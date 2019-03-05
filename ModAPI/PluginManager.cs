@@ -2,20 +2,34 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using UnityEngine;
 
 /**
  * See: https://code.msdn.microsoft.com/windowsdesktop/Creating-a-simple-plugin-b6174b62
  */
 public class PluginManager
 {
+    private static PluginManager instance;
 
     private ICollection<IPlugin> plugins;
 
-    public PluginManager() {
+    private PluginManager() {
         plugins = new List<IPlugin>();
     }
 
-    public void loadAssemblies() {
+    public ICollection<IPlugin> GetPlugins() {
+        return plugins;
+            }
+
+    public static PluginManager getInstance() {
+        if (instance == null) {
+            instance = new PluginManager();
+        }
+
+        return instance;
+    }
+
+    public void loadAssemblies(GameObject doorstepGameObject) {
         DirectoryInfo dir = new DirectoryInfo("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Sheltered\\manager_mods\\");
         Console.WriteLine("Looking for plugins in " + dir.FullName + " ...");
 
@@ -54,12 +68,13 @@ public class PluginManager
             }
         }
 
+        // initialize the plugins and start them from the unity-context
         foreach (Type type in pluginTypes)
         {
             IPlugin plugin = (IPlugin)Activator.CreateInstance(type);
             plugins.Add(plugin);
-
             plugin.initialize();
+            plugin.start(doorstepGameObject);
         }
 
 

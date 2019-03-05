@@ -1,24 +1,22 @@
 ﻿using System;
 using System.IO;
+using UnityEngine;
 
 public class InitializerPlugin : IPlugin
 {
     public InitializerPlugin() { }
 
-    public string Name => "Initializer";
+    public string Name => "InitializerPlugin";
 
     public void initialize()
     {
-        Console.WriteLine("Executing initialize of Initializer ...");
 
-        using (TextWriter tw = File.CreateText("plugin_loaded.log"))
-        {
-            tw.WriteLine("plugin initialized!");
-            tw.Flush();
-        }
     }
 
-    public void start()
+    public void start(GameObject root)
     {
+        LabelComponent label = root.AddComponent<LabelComponent>();
+        label.setText("Mod-API initialized!");
+        label.setTop(10);
     }
 }

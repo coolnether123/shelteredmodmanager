@@ -1,10 +1,12 @@
-﻿public interface IPlugin
+﻿using UnityEngine;
+
+public interface IPlugin
 {
     string Name { get; }
 
     void initialize();
 
-    void start();
+    void start(GameObject root);
 
 
 }

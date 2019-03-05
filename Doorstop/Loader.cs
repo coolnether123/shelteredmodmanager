@@ -1,11 +1,16 @@
 ﻿using System.IO;
 using System.Threading;
+
+
+using System.Runtime.InteropServices;
 using UnityEngine;
+using System;
 
 public static class Loader
 {
     public static void Main(string[] args)
     {
+        
         // create log-file in order to signalize the start of the application
         using (TextWriter tw = File.CreateText("mod_manager.log"))
         {
@@ -18,14 +23,15 @@ public static class Loader
         {
             // after 2,5 seconds ...
             Thread.Sleep(2500);
-
+            
             // THIS gameobject is the bridge between operating-system-context and ingame-context!
             GameObject doorstepGameObject = new GameObject("Doorstop");
+            doorstepGameObject.name = "Doorstop";
             UnityEngine.Object.DontDestroyOnLoad(doorstepGameObject);
 
             // Load the plugins from the plugins-folder
-            PluginManager pm = new PluginManager();
-            pm.loadAssemblies();
+            PluginManager pm = PluginManager.getInstance();
+            pm.loadAssemblies(doorstepGameObject);
 
         }).Start();
 

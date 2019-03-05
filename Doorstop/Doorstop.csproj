@@ -5,7 +5,7 @@
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{62B61CCC-0775-4CF4-B37A-EB5E33CBD08C}</ProjectGuid>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Doorstop</RootNamespace>
     <AssemblyName>Doorstop</AssemblyName>
@@ -16,7 +16,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\..\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -64,10 +64,7 @@
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="UnityEngine">
-      <HintPath>..\..\..\Sheltered_Data\Managed\UnityEngine.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.UI">
-      <HintPath>..\..\..\Sheltered_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <HintPath>..\..\Sheltered_Data\Managed\UnityEngine.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -75,9 +72,10 @@
       <Project>{5297e8bc-3d78-4904-9a81-001a86e02f15}</Project>
       <Name>ManagerGUI</Name>
     </ProjectReference>
+    <ProjectReference Include="..\ModAPI\ModAPI.csproj">
+      <Project>{3c99d6bf-a4a9-45dc-bef1-5717ece2a687}</Project>
+      <Name>ModAPI</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PostBuildEvent>xcopy /y /d  "C:\Program Files (x86)\Steam\steamapps\common\Sheltered\mods\UnityDoorstop\DoorstopTest\bin\Debug\*" "C:\Program Files (x86)\Steam\steamapps\common\Sheltered"</PostBuildEvent>
-  </PropertyGroup>
 </Project>

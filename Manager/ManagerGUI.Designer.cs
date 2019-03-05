@@ -28,23 +28,34 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(ManagerGUI));
             this.pictureBox1 = new System.Windows.Forms.PictureBox();
             this.tabControl1 = new System.Windows.Forms.TabControl();
             this.tabPage1 = new System.Windows.Forms.TabPage();
+            this.label4 = new System.Windows.Forms.Label();
             this.uiGamePath = new System.Windows.Forms.TextBox();
-            this.button2 = new System.Windows.Forms.Button();
-            this.button1 = new System.Windows.Forms.Button();
+            this.uiLaunchButton = new System.Windows.Forms.Button();
+            this.uiLocateButton = new System.Windows.Forms.Button();
             this.label1 = new System.Windows.Forms.Label();
             this.tabPage2 = new System.Windows.Forms.TabPage();
             this.label3 = new System.Windows.Forms.Label();
             this.label2 = new System.Windows.Forms.Label();
             this.doorstopLink = new System.Windows.Forms.LinkLabel();
             this.shelteredLink = new System.Windows.Forms.LinkLabel();
-            this.label4 = new System.Windows.Forms.Label();
+            this.tabPage3 = new System.Windows.Forms.TabPage();
+            this.uiAvailbleModsListView = new System.Windows.Forms.ListBox();
+            this.uiInstalledModsListView = new System.Windows.Forms.ListBox();
+            this.uiAvailableLabel = new System.Windows.Forms.Label();
+            this.uiInstaledLabel = new System.Windows.Forms.Label();
+            this.button1 = new System.Windows.Forms.Button();
+            this.button2 = new System.Windows.Forms.Button();
+            this.uiModsPath = new System.Windows.Forms.TextBox();
+            this.label5 = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             this.tabControl1.SuspendLayout();
             this.tabPage1.SuspendLayout();
             this.tabPage2.SuspendLayout();
+            this.tabPage3.SuspendLayout();
             this.SuspendLayout();
             // 
             // pictureBox1
@@ -59,6 +70,7 @@
             // tabControl1
             // 
             this.tabControl1.Controls.Add(this.tabPage1);
+            this.tabControl1.Controls.Add(this.tabPage3);
             this.tabControl1.Controls.Add(this.tabPage2);
             this.tabControl1.Location = new System.Drawing.Point(13, 221);
             this.tabControl1.Name = "tabControl1";
@@ -69,10 +81,12 @@
             // tabPage1
             // 
             this.tabPage1.BackColor = System.Drawing.SystemColors.Control;
+            this.tabPage1.Controls.Add(this.label5);
+            this.tabPage1.Controls.Add(this.uiModsPath);
             this.tabPage1.Controls.Add(this.label4);
             this.tabPage1.Controls.Add(this.uiGamePath);
-            this.tabPage1.Controls.Add(this.button2);
-            this.tabPage1.Controls.Add(this.button1);
+            this.tabPage1.Controls.Add(this.uiLaunchButton);
+            this.tabPage1.Controls.Add(this.uiLocateButton);
             this.tabPage1.Controls.Add(this.label1);
             this.tabPage1.Location = new System.Drawing.Point(4, 22);
             this.tabPage1.Name = "tabPage1";
@@ -81,35 +95,45 @@
             this.tabPage1.TabIndex = 0;
             this.tabPage1.Text = "Game";
             // 
+            // label4
+            // 
+            this.label4.AutoSize = true;
+            this.label4.Location = new System.Drawing.Point(7, 18);
+            this.label4.Name = "label4";
+            this.label4.Size = new System.Drawing.Size(151, 13);
+            this.label4.TabIndex = 14;
+            this.label4.Text = "Sheltered-Path (Sheltered.exe)";
+            // 
             // uiGamePath
             // 
-            this.uiGamePath.Location = new System.Drawing.Point(68, 40);
-            this.uiGamePath.Multiline = true;
+            this.uiGamePath.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.uiGamePath.Location = new System.Drawing.Point(71, 36);
             this.uiGamePath.Name = "uiGamePath";
-            this.uiGamePath.Size = new System.Drawing.Size(406, 22);
+            this.uiGamePath.Size = new System.Drawing.Size(398, 20);
             this.uiGamePath.TabIndex = 12;
             this.uiGamePath.Text = "None";
+            this.uiGamePath.TextChanged += new System.EventHandler(this.uiGamePath_TextChanged_1);
             // 
-            // button2
+            // uiLaunchButton
             // 
-            this.button2.Location = new System.Drawing.Point(9, 224);
-            this.button2.Name = "button2";
-            this.button2.Size = new System.Drawing.Size(465, 23);
-            this.button2.TabIndex = 11;
-            this.button2.Text = "Launch";
-            this.button2.UseVisualStyleBackColor = true;
-            this.button2.Click += new System.EventHandler(this.button2_Click_1);
+            this.uiLaunchButton.Location = new System.Drawing.Point(10, 224);
+            this.uiLaunchButton.Name = "uiLaunchButton";
+            this.uiLaunchButton.Size = new System.Drawing.Size(464, 23);
+            this.uiLaunchButton.TabIndex = 11;
+            this.uiLaunchButton.Text = "Launch";
+            this.uiLaunchButton.UseVisualStyleBackColor = true;
+            this.uiLaunchButton.Click += new System.EventHandler(this.onLaunchClicked);
             // 
-            // button1
+            // uiLocateButton
             // 
-            this.button1.Font = new System.Drawing.Font("Microsoft Sans Serif", 7F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.button1.Location = new System.Drawing.Point(9, 39);
-            this.button1.Name = "button1";
-            this.button1.Size = new System.Drawing.Size(53, 24);
-            this.button1.TabIndex = 10;
-            this.button1.Text = "Locate";
-            this.button1.UseVisualStyleBackColor = true;
-            this.button1.Click += new System.EventHandler(this.button1_Click_1);
+            this.uiLocateButton.Font = new System.Drawing.Font("Microsoft Sans Serif", 7F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.uiLocateButton.Location = new System.Drawing.Point(10, 35);
+            this.uiLocateButton.Name = "uiLocateButton";
+            this.uiLocateButton.Size = new System.Drawing.Size(56, 22);
+            this.uiLocateButton.TabIndex = 10;
+            this.uiLocateButton.Text = "Locate";
+            this.uiLocateButton.UseVisualStyleBackColor = true;
+            this.uiLocateButton.Click += new System.EventHandler(this.onLocate);
             // 
             // label1
             // 
@@ -120,7 +144,6 @@
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(0, 20);
             this.label1.TabIndex = 9;
-            this.label1.Click += new System.EventHandler(this.label1_Click);
             // 
             // tabPage2
             // 
@@ -155,7 +178,6 @@
             this.label2.Size = new System.Drawing.Size(78, 17);
             this.label2.TabIndex = 2;
             this.label2.Text = "Sheltered";
-            this.label2.Click += new System.EventHandler(this.label2_Click);
             // 
             // doorstopLink
             // 
@@ -179,15 +201,92 @@
             this.shelteredLink.Text = "https://store.steampowered.com/app/356040/Sheltered/";
             this.shelteredLink.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel1_LinkClicked);
             // 
-            // label4
+            // tabPage3
             // 
-            this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(7, 18);
-            this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(151, 13);
-            this.label4.TabIndex = 14;
-            this.label4.Text = "Sheltered-Path (Sheltered.exe)";
-            this.label4.Click += new System.EventHandler(this.label4_Click);
+            this.tabPage3.Controls.Add(this.button2);
+            this.tabPage3.Controls.Add(this.button1);
+            this.tabPage3.Controls.Add(this.uiInstaledLabel);
+            this.tabPage3.Controls.Add(this.uiAvailableLabel);
+            this.tabPage3.Controls.Add(this.uiInstalledModsListView);
+            this.tabPage3.Controls.Add(this.uiAvailbleModsListView);
+            this.tabPage3.Location = new System.Drawing.Point(4, 22);
+            this.tabPage3.Name = "tabPage3";
+            this.tabPage3.Size = new System.Drawing.Size(484, 253);
+            this.tabPage3.TabIndex = 2;
+            this.tabPage3.Text = "Mods";
+            // 
+            // uiAvailbleModsListView
+            // 
+            this.uiAvailbleModsListView.FormattingEnabled = true;
+            this.uiAvailbleModsListView.Location = new System.Drawing.Point(11, 31);
+            this.uiAvailbleModsListView.Name = "uiAvailbleModsListView";
+            this.uiAvailbleModsListView.Size = new System.Drawing.Size(173, 199);
+            this.uiAvailbleModsListView.TabIndex = 0;
+            // 
+            // uiInstalledModsListView
+            // 
+            this.uiInstalledModsListView.FormattingEnabled = true;
+            this.uiInstalledModsListView.Location = new System.Drawing.Point(300, 31);
+            this.uiInstalledModsListView.Name = "uiInstalledModsListView";
+            this.uiInstalledModsListView.Size = new System.Drawing.Size(169, 199);
+            this.uiInstalledModsListView.TabIndex = 1;
+            this.uiInstalledModsListView.SelectedIndexChanged += new System.EventHandler(this.uiInstalledModsListView_SelectedIndexChanged);
+            // 
+            // uiAvailableLabel
+            // 
+            this.uiAvailableLabel.AutoSize = true;
+            this.uiAvailableLabel.Location = new System.Drawing.Point(11, 12);
+            this.uiAvailableLabel.Name = "uiAvailableLabel";
+            this.uiAvailableLabel.Size = new System.Drawing.Size(79, 13);
+            this.uiAvailableLabel.TabIndex = 2;
+            this.uiAvailableLabel.Text = "Available Mods";
+            // 
+            // uiInstaledLabel
+            // 
+            this.uiInstaledLabel.AutoSize = true;
+            this.uiInstaledLabel.Location = new System.Drawing.Point(311, 12);
+            this.uiInstaledLabel.Name = "uiInstaledLabel";
+            this.uiInstaledLabel.Size = new System.Drawing.Size(78, 13);
+            this.uiInstaledLabel.TabIndex = 3;
+            this.uiInstaledLabel.Text = "Installed Mods:";
+            this.uiInstaledLabel.Click += new System.EventHandler(this.uiInstaledLabel_Click);
+            // 
+            // button1
+            // 
+            this.button1.Location = new System.Drawing.Point(190, 178);
+            this.button1.Name = "button1";
+            this.button1.Size = new System.Drawing.Size(104, 23);
+            this.button1.TabIndex = 4;
+            this.button1.Text = "=>";
+            this.button1.UseVisualStyleBackColor = true;
+            this.button1.Click += new System.EventHandler(this.button1_Click);
+            // 
+            // button2
+            // 
+            this.button2.Location = new System.Drawing.Point(190, 207);
+            this.button2.Name = "button2";
+            this.button2.Size = new System.Drawing.Size(104, 23);
+            this.button2.TabIndex = 5;
+            this.button2.Text = "<=";
+            this.button2.UseVisualStyleBackColor = true;
+            // 
+            // uiModsPath
+            // 
+            this.uiModsPath.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.uiModsPath.Location = new System.Drawing.Point(11, 100);
+            this.uiModsPath.Name = "uiModsPath";
+            this.uiModsPath.Size = new System.Drawing.Size(458, 20);
+            this.uiModsPath.TabIndex = 15;
+            this.uiModsPath.Text = "None";
+            // 
+            // label5
+            // 
+            this.label5.AutoSize = true;
+            this.label5.Location = new System.Drawing.Point(8, 84);
+            this.label5.Name = "label5";
+            this.label5.Size = new System.Drawing.Size(58, 13);
+            this.label5.TabIndex = 16;
+            this.label5.Text = "Mods-Path";
             // 
             // ManagerGUI
             // 
@@ -196,6 +295,7 @@
             this.ClientSize = new System.Drawing.Size(514, 512);
             this.Controls.Add(this.tabControl1);
             this.Controls.Add(this.pictureBox1);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "ManagerGUI";
             this.Text = "Sheltered Mod Manager";
             this.Load += new System.EventHandler(this.Form1_Load);
@@ -205,6 +305,8 @@
             this.tabPage1.PerformLayout();
             this.tabPage2.ResumeLayout(false);
             this.tabPage2.PerformLayout();
+            this.tabPage3.ResumeLayout(false);
+            this.tabPage3.PerformLayout();
             this.ResumeLayout(false);
 
         }
@@ -215,14 +317,23 @@
         private System.Windows.Forms.TabPage tabPage1;
         private System.Windows.Forms.TabPage tabPage2;
         private System.Windows.Forms.TextBox uiGamePath;
-        private System.Windows.Forms.Button button2;
-        private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.Button uiLaunchButton;
+        private System.Windows.Forms.Button uiLocateButton;
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.LinkLabel doorstopLink;
         private System.Windows.Forms.LinkLabel shelteredLink;
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.Label label4;
+        private System.Windows.Forms.TabPage tabPage3;
+        private System.Windows.Forms.Label uiInstaledLabel;
+        private System.Windows.Forms.Label uiAvailableLabel;
+        private System.Windows.Forms.ListBox uiInstalledModsListView;
+        private System.Windows.Forms.ListBox uiAvailbleModsListView;
+        private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.Button button2;
+        private System.Windows.Forms.Label label5;
+        private System.Windows.Forms.TextBox uiModsPath;
     }
 }
 
