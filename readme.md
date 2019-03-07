@@ -49,6 +49,8 @@ This are screenshots which were made during development:
 
 <img src="/documentation/manager_gui.png"> 
 
+<img src="/documentation/ingame.png"> 
+
 
 ## Credits & Copyright
 The following frameworks and libraries where used the development of this project, so big thanks to: 
