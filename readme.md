@@ -1,9 +1,8 @@
 # Sheltered ModManager
-Welcome to the repository of the Sheltered ModManager!
+This project aims to enable modding-support for the game [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Team17\
+The project acts as in drop-in application to a regular installation of Sheltered - no files are touched during the whole lifecycle of the application.
 
-This project currently is in an early phase of development so there are bugs, expect crashes and npes.
-
-The ModManager consists of three modules (Doorstop, ModAPI and ManagerGUI) which will be described below.
+This project consists of the following modules which are described in the following paragraphs.
 
 ## Architecture
 **Doorstop**\
@@ -18,33 +17,40 @@ The User-Interface of the application which allows the User to locate and launch
 
 ### Plugins
 **PluginInitializer**\
-Demo plugin, gets executed on launch.
+This plugin is used to print the string "Modding-API active" on the screen.
+The purpose of this plugin is to signalize that the plugin-mechanism works as early as possible, as the console is not 
+available currently.
+
+**PluginConsole**\
+This plugin contains a custom console and userinterface. It can be used to interact with the application, the engine, etc.
+
+**PluginHarmony**\
+This plugin contains the the c#-patching-library Harmony (https://github.com/pardeike/Harmony) 
 
 **PluginDebugGUI**\
-Shows a unity-window within the game.
+This plugin contains a userinterface which visualizes different informations of the application and a summary of the loaded and executed plugins.
 
 ## Installation
 * make a backup of the complete game (zip the contents of the whole sheltered-directory)
-* download the latest doorstop-release (2.7) and extract its content to  the games root-directory
-* clone this directory, open in JetBrains Rider or Visual Studio 2017 
-* TODO: describe which contents have to be copied to which place
-* launch the mod-manager
+* clone this directory, open in Visual Studio 2017 or JetBrains Rider
+* build the whole solution
+* at the projet-root, there is a directory with the name "Dist"
+* it contains all the files which are provided by this project - copy them to the root of your sheltered-installation.
+* execute the launcher in <game_root>\SMM\Manager.exe
 
-
-## Notes
+## Compilation
+* **Notes:** 
 This project is 32-bit only atm - because the Steam-release only contains 32-bit assemblies.
 
-## Attribution
-The following frameworks and tools, applications, etc. were used within this project, thanks to: 
-* [Sheltered](https://store.steampowered.com/app/356040/Sheltered/)
-* [UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)
-* [JetBrains Rider](https://www.jetbrains.com/rider/)
-* [dnSpy](https://github.com/0xd4d/dnSpy/releases)
-
-
+## Credits
+The following frameworks and libraries where used the development of this project, so big thanks to: 
+* [Team 17 for Sheltered](https://store.steampowered.com/app/356040/Sheltered/)
+* [NeighTools for UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)
+* [Pardeike for Harmony](https://github.com/pardeike/Harmony)
 
 ### Testing
 This project has been tested on
 * Windows 10, 64-bit
 * Doorstop 2.7.0.0, 32-bit
 * Sheltered 1.8 (from Steam, 32-bit)
+* Harmony.Lib 1.2.0.1

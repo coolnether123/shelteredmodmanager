@@ -2,6 +2,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/**
+* Author: benjaminfoo
+* See: https://github.com/benjaminfoo/shelteredmodmanager
+* 
+* The userinterface which displays overall information at runtime
+*/
 class DebugWindowComponent : MonoBehaviour
 {
     public Rect windowRect0 = new Rect(20 + Screen.width - 350, 20, 300, 450);

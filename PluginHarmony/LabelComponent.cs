@@ -1,6 +1,12 @@
 ﻿using System;
 using UnityEngine;
 
+/**
+* Author: benjaminfoo
+* See: https://github.com/benjaminfoo/shelteredmodmanager
+* 
+* This monobehaviour is used to display textual information on the screen at runtime.
+*/
 class LabelComponent : MonoBehaviour
 {
     Rect position;

@@ -2,6 +2,12 @@
 using System.Threading;
 using UnityEngine;
 
+/**
+ * Author: benjaminfoo
+ * See: https://github.com/benjaminfoo/shelteredmodmanager
+ * 
+ * The class gets loaded by the UnityDoorstop-hook which is initiated in the winhttp.dll/version.dll
+ */
 public static class Loader
 {
     public static void Main(string[] args)
@@ -14,10 +20,9 @@ public static class Loader
             tw.Flush();
         }
 
-        // wait a short amount of time in order to let the game initialize itself
         new Thread(() =>
         {
-            // after 2,5 seconds ...
+            // wait a short amount of time in order to let the game initialize itself
             Thread.Sleep(2500);
             
             // THIS gameobject is the bridge between operating-system-context and ingame-context!
@@ -28,8 +33,8 @@ public static class Loader
             // Load the plugins from the plugins-folder
             PluginManager pm = PluginManager.getInstance();
             pm.loadAssemblies(doorstepGameObject);
-        }).Start();
 
+        }).Start();
 
     }
 

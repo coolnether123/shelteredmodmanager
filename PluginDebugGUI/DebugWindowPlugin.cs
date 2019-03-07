@@ -1,5 +1,11 @@
 ﻿using UnityEngine;
 
+/**
+* Author: benjaminfoo
+* See: https://github.com/benjaminfoo/shelteredmodmanager
+* 
+* This is the plugin definition for the debug-window-plugin, which instantiates the DebugWindowComponent
+*/
 public class DebugWindowPlugin : IPlugin
 {
     public DebugWindowPlugin() { }

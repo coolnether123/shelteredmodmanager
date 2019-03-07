@@ -3,6 +3,12 @@ using System.Reflection;
 using Harmony;
 using UnityEngine;
 
+/**
+* Author: benjaminfoo
+* See: https://github.com/benjaminfoo/shelteredmodmanager
+* 
+* This is the plugin definition for the harmony-plugin, which enables the usage of harmony within a mod-
+*/
 public class HarmonyPlugin : IPlugin
 {
     public HarmonyPlugin() { }
@@ -41,7 +47,7 @@ public class HarmonyPlugin : IPlugin
     {
         public static void Postfix(CraftingPanel __instance)
         {
-            using (TextWriter tw = File.CreateText(@"C:\Users\Owl\harmony_works.log"))
+            using (TextWriter tw = File.CreateText(@"harmony_works.log"))
             {
                 tw.WriteLine("HarmonyPlugin and Patches initialized!");
                 tw.Flush();

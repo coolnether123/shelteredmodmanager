@@ -31,6 +31,7 @@
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(ManagerGUI));
             this.tabControl1 = new System.Windows.Forms.TabControl();
             this.tabPage1 = new System.Windows.Forms.TabPage();
+            this.uiOpenGameDir = new System.Windows.Forms.Button();
             this.label5 = new System.Windows.Forms.Label();
             this.uiModsPath = new System.Windows.Forms.TextBox();
             this.label4 = new System.Windows.Forms.Label();
@@ -46,14 +47,13 @@
             this.uiInstalledModsListView = new System.Windows.Forms.ListBox();
             this.uiAvailbleModsListView = new System.Windows.Forms.ListBox();
             this.tabPage2 = new System.Windows.Forms.TabPage();
-            this.linkLabel1 = new System.Windows.Forms.LinkLabel();
+            this.harmonyLink = new System.Windows.Forms.LinkLabel();
             this.label6 = new System.Windows.Forms.Label();
             this.label3 = new System.Windows.Forms.Label();
             this.label2 = new System.Windows.Forms.Label();
             this.doorstopLink = new System.Windows.Forms.LinkLabel();
             this.shelteredLink = new System.Windows.Forms.LinkLabel();
             this.pictureBox1 = new System.Windows.Forms.PictureBox();
-            this.uiOpenGameDir = new System.Windows.Forms.Button();
             this.tabControl1.SuspendLayout();
             this.tabPage1.SuspendLayout();
             this.tabPage3.SuspendLayout();
@@ -90,6 +90,17 @@
             this.tabPage1.TabIndex = 0;
             this.tabPage1.Text = "Game";
             this.tabPage1.Click += new System.EventHandler(this.tabPage1_Click);
+            // 
+            // uiOpenGameDir
+            // 
+            this.uiOpenGameDir.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.uiOpenGameDir.Location = new System.Drawing.Point(227, 169);
+            this.uiOpenGameDir.Name = "uiOpenGameDir";
+            this.uiOpenGameDir.Size = new System.Drawing.Size(220, 25);
+            this.uiOpenGameDir.TabIndex = 17;
+            this.uiOpenGameDir.Text = "Open Game Directory";
+            this.uiOpenGameDir.UseVisualStyleBackColor = true;
+            this.uiOpenGameDir.Click += new System.EventHandler(this.uiOpenGameDir_Click);
             // 
             // label5
             // 
@@ -236,7 +247,7 @@
             // tabPage2
             // 
             this.tabPage2.BackColor = System.Drawing.SystemColors.Control;
-            this.tabPage2.Controls.Add(this.linkLabel1);
+            this.tabPage2.Controls.Add(this.harmonyLink);
             this.tabPage2.Controls.Add(this.label6);
             this.tabPage2.Controls.Add(this.label3);
             this.tabPage2.Controls.Add(this.label2);
@@ -249,16 +260,16 @@
             this.tabPage2.TabIndex = 1;
             this.tabPage2.Text = "About";
             // 
-            // linkLabel1
+            // harmonyLink
             // 
-            this.linkLabel1.AutoSize = true;
-            this.linkLabel1.Location = new System.Drawing.Point(8, 139);
-            this.linkLabel1.Name = "linkLabel1";
-            this.linkLabel1.Size = new System.Drawing.Size(188, 13);
-            this.linkLabel1.TabIndex = 5;
-            this.linkLabel1.TabStop = true;
-            this.linkLabel1.Text = "https://github.com/pardeike/Harmony";
-            this.linkLabel1.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel1_LinkClicked_1);
+            this.harmonyLink.AutoSize = true;
+            this.harmonyLink.Location = new System.Drawing.Point(8, 139);
+            this.harmonyLink.Name = "harmonyLink";
+            this.harmonyLink.Size = new System.Drawing.Size(188, 13);
+            this.harmonyLink.TabIndex = 5;
+            this.harmonyLink.TabStop = true;
+            this.harmonyLink.Text = "https://github.com/pardeike/Harmony";
+            this.harmonyLink.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel1_LinkClicked_1);
             // 
             // label6
             // 
@@ -321,17 +332,6 @@
             this.pictureBox1.TabIndex = 11;
             this.pictureBox1.TabStop = false;
             // 
-            // uiOpenGameDir
-            // 
-            this.uiOpenGameDir.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.uiOpenGameDir.Location = new System.Drawing.Point(227, 169);
-            this.uiOpenGameDir.Name = "uiOpenGameDir";
-            this.uiOpenGameDir.Size = new System.Drawing.Size(220, 25);
-            this.uiOpenGameDir.TabIndex = 17;
-            this.uiOpenGameDir.Text = "Open Game Directory";
-            this.uiOpenGameDir.UseVisualStyleBackColor = true;
-            this.uiOpenGameDir.Click += new System.EventHandler(this.uiOpenGameDir_Click);
-            // 
             // ManagerGUI
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -380,7 +380,7 @@
         private System.Windows.Forms.Button button2;
         private System.Windows.Forms.Label label5;
         private System.Windows.Forms.TextBox uiModsPath;
-        private System.Windows.Forms.LinkLabel linkLabel1;
+        private System.Windows.Forms.LinkLabel harmonyLink;
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.PictureBox pictureBox1;
         private System.Windows.Forms.Button uiOpenGameDir;

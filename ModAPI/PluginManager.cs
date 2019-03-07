@@ -5,8 +5,12 @@ using System.Reflection;
 using UnityEngine;
 
 /**
- * See: https://code.msdn.microsoft.com/windowsdesktop/Creating-a-simple-plugin-b6174b62
- */
+* Author: benjaminfoo
+* See: https://github.com/benjaminfoo/shelteredmodmanager
+* See: https://code.msdn.microsoft.com/windowsdesktop/Creating-a-simple-plugin-b6174b62
+* 
+* This class handles the overall plugin-management (like loading and executing them)
+*/
 public class PluginManager
 {
     private static PluginManager instance;

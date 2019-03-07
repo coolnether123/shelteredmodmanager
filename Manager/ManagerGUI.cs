@@ -2,6 +2,12 @@
 using System.IO;
 using System.Windows.Forms;
 
+/**
+ * Author: benjaminfoo
+ * See: https://github.com/benjaminfoo/shelteredmodmanager
+ * 
+ * This class contains the userinterface for the mod-manager. 
+ */
 namespace Manager
 {
     public partial class ManagerGUI : Form
@@ -64,7 +70,6 @@ namespace Manager
             if (fileDialog.ShowDialog() == DialogResult.OK)
             {
                 uiGamePath.Text = fileDialog.FileName;
-                // MessageBox.Show("")
                 uiModsPath.Text = fileDialog.FileName.Replace("\\Sheltered.exe", "") + "\\" + "manager_mods\\";
             }
 
@@ -130,7 +135,7 @@ namespace Manager
 
         private void linkLabel1_LinkClicked_1(object sender, LinkLabelLinkClickedEventArgs e)
         {
-
+            System.Diagnostics.Process.Start(harmonyLink.Text);
         }
     }
 }

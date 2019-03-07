@@ -1,5 +1,11 @@
 ﻿using UnityEngine;
 
+/**
+* Author: benjaminfoo
+* See: https://github.com/benjaminfoo/shelteredmodmanager
+* 
+* This is the plugin definition for the console-plugin, which displays an ingame-console
+*/
 public class ConsolePlugin : IPlugin
 {
     public ConsolePlugin() { }

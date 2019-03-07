@@ -1,6 +1,12 @@
 ﻿using System;
 using UnityEngine;
 
+/**
+* Author: benjaminfoo
+* See: https://github.com/benjaminfoo/shelteredmodmanager
+* 
+* The console-userinterface which gets instantiated by the console-plugin
+*/
 class ConsoleWindowComponent : MonoBehaviour
 {
     public int id = 1;

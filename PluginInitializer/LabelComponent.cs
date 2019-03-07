@@ -1,6 +1,12 @@
 ﻿using System;
 using UnityEngine;
 
+/**
+* Author: benjaminfoo
+* See: https://github.com/benjaminfoo/shelteredmodmanager
+* 
+* The same LabelPlugin as in PluginHarmony ...
+*/
 class LabelComponent : MonoBehaviour
 {
     Rect position;
