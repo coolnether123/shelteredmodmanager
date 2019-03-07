@@ -33,6 +33,8 @@ namespace Manager
 
         private void updateAvailableMods()
         {
+            if (uiModsPath.Text.ToString().Trim().ToLower().Equals(DEFAULT_VALUE.ToLower())) return;
+
             uiAvailbleModsListView.Items.Clear();
             var items = Directory.GetFiles(uiModsPath.Text, "*.dll");
             foreach (var item in items) {
@@ -96,6 +98,7 @@ namespace Manager
         private void uiGamePath_TextChanged_1(object sender, EventArgs e)
         {
             if (uiGamePath.Text.Length == 0) return;
+            if (uiGamePath.Text.ToString().Trim().ToLower().Equals(DEFAULT_VALUE.ToLower())) return;
 
             uiLaunchButton.Enabled = File.Exists(uiGamePath.Text);
             uiOpenGameDir.Enabled = File.Exists(uiGamePath.Text);

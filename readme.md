@@ -44,6 +44,12 @@ This plugin contains a userinterface which visualizes different informations of 
 * **Notes:** 
 This project is 32-bit only atm - because the Steam-release only contains 32-bit assemblies.
 
+## Screenshots
+This are screenshots which were made during development:
+
+<img src="/documentation/manager_gui.png"> 
+
+
 ## Credits & Copyright
 The following frameworks and libraries where used the development of this project, so big thanks to: 
 * [Team 17 for Sheltered](https://store.steampowered.com/app/356040/Sheltered/)
