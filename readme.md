@@ -51,6 +51,8 @@ This are screenshots which were made during development:
 
 <img src="/documentation/ingame.png"> 
 
+<img src="/documentation/ingame_2.png"> 
+
 
 ## Credits & Copyright
 The following frameworks and libraries where used the development of this project, so big thanks to: 
