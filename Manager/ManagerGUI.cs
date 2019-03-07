@@ -9,17 +9,30 @@ namespace Manager
         public static string DEFAULT_VALUE = "None";
         public static string MOD_MANAGER_INI_FILE = "mod_manager.ini";
 
+        // the value which this gui operate son
+        public string currentGameDirectoryPath = DEFAULT_VALUE;
+
         private OpenFileDialog fileDialog = new OpenFileDialog();
 
         public ManagerGUI()
         {
             InitializeComponent();
-
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
             updateGamePath();
+            updateAvailableMods();
+        }
+
+        private void updateAvailableMods()
+        {
+            uiAvailbleModsListView.Items.Clear();
+            var items = Directory.GetFiles(uiModsPath.Text, "*.dll");
+            foreach (var item in items) {
+                uiAvailbleModsListView.Items.Add(item);
+            }
+
         }
 
         private void updateGamePath()
@@ -29,7 +42,7 @@ namespace Manager
                 string contents = File.ReadAllText(MOD_MANAGER_INI_FILE);
                 uiGamePath.Text = contents;
                 // TODO: the following line is obviously a joke
-                uiModsPath.Text = contents.Replace("\\Sheltered.exe", "") + "\\" + "manager_mods\\";
+                uiModsPath.Text = contents.Replace("\\Sheltered.exe", "") + "\\" + "mods\\";
             }
             catch {
                 uiGamePath.Text = DEFAULT_VALUE;
@@ -37,6 +50,7 @@ namespace Manager
 
 
             uiLaunchButton.Enabled = File.Exists(uiGamePath.Text);
+            uiOpenGameDir.Enabled = File.Exists(uiGamePath.Text);
         }
 
         private void onLocate(object sender, EventArgs e)
@@ -50,6 +64,7 @@ namespace Manager
             if (fileDialog.ShowDialog() == DialogResult.OK)
             {
                 uiGamePath.Text = fileDialog.FileName;
+                // MessageBox.Show("")
                 uiModsPath.Text = fileDialog.FileName.Replace("\\Sheltered.exe", "") + "\\" + "manager_mods\\";
             }
 
@@ -75,9 +90,10 @@ namespace Manager
 
         private void uiGamePath_TextChanged_1(object sender, EventArgs e)
         {
-
             if (uiGamePath.Text.Length == 0) return;
+
             uiLaunchButton.Enabled = File.Exists(uiGamePath.Text);
+            uiOpenGameDir.Enabled = File.Exists(uiGamePath.Text);
             File.WriteAllText(MOD_MANAGER_INI_FILE, uiGamePath.Text);
         }
 
@@ -92,6 +108,27 @@ namespace Manager
         }
 
         private void button1_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void label7_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void tabPage1_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void uiOpenGameDir_Click(object sender, EventArgs e)
+        {
+            // start explorer, in game-directory
+            System.Diagnostics.Process.Start(uiGamePath.Text.Replace("Sheltered.exe", ""));
+        }
+
+        private void linkLabel1_LinkClicked_1(object sender, LinkLabelLinkClickedEventArgs e)
         {
 
         }

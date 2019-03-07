@@ -17,7 +17,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\..\SMM\</OutputPath>
+    <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -39,14 +39,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Deployment" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ManagerGUI.cs">
@@ -91,6 +85,61 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="icon.ico" />
+    <None Include="logo.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>SET BUILD_PATH=$(SolutionDir)\Dist
+SET SMM_PATH=$(SolutionDir)\Dist\SMM
+SET MODS_PATH=$(SolutionDir)\Dist\mods
+
+SET LIB_DIR=$(SolutionDir)\libs
+SET PROJECT_DOORSTOP=$(SolutionDir)\Doorstop
+SET PROJECT_MANAGER=$(SolutionDir)\Manager
+SET PROJECT_MODAPI=$(SolutionDir)\ModAPI
+
+SET PROJECT_PLUGIN_CONSOLE=$(SolutionDir)\PluginConsole
+SET PROJECT_PLUGIN_DEBUG_GUI=$(SolutionDir)\PluginDebugGUI
+SET PROJECT_PLUGIN_HARMONY=$(SolutionDir)\PluginHarmony
+SET PROJECT_PLUGIN_INITIALIZER=$(SolutionDir)\PluginInitializer
+
+
+SET SUB_DIR=\bin\debug\
+
+:: initialize the \Dist\ directory
+rd /s /q "%25BUILD_PATH%25"
+mkdir "%25BUILD_PATH%25"
+
+:: initialize the \Dist\SMM\ directory
+rd /s /q "%25SMM_PATH%25"
+mkdir "%25SMM_PATH%25"
+
+
+
+:: Copy the manager exe to the Dist-directory 
+copy "%25PROJECT_MANAGER%25"\"%25SUB_DIR%25"\Manager.exe "%25SMM_PATH%25"\
+
+:: Copy the Mod-API.dll to the Dist-directory 
+copy "%25PROJECT_MODAPI%25"\"%25SUB_DIR%25"\ModAPI.dll "%25SMM_PATH%25"\
+
+:: Copy the Doorstop-Hoock and its config the Dist-directory 
+copy "%25PROJECT_DOORSTOP%25"\"%25SUB_DIR%25"\Doorstop.dll "%25SMM_PATH%25"\
+copy "%25LIB_DIR%25"\doorstop_config.ini "%25BUILD_PATH%25"\
+copy "%25LIB_DIR%25"\winhttp.dll "%25BUILD_PATH%25"\
+
+
+:: initialize the \Dist\mods - directory
+if exist "%25MODS_PATH%25" rd /s /q "%25MODS_PATH%25"
+mkdir "%25MODS_PATH%25"
+
+
+
+:: Copy the Mod-API.dll to the Dist-directory 
+copy "%25PROJECT_PLUGIN_CONSOLE%25"\"%25SUB_DIR%25"\PluginConsole.dll "%25MODS_PATH%25"\
+copy "%25PROJECT_PLUGIN_DEBUG_GUI%25"\"%25SUB_DIR%25"\PluginDebugGUI.dll "%25MODS_PATH%25"\
+copy "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25"\PluginHarmony.dll "%25MODS_PATH%25"\
+copy "%25PROJECT_PLUGIN_INITIALIZER%25"\"%25SUB_DIR%25"\PluginInitializer.dll "%25MODS_PATH%25"\
+copy "%25LIB_DIR%25\"0Harmony.dll* "%25MODS_PATH%25"\
+</PostBuildEvent>
+  </PropertyGroup>
 </Project>

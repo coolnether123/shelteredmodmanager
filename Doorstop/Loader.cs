@@ -1,10 +1,6 @@
 ﻿using System.IO;
 using System.Threading;
-
-
-using System.Runtime.InteropServices;
 using UnityEngine;
-using System;
 
 public static class Loader
 {
@@ -32,9 +28,10 @@ public static class Loader
             // Load the plugins from the plugins-folder
             PluginManager pm = PluginManager.getInstance();
             pm.loadAssemblies(doorstepGameObject);
-
         }).Start();
 
+
     }
+
 }
     

@@ -30,7 +30,7 @@ public class PluginManager
     }
 
     public void loadAssemblies(GameObject doorstepGameObject) {
-        DirectoryInfo dir = new DirectoryInfo("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Sheltered\\manager_mods\\");
+        DirectoryInfo dir = new DirectoryInfo(@"mods");
         Console.WriteLine("Looking for plugins in " + dir.FullName + " ...");
 
         ICollection<Assembly> assemblies = new List<Assembly>();

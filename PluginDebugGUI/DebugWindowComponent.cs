@@ -4,7 +4,7 @@ using UnityEngine;
 
 class DebugWindowComponent : MonoBehaviour
 {
-    public Rect windowRect0 = new Rect(20, 20, 300, 450);
+    public Rect windowRect0 = new Rect(20 + Screen.width - 350, 20, 300, 450);
 
     public String labelText = "This is some text";
     public String titleText = "SMM-Debug-Window";
@@ -15,8 +15,23 @@ class DebugWindowComponent : MonoBehaviour
         
     }
 
+    string[] messages = new string[] {
+        "Waddup...?",
+        "Why you ackin' so cray cray?", 
+        "...",
+        "zZzZzZz....",
+        "The unity-version of this game is " + Application.unityVersion,
+        "The application language is " + Application.systemLanguage,
+        "The data-path of this application is " + Application.dataPath
+    };
+
     void OnGUI()
     {
+        if (Input.GetKeyUp(KeyCode.P)) {
+            var familyMembers = FamilyManager.Instance.GetAllFamilyMembers();
+            familyMembers.ForEach(member => member.Say(messages[UnityEngine.Random.Range(0, messages.Length)]));
+            UISound.instance.PlayPreset(UISound.PresetSound.Accept);
+        }
 
         statusLabel = "";
 
@@ -67,7 +82,6 @@ class DebugWindowComponent : MonoBehaviour
         statusLabel += "Frames per second: " + (int)(1.0f / Time.smoothDeltaTime);
         statusLabel += "\n";
         statusLabel += "\n";
-
 
 
         // Register the window. We create two windows that use the same function

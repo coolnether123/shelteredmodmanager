@@ -1,0 +1,1 @@
+msbuild.exe ShelteredModManager.sln /t:ManagerGUI /p:Configuration="Debug" /p:Platform="x86" /p:BuildProjectReferences=false

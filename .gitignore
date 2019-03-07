@@ -383,3 +383,8 @@ ASALocalRun/
 # MFractors (Xamarin productivity tool) working folder 
 .mfractor/
 
+/libs/Assembly-CSharp.dll
+/libs/UnityEngine.UI.dll
+/libs/0Harmony.dll
+/libs/UnityEngine.dll
+/Dist/

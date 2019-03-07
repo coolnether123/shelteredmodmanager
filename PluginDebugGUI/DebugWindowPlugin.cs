@@ -5,6 +5,7 @@ public class DebugWindowPlugin : IPlugin
     public DebugWindowPlugin() { }
 
     public string Name => "DebugWindowPlugin";
+    public string Version => "0.0.1";
 
     public void initialize()
     {
@@ -13,7 +14,6 @@ public class DebugWindowPlugin : IPlugin
 
     public void start(GameObject root)
     {
-        DebugWindowComponent label = root.AddComponent<DebugWindowComponent>();
-
+        DebugWindowComponent debugWindow = root.AddComponent<DebugWindowComponent>();
     }
 }

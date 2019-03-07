@@ -14,7 +14,7 @@ class LabelComponent : MonoBehaviour
 
     public void OnGUI()
     {
-        position.Set(20f, top, 400, 100);
+        position.Set(20f, top, 400, 300);
         GUI.Label(position, this.message);
     }
 
