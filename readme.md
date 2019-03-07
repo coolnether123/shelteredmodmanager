@@ -1,3 +1,5 @@
+<img src="/documentation/logo.png"> 
+
 # Sheltered ModManager
 This project aims to enable modding-support for the game [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Team17\
 The project acts as in drop-in application to a regular installation of Sheltered - no files are touched during the whole lifecycle of the application.
@@ -42,7 +44,7 @@ This plugin contains a userinterface which visualizes different informations of 
 * **Notes:** 
 This project is 32-bit only atm - because the Steam-release only contains 32-bit assemblies.
 
-## Credits
+## Credits & Copyright
 The following frameworks and libraries where used the development of this project, so big thanks to: 
 * [Team 17 for Sheltered](https://store.steampowered.com/app/356040/Sheltered/)
 * [NeighTools for UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)
