@@ -1,6 +1,6 @@
 <img src="/documentation/logo.png"> 
 
-# Sheltered ModManager
+# [POC] Sheltered ModManager
 This project aims to enable modding-support for the game [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Team17\
 The project acts as in drop-in application to a regular installation of Sheltered - no files are touched during the whole lifecycle of the application.
 
