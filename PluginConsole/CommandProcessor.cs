@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
-using UnityEngine;
 
 namespace ConsoleCommands
 {
@@ -22,94 +20,18 @@ namespace ConsoleCommands
 
         private void RegisterCommands()
         {
-            string logPath;
-            try
+            var commandTypes = Assembly.GetExecutingAssembly().GetTypes()
+                .Where(t => typeof(ICommand).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);
+
+            foreach (var type in commandTypes)
             {
-                var baseDir = UnityEngine.Application.persistentDataPath;
-                if (string.IsNullOrEmpty(baseDir)) baseDir = Directory.GetCurrentDirectory();
-                Directory.CreateDirectory(baseDir);
-                logPath = Path.Combine(baseDir, "mod_manager.log");
-            }
-            catch { logPath = Path.Combine(Directory.GetCurrentDirectory(), "mod_manager.log"); }
-
-            void Log(string msg)
-            {
-                try
+                ICommand command = Activator.CreateInstance(type) as ICommand;
+                if (command != null)
                 {
-                    using (var tw = File.AppendText(logPath))
-                        tw.WriteLine($"[{DateTime.Now:HH:mm:ss}] CommandProcessor: {msg}");
-                }
-                catch { /* don’t crash logging */ }
-                try { UnityEngine.Debug.Log($"[CommandProcessor] {msg}"); } catch { }
-            }
-
-            Log("RegisterCommands: begin");
-
-            var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-            Log($"Assemblies loaded: {allAssemblies.Length}");
-            foreach (var asm in allAssemblies.OrderBy(a => a.GetName().Name))
-            {
-                try { Log($"  - {asm.FullName} @ {asm.Location}"); }
-                catch { Log($"  - {asm.FullName} @ <no location>"); }
-            }
-
-            var discovered = new List<Type>();
-
-            foreach (var asm in allAssemblies)
-            {
-                try
-                {
-                    foreach (var t in asm.GetTypes())
-                    {
-                        if (typeof(ICommand).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract)
-                        {
-                            discovered.Add(t);
-                            Log($"Found ICommand: {t.FullName}");
-                        }
-                    }
-                }
-                catch (ReflectionTypeLoadException rtle)
-                {
-                    foreach (var t in (rtle.Types ?? new Type[0]))
-                    {
-                        if (t != null && typeof(ICommand).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract)
-                        {
-                            discovered.Add(t);
-                            Log($"Found ICommand (RTLE): {t.FullName}");
-                        }
-                    }
-                    if (rtle.LoaderExceptions != null)
-                        foreach (var e in rtle.LoaderExceptions)
-                            Log($"LoaderException: {e.Message}");
-                }
-                catch (Exception ex)
-                {
-                    Log($"Assembly scan failed for {asm.FullName}: {ex.Message}");
+                    _commands[command.Name.ToLower()] = command;
                 }
             }
-
-            foreach (var type in discovered.Distinct())
-            {
-                try
-                {
-                    var cmd = (ICommand)Activator.CreateInstance(type);
-                    _commands[cmd.Name.ToLower()] = cmd;
-                    Log($"Registered: {cmd.Name} ({type.FullName})");
-                }
-                catch (Exception ex)
-                {
-                    Log($"Instantiate failed for {type.FullName}: {ex}");
-                }
-            }
-
-            // Safety net (keeps console usable even if discovery fails)
-            if (!_commands.ContainsKey("help")) _commands["help"] = new HelpCommand();
-            if (!_commands.ContainsKey("clear")) _commands["clear"] = new ClearCommand();
-            if (!_commands.ContainsKey("scene")) _commands["scene"] = new SceneInfoCommand();
-
-            Log($"RegisterCommands: done. Total={_commands.Count}");
         }
-
 
         public string ProcessCommand(string inputLine)
         {
