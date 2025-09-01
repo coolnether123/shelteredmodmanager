@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 
+
 /**
 * Author: benjaminfoo
 * See: https://github.com/benjaminfoo/shelteredmodmanager
@@ -16,16 +17,17 @@ public class InitializerPlugin : IPlugin
     public string Version => "0.0.1";
 
 
-    public void initialize()
+        public void initialize()
     {
-
+        MMLog.Write("InitializerPlugin: initialize called.");
     }
 
     public void start(GameObject root)
     {
+        MMLog.Write("InitializerPlugin: start called.");
         LabelComponent label = root.AddComponent<LabelComponent>();
         label.setTop(10);
         label.setText("Modding-API active");
-
+        MMLog.Write("InitializerPlugin: LabelComponent added and text set.");
     }
 }

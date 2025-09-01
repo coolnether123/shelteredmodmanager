@@ -235,6 +235,7 @@
             this.uiInstalledModsListView.Size = new System.Drawing.Size(169, 199);
             this.uiInstalledModsListView.TabIndex = 1;
             this.uiInstalledModsListView.SelectedIndexChanged += new System.EventHandler(this.uiInstalledModsListView_SelectedIndexChanged);
+            this.uiInstalledModsListView.DoubleClick += new System.EventHandler(this.uiInstalledModsListView_DoubleClick);
             // 
             // uiAvailbleModsListView
             // 
