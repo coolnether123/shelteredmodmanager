@@ -1,5 +1,4 @@
-﻿using UnityEngine;
-using System;
+using UnityEngine;
 
 /**
 * Author: benjaminfoo
@@ -17,21 +16,12 @@ public class ConsolePlugin : IPlugin
 
     public void initialize()
     {
-        MMLog.Write("ConsolePlugin: initialize called.");
+
     }
 
     public void start(GameObject root)
     {
-        MMLog.Write("ConsolePlugin: Attempting to add ConsoleWindowComponent to GameObject.");
-        try
-        {
-            ConsoleWindowComponent consoleWindow = root.AddComponent<ConsoleWindowComponent>();
-            MMLog.Write("ConsolePlugin: ConsoleWindowComponent added successfully.");
-        }
-        catch (Exception ex)
-        {
-            MMLog.Write(string.Format("ConsolePlugin: ERROR adding ConsoleWindowComponent: {0}", ex.Message));
-        }
+        ConsoleWindowComponent consoleWindow = root.AddComponent<ConsoleWindowComponent>();
     }
 
 }
