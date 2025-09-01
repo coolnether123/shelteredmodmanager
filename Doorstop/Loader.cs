@@ -4,6 +4,7 @@ using UnityEngine;
 
 /**
  * Author: benjaminfoo
+ * Maintainer: coolnether123
  * See: https://github.com/benjaminfoo/shelteredmodmanager
  * 
  * The class gets loaded by the UnityDoorstop-hook which is initiated in the winhttp.dll/version.dll
