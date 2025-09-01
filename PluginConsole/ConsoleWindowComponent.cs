@@ -1,70 +1,102 @@
 ﻿using System;
 using UnityEngine;
+using ConsoleCommands;
 
-/**
-* Author: benjaminfoo
-* See: https://github.com/benjaminfoo/shelteredmodmanager
-* 
-* The console-userinterface which gets instantiated by the console-plugin
-*/
+
 class ConsoleWindowComponent : MonoBehaviour
 {
     public int id = 1;
-    public Rect windowRect1 = new Rect(20, 20, 300, 300);
+    public Rect windowRect = new Rect(20, 20, 450, 400);
 
     public String titleText = "Console";
 
-    private bool executeHasBeenPressed = false;
+    private CommandProcessor _commandProcessor;
+    private Vector2 _scrollPosition;
 
-    private String consoleOutput = String.Empty;
-    private string consoleInput = String.Empty;
+    private string consoleOutput = "";
+    private string consoleInput = "";
 
-    void Start() {
-        
+    void Awake()
+    {
+        MMLog.Write("ConsoleWindowComponent: Awake called.");
+    }
+
+    void Start()
+    {
+        MMLog.Write("ConsoleWindowComponent: Start called. Instantiating CommandProcessor.");
+        _commandProcessor = new CommandProcessor();
+        consoleOutput = "Console Initialized. Type 'help' for a list of commands.";
+        Application.logMessageReceived += HandleUnityLog;
     }
 
     void OnGUI()
     {
-        windowRect1 = GUI.Window(id, windowRect1, DoMyWindow, titleText);
-
-        if (Event.current.keyCode == KeyCode.Return || executeHasBeenPressed)
-        {
-            appendMessage(consoleInput);
-        }
+        windowRect = GUI.Window(id, windowRect, DoMyWindow, titleText);
     }
-
-    public void appendMessage(string message) {
-        consoleOutput += "\n";
-        consoleOutput += message;
-
-        consoleInput = String.Empty;
-    }
-
 
     void DoMyWindow(int windowID)
     {
+        bool executeCommand = (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Return);
+
         GUILayout.BeginVertical();
+
+        _scrollPosition = GUILayout.BeginScrollView(_scrollPosition, GUILayout.Height(320));
         GUILayout.TextArea(consoleOutput, new GUILayoutOption[] {
             GUILayout.ExpandWidth(true),
-            GUILayout.Height(240)
+            GUILayout.ExpandHeight(true)
         });
+        GUILayout.EndScrollView();
 
         GUILayout.BeginHorizontal();
+        
+        GUI.SetNextControlName("ConsoleInput");
         consoleInput = GUILayout.TextField(consoleInput, new GUILayoutOption[] {
             GUILayout.ExpandWidth(true),
             GUILayout.Height(30),
         });
-        executeHasBeenPressed = GUILayout.Button("Execute" , new GUILayoutOption[] {
-            GUILayout.Width(80),
-            GUILayout.Height(30),
-        });
-        GUILayout.EndHorizontal();
+        GUI.FocusControl("ConsoleInput");
 
+        if (GUILayout.Button("Execute", new GUILayoutOption[] { GUILayout.Width(80), GUILayout.Height(30) }) || executeCommand)
+        {
+            if (!string.IsNullOrEmpty(consoleInput))
+            {
+                consoleOutput += string.Format("\n> {0}", consoleInput);
+
+                string result = _commandProcessor.ProcessCommand(consoleInput);
+                
+                if (result == "##CLEAR##")
+                {
+                    consoleOutput = "";
+                }
+                else if (!string.IsNullOrEmpty(result))
+                {
+                    consoleOutput += string.Format("\n{0}", result);
+                }
+
+                consoleInput = "";
+                _scrollPosition.y = Mathf.Infinity;
+            }
+            Event.current.Use();
+        }
+
+        GUILayout.EndHorizontal();
         GUILayout.EndVertical();
 
-        // Make the windows be draggable.
         GUI.DragWindow(new Rect(0, 0, 10000, 10000));
     }
 
-    
+    void OnDestroy()
+    {
+        MMLog.Write("ConsoleWindowComponent: OnDestroy called.");
+        Application.logMessageReceived -= HandleUnityLog;
+    }
+
+    private void HandleUnityLog(string condition, string stackTrace, LogType type)
+    {
+        string prefix = type == LogType.Warning ? "[Warn] " :
+                        (type == LogType.Error || type == LogType.Exception) ? "[Error] " :
+                        (type == LogType.Assert ? "[Assert] " : "[Log] ");
+        consoleOutput += string.Format("\n{0}{1}", prefix, condition);
+        _scrollPosition.y = Mathf.Infinity;
+    }
 }

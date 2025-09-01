@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -53,9 +53,18 @@
     <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.UI.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ManagerGUI.cs">
@@ -109,6 +118,11 @@
       <Install>true</Install>
     </BootstrapperPackage>
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Lib.Harmony">
+      <Version>1.2.0.1</Version>
+    </PackageReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>SET BUILD_PATH=$(SolutionDir)\Dist
@@ -146,6 +160,7 @@ copy "%25PROJECT_MODAPI%25"\"%25SUB_DIR%25"\ModAPI.dll "%25SMM_PATH%25"\
 
 :: Copy the Doorstop-Hoock and its config the Dist-directory 
 copy "%25PROJECT_DOORSTOP%25"\"%25SUB_DIR%25"\Doorstop.dll "%25SMM_PATH%25"\
+copy "%25PROJECT_DOORSTOP%25"\"%25SUB_DIR%25"\Doorstop.pdb "%25SMM_PATH%25"\
 copy "%25LIB_DIR%25"\doorstop_config.ini "%25BUILD_PATH%25"\
 copy "%25LIB_DIR%25"\winhttp.dll "%25BUILD_PATH%25"\
 
@@ -157,11 +172,12 @@ mkdir "%25MODS_PATH%25"
 
 
 :: Copy the Mod-API.dll to the Dist-directory 
-copy "%25PROJECT_PLUGIN_CONSOLE%25"\"%25SUB_DIR%25"\PluginConsole.dll "%25MODS_PATH%25"\
+copy "%25PROJECT_PLUGIN_CONSOLE%25"\"%25SUB_DIR%25\"\PluginConsole.dll "%25MODS_PATH%25"\
+copy "%25PROJECT_PLUGIN_CONSOLE%25"\"%25SUB_DIR%25\"\PluginConsole.pdb "%25MODS_PATH%25"\
 copy "%25PROJECT_PLUGIN_DEBUG_GUI%25"\"%25SUB_DIR%25"\PluginDebugGUI.dll "%25MODS_PATH%25"\
 copy "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25"\PluginHarmony.dll "%25MODS_PATH%25"\
 copy "%25PROJECT_PLUGIN_INITIALIZER%25"\"%25SUB_DIR%25"\PluginInitializer.dll "%25MODS_PATH%25"\
-copy "%25LIB_DIR%25\"0Harmony.dll* "%25MODS_PATH%25"\
+copy "%25LIB_DIR%25"\0Harmony.dll* "%25MODS_PATH%25"\
 </PostBuildEvent>
   </PropertyGroup>
 </Project>
