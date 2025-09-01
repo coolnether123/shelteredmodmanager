@@ -1,6 +1,6 @@
 ﻿using System.IO;
 using System.Reflection;
-using Harmony;
+using HarmonyLib;
 using UnityEngine;
 
 /**
@@ -25,7 +25,7 @@ public class HarmonyPlugin : IPlugin
     public void start(GameObject root)
     {
 
-        var harmony = HarmonyInstance.Create("org.owls.modmanager");
+        var harmony = new Harmony("com.coolnether123.shelteredmodmanager");
         harmony.PatchAll(Assembly.GetExecutingAssembly());
 
         LabelComponent label = root.AddComponent<LabelComponent>();
@@ -34,7 +34,7 @@ public class HarmonyPlugin : IPlugin
         label.setText(
             "Harmony-Plugin loaded: " + (harmony != null) + "\n"
             + "Harmony-Id: " + (harmony.Id) + "\n"
-            + "Harmony.hasPatches: " + harmony.HasAnyPatches(harmony.Id)
+            + "Harmony.hasPatches: " + Harmony.HasAnyPatches(harmony.Id)
         );
 
 
@@ -80,7 +80,7 @@ public class HarmonyPlugin : IPlugin
     [HarmonyPatch(typeof(Obj_Base), "Update")]
     public static class Obj_Base_Update_Patch
     {
-        public static bool Prefix(ref Obj_Base __instance)
+        public static bool Prefix(Obj_Base __instance)
         {
             Traverse.Create(__instance).Field("m_Movable").SetValue(true);
             return true;

@@ -7,6 +7,7 @@ using UnityEngine;
 
 /**
 * Original Author: benjaminfoo
+* Maintainer: coolnether123
 * See: https://github.com/benjaminfoo/shelteredmodmanager
 * See: https://code.msdn.microsoft.com/windowsdesktop/Creating-a-simple-plugin-b6174b62
 * 
