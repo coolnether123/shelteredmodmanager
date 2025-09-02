@@ -46,6 +46,8 @@
   <ItemGroup>
     <Compile Include="IPlugin.cs" />
     <Compile Include="MMLog.cs" />
+    <Compile Include="ModManifest.cs" />
+    <Compile Include="ModDiscovery.cs" />
     <Compile Include="PluginManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
