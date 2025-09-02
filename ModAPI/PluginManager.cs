@@ -49,12 +49,19 @@ public class PluginManager
         // New: Manifest-driven mod discovery (About.json inside About/)
         // Coolnether123
         var discovered = ModDiscovery.DiscoverEnabledMods();
+        // Determine mods root (Coolnether123)
+        string modsRoot = modsPath;
+        // Apply load order resolver (Coolnether123)
+        discovered = LoadOrderResolver.Resolve(discovered, modsRoot);
+
         foreach (var mod in discovered)
         {
             var modAssemblies = ModDiscovery.LoadAssemblies(mod);
             foreach (var asm in modAssemblies)
             {
                 assemblies.Add(asm);
+                // Register mapping between assembly and its mod for settings resolution (Coolnether123)
+                ModRegistry.RegisterAssemblyForMod(asm, mod);
             }
 
             // Respect explicit entry type if provided (must implement IPlugin)
@@ -121,6 +128,22 @@ public class PluginManager
                     Debug.Log("[Legacy] Loading " + dllFile + " ...");
                     Assembly assembly = Assembly.LoadFile(dllFile.FullName);
                     assemblies.Add(assembly);
+                    // Legacy DLLs: no manifest; still register best-effort so settings can look next to the DLL (Coolnether123)
+                    try
+                    {
+                        var legacyEntry = new ModEntry
+                        {
+                            Id = dllFile.Name.ToLowerInvariant(),
+                            Name = dllFile.Name,
+                            Version = null,
+                            RootPath = dllFile.DirectoryName,
+                            AboutPath = null,
+                            AssembliesPath = dllFile.DirectoryName,
+                            Manifest = null
+                        };
+                        ModRegistry.RegisterAssemblyForMod(assembly, legacyEntry);
+                    }
+                    catch { }
                     Debug.Log("[Legacy] ... loaded " + dllFile + " !");
                 }
             }

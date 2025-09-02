@@ -13,13 +13,13 @@ using UnityEngine;
  */
 public class ModEntry
 {
-    public string Id;            // normalized id                               // Coolnether123
-    public string Name;          // display name                                // Coolnether123
-    public string Version;       // optional version string                     // Coolnether123
-    public string RootPath;      // mod root folder                             // Coolnether123
-    public string AboutPath;     // path to About/About.json                    // Coolnether123
-    public string AssembliesPath;// path to Assemblies folder                   // Coolnether123
-    public ModManifest Manifest; // parsed manifest                             // Coolnether123
+    public string Id;            // normalized id                              
+    public string Name;          // display name                                
+    public string Version;       // optional version string                  
+    public string RootPath;      // mod root folder                            
+    public string AboutPath;     // path to About/About.json                    
+    public string AssembliesPath;// path to Assemblies folder                   
+    public ModManifest Manifest; // parsed manifest                             
 }
 
 public static class ModDiscovery

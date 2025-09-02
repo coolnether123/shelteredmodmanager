@@ -31,6 +31,19 @@ public class HarmonyPlugin : IPlugin
         LabelComponent label = root.AddComponent<LabelComponent>();
         label.setTop(30);
         if (harmony == null) return;
+        // Demo: read settings for this plugin (Coolnether123)
+        try
+        {
+            var settings = ModSettings.ForAssembly(Assembly.GetExecutingAssembly());
+            bool enabled = settings.GetBool("enabled", true);
+            int maxCount = settings.GetInt("maxCount", 10);
+            // Touch user config to demonstrate persistence (only if changed)
+            settings.SetBool("enabled", enabled);
+            settings.SetInt("maxCount", maxCount);
+            settings.SaveUser();
+        }
+        catch { }
+
         label.setText(
             "Harmony-Plugin loaded: " + (harmony != null) + "\n"
             + "Harmony-Id: " + (harmony.Id) + "\n"

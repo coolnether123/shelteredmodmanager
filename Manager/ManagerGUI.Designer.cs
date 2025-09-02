@@ -59,12 +59,41 @@
             this.tabPage3.SuspendLayout();
             this.tabPage2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
+            // Create Details tab and child controls (Coolnether123)
+            this.tabPageDetails = new System.Windows.Forms.TabPage();
+            this.grpDetails = new System.Windows.Forms.GroupBox();
+            this.pbPreview = new System.Windows.Forms.PictureBox();
+            this.lblName = new System.Windows.Forms.Label();
+            this.lblId = new System.Windows.Forms.Label();
+            this.lblVersion = new System.Windows.Forms.Label();
+            this.lblAuthors = new System.Windows.Forms.Label();
+            this.lblDescription = new System.Windows.Forms.Label();
+            this.lblTags = new System.Windows.Forms.Label();
+            this.lblWebsite = new System.Windows.Forms.Label();
+            this.grpSettings = new System.Windows.Forms.GroupBox();
+            this.panelSettings = new System.Windows.Forms.Panel();
+            this.btnApplySettings = new System.Windows.Forms.Button();
+            this.btnResetSettings = new System.Windows.Forms.Button();
+            this.chkDevMode = new System.Windows.Forms.CheckBox();
+            this.grpManifestInspector = new System.Windows.Forms.GroupBox();
+            this.chkHasId = new System.Windows.Forms.CheckBox();
+            this.chkHasName = new System.Windows.Forms.CheckBox();
+            this.chkHasVersion = new System.Windows.Forms.CheckBox();
+            this.chkHasAuthors = new System.Windows.Forms.CheckBox();
+            this.chkHasDescription = new System.Windows.Forms.CheckBox();
+            this.chkHasEntryType = new System.Windows.Forms.CheckBox();
+            this.chkHasDependsOn = new System.Windows.Forms.CheckBox();
+            this.chkHasLoadBefore = new System.Windows.Forms.CheckBox();
+            this.chkHasLoadAfter = new System.Windows.Forms.CheckBox();
+            this.chkHasTags = new System.Windows.Forms.CheckBox();
+            this.chkHasWebsite = new System.Windows.Forms.CheckBox();
             this.SuspendLayout();
             // 
             // tabControl1
             // 
             this.tabControl1.Controls.Add(this.tabPage1);
             this.tabControl1.Controls.Add(this.tabPage3);
+            this.tabControl1.Controls.Add(this.tabPageDetails);
             this.tabControl1.Controls.Add(this.tabPage2);
             this.tabControl1.Location = new System.Drawing.Point(13, 244);
             this.tabControl1.Name = "tabControl1";
@@ -197,6 +226,7 @@
             this.button2.TabIndex = 5;
             this.button2.Text = "<=";
             this.button2.UseVisualStyleBackColor = true;
+            this.button2.Click += new System.EventHandler(this.button2_Click);
             // 
             // button1
             // 
@@ -207,6 +237,42 @@
             this.button1.Text = "=>";
             this.button1.UseVisualStyleBackColor = true;
             this.button1.Click += new System.EventHandler(this.button1_Click);
+            // 
+            // btnMoveUpEnabled
+            // 
+            this.btnMoveUpEnabled = new System.Windows.Forms.Button();
+            this.btnMoveUpEnabled.Location = new System.Drawing.Point(190, 149);
+            this.btnMoveUpEnabled.Name = "btnMoveUpEnabled";
+            this.btnMoveUpEnabled.Size = new System.Drawing.Size(104, 23);
+            this.btnMoveUpEnabled.TabIndex = 6;
+            this.btnMoveUpEnabled.Text = "Move Up";
+            this.btnMoveUpEnabled.UseVisualStyleBackColor = true;
+            this.btnMoveUpEnabled.Click += new System.EventHandler(this.btnMoveUpEnabled_Click);
+            this.tabPage3.Controls.Add(this.btnMoveUpEnabled);
+            // 
+            // btnMoveDownEnabled
+            // 
+            this.btnMoveDownEnabled = new System.Windows.Forms.Button();
+            this.btnMoveDownEnabled.Location = new System.Drawing.Point(190, 120);
+            this.btnMoveDownEnabled.Name = "btnMoveDownEnabled";
+            this.btnMoveDownEnabled.Size = new System.Drawing.Size(104, 23);
+            this.btnMoveDownEnabled.TabIndex = 7;
+            this.btnMoveDownEnabled.Text = "Move Down";
+            this.btnMoveDownEnabled.UseVisualStyleBackColor = true;
+            this.btnMoveDownEnabled.Click += new System.EventHandler(this.btnMoveDownEnabled_Click);
+            this.tabPage3.Controls.Add(this.btnMoveDownEnabled);
+            // 
+            // btnSaveOrder
+            // 
+            this.btnSaveOrder = new System.Windows.Forms.Button();
+            this.btnSaveOrder.Location = new System.Drawing.Point(190, 91);
+            this.btnSaveOrder.Name = "btnSaveOrder";
+            this.btnSaveOrder.Size = new System.Drawing.Size(104, 23);
+            this.btnSaveOrder.TabIndex = 8;
+            this.btnSaveOrder.Text = "Save Order";
+            this.btnSaveOrder.UseVisualStyleBackColor = true;
+            this.btnSaveOrder.Click += new System.EventHandler(this.btnSaveOrder_Click);
+            this.tabPage3.Controls.Add(this.btnSaveOrder);
             // 
             // uiInstaledLabel
             // 
@@ -244,6 +310,7 @@
             this.uiAvailbleModsListView.Name = "uiAvailbleModsListView";
             this.uiAvailbleModsListView.Size = new System.Drawing.Size(173, 199);
             this.uiAvailbleModsListView.TabIndex = 0;
+            this.uiAvailbleModsListView.SelectedIndexChanged += new System.EventHandler(this.uiAvailbleModsListView_SelectedIndexChanged);
             // 
             // tabPage2
             // 
@@ -333,6 +400,220 @@
             this.pictureBox1.TabIndex = 11;
             this.pictureBox1.TabStop = false;
             // 
+            // tabPageDetails
+            // 
+            this.tabPageDetails.Location = new System.Drawing.Point(4, 22);
+            this.tabPageDetails.Name = "tabPageDetails";
+            this.tabPageDetails.Padding = new System.Windows.Forms.Padding(3);
+            this.tabPageDetails.Size = new System.Drawing.Size(453, 229);
+            this.tabPageDetails.TabIndex = 3;
+            this.tabPageDetails.Text = "Details";
+            this.tabPageDetails.UseVisualStyleBackColor = true;
+            // 
+            // grpDetails
+            // 
+            this.grpDetails.Location = new System.Drawing.Point(8, 6);
+            this.grpDetails.Name = "grpDetails";
+            this.grpDetails.Size = new System.Drawing.Size(290, 105);
+            this.grpDetails.TabIndex = 0;
+            this.grpDetails.TabStop = false;
+            this.grpDetails.Text = "Details";
+            // 
+            // pbPreview
+            // 
+            this.pbPreview.Location = new System.Drawing.Point(14, 20);
+            this.pbPreview.Name = "pbPreview";
+            this.pbPreview.Size = new System.Drawing.Size(64, 64);
+            this.pbPreview.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
+            this.pbPreview.TabIndex = 0;
+            this.pbPreview.TabStop = false;
+            // 
+            // lblName
+            // 
+            this.lblName.AutoSize = true;
+            this.lblName.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold);
+            this.lblName.Location = new System.Drawing.Point(90, 10);
+            this.lblName.Name = "lblName";
+            this.lblName.Size = new System.Drawing.Size(36, 13);
+            this.lblName.TabIndex = 1;
+            this.lblName.Text = "name";
+            // 
+            // lblId
+            // 
+            this.lblId.AutoSize = true;
+            this.lblId.Location = new System.Drawing.Point(90, 25);
+            this.lblId.Name = "lblId";
+            this.lblId.Size = new System.Drawing.Size(16, 13);
+            this.lblId.TabIndex = 2;
+            this.lblId.Text = "id";
+            // 
+            // lblVersion
+            // 
+            this.lblVersion.AutoSize = true;
+            this.lblVersion.Location = new System.Drawing.Point(90, 40);
+            this.lblVersion.Name = "lblVersion";
+            this.lblVersion.Size = new System.Drawing.Size(41, 13);
+            this.lblVersion.TabIndex = 3;
+            this.lblVersion.Text = "version";
+            // 
+            // lblAuthors
+            // 
+            this.lblAuthors.AutoSize = true;
+            this.lblAuthors.Location = new System.Drawing.Point(90, 55);
+            this.lblAuthors.Name = "lblAuthors";
+            this.lblAuthors.Size = new System.Drawing.Size(43, 13);
+            this.lblAuthors.TabIndex = 4;
+            this.lblAuthors.Text = "authors";
+            // 
+            // lblDescription
+            // 
+            this.lblDescription.AutoSize = true;
+            this.lblDescription.Location = new System.Drawing.Point(90, 70);
+            this.lblDescription.Name = "lblDescription";
+            this.lblDescription.Size = new System.Drawing.Size(62, 13);
+            this.lblDescription.TabIndex = 5;
+            this.lblDescription.Text = "description";
+            // 
+            // lblTags
+            // 
+            this.lblTags.AutoSize = true;
+            this.lblTags.Location = new System.Drawing.Point(90, 85);
+            this.lblTags.Name = "lblTags";
+            this.lblTags.Size = new System.Drawing.Size(28, 13);
+            this.lblTags.TabIndex = 6;
+            this.lblTags.Text = "tags";
+            // 
+            // lblWebsite
+            // 
+            this.lblWebsite.AutoSize = true;
+            this.lblWebsite.Location = new System.Drawing.Point(90, 100);
+            this.lblWebsite.Name = "lblWebsite";
+            this.lblWebsite.Size = new System.Drawing.Size(50, 13);
+            this.lblWebsite.TabIndex = 7;
+            this.lblWebsite.Text = "website";
+            // 
+            // grpSettings
+            // 
+            this.grpSettings.Location = new System.Drawing.Point(8, 117);
+            this.grpSettings.Name = "grpSettings";
+            this.grpSettings.Size = new System.Drawing.Size(290, 106);
+            this.grpSettings.TabIndex = 1;
+            this.grpSettings.TabStop = false;
+            this.grpSettings.Text = "Settings";
+            // 
+            // panelSettings
+            // 
+            this.panelSettings.AutoScroll = true;
+            this.panelSettings.Location = new System.Drawing.Point(14, 136);
+            this.panelSettings.Name = "panelSettings";
+            this.panelSettings.Size = new System.Drawing.Size(276, 63);
+            this.panelSettings.TabIndex = 2;
+            // 
+            // btnApplySettings
+            // 
+            this.btnApplySettings.Location = new System.Drawing.Point(164, 205);
+            this.btnApplySettings.Name = "btnApplySettings";
+            this.btnApplySettings.Size = new System.Drawing.Size(62, 18);
+            this.btnApplySettings.TabIndex = 3;
+            this.btnApplySettings.Text = "Apply";
+            this.btnApplySettings.UseVisualStyleBackColor = true;
+            this.btnApplySettings.Click += new System.EventHandler(this.btnApplySettings_Click);
+            // 
+            // btnResetSettings
+            // 
+            this.btnResetSettings.Location = new System.Drawing.Point(232, 205);
+            this.btnResetSettings.Name = "btnResetSettings";
+            this.btnResetSettings.Size = new System.Drawing.Size(62, 18);
+            this.btnResetSettings.TabIndex = 4;
+            this.btnResetSettings.Text = "Reset";
+            this.btnResetSettings.UseVisualStyleBackColor = true;
+            this.btnResetSettings.Click += new System.EventHandler(this.btnResetSettings_Click);
+            // 
+            // chkDevMode
+            // 
+            this.chkDevMode.AutoSize = true;
+            this.chkDevMode.Location = new System.Drawing.Point(306, 6);
+            this.chkDevMode.Name = "chkDevMode";
+            this.chkDevMode.Size = new System.Drawing.Size(136, 17);
+            this.chkDevMode.TabIndex = 5;
+            this.chkDevMode.Text = "Developer Mode (More)";
+            this.chkDevMode.UseVisualStyleBackColor = true;
+            this.chkDevMode.CheckedChanged += new System.EventHandler(this.chkDevMode_CheckedChanged);
+            // 
+            // grpManifestInspector
+            // 
+            this.grpManifestInspector.Location = new System.Drawing.Point(306, 29);
+            this.grpManifestInspector.Name = "grpManifestInspector";
+            this.grpManifestInspector.Size = new System.Drawing.Size(141, 194);
+            this.grpManifestInspector.TabIndex = 6;
+            this.grpManifestInspector.TabStop = false;
+            this.grpManifestInspector.Text = "Manifest Inspector";
+            this.grpManifestInspector.Visible = false;
+            // Add checkboxes
+            this.chkHasId.Location = new System.Drawing.Point(10, 20);
+            this.chkHasId.Size = new System.Drawing.Size(120, 16);
+            this.chkHasId.Text = "id";
+            this.grpManifestInspector.Controls.Add(this.chkHasId);
+            this.chkHasName.Location = new System.Drawing.Point(10, 40);
+            this.chkHasName.Size = new System.Drawing.Size(120, 16);
+            this.chkHasName.Text = "name";
+            this.grpManifestInspector.Controls.Add(this.chkHasName);
+            this.chkHasVersion.Location = new System.Drawing.Point(10, 60);
+            this.chkHasVersion.Size = new System.Drawing.Size(120, 16);
+            this.chkHasVersion.Text = "version";
+            this.grpManifestInspector.Controls.Add(this.chkHasVersion);
+            this.chkHasAuthors.Location = new System.Drawing.Point(10, 80);
+            this.chkHasAuthors.Size = new System.Drawing.Size(120, 16);
+            this.chkHasAuthors.Text = "authors";
+            this.grpManifestInspector.Controls.Add(this.chkHasAuthors);
+            this.chkHasDescription.Location = new System.Drawing.Point(10, 100);
+            this.chkHasDescription.Size = new System.Drawing.Size(120, 16);
+            this.chkHasDescription.Text = "description";
+            this.grpManifestInspector.Controls.Add(this.chkHasDescription);
+            this.chkHasEntryType.Location = new System.Drawing.Point(10, 120);
+            this.chkHasEntryType.Size = new System.Drawing.Size(120, 16);
+            this.chkHasEntryType.Text = "entryType";
+            this.grpManifestInspector.Controls.Add(this.chkHasEntryType);
+            this.chkHasDependsOn.Location = new System.Drawing.Point(10, 140);
+            this.chkHasDependsOn.Size = new System.Drawing.Size(120, 16);
+            this.chkHasDependsOn.Text = "dependsOn";
+            this.grpManifestInspector.Controls.Add(this.chkHasDependsOn);
+            this.chkHasLoadBefore.Location = new System.Drawing.Point(10, 160);
+            this.chkHasLoadBefore.Size = new System.Drawing.Size(120, 16);
+            this.chkHasLoadBefore.Text = "loadBefore";
+            this.grpManifestInspector.Controls.Add(this.chkHasLoadBefore);
+            this.chkHasLoadAfter.Location = new System.Drawing.Point(10, 180);
+            this.chkHasLoadAfter.Size = new System.Drawing.Size(120, 16);
+            this.chkHasLoadAfter.Text = "loadAfter";
+            this.grpManifestInspector.Controls.Add(this.chkHasLoadAfter);
+            this.chkHasTags.Location = new System.Drawing.Point(10, 200);
+            this.chkHasTags.Size = new System.Drawing.Size(120, 16);
+            this.chkHasTags.Text = "tags";
+            this.grpManifestInspector.Controls.Add(this.chkHasTags);
+            // not all fit; ignore overflowing positions in small tab
+            this.chkHasWebsite.Location = new System.Drawing.Point(10, 220);
+            this.chkHasWebsite.Size = new System.Drawing.Size(120, 16);
+            this.chkHasWebsite.Text = "website";
+            this.grpManifestInspector.Controls.Add(this.chkHasWebsite);
+            // 
+            // Add controls to containers
+            // 
+            this.grpDetails.Controls.Add(this.pbPreview);
+            this.grpDetails.Controls.Add(this.lblName);
+            this.grpDetails.Controls.Add(this.lblId);
+            this.grpDetails.Controls.Add(this.lblVersion);
+            this.grpDetails.Controls.Add(this.lblAuthors);
+            this.grpDetails.Controls.Add(this.lblDescription);
+            this.grpDetails.Controls.Add(this.lblTags);
+            this.grpDetails.Controls.Add(this.lblWebsite);
+            this.tabPageDetails.Controls.Add(this.grpDetails);
+            this.tabPageDetails.Controls.Add(this.grpSettings);
+            this.tabPageDetails.Controls.Add(this.panelSettings);
+            this.tabPageDetails.Controls.Add(this.btnApplySettings);
+            this.tabPageDetails.Controls.Add(this.btnResetSettings);
+            this.tabPageDetails.Controls.Add(this.chkDevMode);
+            this.tabPageDetails.Controls.Add(this.grpManifestInspector);
+            // 
             // ManagerGUI
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -385,6 +666,36 @@
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.PictureBox pictureBox1;
         private System.Windows.Forms.Button uiOpenGameDir;
+        private System.Windows.Forms.Button btnMoveUpEnabled;
+        private System.Windows.Forms.Button btnMoveDownEnabled;
+        private System.Windows.Forms.Button btnSaveOrder;
+        private System.Windows.Forms.TabPage tabPageDetails;
+        private System.Windows.Forms.GroupBox grpDetails;
+        private System.Windows.Forms.PictureBox pbPreview;
+        private System.Windows.Forms.Label lblName;
+        private System.Windows.Forms.Label lblId;
+        private System.Windows.Forms.Label lblVersion;
+        private System.Windows.Forms.Label lblAuthors;
+        private System.Windows.Forms.Label lblDescription;
+        private System.Windows.Forms.Label lblTags;
+        private System.Windows.Forms.Label lblWebsite;
+        private System.Windows.Forms.GroupBox grpSettings;
+        private System.Windows.Forms.Panel panelSettings;
+        private System.Windows.Forms.Button btnApplySettings;
+        private System.Windows.Forms.Button btnResetSettings;
+        private System.Windows.Forms.CheckBox chkDevMode;
+        private System.Windows.Forms.GroupBox grpManifestInspector;
+        private System.Windows.Forms.CheckBox chkHasId;
+        private System.Windows.Forms.CheckBox chkHasName;
+        private System.Windows.Forms.CheckBox chkHasVersion;
+        private System.Windows.Forms.CheckBox chkHasAuthors;
+        private System.Windows.Forms.CheckBox chkHasDescription;
+        private System.Windows.Forms.CheckBox chkHasEntryType;
+        private System.Windows.Forms.CheckBox chkHasDependsOn;
+        private System.Windows.Forms.CheckBox chkHasLoadBefore;
+        private System.Windows.Forms.CheckBox chkHasLoadAfter;
+        private System.Windows.Forms.CheckBox chkHasTags;
+        private System.Windows.Forms.CheckBox chkHasWebsite;
     }
 }
 
