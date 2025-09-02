@@ -53,7 +53,7 @@ public class ModSettings
         ModEntry entry;
         if (ModRegistry.TryGetModByAssembly(asm, out entry))
         {
-            return new ModSettings(entry.Manifest != null ? entry.Manifest.id : null, entry.RootPath);
+            return new ModSettings(entry.About != null ? entry.About.id : null, entry.RootPath);
         }
 
         // Fallback: best-effort guess by walking up from the assembly path
@@ -76,8 +76,8 @@ public class ModSettings
                             if (File.Exists(aboutFile))
                             {
                                 var text = File.ReadAllText(aboutFile);
-                                var manifest = JsonUtility.FromJson<ModManifest>(text);
-                                modId = manifest != null ? manifest.id : null;
+                                var about = JsonUtility.FromJson<ModAbout>(text);
+                                modId = about != null ? about.id : null;
                             }
                         }
                         catch { }

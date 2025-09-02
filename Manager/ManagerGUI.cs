@@ -28,11 +28,11 @@ namespace Manager
         private class ModListItem
         {
             public string DisplayName;
-            public string Id;              // manifest id or fallback
+            public string Id;              // about id or fallback
             public string RootPath;        // mod folder or dll folder
             public bool IsDirectory;       // true for folder-based mods
-            public bool HasManifest;       // About/About.json exists
-            public ModManifest Manifest;   // may be null
+            public bool HasAbout;       // About/About.json exists
+            public ModAbout About;   // may be null
             public string PreviewPath;     // About/preview.png if exists
             public override string ToString() { return DisplayName; }
         }
@@ -105,8 +105,8 @@ namespace Manager
                         Id = name.ToLowerInvariant(),
                         RootPath = Path.GetDirectoryName(dll),
                         IsDirectory = false,
-                        HasManifest = false,
-                        Manifest = null,
+                        HasAbout = false,
+                        About = null,
                         PreviewPath = null
                     });
                 }
@@ -119,7 +119,7 @@ namespace Manager
         {
             var aboutDir = Path.Combine(dir, "About");
             var aboutJson = Path.Combine(aboutDir, "About.json");
-            ModManifest manifest = null;
+            ModAbout about = null;
             string id = null, display = Path.GetFileName(dir);
             string preview = null;
             if (File.Exists(aboutJson))
@@ -127,11 +127,11 @@ namespace Manager
                 try
                 {
                     var text = File.ReadAllText(aboutJson);
-                    manifest = new JavaScriptSerializer().Deserialize<ModManifest>(text);
-                    if (manifest != null)
+                    about = new JavaScriptSerializer().Deserialize<ModAbout>(text);
+                    if (about != null)
                     {
-                        id = string.IsNullOrEmpty(manifest.id) ? null : manifest.id.Trim().ToLowerInvariant();
-                        display = string.IsNullOrEmpty(manifest.name) ? display : manifest.name;
+                        id = string.IsNullOrEmpty(about.id) ? null : about.id.Trim().ToLowerInvariant();
+                        display = string.IsNullOrEmpty(about.name) ? display : about.name;
                     }
                 }
                 catch { }
@@ -144,8 +144,8 @@ namespace Manager
                 Id = id ?? display.ToLowerInvariant(),
                 RootPath = dir,
                 IsDirectory = true,
-                HasManifest = File.Exists(aboutJson),
-                Manifest = manifest,
+                HasAbout = File.Exists(aboutJson),
+                About = about,
                 PreviewPath = preview
             };
         }
@@ -435,29 +435,78 @@ namespace Manager
         {
             try
             {
-                // labels created in Designer: lblName, lblVersion, lblAuthors, lblDescription, lblId, lblTags, lblWebsite
-                if (lblName != null) lblName.Text = item != null ? item.DisplayName : string.Empty;
-                if (lblId != null) lblId.Text = item != null ? item.Id : string.Empty;
-                if (item != null && item.Manifest != null)
+                if (item == null)
                 {
-                    if (lblVersion != null) lblVersion.Text = item.Manifest.version ?? "-";
-                    if (lblAuthors != null) lblAuthors.Text = (item.Manifest.authors != null && item.Manifest.authors.Length > 0) ? string.Join(", ", item.Manifest.authors) : "-";
-                    if (lblDescription != null) lblDescription.Text = item.Manifest.description ?? "";
-                    if (lblTags != null) lblTags.Text = (item.Manifest.tags != null && item.Manifest.tags.Length > 0) ? string.Join(", ", item.Manifest.tags) : "-";
-                    if (lblWebsite != null) lblWebsite.Text = item.Manifest.website ?? "-";
-                }
-                else
-                {
+                    // Clear all fields if no item is selected
+                    if (lblName != null) lblName.Text = string.Empty;
+                    if (lblId != null) lblId.Text = string.Empty;
                     if (lblVersion != null) lblVersion.Text = "-";
                     if (lblAuthors != null) lblAuthors.Text = "-";
+                    if (lblDependsOn != null) lblDependsOn.Text = "";
+                    if (rtbDescription != null) rtbDescription.Text = string.Empty;
                     if (lblTags != null) lblTags.Text = "-";
                     if (lblWebsite != null) lblWebsite.Text = "-";
-                    if (lblDescription != null) lblDescription.Text = item != null && !item.HasManifest ? "Legacy mod (no About.json)" : string.Empty;
+                    if (pbPreview != null) pbPreview.Image = null;
+                    return;
                 }
+
+                bool devMode = chkDevMode != null && chkDevMode.Checked;
+
+                // Basic info (always available)
+                if (lblName != null) lblName.Text = item.DisplayName;
+                if (lblId != null) lblId.Text = item.Id;
+
+                // About-dependent info
+                var about = item.About;
+
+                if (lblVersion != null) {
+                    if (about != null && !string.IsNullOrEmpty(about.version)) lblVersion.Text = about.version;
+                    else if (devMode) lblVersion.Text = "Add '\"version\": \"1.0.0\"'";
+                    else lblVersion.Text = "-";
+                }
+
+                if (lblAuthors != null) {
+                    if (about != null && about.authors != null && about.authors.Length > 0) lblAuthors.Text = string.Join(", ", about.authors);
+                    else if (devMode) lblAuthors.Text = "Add '\"authors\": [\"YourName\"]'";
+                    else lblAuthors.Text = "-";
+                }
+
+                if (lblDependsOn != null)
+                {
+                    if (about != null && about.dependsOn != null && about.dependsOn.Length > 0)
+                    {
+                        lblDependsOn.Text = "Depends On: " + string.Join(", ", about.dependsOn);
+                    }
+                    else
+                    {
+                        lblDependsOn.Text = "";
+                    }
+                }
+
+                if (rtbDescription != null) {
+                    if (about != null && !string.IsNullOrEmpty(about.description)) rtbDescription.Text = about.description;
+                    else if (devMode && !item.HasAbout) rtbDescription.Text = "Create 'About/About.json' file for this mod.";
+                    else if (devMode) rtbDescription.Text = "Add '\"description\": \"Your description.\"'";
+                    else if (!item.HasAbout) rtbDescription.Text = "Legacy mod (no About.json)";
+                    else rtbDescription.Text = "";
+                }
+
+                if (lblTags != null) {
+                    if (about != null && about.tags != null && about.tags.Length > 0) lblTags.Text = string.Join(", ", about.tags);
+                    else if (devMode) lblTags.Text = "Add '\"tags\": [\"QoL\", \"UI\"]'";
+                    else lblTags.Text = "-";
+                }
+
+                if (lblWebsite != null) {
+                    if (about != null && !string.IsNullOrEmpty(about.website)) lblWebsite.Text = about.website;
+                    else if (devMode) lblWebsite.Text = "Add '\"website\": \"https://your.link.com\"'";
+                    else lblWebsite.Text = "-";
+                }
+
 
                 if (pbPreview != null)
                 {
-                    if (item != null && !string.IsNullOrEmpty(item.PreviewPath) && System.IO.File.Exists(item.PreviewPath))
+                    if (!string.IsNullOrEmpty(item.PreviewPath) && System.IO.File.Exists(item.PreviewPath))
                     {
                         using (var img = Image.FromFile(item.PreviewPath))
                         {
@@ -470,21 +519,24 @@ namespace Manager
                     }
                 }
 
-                // Dev mode manifest presence
-                if (chkDevMode != null && chkDevMode.Checked && item != null)
+                // Dev mode about presence inspector
+                if (grpAboutInspector != null)
                 {
-                    var man = item.Manifest;
-                    setCheck(chkHasId, man != null && !string.IsNullOrEmpty(man.id));
-                    setCheck(chkHasName, man != null && !string.IsNullOrEmpty(man.name));
-                    setCheck(chkHasVersion, man != null && !string.IsNullOrEmpty(man.version));
-                    setCheck(chkHasAuthors, man != null && man.authors != null && man.authors.Length > 0);
-                    setCheck(chkHasDescription, man != null && !string.IsNullOrEmpty(man.description));
-                    setCheck(chkHasEntryType, man != null && !string.IsNullOrEmpty(man.entryType));
-                    setCheck(chkHasDependsOn, man != null && man.dependsOn != null && man.dependsOn.Length > 0);
-                    setCheck(chkHasLoadBefore, man != null && man.loadBefore != null && man.loadBefore.Length > 0);
-                    setCheck(chkHasLoadAfter, man != null && man.loadAfter != null && man.loadAfter.Length > 0);
-                    setCheck(chkHasTags, man != null && man.tags != null && man.tags.Length > 0);
-                    setCheck(chkHasWebsite, man != null && !string.IsNullOrEmpty(man.website));
+                    grpAboutInspector.Visible = devMode;
+                    if(devMode)
+                    {
+                        setCheck(chkHasId, about != null && !string.IsNullOrEmpty(about.id));
+                        setCheck(chkHasName, about != null && !string.IsNullOrEmpty(about.name));
+                        setCheck(chkHasVersion, about != null && !string.IsNullOrEmpty(about.version));
+                        setCheck(chkHasAuthors, about != null && about.authors != null && about.authors.Length > 0);
+                        setCheck(chkHasDescription, about != null && !string.IsNullOrEmpty(about.description));
+                        setCheck(chkHasEntryType, about != null && !string.IsNullOrEmpty(about.entryType));
+                        setCheck(chkHasDependsOn, about != null && about.dependsOn != null && about.dependsOn.Length > 0);
+                        setCheck(chkHasLoadBefore, about != null && about.loadBefore != null && about.loadBefore.Length > 0);
+                        setCheck(chkHasLoadAfter, about != null && about.loadAfter != null && about.loadAfter.Length > 0);
+                        setCheck(chkHasTags, about != null && about.tags != null && about.tags.Length > 0);
+                        setCheck(chkHasWebsite, about != null && !string.IsNullOrEmpty(about.website));
+                    }
                 }
             }
             catch { }
@@ -736,8 +788,8 @@ namespace Manager
         private void chkDevMode_CheckedChanged(object sender, EventArgs e)
         {
             UpdateDetailsPanel(_selectedItem);
-            if (grpManifestInspector != null)
-                grpManifestInspector.Visible = chkDevMode.Checked;
+            if (grpAboutInspector != null)
+                grpAboutInspector.Visible = chkDevMode.Checked;
         }
     }
 }
