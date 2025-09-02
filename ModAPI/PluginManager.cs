@@ -37,21 +37,97 @@ public class PluginManager
     }
 
     public void loadAssemblies(GameObject doorstepGameObject) {
-        // The original relative path for the mods directory was unreliable.
-        // This has been changed to build a robust, absolute path from the game's data folder.
+        // Build absolute path to the mods directory (from game's data folder)
         string gameRootPath = Directory.GetParent(Application.dataPath).FullName;
         string modsPath = Path.Combine(gameRootPath, "mods");
-        DirectoryInfo dir = new DirectoryInfo(Path.Combine(modsPath, "enabled"));
-        Debug.Log("Looking for plugins in " + dir.FullName + " ...");
+        string enabledPath = Path.Combine(modsPath, "enabled");
+        Debug.Log("Looking for plugins in " + enabledPath + " ...");
 
         ICollection<Assembly> assemblies = new List<Assembly>();
-        foreach (FileInfo dllFile in dir.GetFiles("*.dll"))
-        {
-            Debug.Log("Loading " + dllFile + " ...");
-            Assembly assembly = Assembly.LoadFile(dllFile.FullName);
-            assemblies.Add(assembly);
-            Debug.Log("... loaded " + dllFile + " !");
+        var activatedTypes = new HashSet<Type>(); // track explicitly activated entry types // Coolnether123
 
+        // New: Manifest-driven mod discovery (About.json inside About/)
+        // Coolnether123
+        var discovered = ModDiscovery.DiscoverEnabledMods();
+        foreach (var mod in discovered)
+        {
+            var modAssemblies = ModDiscovery.LoadAssemblies(mod);
+            foreach (var asm in modAssemblies)
+            {
+                assemblies.Add(asm);
+            }
+
+            // Respect explicit entry type if provided (must implement IPlugin)
+            // Coolnether123
+            try
+            {
+                if (mod.Manifest != null && !string.IsNullOrEmpty(mod.Manifest.entryType))
+                {
+                    Type entry = null;
+                    foreach (var asm in modAssemblies)
+                    {
+                        // Try fast path: fully qualified name lookup in this assembly
+                        entry = asm.GetType(mod.Manifest.entryType, false);
+                        if (entry != null) break;
+                        // Slow path: scan types if needed
+                        foreach (var t in asm.GetTypes())
+                        {
+                            if (t.FullName == mod.Manifest.entryType)
+                            {
+                                entry = t;
+                                break;
+                            }
+                        }
+                        if (entry != null) break;
+                    }
+
+                    if (entry != null)
+                    {
+                        if (!entry.IsInterface && !entry.IsAbstract && entry.GetInterface(typeof(IPlugin).FullName) != null)
+                        {
+                            IPlugin plugin = (IPlugin)Activator.CreateInstance(entry);
+                            plugins.Add(plugin);
+                            activatedTypes.Add(entry);
+                            plugin.initialize();
+                            plugin.start(doorstepGameObject);
+                        }
+                        else
+                        {
+                            MMLog.Write("Entry type does not implement IPlugin: " + mod.Manifest.entryType);
+                        }
+                    }
+                    else
+                    {
+                        MMLog.Write("Entry type not found: " + mod.Manifest.entryType + " in mod " + mod.Name);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.Write("Error activating entryType for mod '" + mod.Name + "': " + ex.Message);
+            }
+        }
+
+        // Backward compatibility: also load any loose DLLs directly under mods/enabled
+        // This supports legacy mods until migrated to About.json format.
+        // Coolnether123
+        try
+        {
+            DirectoryInfo dir = new DirectoryInfo(enabledPath);
+            if (dir.Exists)
+            {
+                foreach (FileInfo dllFile in dir.GetFiles("*.dll"))
+                {
+                    Debug.Log("[Legacy] Loading " + dllFile + " ...");
+                    Assembly assembly = Assembly.LoadFile(dllFile.FullName);
+                    assemblies.Add(assembly);
+                    Debug.Log("[Legacy] ... loaded " + dllFile + " !");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            MMLog.Write("Error loading legacy DLLs: " + ex.Message);
         }
 
         Type pluginType = typeof(IPlugin);
@@ -79,8 +155,12 @@ public class PluginManager
         }
 
         // initialize the plugins and start them from the unity-context
+        // If a mod provided an entryType (About.json), it will still be picked up
+        // here as long as that type implements IPlugin. This keeps the system simple
+        // while enabling explicit entry points. // Coolnether123
         foreach (Type type in pluginTypes)
         {
+            if (activatedTypes.Contains(type)) continue; // skip already started entry types // Coolnether123
             IPlugin plugin = (IPlugin)Activator.CreateInstance(type);
             plugins.Add(plugin);
             plugin.initialize();
