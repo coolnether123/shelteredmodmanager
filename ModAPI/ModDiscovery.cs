@@ -19,7 +19,7 @@ public class ModEntry
     public string RootPath;      // mod root folder                            
     public string AboutPath;     // path to About/About.json                    
     public string AssembliesPath;// path to Assemblies folder                   
-    public ModManifest Manifest; // parsed manifest                             
+    public ModAbout About; // parsed about                             
 }
 
 public static class ModDiscovery
@@ -44,27 +44,27 @@ public static class ModDiscovery
             foreach (var dir in Directory.GetDirectories(enabledRoot))
             {
                 var about = Path.Combine(dir, "About");
-                var aboutJson = Path.Combine(about, "About.json"); // <- renamed manifest file  // Coolnether123
+                var aboutJson = Path.Combine(about, "About.json"); // <- renamed about file  // Coolnether123
                 if (!File.Exists(aboutJson))
                 {
-                    // Not a manifest-driven mod; will be handled by legacy loader
+                    // Not a about-driven mod; will be handled by legacy loader
                     continue;
                 }
 
                 try
                 {
                     var text = File.ReadAllText(aboutJson);
-                    var manifest = JsonUtility.FromJson<ModManifest>(text);
-                    if (manifest == null)
+                    var modAbout = JsonUtility.FromJson<ModAbout>(text);
+                    if (modAbout == null)
                     {
                         MMLog.Write("Failed to parse About.json in: " + dir);
                         continue;
                     }
 
                     // Validate required fields (basic)
-                    if (string.IsNullOrEmpty(manifest.id) || string.IsNullOrEmpty(manifest.name) ||
-                        string.IsNullOrEmpty(manifest.version) || string.IsNullOrEmpty(manifest.description) ||
-                        manifest.authors == null || manifest.authors.Length == 0)
+                    if (string.IsNullOrEmpty(modAbout.id) || string.IsNullOrEmpty(modAbout.name) ||
+                        string.IsNullOrEmpty(modAbout.version) || string.IsNullOrEmpty(modAbout.description) ||
+                        modAbout.authors == null || modAbout.authors.Length == 0)
                     {
                         MMLog.Write("About.json missing required fields in: " + dir);
                         continue;
@@ -72,13 +72,13 @@ public static class ModDiscovery
 
                     var entry = new ModEntry
                     {
-                        Id = NormalizeId(manifest.id),
-                        Name = manifest.name,
-                        Version = manifest.version,
+                        Id = NormalizeId(modAbout.id),
+                        Name = modAbout.name,
+                        Version = modAbout.version,
                         RootPath = dir,
                         AboutPath = aboutJson,
                         AssembliesPath = Path.Combine(dir, "Assemblies"),
-                        Manifest = manifest
+                        About = modAbout
                     };
 
                     results.Add(entry);

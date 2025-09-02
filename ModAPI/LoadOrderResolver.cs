@@ -4,7 +4,7 @@ using System.IO;
 using UnityEngine;
 
 /**
- * Resolves final mod load order using user order plus manifest constraints.
+ * Resolves final mod load order using user order plus about constraints.
  * Constraints considered: dependsOn (hard), loadBefore (soft), loadAfter (soft).
  * Author: Coolnether123
  */
@@ -19,7 +19,7 @@ public static class LoadOrderResolver
         var ids = new List<string>();
         foreach (var m in discovered)
         {
-            var id = (m.Manifest != null && !string.IsNullOrEmpty(m.Manifest.id)) ? m.Manifest.id.Trim().ToLowerInvariant() : (m.Id ?? m.Name ?? m.RootPath);
+            var id = (m.About != null && !string.IsNullOrEmpty(m.About.id)) ? m.About.id.Trim().ToLowerInvariant() : (m.Id ?? m.Name ?? m.RootPath);
             if (string.IsNullOrEmpty(id)) id = Guid.NewGuid().ToString("N");
             if (!byId.ContainsKey(id))
             {
@@ -54,10 +54,10 @@ public static class LoadOrderResolver
 
         foreach (var m in discovered)
         {
-            var mid = (m.Manifest != null && !string.IsNullOrEmpty(m.Manifest.id)) ? m.Manifest.id.Trim().ToLowerInvariant() : (m.Id ?? m.Name ?? m.RootPath);
+            var mid = (m.About != null && !string.IsNullOrEmpty(m.About.id)) ? m.About.id.Trim().ToLowerInvariant() : (m.Id ?? m.Name ?? m.RootPath);
             if (string.IsNullOrEmpty(mid) || !adj.ContainsKey(mid)) continue;
 
-            var man = m.Manifest;
+            var man = m.About;
             if (man == null) continue;
             if (man.dependsOn != null)
             {

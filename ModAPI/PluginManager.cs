@@ -46,7 +46,7 @@ public class PluginManager
         ICollection<Assembly> assemblies = new List<Assembly>();
         var activatedTypes = new HashSet<Type>(); // track explicitly activated entry types // Coolnether123
 
-        // New: Manifest-driven mod discovery (About.json inside About/)
+        // New: About-driven mod discovery (About.json inside About/)
         // Coolnether123
         var discovered = ModDiscovery.DiscoverEnabledMods();
         // Determine mods root (Coolnether123)
@@ -68,18 +68,18 @@ public class PluginManager
             // Coolnether123
             try
             {
-                if (mod.Manifest != null && !string.IsNullOrEmpty(mod.Manifest.entryType))
+                if (mod.About != null && !string.IsNullOrEmpty(mod.About.entryType))
                 {
                     Type entry = null;
                     foreach (var asm in modAssemblies)
                     {
                         // Try fast path: fully qualified name lookup in this assembly
-                        entry = asm.GetType(mod.Manifest.entryType, false);
+                        entry = asm.GetType(mod.About.entryType, false);
                         if (entry != null) break;
                         // Slow path: scan types if needed
                         foreach (var t in asm.GetTypes())
                         {
-                            if (t.FullName == mod.Manifest.entryType)
+                            if (t.FullName == mod.About.entryType)
                             {
                                 entry = t;
                                 break;
@@ -100,12 +100,12 @@ public class PluginManager
                         }
                         else
                         {
-                            MMLog.Write("Entry type does not implement IPlugin: " + mod.Manifest.entryType);
+                            MMLog.Write("Entry type does not implement IPlugin: " + mod.About.entryType);
                         }
                     }
                     else
                     {
-                        MMLog.Write("Entry type not found: " + mod.Manifest.entryType + " in mod " + mod.Name);
+                        MMLog.Write("Entry type not found: " + mod.About.entryType + " in mod " + mod.Name);
                     }
                 }
             }
@@ -128,7 +128,7 @@ public class PluginManager
                     Debug.Log("[Legacy] Loading " + dllFile + " ...");
                     Assembly assembly = Assembly.LoadFile(dllFile.FullName);
                     assemblies.Add(assembly);
-                    // Legacy DLLs: no manifest; still register best-effort so settings can look next to the DLL (Coolnether123)
+                    // Legacy DLLs: no about; still register best-effort so settings can look next to the DLL (Coolnether123)
                     try
                     {
                         var legacyEntry = new ModEntry
@@ -139,7 +139,7 @@ public class PluginManager
                             RootPath = dllFile.DirectoryName,
                             AboutPath = null,
                             AssembliesPath = dllFile.DirectoryName,
-                            Manifest = null
+                            About = null
                         };
                         ModRegistry.RegisterAssemblyForMod(assembly, legacyEntry);
                     }
