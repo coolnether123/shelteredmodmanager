@@ -20,8 +20,8 @@ File format (JSON, parsed by UnityEngine.JsonUtility on .NET 3.5):
 Notes
 -----
 - Types supported: string, int, float, bool
-- default.json contains all defaults
-- user.json includes only keys that differ from defaults
+- default.json contains all defaults for the mod
+- user.json includes only keys that differ from defaults that the user assigns
 - Effective settings = defaults overridden by user values
 
 Mod API Usage
@@ -30,12 +30,19 @@ Mod API Usage
 using UnityEngine;
 
 public class MyPlugin : IPlugin {
-  public string Name => "MyPlugin";
+  // The public name of the plugin.
+  public string Name => "MyPlugin"; 
+
+  // The version of the plugin.
   public string Version => "1.0.0";
 
   public void initialize() {}
   public void start(GameObject root) {
-    var settings = ModSettings.ForThisAssembly(); // (Coolnether123)
+
+    // Call ModSettings to read and write from it
+    var settings = ModSettings.ForThisAssembly(); 
+
+    // First value is the name of the settings, second value is the default you want if no value is found.
     int maxCount = settings.GetInt("maxCount", 5);
     bool enabled = settings.GetBool("enabled", true);
 

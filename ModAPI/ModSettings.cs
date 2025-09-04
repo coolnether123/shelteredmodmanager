@@ -25,6 +25,8 @@ public class ModConfigFile
 
 public class ModSettings
 {
+    private static readonly StringComparer KeyComparer = StringComparer.OrdinalIgnoreCase;
+
     private readonly string _modId;           // may be null for legacy
     private readonly string _rootPath;        // mod root folder
     private readonly string _configDir;       // <root>/Config
@@ -32,9 +34,9 @@ public class ModSettings
     private readonly string _userPath;        // user.json
 
     // In-memory maps: key -> (type,value) as strings; effective merges user over defaults
-    private readonly Dictionary<string, ModConfigEntry> _defaults = new Dictionary<string, ModConfigEntry>(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, ModConfigEntry> _user = new Dictionary<string, ModConfigEntry>(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, ModConfigEntry> _effective = new Dictionary<string, ModConfigEntry>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ModConfigEntry> _defaults = new Dictionary<string, ModConfigEntry>(KeyComparer);
+    private readonly Dictionary<string, ModConfigEntry> _user = new Dictionary<string, ModConfigEntry>(KeyComparer);
+    private readonly Dictionary<string, ModConfigEntry> _effective = new Dictionary<string, ModConfigEntry>(KeyComparer);
 
     private ModSettings(string modId, string rootPath)
     {
@@ -236,7 +238,7 @@ public class ModSettings
         if (_defaults.TryGetValue(key, out def))
         {
             var defType = string.IsNullOrEmpty(def.type) ? "string" : def.type;
-            equalsDefault = string.Equals(defType, type, StringComparison.OrdinalIgnoreCase) && string.Equals((def.value ?? string.Empty), (raw ?? string.Empty), StringComparison.Ordinal);
+            equalsDefault = KeyComparer.Equals(defType, type) && string.Equals((def.value ?? string.Empty), (raw ?? string.Empty), StringComparison.Ordinal);
         }
 
         if (equalsDefault)

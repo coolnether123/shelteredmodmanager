@@ -26,25 +26,27 @@ public static class ModDiscovery
 {
     // Finds enabled mods with About/About.json and returns descriptors
     // Coolnether123
-    public static List<ModEntry> DiscoverEnabledMods()
+    public static List<ModEntry> DiscoverAllMods()
     {
         var results = new List<ModEntry>();
         try
         {
             string gameRootPath = Directory.GetParent(Application.dataPath).FullName;
             string modsRoot = Path.Combine(gameRootPath, "mods");
-            string enabledRoot = Path.Combine(modsRoot, "enabled");
 
-            if (!Directory.Exists(enabledRoot))
+            if (!Directory.Exists(modsRoot))
             {
-                MMLog.Write("No 'mods/enabled' directory found. Skipping discovery.");
+                MMLog.Write("No 'mods' directory found. Skipping discovery.");
                 return results;
             }
 
-            foreach (var dir in Directory.GetDirectories(enabledRoot))
+            foreach (var dir in Directory.GetDirectories(modsRoot))
             {
+                var name = Path.GetFileName(dir);
+                if (string.Equals(name, "disabled", StringComparison.OrdinalIgnoreCase)) continue;
+
                 var about = Path.Combine(dir, "About");
-                var aboutJson = Path.Combine(about, "About.json"); // <- renamed about file  // Coolnether123
+                var aboutJson = Path.Combine(about, "About.json"); 
                 if (!File.Exists(aboutJson))
                 {
                     // Not a about-driven mod; will be handled by legacy loader
@@ -72,7 +74,7 @@ public static class ModDiscovery
 
                     var entry = new ModEntry
                     {
-                        Id = NormalizeId(modAbout.id),
+                        Id = NormId(modAbout.id),
                         Name = modAbout.name,
                         Version = modAbout.version,
                         RootPath = dir,
@@ -154,11 +156,8 @@ public static class ModDiscovery
         return null;
     }
 
-    // Normalizes IDs for comparisons: lowercase and trim
-    // Coolnether123
-    private static string NormalizeId(string id)
-    {
-        return string.IsNullOrEmpty(id) ? id : id.Trim().ToLowerInvariant();
-    }
+    
+
+    private static string NormId(string s) => (s ?? "").Trim().ToLowerInvariant();
 }
 

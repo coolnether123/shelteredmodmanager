@@ -63,8 +63,6 @@
             this.lblTags = new System.Windows.Forms.Label();
             this.lblWebsite = new System.Windows.Forms.Label();
             this.lblDependsOn = new System.Windows.Forms.Label();
-            this.grpSettings = new System.Windows.Forms.GroupBox();
-            this.chkDevMode = new System.Windows.Forms.CheckBox();
             this.btnApplySettings = new System.Windows.Forms.Button();
             this.btnResetSettings = new System.Windows.Forms.Button();
             this.grpAboutInspector = new System.Windows.Forms.GroupBox();
@@ -89,6 +87,8 @@
             this.label2 = new System.Windows.Forms.Label();
             this.doorstopLink = new System.Windows.Forms.LinkLabel();
             this.shelteredLink = new System.Windows.Forms.LinkLabel();
+            this.grpSettings = new System.Windows.Forms.GroupBox();
+            this.chkDevMode = new System.Windows.Forms.CheckBox();
             this.pictureBox1 = new System.Windows.Forms.PictureBox();
             this.panelSettings = new System.Windows.Forms.Panel();
             this.tabControl1.SuspendLayout();
@@ -96,9 +96,9 @@
             this.tabPage3.SuspendLayout();
             this.grpDetails.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pbPreview)).BeginInit();
-            this.grpSettings.SuspendLayout();
             this.grpAboutInspector.SuspendLayout();
             this.tabPage2.SuspendLayout();
+            this.grpSettings.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             this.SuspendLayout();
             // 
@@ -503,29 +503,6 @@
             this.lblDependsOn.TabIndex = 16;
             this.lblDependsOn.Text = "Depends on:";
             // 
-            // grpSettings
-            // 
-            this.grpSettings.Controls.Add(this.chkDevMode);
-            this.grpSettings.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
-            this.grpSettings.Location = new System.Drawing.Point(397, 15);
-            this.grpSettings.Name = "grpSettings";
-            this.grpSettings.Size = new System.Drawing.Size(459, 117);
-            this.grpSettings.TabIndex = 1;
-            this.grpSettings.TabStop = false;
-            this.grpSettings.Text = "Mod Settings";
-            // 
-            // chkDevMode
-            // 
-            this.chkDevMode.AutoSize = true;
-            this.chkDevMode.Font = new System.Drawing.Font("Segoe UI", 9F);
-            this.chkDevMode.Location = new System.Drawing.Point(6, 29);
-            this.chkDevMode.Name = "chkDevMode";
-            this.chkDevMode.Size = new System.Drawing.Size(227, 24);
-            this.chkDevMode.TabIndex = 5;
-            this.chkDevMode.Text = " Developer Mode (Advanced)";
-            this.chkDevMode.UseVisualStyleBackColor = true;
-            this.chkDevMode.CheckedChanged += new System.EventHandler(this.chkDevMode_CheckedChanged);
-            // 
             // btnApplySettings
             // 
             this.btnApplySettings.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(120)))), ((int)(((byte)(215)))));
@@ -779,6 +756,29 @@
             this.shelteredLink.Text = "🔗 https://store.steampowered.com/app/356040/Sheltered/";
             this.shelteredLink.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel1_LinkClicked);
             // 
+            // grpSettings
+            // 
+            this.grpSettings.Controls.Add(this.chkDevMode);
+            this.grpSettings.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.grpSettings.Location = new System.Drawing.Point(397, 15);
+            this.grpSettings.Name = "grpSettings";
+            this.grpSettings.Size = new System.Drawing.Size(459, 117);
+            this.grpSettings.TabIndex = 1;
+            this.grpSettings.TabStop = false;
+            this.grpSettings.Text = "Mod Settings";
+            // 
+            // chkDevMode
+            // 
+            this.chkDevMode.AutoSize = true;
+            this.chkDevMode.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.chkDevMode.Location = new System.Drawing.Point(6, 29);
+            this.chkDevMode.Name = "chkDevMode";
+            this.chkDevMode.Size = new System.Drawing.Size(227, 24);
+            this.chkDevMode.TabIndex = 5;
+            this.chkDevMode.Text = " Developer Mode (Advanced)";
+            this.chkDevMode.UseVisualStyleBackColor = true;
+            this.chkDevMode.CheckedChanged += new System.EventHandler(this.chkDevMode_CheckedChanged);
+            // 
             // pictureBox1
             // 
             this.pictureBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
@@ -816,7 +816,7 @@
             this.Name = "ManagerGUI";
             this.Padding = new System.Windows.Forms.Padding(10);
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "Sheltered Mod Manager v1.0";
+            this.Text = "Sheltered Mod Manager v0.6";
             this.Load += new System.EventHandler(this.Form1_Load);
             this.tabControl1.ResumeLayout(false);
             this.tabPage1.ResumeLayout(false);
@@ -826,11 +826,11 @@
             this.grpDetails.ResumeLayout(false);
             this.grpDetails.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pbPreview)).EndInit();
-            this.grpSettings.ResumeLayout(false);
-            this.grpSettings.PerformLayout();
             this.grpAboutInspector.ResumeLayout(false);
             this.tabPage2.ResumeLayout(false);
             this.tabPage2.PerformLayout();
+            this.grpSettings.ResumeLayout(false);
+            this.grpSettings.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
             this.ResumeLayout(false);
 

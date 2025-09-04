@@ -18,7 +18,7 @@ class ConsoleWindowComponent : MonoBehaviour
 
     void Awake()
     {
-        MMLog.Write("ConsoleWindowComponent: Awake called.");
+
     }
 
     void Start()

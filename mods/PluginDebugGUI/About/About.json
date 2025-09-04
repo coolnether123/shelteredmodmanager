@@ -1,0 +1,10 @@
+{
+  "id": "com.plugin.debuggui",
+  "name": "Plugin Debug GUI",
+  "version": "1.0.0",
+  "authors": ["Coolnether123"],
+  "entryType": "DebugWindowPlugin",
+  "loadAfter": ["com.plugin.harmony"],
+  "tags": ["Debug", "UI", "Tool"],
+  "description": "Provides an in-game debug overlay displaying real-time game information such as loaded plugins, application details, Unity version, resolution, and mouse position. Useful for mod development and troubleshooting."
+}

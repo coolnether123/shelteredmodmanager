@@ -8,19 +8,9 @@ public static class MMLog
 
     static MMLog()
     {
-        try
-        {
-            var baseDir = Application.persistentDataPath;
-            if (string.IsNullOrEmpty(baseDir))
-                baseDir = Directory.GetCurrentDirectory();
-
-            Directory.CreateDirectory(baseDir);
-            _logPath = Path.Combine(baseDir, "mod_manager.log");
-        }
-        catch
-        {
-            _logPath = Path.Combine(Directory.GetCurrentDirectory(), "mod_manager.log");
-        }
+        var baseDir = Directory.GetCurrentDirectory();
+        Directory.CreateDirectory(baseDir);
+        _logPath = Path.Combine(baseDir, "mod_manager.log");
     }
 
     public static void Write(string msg)

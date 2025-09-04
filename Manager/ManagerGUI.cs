@@ -4,7 +4,8 @@ using System.Windows.Forms;
 using System.Collections.Generic;
 using System.Linq;
 using System.Drawing;
-using System.Web.Script.Serialization; // JSON for Manager (Coolnether123)
+using System.Web.Script.Serialization;
+using static LoadOrderResolver; // JSON for Manager (Coolnether123)
 
 /**
  * Author: benjaminfoo
@@ -34,11 +35,14 @@ namespace Manager
             public bool HasAbout;       // About/About.json exists
             public ModAbout About;   // may be null
             public string PreviewPath;     // About/preview.png if exists
+            public bool IsEnabled;         // New: enabled/disabled status
             public override string ToString() { return DisplayName; }
         }
 
+        private static readonly StringComparer NameComparer = StringComparer.OrdinalIgnoreCase;
+
         // Dynamic settings controls per key (Coolnether123)
-        private readonly Dictionary<string, Control> _settingsControls = new Dictionary<string, Control>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Control> _settingsControls = new Dictionary<string, Control>(NameComparer);
         private ModListItem _selectedItem = null;
         private bool _orderDirty = false;
 
@@ -56,8 +60,7 @@ namespace Manager
         /// <summary>
         /// Paths for enabled/disabled mods
         /// </summary>
-        private string EnabledModsPath => Path.Combine(uiModsPath.Text, "enabled");
-        private string DisabledModsPath => Path.Combine(uiModsPath.Text, "disabled");
+        
 
         /// <summary>
         /// Refreshes the available and installed mods lists
@@ -66,27 +69,43 @@ namespace Manager
         {
             if (uiModsPath.Text.ToString().Trim().ToLower().Equals(DEFAULT_VALUE.ToLower())) return;
 
-            // Ensure directories exist
-            Directory.CreateDirectory(EnabledModsPath);
-            Directory.CreateDirectory(DisabledModsPath);
-
             uiAvailbleModsListView.Items.Clear();
             uiInstalledModsListView.Items.Clear();
 
-            // Populate Available Mods (from disabled folder)
-            var disabledItems = DiscoverMods(DisabledModsPath);
-            foreach (var it in disabledItems) uiAvailbleModsListView.Items.Add(it);
+            // Discover all mods
+            var allMods = DiscoverModsFromRoot(uiModsPath.Text);
 
-            // Populate Installed Mods (from enabled folder)
-            var enabledItems = DiscoverMods(EnabledModsPath);
-            var ordered = ApplySavedOrder(enabledItems);
+            // Read load order file
+            var processedLof = LoadOrderResolver.ReadLoadOrderFile(uiModsPath.Text);
+
+            // Separate enabled and disabled mods
+            var enabledMods = new List<ModListItem>();
+            var disabledMods = new List<ModListItem>();
+
+            foreach (var mod in allMods)
+            {
+                if (processedLof.Mods.TryGetValue(mod.Id, out var status) && status.enabled)
+                {
+                    enabledMods.Add(mod);
+                }
+                else
+                {
+                    disabledMods.Add(mod);
+                }
+            }
+
+            // Populate Available Mods (disabled)
+            foreach (var it in disabledMods) uiAvailbleModsListView.Items.Add(it);
+
+            // Populate Installed Mods (enabled) and apply saved order
+            var ordered = ApplySavedOrder(enabledMods, processedLof.Order);
             foreach (var it in ordered) uiInstalledModsListView.Items.Add(it);
 
             _orderDirty = false;
         }
 
         // Discover mods in a path (directories first, then legacy loose DLLs). (Coolnether123)
-        private List<ModListItem> DiscoverMods(string root)
+        private List<ModListItem> DiscoverModsFromRoot(string root)
         {
             var list = new List<ModListItem>();
             try
@@ -94,24 +113,14 @@ namespace Manager
                 if (!Directory.Exists(root)) return list;
                 foreach (var dir in Directory.GetDirectories(root))
                 {
+                    var name = Path.GetFileName(dir);
+                    if (string.Equals(name, "disabled", StringComparison.OrdinalIgnoreCase)) continue; // Skip disabled folder
+
                     list.Add(BuildItemFromDirectory(dir));
                 }
-                foreach (var dll in Directory.GetFiles(root, "*.dll"))
-                {
-                    var name = Path.GetFileName(dll);
-                    list.Add(new ModListItem
-                    {
-                        DisplayName = name,
-                        Id = name.ToLowerInvariant(),
-                        RootPath = Path.GetDirectoryName(dll),
-                        IsDirectory = false,
-                        HasAbout = false,
-                        About = null,
-                        PreviewPath = null
-                    });
-                }
-            }
-            catch { }
+                // No longer discovering loose DLLs directly in the root, as they should be in mod folders.
+                // If there's a need for loose DLLs, they should be handled by a specific mod entry.
+            } catch { } // Ignore exceptions during discovery
             return list;
         }
 
@@ -134,7 +143,7 @@ namespace Manager
                         display = string.IsNullOrEmpty(about.name) ? display : about.name;
                     }
                 }
-                catch { }
+                catch { } // Ignore exceptions during JSON deserialization
                 var prev = Path.Combine(aboutDir, "preview.png");
                 if (File.Exists(prev)) preview = prev;
             }
@@ -146,32 +155,29 @@ namespace Manager
                 IsDirectory = true,
                 HasAbout = File.Exists(aboutJson),
                 About = about,
-                PreviewPath = preview
+                PreviewPath = preview,
+                IsEnabled = false
             };
         }
 
-        private List<ModListItem> ApplySavedOrder(List<ModListItem> items)
+        private List<ModListItem> ApplySavedOrder(List<ModListItem> items, string[] order)
         {
             try
             {
-                var orderPath = Path.Combine(uiModsPath.Text, "loadorder.json");
-                if (!File.Exists(orderPath)) return items;
-                var text = File.ReadAllText(orderPath);
-                var o = new JavaScriptSerializer().Deserialize<LocalOrder>(text);
-                if (o == null || o.order == null) return items;
-                var prio = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-                int p = 0; foreach (var id in o.order) if (!prio.ContainsKey(id)) prio[id] = p++;
+                if (order == null) return items;
+                var prio = new Dictionary<string, int>(NameComparer);
+                int p = 0; foreach (var id in order) if (!prio.ContainsKey(id)) prio[id] = p++;
                 items.Sort(delegate (ModListItem a, ModListItem b)
                 {
                     int pa = prio.ContainsKey(a.Id) ? prio[a.Id] : int.MaxValue;
                     int pb = prio.ContainsKey(b.Id) ? prio[b.Id] : int.MaxValue;
                     int c = pa.CompareTo(pb);
                     if (c != 0) return c;
-                    return string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase);
+                    return NameComparer.Compare(a.DisplayName, b.DisplayName);
                 });
                 return items;
             }
-            catch { return items; }
+            catch { return items; } // Ignore exceptions during order loading
         }
 
         /// <summary>
@@ -184,10 +190,12 @@ namespace Manager
                 string contents = File.ReadAllText(MOD_MANAGER_INI_FILE);
                 uiGamePath.Text = contents;
                 uiModsPath.Text = Path.Combine(Path.GetDirectoryName(contents), "mods");
+                Program.GameRootPath = contents; // Set the static game root path
             }
             catch
             {
                 uiGamePath.Text = DEFAULT_VALUE;
+                Program.GameRootPath = null; // Clear if path is invalid
             }
 
             uiLaunchButton.Enabled = File.Exists(uiGamePath.Text);
@@ -208,6 +216,7 @@ namespace Manager
             {
                 uiGamePath.Text = fileDialog.FileName;
                 uiModsPath.Text = Path.Combine(Path.GetDirectoryName(fileDialog.FileName), "mods"); // (Coolnether123)
+                Program.GameRootPath = fileDialog.FileName; // Set the static game root path
             }
         }
 
@@ -273,32 +282,38 @@ namespace Manager
         /// </summary>
         private void button1_Click(object sender, EventArgs e)
         {
-            var item = uiAvailbleModsListView.SelectedItem as object;
+            var item = uiAvailbleModsListView.SelectedItem as ManagerGUI.ModListItem;
             if (item == null) return;
-            var mod = item as ManagerGUI.ModListItem;
-            if (mod == null)
-            {
-                // Backward compat: enable a dll file name string
-                string modFileName = uiAvailbleModsListView.SelectedItem.ToString();
-                string sourcePath = Path.Combine(DisabledModsPath, modFileName);
-                string destinationPath = Path.Combine(EnabledModsPath, modFileName);
-                try { File.Move(sourcePath, destinationPath); updateAvailableMods(); } catch (Exception ex) { System.Windows.Forms.MessageBox.Show($"Error enabling mod: {ex.Message}", "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error); }
-                return;
-            }
+
             try
             {
-                if (mod.IsDirectory)
+                // Read current loadorder.json
+                var modsRoot = uiModsPath.Text;
+                var processedLof = LoadOrderResolver.ReadLoadOrderFile(modsRoot);
+
+                // Update mod status
+                if (processedLof.Mods.ContainsKey(item.Id))
                 {
-                    var dest = Path.Combine(EnabledModsPath, Path.GetFileName(mod.RootPath));
-                    Directory.Move(mod.RootPath, dest);
+                    processedLof.Mods[item.Id].enabled = true;
                 }
                 else
                 {
-                    var src = Path.Combine(DisabledModsPath, mod.DisplayName);
-                    var dest = Path.Combine(EnabledModsPath, mod.DisplayName);
-                    File.Move(src, dest);
+                    // If mod not in JSON, add it as enabled
+                    processedLof.Mods[item.Id] = new ModStatusEntry { enabled = true };
                 }
-                updateAvailableMods();
+
+                // Ensure the mod is in the order list if it's enabled
+                if (!processedLof.Order.Contains(item.Id))
+                {
+                    var newOrderList = processedLof.Order.ToList();
+                    newOrderList.Add(item.Id);
+                    processedLof.Order = newOrderList.ToArray();
+                }
+
+                // Save updated loadorder.json
+                SaveLoadOrderFile(processedLof);
+
+                updateAvailableMods(); // Refresh UI
             }
             catch (Exception ex)
             {
@@ -311,32 +326,38 @@ namespace Manager
         /// </summary>
         private void button2_Click(object sender, EventArgs e)
         {
-            var item = uiInstalledModsListView.SelectedItem as object;
+            var item = uiInstalledModsListView.SelectedItem as ManagerGUI.ModListItem;
             if (item == null) return;
-            var mod = item as ManagerGUI.ModListItem;
-            if (mod == null)
-            {
-                // Backward compat: disable a dll file name string
-                string modFileName = uiInstalledModsListView.SelectedItem.ToString();
-                string sourcePath = Path.Combine(EnabledModsPath, modFileName);
-                string destinationPath = Path.Combine(DisabledModsPath, modFileName);
-                try { File.Move(sourcePath, destinationPath); updateAvailableMods(); } catch (Exception ex) { System.Windows.Forms.MessageBox.Show($"Error disabling mod: {ex.Message}", "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error); }
-                return;
-            }
+
             try
             {
-                if (mod.IsDirectory)
+                // Read current loadorder.json
+                var modsRoot = uiModsPath.Text;
+                var processedLof = LoadOrderResolver.ReadLoadOrderFile(modsRoot);
+
+                // Update mod status
+                if (processedLof.Mods.ContainsKey(item.Id))
                 {
-                    var dest = Path.Combine(DisabledModsPath, Path.GetFileName(mod.RootPath));
-                    Directory.Move(mod.RootPath, dest);
+                    processedLof.Mods[item.Id].enabled = false;
                 }
                 else
                 {
-                    var src = Path.Combine(EnabledModsPath, mod.DisplayName);
-                    var dest = Path.Combine(DisabledModsPath, mod.DisplayName);
-                    File.Move(src, dest);
+                    // If mod not in JSON, add it as disabled
+                    processedLof.Mods[item.Id] = new ModStatusEntry { enabled = false };
                 }
-                updateAvailableMods();
+
+                // Remove the mod from the order list if it's disabled
+                if (processedLof.Order.Contains(item.Id))
+                {
+                    var newOrderList = processedLof.Order.ToList();
+                    newOrderList.Remove(item.Id);
+                    processedLof.Order = newOrderList.ToArray();
+                }
+
+                // Save updated loadorder.json
+                SaveLoadOrderFile(processedLof);
+
+                updateAvailableMods(); // Refresh UI
             }
             catch (Exception ex)
             {
@@ -368,9 +389,7 @@ namespace Manager
             System.Diagnostics.Process.Start(Path.GetDirectoryName(uiGamePath.Text));
         }
 
-        // Local order format (Coolnether123)
-        [Serializable]
-        private class LocalOrder { public string[] order; }
+        
 
         // Move selected enabled mod up (Coolnether123)
         private void btnMoveUpEnabled_Click(object sender, EventArgs e)
@@ -403,20 +422,73 @@ namespace Manager
         {
             try
             {
-                var ids = new System.Collections.Generic.List<string>();
+                var modsRoot = uiModsPath.Text;
+                var processedLof = LoadOrderResolver.ReadLoadOrderFile(modsRoot);
+
+                // Update order based on current UI list
+                var newOrderIds = new System.Collections.Generic.List<string>();
                 foreach (var o in uiInstalledModsListView.Items)
                 {
-                    var it = o as ManagerGUI.ModListItem; if (it == null) continue; ids.Add(it.Id);
+                    var it = o as ManagerGUI.ModListItem;
+                    if (it == null) continue;
+                    newOrderIds.Add(it.Id);
                 }
-                var lo = new LocalOrder { order = ids.ToArray() };
-                var json = new JavaScriptSerializer().Serialize(lo);
-                System.IO.File.WriteAllText(System.IO.Path.Combine(uiModsPath.Text, "loadorder.json"), json);
+                processedLof.Order = newOrderIds.ToArray();
+
+                // Ensure all mods in the UI list are marked as enabled in the processedLof.Mods dictionary
+                // And any mods not in the UI list are marked as disabled
+                var currentEnabledModIds = new HashSet<string>(newOrderIds, StringComparer.OrdinalIgnoreCase);
+                foreach (var modItem in uiAvailbleModsListView.Items.Cast<ManagerGUI.ModListItem>().Concat(uiInstalledModsListView.Items.Cast<ManagerGUI.ModListItem>()))
+                {
+                    if (currentEnabledModIds.Contains(modItem.Id))
+                    {
+                        if (!processedLof.Mods.ContainsKey(modItem.Id))
+                        {
+                            processedLof.Mods[modItem.Id] = new ModStatusEntry { enabled = true };
+                        }
+                        else
+                        {
+                            processedLof.Mods[modItem.Id].enabled = true;
+                        }
+                    }
+                    else
+                    {
+                        if (!processedLof.Mods.ContainsKey(modItem.Id))
+                        {
+                            processedLof.Mods[modItem.Id] = new ModStatusEntry { enabled = false };
+                        }
+                        else
+                        {
+                            processedLof.Mods[modItem.Id].enabled = false;
+                        }
+                    }
+                }
+
+                SaveLoadOrderFile(processedLof);
                 _orderDirty = false;
                 System.Windows.Forms.MessageBox.Show("Load order saved.", "Info", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 System.Windows.Forms.MessageBox.Show($"Failed to save load order: {ex.Message}", "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+            }
+        }
+
+        private void SaveLoadOrderFile(ProcessedLoadOrderData processedData)
+        {
+            try
+            {
+                var lof = new LoadOrderFile
+                {
+                    order = processedData.Order,
+                    mods = processedData.Mods.Select(kvp => new ModStatusEntryKV { id = kvp.Key, enabled = kvp.Value.enabled, locked = kvp.Value.locked, notes = kvp.Value.notes }).ToArray()
+                };
+                var json = new JavaScriptSerializer().Serialize(lof);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(uiModsPath.Text, "loadorder.json"), json);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show($"Failed to save load order file: {ex.Message}", "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
             }
         }
 
@@ -539,7 +611,7 @@ namespace Manager
                     }
                 }
             }
-            catch { }
+            catch { } // Ignore exceptions during details update
         }
 
         private void setCheck(CheckBox cb, bool on)
@@ -579,7 +651,7 @@ namespace Manager
                     else if (float.TryParse(sval, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out fval))
                     {
                         var num = new NumericUpDown { Left = 150, Top = y, Width = 100, Minimum = -100000, Maximum = 100000, DecimalPlaces = 2 };
-                        try { num.Value = (decimal)fval; } catch { num.Value = 0; }
+                        try { num.Value = (decimal)fval; } catch { num.Value = 0; } // Handle potential conversion errors
                         input = num;
                     }
                     else
@@ -595,10 +667,7 @@ namespace Manager
 
                 panelSettings.Tag = ms; // stash
             }
-            catch (Exception)
-            {
-                // ignore
-            }
+            catch (Exception) { /* Ignore exceptions during settings panel rebuild */ }
             finally
             {
                 panelSettings.ResumeLayout();
@@ -612,7 +681,8 @@ namespace Manager
             var s = raw.Trim().ToLowerInvariant();
             if (s == "1" || s == "yes" || s == "y" || s == "on") { v = true; return true; }
             if (s == "0" || s == "no" || s == "n" || s == "off") { v = false; return true; }
-            v = false; return false;
+            v = false;
+            return false;
         }
 
         private void btnApplySettings_Click(object sender, EventArgs e)
@@ -653,12 +723,14 @@ namespace Manager
         // Local settings class for Manager (avoid UnityEngine dependency). (Coolnether123)
         private class LocalSettings
         {
+            private static readonly StringComparer KeyComparer = StringComparer.OrdinalIgnoreCase;
+
             private readonly string _configDir;
             private readonly string _defaultPath;
             private readonly string _userPath;
-            private readonly Dictionary<string, string> _types = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            private readonly Dictionary<string, string> _defaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            private readonly Dictionary<string, string> _user = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, string> _types = new Dictionary<string, string>(KeyComparer);
+            private readonly Dictionary<string, string> _defaults = new Dictionary<string, string>(KeyComparer);
+            private readonly Dictionary<string, string> _user = new Dictionary<string, string>(KeyComparer);
 
             public LocalSettings(string rootPath)
             {
@@ -693,12 +765,12 @@ namespace Manager
                         target[e.key] = e.value;
                     }
                 }
-                catch { }
+                catch { } // Ignore exceptions during file loading
             }
 
             public IEnumerable<string> Keys()
             {
-                var set = new HashSet<string>(_defaults.Keys, StringComparer.OrdinalIgnoreCase);
+                var set = new HashSet<string>(_defaults.Keys, KeyComparer);
                 foreach (var k in _user.Keys) set.Add(k);
                 return set;
             }
@@ -766,7 +838,7 @@ namespace Manager
                     var json = new JavaScriptSerializer().Serialize(file);
                     File.WriteAllText(_userPath, json);
                 }
-                catch { }
+                catch { } // Ignore exceptions during user settings save
             }
 
             public void ResetUser()
