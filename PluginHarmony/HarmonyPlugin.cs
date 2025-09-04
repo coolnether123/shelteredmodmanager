@@ -1,14 +1,9 @@
-﻿using System.IO;
+using System.IO;
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
+using System.Collections.Generic;
 
-/**
-* Author: benjaminfoo
-* See: https://github.com/benjaminfoo/shelteredmodmanager
-* 
-* This is the plugin definition for the harmony-plugin, which enables the usage of harmony within a mod-
-*/
 public class HarmonyPlugin : IPlugin
 {
     public HarmonyPlugin() { }
@@ -49,10 +44,6 @@ public class HarmonyPlugin : IPlugin
             + "Harmony-Id: " + (harmony.Id) + "\n"
             + "Harmony.hasPatches: " + Harmony.HasAnyPatches(harmony.Id)
         );
-
-
-
-        
     }
 
     [HarmonyPatch(typeof(CraftingPanel), "GetRecipes")]
@@ -100,7 +91,35 @@ public class HarmonyPlugin : IPlugin
         }
     }
 
+    /// <summary>
+    /// Test patch to add a new recipe to the crafting panel.
+    /// </summary>
+    [HarmonyPatch(typeof(CraftingPanel), "GetRecipes")]
+    public static class AddHingeRecipe_TestPatch
+    {
+        public static void Postfix(ref List<CraftingManager.Recipe> __result)
+        {
+            MMLog.Write("[HingeTestPatch] Postfix started.");
+            MMLog.Write("[HingeTestPatch] Original recipe count: " + __result.Count);
 
+            // Define the ingredients for our new recipe using verified item types.
+            var ingredients = new CraftingManager.Recipe.Ingredient[]
+            {
+                new CraftingManager.Recipe.Ingredient() { Item = ItemManager.ItemType.Valve, Quantity = 2 },
+                new CraftingManager.Recipe.Ingredient() { Item = ItemManager.ItemType.Cement, Quantity = 1 }
+            };
 
+            // Create the new recipe object using the correct constructor.
+            var newRecipe = new CraftingManager.Recipe(ItemManager.ItemType.Hinge, ingredients);
 
+            // Set other public properties after creation.
+            newRecipe.level = 1;
+            newRecipe.location = CraftingManager.CraftLocation.Workbench;
+
+            // Add our new recipe to the list that the game will use.
+            __result.Add(newRecipe);
+            MMLog.Write("[HingeTestPatch] Recipe for Hinge added successfully.");
+            MMLog.Write("[HingeTestPatch] New recipe count: " + __result.Count);
+        }
+    }
 }

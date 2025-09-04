@@ -16,16 +16,19 @@ Sheltered/
       └─ ...
 
 
+Example About.json
+------------------
 {
-  "id": "com.yourname.mycoolmod", // Required
-  "name": "My Cool Mod", // Required
-  "version": "1.2.3", // Required
-  "authors": ["You"], // Required
-  "entryType": "MyCoolMod.Entry",  // Optional
-  "dependsOn": ["com.other.mod>=2.0.0"], // Optional
-  "loadBefore": ["com.some.mod"], // Optional
-  "loadAfter": ["com.core.api"], // Optional
-  "description": "Adds X to Sheltered.", // Required
-  "tags": ["QoL","UI"], // Optional
-  "website": "https://…" // Optional
+  "id": "com.yourname.mycoolmod",        // Required
+  "name": "My Cool Mod",                 // Required
+  "version": "1.2.3",                    // Required
+  "authors": ["You"],                     // Required
+  "entryType": "MyCoolMod.Entry",         // Optional
+  "dependsOn": ["com.other.mod>=2.0.0"],  // Optional
+  "loadBefore": ["com.some.mod"],         // Optional
+  "loadAfter": ["com.core.api"],          // Optional
+  "description": "Adds X to Sheltered.",  // Required
+  "tags": ["QoL","UI"],                  // Optional
+  "website": "https://example.com"        // Optional
 }
+

@@ -1,1 +1,96 @@
-TODO
+How to Develop a Plugin | Coolnether123
+=======================
+
+Prerequisites
+- Visual Studio 2017+ or JetBrains Rider
+- Clone this repo and build once so `ModAPI.dll` is available
+
+Steps
+1) Create a new C# Class Library project targeting .NET Framework 3.5
+
+2) Add a project reference to `ModAPI/ModAPI.csproj` (or reference `ModAPI.dll` from `Dist/SMM` after build)
+
+3) Write your plugin code. Here is a simple example that displays a message on screen:
+
+// HelloWorldPlugin.cs - A simple example plugin.
+using UnityEngine;
+
+public class HelloWorldPlugin : IPlugin
+{
+    // The public name of your plugin.
+    public string Name => "Hello World Plugin";
+
+    // The version of your plugin.
+    public string Version => "1.0.0";
+
+    // Called once when the plugin is first initialized.
+    // Use this for one-time setup.
+    public void initialize()
+    {
+        MMLog.Write("Hello World Plugin Initialized!");
+    }
+
+    // Called when the plugin should execute its main logic.
+    // A root GameObject is provided that you can add components to.
+    public void start(GameObject root)
+    {
+        // To display things on screen or run code every frame, create a MonoBehaviour.
+        // Add the custom component to the root GameObject provided by the ModAPI.
+        root.AddComponent<HelloWorldComponent>();
+        MMLog.Write("Hello World Plugin Started!");
+    }
+}
+
+// This is a MonoBehaviour component that will be attached to a GameObject in the game.
+// Unity automatically calls methods like OnGUI() on active MonoBehaviours.
+public class HelloWorldComponent : MonoBehaviour
+{
+    // OnGUI is a Unity method that is called for rendering and handling GUI events.
+    void OnGUI()
+    {
+        // Set the color for the GUI elements.
+        GUI.color = Color.white;
+
+        // Define the style for the label.
+        var style = new GUIStyle(GUI.skin.label);
+        style.fontSize = 20;
+        style.alignment = TextAnchor.UpperCenter;
+
+        // Create a label at the top-center of the screen.
+        GUI.Label(
+            new Rect(0, 10, Screen.width, 50),
+            "Hello, World! The plugin is working!",
+            style
+        );
+    }
+}
+
+
+4) Implement `IPlugin` Folder-based mod layout:
+
+   Sheltered/mods/disabled/MyPlugin/
+     About/About.json
+     Assemblies/MyPlugin.dll <-- Build your project here
+     Config/default.json   (optional; see documentation/SETTINGS.md)
+
+   Minimal About.json:
+   {
+     "id": "com.yourname.myplugin",
+     "name": "My Plugin",
+     "version": "1.0.0",
+     "authors": ["You"],
+     "description": "What it does"
+   }
+
+
+5) Enable your mod in the Manager GUI
+
+Using Settings
+- Call `var s = ModSettings.ForThisAssembly();`
+- Read: `s.GetInt("maxCount", 5)` / `s.GetBool("enabled", true)` etc.
+- Write: `s.SetInt("maxCount", 10); s.SaveUser();`
+
+Tips
+- Avoid blocking the main thread during `start`; use coroutines if needed
+- Use `MMLog.Write("...")` for simple file logging
+- Reference Unity game assemblies from your local install if you build against them

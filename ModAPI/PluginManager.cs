@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Linq;
 using UnityEngine;
 
 
@@ -40,19 +41,41 @@ public class PluginManager
         // Build absolute path to the mods directory (from game's data folder)
         string gameRootPath = Directory.GetParent(Application.dataPath).FullName;
         string modsPath = Path.Combine(gameRootPath, "mods");
-        string enabledPath = Path.Combine(modsPath, "enabled");
-        Debug.Log("Looking for plugins in " + enabledPath + " ...");
+        string modsRoot = modsPath; // Consistent naming
 
         ICollection<Assembly> assemblies = new List<Assembly>();
         var activatedTypes = new HashSet<Type>(); // track explicitly activated entry types // Coolnether123
 
-        // New: About-driven mod discovery (About.json inside About/)
-        // Coolnether123
-        var discovered = ModDiscovery.DiscoverEnabledMods();
-        // Determine mods root (Coolnether123)
-        string modsRoot = modsPath;
-        // Apply load order resolver (Coolnether123)
-        discovered = LoadOrderResolver.Resolve(discovered, modsRoot);
+        // Read load order file
+        var processedLof = LoadOrderResolver.ReadLoadOrderFile(modsRoot);
+
+        // Discover all mods
+        var discovered = ModDiscovery.DiscoverAllMods();
+
+        // Filter mods based on enabled status from loadorder.json
+        HashSet<string> enabledIds = null;
+        if (processedLof.Mods != null && processedLof.Mods.Any())
+        {
+            enabledIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kvp in processedLof.Mods)
+            {
+                if (kvp.Value.enabled)
+                {
+                    enabledIds.Add(kvp.Key);
+                }
+            }
+        }
+
+        if (enabledIds != null)
+        {
+            discovered = discovered.Where(m => enabledIds.Contains(m.Id)).ToList();
+        }
+        // If processedLof.Mods is null or empty, all discovered mods are treated as enabled by default.
+
+        // Apply load order resolver
+        var resolutionResult = LoadOrderResolver.Resolve(discovered, processedLof.Order ?? new string[0]);
+        // (CN) TODO: Should display errors and cycle info to the user.
+        discovered = resolutionResult.Mods;
 
         foreach (var mod in discovered)
         {
@@ -115,43 +138,7 @@ public class PluginManager
             }
         }
 
-        // Backward compatibility: also load any loose DLLs directly under mods/enabled
-        // This supports legacy mods until migrated to About.json format.
-        // Coolnether123
-        try
-        {
-            DirectoryInfo dir = new DirectoryInfo(enabledPath);
-            if (dir.Exists)
-            {
-                foreach (FileInfo dllFile in dir.GetFiles("*.dll"))
-                {
-                    Debug.Log("[Legacy] Loading " + dllFile + " ...");
-                    Assembly assembly = Assembly.LoadFile(dllFile.FullName);
-                    assemblies.Add(assembly);
-                    // Legacy DLLs: no about; still register best-effort so settings can look next to the DLL (Coolnether123)
-                    try
-                    {
-                        var legacyEntry = new ModEntry
-                        {
-                            Id = dllFile.Name.ToLowerInvariant(),
-                            Name = dllFile.Name,
-                            Version = null,
-                            RootPath = dllFile.DirectoryName,
-                            AboutPath = null,
-                            AssembliesPath = dllFile.DirectoryName,
-                            About = null
-                        };
-                        ModRegistry.RegisterAssemblyForMod(assembly, legacyEntry);
-                    }
-                    catch { }
-                    Debug.Log("[Legacy] ... loaded " + dllFile + " !");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            MMLog.Write("Error loading legacy DLLs: " + ex.Message);
-        }
+        
 
         Type pluginType = typeof(IPlugin);
         ICollection<Type> pluginTypes = new List<Type>();
