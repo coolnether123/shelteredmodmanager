@@ -52,25 +52,17 @@ public class PluginManager
         // Discover all mods
         var discovered = ModDiscovery.DiscoverAllMods();
 
-        // Filter mods based on enabled status from loadorder.json
-        HashSet<string> enabledIds = null;
-        if (processedLof.Mods != null && processedLof.Mods.Any())
+        // Enabled mods are those explicitly listed in the loadorder `order` array.
+        // If no order is present, load nothing (user has not enabled any mods).
+        if (processedLof.Order != null && processedLof.Order.Length > 0)
         {
-            enabledIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var kvp in processedLof.Mods)
-            {
-                if (kvp.Value.enabled)
-                {
-                    enabledIds.Add(kvp.Key);
-                }
-            }
-        }
-
-        if (enabledIds != null)
-        {
+            var enabledIds = new HashSet<string>(processedLof.Order, StringComparer.OrdinalIgnoreCase);
             discovered = discovered.Where(m => enabledIds.Contains(m.Id)).ToList();
         }
-        // If processedLof.Mods is null or empty, all discovered mods are treated as enabled by default.
+        else
+        {
+            discovered = new List<ModEntry>();
+        }
 
         // Apply load order resolver
         var resolutionResult = LoadOrderResolver.Resolve(discovered, processedLof.Order ?? new string[0]);

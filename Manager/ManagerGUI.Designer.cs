@@ -320,6 +320,7 @@
             this.uiAvailbleModsListView.Size = new System.Drawing.Size(250, 464);
             this.uiAvailbleModsListView.TabIndex = 0;
             this.uiAvailbleModsListView.SelectedIndexChanged += new System.EventHandler(this.uiAvailbleModsListView_SelectedIndexChanged);
+            this.uiAvailbleModsListView.DoubleClick += new System.EventHandler(this.uiAvailbleModsListView_DoubleClick);
             // 
             // grpDetails
             // 
@@ -901,4 +902,3 @@
         private System.Windows.Forms.Panel panelSettings;
     }
 }
-
