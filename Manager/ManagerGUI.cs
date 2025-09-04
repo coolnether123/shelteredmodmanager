@@ -53,6 +53,9 @@ namespace Manager
 
         private void Form1_Load(object sender, EventArgs e)
         {
+            // Allow multi-select for batch enable/disable
+            try { uiAvailbleModsListView.SelectionMode = SelectionMode.MultiExtended; } catch { }
+            try { uiInstalledModsListView.SelectionMode = SelectionMode.MultiExtended; } catch { }
             updateGamePath();
             updateAvailableMods();
         }
@@ -75,31 +78,35 @@ namespace Manager
             // Discover all mods
             var allMods = DiscoverModsFromRoot(uiModsPath.Text);
 
-            // Read load order file
-            var processedLof = LoadOrderResolver.ReadLoadOrderFile(uiModsPath.Text);
+            // Read load order file (Manager-local JSON reader, order-only)
+            var currentOrder = ReadOrderFromFile(uiModsPath.Text);
 
-            // Separate enabled and disabled mods
+            // Separate enabled and disabled mods based on presence in loadorder `order`.
             var enabledMods = new List<ModListItem>();
             var disabledMods = new List<ModListItem>();
 
+            var enabledSet = new HashSet<string>(currentOrder ?? new string[0], StringComparer.OrdinalIgnoreCase);
             foreach (var mod in allMods)
             {
-                if (processedLof.Mods.TryGetValue(mod.Id, out var status) && status.enabled)
-                {
-                    enabledMods.Add(mod);
-                }
-                else
-                {
-                    disabledMods.Add(mod);
-                }
+                if (enabledSet.Contains(mod.Id)) enabledMods.Add(mod); else disabledMods.Add(mod);
             }
 
             // Populate Available Mods (disabled)
-            foreach (var it in disabledMods) uiAvailbleModsListView.Items.Add(it);
+            uiAvailbleModsListView.BeginUpdate();
+            uiInstalledModsListView.BeginUpdate();
+            try
+            {
+                foreach (var it in disabledMods) uiAvailbleModsListView.Items.Add(it);
+            }
+            finally { uiAvailbleModsListView.EndUpdate(); }
 
             // Populate Installed Mods (enabled) and apply saved order
-            var ordered = ApplySavedOrder(enabledMods, processedLof.Order);
-            foreach (var it in ordered) uiInstalledModsListView.Items.Add(it);
+            var ordered = ApplySavedOrder(enabledMods, currentOrder);
+            try
+            {
+                foreach (var it in ordered) uiInstalledModsListView.Items.Add(it);
+            }
+            finally { uiInstalledModsListView.EndUpdate(); }
 
             _orderDirty = false;
         }
@@ -282,36 +289,19 @@ namespace Manager
         /// </summary>
         private void button1_Click(object sender, EventArgs e)
         {
-            var item = uiAvailbleModsListView.SelectedItem as ManagerGUI.ModListItem;
-            if (item == null) return;
+            var selected = uiAvailbleModsListView.SelectedItems.Cast<ManagerGUI.ModListItem>().ToList();
+            if (selected == null || selected.Count == 0) return;
 
             try
             {
-                // Read current loadorder.json
                 var modsRoot = uiModsPath.Text;
-                var processedLof = LoadOrderResolver.ReadLoadOrderFile(modsRoot);
-
-                // Update mod status
-                if (processedLof.Mods.ContainsKey(item.Id))
+                var order = new List<string>(ReadOrderFromFile(modsRoot) ?? new string[0]);
+                foreach (var item in selected)
                 {
-                    processedLof.Mods[item.Id].enabled = true;
+                    if (!order.Any(x => string.Equals(x, item.Id, StringComparison.OrdinalIgnoreCase)))
+                        order.Add(item.Id);
                 }
-                else
-                {
-                    // If mod not in JSON, add it as enabled
-                    processedLof.Mods[item.Id] = new ModStatusEntry { enabled = true };
-                }
-
-                // Ensure the mod is in the order list if it's enabled
-                if (!processedLof.Order.Contains(item.Id))
-                {
-                    var newOrderList = processedLof.Order.ToList();
-                    newOrderList.Add(item.Id);
-                    processedLof.Order = newOrderList.ToArray();
-                }
-
-                // Save updated loadorder.json
-                SaveLoadOrderFile(processedLof);
+                WriteOrderToFile(modsRoot, order);
 
                 updateAvailableMods(); // Refresh UI
             }
@@ -326,37 +316,19 @@ namespace Manager
         /// </summary>
         private void button2_Click(object sender, EventArgs e)
         {
-            var item = uiInstalledModsListView.SelectedItem as ManagerGUI.ModListItem;
-            if (item == null) return;
+            var selected = uiInstalledModsListView.SelectedItems.Cast<ManagerGUI.ModListItem>().ToList();
+            if (selected == null || selected.Count == 0) return;
 
             try
             {
-                // Read current loadorder.json
                 var modsRoot = uiModsPath.Text;
-                var processedLof = LoadOrderResolver.ReadLoadOrderFile(modsRoot);
-
-                // Update mod status
-                if (processedLof.Mods.ContainsKey(item.Id))
+                var order = new List<string>(ReadOrderFromFile(modsRoot) ?? new string[0]);
+                foreach (var item in selected)
                 {
-                    processedLof.Mods[item.Id].enabled = false;
+                    order.RemoveAll(x => string.Equals(x, item.Id, StringComparison.OrdinalIgnoreCase));
                 }
-                else
-                {
-                    // If mod not in JSON, add it as disabled
-                    processedLof.Mods[item.Id] = new ModStatusEntry { enabled = false };
-                }
-
-                // Remove the mod from the order list if it's disabled
-                if (processedLof.Order.Contains(item.Id))
-                {
-                    var newOrderList = processedLof.Order.ToList();
-                    newOrderList.Remove(item.Id);
-                    processedLof.Order = newOrderList.ToArray();
-                }
-
-                // Save updated loadorder.json
-                SaveLoadOrderFile(processedLof);
-
+                WriteOrderToFile(modsRoot, order);
+                
                 updateAvailableMods(); // Refresh UI
             }
             catch (Exception ex)
@@ -423,48 +395,15 @@ namespace Manager
             try
             {
                 var modsRoot = uiModsPath.Text;
-                var processedLof = LoadOrderResolver.ReadLoadOrderFile(modsRoot);
-
-                // Update order based on current UI list
                 var newOrderIds = new System.Collections.Generic.List<string>();
                 foreach (var o in uiInstalledModsListView.Items)
                 {
                     var it = o as ManagerGUI.ModListItem;
                     if (it == null) continue;
-                    newOrderIds.Add(it.Id);
+                    if (!newOrderIds.Any(x => string.Equals(x, it.Id, StringComparison.OrdinalIgnoreCase)))
+                        newOrderIds.Add(it.Id);
                 }
-                processedLof.Order = newOrderIds.ToArray();
-
-                // Ensure all mods in the UI list are marked as enabled in the processedLof.Mods dictionary
-                // And any mods not in the UI list are marked as disabled
-                var currentEnabledModIds = new HashSet<string>(newOrderIds, StringComparer.OrdinalIgnoreCase);
-                foreach (var modItem in uiAvailbleModsListView.Items.Cast<ManagerGUI.ModListItem>().Concat(uiInstalledModsListView.Items.Cast<ManagerGUI.ModListItem>()))
-                {
-                    if (currentEnabledModIds.Contains(modItem.Id))
-                    {
-                        if (!processedLof.Mods.ContainsKey(modItem.Id))
-                        {
-                            processedLof.Mods[modItem.Id] = new ModStatusEntry { enabled = true };
-                        }
-                        else
-                        {
-                            processedLof.Mods[modItem.Id].enabled = true;
-                        }
-                    }
-                    else
-                    {
-                        if (!processedLof.Mods.ContainsKey(modItem.Id))
-                        {
-                            processedLof.Mods[modItem.Id] = new ModStatusEntry { enabled = false };
-                        }
-                        else
-                        {
-                            processedLof.Mods[modItem.Id].enabled = false;
-                        }
-                    }
-                }
-
-                SaveLoadOrderFile(processedLof);
+                WriteOrderToFile(modsRoot, newOrderIds);
                 _orderDirty = false;
                 System.Windows.Forms.MessageBox.Show("Load order saved.", "Info", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
             }
@@ -476,19 +415,57 @@ namespace Manager
 
         private void SaveLoadOrderFile(ProcessedLoadOrderData processedData)
         {
-            try
-            {
-                var lof = new LoadOrderFile
-                {
-                    order = processedData.Order,
-                    mods = processedData.Mods.Select(kvp => new ModStatusEntryKV { id = kvp.Key, enabled = kvp.Value.enabled, locked = kvp.Value.locked, notes = kvp.Value.notes }).ToArray()
-                };
-                var json = new JavaScriptSerializer().Serialize(lof);
-                System.IO.File.WriteAllText(System.IO.Path.Combine(uiModsPath.Text, "loadorder.json"), json);
-            }
+            // Backward-compatible wrapper, now writes order-only
+            try { WriteOrderToFile(uiModsPath.Text, processedData != null ? (processedData.Order ?? new string[0]) : new string[0]); }
             catch (Exception ex)
             {
                 System.Windows.Forms.MessageBox.Show($"Failed to save load order file: {ex.Message}", "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+            }
+        }
+
+        // Local JSON helpers (no Unity dependency)
+        private class SimpleLoadOrder { public string[] order; }
+        private static bool IsNullOrWhiteSpaceCompat(string s) { return s == null || s.Trim().Length == 0; }
+        private string[] ReadOrderFromFile(string modsRoot)
+        {
+            try
+            {
+                var path = Path.Combine(modsRoot, "loadorder.json");
+                if (!File.Exists(path)) return new string[0];
+                var json = File.ReadAllText(path);
+                var obj = new JavaScriptSerializer().Deserialize<SimpleLoadOrder>(json);
+                var raw = (obj != null && obj.order != null) ? obj.order : new string[0];
+                var list = new List<string>();
+                foreach (var s in raw)
+                {
+                    if (IsNullOrWhiteSpaceCompat(s)) continue;
+                    var id = s.Trim().ToLowerInvariant();
+                    if (!list.Contains(id)) list.Add(id);
+                }
+                return list.ToArray();
+            }
+            catch { return new string[0]; }
+        }
+
+        private void WriteOrderToFile(string modsRoot, IEnumerable<string> order)
+        {
+            try
+            {
+                var unique = new List<string>();
+                foreach (var s in (order ?? new string[0]))
+                {
+                    if (IsNullOrWhiteSpaceCompat(s)) continue;
+                    var id = s.Trim().ToLowerInvariant();
+                    if (!unique.Any(x => string.Equals(x, id, StringComparison.OrdinalIgnoreCase))) unique.Add(id);
+                }
+                var json = new JavaScriptSerializer().Serialize(new { order = unique.ToArray() });
+                var path = Path.Combine(modsRoot, "loadorder.json");
+                Directory.CreateDirectory(modsRoot);
+                File.WriteAllText(path, json);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show($"Failed to write load order: {ex.Message}", "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
             }
         }
 
