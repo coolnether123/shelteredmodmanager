@@ -38,12 +38,15 @@ public class PluginManager
     private string _gameRoot;                            // <GameRoot>
     private string _modsRoot;                            // <GameRoot>/mods
 
+    public static List<ModEntry> LoadedMods { get; private set; } // Expose loaded mods
+
     private PluginManager()
     {
         _plugins = new List<IModPlugin>();
         _updates = new List<IModUpdate>();
         _shutdown = new List<IModShutdown>();
         _sceneEvents = new List<IModSceneEvents>();
+        LoadedMods = new List<ModEntry>(); 
     }
 
     public static PluginManager getInstance()
@@ -68,7 +71,7 @@ public class PluginManager
         _loaderRoot = doorstepGameObject;                                  // keep a handle for context
 
         var assemblies = new List<Assembly>();                             // collect candidate assemblies
-        var activatedTypes = new HashSet<Type>(); // track explicit entry types // Coolnether123
+        var activatedTypes = new HashSet<Type>(); // track explicit entry types  Coolnether123
 
         // Read load order file (unchanged input contract)
         var processedLof = LoadOrderResolver.ReadLoadOrderFile(_modsRoot);
@@ -77,24 +80,36 @@ public class PluginManager
         var discovered = ModDiscovery.DiscoverAllMods();
 
         // Enabled mods filtering:
-        //  1) If 'order' is present, treat it as the allow-list (like previous behavior).
-        //  2) If Mods[id].enabled is present, also honor it.
-        if (processedLof.Order != null && processedLof.Order.Length > 0)
+        // Behavior change: If loadorder.json exists, treat its 'order' as a strict allow-list (even if empty).
+        // If no loadorder.json is present, load no mods by default to avoid surprising global enable.
+        try
         {
-            var allowed = new HashSet<string>(processedLof.Order, StringComparer.OrdinalIgnoreCase);
-            discovered = discovered.Where(m => allowed.Contains(m.Id)).ToList();
+            var lofPath = Path.Combine(_modsRoot, "loadorder.json");
+            var hasLoadOrder = File.Exists(lofPath);
+            if (hasLoadOrder)
+            {
+                var allowed = new HashSet<string>(processedLof.Order ?? new string[0], StringComparer.OrdinalIgnoreCase);
+                discovered = discovered.Where(m => allowed.Contains(m.Id)).ToList();
+                if (processedLof.Mods != null && processedLof.Mods.Count > 0)
+                {
+                    discovered = discovered.Where(m => {
+                        ModStatusEntry st;
+                        return !processedLof.Mods.TryGetValue(m.Id, out st) || st.enabled;
+                    }).ToList();
+                }
+            }
+            else
+            {
+                MMLog.Write("[loader] No loadorder.json found. Skipping all mods until one is created by the Manager.");
+                discovered = new List<ModEntry>();
+            }
         }
-        if (processedLof.Mods != null && processedLof.Mods.Count > 0)
-        {
-            discovered = discovered.Where(m => {
-                ModStatusEntry st;
-                return !processedLof.Mods.TryGetValue(m.Id, out st) || st.enabled;
-            }).ToList();
-        }
+        catch { }
 
         // Resolve dependency-aware load order
         var resolution = LoadOrderResolver.Resolve(discovered, processedLof.Order ?? new string[0]);
         var orderedMods = resolution.Mods; // already sorted
+        LoadedMods = orderedMods; // Populate the new static property
         if (resolution.MissingHardDependencies != null && resolution.MissingHardDependencies.Count > 0)
         {
             foreach (var e in resolution.MissingHardDependencies)

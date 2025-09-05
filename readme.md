@@ -40,12 +40,13 @@ Includes Harmony (https://github.com/pardeike/Harmony) and demo patches to verif
 **PluginDebugGUI**\
 Simple UI exposing loader state and loaded plugins while in-game.
 
-## Installation (Coolnether note: Will be streamlining soon)
+## Installation
 - Backup your game directory (zip the entire Sheltered folder)
-- Clone this repository, open `ShelteredModManager.sln` in Visual Studio 2017+ or JetBrains Rider
-- Build the whole solution in `Release` configuration
-- After build, a `Dist/` folder appears at the project root; copy the entire contents of `Dist/` to your Sheltered installation root (e.g., `D:\Epic Games\Sheltered\`)
+- Download [Release v0.6](https://github.com/coolnether123/shelteredmodmanager/releases/tag/v0.6)  
+- Copy its content in the same space as the games exe
 - Launch `SMM\\Manager.exe` from your game folder
+- Use the browse for sheltered exe button and navigate to the exe
+- Currently a bug with refreshing the mods after this so restarted the mod manager and everything will work from then.
 
 ## Compilation
 - Target Framework: .NET Framework 3.5
