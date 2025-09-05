@@ -1,0 +1,34 @@
+Sheltered/
+└─ mods/
+   ├─ enabled/
+   │  └─ MyCoolMod/                ← one folder per mod
+   │     ├─ About/                 ← metadata & preview
+   │     │  ├─ About.json          ← JSON details for the mod (renamed)
+   │     │  └─ preview.png         ← for the manager UI could also have an icon png
+   │     ├─ Assemblies/            ← compiled code (pick the best TFM at runtime)
+   │     │  └─ MyCoolMod.dll
+   │     ├─ Assets/                ← optional data the mod defines
+   │     │  ├─ Textures/
+   │     │  ├─ Audio/
+   │     │  └─ Localization/
+   │     └─ Config/                ← default cfg the mod can read
+   └─ disabled/
+      └─ ...
+
+
+Example About.json
+------------------
+{
+  "id": "com.yourname.mycoolmod",        // Required
+  "name": "My Cool Mod",                 // Required
+  "version": "1.2.3",                    // Required
+  "authors": ["You"],                     // Required
+  "entryType": "MyCoolMod.Entry",         // Optional
+  "dependsOn": ["com.other.mod>=2.0.0"],  // Optional
+  "loadBefore": ["com.some.mod"],         // Optional
+  "loadAfter": ["com.core.api"],          // Optional
+  "description": "Adds X to Sheltered.",  // Required
+  "tags": ["QoL","UI"],                  // Optional
+  "website": "https://example.com"        // Optional
+}
+

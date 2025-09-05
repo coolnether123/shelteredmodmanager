@@ -13,7 +13,7 @@ SET PROJECT_PLUGIN_HARMONY=$(SolutionDir)\PluginHarmony
 SET PROJECT_PLUGIN_INITIALIZER=$(SolutionDir)\PluginInitializer
 
 
-SET SUB_DIR=\bin\debug\
+SET SUB_DIR=\bin\$(Configuration)\
 
 :: initialize the \Dist\ directory
 rd /s /q "%BUILD_PATH%"
@@ -48,4 +48,5 @@ copy "%PROJECT_PLUGIN_CONSOLE%"\"%SUB_DIR%"\PluginConsole.dll "%MODS_PATH%"\
 copy "%PROJECT_PLUGIN_DEBUG_GUI%"\"%SUB_DIR%"\PluginDebugGUI.dll "%MODS_PATH%"\
 copy "%PROJECT_PLUGIN_HARMONY%"\"%SUB_DIR%"\PluginHarmony.dll "%MODS_PATH%"\
 copy "%PROJECT_PLUGIN_INITIALIZER%"\"%SUB_DIR%"\PluginInitializer.dll "%MODS_PATH%"\
-copy "%LIB_DIR%\"0Harmony.dll* "%MODS_PATH%"\
+if exist "%PROJECT_PLUGIN_HARMONY%"\"%SUB_DIR%"\0Harmony.dll copy "%PROJECT_PLUGIN_HARMONY%"\"%SUB_DIR%"\0Harmony.dll "%MODS_PATH%"\
+if exist "%SolutionDir%packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" copy "%SolutionDir%packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" "%MODS_PATH%"\

@@ -1,0 +1,10 @@
+{
+  "id": "com.plugin.harmony",
+  "name": "Plugin Harmony",
+  "version": "1.0.0",
+  "authors": ["Coolnether123"],
+  "entryType": "HarmonyPlugin",
+  "dependsOn": ["com.harmony.0harmony"],
+    "tags": ["Patching", "Framework", "Core"],
+  "description": "Enables advanced runtime code patching for Sheltered using the Harmony library. This core plugin allows other mods to modify game behavior, add new features, and fix bugs without directly altering game files. Required by most complex mods."
+}

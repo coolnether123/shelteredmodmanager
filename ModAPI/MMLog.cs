@@ -8,21 +8,14 @@ public static class MMLog
 
     static MMLog()
     {
-        try
-        {
-            var baseDir = Application.persistentDataPath;
-            if (string.IsNullOrEmpty(baseDir))
-                baseDir = Directory.GetCurrentDirectory();
-
-            Directory.CreateDirectory(baseDir);
-            _logPath = Path.Combine(baseDir, "mod_manager.log");
-        }
-        catch
-        {
-            _logPath = Path.Combine(Directory.GetCurrentDirectory(), "mod_manager.log");
-        }
+        var baseDir = Directory.GetCurrentDirectory();
+        Directory.CreateDirectory(baseDir);
+        _logPath = Path.Combine(baseDir, "mod_manager.log");
     }
 
+    /// <summary>
+    /// Writes a line to mod_manager.log with the time it was writen
+    /// </summary>
     public static void Write(string msg)
     {
         var line = $"[{DateTime.Now:HH:mm:ss}] {msg}";
