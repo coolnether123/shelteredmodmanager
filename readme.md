@@ -124,7 +124,7 @@ public class MyPlugin : IModPlugin
 Dependencies and order are declared in `About.json` via `dependsOn`, `loadBefore`, and `loadAfter`. Version constraints are supported (e.g., `"com.example.mod >= 1.2.0"`). To use another mod’s public API, reference its DLL and declare a matching `dependsOn` entry. 
 
 ## Screenshots
-<img src="/documentation/manager_gui.png">
+<img src="/documentation/mod_manager_gui.png">
 
 <img src="/documentation/ingame.png">
 
