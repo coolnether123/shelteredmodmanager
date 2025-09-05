@@ -126,9 +126,9 @@ Dependencies and order are declared in `About.json` via `dependsOn`, `loadBefore
 ## Screenshots
 <img src="/documentation/mod_manager_gui.png">
 
-<img src="/documentation/ingame.png">
+<img src="/documentation/mod_ingame.png">
 
-<img src="/documentation/ingame_2.png">
+<img src="/documentation/mod_ingame_2.png">
 
 ## Credits
 - [Team 17 for Sheltered](https://store.steampowered.com/app/356040/Sheltered/)
