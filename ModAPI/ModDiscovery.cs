@@ -117,7 +117,9 @@ public static class ModDiscovery
                 try
                 {
                     MMLog.Write("Loading mod assembly: " + dll);
-                    assemblies.Add(Assembly.LoadFile(dll));
+                    var asm = Assembly.LoadFile(dll);
+                    assemblies.Add(asm);
+                    try { ModRegistry.RegisterAssemblyForMod(asm, entry); } catch { }
                 }
                 catch (Exception ex)
                 {
@@ -160,4 +162,3 @@ public static class ModDiscovery
 
     private static string NormId(string s) => (s ?? "").Trim().ToLowerInvariant();
 }
-

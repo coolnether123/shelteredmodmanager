@@ -92,54 +92,13 @@ public class PluginManager
             }).ToList();
         }
 
-        // Collect assemblies from discovered mods (both explicit entryType and general plugin assemblies)
-        foreach (var entry in discovered)
+        // Resolve dependency-aware load order
+        var resolution = LoadOrderResolver.Resolve(discovered, processedLof.Order ?? new string[0]);
+        var orderedMods = resolution.Mods; // already sorted
+        if (resolution.MissingHardDependencies != null && resolution.MissingHardDependencies.Count > 0)
         {
-            try
-            {
-                // 1) If About.json specifies an explicit entryType, preload that assembly and mark type as activated.
-                if (!string.IsNullOrEmpty(entry.About.entryType))
-                {
-                    var t = ResolveType(entry.About.entryType);
-                    if (t != null)
-                    {
-                        activatedTypes.Add(t);
-                        assemblies.Add(t.Assembly); // ensure it is scanned as well
-                    }
-                }
-
-                // 2) Load all DLLs under Assemblies/ (handles both explicit & implicit plugins)
-                var asmPaths = SafeEnumerateAssemblies(entry);
-                foreach (var p in asmPaths)
-                {
-                    var asm = SafeLoadAssembly(p);
-                    if (asm != null) assemblies.Add(asm);
-                }
-            }
-            catch (Exception ex)
-            {
-                MMLog.Write($"[loader] discover/load assemblies for '{entry.Id}' failed: {ex.Message}");
-            }
-        }
-
-        // Find all IModPlugin implementations across assemblies
-        var pluginTypes = new List<Type>();
-        foreach (var asm in assemblies.Distinct())
-        {
-            Type[] types = new Type[0];
-            try { types = asm.GetTypes(); }
-            catch (ReflectionTypeLoadException rtle) { types = rtle.Types.Where(x => x != null).ToArray(); }
-
-            foreach (var type in types)
-            {
-                if (type == null || type.IsAbstract || !type.IsClass) continue;
-
-                // If there's an explicit entry type, we keep it; otherwise any IModPlugin is eligible
-                if (typeof(IModPlugin).IsAssignableFrom(type))
-                {
-                    pluginTypes.Add(type);
-                }
-            }
+            foreach (var e in resolution.MissingHardDependencies)
+                MMLog.Write("[loader] dependency error: " + e);
         }
 
         // Attach a small runner to drive updates and scene events (once)
@@ -147,39 +106,55 @@ public class PluginManager
         if (runner == null) runner = _loaderRoot.AddComponent<PluginRunner>();
         runner.Manager = this; // set back-reference // Coolnether123
 
-        // Instantiate, build context, and start plugins (isolated)
-        foreach (Type type in pluginTypes)
+        // Load and start plugins mod-by-mod in resolved order
+        foreach (var entry in orderedMods)
         {
-            if (activatedTypes.Contains(type))
-            {
-                // still start it here (Initialize/Start) but we track it to avoid double-activation logic elsewhere
-            }
+            List<Assembly> modAssemblies = null;
             try
             {
-                var plugin = (IModPlugin)Activator.CreateInstance(type);
-                var pluginRoot = new GameObject($"Mod-{SafeModIdFor(type)}");
-                pluginRoot.transform.SetParent(_loaderRoot.transform, false);
-
-                var ctx = BuildContextFor(type, pluginRoot);
-                _plugins.Add(plugin);
-
-                // Optional capability caches
-                var u = plugin as IModUpdate;
-                if (u != null) _updates.Add(u);
-                var s = plugin as IModShutdown;
-                if (s != null) _shutdown.Add(s);
-                var se = plugin as IModSceneEvents;
-                if (se != null) _sceneEvents.Add(se);
-
-                // Call lifecycle with isolation
-                plugin.Initialize(ctx);
-                plugin.Start(ctx);
-
-                ctx.Log.Info("Started.");
+                modAssemblies = ModDiscovery.LoadAssemblies(entry);
             }
             catch (Exception ex)
             {
-                MMLog.Write($"[loader] error starting plugin '{type.FullName}': {ex.Message}");
+                MMLog.Write($"[loader] failed to load assemblies for '{entry.Id}': {ex.Message}");
+                continue;
+            }
+
+            foreach (var asm in modAssemblies)
+            {
+                Type[] types = new Type[0];
+                try { types = asm.GetTypes(); }
+                catch (ReflectionTypeLoadException rtle) { types = rtle.Types.Where(x => x != null).ToArray(); }
+
+                foreach (var type in types)
+                {
+                    if (type == null || type.IsAbstract || !type.IsClass) continue;
+                    if (!typeof(IModPlugin).IsAssignableFrom(type)) continue;
+
+                    try
+                    {
+                        var plugin = (IModPlugin)Activator.CreateInstance(type);
+                        var pluginRoot = new GameObject($"Mod-{SafeModIdFor(type)}");
+                        pluginRoot.transform.SetParent(_loaderRoot.transform, false);
+
+                        var ctx = BuildContextFor(type, pluginRoot);
+                        _plugins.Add(plugin);
+
+                        // Optional capability caches
+                        var u = plugin as IModUpdate; if (u != null) _updates.Add(u);
+                        var s = plugin as IModShutdown; if (s != null) _shutdown.Add(s);
+                        var se = plugin as IModSceneEvents; if (se != null) _sceneEvents.Add(se);
+
+                        // Call lifecycle with isolation
+                        plugin.Initialize(ctx);
+                        plugin.Start(ctx);
+                        ctx.Log.Info("Started.");
+                    }
+                    catch (Exception ex)
+                    {
+                        MMLog.Write($"[loader] error starting plugin '{type.FullName}': {ex.Message}");
+                    }
+                }
             }
         }
 

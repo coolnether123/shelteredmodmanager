@@ -22,11 +22,12 @@ Quick Start
      }
    }
 
-3) In your plugin `start`, create/apply your Harmony instance:
+3) In your plugin `Start`, create/apply your Harmony instance:
 
-   public void start(UnityEngine.GameObject root) {
+   public void Start(IPluginContext ctx) {
      var harmony = new Harmony("com.yourname.myplugin");
      harmony.PatchAll(System.Reflection.Assembly.GetExecutingAssembly());
+     ctx.Log.Info("Harmony patches applied.");
    }
 
 Tips

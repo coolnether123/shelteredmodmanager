@@ -10,68 +10,44 @@ Steps
 
 2) Add a project reference to `ModAPI/ModAPI.csproj` (or reference `ModAPI.dll` from `Dist/SMM` after build)
 
-3) Write your plugin code. Here is a simple example that displays a message on screen:
+3) Write your plugin code. Example that displays a message on screen:
 
 // HelloWorldPlugin.cs - A simple example plugin.
 using UnityEngine;
 
-public class HelloWorldPlugin : IPlugin
+public class HelloWorldPlugin : IModPlugin
 {
-    // The public name of your plugin.
-    public string Name => "Hello World Plugin";
-
-    // The version of your plugin.
-    public string Version => "1.0.0";
-
-    // Called once when the plugin is first initialized.
-    // Use this for one-time setup.
-    public void initialize()
+    public void Initialize(IPluginContext ctx)
     {
-        MMLog.Write("Hello World Plugin Initialized!");
+        // one-time setup; read settings, register services, etc.
     }
 
-    // Called when the plugin should execute its main logic.
-    // A root GameObject is provided that you can add components to.
-    public void start(GameObject root)
+    public void Start(IPluginContext ctx)
     {
-        // To display things on screen or run code every frame, create a MonoBehaviour.
-        // Add the custom component to the root GameObject provided by the ModAPI.
-        root.AddComponent<HelloWorldComponent>();
-        MMLog.Write("Hello World Plugin Started!");
+        // Attach a component under the per-plugin root provided by the loader
+        ctx.PluginRoot.AddComponent<HelloWorldComponent>();
+        ctx.Log.Info("Hello World Plugin started.");
     }
 }
 
-// This is a MonoBehaviour component that will be attached to a GameObject in the game.
-// Unity automatically calls methods like OnGUI() on active MonoBehaviours.
+// Unity MonoBehaviour that renders a label
 public class HelloWorldComponent : MonoBehaviour
 {
-    // OnGUI is a Unity method that is called for rendering and handling GUI events.
     void OnGUI()
     {
-        // Set the color for the GUI elements.
         GUI.color = Color.white;
-
-        // Define the style for the label.
-        var style = new GUIStyle(GUI.skin.label);
-        style.fontSize = 20;
-        style.alignment = TextAnchor.UpperCenter;
-
-        // Create a label at the top-center of the screen.
-        GUI.Label(
-            new Rect(0, 10, Screen.width, 50),
-            "Hello, World! The plugin is working!",
-            style
-        );
+        var style = new GUIStyle(GUI.skin.label) { fontSize = 20, alignment = TextAnchor.UpperCenter };
+        GUI.Label(new Rect(0, 10, Screen.width, 50), "Hello, World! The plugin is working!", style);
     }
 }
 
 
-4) Implement `IPlugin` Folder-based mod layout:
+4) Implement `IModPlugin` and use the folder-based mod layout:
 
    Sheltered/mods/disabled/MyPlugin/
      About/About.json
-     Assemblies/MyPlugin.dll <-- Build your project here
-     Config/default.json   (optional; see documentation/SETTINGS.md)
+     Assemblies/MyPlugin.dll   <-- Build your project here
+     Config/default.json       (optional; see documentation/SETTINGS.md)
 
    Minimal About.json:
    {
@@ -86,11 +62,11 @@ public class HelloWorldComponent : MonoBehaviour
 5) Enable your mod in the Manager GUI
 
 Using Settings
-- Call `var s = ModSettings.ForThisAssembly();`
+- Access via the plugin context: `var s = ctx.Settings;`
 - Read: `s.GetInt("maxCount", 5)` / `s.GetBool("enabled", true)` etc.
 - Write: `s.SetInt("maxCount", 10); s.SaveUser();`
 
 Tips
-- Avoid blocking the main thread during `start`; use coroutines if needed
-- Use `MMLog.Write("...")` for simple file logging
+- Avoid blocking the main thread during `Start`; use coroutines if needed (`ctx.StartCoroutine` or `ctx.RunNextFrame`)
+- Use `ctx.Log.Info("...")` for simple file logging (prefixed with your mod id)
 - Reference Unity game assemblies from your local install if you build against them

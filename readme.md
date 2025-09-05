@@ -17,7 +17,12 @@ It acts as a drop-in application for a regular installation of Sheltered — no 
 Bootstraps the Mod API inside the game using Unity Doorstop and starts the plugin system.
 
 **ModAPI**\
-Defines the plugin interface and manager, puts mods in the correct order, and loads/starts them in-game.
+Defines the plugin interfaces and loader. Plugins implement `IModPlugin` and receive an `IPluginContext` with:
+- `PluginRoot` GameObject for attaching behaviours
+- `Mod` (About.json metadata and paths)
+- `Settings` (typed access to Config/default.json + Config/user.json)
+- `Log` (mod-prefixed logger)
+The loader currently resolves dependencies (`dependsOn`), ordering (`loadBefore`/`loadAfter`), and honors `loadorder.json`. This will be moved to more user facing with a sort button.
 
 **ManagerGUI**\
 Windows UI to locate the game, manage mod enable/disable, and set load order.
@@ -85,6 +90,38 @@ Example About.json
   "website": "https://example.com"        // Optional
 }
 
+## Plugin Authoring
+
+Create a class that implements `IModPlugin` and use the provided context:
+
+```csharp
+using UnityEngine;
+
+public class MyPlugin : IModPlugin
+{
+    public void Initialize(IPluginContext ctx)
+    {
+        // optional: pre-load resources, register services, read settings
+    }
+
+    public void Start(IPluginContext ctx)
+    {
+        // attach behaviours under a per-plugin root
+        ctx.PluginRoot.AddComponent<MyMonoBehaviour>();
+
+        // read/write settings (merged defaults + user overrides)
+        int maxCount = ctx.Settings.GetInt("maxCount", 10);
+        ctx.Settings.SetInt("maxCount", maxCount);
+        ctx.Settings.SaveUser();
+
+        // simple logging, prefixed with your mod id
+        ctx.Log.Info($"MyPlugin started. maxCount={maxCount}");
+    }
+}
+```
+
+Dependencies and order are declared in `About.json` via `dependsOn`, `loadBefore`, and `loadAfter`. Version constraints are supported (e.g., `"com.example.mod >= 1.2.0"`). To use another mod’s public API, reference its DLL and declare a matching `dependsOn` entry. 
+
 ## Screenshots
 <img src="/documentation/manager_gui.png">
 
@@ -106,4 +143,3 @@ Validated on:
 
 ## License
 MIT — see `LICENSE`.
-
