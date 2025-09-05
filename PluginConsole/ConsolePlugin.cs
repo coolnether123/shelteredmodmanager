@@ -2,27 +2,23 @@ using UnityEngine;
 
 /**
 * Author: benjaminfoo
-* Maintainer: coolnether123
+* Maintainer: Coolnether123
 * See: https://github.com/benjaminfoo/shelteredmodmanager
 * 
-* This is the plugin definition for the console-plugin, which displays an ingame-console
+* This is the plugin definition for the console-plugin, which displays an ingame-console.
 */
-public class ConsolePlugin : IPlugin
+public class ConsolePlugin : IModPlugin
 {
     public ConsolePlugin() { }
 
-    public string Name => "ConsolePlugin";
-    public string Version => "0.0.1";
-
-
-    public void initialize()
+    public void Initialize(IPluginContext ctx)
     {
-
+        // No-op; reserved for future console command registration
     }
 
-    public void start(GameObject root)
+    public void Start(IPluginContext ctx)
     {
-        ConsoleWindowComponent consoleWindow = root.AddComponent<ConsoleWindowComponent>();
+        ConsoleWindowComponent consoleWindow = ctx.PluginRoot.AddComponent<ConsoleWindowComponent>();
+        ctx.Log.Info("ConsolePlugin: ConsoleWindowComponent attached.");
     }
-
 }

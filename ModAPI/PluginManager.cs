@@ -1,10 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
 using System.Linq;
+using System.Reflection;
 using UnityEngine;
-
+using UnityEngine.SceneManagement;
+using static LoadOrderResolver;
 
 /**
 * Original Author: benjaminfoo
@@ -14,162 +16,388 @@ using UnityEngine;
 * 
 * 
 * This class handles the overall plugin-management (like loading and executing them)
+* 
+* BREAKING CHANGE (WIP): Updated to the new context-first plugin API (IModPlugin et al.).
+*  - Each plugin now gets a dedicated parent GameObject for clean teardown.
+*  - Safe per-plugin try/catch so one bad plugin won't break others.
+*  - Optional Update/Shutdown/Scene event hooks via IModUpdate/IModShutdown/IModSceneEvents.
+*  - Honors loadorder.json 'order' and 'enabled' flags before loading.
+*  - Emits clearer diagnostics via a per-mod prefixed logger.
+*  (Coolnether123)
 */
 public class PluginManager
 {
     private static PluginManager instance;
 
-    private ICollection<IPlugin> plugins;
+    private readonly List<IModPlugin> _plugins;          // all loaded plugin instances
+    private readonly List<IModUpdate> _updates;          // plugins that implement IModUpdate
+    private readonly List<IModShutdown> _shutdown;       // plugins that implement IModShutdown
+    private readonly List<IModSceneEvents> _sceneEvents; // plugins that implement IModSceneEvents
 
-    private PluginManager() {
-        plugins = new List<IPlugin>();
+    private GameObject _loaderRoot;                      // global host object
+    private string _gameRoot;                            // <GameRoot>
+    private string _modsRoot;                            // <GameRoot>/mods
+
+    private PluginManager()
+    {
+        _plugins = new List<IModPlugin>();
+        _updates = new List<IModUpdate>();
+        _shutdown = new List<IModShutdown>();
+        _sceneEvents = new List<IModSceneEvents>();
     }
 
-    public ICollection<IPlugin> GetPlugins() {
-        return plugins;
-            }
-
-    public static PluginManager getInstance() {
-        if (instance == null) {
+    public static PluginManager getInstance()
+    {
+        if (instance == null)
+        {
             instance = new PluginManager();
         }
-
         return instance;
     }
 
-    public void loadAssemblies(GameObject doorstepGameObject) {
+    public IEnumerable<IModPlugin> GetPlugins()
+    {
+        return _plugins;
+    }
+
+    public void loadAssemblies(GameObject doorstepGameObject)
+    {
         // Build absolute path to the mods directory (from game's data folder)
-        string gameRootPath = Directory.GetParent(Application.dataPath).FullName;
-        string modsPath = Path.Combine(gameRootPath, "mods");
-        string modsRoot = modsPath; // Consistent naming
+        _gameRoot = Directory.GetParent(Application.dataPath).FullName;    // same as before
+        _modsRoot = Path.Combine(_gameRoot, "mods");                       // consistent naming
+        _loaderRoot = doorstepGameObject;                                  // keep a handle for context
 
-        ICollection<Assembly> assemblies = new List<Assembly>();
-        var activatedTypes = new HashSet<Type>(); // track explicitly activated entry types // Coolnether123
+        var assemblies = new List<Assembly>();                             // collect candidate assemblies
+        var activatedTypes = new HashSet<Type>(); // track explicit entry types // Coolnether123
 
-        // Read load order file
-        var processedLof = LoadOrderResolver.ReadLoadOrderFile(modsRoot);
+        // Read load order file (unchanged input contract)
+        var processedLof = LoadOrderResolver.ReadLoadOrderFile(_modsRoot);
 
-        // Discover all mods
+        // Discover all mods (About.json-driven)
         var discovered = ModDiscovery.DiscoverAllMods();
 
-        // Enabled mods are those explicitly listed in the loadorder `order` array.
-        // If no order is present, load nothing (user has not enabled any mods).
+        // Enabled mods filtering:
+        //  1) If 'order' is present, treat it as the allow-list (like previous behavior).
+        //  2) If Mods[id].enabled is present, also honor it.
         if (processedLof.Order != null && processedLof.Order.Length > 0)
         {
-            var enabledIds = new HashSet<string>(processedLof.Order, StringComparer.OrdinalIgnoreCase);
-            discovered = discovered.Where(m => enabledIds.Contains(m.Id)).ToList();
+            var allowed = new HashSet<string>(processedLof.Order, StringComparer.OrdinalIgnoreCase);
+            discovered = discovered.Where(m => allowed.Contains(m.Id)).ToList();
         }
-        else
+        if (processedLof.Mods != null && processedLof.Mods.Count > 0)
         {
-            discovered = new List<ModEntry>();
+            discovered = discovered.Where(m => {
+                ModStatusEntry st;
+                return !processedLof.Mods.TryGetValue(m.Id, out st) || st.enabled;
+            }).ToList();
         }
 
-        // Apply load order resolver
-        var resolutionResult = LoadOrderResolver.Resolve(discovered, processedLof.Order ?? new string[0]);
-        // (CN) TODO: Should display errors and cycle info to the user.
-        discovered = resolutionResult.Mods;
-
-        foreach (var mod in discovered)
+        // Collect assemblies from discovered mods (both explicit entryType and general plugin assemblies)
+        foreach (var entry in discovered)
         {
-            var modAssemblies = ModDiscovery.LoadAssemblies(mod);
-            foreach (var asm in modAssemblies)
-            {
-                assemblies.Add(asm);
-                // Register mapping between assembly and its mod for settings resolution (Coolnether123)
-                ModRegistry.RegisterAssemblyForMod(asm, mod);
-            }
-
-            // Respect explicit entry type if provided (must implement IPlugin)
-            // Coolnether123
             try
             {
-                if (mod.About != null && !string.IsNullOrEmpty(mod.About.entryType))
+                // 1) If About.json specifies an explicit entryType, preload that assembly and mark type as activated.
+                if (!string.IsNullOrEmpty(entry.About.entryType))
                 {
-                    Type entry = null;
-                    foreach (var asm in modAssemblies)
+                    var t = ResolveType(entry.About.entryType);
+                    if (t != null)
                     {
-                        // Try fast path: fully qualified name lookup in this assembly
-                        entry = asm.GetType(mod.About.entryType, false);
-                        if (entry != null) break;
-                        // Slow path: scan types if needed
-                        foreach (var t in asm.GetTypes())
-                        {
-                            if (t.FullName == mod.About.entryType)
-                            {
-                                entry = t;
-                                break;
-                            }
-                        }
-                        if (entry != null) break;
+                        activatedTypes.Add(t);
+                        assemblies.Add(t.Assembly); // ensure it is scanned as well
                     }
+                }
 
-                    if (entry != null)
-                    {
-                        if (!entry.IsInterface && !entry.IsAbstract && entry.GetInterface(typeof(IPlugin).FullName) != null)
-                        {
-                            IPlugin plugin = (IPlugin)Activator.CreateInstance(entry);
-                            plugins.Add(plugin);
-                            activatedTypes.Add(entry);
-                            plugin.initialize();
-                            plugin.start(doorstepGameObject);
-                        }
-                        else
-                        {
-                            MMLog.Write("Entry type does not implement IPlugin: " + mod.About.entryType);
-                        }
-                    }
-                    else
-                    {
-                        MMLog.Write("Entry type not found: " + mod.About.entryType + " in mod " + mod.Name);
-                    }
+                // 2) Load all DLLs under Assemblies/ (handles both explicit & implicit plugins)
+                var asmPaths = SafeEnumerateAssemblies(entry);
+                foreach (var p in asmPaths)
+                {
+                    var asm = SafeLoadAssembly(p);
+                    if (asm != null) assemblies.Add(asm);
                 }
             }
             catch (Exception ex)
             {
-                MMLog.Write("Error activating entryType for mod '" + mod.Name + "': " + ex.Message);
+                MMLog.Write($"[loader] discover/load assemblies for '{entry.Id}' failed: {ex.Message}");
             }
         }
 
-        
-
-        Type pluginType = typeof(IPlugin);
-        ICollection<Type> pluginTypes = new List<Type>();
-        foreach (Assembly assembly in assemblies)
+        // Find all IModPlugin implementations across assemblies
+        var pluginTypes = new List<Type>();
+        foreach (var asm in assemblies.Distinct())
         {
-            if (assembly != null)
+            Type[] types = new Type[0];
+            try { types = asm.GetTypes(); }
+            catch (ReflectionTypeLoadException rtle) { types = rtle.Types.Where(x => x != null).ToArray(); }
+
+            foreach (var type in types)
             {
-                Type[] types = assembly.GetTypes();
-                foreach (Type type in types)
+                if (type == null || type.IsAbstract || !type.IsClass) continue;
+
+                // If there's an explicit entry type, we keep it; otherwise any IModPlugin is eligible
+                if (typeof(IModPlugin).IsAssignableFrom(type))
                 {
-                    if (type.IsInterface || type.IsAbstract)
-                    {
-                        continue;
-                    }
-                    else
-                    {
-                        if (type.GetInterface(pluginType.FullName) != null)
-                        {
-                            pluginTypes.Add(type);
-                        }
-                    }
+                    pluginTypes.Add(type);
                 }
             }
         }
 
-        // initialize the plugins and start them from the unity-context
-        // If a mod provided an entryType (About.json), it will still be picked up
-        // here as long as that type implements IPlugin. This keeps the system simple
-        // while enabling explicit entry points. // Coolnether123
+        // Attach a small runner to drive updates and scene events (once)
+        var runner = _loaderRoot.GetComponent<PluginRunner>();
+        if (runner == null) runner = _loaderRoot.AddComponent<PluginRunner>();
+        runner.Manager = this; // set back-reference // Coolnether123
+
+        // Instantiate, build context, and start plugins (isolated)
         foreach (Type type in pluginTypes)
         {
-            if (activatedTypes.Contains(type)) continue; // skip already started entry types // Coolnether123
-            IPlugin plugin = (IPlugin)Activator.CreateInstance(type);
-            plugins.Add(plugin);
-            plugin.initialize();
-            plugin.start(doorstepGameObject);
+            if (activatedTypes.Contains(type))
+            {
+                // still start it here (Initialize/Start) but we track it to avoid double-activation logic elsewhere
+            }
+            try
+            {
+                var plugin = (IModPlugin)Activator.CreateInstance(type);
+                var pluginRoot = new GameObject($"Mod-{SafeModIdFor(type)}");
+                pluginRoot.transform.SetParent(_loaderRoot.transform, false);
+
+                var ctx = BuildContextFor(type, pluginRoot);
+                _plugins.Add(plugin);
+
+                // Optional capability caches
+                var u = plugin as IModUpdate;
+                if (u != null) _updates.Add(u);
+                var s = plugin as IModShutdown;
+                if (s != null) _shutdown.Add(s);
+                var se = plugin as IModSceneEvents;
+                if (se != null) _sceneEvents.Add(se);
+
+                // Call lifecycle with isolation
+                plugin.Initialize(ctx);
+                plugin.Start(ctx);
+
+                ctx.Log.Info("Started.");
+            }
+            catch (Exception ex)
+            {
+                MMLog.Write($"[loader] error starting plugin '{type.FullName}': {ex.Message}");
+            }
         }
 
-
+        // Final load summary (simple)
+        MMLog.Write($"[loader] Loaded {_plugins.Count} plugin(s). Updates={_updates.Count}, Shutdown={_shutdown.Count}, SceneEvents={_sceneEvents.Count}");
     }
 
+    // Schedules an action on the next frame via the runner
+    internal void EnqueueNextFrame(Action a)
+    {
+        var runner = _loaderRoot != null ? _loaderRoot.GetComponent<PluginRunner>() : null;
+        if (runner != null) runner.Enqueue(a);
+    }
+
+    // Dispatch called by PluginRunner on Unity's Update()
+    internal void OnUnityUpdate()
+    {
+        for (int i = 0; i < _updates.Count; i++)
+        {
+            try { _updates[i].Update(); }
+            catch (Exception ex) { MMLog.Write($"[loader] Update() failed: {ex.Message}"); }
+        }
+    }
+
+    // Scene events forwarded by PluginRunner
+    internal void OnSceneLoaded(string name)
+    {
+        for (int i = 0; i < _sceneEvents.Count; i++)
+        {
+            try { _sceneEvents[i].OnSceneLoaded(name); }
+            catch (Exception ex) { MMLog.Write($"[loader] OnSceneLoaded failed: {ex.Message}"); }
+        }
+    }
+
+    internal void OnSceneUnloaded(string name)
+    {
+        for (int i = 0; i < _sceneEvents.Count; i++)
+        {
+            try { _sceneEvents[i].OnSceneUnloaded(name); }
+            catch (Exception ex) { MMLog.Write($"[loader] OnSceneUnloaded failed: {ex.Message}"); }
+        }
+    }
+
+    // Graceful shutdown hook you can call from the host on exit if desired.
+    public void ShutdownAll()
+    {
+        for (int i = _shutdown.Count - 1; i >= 0; i--)
+        {
+            try { _shutdown[i].Shutdown(); }
+            catch (Exception ex) { MMLog.Write($"[loader] Shutdown() failed: {ex.Message}"); }
+        }
+    }
+
+    // --- Helpers ---------------------------------------------------------
+
+    private string SafeModIdFor(Type type)
+    {
+        ModEntry entry;
+        if (ModRegistry.TryGetModByAssembly(type.Assembly, out entry) && entry != null && !string.IsNullOrEmpty(entry.Id))
+            return entry.Id;
+        return type.Namespace ?? type.Name;
+    }
+
+    private IPluginContext BuildContextFor(Type type, GameObject pluginRoot)
+    {
+        ModEntry entry = null;
+        ModRegistry.TryGetModByAssembly(type.Assembly, out entry);  // prefer registry
+
+        // Fallback best-effort root (walk up to find About/)
+        string asmPath = SafeAssemblyPath(type.Assembly);
+        string modRoot = entry != null ? entry.RootPath : ProbeModRootFromAssembly(asmPath);
+
+        // Compose logger and settings
+        string modId = entry != null && !string.IsNullOrEmpty(entry.Id) ? entry.Id : (type.Namespace ?? type.Name);
+        var log = new PrefixedLogger(modId);
+        ModSettings settings = null;
+        try { settings = ModSettings.ForAssembly(type.Assembly); } catch { settings = null; }
+
+        return new PluginContextImpl
+        {
+            LoaderRoot = _loaderRoot,
+            PluginRoot = pluginRoot,
+            Mod = entry,
+            Settings = settings,
+            Log = log,
+            GameRoot = _gameRoot,
+            ModsRoot = _modsRoot,
+            Scheduler = (Action a) => EnqueueNextFrame(a)
+        };
+    }
+
+    private static string SafeAssemblyPath(Assembly asm)
+    {
+        try { return asm != null ? asm.Location : null; } catch { return null; }
+    }
+
+    private static string ProbeModRootFromAssembly(string asmPath)
+    {
+        if (string.IsNullOrEmpty(asmPath)) return null;
+        try
+        {
+            var dir = new DirectoryInfo(Path.GetDirectoryName(asmPath));
+            for (var cursor = dir; cursor != null; cursor = cursor.Parent)
+            {
+                var aboutDir = Path.Combine(cursor.FullName, "About");
+                if (Directory.Exists(aboutDir)) return cursor.FullName;
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    private static IEnumerable<string> SafeEnumerateAssemblies(ModEntry entry)
+    {
+        var list = new List<string>();
+        try
+        {
+            var asmDir = Path.Combine(entry.RootPath, "Assemblies");
+            if (Directory.Exists(asmDir))
+            {
+                foreach (var dll in Directory.GetFiles(asmDir, "*.dll", SearchOption.AllDirectories))
+                {
+                    list.Add(dll);
+                }
+            }
+        }
+        catch { }
+        return list;
+    }
+
+    private static Assembly SafeLoadAssembly(string path)
+    {
+        try { return Assembly.LoadFrom(path); } catch { return null; }
+    }
+
+    // Resolves an explicitly declared entryType (About.json) safely
+    private static Type ResolveType(string typeName)
+    {
+        if (string.IsNullOrEmpty(typeName)) return null;
+        try { return Type.GetType(typeName, throwOnError: false); } catch { return null; }
+    }
+}
+
+// Small runner to drive Update() and scene events for plugins.
+// Attached once to the loader's root GameObject. (New) (Coolnether123)
+public class PluginRunner : MonoBehaviour
+{
+    private readonly Queue<Action> _nextFrame = new Queue<Action>();
+    public PluginManager Manager; // set by PluginManager
+
+    public void Enqueue(Action a)
+    {
+        if (a != null) _nextFrame.Enqueue(a);
+    }
+
+    private void Awake()
+    {
+        // subscribe to scene events once
+        SceneManager.sceneLoaded += OnSceneLoadedInternal;
+        SceneManager.sceneUnloaded += OnSceneUnloadedInternal;
+    }
+
+    private void OnDestroy()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoadedInternal;
+        SceneManager.sceneUnloaded -= OnSceneUnloadedInternal;
+    }
+
+    private void Update()
+    {
+        // pump next-frame actions
+        while (_nextFrame.Count > 0)
+        {
+            var a = _nextFrame.Dequeue();
+            try { a(); } catch (Exception ex) { MMLog.Write($"[loader] next-frame action failed: {ex.Message}"); }
+        }
+
+        if (Manager != null) Manager.OnUnityUpdate();
+    }
+
+    private void OnSceneLoadedInternal(Scene scene, LoadSceneMode mode)
+    {
+        if (Manager != null) Manager.OnSceneLoaded(scene.name);
+    }
+
+    private void OnSceneUnloadedInternal(Scene scene)
+    {
+        if (Manager != null) Manager.OnSceneUnloaded(scene.name);
+    }
+}
+
+// Adapter that prefixes log lines with the mod id. (New) (Coolnether123)
+internal class PrefixedLogger : IModLogger
+{
+    private readonly string _prefix;
+    public PrefixedLogger(string modId) { _prefix = string.IsNullOrEmpty(modId) ? "mod" : modId; }
+
+    public void Info(string message) { MMLog.Write($"[{_prefix}] {message}"); }
+    public void Warn(string message) { MMLog.Write($"[{_prefix}] WARN: {message}"); }
+    public void Error(string message) { MMLog.Write($"[{_prefix}] ERROR: {message}"); }
+}
+
+// Private concrete context passed to plugins. (New) (Coolnether123)
+internal class PluginContextImpl : IPluginContext
+{
+    public GameObject LoaderRoot { get; set; }
+    public GameObject PluginRoot { get; set; }
+    public ModEntry Mod { get; set; }
+    public ModSettings Settings { get; set; }
+    public IModLogger Log { get; set; }
+    public string GameRoot { get; set; }
+    public string ModsRoot { get; set; }
+
+    public Action<Action> Scheduler; // set by PluginManager
+
+    public void RunNextFrame(Action action) { Scheduler?.Invoke(action); }
+    public Coroutine StartCoroutine(IEnumerator routine)
+    {
+        return LoaderRoot != null ? LoaderRoot.GetComponent<PluginRunner>().StartCoroutine(routine) : null;
+    }
 }

@@ -6,8 +6,11 @@ using System.Reflection;
 using UnityEngine;
 
 /**
+ * Coolnether123
  * ModSettings: read/write settings from Config/default.json and Config/user.json.
- * Uses an 'entries' array format to be compatible with Unity's JsonUtility. (Coolnether123)
+ * Uses an 'entries' array format to be compatible with Unity's JsonUtility. 
+ * 
+ * WIP. TODO
  */
 [Serializable]
 public class ModConfigEntry

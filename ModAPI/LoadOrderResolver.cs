@@ -302,7 +302,7 @@ public class LoadOrderFile
 
         if (!match.Success)
         {
-            // (Coolnether123) Fallback for simple ID-only constraints.
+            // Fallback for simple ID-only constraints.
             return new ModConstraint(NormId(raw));
         }
 
@@ -331,7 +331,7 @@ public class LoadOrderFile
         return new ModConstraint(id, version, op);
     }
 
-    // (Coolnether123) Holds the result of a topological sort.
+    // Holds the result of a topological sort.
     private class SortResult
     {
         public readonly List<string> SortedIds;
@@ -370,18 +370,18 @@ public class LoadOrderFile
                 }
             }
             idx++;
-            // (Coolnether123) Safety break against infinite loops.
+            // Safety break against infinite loops.
             if (idx > 10000) break; 
         }
 
         var cycled = new HashSet<string>(ModIdComparer);
-        // (Coolnether123) Cycle detected: attempt to resolve.
+        // Cycle detected: attempt to resolve.
         if (resultIds.Count < ids.Count)
         {
             var remainingNodes = new HashSet<string>(ModIdComparer);
             foreach (var id in ids) if (!resultIds.Contains(id)) remainingNodes.Add(id);
 
-            // (Coolnether123) Cycle resolution: break soft dependencies first.
+            // Cycle resolution: break soft dependencies first.
             var tempIndeg = new Dictionary<string, int>(ModIdComparer);
             foreach (var id in remainingNodes) tempIndeg[id] = 0;
 
@@ -422,7 +422,7 @@ public class LoadOrderFile
             }
             resultIds.AddRange(resolvedFromCycle);
 
-            // (Coolnether123) Unresolvable hard cycle: add remaining nodes by priority.
+            // Unresolvable hard cycle: add remaining nodes by priority.
             if (resolvedFromCycle.Count < remainingNodes.Count)
             {
                 MMLog.Write("Unresolvable load order cycle detected.");
@@ -500,7 +500,7 @@ internal class PriorityComparer : IComparer<string>
         int py = _prio.ContainsKey(y) ? _prio[y] : int.MaxValue;
         int c = px.CompareTo(py);
         if (c != 0) return c;
-        // (Coolnether123) Tie-break with alphabetical sort.
+        // Tie-break with alphabetical sort.
         return _comparer.Compare(x, y);
     }
 }

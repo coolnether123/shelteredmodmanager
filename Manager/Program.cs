@@ -15,16 +15,14 @@ namespace Manager
         [STAThread]
         static void Main()
         {
-            // --- Start: Added code for dynamic assembly resolution ---
             AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
-            // --- End: Added code for dynamic assembly resolution ---
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new ManagerGUI());
         }
 
-        // --- Start: Added code for dynamic assembly resolution ---
+
         public static string GameRootPath { get; set; }
 
         private static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
@@ -47,7 +45,6 @@ namespace Manager
 
             if (File.Exists(assemblyPath))
             {
-                // Optional: Log for debugging purposes
                 // MMLog.Write($"[Manager] Resolving assembly: {assemblyName} from {assemblyPath}");
                 return Assembly.LoadFrom(assemblyPath);
             }
@@ -55,6 +52,5 @@ namespace Manager
             // If not found, return null to let the default resolution continue or fail
             return null;
         }
-        // --- End: Added code for dynamic assembly resolution ---
     }
 }

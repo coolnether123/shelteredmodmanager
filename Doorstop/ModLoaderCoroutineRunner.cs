@@ -2,6 +2,7 @@ using System.Collections;
 using UnityEngine;
 
 /**
+ * Coolnether123
  * Runs plugin loading on the Unity main thread via coroutine.
  */
 public class ModLoaderCoroutineRunner : MonoBehaviour

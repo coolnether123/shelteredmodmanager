@@ -11,7 +11,7 @@ public static class ModRegistry
     // Map assembly.Location (full path) -> ModEntry (discovered)
     private static readonly Dictionary<string, ModEntry> _byAssemblyPath = new Dictionary<string, ModEntry>(StringComparer.OrdinalIgnoreCase);
 
-    // Registers an assembly as belonging to a discovered mod (Coolnether123)
+    // Registers an assembly as belonging to a discovered mod
     public static void RegisterAssemblyForMod(Assembly asm, ModEntry entry)
     {
         if (asm == null || entry == null) return;
@@ -20,7 +20,7 @@ public static class ModRegistry
         _byAssemblyPath[key] = entry;
     }
 
-    // Attempts to resolve the ModEntry for a given assembly (Coolnether123)
+    // Attempts to resolve the ModEntry for a given assembly 
     public static bool TryGetModByAssembly(Assembly asm, out ModEntry entry)
     {
         entry = null;

@@ -6,7 +6,7 @@ using UnityEngine;
  * This file defines the ModAbout class and related types.
  * It is deserialized from About/About.json using UnityEngine.JsonUtility.
  * Fields are public to comply with JsonUtility requirements.
- * Coolnether123
+ *
  */
 [Serializable]
 public class ModAbout

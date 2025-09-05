@@ -1,43 +1,55 @@
-using System.IO;
+﻿using System.IO;
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
 using System.Collections.Generic;
 
-public class HarmonyPlugin : IPlugin
+/**
+ * Maintainer: coolnether123
+ * 
+ *  Updated to IModPlugin with context-first lifecycle.
+ */
+public class HarmonyPlugin : IModPlugin 
 {
     public HarmonyPlugin() { }
 
-    public string Name => "HarmonyPlugin";
-
-    public string Version => "0.0.1";
-
-    public void initialize()
+    // Context-first initialize
+    public void Initialize(IPluginContext ctx)
     {
-
+        // no-op; keep style consistent. Could pre-load state here.
     }
 
-    public void start(GameObject root)
+    // Context-first start
+    public void Start(IPluginContext ctx)
     {
-
         var harmony = new Harmony("com.coolnether123.shelteredmodmanager");
         harmony.PatchAll(Assembly.GetExecutingAssembly());
 
-        LabelComponent label = root.AddComponent<LabelComponent>();
+        // attach label to this plugin's parent root so it cleans up with the plugin
+        LabelComponent label = ctx.PluginRoot.AddComponent<LabelComponent>(); 
         label.setTop(30);
         if (harmony == null) return;
-        // Demo: read settings for this plugin (Coolnether123)
+
+        // Use settings from the context (bound to this mod)
         try
         {
-            var settings = ModSettings.ForAssembly(Assembly.GetExecutingAssembly());
-            bool enabled = settings.GetBool("enabled", true);
-            int maxCount = settings.GetInt("maxCount", 10);
-            // Touch user config to demonstrate persistence (only if changed)
-            settings.SetBool("enabled", enabled);
-            settings.SetInt("maxCount", maxCount);
-            settings.SaveUser();
+            var settings = ctx.Settings; 
+            if (settings != null)
+            {
+                bool enabled = settings.GetBool("enabled", true);
+                int maxCount = settings.GetInt("maxCount", 10);
+                // Persist (only if changed); mirrors previous example
+                settings.SetBool("enabled", enabled);
+                settings.SetInt("maxCount", maxCount);
+                settings.SaveUser();
+            }
         }
         catch { }
+
+        // Prefer ctx.Log; MMLog still works but ctx.Log prefixes with mod id. (Coolnether123) WIP Plan on making MMLog more robust as a tool)
+        ctx.Log.Info(
+            "Harmony-Plugin initialized. HasAnyPatches=" + Harmony.HasAnyPatches(harmony.Id)
+        );
 
         label.setText(
             "Harmony-Plugin loaded: " + (harmony != null) + "\n"
@@ -69,7 +81,6 @@ public class HarmonyPlugin : IPlugin
         }
     }
 
-
     [HarmonyPatch(typeof(Obj_Integrity), "IsInteractionAllowed")]
     public static class Obj_Integrity_IsInteractionAllowed_Patch
     {
@@ -79,7 +90,6 @@ public class HarmonyPlugin : IPlugin
             return false;
         }
     }
-
 
     [HarmonyPatch(typeof(Obj_Base), "Update")]
     public static class Obj_Base_Update_Patch
