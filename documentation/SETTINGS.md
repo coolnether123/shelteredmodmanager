@@ -1,5 +1,5 @@
-Mod Settings Format (Coolnether123)
-===================================
+Mod Settings Format
+===================
 
 Location per mod:
 
@@ -24,31 +24,31 @@ Notes
 - user.json includes only keys that differ from defaults that the user assigns
 - Effective settings = defaults overridden by user values
 
-Mod API Usage
--------------
+Using Settings in a Plugin
+--------------------------
 
 using UnityEngine;
 
-public class MyPlugin : IPlugin {
-  // The public name of the plugin.
-  public string Name => "MyPlugin"; 
+public class MyPlugin : IModPlugin
+{
+  public void Initialize(IPluginContext ctx)
+  {
+    // optional: pre-load resources or register services
+  }
 
-  // The version of the plugin.
-  public string Version => "1.0.0";
-
-  public void initialize() {}
-  public void start(GameObject root) {
-
-    // Call ModSettings to read and write from it
-    var settings = ModSettings.ForThisAssembly(); 
-
-    // First value is the name of the settings, second value is the default you want if no value is found.
+  public void Start(IPluginContext ctx)
+  {
+    // Access this mod's settings via context
+    var settings = ctx.Settings;
     int maxCount = settings.GetInt("maxCount", 5);
     bool enabled = settings.GetBool("enabled", true);
 
-    // Change and persist:
+    // Modify and persist user overrides
     settings.SetInt("maxCount", 20);
     settings.SaveUser();
+
+    // Attach behaviours under the per-plugin root
+    ctx.PluginRoot.AddComponent<MyMonoBehaviour>();
+    ctx.Log.Info($"MyPlugin started. enabled={enabled} maxCount={maxCount}");
   }
 }
-
