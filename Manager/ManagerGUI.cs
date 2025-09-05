@@ -35,7 +35,7 @@ namespace Manager
             public bool HasAbout;       // About/About.json exists
             public ModAbout About;   // may be null
             public string PreviewPath;     // About/preview.png if exists
-            public bool IsEnabled;         // New: enabled/disabled status
+            public bool IsEnabled;         // Enabled/disabled status
             public override string ToString() { return DisplayName; }
         }
 
