@@ -13,6 +13,9 @@ public static class MMLog
         _logPath = Path.Combine(baseDir, "mod_manager.log");
     }
 
+    /// <summary>
+    /// Writes a line to mod_manager.log with the time it was writen
+    /// </summary>
     public static void Write(string msg)
     {
         var line = $"[{DateTime.Now:HH:mm:ss}] {msg}";
