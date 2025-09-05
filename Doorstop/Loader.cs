@@ -11,32 +11,36 @@ using UnityEngine;
  */
 public static class Loader
 {
+    public static readonly string LogFilePath = "mod_manager.log"; // Made public static for Entrypoint to access
+
     public static void Main(string[] args)
     {
-        
-        // create log-file in order to signalize the start of the application
-        using (TextWriter tw = File.CreateText("mod_manager.log"))
-        {
-            tw.WriteLine("ModManager initialized!");
-            tw.Flush();
-        }
+        File.AppendAllText(LogFilePath, "[Loader] Main method called.\n");
 
+        // This initial write is now handled by Entrypoint.Start() to ensure file is cleared.
+        // File.AppendAllText(LogFilePath, "ModManager initialized!\n"); 
+
+        File.AppendAllText(LogFilePath, "[Loader] Starting new thread for delayed initialization.\n");
         new Thread(() =>
         {
+            File.AppendAllText(LogFilePath, "[Loader Thread] Thread started. Waiting for 2.5 seconds...\n");
             // wait a short amount of time in order to let the game initialize itself
             Thread.Sleep(2500);
+            File.AppendAllText(LogFilePath, "[Loader Thread] Wait finished. Creating Doorstop GameObject...\n");
             
             // THIS gameobject is the bridge between operating-system-context and ingame-context!
             GameObject doorstepGameObject = new GameObject("Doorstop");
             doorstepGameObject.name = "Doorstop";
             UnityEngine.Object.DontDestroyOnLoad(doorstepGameObject);
+            File.AppendAllText(LogFilePath, "[Loader Thread] Doorstop GameObject created and DontDestroyOnLoad called.\n");
 
             // Load the plugins from the plugins-folder
+            File.AppendAllText(LogFilePath, "[Loader Thread] Getting PluginManager instance and loading assemblies...\n");
             PluginManager pm = PluginManager.getInstance();
             pm.loadAssemblies(doorstepGameObject);
+            File.AppendAllText(LogFilePath, "[Loader Thread] Plugin assemblies loaded.\n");
 
         }).Start();
-
     }
 
 }
@@ -49,6 +53,9 @@ namespace Doorstop
         {
             try
             {
+                // Clear the log file at the very beginning of each run
+                System.IO.File.WriteAllText(global::Loader.LogFilePath, "ModManager initialized!\n");
+                System.IO.File.AppendAllText(global::Loader.LogFilePath, "[Doorstop.Entrypoint] Start method called.\n");
                 global::Loader.Main(new string[0]);
             }
             catch (System.Exception ex)
