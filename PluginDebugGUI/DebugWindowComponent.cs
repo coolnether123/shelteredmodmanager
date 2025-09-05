@@ -17,13 +17,14 @@ class DebugWindowComponent : MonoBehaviour
     public String statusLabel = "...";
 
 
-    void Start() {
-        
+    void Start()
+    {
+
     }
 
     string[] messages = new string[] {
         "Waddup...?",
-        "Why you ackin' so cray cray?", 
+        "Why you ackin' so cray cray?",
         "...",
         "zZzZzZz....",
         "The unity-version of this game is " + Application.unityVersion,
@@ -33,7 +34,8 @@ class DebugWindowComponent : MonoBehaviour
 
     void OnGUI()
     {
-        if (Input.GetKeyUp(KeyCode.P)) {
+        if (Input.GetKeyUp(KeyCode.P))
+        {
             var familyMembers = FamilyManager.Instance.GetAllFamilyMembers();
             familyMembers.ForEach(member => member.Say(messages[UnityEngine.Random.Range(0, messages.Length)]));
             UISound.instance.PlayPreset(UISound.PresetSound.Accept);
@@ -46,12 +48,16 @@ class DebugWindowComponent : MonoBehaviour
         statusLabel += "\n";
         statusLabel += "\n";
 
-        ICollection<IPlugin> plugins = PluginManager.getInstance().GetPlugins();
-        statusLabel += "Plugins loaded (" + plugins.Count + ") ...";
+        // The loader now exposes IModPlugin instead of IPlugin. We also no longer
+        // rely on plugin.Name, so we show the concrete type name for clarity.
+        IEnumerable<IModPlugin> plugins = PluginManager.getInstance().GetPlugins(); //
+        // show count as before
+        int pluginCount = 0; foreach (var _ in plugins) pluginCount++; // simple count to keep style
+        statusLabel += "Plugins loaded (" + pluginCount + ") ...";
         statusLabel += "\n";
-        foreach (IPlugin plugin in plugins)
+        foreach (IModPlugin plugin in plugins) //
         {
-            statusLabel += "|---" + plugin.Name;
+            statusLabel += "|---" + plugin.GetType().Name; // show type name instead of plugin.Name
             statusLabel += "\n";
         }
         statusLabel += "\n";
@@ -76,7 +82,7 @@ class DebugWindowComponent : MonoBehaviour
         statusLabel += "Current level: " + Application.loadedLevelName;
         statusLabel += "\n";
         statusLabel += "\n";
-        
+
         statusLabel += "Mouse-Position: " + Input.mousePosition.ToString();
         statusLabel += "\n";
         statusLabel += "\n";
@@ -92,7 +98,7 @@ class DebugWindowComponent : MonoBehaviour
 
         // Register the window. We create two windows that use the same function
         // Notice that their IDs differ
-        windowRect0 = GUI.Window(0, windowRect0, DoMyWindow, titleText );
+        windowRect0 = GUI.Window(0, windowRect0, DoMyWindow, titleText);
     }
 
     void DoMyWindow(int windowID)
@@ -103,5 +109,5 @@ class DebugWindowComponent : MonoBehaviour
         GUI.DragWindow(new Rect(0, 0, 10000, 10000));
     }
 
-    
+
 }

@@ -1,0 +1,7 @@
+{
+  "id": "com.harmony.0harmony",
+  "name": "0Harmony",
+  "version": "1.0.0",
+  "authors": ["Unknown"],
+  "description": "A patching library for .NET"
+}

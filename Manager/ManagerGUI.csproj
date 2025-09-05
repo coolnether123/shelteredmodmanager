@@ -56,15 +56,11 @@
     <Reference Include="Assembly-CSharp">
       <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
     </Reference>
+    <Reference Include="System.Core" />
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
-    <Reference Include="UnityEngine">
-      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.UI">
-      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.UI.dll</HintPath>
-    </Reference>
+    <Reference Include="System.Web.Extensions" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ManagerGUI.cs">
@@ -120,7 +116,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Lib.Harmony">
-      <Version>1.2.0.1</Version>
+      <Version>2.4.1</Version>
     </PackageReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
@@ -140,7 +136,7 @@ SET PROJECT_PLUGIN_HARMONY=$(SolutionDir)\PluginHarmony
 SET PROJECT_PLUGIN_INITIALIZER=$(SolutionDir)\PluginInitializer
 
 
-SET SUB_DIR=\bin\debug\
+SET SUB_DIR=\bin\$(Configuration)\
 
 :: initialize the \Dist\ directory
 rd /s /q "%25BUILD_PATH%25"
@@ -177,7 +173,8 @@ copy "%25PROJECT_PLUGIN_CONSOLE%25"\"%25SUB_DIR%25\"\PluginConsole.pdb "%25MODS_
 copy "%25PROJECT_PLUGIN_DEBUG_GUI%25"\"%25SUB_DIR%25"\PluginDebugGUI.dll "%25MODS_PATH%25"\
 copy "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25"\PluginHarmony.dll "%25MODS_PATH%25"\
 copy "%25PROJECT_PLUGIN_INITIALIZER%25"\"%25SUB_DIR%25"\PluginInitializer.dll "%25MODS_PATH%25"\
-copy "%25LIB_DIR%25"\0Harmony.dll* "%25MODS_PATH%25"\
+if exist "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25\"\0Harmony.dll copy "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25\"\0Harmony.dll "%25MODS_PATH%25"\
+if exist "%25SolutionDir%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" copy "%25SolutionDir%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" "%25MODS_PATH%25"\
 </PostBuildEvent>
   </PropertyGroup>
 </Project>

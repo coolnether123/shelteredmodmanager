@@ -1,0 +1,10 @@
+{
+    "id": "com.Coolnether123.PluginConsole", 
+    "name": "Plugin Console", 
+    "version": "1.0.0", 
+    "authors": ["Coolnether123"], 
+    "entryType": "ConsolePlugin", 
+    "loadAfter": ["com.plugin.harmony"], 
+    "description": "Integrates a powerful in-game developer console, allowing execution of commands for debugging, information retrieval, and potential mod interaction. Includes commands like 'help', 'clear', and 'scene info'.", 
+    "tags": ["QoL","UI"]
+}

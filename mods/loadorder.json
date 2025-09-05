@@ -1,0 +1,26 @@
+{
+  "order": [
+    "com.harmony.0harmony",
+    "com.Coolnether123.PluginConsole",
+    "com.plugin.debuggui",
+    "com.plugin.harmony",
+    "com.plugin.initializer"
+  ],
+  "mods": {
+    "com.harmony.0harmony": {
+      "enabled": true
+    },
+    "com.Coolnether123.PluginConsole": {
+      "enabled": true
+    },
+    "com.plugin.debuggui": {
+      "enabled": true
+    },
+    "com.plugin.harmony": {
+      "enabled": true
+    },
+    "com.plugin.initializer": {
+      "enabled": false
+    }
+  }
+}

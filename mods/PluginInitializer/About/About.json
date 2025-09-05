@@ -1,0 +1,9 @@
+{
+  "id": "com.plugin.initializer",
+  "name": "Plugin Initializer",
+  "version": "1.0.0",
+  "authors": ["Coolnether123"],
+  "entryType": "InitializerPlugin",
+  "tags": ["Core", "Utility", "Initialization"],
+  "description": "A foundational plugin that ensures the Sheltered Modding API is active and operational within the game. Displays a simple on-screen message to confirm the mod loader's successful initialization."
+}

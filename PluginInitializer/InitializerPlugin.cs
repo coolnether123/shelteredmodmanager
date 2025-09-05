@@ -1,33 +1,31 @@
 ﻿using UnityEngine;
 
-
 /**
 * Author: benjaminfoo
+* Maintainer: Coolnether123
 * See: https://github.com/benjaminfoo/shelteredmodmanager
 * 
 * This is the plugin definition for initializer plugin which simply prints "Modding-API active" on the screen.
 * The purpose of this plugin is to signalize that the plugin-mechanism works as early as possible, as the console is not 
 * available currently.
 */
-public class InitializerPlugin : IPlugin
+public class InitializerPlugin : IModPlugin
 {
     public InitializerPlugin() { }
 
-    public string Name => "InitializerPlugin";
-    public string Version => "0.0.1";
-
-
-        public void initialize()
+    public void Initialize(IPluginContext ctx)
     {
-        MMLog.Write("InitializerPlugin: initialize called.");
+        ctx.Log.Info("InitializerPlugin: Initialize called.");
     }
 
-    public void start(GameObject root)
+    public void Start(IPluginContext ctx)
     {
-        MMLog.Write("InitializerPlugin: start called.");
-        LabelComponent label = root.AddComponent<LabelComponent>();
+        ctx.Log.Info("InitializerPlugin: Start called.");
+
+        LabelComponent label = ctx.PluginRoot.AddComponent<LabelComponent>();
         label.setTop(10);
         label.setText("Modding-API active");
-        MMLog.Write("InitializerPlugin: LabelComponent added and text set.");
+
+        ctx.Log.Info("InitializerPlugin: LabelComponent added and text set.");
     }
 }

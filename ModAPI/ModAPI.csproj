@@ -34,6 +34,7 @@
     <Reference Include="Assembly-CSharp">
       <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
     </Reference>
+    <Reference Include="System.Core" />
     <Reference Include="System" />
     <Reference Include="UnityEngine, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -46,12 +47,17 @@
   <ItemGroup>
     <Compile Include="IPlugin.cs" />
     <Compile Include="MMLog.cs" />
+    <Compile Include="LoadOrderResolver.cs" />
+    <Compile Include="ModRegistry.cs" />
+    <Compile Include="ModSettings.cs" />
+    <Compile Include="ModAbout.cs" />
+    <Compile Include="ModDiscovery.cs" />
     <Compile Include="PluginManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Lib.Harmony">
-      <Version>1.2.0.1</Version>
+      <Version>2.4.1</Version>
     </PackageReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
