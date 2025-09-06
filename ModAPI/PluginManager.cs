@@ -121,6 +121,16 @@ public class PluginManager
         if (runner == null) runner = _loaderRoot.AddComponent<PluginRunner>();
         runner.Manager = this; // set back-reference // Coolnether123
 
+        // Attach runtime inspector + highlighter (once)
+        try
+        {
+            if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeInspector>() == null)
+                _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeInspector>();
+            if (_loaderRoot.GetComponent<ModAPI.Inspector.BoundsHighlighter>() == null)
+                _loaderRoot.AddComponent<ModAPI.Inspector.BoundsHighlighter>();
+        }
+        catch { }
+
         // Load and start plugins mod-by-mod in resolved order
         foreach (var entry in orderedMods)
         {
