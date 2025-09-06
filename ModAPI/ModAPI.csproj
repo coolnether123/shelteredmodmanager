@@ -49,6 +49,9 @@
     <Compile Include="MMLog.cs" />
     <Compile Include="UIFlowGuard.cs" />
     <Compile Include="UIUtil.cs" />
+    <Compile Include="Inspector\HierarchyUtil.cs" />
+    <Compile Include="Inspector\BoundsHighlighter.cs" />
+    <Compile Include="Inspector\RuntimeInspector.cs" />
     <Compile Include="LoadOrderResolver.cs" />
     <Compile Include="ModRegistry.cs" />
     <Compile Include="ModSettings.cs" />
