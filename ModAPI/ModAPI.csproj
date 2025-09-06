@@ -47,6 +47,8 @@
   <ItemGroup>
     <Compile Include="IPlugin.cs" />
     <Compile Include="MMLog.cs" />
+    <Compile Include="UIFlowGuard.cs" />
+    <Compile Include="UIUtil.cs" />
     <Compile Include="LoadOrderResolver.cs" />
     <Compile Include="ModRegistry.cs" />
     <Compile Include="ModSettings.cs" />
