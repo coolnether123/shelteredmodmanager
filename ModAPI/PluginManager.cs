@@ -65,6 +65,10 @@ public class PluginManager
 
     public void loadAssemblies(GameObject doorstepGameObject)
     {
+        // Ensure ModAPI Harmony patches are applied (paging, proxy, global save bridge)
+        try { MMLog.WriteDebug("PluginManager: calling HarmonyBootstrap.EnsurePatched()"); ModAPI.Hooks.HarmonyBootstrap.EnsurePatched(); }
+        catch (Exception ex) { MMLog.Write("PluginManager: EnsurePatched failed: " + ex.Message); }
+
         // Build absolute path to the mods directory (from game's data folder)
         _gameRoot = Directory.GetParent(Application.dataPath).FullName;    // same as before
         _modsRoot = Path.Combine(_gameRoot, "mods");                       // consistent naming
