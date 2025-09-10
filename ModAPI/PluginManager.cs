@@ -404,4 +404,32 @@ internal class PluginContextImpl : IPluginContext
     {
         return LoaderRoot != null ? LoaderRoot.GetComponent<PluginRunner>().StartCoroutine(routine) : null;
     }
+
+    // Locates a panel by name or path and returns its GameObject.
+    // - name: first active GameObject matching by name (breadth-first)
+    // - path: slash-separated from a root, e.g., "UIRoot/ExpeditionMainPanelNew"
+    public GameObject FindPanel(string nameOrPath)
+    {
+        try { return ModAPI.SceneUtil.Find(nameOrPath); }
+        catch { return null; }
+    }
+
+    // Adds (or gets) a component on the target panel. If the panel is not found, returns null.
+    public T AddComponentToPanel<T>(string nameOrPath) where T : Component
+    {
+        var go = FindPanel(nameOrPath);
+        if (go == null)
+        {
+            Log?.Warn("FindPanel failed for '" + nameOrPath + "'");
+            return null;
+        }
+        var existing = go.GetComponent<T>();
+        if (existing != null) return existing;
+        try { return go.AddComponent<T>(); }
+        catch (Exception ex)
+        {
+            Log?.Error("AddComponentToPanel<" + typeof(T).Name + "> failed: " + ex.Message);
+            return null;
+        }
+    }
 }

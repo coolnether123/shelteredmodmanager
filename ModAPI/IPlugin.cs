@@ -48,6 +48,12 @@ public interface IModSceneEvents
  *  - Log:        a logger that prefixes with the mod id for easier diagnostics
  *  - GameRoot/ModsRoot: convenience paths derived from the running game
  *  - Scheduling helpers: RunNextFrame / StartCoroutine for main-thread work
+ *  - UI helpers: FindPanel("UIRoot/SomePanel") and AddComponentToPanel<T>(name)
+ *
+ * Notes:
+ *  - Prefer storing per-UI state in your own MonoBehaviour attached via
+ *    AddComponentToPanel<MyLogic>("SomePanel"), rather than static fields in patches.
+ *  - Read configuration up front, e.g. var maxParty = Settings.GetInt("maxPartySize", 4);
  */
 public interface IPluginContext
 {
@@ -61,6 +67,16 @@ public interface IPluginContext
 
     void RunNextFrame(Action action);      // queues an action for next frame
     Coroutine StartCoroutine(IEnumerator routine);
+
+    // --- UI helpers (new) --------------------------------------------------
+    // Finds a UI panel (GameObject) by name or path (e.g., "UIRoot/ExpeditionMainPanelNew").
+    // Returns null if not found. Prefer calling from Start() or OnSceneLoaded().
+    GameObject FindPanel(string nameOrPath);
+
+    // Adds (or gets) a custom MonoBehaviour component on an existing panel in the scene.
+    // Example: ctx.AddComponentToPanel<MyPartySetupLogic>("ExpeditionMainPanelNew");
+    // Returns the component instance attached to that panel (or null if panel not found).
+    T AddComponentToPanel<T>(string nameOrPath) where T : Component;
 }
 
 // Simple logger abstraction so plugins don't depend directly on MMLog static
