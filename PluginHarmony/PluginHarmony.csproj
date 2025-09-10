@@ -55,7 +55,6 @@
     <Compile Include="HarmonyPlugin.cs" />
     <Compile Include="LabelComponent.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="SkipIntroAndTitlePatch.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ModAPI\ModAPI.csproj">

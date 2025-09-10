@@ -107,5 +107,46 @@ public static class UIUtil
         var go = _clickBlockers.Pop();
         if (go != null) Object.Destroy(go);
     }
-}
 
+    /// <summary>
+    /// Clone a UI widget and reposition it by a local offset.
+    /// - If parent is null, uses the template's parent.
+    /// - Copies local rotation/scale and layer.
+    /// Returns the cloned GameObject (or null if the template is null).
+    /// </summary>
+    public static GameObject CloneAndReposition(GameObject template, Vector3 localOffset, Transform parent = null)
+    {
+        if (template == null) return null;
+
+        var clone = Object.Instantiate(template) as GameObject;
+        if (clone == null) return null;
+
+        var targetParent = parent != null ? parent : template.transform.parent;
+        if (targetParent != null)
+        {
+            clone.transform.SetParent(targetParent, false);
+            clone.layer = targetParent.gameObject.layer;
+        }
+
+        clone.name = template.name + "_Clone";
+        clone.transform.localScale = template.transform.localScale;
+        clone.transform.localRotation = template.transform.localRotation;
+        clone.transform.localPosition = template.transform.localPosition + localOffset;
+
+        return clone;
+    }
+
+    /// <summary>
+    /// Generic version that returns the requested component type from the cloned object.
+    /// Useful for list-based UIs (e.g., duplicate and offset an avatar or button widget).
+    /// Example:
+    ///   var extra = UIUtil.CloneAndReposition(memberAvatarTemplate, new Vector3(120, 0, 0));
+    /// </summary>
+    public static T CloneAndReposition<T>(T template, Vector3 localOffset, Transform parent = null) where T : Component
+    {
+        if (template == null) return null;
+        var go = template.gameObject;
+        var cloneGo = CloneAndReposition(go, localOffset, parent);
+        return cloneGo != null ? cloneGo.GetComponent<T>() : null;
+    }
+}

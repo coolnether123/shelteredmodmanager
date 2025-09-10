@@ -72,6 +72,7 @@
     <Compile Include="ModSettings.cs" />
     <Compile Include="ModAbout.cs" />
     <Compile Include="ModDiscovery.cs" />
+    <Compile Include="SceneUtil.cs" />
     <Compile Include="PluginManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

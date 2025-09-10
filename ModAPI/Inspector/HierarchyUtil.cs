@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace ModAPI.Inspector
 {
-    internal static class HierarchyUtil
+    public static class HierarchyUtil
     {
         public static List<Transform> GetRootTransforms()
         {
