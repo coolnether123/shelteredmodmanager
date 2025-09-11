@@ -96,17 +96,29 @@ public static class MMLog
     {
         try
         {
-            // Check debug level
-            var debugVar = Environment.GetEnvironmentVariable("MODAPI_DEBUG_LEVEL");
-            if (!string.IsNullOrEmpty(debugVar))
+            // Check dev mode
+            var devModeVar = Environment.GetEnvironmentVariable("MODAPI_DEV_MODE");
+            if (!string.IsNullOrEmpty(devModeVar) && devModeVar.ToLower() == "true")
             {
-                var level = TryParseLogLevel(debugVar);
+                // If dev mode is on, set level to Debug and enable all categories unless specified otherwise
+                _minLevel = LogLevel.Debug;
+                foreach (LogCategory cat in Enum.GetValues(typeof(LogCategory)))
+                {
+                    _enabledCategories.Add(cat);
+                }
+            }
+            
+            // Check debug level (this can override the dev mode default)
+            var levelVar = Environment.GetEnvironmentVariable("MODAPI_LOG_LEVEL"); // Use new name
+            if (!string.IsNullOrEmpty(levelVar))
+            {
+                var level = TryParseLogLevel(levelVar);
                 if (level.HasValue)
                     _minLevel = level.Value;
             }
 
-            // Check enabled categories
-            var categoriesVar = Environment.GetEnvironmentVariable("MODAPI_DEBUG_CATEGORIES");
+            // Check enabled categories (this can override the dev mode default)
+            var categoriesVar = Environment.GetEnvironmentVariable("MODAPI_LOG_CATEGORIES"); // Use new name
             if (!string.IsNullOrEmpty(categoriesVar))
             {
                 _enabledCategories.Clear();

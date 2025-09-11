@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using HarmonyLib;
@@ -8,90 +7,126 @@ using UnityEngine;
 
 namespace ModAPI.Hooks
 {
-    // Wraps the platform save so we can serve custom data when a reserved slot is used
     public class PlatformSaveProxy : PlatformSave_Base
     {
         private class Target { public string scenarioId; public string saveId; }
+        private readonly System.Collections.Generic.Dictionary<SaveManager.SaveType, Target> _nextLoad = new System.Collections.Generic.Dictionary<SaveManager.SaveType, Target>();
+        private readonly System.Collections.Generic.Dictionary<SaveManager.SaveType, Target> _nextSave = new System.Collections.Generic.Dictionary<SaveManager.SaveType, Target>();
+
         private readonly PlatformSave_Base _inner;
-        private readonly Dictionary<SaveManager.SaveType, Target> _nextLoad = new Dictionary<SaveManager.SaveType, Target>();
-        private readonly Dictionary<SaveManager.SaveType, Target> _nextSave = new Dictionary<SaveManager.SaveType, Target>();
         private string _customLoadedXml;
+        private SaveEntry _activeCustomSave;
 
         public PlatformSaveProxy(PlatformSave_Base inner)
         {
             _inner = inner;
         }
 
-        public override bool IsSaving() => _inner != null && _inner.IsSaving();
-        public override bool IsLoading() => _inner != null && _inner.IsLoading();
-        public override bool IsDeleting() => _inner != null && _inner.IsDeleting();
-        public override bool WasSaveError() => _inner != null && _inner.WasSaveError();
-        public override void DoesSaveExist(SaveManager.SaveType type, out bool exists, out bool corrupted)
-        { _inner.DoesSaveExist(type, out exists, out corrupted); }
-        public override void PlatformInit() { if (_inner != null) _inner.PlatformInit(); }
+        public override bool IsSaving() => _inner.IsSaving();
+        public override bool IsLoading() => _inner.IsLoading();
+        public override bool IsDeleting() => _inner.IsDeleting();
+        public override bool WasSaveError() => _inner.WasSaveError();
+        public override void DoesSaveExist(SaveManager.SaveType type, out bool exists, out bool corrupted) => _inner.DoesSaveExist(type, out exists, out corrupted);
+        public override void PlatformInit() => _inner.PlatformInit();
+        public override void PlatformUpdate() => _inner.PlatformUpdate();
+        public override bool PlatformDelete(SaveManager.SaveType type) => _inner.PlatformDelete(type);
 
         public override bool PlatformSave(SaveManager.SaveType type, byte[] data)
         {
-            if (IsReserved(type))
+            if (_activeCustomSave != null)
             {
-                Target t;
-                if (_nextSave.TryGetValue(type, out t))
+                try
                 {
-                    try
-                    {
-                        var scenarioId = t.scenarioId; var saveId = t.saveId;
-                        MMLog.WriteDebug($"PlatformSaveProxy.PlatformSave reserved type={type}, scenario={scenarioId}, save={saveId}");
-                        string xml = CustomSaveRegistry.DecodeToXml(data);
-                        var bytes = Encoding.UTF8.GetBytes(xml);
-                        var before = CustomSaveRegistry.GetSave(scenarioId, saveId);
-                        if (before != null) Events.RaiseBeforeSave(before);
-                        var after = CustomSaveRegistry.OverwriteSave(scenarioId, saveId, null, bytes);
-                        if (after != null) Events.RaiseAfterSave(after);
-                        // Ensure preview auto-capture is active
-                        PreviewAuto.EnsureHooked();
-                        _nextSave.Remove(type);
-                        MMLog.WriteDebug("PlatformSaveProxy.PlatformSave completed for custom entry");
-                        return true; // simulate success; do not write vanilla slot
-                    }
-                    catch (Exception ex)
-                    {
-                        MMLog.Write("PlatformSaveProxy custom save error: " + ex.Message);
-                        return false;
-                    }
+                    MMLog.WriteDebug($"PlatformSaveProxy: Overwriting active custom save '{_activeCustomSave.scenarioId}/{_activeCustomSave.id}'");
+
+                    ISaveApi saveApi = ExpandedVanillaSaves.IsStandardScenario(_activeCustomSave.scenarioId)
+                        ? ExpandedVanillaSaves.Instance
+                        : ScenarioSaves.GetRegistry(_activeCustomSave.scenarioId);
+
+                    var after = saveApi.Overwrite(_activeCustomSave.id, null, data);
+                    if (after != null) _activeCustomSave = after;
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError("PlatformSaveProxy active save error: " + ex);
+                    return false;
                 }
             }
+
+            Target nextSaveTarget;
+            if (_nextSave.TryGetValue(type, out nextSaveTarget))
+            {
+                try
+                {
+                    MMLog.WriteDebug($"PlatformSaveProxy: Saving new custom save for slot={type}, target='{nextSaveTarget.scenarioId}/{nextSaveTarget.saveId}'");
+
+                    ISaveApi saveApi = ExpandedVanillaSaves.IsStandardScenario(nextSaveTarget.scenarioId)
+                        ? ExpandedVanillaSaves.Instance
+                        : ScenarioSaves.GetRegistry(nextSaveTarget.scenarioId);
+
+                    var after = saveApi.Overwrite(nextSaveTarget.saveId, null, data);
+                    if (after != null) _activeCustomSave = after;
+                    _nextSave.Remove(type);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError("PlatformSaveProxy new save error: " + ex);
+                    return false;
+                }
+            }
+
+            MMLog.WriteDebug($"PlatformSaveProxy: No custom context. Passing save for slot={type} to vanilla handler.");
             return _inner.PlatformSave(type, data);
         }
 
         public override bool PlatformLoad(SaveManager.SaveType type)
         {
-            if (IsReserved(type))
+            Target nextLoadTarget;
+            if (_nextLoad.TryGetValue(type, out nextLoadTarget))
             {
-                Target t;
-                if (_nextLoad.TryGetValue(type, out t))
+                try
                 {
-                    try
+                    var scenarioId = nextLoadTarget.scenarioId;
+                    var saveId = nextLoadTarget.saveId;
+                    MMLog.WriteDebug($"PlatformSaveProxy: Loading custom save for slot={type}, target='{scenarioId}/{saveId}'");
+
+                    ISaveApi saveApi = ExpandedVanillaSaves.IsStandardScenario(scenarioId)
+                        ? ExpandedVanillaSaves.Instance
+                        : ScenarioSaves.GetRegistry(scenarioId);
+
+                    var entry = saveApi.Get(saveId);
+
+                    if (entry == null)
                     {
-                        var scenarioId = t.scenarioId; var saveId = t.saveId;
-                        MMLog.WriteDebug($"PlatformSaveProxy.PlatformLoad reserved type={type}, scenario={scenarioId}, save={saveId}");
-                        var path = DirectoryProvider.EntryPath(scenarioId, saveId);
-                        var entry = CustomSaveRegistry.GetSave(scenarioId, saveId);
-                        if (entry != null) Events.RaiseBeforeLoad(entry);
-                        if (!File.Exists(path)) return false;
-                        _customLoadedXml = File.ReadAllText(path);
-                        if (entry != null) Events.RaiseAfterLoad(entry);
-                        _nextLoad.Remove(type);
-                        MMLog.WriteDebug("PlatformSaveProxy.PlatformLoad provided custom xml bytes");
-                        return true; // loaded
-                    }
-                    catch (Exception ex)
-                    {
-                        MMLog.Write("PlatformSaveProxy custom load error: " + ex.Message);
-                        _customLoadedXml = null;
+                        MMLog.WriteError($"PlatformSaveProxy: Could not find SaveEntry for '{scenarioId}/{saveId}'");
                         return false;
                     }
+
+                    var path = DirectoryProvider.EntryPath(scenarioId, saveId);
+                    if (!File.Exists(path))
+                    {
+                        MMLog.WriteError($"PlatformSaveProxy: Save file does not exist at '{path}'");
+                        return false;
+                    }
+
+                    _customLoadedXml = File.ReadAllText(path);
+                    _activeCustomSave = entry;
+                    _nextLoad.Remove(type);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError("PlatformSaveProxy custom load error: " + ex);
+                    _customLoadedXml = null;
+                    _activeCustomSave = null;
+                    return false;
                 }
             }
+
+            MMLog.WriteDebug($"PlatformSaveProxy: No custom context. Passing load for slot={type} to vanilla handler.");
+            _activeCustomSave = null;
             return _inner.PlatformLoad(type);
         }
 
@@ -106,32 +141,14 @@ namespace ModAPI.Hooks
             return _inner.PlatformGetLoadedData(out data);
         }
 
-        public override bool PlatformDelete(SaveManager.SaveType type)
-        { return _inner.PlatformDelete(type); }
-
-        public override void PlatformUpdate() { if (_inner != null) _inner.PlatformUpdate(); }
-
-        private static bool IsReserved(SaveManager.SaveType type)
-        {
-            int physical = -1;
-            if (type == SaveManager.SaveType.Slot1) physical = 1;
-            else if (type == SaveManager.SaveType.Slot2) physical = 2;
-            else if (type == SaveManager.SaveType.Slot3) physical = 3;
-            else return false;
-            var r = SlotReservationManager.GetSlotReservation(physical);
-            return r.usage == SaveSlotUsage.CustomScenario && !string.IsNullOrEmpty(r.scenarioId);
-        }
-
         public void SetNextLoad(SaveManager.SaveType type, string scenarioId, string saveId)
         {
-            _nextLoad[type] = new Target{ scenarioId = scenarioId, saveId = saveId };
-            MMLog.WriteDebug($"PlatformSaveProxy.SetNextLoad type={type} scenario={scenarioId} id={saveId}");
+            _nextLoad[type] = new Target { scenarioId = scenarioId, saveId = saveId };
         }
 
         public void SetNextSave(SaveManager.SaveType type, string scenarioId, string saveId)
         {
-            _nextSave[type] = new Target{ scenarioId = scenarioId, saveId = saveId };
-            MMLog.WriteDebug($"PlatformSaveProxy.SetNextSave type={type} scenario={scenarioId} id={saveId}");
+            _nextSave[type] = new Target { scenarioId = scenarioId, saveId = saveId };
         }
     }
 
@@ -143,7 +160,7 @@ namespace ModAPI.Hooks
             try
             {
                 var traverse = Traverse.Create(__instance);
-                var inner = __instance.platformSave; // existing instance
+                var inner = __instance.platformSave;
                 if (!(inner is PlatformSaveProxy))
                 {
                     var proxy = new PlatformSaveProxy(inner);
@@ -153,7 +170,7 @@ namespace ModAPI.Hooks
             }
             catch (Exception ex)
             {
-                MMLog.Write("Failed to install PlatformSaveProxy: " + ex.Message);
+                MMLog.WriteError("Failed to install PlatformSaveProxy: " + ex);
             }
         }
     }

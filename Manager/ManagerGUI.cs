@@ -6,6 +6,7 @@ using System.Linq;
 using System.Drawing;
 using System.Web.Script.Serialization;
 using Manager.Shared;
+using ModAPI;
 
 /**
  * Author: benjaminfoo
@@ -48,9 +49,14 @@ namespace Manager
 
         private CheckBox darkModeToggle;
 
+        private GroupBox grpDevSettings;
+        private ComboBox cmbLogLevel;
+        private CheckedListBox clbLogCategories;
+
         public ManagerGUI()
         {
             InitializeComponent();
+            InitializeDevControls(); // Add this call
 
             // Create the dark mode checkbox
             darkModeToggle = new CheckBox();
@@ -64,6 +70,35 @@ namespace Manager
             ThemeManager.IsDarkMode = darkModeToggle.Checked;
             ThemeManager.ApplyTheme(this);
             SaveSettings(); // Save setting on change
+        }
+
+        // Add this new method to create the controls
+        private void InitializeDevControls()
+        {
+            // Main group box for dev settings
+            grpDevSettings = new GroupBox
+            {
+                Text = "Developer Settings",
+                Location = new Point(grpSettings.Location.X, grpSettings.Location.Y + grpSettings.Height + 6),
+                Size = new Size(grpSettings.Width, 180),
+                Visible = false // Initially hidden
+            };
+            this.Controls.Add(grpDevSettings);
+            grpDevSettings.BringToFront();
+
+            // Log Level
+            var lblLogLevel = new Label { Text = "Log Level:", Location = new Point(10, 25), AutoSize = true };
+            cmbLogLevel = new ComboBox { Location = new Point(120, 22), DropDownStyle = ComboBoxStyle.DropDownList };
+            cmbLogLevel.Items.AddRange(Enum.GetNames(typeof(MMLog.LogLevel)));
+            grpDevSettings.Controls.Add(lblLogLevel);
+            grpDevSettings.Controls.Add(cmbLogLevel);
+
+            // Log Categories
+            var lblLogCategories = new Label { Text = "Log Categories:", Location = new Point(10, 55), AutoSize = true };
+            clbLogCategories = new CheckedListBox { Location = new Point(120, 55), Size = new Size(200, 110), CheckOnClick = true, BorderStyle = BorderStyle.FixedSingle };
+            clbLogCategories.Items.AddRange(Enum.GetNames(typeof(MMLog.LogCategory)));
+            grpDevSettings.Controls.Add(lblLogCategories);
+            grpDevSettings.Controls.Add(clbLogCategories);
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -80,6 +115,7 @@ namespace Manager
             
             LoadSettings(); // Load all settings from INI
             updateAvailableMods();
+            grpDevSettings.Visible = chkDevMode.Checked; // Ensure visibility matches on load
 
             // Apply the initial theme to all controls
             ThemeManager.IsDarkMode = darkModeToggle.Checked;
@@ -261,6 +297,17 @@ namespace Manager
             var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             settings["GamePath"] = uiGamePath.Text;
             settings["DarkMode"] = darkModeToggle.Checked.ToString();
+
+            // --- ADD THIS SECTION ---
+            settings["DevMode"] = chkDevMode.Checked.ToString();
+            if (cmbLogLevel.SelectedItem != null)
+            {
+                settings["LogLevel"] = cmbLogLevel.SelectedItem.ToString();
+            }
+            var checkedCategories = clbLogCategories.CheckedItems.Cast<string>().ToArray();
+            settings["LogCategories"] = string.Join(",", checkedCategories);
+            // -----------------------
+
             WriteIniSettings(settings);
         }
 
@@ -272,9 +319,19 @@ namespace Manager
             var settings = ReadIniSettings();
             string gamePath = null;
             string darkMode = "false";
+            // --- ADD THESE ---
+            string devMode = "false";
+            string logLevel = "Info"; // Default
+            string logCategories = "General,Loader,Plugin,Assembly"; // Default
+            // -----------------
 
             settings.TryGetValue("GamePath", out gamePath);
             settings.TryGetValue("DarkMode", out darkMode);
+            // --- ADD THESE ---
+            settings.TryGetValue("DevMode", out devMode);
+            settings.TryGetValue("LogLevel", out logLevel);
+            settings.TryGetValue("LogCategories", out logCategories);
+            // -----------------
 
             if (!string.IsNullOrEmpty(gamePath) && File.Exists(gamePath))
             {
@@ -293,6 +350,25 @@ namespace Manager
             {
                 darkModeToggle.Checked = isDark;
             }
+            
+            // --- ADD THIS SECTION ---
+            bool isDev;
+            if (bool.TryParse(devMode, out isDev))
+            {
+                chkDevMode.Checked = isDev;
+            }
+
+            // Load LogLevel
+            int logLevelIndex = cmbLogLevel.FindStringExact(logLevel);
+            cmbLogLevel.SelectedIndex = logLevelIndex >= 0 ? logLevelIndex : cmbLogLevel.FindStringExact("Info");
+
+            // Load LogCategories
+            var enabledCategories = new HashSet<string>((logCategories ?? "").Split(','), StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < clbLogCategories.Items.Count; i++)
+            {
+                clbLogCategories.SetItemChecked(i, enabledCategories.Contains(clbLogCategories.Items[i].ToString()));
+            }
+            // -----------------------
 
             uiLaunchButton.Enabled = File.Exists(uiGamePath.Text);
             uiOpenGameDir.Enabled = File.Exists(uiGamePath.Text);
@@ -346,7 +422,34 @@ namespace Manager
         /// </summary>
         private void onLaunchClicked(object sender, EventArgs e)
         {
-            System.Diagnostics.Process.Start(uiGamePath.Text);
+            // Save any pending settings changes before launch
+            SaveSettings();
+
+            try
+            {
+                var startInfo = new System.Diagnostics.ProcessStartInfo();
+                startInfo.FileName = uiGamePath.Text;
+                startInfo.WorkingDirectory = Path.GetDirectoryName(uiGamePath.Text);
+                startInfo.UseShellExecute = false; // Required to set environment variables
+
+                // Read settings to pass as environment variables
+                var settings = ReadIniSettings();
+                string devMode, logLevel, logCategories;
+                settings.TryGetValue("DevMode", out devMode);
+                settings.TryGetValue("LogLevel", out logLevel);
+                settings.TryGetValue("LogCategories", out logCategories);
+
+                // Set environment variables for the game process ONLY
+                startInfo.EnvironmentVariables["MODAPI_DEV_MODE"] = devMode ?? "false";
+                startInfo.EnvironmentVariables["MODAPI_LOG_LEVEL"] = logLevel ?? "Info";
+                startInfo.EnvironmentVariables["MODAPI_LOG_CATEGORIES"] = logCategories ?? "General,Loader,Plugin,Assembly";
+                
+                System.Diagnostics.Process.Start(startInfo);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show($"Failed to launch Sheltered: {ex.Message}", "Launch Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+            }
         }
 
         /// <summary>
@@ -929,6 +1032,11 @@ namespace Manager
             UpdateDetailsPanel(_selectedItem);
             if (grpAboutInspector != null)
                 grpAboutInspector.Visible = chkDevMode.Checked;
+            
+            // --- ADD THIS ---
+            if (grpDevSettings != null)
+                grpDevSettings.Visible = chkDevMode.Checked;
+            // ----------------
         }
     }
 }
