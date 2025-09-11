@@ -61,6 +61,9 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Web.Extensions" />
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ManagerGUI.cs">
@@ -70,6 +73,9 @@
       <DependentUpon>ManagerGUI.cs</DependentUpon>
     </Compile>
     <Compile Include="Program.cs" />
+    <Compile Include="Shared\LoadOrderResolverTypes.cs" />
+    <Compile Include="Shared\ModAbout.cs" />
+    <Compile Include="ThemeManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\Settings.Designer.cs">
       <AutoGen>True</AutoGen>
@@ -96,12 +102,6 @@
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\ModAPI\ModAPI.csproj">
-      <Project>{3c99d6bf-a4a9-45dc-bef1-5717ece2a687}</Project>
-      <Name>ModAPI</Name>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <Content Include="icon.ico" />
