@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Drawing;
 using System.Web.Script.Serialization;
-using static LoadOrderResolver; // JSON for Manager (Coolnether123)
+using Manager.Shared;
 
 /**
  * Author: benjaminfoo
@@ -46,18 +46,44 @@ namespace Manager
         private ModListItem _selectedItem = null;
         private bool _orderDirty = false;
 
+        private CheckBox darkModeToggle;
+
         public ManagerGUI()
         {
             InitializeComponent();
+
+            // Create the dark mode checkbox
+            darkModeToggle = new CheckBox();
+            darkModeToggle.Text = "Dark Mode";
+            darkModeToggle.AutoSize = true;
+            darkModeToggle.CheckedChanged += new EventHandler(darkModeToggle_CheckedChanged);
+        }
+
+        private void darkModeToggle_CheckedChanged(object sender, EventArgs e)
+        {
+            ThemeManager.IsDarkMode = darkModeToggle.Checked;
+            ThemeManager.ApplyTheme(this);
+            SaveSettings(); // Save setting on change
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
+            // Position and add the dark mode checkbox
+            darkModeToggle.Location = new Point(12, this.ClientSize.Height - darkModeToggle.Height - 12);
+            darkModeToggle.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            this.Controls.Add(darkModeToggle);
+            darkModeToggle.BringToFront(); // Ensure it's visible
+
             // Allow multi-select for batch enable/disable
             try { uiAvailbleModsListView.SelectionMode = SelectionMode.MultiExtended; } catch { }
             try { uiInstalledModsListView.SelectionMode = SelectionMode.MultiExtended; } catch { }
-            updateGamePath();
+            
+            LoadSettings(); // Load all settings from INI
             updateAvailableMods();
+
+            // Apply the initial theme to all controls
+            ThemeManager.IsDarkMode = darkModeToggle.Checked;
+            ThemeManager.ApplyTheme(this);
         }
 
         /// <summary>
@@ -187,22 +213,85 @@ namespace Manager
             catch { return items; } // Ignore exceptions during order loading
         }
 
-        /// <summary>
-        /// Loads the game path from the ini file
-        /// </summary>
-        private void updateGamePath()
+        // INI Settings Helpers
+        private Dictionary<string, string> ReadIniSettings()
+        {
+            var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (!File.Exists(MOD_MANAGER_INI_FILE)) return settings;
+
+            try
+            {
+                foreach (var line in File.ReadAllLines(MOD_MANAGER_INI_FILE))
+                {
+                    var parts = line.Split(new[] { '=' }, 2);
+                    if (parts.Length == 2)
+                    {
+                        settings[parts[0].Trim()] = parts[1].Trim();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show($"Error reading settings from {MOD_MANAGER_INI_FILE}: {ex.Message}", "Settings Error", System.Windows.Forms.MessageBoxButtons.OK,
+ System.Windows.Forms.MessageBoxIcon.Error);
+            }
+            return settings;
+        }
+
+        private void WriteIniSettings(Dictionary<string, string> settings)
         {
             try
             {
-                string contents = File.ReadAllText(MOD_MANAGER_INI_FILE);
-                uiGamePath.Text = contents;
-                uiModsPath.Text = Path.Combine(Path.GetDirectoryName(contents), "mods");
-                Program.GameRootPath = contents; // Set the static game root path
+                var lines = new List<string>();
+                foreach (var kvp in settings)
+                {
+                    lines.Add($"{kvp.Key}={kvp.Value}");
+                }
+                File.WriteAllLines(MOD_MANAGER_INI_FILE, lines.ToArray());
             }
-            catch
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show($"Error saving settings to {MOD_MANAGER_INI_FILE}: {ex.Message}", "Settings Error", System.Windows.Forms.MessageBoxButtons.OK,
+  System.Windows.Forms.MessageBoxIcon.Error);
+            }
+        }
+
+        private void SaveSettings()
+        {
+            var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            settings["GamePath"] = uiGamePath.Text;
+            settings["DarkMode"] = darkModeToggle.Checked.ToString();
+            WriteIniSettings(settings);
+        }
+
+        /// <summary>
+        /// Loads settings from the ini file and applies them
+        /// </summary>
+        private void LoadSettings()
+        {
+            var settings = ReadIniSettings();
+            string gamePath = null;
+            string darkMode = "false";
+
+            settings.TryGetValue("GamePath", out gamePath);
+            settings.TryGetValue("DarkMode", out darkMode);
+
+            if (!string.IsNullOrEmpty(gamePath) && File.Exists(gamePath))
+            {
+                uiGamePath.Text = gamePath;
+                uiModsPath.Text = Path.Combine(Path.GetDirectoryName(gamePath), "mods");
+                Program.GameRootPath = gamePath;
+            }
+            else
             {
                 uiGamePath.Text = DEFAULT_VALUE;
-                Program.GameRootPath = null; // Clear if path is invalid
+                Program.GameRootPath = null;
+            }
+
+            bool isDark;
+            if (bool.TryParse(darkMode, out isDark))
+            {
+                darkModeToggle.Checked = isDark;
             }
 
             uiLaunchButton.Enabled = File.Exists(uiGamePath.Text);
@@ -222,8 +311,9 @@ namespace Manager
             if (fileDialog.ShowDialog() == DialogResult.OK)
             {
                 uiGamePath.Text = fileDialog.FileName;
-                uiModsPath.Text = Path.Combine(Path.GetDirectoryName(fileDialog.FileName), "mods"); // (Coolnether123)
-                Program.GameRootPath = fileDialog.FileName; // Set the static game root path
+                uiModsPath.Text = Path.Combine(Path.GetDirectoryName(fileDialog.FileName), "mods");
+                Program.GameRootPath = fileDialog.FileName;
+                SaveSettings(); // Save setting on change
             }
         }
 
@@ -269,7 +359,7 @@ namespace Manager
 
             uiLaunchButton.Enabled = File.Exists(uiGamePath.Text);
             uiOpenGameDir.Enabled = File.Exists(uiGamePath.Text);
-            File.WriteAllText(MOD_MANAGER_INI_FILE, uiGamePath.Text);
+            SaveSettings(); // Save setting on change
         }
 
         private void uiInstaledLabel_Click(object sender, EventArgs e) { }
