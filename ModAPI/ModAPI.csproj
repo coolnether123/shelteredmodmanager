@@ -45,8 +45,13 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Hooks\Paging\PagingManager.cs" />
     <Compile Include="IPlugin.cs" />
     <Compile Include="MMLog.cs" />
+    <Compile Include="Saves\ExpandedVanillaSaves.cs" />
+    <Compile Include="Saves\ISaveApi.cs" />
+    <Compile Include="Saves\SaveRegistryCore.cs" />
+    <Compile Include="Saves\ScenarioSaves.cs" />
     <Compile Include="UIFlowGuard.cs" />
     <Compile Include="UIUtil.cs" />
     <Compile Include="Saves\CRC32.cs" />
@@ -58,12 +63,9 @@
     <Compile Include="Saves\PreviewCapture.cs" />
     <Compile Include="Saves\PreviewAuto.cs" />
     <Compile Include="Saves\ScenarioRegistry.cs" />
-    <Compile Include="Saves\SlotReservationManager.cs" />
-    <Compile Include="Saves\CustomSaveRegistry.cs" />
     <Compile Include="Hooks\PlatformSaveProxy.cs" />
     <Compile Include="Hooks\SlotSelectionPatches.cs" />
     <Compile Include="Hooks\HarmonyBootstrap.cs" />
-    <Compile Include="Hooks\SaveGlobalBridge.cs" />
     <Compile Include="Inspector\HierarchyUtil.cs" />
     <Compile Include="Inspector\BoundsHighlighter.cs" />
     <Compile Include="Inspector\RuntimeInspector.cs" />
