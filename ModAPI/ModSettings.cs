@@ -280,6 +280,27 @@ public class ModSettings
             var file = new ModConfigFile { entries = MapToArray(_user) };
             var json = JsonUtility.ToJson(file, true);
             File.WriteAllText(_userPath, json);
+
+            // Also write an INI mirror for external tools (optional consumer)
+            try
+            {
+                var iniPath = Path.Combine(_configDir, "user.ini");
+                using (var sw = new StreamWriter(iniPath, false))
+                {
+                    sw.WriteLine("[Settings]");
+                    foreach (var kv in _user)
+                    {
+                        var val = kv.Value != null ? (kv.Value.value ?? string.Empty) : string.Empty;
+                        // Basic sanitation: replace newlines with spaces
+                        val = val.Replace('\r', ' ').Replace('\n', ' ');
+                        sw.WriteLine(kv.Key + "=" + val);
+                    }
+                }
+            }
+            catch (Exception iniEx)
+            {
+                MMLog.Write("Settings INI mirror error: " + iniEx.Message);
+            }
         }
         catch (Exception ex)
         {
@@ -301,6 +322,17 @@ public class ModSettings
     public IEnumerable<string> Keys()
     {
         return _effective.Keys;
+    }
+
+    // Returns the declared/inferred type of a key (string|int|float|bool)
+    public string GetTypeOf(string key)
+    {
+        ModConfigEntry e;
+        if (_effective.TryGetValue(key, out e))
+        {
+            return string.IsNullOrEmpty(e.type) ? "string" : e.type;
+        }
+        return "string";
     }
 
     private static ModConfigEntry[] MapToArray(Dictionary<string, ModConfigEntry> map)

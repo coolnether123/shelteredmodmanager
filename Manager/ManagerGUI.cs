@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Drawing;
 using System.Web.Script.Serialization;
-using Manager.Shared;
 using ModAPI;
 
 /**
@@ -47,16 +46,17 @@ namespace Manager
         private ModListItem _selectedItem = null;
         private bool _orderDirty = false;
 
+        // Dependency evaluation result for color coding
+        private HashSet<string> _hardIssueIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private HashSet<string> _softIssueIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         private CheckBox darkModeToggle;
 
-        private GroupBox grpDevSettings;
-        private ComboBox cmbLogLevel;
-        private CheckedListBox clbLogCategories;
+        
 
         public ManagerGUI()
         {
             InitializeComponent();
-            InitializeDevControls(); // Add this call
 
             // Create the dark mode checkbox
             darkModeToggle = new CheckBox();
@@ -72,35 +72,6 @@ namespace Manager
             SaveSettings(); // Save setting on change
         }
 
-        // Add this new method to create the controls
-        private void InitializeDevControls()
-        {
-            // Main group box for dev settings
-            grpDevSettings = new GroupBox
-            {
-                Text = "Developer Settings",
-                Location = new Point(grpSettings.Location.X, grpSettings.Location.Y + grpSettings.Height + 6),
-                Size = new Size(grpSettings.Width, 180),
-                Visible = false // Initially hidden
-            };
-            this.Controls.Add(grpDevSettings);
-            grpDevSettings.BringToFront();
-
-            // Log Level
-            var lblLogLevel = new Label { Text = "Log Level:", Location = new Point(10, 25), AutoSize = true };
-            cmbLogLevel = new ComboBox { Location = new Point(120, 22), DropDownStyle = ComboBoxStyle.DropDownList };
-            cmbLogLevel.Items.AddRange(Enum.GetNames(typeof(MMLog.LogLevel)));
-            grpDevSettings.Controls.Add(lblLogLevel);
-            grpDevSettings.Controls.Add(cmbLogLevel);
-
-            // Log Categories
-            var lblLogCategories = new Label { Text = "Log Categories:", Location = new Point(10, 55), AutoSize = true };
-            clbLogCategories = new CheckedListBox { Location = new Point(120, 55), Size = new Size(200, 110), CheckOnClick = true, BorderStyle = BorderStyle.FixedSingle };
-            clbLogCategories.Items.AddRange(Enum.GetNames(typeof(MMLog.LogCategory)));
-            grpDevSettings.Controls.Add(lblLogCategories);
-            grpDevSettings.Controls.Add(clbLogCategories);
-        }
-
         private void Form1_Load(object sender, EventArgs e)
         {
             // Position and add the dark mode checkbox
@@ -112,10 +83,11 @@ namespace Manager
             // Allow multi-select for batch enable/disable
             try { uiAvailbleModsListView.SelectionMode = SelectionMode.MultiExtended; } catch { }
             try { uiInstalledModsListView.SelectionMode = SelectionMode.MultiExtended; } catch { }
+            // Owner-draw to color code misordered mods
+            try { uiInstalledModsListView.DrawMode = DrawMode.OwnerDrawFixed; uiInstalledModsListView.DrawItem += uiInstalledModsListView_DrawItem; } catch { }
             
             LoadSettings(); // Load all settings from INI
             updateAvailableMods();
-            grpDevSettings.Visible = chkDevMode.Checked; // Ensure visibility matches on load
 
             // Apply the initial theme to all controls
             ThemeManager.IsDarkMode = darkModeToggle.Checked;
@@ -170,7 +142,79 @@ namespace Manager
             }
             finally { uiInstalledModsListView.EndUpdate(); }
 
+            // Evaluate to update color coding for issues
+            try
+            {
+                var discovered = ToModEntries(ordered);
+                var eval = LoadOrderResolver.Evaluate(discovered, currentOrder ?? new string[0]);
+                _hardIssueIds = new HashSet<string>(eval.HardIssues ?? new HashSet<string>(), StringComparer.OrdinalIgnoreCase);
+                _softIssueIds = new HashSet<string>(eval.SoftIssues ?? new HashSet<string>(), StringComparer.OrdinalIgnoreCase);
+
+                // Add mods with missing hard dependencies to hard issues for red coloring
+                foreach (var errorMsg in eval.MissingHardDependencies)
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(errorMsg, "^Mod '([^']*)' has a missing hard dependency:");
+                    if (match.Success)
+                    {
+                        _hardIssueIds.Add(match.Groups[1].Value);
+                    }
+                }
+            }
+            catch { _hardIssueIds.Clear(); _softIssueIds.Clear(); }
+
             _orderDirty = false;
+            try { uiInstalledModsListView.Invalidate(); } catch { }
+        }
+
+        // Convert UI items to ModAPI ModEntry list for resolver
+        private List<ModEntry> ToModEntries(List<ModListItem> items)
+        {
+            var list = new List<ModEntry>();
+            foreach (var it in items)
+            {
+                try
+                {
+                    var aboutPath = Path.Combine(it.RootPath ?? string.Empty, "About\\About.json");
+                    list.Add(new ModEntry
+                    {
+                        Id = (it.Id ?? string.Empty).Trim().ToLowerInvariant(),
+                        Name = it.DisplayName,
+                        Version = it.About != null ? it.About.version : null,
+                        RootPath = it.RootPath,
+                        AboutPath = File.Exists(aboutPath) ? aboutPath : null,
+                        AssembliesPath = Path.Combine(it.RootPath ?? string.Empty, "Assemblies"),
+                        About = it.About
+                    });
+                }
+                catch { }
+            }
+            return list;
+        }
+
+        // Owner-draw for installed list to show dependency issues (red/yellow)
+        private void uiInstalledModsListView_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            try
+            {
+                e.DrawBackground();
+                if (e.Index < 0 || e.Index >= uiInstalledModsListView.Items.Count) return;
+                var item = uiInstalledModsListView.Items[e.Index] as ManagerGUI.ModListItem;
+                var text = item != null ? item.ToString() : string.Empty;
+
+                var fore = e.ForeColor;
+                if (item != null)
+                {
+                    if (_hardIssueIds.Contains(item.Id)) fore = Color.Red;
+                    else if (_softIssueIds.Contains(item.Id)) fore = Color.Goldenrod;
+                }
+
+                using (var b = new SolidBrush(fore))
+                {
+                    e.Graphics.DrawString(text, e.Font, b, e.Bounds);
+                }
+                e.DrawFocusRectangle();
+            }
+            catch { }
         }
 
         // Discover mods in a path (directories first, then legacy loose DLLs). (Coolnether123)
@@ -299,13 +343,31 @@ namespace Manager
             settings["DarkMode"] = darkModeToggle.Checked.ToString();
 
             // --- ADD THIS SECTION ---
-            settings["DevMode"] = chkDevMode.Checked.ToString();
-            if (cmbLogLevel.SelectedItem != null)
+            if (grpDevSettings != null) // Add null check for the parent group box
             {
-                settings["LogLevel"] = cmbLogLevel.SelectedItem.ToString();
+                // chkDevMode is part of grpSettings, so it should be initialized earlier.
+                // However, it's safer to check it if it's being accessed within this block.
+                if (chkDevMode != null)
+                {
+                    settings["DevMode"] = chkDevMode.Checked.ToString();
+                }
+
+                if (cmbLogLevel != null && cmbLogLevel.SelectedItem != null)
+                {
+                    settings["LogLevel"] = cmbLogLevel.SelectedItem.ToString();
+                }
+                
+                if (clbLogCategories != null) // Check clbLogCategories itself
+                {
+                    var checkedCategories = clbLogCategories.CheckedItems.Cast<string>().ToArray();
+                    settings["LogCategories"] = string.Join(",", checkedCategories);
+                }
+                
+                if (chkIgnoreOrderChecks != null)
+                {
+                    settings["IgnoreOrderChecks"] = chkIgnoreOrderChecks.Checked.ToString();
+                }
             }
-            var checkedCategories = clbLogCategories.CheckedItems.Cast<string>().ToArray();
-            settings["LogCategories"] = string.Join(",", checkedCategories);
             // -----------------------
 
             WriteIniSettings(settings);
@@ -323,6 +385,7 @@ namespace Manager
             string devMode = "false";
             string logLevel = "Info"; // Default
             string logCategories = "General,Loader,Plugin,Assembly"; // Default
+            string ignoreOrderChecks = "false";
             // -----------------
 
             settings.TryGetValue("GamePath", out gamePath);
@@ -331,6 +394,7 @@ namespace Manager
             settings.TryGetValue("DevMode", out devMode);
             settings.TryGetValue("LogLevel", out logLevel);
             settings.TryGetValue("LogCategories", out logCategories);
+            settings.TryGetValue("IgnoreOrderChecks", out ignoreOrderChecks);
             // -----------------
 
             if (!string.IsNullOrEmpty(gamePath) && File.Exists(gamePath))
@@ -359,16 +423,26 @@ namespace Manager
             }
 
             // Load LogLevel
+            cmbLogLevel.Items.AddRange((string[])Enum.GetNames(typeof(MMLog.LogLevel))); // Add this line
             int logLevelIndex = cmbLogLevel.FindStringExact(logLevel);
             cmbLogLevel.SelectedIndex = logLevelIndex >= 0 ? logLevelIndex : cmbLogLevel.FindStringExact("Info");
 
             // Load LogCategories
+            clbLogCategories.Items.AddRange((string[])Enum.GetNames(typeof(MMLog.LogCategory))); // Add this line
             var enabledCategories = new HashSet<string>((logCategories ?? "").Split(','), StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < clbLogCategories.Items.Count; i++)
             {
                 clbLogCategories.SetItemChecked(i, enabledCategories.Contains(clbLogCategories.Items[i].ToString()));
             }
             // -----------------------
+
+            // Ignore order checks toggle visibility/state
+            bool ignore;
+            if (chkIgnoreOrderChecks != null && bool.TryParse(ignoreOrderChecks, out ignore))
+            {
+                chkIgnoreOrderChecks.Checked = ignore;
+                chkIgnoreOrderChecks.Enabled = chkDevMode.Checked;
+            }
 
             uiLaunchButton.Enabled = File.Exists(uiGamePath.Text);
             uiOpenGameDir.Enabled = File.Exists(uiGamePath.Text);
@@ -427,23 +501,72 @@ namespace Manager
 
             try
             {
+                // Read settings (dev mode + order checks)
+                var settings = ReadIniSettings();
+                string devMode, logLevel, logCategories, ignoreOrderChecks;
+                settings.TryGetValue("DevMode", out devMode);
+                settings.TryGetValue("LogLevel", out logLevel);
+                settings.TryGetValue("LogCategories", out logCategories);
+                settings.TryGetValue("IgnoreOrderChecks", out ignoreOrderChecks);
+
+                bool isDev = false; bool.TryParse(devMode ?? "false", out isDev);
+                bool bypass = false; if (isDev) bool.TryParse(ignoreOrderChecks ?? "false", out bypass);
+
+                if (!bypass)
+                {
+                    // Evaluate current order for issues
+                    var currentOrder = ReadOrderFromFile(uiModsPath.Text) ?? new string[0];
+                    var enabledItems = uiInstalledModsListView.Items.Cast<ManagerGUI.ModListItem>().ToList();
+                    var discovered = ToModEntries(enabledItems);
+                    var eval = LoadOrderResolver.Evaluate(discovered, currentOrder);
+                    var hasIssues = (eval.HardIssues != null && eval.HardIssues.Count > 0)
+                                  || (eval.SoftIssues != null && eval.SoftIssues.Count > 0)
+                                  || (eval.MissingHardDependencies != null && eval.MissingHardDependencies.Count > 0);
+                    if (hasIssues)
+                    {
+                        var harmonyMissing = eval.MissingHardDependencies.Any(depMsg =>
+                            System.Text.RegularExpressions.Regex.IsMatch(depMsg, "missing hard dependency: '0Harmony'", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ||
+                            System.Text.RegularExpressions.Regex.IsMatch(depMsg, "missing hard dependency: 'Lib.Harmony'", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                        );
+
+                        var msg = "Mod order has dependency issues.\n\n" +
+                                  (eval.HardIssues.Count > 0 ? ("Hard issues: " + string.Join(", ", eval.HardIssues.ToArray()) + "\n") : "") +
+                                  (eval.SoftIssues.Count > 0 ? ("Soft issues: " + string.Join(", ", eval.SoftIssues.ToArray()) + "\n") : "") +
+                                  (eval.MissingHardDependencies.Count > 0 ? ("Missing deps: " + string.Join(" | ", eval.MissingHardDependencies.ToArray()) + "\n") : "");
+
+                        if (harmonyMissing)
+                        {
+                            msg += "\nNote: If '0Harmony' is listed as a missing dependency, ModAPI will attempt to load it automatically regardless of its position in the load order.\n";
+                        }
+
+                        msg += "\nYes = Load as is\nNo = Auto sort and load\nCancel = Abort";
+
+                        var choice = System.Windows.Forms.MessageBox.Show(msg, "Load Order Warning", System.Windows.Forms.MessageBoxButtons.YesNoCancel, System.Windows.Forms.MessageBoxIcon.Warning);
+                        if (choice == DialogResult.Cancel)
+                        {
+                            try { this.Close(); } catch { }
+                            return; // abort and close
+                        }
+                        if (choice == DialogResult.No)
+                        {
+                            try { WriteOrderToFile(uiModsPath.Text, eval.SortedIds ?? new List<string>()); }
+                            catch { }
+                            updateAvailableMods();
+                        }
+                        // Yes => proceed as is
+                    }
+                }
+
                 var startInfo = new System.Diagnostics.ProcessStartInfo();
                 startInfo.FileName = uiGamePath.Text;
                 startInfo.WorkingDirectory = Path.GetDirectoryName(uiGamePath.Text);
                 startInfo.UseShellExecute = false; // Required to set environment variables
 
-                // Read settings to pass as environment variables
-                var settings = ReadIniSettings();
-                string devMode, logLevel, logCategories;
-                settings.TryGetValue("DevMode", out devMode);
-                settings.TryGetValue("LogLevel", out logLevel);
-                settings.TryGetValue("LogCategories", out logCategories);
-
                 // Set environment variables for the game process ONLY
-                startInfo.EnvironmentVariables["MODAPI_DEV_MODE"] = devMode ?? "false";
+                startInfo.EnvironmentVariables["MODAPI_DEV_MODE"] = isDev ? "true" : "false";
                 startInfo.EnvironmentVariables["MODAPI_LOG_LEVEL"] = logLevel ?? "Info";
                 startInfo.EnvironmentVariables["MODAPI_LOG_CATEGORIES"] = logCategories ?? "General,Loader,Plugin,Assembly";
-                
+
                 System.Diagnostics.Process.Start(startInfo);
             }
             catch (Exception ex)
@@ -487,6 +610,7 @@ namespace Manager
 
             try
             {
+                if (_orderDirty) SaveCurrentOrderToDisk();
                 var modsRoot = uiModsPath.Text;
                 var order = new List<string>(ReadOrderFromFile(modsRoot) ?? new string[0]);
                 foreach (var item in selected)
@@ -514,6 +638,7 @@ namespace Manager
 
             try
             {
+                if (_orderDirty) SaveCurrentOrderToDisk();
                 var modsRoot = uiModsPath.Text;
                 var order = new List<string>(ReadOrderFromFile(modsRoot) ?? new string[0]);
                 foreach (var item in selected)
@@ -567,6 +692,7 @@ namespace Manager
             lb.Items.Insert(i - 1, item);
             lb.SelectedIndex = i - 1;
             _orderDirty = true;
+            SaveCurrentOrderToDisk();
         }
 
         // Move selected enabled mod down (Coolnether123)
@@ -580,39 +706,64 @@ namespace Manager
             lb.Items.Insert(i + 1, item);
             lb.SelectedIndex = i + 1;
             _orderDirty = true;
+            SaveCurrentOrderToDisk();
         }
 
-        // Save load order to mods/loadorder.json (Coolnether123)
+        // Auto sort enabled mods and save to mods/loadorder.json
         private void btnSaveOrder_Click(object sender, EventArgs e)
         {
             try
             {
                 var modsRoot = uiModsPath.Text;
-                var newOrderIds = new System.Collections.Generic.List<string>();
-                foreach (var o in uiInstalledModsListView.Items)
-                {
-                    var it = o as ManagerGUI.ModListItem;
-                    if (it == null) continue;
-                    if (!newOrderIds.Any(x => string.Equals(x, it.Id, StringComparison.OrdinalIgnoreCase)))
-                        newOrderIds.Add(it.Id);
-                }
-                WriteOrderToFile(modsRoot, newOrderIds);
+                var currentOrder = ReadOrderFromFile(modsRoot) ?? new string[0];
+                var enabledItems = uiInstalledModsListView.Items.Cast<ManagerGUI.ModListItem>().ToList();
+                var discovered = ToModEntries(enabledItems);
+                var eval = LoadOrderResolver.Evaluate(discovered, currentOrder);
+                WriteOrderToFile(modsRoot, eval.SortedIds ?? new List<string>());
                 _orderDirty = false;
-                System.Windows.Forms.MessageBox.Show("Load order saved.", "Info", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+                updateAvailableMods();
+                System.Windows.Forms.MessageBox.Show("Mods auto-sorted.", "Info", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                System.Windows.Forms.MessageBox.Show($"Failed to save load order: {ex.Message}", "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+                System.Windows.Forms.MessageBox.Show($"Failed to auto sort: {ex.Message}", "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
             }
         }
 
-        private void SaveLoadOrderFile(ProcessedLoadOrderData processedData)
+        private void SaveCurrentOrderToDisk()
         {
-            // Backward-compatible wrapper, now writes order-only
-            try { WriteOrderToFile(uiModsPath.Text, processedData != null ? (processedData.Order ?? new string[0]) : new string[0]); }
+            try
+            {
+                var modsRoot = uiModsPath.Text;
+                var currentUiOrder = uiInstalledModsListView.Items.Cast<ManagerGUI.ModListItem>().Select(item => item.Id).ToList();
+                WriteOrderToFile(modsRoot, currentUiOrder);
+                _orderDirty = false;
+
+                // Store selected item ID before refreshing
+                string selectedModId = null;
+                if (uiInstalledModsListView.SelectedItem is ManagerGUI.ModListItem selectedItem)
+                {
+                    selectedModId = selectedItem.Id;
+                }
+
+                updateAvailableMods();
+
+                // Re-select the mod after refreshing
+                if (selectedModId != null)
+                {
+                    foreach (ManagerGUI.ModListItem item in uiInstalledModsListView.Items)
+                    {
+                        if (item.Id == selectedModId)
+                        {
+                            uiInstalledModsListView.SelectedItem = item;
+                            break;
+                        }
+                    }
+                }
+            }
             catch (Exception ex)
             {
-                System.Windows.Forms.MessageBox.Show($"Failed to save load order file: {ex.Message}", "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+                System.Windows.Forms.MessageBox.Show($"Failed to save current order: {ex.Message}", "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
             }
         }
 
@@ -1007,6 +1158,23 @@ namespace Manager
                     var file = new LocalFile { entries = entries.ToArray() };
                     var json = new JavaScriptSerializer().Serialize(file);
                     File.WriteAllText(_userPath, json);
+
+                    // Also write INI mirror alongside user.json
+                    try
+                    {
+                        var iniPath = Path.Combine(_configDir, "user.ini");
+                        using (var sw = new StreamWriter(iniPath, false))
+                        {
+                            sw.WriteLine("[Settings]");
+                            foreach (var kv in _user)
+                            {
+                                var val = kv.Value ?? string.Empty;
+                                val = val.Replace('\r', ' ').Replace('\n', ' ');
+                                sw.WriteLine(kv.Key + "=" + val);
+                            }
+                        }
+                    }
+                    catch { }
                 }
                 catch { } // Ignore exceptions during user settings save
             }
@@ -1037,6 +1205,8 @@ namespace Manager
             if (grpDevSettings != null)
                 grpDevSettings.Visible = chkDevMode.Checked;
             // ----------------
+            if (chkIgnoreOrderChecks != null)
+                chkIgnoreOrderChecks.Enabled = chkDevMode.Checked;
         }
     }
 }
