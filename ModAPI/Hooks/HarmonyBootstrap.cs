@@ -8,6 +8,11 @@ namespace ModAPI.Hooks
 {
     internal static class HarmonyBootstrap
     {
+        static HarmonyBootstrap()
+        {
+            MMLog.Write("[HarmonyBootstrap] Static constructor called. ModAPI.dll is loading.");
+        }
+
         private static bool _installed;
         private static GameObject _runnerGo;
 
@@ -52,6 +57,10 @@ namespace ModAPI.Hooks
                 var harmony = new Harmony("ModAPI.CustomSaves");
                 harmony.PatchAll(asm);
                 _installed = true;
+
+                // --- DIAGNOSTIC --- 
+                // SaveManagerInspector.LogMethods();
+
                 MMLog.WriteDebug("HarmonyBootstrap: ModAPI hooks patched");
                 if (_runnerGo != null) UnityEngine.Object.Destroy(_runnerGo);
             }

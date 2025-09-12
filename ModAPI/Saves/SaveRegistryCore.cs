@@ -26,6 +26,11 @@ namespace ModAPI.Saves
         public SaveEntry Overwrite(string saveId, SaveOverwriteOptions opts, byte[] xmlBytes) => OverwriteSave(saveId, opts, xmlBytes);
 
 
+        public SaveEntry[] ListSaves()
+        {
+            return LoadManifest().entries ?? new SaveEntry[0];
+        }
+
         public SaveEntry[] ListSaves(int page, int pageSize)
         {
             var all = LoadManifest().entries;
@@ -60,6 +65,7 @@ namespace ModAPI.Saves
             var entry = new SaveEntry
             {
                 id = id,
+                absoluteSlot = opts.absoluteSlot,
                 name = UniqueName(m, NameSanitizer.SanitizeName(opts?.name)),
                 createdAt = now,
                 updatedAt = now,
@@ -157,6 +163,7 @@ namespace ModAPI.Saves
                 try
                 {
                     var path = DirectoryProvider.ManifestPath(_scenarioId);
+                    MMLog.Write($"[SaveRegistryCore] Saving manifest file to: {path}");
                     var tmp = path + ".tmp";
                     var json = JsonUtility.ToJson(m, true);
 
@@ -197,15 +204,17 @@ namespace ModAPI.Saves
             {
                 var sd = new SaveData(xmlBytes);
                 var info = sd.info;
+                MMLog.Write($"[TryUpdateEntryInfo] Extracted Info: Family='{info.m_familyName}', Days={info.m_daysSurvived}, Difficulty={info.m_diffSetting}");
                 entry.saveInfo.daysSurvived = info.m_daysSurvived;
                 entry.saveInfo.difficulty = info.m_diffSetting;
                 entry.saveInfo.familyName = info.m_familyName;
                 entry.saveInfo.saveTime = info.m_saveTime;
                 sd.Finished();
+                MMLog.Write($"[TryUpdateEntryInfo] Successfully updated SaveEntry '{entry.id}'.");
             }
             catch (Exception ex)
             {
-                MMLog.Write("TryUpdateEntryInfo parse error: " + ex.Message);
+                MMLog.Write("[TryUpdateEntryInfo] CRITICAL parse error: " + ex);
             }
         }
 

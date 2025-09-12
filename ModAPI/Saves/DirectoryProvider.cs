@@ -94,6 +94,16 @@ namespace ModAPI.Saves
             }
         }
 
+        public static string LibsRoot
+        {
+            get
+            {
+                var root = Path.Combine(Directory.GetCurrentDirectory(), "libs");
+                EnsureDir(root);
+                return root;
+            }
+        }
+
         private static void EnsureDir(string path)
         {
             if (!Directory.Exists(path)) Directory.CreateDirectory(path);

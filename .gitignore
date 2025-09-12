@@ -388,3 +388,5 @@ ASALocalRun/
 /libs/0Harmony.dll
 /libs/UnityEngine.dll
 /Dist/
+
+/decompiled/

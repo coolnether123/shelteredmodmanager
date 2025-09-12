@@ -8,5 +8,6 @@
     {
         SaveEntry Get(string saveId);
         SaveEntry Overwrite(string saveId, SaveOverwriteOptions opts, byte[] xmlBytes);
+        SaveEntry[] ListSaves(int page, int pageSize);
     }
 }
