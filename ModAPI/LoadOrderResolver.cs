@@ -36,6 +36,37 @@ public class ProcessedLoadOrderData
 }
 
 /**
+ * (Coolnether123) Detailed evaluation of the current user order against dependency rules.
+ * Provides sets of mods that are misordered (hard/soft), the resolved sorted ids,
+ * and any missing hard dependencies or cycles encountered.
+ */
+public class OrderEvaluation
+{
+    public readonly List<string> EnabledOrder;               // normalized from user
+    public readonly List<string> SortedIds;                  // dependency-resolved order
+    public readonly HashSet<string> HardIssues;              // ids violating hard deps
+    public readonly HashSet<string> SoftIssues;              // ids violating soft hints
+    public readonly List<string> MissingHardDependencies;    // textual messages
+    public readonly HashSet<string> CycledModIds;            // ids part of hard cycles
+
+    public OrderEvaluation(
+        List<string> enabledOrder,
+        List<string> sortedIds,
+        HashSet<string> hardIssues,
+        HashSet<string> softIssues,
+        List<string> missingHardDependencies,
+        HashSet<string> cycled)
+    {
+        EnabledOrder = enabledOrder;
+        SortedIds = sortedIds;
+        HardIssues = hardIssues;
+        SoftIssues = softIssues;
+        MissingHardDependencies = missingHardDependencies;
+        CycledModIds = cycled;
+    }
+}
+
+/**
  * (Coolnether123) Resolves mod load order based on dependencies and user-defined priorities.
  * Uses Kahn's algorithm for topological sorting.
  */
@@ -143,6 +174,68 @@ public class LoadOrderFile
             if (byId.ContainsKey(id)) resultMods.Add(byId[id]);
 
         return new ResolutionResult(resultMods, graphResult.Errors, sortResult.CycledIds);
+    }
+
+    /**
+     * (Coolnether123) Evaluates an existing user order for dependency issues.
+     * Returns both the correctly sorted order and sets of misordered ids.
+     */
+    public static OrderEvaluation Evaluate(List<ModEntry> discovered, IEnumerable<string> userOrder)
+    {
+        if (discovered == null) discovered = new List<ModEntry>();
+        if (userOrder == null) userOrder = new string[0];
+
+        Dictionary<string, ModEntry> byId;
+        List<string> ids;
+        Dictionary<string, int> priority;
+        InitializeModData(discovered, userOrder, out byId, out ids, out priority);
+
+        var graphResult = BuildDependencyGraph(discovered, byId);
+        var sortResult = PerformTopologicalSort(ids, graphResult.Adj, graphResult.Indeg, priority);
+
+        // Build quick index map of current user order (normalized)
+        var enabledOrder = new List<string>();
+        var index = new Dictionary<string, int>(ModIdComparer);
+        int pos = 0;
+        foreach (var id in userOrder)
+        {
+            var nid = NormId(id);
+            if (!byId.ContainsKey(nid)) continue; // ignore mods not discovered/enabled
+            if (!index.ContainsKey(nid))
+            {
+                index[nid] = pos++;
+                enabledOrder.Add(nid);
+            }
+        }
+
+        var hardIssues = new HashSet<string>(ModIdComparer);
+        var softIssues = new HashSet<string>(ModIdComparer);
+
+        // Check ordering of edges: A -> B requires A before B. If B comes before A, flag B.
+        foreach (var kv in graphResult.Adj)
+        {
+            var from = kv.Key;
+            foreach (var e in kv.Value)
+            {
+                var to = e.To;
+                int ifrom, ito;
+                if (!index.TryGetValue(from, out ifrom)) continue; // edge source not enabled
+                if (!index.TryGetValue(to, out ito)) continue;     // edge target not enabled
+                if (ito < ifrom)
+                {
+                    if (e.IsHard) hardIssues.Add(to); else softIssues.Add(to);
+                }
+            }
+        }
+
+        return new OrderEvaluation(
+            enabledOrder,
+            sortResult.SortedIds,
+            hardIssues,
+            softIssues,
+            graphResult.Errors,
+            sortResult.CycledIds
+        );
     }
 
     /**

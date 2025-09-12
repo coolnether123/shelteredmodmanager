@@ -1,4 +1,4 @@
-﻿namespace Manager
+namespace Manager
 {
     partial class ManagerGUI
     {
@@ -10,7 +10,7 @@
         /// <summary>
         /// Verwendete Ressourcen bereinigen.
         /// </summary>
-        /// <param name="disposing">True, wenn verwaltete Ressourcen gelöscht werden sollen; andernfalls False.</param>
+        /// <param name="disposing">True, wenn verwaltete Ressourcen gel�scht werden sollen; andernfalls False.</param>
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null))
@@ -23,8 +23,8 @@
         #region Vom Windows Form-Designer generierter Code
 
         /// <summary>
-        /// Erforderliche Methode für die Designerunterstützung.
-        /// Der Inhalt der Methode darf nicht mit dem Code-Editor geändert werden.
+        /// Erforderliche Methode f�r die Designerunterst�tzung.
+        /// Der Inhalt der Methode darf nicht mit dem Code-Editor ge�ndert werden.
         /// </summary>
         private void InitializeComponent()
         {
@@ -89,6 +89,12 @@
             this.shelteredLink = new System.Windows.Forms.LinkLabel();
             this.grpSettings = new System.Windows.Forms.GroupBox();
             this.chkDevMode = new System.Windows.Forms.CheckBox();
+            this.grpDevSettings = new System.Windows.Forms.GroupBox();
+            this.lblLogLevel = new System.Windows.Forms.Label();
+            this.cmbLogLevel = new System.Windows.Forms.ComboBox();
+            this.lblLogCategories = new System.Windows.Forms.Label();
+            this.clbLogCategories = new System.Windows.Forms.CheckedListBox();
+            this.chkIgnoreOrderChecks = new System.Windows.Forms.CheckBox();
             this.pictureBox1 = new System.Windows.Forms.PictureBox();
             this.panelSettings = new System.Windows.Forms.Panel();
             this.tabControl1.SuspendLayout();
@@ -99,6 +105,7 @@
             this.grpAboutInspector.SuspendLayout();
             this.tabPage2.SuspendLayout();
             this.grpSettings.SuspendLayout();
+            this.grpDevSettings.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             this.SuspendLayout();
             // 
@@ -671,7 +678,7 @@
             this.btnSaveOrder.Name = "btnSaveOrder";
             this.btnSaveOrder.Size = new System.Drawing.Size(120, 35);
             this.btnSaveOrder.TabIndex = 8;
-            this.btnSaveOrder.Text = "Save Order";
+            this.btnSaveOrder.Text = "Sort Order";
             this.btnSaveOrder.UseVisualStyleBackColor = false;
             this.btnSaveOrder.Click += new System.EventHandler(this.btnSaveOrder_Click);
             // 
@@ -697,10 +704,10 @@
             this.harmonyLink.Font = new System.Drawing.Font("Segoe UI", 10F);
             this.harmonyLink.Location = new System.Drawing.Point(20, 200);
             this.harmonyLink.Name = "harmonyLink";
-            this.harmonyLink.Size = new System.Drawing.Size(331, 23);
+            this.harmonyLink.Size = new System.Drawing.Size(324, 23);
             this.harmonyLink.TabIndex = 5;
             this.harmonyLink.TabStop = true;
-            this.harmonyLink.Text = "🔗 https://github.com/pardeike/Harmony";
+            this.harmonyLink.Text = "?? https://github.com/pardeike/Harmony";
             this.harmonyLink.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel1_LinkClicked_1);
             // 
             // label6
@@ -739,10 +746,10 @@
             this.doorstopLink.Font = new System.Drawing.Font("Segoe UI", 10F);
             this.doorstopLink.Location = new System.Drawing.Point(20, 130);
             this.doorstopLink.Name = "doorstopLink";
-            this.doorstopLink.Size = new System.Drawing.Size(391, 23);
+            this.doorstopLink.Size = new System.Drawing.Size(384, 23);
             this.doorstopLink.TabIndex = 1;
             this.doorstopLink.TabStop = true;
-            this.doorstopLink.Text = "🔗 https://github.com/NeighTools/UnityDoorstop";
+            this.doorstopLink.Text = "?? https://github.com/NeighTools/UnityDoorstop";
             this.doorstopLink.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel2_LinkClicked);
             // 
             // shelteredLink
@@ -751,22 +758,22 @@
             this.shelteredLink.Font = new System.Drawing.Font("Segoe UI", 10F);
             this.shelteredLink.Location = new System.Drawing.Point(20, 60);
             this.shelteredLink.Name = "shelteredLink";
-            this.shelteredLink.Size = new System.Drawing.Size(469, 23);
+            this.shelteredLink.Size = new System.Drawing.Size(462, 23);
             this.shelteredLink.TabIndex = 0;
             this.shelteredLink.TabStop = true;
-            this.shelteredLink.Text = "🔗 https://store.steampowered.com/app/356040/Sheltered/";
+            this.shelteredLink.Text = "?? https://store.steampowered.com/app/356040/Sheltered/";
             this.shelteredLink.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel1_LinkClicked);
             // 
             // grpSettings
             // 
             this.grpSettings.Controls.Add(this.chkDevMode);
             this.grpSettings.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
-            this.grpSettings.Location = new System.Drawing.Point(397, 15);
+            this.grpSettings.Location = new System.Drawing.Point(369, 15);
             this.grpSettings.Name = "grpSettings";
-            this.grpSettings.Size = new System.Drawing.Size(459, 117);
+            this.grpSettings.Size = new System.Drawing.Size(294, 117);
             this.grpSettings.TabIndex = 1;
             this.grpSettings.TabStop = false;
-            this.grpSettings.Text = "Mod Settings";
+            this.grpSettings.Text = "Mod Settings WIP";
             // 
             // chkDevMode
             // 
@@ -779,6 +786,67 @@
             this.chkDevMode.Text = " Developer Mode (Advanced)";
             this.chkDevMode.UseVisualStyleBackColor = true;
             this.chkDevMode.CheckedChanged += new System.EventHandler(this.chkDevMode_CheckedChanged);
+            // 
+            // grpDevSettings
+            // 
+            this.grpDevSettings.Controls.Add(this.lblLogLevel);
+            this.grpDevSettings.Controls.Add(this.cmbLogLevel);
+            this.grpDevSettings.Controls.Add(this.lblLogCategories);
+            this.grpDevSettings.Controls.Add(this.clbLogCategories);
+            this.grpDevSettings.Controls.Add(this.chkIgnoreOrderChecks);
+            this.grpDevSettings.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.grpDevSettings.Location = new System.Drawing.Point(825, 15);
+            this.grpDevSettings.Name = "grpDevSettings";
+            this.grpDevSettings.Size = new System.Drawing.Size(563, 180);
+            this.grpDevSettings.TabIndex = 2;
+            this.grpDevSettings.TabStop = false;
+            this.grpDevSettings.Text = "Developer Settings WIP";
+            this.grpDevSettings.Visible = false;
+            // 
+            // lblLogLevel
+            // 
+            this.lblLogLevel.AutoSize = true;
+            this.lblLogLevel.Location = new System.Drawing.Point(10, 25);
+            this.lblLogLevel.Name = "lblLogLevel";
+            this.lblLogLevel.Size = new System.Drawing.Size(91, 23);
+            this.lblLogLevel.TabIndex = 0;
+            this.lblLogLevel.Text = "Log Level:";
+            // 
+            // cmbLogLevel
+            // 
+            this.cmbLogLevel.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.cmbLogLevel.Location = new System.Drawing.Point(120, 22);
+            this.cmbLogLevel.Name = "cmbLogLevel";
+            this.cmbLogLevel.Size = new System.Drawing.Size(121, 31);
+            this.cmbLogLevel.TabIndex = 1;
+            // 
+            // lblLogCategories
+            // 
+            this.lblLogCategories.AutoSize = true;
+            this.lblLogCategories.Location = new System.Drawing.Point(10, 55);
+            this.lblLogCategories.Name = "lblLogCategories";
+            this.lblLogCategories.Size = new System.Drawing.Size(135, 23);
+            this.lblLogCategories.TabIndex = 2;
+            this.lblLogCategories.Text = "Log Categories:";
+            // 
+            // clbLogCategories
+            // 
+            this.clbLogCategories.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.clbLogCategories.CheckOnClick = true;
+            this.clbLogCategories.Location = new System.Drawing.Point(151, 55);
+            this.clbLogCategories.Name = "clbLogCategories";
+            this.clbLogCategories.Size = new System.Drawing.Size(200, 102);
+            this.clbLogCategories.TabIndex = 3;
+            // 
+            // chkIgnoreOrderChecks
+            // 
+            this.chkIgnoreOrderChecks.AutoSize = true;
+            this.chkIgnoreOrderChecks.Location = new System.Drawing.Point(249, 12);
+            this.chkIgnoreOrderChecks.Name = "chkIgnoreOrderChecks";
+            this.chkIgnoreOrderChecks.Size = new System.Drawing.Size(275, 27);
+            this.chkIgnoreOrderChecks.TabIndex = 4;
+            this.chkIgnoreOrderChecks.Text = "Ignore order checks (dev only)";
+            this.chkIgnoreOrderChecks.UseVisualStyleBackColor = true;
             // 
             // pictureBox1
             // 
@@ -810,6 +878,7 @@
             this.Controls.Add(this.pictureBox1);
             this.Controls.Add(this.tabControl1);
             this.Controls.Add(this.grpSettings);
+            this.Controls.Add(this.grpDevSettings);
             this.Controls.Add(this.panelSettings);
             this.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
@@ -832,6 +901,8 @@
             this.tabPage2.PerformLayout();
             this.grpSettings.ResumeLayout(false);
             this.grpSettings.PerformLayout();
+            this.grpDevSettings.ResumeLayout(false);
+            this.grpDevSettings.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
             this.ResumeLayout(false);
 
@@ -900,5 +971,11 @@
         private System.Windows.Forms.Label label10;
         private System.Windows.Forms.Label lblDependsOn;
         private System.Windows.Forms.Panel panelSettings;
+        private System.Windows.Forms.GroupBox grpDevSettings;
+        private System.Windows.Forms.ComboBox cmbLogLevel;
+        private System.Windows.Forms.CheckedListBox clbLogCategories;
+        private System.Windows.Forms.CheckBox chkIgnoreOrderChecks;
+        private System.Windows.Forms.Label lblLogLevel;
+        private System.Windows.Forms.Label lblLogCategories;
     }
 }
