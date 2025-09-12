@@ -24,6 +24,7 @@ namespace ModAPI.Saves
     public class SaveEntry
     {
         public string id;                    // GUID string
+        public int absoluteSlot;             // 1-based slot number (1, 2, 3, 4, ...)
         public string name;                  // display name
         public string createdAt;             // ISO-8601
         public string updatedAt;             // ISO-8601
@@ -80,6 +81,7 @@ namespace ModAPI.Saves
     {
         public string name;
         public string extraJson;
+        public int absoluteSlot;
     }
 
     public class SaveOverwriteOptions

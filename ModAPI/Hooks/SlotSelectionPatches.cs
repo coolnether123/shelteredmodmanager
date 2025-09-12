@@ -7,37 +7,66 @@ using ModAPI.Hooks.Paging;
 
 namespace ModAPI.Hooks
 {
+    /// <summary>
+    /// This static class holds state that must persist across scene loads,
+    /// specifically the intended "slot in use" for the SaveManager.
+    /// </summary>
+    internal static class SaveManagerContext
+    {
+        public static SaveManager.SaveType IntendedSlotInUse = SaveManager.SaveType.Invalid;
+    }
+
     [HarmonyPatch(typeof(SlotSelectionPanel), "OnShow")]
     internal static class SlotSelectionPanel_OnShow_Patch
     {
         static void Postfix(SlotSelectionPanel __instance)
         {
+            // Log custom saves
+            ExpandedVanillaSaves.Debug_ListAllSaves();
+
+            // Log vanilla saves
+            MMLog.Write("--- Debug Listing Vanilla Saves ---");
+            try
+            {
+                var t = Traverse.Create(__instance);
+                var m_slotInfo = t.Field("m_slotInfo").GetValue<System.Collections.IList>();
+                for (int i = 0; i < 3; i++)
+                {
+                    var slotInfo = m_slotInfo[i];
+                    var state = Traverse.Create(slotInfo).Field("m_state").GetValue<SlotSelectionPanel.SlotState>();
+                    if (state == SlotSelectionPanel.SlotState.Loaded)
+                    {
+                        var familyName = Traverse.Create(slotInfo).Field("m_familyName").GetValue<string>();
+                        var daysSurvived = Traverse.Create(slotInfo).Field("m_daysSurvived").GetValue<int>();
+                        var saveTime = Traverse.Create(slotInfo).Field("m_saveTime").GetValue<string>();
+                        MMLog.Write($"  - Slot: {i + 1}, State: {state}, Family: '{familyName}', Days: {daysSurvived}, Updated: {saveTime}");
+                    }
+                    else
+                    {
+                        MMLog.Write($"  - Slot: {i + 1}, State: {state}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("Error during vanilla save debug logging: " + ex);
+            }
+            MMLog.Write("--- End of List ---");
+
             PagingManager.Initialize(__instance);
+            MMLog.WriteDebug($"[SlotSelectionPanel_OnShow_Patch] Panel shown. PagingManager initialized for instance: {__instance.name}");
         }
     }
 
-    /// <summary>
-    /// This is the definitive fix. By using a Prefix patch, we can completely prevent the
-    /// original game logic from running on our expanded save pages. This stops the game from
-    /// overwriting our UI data with stale vanilla information in a subsequent frame.
-    /// </summary>
     [HarmonyPatch(typeof(SlotSelectionPanel), "RefreshSaveSlotInfo")]
     internal static class SlotSelectionPanel_RefreshSaveSlotInfo_Patch
     {
-        /// <summary>
-        /// Runs BEFORE the original RefreshSaveSlotInfo method.
-        /// </summary>
-        /// <returns>True = run original method, False = skip original method.</returns>
         static bool Prefix(SlotSelectionPanel __instance)
         {
             int page = PagingManager.GetPage(__instance);
-            MMLog.WriteDebug($"[RefreshSaveSlotInfo PREFIX] Intercepting refresh. Current UI Page: {page + 1}.");
-
-            // Page 0 is the VANILLA page. We let the original game method run untouched.
+            MMLog.WriteDebug($"[RefreshSaveSlotInfo] Entering Prefix. Current page: {page}");
             if (page == 0)
             {
-                MMLog.WriteDebug("[RefreshSaveSlotInfo PREFIX] Page is 1 (Vanilla). Allowing original method to execute.");
-                // Ensure vanilla-specific scenario buttons are visible.
                 var vanillaButtons = __instance.GetComponentsInChildren<SaveSlotButton>(true);
                 foreach (var btn in vanillaButtons)
                 {
@@ -46,26 +75,39 @@ namespace ModAPI.Hooks
                         if (!btn.gameObject.activeSelf) btn.gameObject.SetActive(true);
                     }
                 }
-                return true; // <<< Let the original method run
+                return true;
             }
 
-            // If we are here, we are on an EXPANDED page (UI Page 2+). We take full control.
-            MMLog.WriteDebug($"[RefreshSaveSlotInfo PREFIX] Page is expanded. Taking full control of refresh logic.");
             try
             {
                 int apiPage = page - 1;
-                var savesOnPage = ExpandedVanillaSaves.List(apiPage, 3);
-                MMLog.WriteDebug($"[RefreshSaveSlotInfo PREFIX] Fetched {savesOnPage.Length} saves for API page {apiPage}.");
+                // Get all saves for this scenario, not just one page.
+                var allSaves = ExpandedVanillaSaves.List();
+                var savesOnPage = new SaveEntry[3];
+                
+                // Distribute the saves into the correct slots for the current page.
+                foreach(var save in allSaves)
+                {
+                    int saveSlot = save.absoluteSlot;
+                    if (saveSlot > 0)
+                    {
+                        int saveApiPage = (saveSlot - 4) / 3;
+                        if (saveApiPage == apiPage)
+                        {
+                            int slotIndexOnPage = (saveSlot - 4) % 3;
+                            if(slotIndexOnPage >= 0 && slotIndexOnPage < 3)
+                            {
+                                savesOnPage[slotIndexOnPage] = save;
+                            }
+                        }
+                    }
+                }
+
+                MMLog.WriteDebug($"[RefreshSaveSlotInfo] apiPage: {apiPage}, found {savesOnPage.Length} saves for this page.");
 
                 var t = Traverse.Create(__instance);
                 var m_slotInfo = t.Field("m_slotInfo").GetValue<System.Collections.IList>();
-                if (m_slotInfo == null)
-                {
-                    MMLog.WriteError("[RefreshSaveSlotInfo PREFIX] m_slotInfo is null. Aborting.");
-                    return false;
-                }
 
-                // Hide vanilla scenario buttons.
                 var buttons = __instance.GetComponentsInChildren<SaveSlotButton>(true);
                 foreach (var btn in buttons)
                 {
@@ -75,11 +117,12 @@ namespace ModAPI.Hooks
                     }
                 }
 
-                MMLog.WriteDebug("[RefreshSaveSlotInfo PREFIX] Overwriting the 3 visible UI slots with expanded save data.");
                 for (int i = 0; i < 3; i++)
                 {
                     var slotInfo = m_slotInfo[i];
                     var entry = (i < savesOnPage.Length) ? savesOnPage[i] : null;
+
+                    MMLog.WriteDebug($"[RefreshSaveSlotInfo] Processing slot {i}. Entry: {(entry != null ? entry.id : "NULL")}");
 
                     if (entry != null)
                     {
@@ -88,15 +131,15 @@ namespace ModAPI.Hooks
                         Traverse.Create(slotInfo).Field("m_daysSurvived").SetValue(entry.saveInfo.daysSurvived);
                         Traverse.Create(slotInfo).Field("m_diffSetting").SetValue(entry.saveInfo.difficulty);
                         Traverse.Create(slotInfo).Field("m_saveTime").SetValue(entry.saveInfo.saveTime ?? entry.updatedAt);
+                        MMLog.WriteDebug($"[RefreshSaveSlotInfo] Slot {i} state: Loaded. Family: {entry.saveInfo.familyName}, Days: {entry.saveInfo.daysSurvived}");
                     }
                     else
                     {
                         Traverse.Create(slotInfo).Field("m_state").SetValue(SlotSelectionPanel.SlotState.Empty);
+                        MMLog.WriteDebug($"[RefreshSaveSlotInfo] Slot {i} state: Empty.");
                     }
                 }
 
-                // We MUST call RefreshSlotLabels ourselves because we are skipping the original method.
-                MMLog.WriteDebug("[RefreshSaveSlotInfo PREFIX] Calling RefreshSlotLabels to draw our changes.");
                 t.Method("RefreshSlotLabels").GetValue();
             }
             catch (Exception ex)
@@ -104,7 +147,7 @@ namespace ModAPI.Hooks
                 MMLog.WriteError("[RefreshSaveSlotInfo PREFIX] Error during takeover: " + ex);
             }
 
-            return false; // <<< IMPORTANT: Block the original method from running and overwriting our changes.
+            return false;
         }
     }
 
@@ -114,7 +157,7 @@ namespace ModAPI.Hooks
         static void Postfix(SlotSelectionPanel __instance)
         {
             int page = PagingManager.GetPage(__instance);
-            if (page <= 0) return; // Only modify labels on expanded pages.
+            if (page <= 0) return;
 
             try
             {
@@ -128,12 +171,8 @@ namespace ModAPI.Hooks
                     var lab = labels[i] as UILabel;
                     if (lab == null || string.IsNullOrEmpty(lab.text)) continue;
 
-                    // Replace "Slot X" with the correct number for the page, e.g., "Slot 4".
                     string updated = ReplaceFirstNumber(lab.text, (i + 4 + offset).ToString());
-                    if (updated != lab.text)
-                    {
-                        lab.text = updated;
-                    }
+                    if (updated != lab.text) lab.text = updated;
                 }
             }
             catch (Exception ex)
@@ -160,117 +199,131 @@ namespace ModAPI.Hooks
     {
         static bool Prefix(SlotSelectionPanel __instance)
         {
-            int page = PagingManager.GetPage(__instance);
-            if (page == 0)
             {
-                MMLog.WriteDebug("[OnSlotChosen] Prefix: Page is 1 (Vanilla). Letting original game logic run.");
-                return true;
-            }
+                int page = PagingManager.GetPage(__instance);
+                if (page == 0) return true;
 
-            try
-            {
-                var t = Traverse.Create(__instance);
-                int chosenSlotIndex = t.Field("m_chosenSlot").GetValue<int>(); // 0, 1, or 2
-                if (chosenSlotIndex > 2) return true;
-
-                MMLog.WriteDebug($"[OnSlotChosen] Prefix: User chose UI slot {chosenSlotIndex + 1} on expanded page {page + 1}.");
-
-                int apiPage = page - 1;
-                var entry = ExpandedVanillaSaves.FindByUIPosition(chosenSlotIndex + 1, apiPage, 3);
-
-                var proxy = SaveManager.instance.platformSave as PlatformSaveProxy;
-                if (proxy == null)
+                try
                 {
-                    MMLog.WriteError("[OnSlotChosen] PlatformSaveProxy not found! Cannot handle custom save.");
-                    return true;
-                }
+                    var t = Traverse.Create(__instance);
+                    // m_chosenSlot is unreliable (-1 for new games). m_selectedSlot seems to hold the actual UI index.
+                    int chosenSlotIndex = t.Field("m_selectedSlot").GetValue<int>();
+                    if (chosenSlotIndex > 2) return true; // Should not happen on paged view
 
-                var virtualSaveType = (SaveManager.SaveType)(chosenSlotIndex + 1);
+                    int apiPage = page - 1;
+                    MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] chosenSlotIndex: {chosenSlotIndex}, apiPage: {apiPage}");
 
-                if (entry == null) // Creating a new game
-                {
-                    MMLog.WriteDebug("[OnSlotChosen] Action: Creating a new expanded vanilla save.");
-                    var created = ExpandedVanillaSaves.Create(new SaveCreateOptions { name = "New Game" });
-                    if (created != null)
+                    var allSaves = ExpandedVanillaSaves.List();
+                    var savesOnPage = new SaveEntry[3];
+                    foreach (var save in allSaves)
                     {
-                        proxy.SetNextSave(virtualSaveType, "Standard", created.id);
-                        MMLog.WriteDebug($"[OnSlotChosen] Outcome: Primed proxy to save new game with ID {created.id}. Passing to vanilla for customization screen.");
+                        int saveSlot = save.absoluteSlot;
+                        if (saveSlot > 0)
+                        {
+                            int saveApiPage = (saveSlot - 4) / 3;
+                            if (saveApiPage == apiPage)
+                            {
+                                int slotIndexOnPage = (saveSlot - 4) % 3;
+                                if (slotIndexOnPage >= 0 && slotIndexOnPage < 3)
+                                {
+                                    savesOnPage[slotIndexOnPage] = save;
+                                }
+                            }
+                        }
                     }
+                    var entry = (chosenSlotIndex < savesOnPage.Length) ? savesOnPage[chosenSlotIndex] : null;
+
+                    var virtualSaveType = (SaveManager.SaveType)(chosenSlotIndex + 1);
+                    MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] virtualSaveType: {virtualSaveType}");
+
+                    if (entry == null) // Creating a new game
+                    {
+                        int absoluteSlot = (apiPage * 3) + chosenSlotIndex + 4;
+                        MMLog.Write($"--- Player clicked slot {absoluteSlot} to start a new game ---");
+
+                        var created = ExpandedVanillaSaves.Create(new SaveCreateOptions { name = "New Game", absoluteSlot = absoluteSlot });
+                        if (created != null)
+                        {
+                            MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] Calling SetNextSave with type={virtualSaveType}, scenarioId=Standard, saveId={created.id}");
+                            PlatformSaveProxy.SetNextSave(virtualSaveType, "Standard", created.id);
+                            SaveManager.instance.SetCurrentSlot(chosenSlotIndex + 1);
+                        }
+                        return true;
+                    }
+                    else // Loading an existing expanded game
+                    {
+                        MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] Loading existing game with id: {entry.id}");
+                        MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] Calling SetNextLoad with type={virtualSaveType}, scenarioId=Standard, saveId={entry.id}");
+                        PlatformSaveProxy.SetNextLoad(virtualSaveType, "Standard", entry.id);
+                        SaveManager.instance.SetSlotToLoad(chosenSlotIndex + 1); // Fix typo: SaveManager.instance
+                        return false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError("OnSlotChosen Prefix patch error: " + ex);
                     return true;
                 }
-                else // Loading an existing expanded game
+            }
+        }
+
+        [HarmonyPatch(typeof(SlotSelectionPanel), "OnDeleteMessageBox")]
+        internal static class SlotSelectionPanel_OnDeleteMessageBox_Patch
+        {
+            static bool Prefix(SlotSelectionPanel __instance, int response)
+            {
+                int page = PagingManager.GetPage(__instance);
+                if (page == 0) return true;
+
+                if (response != 1) return false;
+
+                try
                 {
-                    MMLog.WriteDebug($"[OnSlotChosen] Action: Loading existing expanded save '{entry.name}' with ID {entry.id}.");
-                    proxy.SetNextLoad(virtualSaveType, "Standard", entry.id);
-                    SaveManager.instance.SetSlotToLoad(chosenSlotIndex + 1);
-                    MMLog.WriteDebug("[OnSlotChosen] Outcome: Primed proxy and called SaveManager.SetSlotToLoad. Blocking original method.");
+                    var t = Traverse.Create(__instance);
+                    int selectedSlotIndex = t.Field("m_selectedSlot").GetValue<int>();
+                    if (selectedSlotIndex > 2) return true;
+
+                    var entry = ExpandedVanillaSaves.FindByUIPosition(selectedSlotIndex + 1, page - 1, 3);
+
+                    if (entry != null)
+                    {
+                        ExpandedVanillaSaves.Delete(entry.id);
+                        t.Field("m_infoNeedsRefresh").SetValue(true);
+                    }
                     return false;
                 }
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteError("OnSlotChosen Prefix patch error: " + ex);
-                return true;
-            }
-        }
-    }
-
-    [HarmonyPatch(typeof(SlotSelectionPanel), "OnDeleteMessageBox")]
-    internal static class SlotSelectionPanel_OnDeleteMessageBox_Patch
-    {
-        static bool Prefix(SlotSelectionPanel __instance, int response)
-        {
-            int page = PagingManager.GetPage(__instance);
-            if (page == 0) return true;
-
-            if (response != 1) return false;
-
-            try
-            {
-                var t = Traverse.Create(__instance);
-                int selectedSlotIndex = t.Field("m_selectedSlot").GetValue<int>();
-                if (selectedSlotIndex > 2) return true;
-
-                var entry = ExpandedVanillaSaves.FindByUIPosition(selectedSlotIndex + 1, page - 1, 3);
-
-                if (entry != null)
+                catch (Exception ex)
                 {
-                    MMLog.WriteDebug($"[OnDeleteMessageBox] Deleting expanded save '{entry.name}' (ID: {entry.id})");
-                    ExpandedVanillaSaves.Delete(entry.id);
-                    t.Field("m_infoNeedsRefresh").SetValue(true);
+                    MMLog.WriteError("OnDeleteMessageBox Prefix patch error: " + ex);
+                    return true;
                 }
-                return false;
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteError("OnDeleteMessageBox Prefix patch error: " + ex);
-                return true;
             }
         }
-    }
 
-    [HarmonyPatch(typeof(SlotSelectionPanel), "Update")]
-    internal static class SlotSelectionPanel_Update_Patch
-    {
-        static void Postfix(SlotSelectionPanel __instance)
+        [HarmonyPatch(typeof(SlotSelectionPanel), "Update")]
+        internal static class SlotSelectionPanel_Update_Patch
         {
-            if (Input.GetKeyDown(KeyCode.RightArrow))
+            static void Postfix(SlotSelectionPanel __instance)
             {
-                PagingManager.ChangePage(__instance, 1);
-            }
-            else if (Input.GetKeyDown(KeyCode.LeftArrow))
-            {
-                PagingManager.ChangePage(__instance, -1);
+                if (Input.GetKeyDown(KeyCode.RightArrow))
+                {
+                    PagingManager.ChangePage(__instance, 1);
+                }
+                else if (Input.GetKeyDown(KeyCode.LeftArrow))
+                {
+                    PagingManager.ChangePage(__instance, -1);
+                }
             }
         }
-    }
 
-    [HarmonyPatch(typeof(SlotSelectionPanel), "Start")]
-    internal static class SlotSelectionPanel_Start_Patch
-    {
-        static void Postfix()
+        [HarmonyPatch(typeof(SlotSelectionPanel), "Start")]
+        internal static class SlotSelectionPanel_Start_Patch
         {
-            MMLog.WriteDebug("SlotSelectionPanel.Start postfix fired, ModAPI patches are active.");
+            static void Postfix()
+            {
+                MMLog.WriteDebug("SlotSelectionPanel.Start postfix fired, ModAPI patches are active.");
+            }
         }
+
     }
 }

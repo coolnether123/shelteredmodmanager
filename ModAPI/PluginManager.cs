@@ -160,6 +160,8 @@ public class PluginManager
                     if (type == null || type.IsAbstract || !type.IsClass) continue;
                     if (!typeof(IModPlugin).IsAssignableFrom(type)) continue;
 
+                    MMLog.WriteDebug($"[loader] Found potential plugin: {type.FullName}");
+
                     try
                     {
                         var plugin = (IModPlugin)Activator.CreateInstance(type);
@@ -174,14 +176,15 @@ public class PluginManager
                         var s = plugin as IModShutdown; if (s != null) _shutdown.Add(s);
                         var se = plugin as IModSceneEvents; if (se != null) _sceneEvents.Add(se);
 
-                        // Call lifecycle with isolation
+                        MMLog.WriteDebug($"[loader] Initializing plugin: {type.FullName}");
                         plugin.Initialize(ctx);
+                        MMLog.WriteDebug($"[loader] Starting plugin: {type.FullName}");
                         plugin.Start(ctx);
                         ctx.Log.Info("Started.");
                     }
                     catch (Exception ex)
                     {
-                        MMLog.Write($"[loader] error starting plugin '{type.FullName}': {ex.Message}");
+                        MMLog.WriteError($"[loader] error starting plugin '{type.FullName}': {ex.Message}");
                     }
                 }
             }
