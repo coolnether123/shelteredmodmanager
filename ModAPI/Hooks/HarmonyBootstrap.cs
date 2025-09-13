@@ -54,12 +54,12 @@ namespace ModAPI.Hooks
             try
             {
                 var asm = Assembly.GetExecutingAssembly();
-                var harmony = new Harmony("ModAPI.CustomSaves");
+                var harmony = new Harmony("ShelteredModManager.ModAPI");
                 harmony.PatchAll(asm);
                 _installed = true;
 
                 // --- DIAGNOSTIC --- 
-                // SaveManagerInspector.LogMethods();
+                
 
                 MMLog.WriteDebug("HarmonyBootstrap: ModAPI hooks patched");
                 if (_runnerGo != null) UnityEngine.Object.Destroy(_runnerGo);
