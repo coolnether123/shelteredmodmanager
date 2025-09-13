@@ -2,9 +2,9 @@ using System.Collections;
 using UnityEngine;
 
 /// <summary>
-/// Simple global UI flow guard to prevent the save-slot panel from
-/// consuming clicks while a mod is taking over the Scenario screen
-/// (e.g., to show a custom scenario list).
+/// Simple global UI flow guard to prevent UI elements from
+/// consuming clicks while a mod is taking over a screen
+/// (e.g., to show a custom UI).
 /// </summary>
 public static class UIFlowGuard
 {

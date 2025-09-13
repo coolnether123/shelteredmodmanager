@@ -51,7 +51,7 @@ public static class MMLog
     #region Private Fields
     private static readonly object _lock = new object();
     private static string _logPath;
-    private static string _archivePath;
+    // Archived log files will use timestamped filenames
     private static LogLevel _minLevel = LogLevel.Info;
     private static readonly HashSet<LogCategory> _enabledCategories = new HashSet<LogCategory>();
     private static readonly Dictionary<string, int> _modLogCounts = new Dictionary<string, int>();
@@ -80,7 +80,7 @@ public static class MMLog
         var baseDir = Directory.GetCurrentDirectory();
         Directory.CreateDirectory(baseDir);
         _logPath = Path.Combine(baseDir, "mod_manager.log");
-        _archivePath = Path.Combine(baseDir, "mod_manager_archive.log");
+        try { if (File.Exists(_logPath)) _logFileSize = new FileInfo(_logPath).Length; } catch { _logFileSize = 0; }
 
         // Initialize with default categories
         _enabledCategories.Add(LogCategory.General);
@@ -88,46 +88,52 @@ public static class MMLog
         _enabledCategories.Add(LogCategory.Plugin);
         _enabledCategories.Add(LogCategory.Assembly);
 
-        InitializeFromEnvironment();
+        InitializeFromManagerIni();
         WriteStartupBanner();
     }
 
-    private static void InitializeFromEnvironment()
+    // Read Manager-authored settings from mod_manager.ini in the game directory.
+    private static void InitializeFromManagerIni()
     {
         try
         {
-            // Check dev mode
-            var devModeVar = Environment.GetEnvironmentVariable("MODAPI_DEV_MODE");
-            if (!string.IsNullOrEmpty(devModeVar) && devModeVar.ToLower() == "true")
+            var ini = System.IO.Path.Combine(System.IO.Path.Combine(Directory.GetCurrentDirectory(), "SMM"), "mod_manager.ini");
+            string devMode = null, logLevel = null, logCategories = null;
+            if (File.Exists(ini))
             {
-                // If dev mode is on, set level to Debug and enable all categories unless specified otherwise
-                _minLevel = LogLevel.Debug;
-                foreach (LogCategory cat in Enum.GetValues(typeof(LogCategory)))
+                foreach (var raw in File.ReadAllLines(ini))
                 {
-                    _enabledCategories.Add(cat);
+                    if (string.IsNullOrEmpty(raw)) continue;
+                    var line = raw.Trim();
+                    if (line.StartsWith("#") || line.StartsWith(";") || line.StartsWith("[")) continue;
+                    var idx = line.IndexOf('='); if (idx <= 0) continue;
+                    var key = line.Substring(0, idx).Trim();
+                    var val = line.Substring(idx + 1).Trim();
+                    if (key.Equals("DevMode", StringComparison.OrdinalIgnoreCase)) devMode = val;
+                    else if (key.Equals("LogLevel", StringComparison.OrdinalIgnoreCase)) logLevel = val;
+                    else if (key.Equals("LogCategories", StringComparison.OrdinalIgnoreCase)) logCategories = val;
                 }
             }
-            
-            // Check debug level (this can override the dev mode default)
-            var levelVar = Environment.GetEnvironmentVariable("MODAPI_LOG_LEVEL"); // Use new name
-            if (!string.IsNullOrEmpty(levelVar))
+
+            if (!string.IsNullOrEmpty(devMode) && devMode.ToLower() == "true")
             {
-                var level = TryParseLogLevel(levelVar);
-                if (level.HasValue)
-                    _minLevel = level.Value;
+                _minLevel = LogLevel.Debug;
+                _enabledCategories.Clear();
+                foreach (LogCategory cat in Enum.GetValues(typeof(LogCategory)))
+                    _enabledCategories.Add(cat);
             }
 
-            // Check enabled categories (this can override the dev mode default)
-            var categoriesVar = Environment.GetEnvironmentVariable("MODAPI_LOG_CATEGORIES"); // Use new name
-            if (!string.IsNullOrEmpty(categoriesVar))
+            var level = TryParseLogLevel(logLevel);
+            if (level.HasValue) _minLevel = level.Value;
+
+            if (!string.IsNullOrEmpty(logCategories))
             {
                 _enabledCategories.Clear();
-                var categories = categoriesVar.Split(',');
-                foreach (var cat in categories)
+                var parts = (logCategories ?? string.Empty).Split(',');
+                foreach (var p in parts)
                 {
-                    var category = TryParseLogCategory(cat.Trim());
-                    if (category.HasValue)
-                        _enabledCategories.Add(category.Value);
+                    var c = TryParseLogCategory(p.Trim());
+                    if (c.HasValue) _enabledCategories.Add(c.Value);
                 }
             }
         }
@@ -358,37 +364,7 @@ public static class MMLog
         }
     }
 
-    /// <summary>
-    /// Memory usage tracking
-    /// </summary>
-    public static void WriteMemoryInfo(string context = "")
-    {
-        try
-        {
-            var currentMemory = GC.GetTotalMemory(false);
-            var deltaMemory = currentMemory - _lastMemoryUsage;
-            _lastMemoryUsage = currentMemory;
-            _memoryHistory.Add(currentMemory);
-
-            // Keep only recent history
-            if (_memoryHistory.Count > 100)
-                _memoryHistory.RemoveAt(0);
-
-            var message = new StringBuilder();
-            message.AppendLine($"[MEMORY] {context}");
-            message.AppendLine($"Current: {FormatBytes(currentMemory)}");
-            message.AppendLine($"Delta: {FormatBytes(deltaMemory)}");
-            message.AppendLine($"GC Gen0: {GC.CollectionCount(0)}");
-            message.AppendLine($"GC Gen1: {GC.CollectionCount(1)}");
-            message.AppendLine($"GC Gen2: {GC.CollectionCount(2)}");
-
-            WriteInternal(LogLevel.Debug, LogCategory.Memory, "GC", message.ToString());
-        }
-        catch (Exception ex)
-        {
-            WriteInternal(LogLevel.Warning, LogCategory.Memory, "GC", $"Failed to collect memory info: {ex.Message}");
-        }
-    }
+    // Removed WriteMemoryInfo
 
     /// <summary>
     /// Scene transition logging
@@ -429,115 +405,15 @@ public static class MMLog
         WriteInternal(LogLevel.Info, LogCategory.General, "Logger", $"Log level changed to: {level}");
     }
 
-    /// <summary>
-    /// Enable/disable specific log categories
-    /// </summary>
-    public static void SetCategoryEnabled(LogCategory category, bool enabled)
-    {
-        lock (_lock)
-        {
-            if (enabled)
-                _enabledCategories.Add(category);
-            else
-                _enabledCategories.Remove(category);
-        }
-        WriteInternal(LogLevel.Debug, LogCategory.General, "Logger", $"Category {category} {(enabled ? "enabled" : "disabled")}");
-    }
+    // Removed SetCategoryEnabled: categories controlled by Manager via INI
 
-    /// <summary>
-    /// Generate comprehensive system report
-    /// </summary>
-    public static void WriteSystemReport()
-    {
-        var report = new StringBuilder();
-        report.AppendLine("================================================================================");
-        report.AppendLine("                          SYSTEM DIAGNOSTIC REPORT");
-        report.AppendLine("================================================================================");
-        report.AppendLine($"Timestamp: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-        report.AppendLine($"Uptime: {TimeSpan.FromMilliseconds(Environment.TickCount)}");
-        report.AppendLine();
-
-        // Unity Info
-        report.AppendLine("[UNITY ENVIRONMENT]");
-        report.AppendLine($"Version: {Application.unityVersion}");
-        report.AppendLine($"Platform: {Application.platform}");
-        report.AppendLine($"System Language: {Application.systemLanguage}");
-        report.AppendLine($"Target Frame Rate: {Application.targetFrameRate}");
-        report.AppendLine($"Running in Background: {Application.runInBackground}");
-        report.AppendLine();
-
-        // System Info
-        report.AppendLine("[SYSTEM INFORMATION]");
-        report.AppendLine($"OS: {SystemInfo.operatingSystem}");
-        report.AppendLine($"Processor: {SystemInfo.processorType} ({SystemInfo.processorCount} cores)");
-        report.AppendLine($"Memory: {SystemInfo.systemMemorySize} MB");
-        report.AppendLine($"Graphics: {SystemInfo.graphicsDeviceName}");
-        report.AppendLine($"Graphics Memory: {SystemInfo.graphicsMemorySize} MB");
-        report.AppendLine();
-
-        // Memory Stats
-        report.AppendLine("[MEMORY STATISTICS]");
-        report.AppendLine($"Total Memory: {FormatBytes(GC.GetTotalMemory(false))}");
-        report.AppendLine($"GC Collections - Gen0: {GC.CollectionCount(0)}, Gen1: {GC.CollectionCount(1)}, Gen2: {GC.CollectionCount(2)}");
-        report.AppendLine();
-
-        // Loaded Assemblies
-        report.AppendLine("[LOADED ASSEMBLIES]");
-        var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-        foreach (var assembly in assemblies)
-        {
-            try
-            {
-                report.AppendLine($"  {assembly.GetName().Name} v{assembly.GetName().Version} ({SafeGetLocation(assembly)})");
-            }
-            catch
-            {
-                report.AppendLine($"  {assembly.GetName().Name} (location unavailable)");
-            }
-        }
-        report.AppendLine();
-
-        // Performance Summary
-        if (_performanceHistory.Count > 0)
-        {
-            report.AppendLine("[PERFORMANCE HISTORY]");
-            foreach (var kvp in _performanceHistory)
-            {
-                var times = kvp.Value;
-                if (times.Count > 0)
-                {
-                    var avg = times.Sum() / (double)times.Count;
-                    var max = times.Max();
-                    var min = times.Min();
-                    report.AppendLine($"  {kvp.Key}: Avg={avg:F1}ms, Min={min}ms, Max={max}ms, Samples={times.Count}");
-                }
-            }
-            report.AppendLine();
-        }
-
-        // Mod Statistics
-        if (_modLogCounts.Count > 0)
-        {
-            report.AppendLine("[MOD LOG STATISTICS]");
-            var sortedMods = _modLogCounts.OrderByDescending(x => x.Value).ToArray();
-            foreach (var kvp in sortedMods)
-            {
-                report.AppendLine($"  {kvp.Key}: {kvp.Value} log entries");
-            }
-            report.AppendLine();
-        }
-
-        report.AppendLine("================================================================================");
-
-        WriteInternal(LogLevel.Info, LogCategory.General, "System", report.ToString());
-    }
+    // Removed WriteSystemReport
     #endregion
 
     #region Internal Methods
     private static void WriteInternal(LogLevel level, LogCategory category, string source, string message)
     {
         if (level < _minLevel) return;
-        if (!_enabledCategories.Contains(category) && level < LogLevel.Error) return;
         if (message == null) message = string.Empty;
 
         var now = DateTime.UtcNow;
@@ -545,6 +421,8 @@ public static class MMLog
 
         lock (_lock)
         {
+            if (!_enabledCategories.Contains(category) && level < LogLevel.Error)
+                return;
             // Handle spam aggregation
             if (!string.IsNullOrEmpty(_lastMsg) && string.Equals(comparableMessage, _lastMsg, StringComparison.Ordinal))
             {
@@ -626,11 +504,13 @@ public static class MMLog
         {
             try
             {
-                if (File.Exists(_archivePath))
-                    File.Delete(_archivePath);
-
                 if (File.Exists(_logPath))
-                    File.Move(_logPath, _archivePath);
+                {
+                    var ts = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                    var dir = Path.GetDirectoryName(_logPath);
+                    var archive = Path.Combine(dir ?? string.Empty, $"mod_manager_{ts}.log");
+                    File.Move(_logPath, archive);
+                }
 
                 _logFileSize = 0;
                 WriteInternal(LogLevel.Info, LogCategory.General, "Logger", "Log file rotated");
@@ -776,21 +656,20 @@ public static class MMLog
         WriteInternal(LogLevel.Error, LogCategory.Plugin, "PluginManager", message.ToString());
     }
 
-    /// <summary>
-    /// Debug method to dump current logger state
-    /// </summary>
-    public static void DumpLoggerState()
-    {
-        var state = new StringBuilder();
-        state.AppendLine("[LOGGER STATE]");
-        state.AppendLine($"Min Level: {_minLevel}");
-        state.AppendLine($"Enabled Categories: {string.Join(", ", _enabledCategories.Select(x => x.ToString()).ToArray())}");
-        state.AppendLine($"Log File Size: {FormatBytes(_logFileSize)}");
-        state.AppendLine($"Active Timers: {_activeTimers.Count}");
-        state.AppendLine($"Performance History Entries: {_performanceHistory.Count}");
-        state.AppendLine($"Mod Log Counts: {_modLogCounts.Count}");
-
-        WriteInternal(LogLevel.Debug, LogCategory.General, "Logger", state.ToString());
-    }
+    // Removed DumpLoggerState
     #endregion
+
+    // Disposable scope for measuring operations safely
+    public sealed class MeasureScope : IDisposable
+    {
+        private readonly string _name; private readonly string _details; private bool _stopped;
+        public MeasureScope(string name, string details = "") { _name = name; _details = details; StartTimer(name); }
+        public void Dispose() { if (!_stopped) { StopTimer(_name, _details); _stopped = true; } }
+    }
+
+    public static MeasureScope Measure(string operationName, string details = "")
+    {
+        return new MeasureScope(operationName, details);
+    }
 }
+

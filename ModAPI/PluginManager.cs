@@ -65,7 +65,7 @@ public class PluginManager
 
     public void loadAssemblies(GameObject doorstepGameObject)
     {
-        // Ensure ModAPI Harmony patches are applied (paging, proxy, global save bridge)
+        
         try { MMLog.WriteDebug("PluginManager: calling HarmonyBootstrap.EnsurePatched()"); ModAPI.Hooks.HarmonyBootstrap.EnsurePatched(); }
         catch (Exception ex) { MMLog.Write("PluginManager: EnsurePatched failed: " + ex.Message); }
 

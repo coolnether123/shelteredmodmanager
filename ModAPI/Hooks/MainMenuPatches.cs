@@ -1,7 +1,7 @@
 using System;
 using HarmonyLib;
 using UnityEngine;
-using ModAPI.Saves;
+
 
 namespace ModAPI.Hooks
 {
@@ -12,14 +12,7 @@ namespace ModAPI.Hooks
         {
             try
             {
-                var saveManager = SaveManager.instance;
-                if (saveManager == null) return;
 
-                var platformSaveProxy = saveManager.platformSave as PlatformSaveProxy;
-                if (platformSaveProxy == null) return;
-
-                platformSaveProxy.ResetState();
-                MMLog.WriteDebug("MainMenuPanel: PlatformSaveProxy state reset.");
             }
             catch (Exception ex)
             {
