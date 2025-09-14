@@ -3,11 +3,13 @@
 Original Author: benjaminfoo
 Maintainer: Coolnether123
 
-# Legacy # | Coolnether123
-This project do to lack of interest to actually create a modding scene in Sheltered. In 2019 it was left to github and asking the community to pick it up. On reddit UnicubeSheltered, a dev, said they wanted to add one but didn't build the framework. On the mod loader Github Tiller4363 attempted to reach out to benjaminfoo for help on understanding the project but from everywhere I look benjaminfoo never answered and simply left the sheltered community. In 2025 Coolnether123 (myself) picked up the project. Finding it only after getting Sheltered in Febuary. Finding a love for the game I looked for mods and found this. 
+# Legacy | Coolnether123
+This project is considered legacy because the original Sheltered mod-loader effort from 2019 was left unmaintained and never grew into an active modding framework. At the time, a Unicube developer (on Reddit as UnicubeSheltered) expressed interest in mod support, but no official framework was shipped. On the original mod-loader GitHub repo, Tiller4363 attempted in 2023 to contact benjaminfoo for guidance, but from what I can find, there was no reply and benjaminfoo deleted his reddit account.
+
+In 2025, I (Coolnether123) discovered Sheltered and went looking for mods. The only thing I found was the abandoned mod loader, so I decided to pick it up and continue development to enable modding for the game.
 
 
-# Sheltered Mod Manager v0.6
+# Sheltered Mod Manager v0.7
 
 This project enables modding support for the game [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Team17.\
 It acts as a drop-in application for a regular installation of Sheltered — no original game files are modified.
@@ -23,6 +25,8 @@ Defines the plugin interfaces and loader. Plugins implement `IModPlugin` and rec
 - `Settings` (typed access to Config/default.json + Config/user.json)
 - `Log` (mod-prefixed logger)
 The loader currently resolves dependencies (`dependsOn`), ordering (`loadBefore`/`loadAfter`), and honors `loadorder.json`. This will be moved to more user facing with a sort button.
+
+# Example Plugins
 
 **ManagerGUI**\
 Windows UI to locate the game, manage mod enable/disable, and set load order.
@@ -46,7 +50,6 @@ Simple UI exposing loader state and loaded plugins while in-game.
 - Copy its content in the same space as the games exe
 - Launch `SMM\\Manager.exe` from your game folder
 - Use the browse for sheltered exe button and navigate to the exe
-- Currently a bug with refreshing the mods after this so restarted the mod manager and everything will work from then.
 
 ## Compilation
 - Target Framework: .NET Framework 3.5
@@ -91,34 +94,115 @@ Example About.json
   "website": "https://example.com"        // Optional
 }
 
-## Plugin Authoring
+## Developing Plugins
 
-Create a class that implements `IModPlugin` and use the provided context:
+To create a mod, you'll write a plugin by creating a class that implements the `IModPlugin` interface. The loader will automatically discover and run your plugin if it's structured correctly and enabled in the manager.
+
+Here is an example of a simple plugin that adds a label to the main menu:
 
 ```csharp
+using HarmonyLib;
 using UnityEngine;
 
-public class MyPlugin : IModPlugin
+/// <summary>
+/// Example plugin that adds a simple cyan label to the Main Menu
+/// 
+/// This shows the full lifecycle of a ModAPI plugin:
+///  - Initialize() is called before the game starts (read settings here)
+///  - Start() is called once Unity is running (safe to patch here)
+///  - Harmony is used to patch into game methods (here: MainMenu.OnShow)
+///  - UIUtil helper is used to safely create an NGUI UILabel
+/// 
+/// Why is Harmony used at all?
+///   - Sheltered doesn't add menu panels until runtime
+///   - The menu GameObjects exist but are inactive during scene load
+///   - Harmony lets us “hook” the panel’s OnShow() so we run code right when
+///     the game activates it, ensuring the label is visible.
+/// 
+/// </summary>
+public class MyMenuPlugin : IModPlugin
 {
+    private IModLogger _log;
+
+    /// <summary>
+    /// Called very early, before Unity scene is running.
+    /// Use this to read settings/config values.
+    /// </summary>
     public void Initialize(IPluginContext ctx)
     {
-        // optional: pre-load resources, register services, read settings
+        _log = ctx.Log;
+        _log.Info("MyMenuPlugin Initializing...");
     }
 
+    /// <summary>
+    /// Called once Unity is ready and safe to run coroutines/patches.
+    /// Creates a Harmony instance and patch all targets in this assembly.
+    /// </summary>
     public void Start(IPluginContext ctx)
     {
-        // attach behaviours under a per-plugin root
-        ctx.PluginRoot.AddComponent<MyMonoBehaviour>();
-
-        // read/write settings (merged defaults + user overrides)
-        int maxCount = ctx.Settings.GetInt("maxCount", 10);
-        ctx.Settings.SetInt("maxCount", maxCount);
-        ctx.Settings.SaveUser();
-
-        // simple logging, prefixed with your mod id
-        ctx.Log.Info($"MyPlugin started. maxCount={maxCount}");
+        _log.Info("MyMenuPlugin Starting...");
+        var h = new Harmony("com.plugin.mymenu"); // unique ID for this patch set
+        h.PatchAll(typeof(MyMenuPlugin).Assembly);
+        _log.Info("Harmony patches for MyMenuPlugin applied.");
     }
 }
+
+/// <summary>
+/// Patch handler for when the MainMenu panel is shown.
+/// Note: Sheltered has two menu variants: MainMenu and MainMenuX.
+/// To be safe, you can patch both. Just MainMenu works here though.
+/// </summary>
+[HarmonyPatch(typeof(MainMenu), "OnShow")]
+public static class MainMenu_OnShow_Patch
+{
+    /// <summary>
+    /// Postfix is called after the real OnShow() runs.
+    /// At this point the panel is active and safe to add children to.
+    /// </summary>
+    static void Postfix(MainMenu __instance)
+    {
+        // Always null-check the instance; Harmony will pass null if the patch misfires
+        if (__instance == null || __instance.gameObject == null) return;
+
+        // Our own marker component prevents us from adding the label twice
+        if (__instance.GetComponent<MyMenuLabelMarker>() != null) return;
+
+        __instance.gameObject.AddComponent<MyMenuLabelMarker>();
+
+        // Build label options:
+        // - Cyan text
+        // - Anchored top-right with a 10px inset
+        // - Slight outline effect so it stands out
+        // - Relative depth +50 to ensure it renders above most default widgets
+        UIPanel used;
+        var opts = new UIUtil.UILabelOptions
+        {
+            text = "MyMenuPlugin is active!",
+            color = Color.cyan,
+            fontSize = 22,
+            alignment = NGUIText.Alignment.Right,
+            effect = UILabel.Effect.Outline,
+            effectColor = new Color(0, 0, 0, 0.85f),
+            anchor = UIUtil.AnchorCorner.TopRight,
+            pixelOffset = new Vector2(-10, -10),
+            relativeDepth = 50
+        };
+
+        // Actually create the label via the ModAPI helper.
+        // Use UIUtil.CreateLabel instead of new UILabel manually to
+        //   - Ensures label is under a UIPanel
+        //   - Picks a working font automatically (bitmap or TTF fallback)
+        //   - Computes safe depth above siblings
+        //   - Honors UIRoot activeHeight → resolution-scaled placement
+        UIUtil.CreateLabel(__instance.gameObject, opts, out used);
+    }
+}
+
+/// <summary>
+/// Simple empty marker component to ensure it doesn't inject multiple times.
+/// Many BasePanel classes in Sheltered can call OnShow() more than once per session. 
+/// </summary>
+public class MyMenuLabelMarker : MonoBehaviour { }
 ```
 
 Dependencies and order are declared in `About.json` via `dependsOn`, `loadBefore`, and `loadAfter`. Version constraints are supported (e.g., `"com.example.mod >= 1.2.0"`). To use another mod’s public API, reference its DLL and declare a matching `dependsOn` entry. 

@@ -347,6 +347,13 @@ public class PluginRunner : MonoBehaviour
         // subscribe to scene events once
         SceneManager.sceneLoaded += OnSceneLoadedInternal;
         SceneManager.sceneUnloaded += OnSceneUnloadedInternal;
+
+        // Manually trigger for the already loaded scene, as the event would have been missed
+        var activeScene = SceneManager.GetActiveScene();
+        if (activeScene.isLoaded)
+        {
+            OnSceneLoadedInternal(activeScene, LoadSceneMode.Single);
+        }
     }
 
     private void OnDestroy()

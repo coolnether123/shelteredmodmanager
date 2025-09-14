@@ -54,8 +54,25 @@ namespace ModAPI.Hooks
             try
             {
                 var asm = Assembly.GetExecutingAssembly();
-                var harmony = new Harmony("ShelteredModManager.ModAPI");
-                harmony.PatchAll(asm);
+                 var harmony = new HarmonyLib.Harmony("ShelteredModManager.ModAPI");
+
+                var opts = new ModAPI.Harmony.HarmonyUtil.PatchOptions
+                {
+                    AllowDebugPatches = ReadManagerBool("EnableDebugPatches", false),
+                    AllowDangerousPatches = ReadManagerBool("AllowDangerousPatches", false),
+                    AllowStructReturns = ReadManagerBool("AllowStructReturns", false),
+                    OnResult = (mb, reason) =>
+                    {
+                        try
+                        {
+                            var who = mb is MethodBase ? ((MethodBase)mb).DeclaringType.FullName + "." + ((MethodBase)mb).Name : (mb != null ? mb.ToString() : "<null>");
+                            MMLog.WriteDebug("[HarmonyBootstrap] " + who + " -> " + reason);
+                        }
+                        catch { }
+                    }
+                };
+
+                ModAPI.Harmony.HarmonyUtil.PatchAll(harmony, asm, opts);
                 _installed = true;
 
                 // --- DIAGNOSTIC --- 
@@ -68,6 +85,32 @@ namespace ModAPI.Hooks
             {
                 MMLog.Write("HarmonyBootstrap patch attempt failed: " + ex.Message);
             }
+        }
+
+        private static bool ReadManagerBool(string key, bool fallback)
+        {
+            try
+            {
+                var ini = System.IO.Path.Combine(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "SMM"), "mod_manager.ini");
+                if (!System.IO.File.Exists(ini)) return fallback;
+                foreach (var raw in System.IO.File.ReadAllLines(ini))
+                {
+                    if (string.IsNullOrEmpty(raw)) continue;
+                    var line = raw.Trim();
+                    if (line.StartsWith("#") || line.StartsWith(";") || line.StartsWith("[")) continue;
+                    var idx = line.IndexOf('='); if (idx <= 0) continue;
+                    var k = line.Substring(0, idx).Trim();
+                    var v = line.Substring(idx + 1).Trim();
+                    if (!k.Equals(key, StringComparison.OrdinalIgnoreCase)) continue;
+                    bool b;
+                    if (bool.TryParse(v, out b)) return b;
+                    var s = v.ToLowerInvariant();
+                    if (s == "1" || s == "yes" || s == "y" || s == "on") return true;
+                    if (s == "0" || s == "no" || s == "n" || s == "off") return false;
+                }
+            }
+            catch { }
+            return fallback;
         }
 
         private static void StartRetryRunner()
