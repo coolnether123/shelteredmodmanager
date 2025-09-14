@@ -82,6 +82,7 @@ namespace Manager
             this.btnMoveDownEnabled = new System.Windows.Forms.Button();
             this.btnSaveOrder = new System.Windows.Forms.Button();
             this.tabPage2 = new System.Windows.Forms.TabPage();
+            this.richTextBox1 = new System.Windows.Forms.RichTextBox();
             this.label15 = new System.Windows.Forms.Label();
             this.linkLabel1 = new System.Windows.Forms.LinkLabel();
             this.label14 = new System.Windows.Forms.Label();
@@ -101,7 +102,6 @@ namespace Manager
             this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             this.pictureBox1 = new System.Windows.Forms.PictureBox();
             this.panelSettings = new System.Windows.Forms.Panel();
-            this.richTextBox1 = new System.Windows.Forms.RichTextBox();
             this.tabControl1.SuspendLayout();
             this.tabPage1.SuspendLayout();
             this.tabPage3.SuspendLayout();
@@ -707,6 +707,23 @@ namespace Manager
             this.tabPage2.TabIndex = 1;
             this.tabPage2.Text = "About";
             // 
+            // richTextBox1
+            // 
+            this.richTextBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.richTextBox1.BackColor = System.Drawing.Color.White;
+            this.richTextBox1.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.richTextBox1.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.richTextBox1.Location = new System.Drawing.Point(523, 154);
+            this.richTextBox1.Name = "richTextBox1";
+            this.richTextBox1.ReadOnly = true;
+            this.richTextBox1.ScrollBars = System.Windows.Forms.RichTextBoxScrollBars.Vertical;
+            this.richTextBox1.Size = new System.Drawing.Size(601, 227);
+            this.richTextBox1.TabIndex = 9;
+            this.richTextBox1.Text = resources.GetString("richTextBox1.Text");
+            this.richTextBox1.TextChanged += new System.EventHandler(this.richTextBox1_TextChanged);
+            // 
             // label15
             // 
             this.label15.AutoSize = true;
@@ -815,7 +832,7 @@ namespace Manager
             this.grpSettings.Size = new System.Drawing.Size(294, 159);
             this.grpSettings.TabIndex = 1;
             this.grpSettings.TabStop = false;
-            this.grpSettings.Text = "Mod Settings WIP";
+            this.grpSettings.Text = "Mod Settings";
             // 
             // chkDevMode
             // 
@@ -841,7 +858,7 @@ namespace Manager
             this.grpDevSettings.Size = new System.Drawing.Size(684, 159);
             this.grpDevSettings.TabIndex = 2;
             this.grpDevSettings.TabStop = false;
-            this.grpDevSettings.Text = "Developer Settings WIP";
+            this.grpDevSettings.Text = "Developer Settings ";
             this.grpDevSettings.Visible = false;
             // 
             // chkVerboseLogging
@@ -905,23 +922,6 @@ namespace Manager
             this.panelSettings.Name = "panelSettings";
             this.panelSettings.Size = new System.Drawing.Size(310, 90);
             this.panelSettings.TabIndex = 2;
-            // 
-            // richTextBox1
-            // 
-            this.richTextBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.richTextBox1.BackColor = System.Drawing.Color.White;
-            this.richTextBox1.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.richTextBox1.Font = new System.Drawing.Font("Segoe UI", 9F);
-            this.richTextBox1.Location = new System.Drawing.Point(523, 154);
-            this.richTextBox1.Name = "richTextBox1";
-            this.richTextBox1.ReadOnly = true;
-            this.richTextBox1.ScrollBars = System.Windows.Forms.RichTextBoxScrollBars.Vertical;
-            this.richTextBox1.Size = new System.Drawing.Size(601, 227);
-            this.richTextBox1.TabIndex = 9;
-            this.richTextBox1.Text = "This project is considered legacy because the original Sheltered mod-loader effort from 2019 was left unmaintained and never grew into an active modding framework. At the time, a Unicube developer (on Reddit as UnicubeSheltered) expressed interest in mod support, but no official framework was shipped. On the original mod-loader GitHub repo, Tiller4363 attempted in 2023 to contact benjaminfoo for guidance, but from what I can find, there was no reply and benjaminfoo deleted his reddit account.\r\n\r\nIn 2025, I (Coolnether123) discovered Sheltered and went looking for mods. The only thing I found was the abandoned mod loader, so I decided to pick it up and continue development to enable modding for the game.";
-            this.richTextBox1.TextChanged += new System.EventHandler(this.richTextBox1_TextChanged);
             // 
             // ManagerGUI
             // 
