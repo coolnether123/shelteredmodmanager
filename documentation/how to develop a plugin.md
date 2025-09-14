@@ -8,9 +8,12 @@ Prerequisites
 Steps
 1) Create a new C# Class Library project targeting .NET Framework 3.5
 
-2) Add a project reference to `ModAPI/ModAPI.csproj` (or reference `ModAPI.dll` from `Dist/SMM` after build)
+2) Add a project reference to 
+- `ModAPI.dll` from `Dist/SMM`
+- `Assembly-CSharp.dll` from `Windows64_EOS_Data\Managed`
+- Also if needed `UnityEngine.dll` from `Windows64_EOS_Data\Managed`
 
-3) Write your plugin code. Example that displays a message on screen:
+3) Write your plugin code:
 
 // HelloWorldPlugin.cs - A simple example plugin.
 using UnityEngine;
@@ -24,20 +27,25 @@ public class HelloWorldPlugin : IModPlugin
 
     public void Start(IPluginContext ctx)
     {
-        // Attach a component under the per-plugin root provided by the loader
+        // Attach a simple behaviour under the per-plugin root.
         ctx.PluginRoot.AddComponent<HelloWorldComponent>();
         ctx.Log.Info("Hello World Plugin started.");
     }
 }
 
-// Unity MonoBehaviour that renders a label
+// Unity MonoBehaviour that renders a label over the screen
 public class HelloWorldComponent : MonoBehaviour
 {
     void OnGUI()
     {
         GUI.color = Color.white;
-        var style = new GUIStyle(GUI.skin.label) { fontSize = 20, alignment = TextAnchor.UpperCenter };
-        GUI.Label(new Rect(0, 10, Screen.width, 50), "Hello, World! The plugin is working!", style);
+        var style = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 20,
+            alignment = TextAnchor.UpperCenter
+        };
+        GUI.Label(new Rect(0, 10, Screen.width, 50),
+            "Hello, World! The plugin is working!", style);
     }
 }
 
@@ -68,5 +76,5 @@ Using Settings
 
 Tips
 - Avoid blocking the main thread during `Start`; use coroutines if needed (`ctx.StartCoroutine` or `ctx.RunNextFrame`)
-- Use `ctx.Log.Info("...")` for simple file logging (prefixed with your mod id)
+- Use `ctx.Log.Info("...")` for simple file logging, or advanced MMLog levels for diagnostics.
 - Reference Unity game assemblies from your local install if you build against them

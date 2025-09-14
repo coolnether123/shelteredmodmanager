@@ -28,6 +28,7 @@ namespace Manager
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(ManagerGUI));
             this.tabControl1 = new System.Windows.Forms.TabControl();
             this.tabPage1 = new System.Windows.Forms.TabPage();
@@ -81,6 +82,9 @@ namespace Manager
             this.btnMoveDownEnabled = new System.Windows.Forms.Button();
             this.btnSaveOrder = new System.Windows.Forms.Button();
             this.tabPage2 = new System.Windows.Forms.TabPage();
+            this.label15 = new System.Windows.Forms.Label();
+            this.linkLabel1 = new System.Windows.Forms.LinkLabel();
+            this.label14 = new System.Windows.Forms.Label();
             this.harmonyLink = new System.Windows.Forms.LinkLabel();
             this.label6 = new System.Windows.Forms.Label();
             this.label3 = new System.Windows.Forms.Label();
@@ -90,13 +94,14 @@ namespace Manager
             this.grpSettings = new System.Windows.Forms.GroupBox();
             this.chkDevMode = new System.Windows.Forms.CheckBox();
             this.grpDevSettings = new System.Windows.Forms.GroupBox();
-            this.lblLogLevel = new System.Windows.Forms.Label();
-            this.cmbLogLevel = new System.Windows.Forms.ComboBox();
+            this.chkVerboseLogging = new System.Windows.Forms.CheckBox();
             this.lblLogCategories = new System.Windows.Forms.Label();
             this.clbLogCategories = new System.Windows.Forms.CheckedListBox();
             this.chkIgnoreOrderChecks = new System.Windows.Forms.CheckBox();
+            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             this.pictureBox1 = new System.Windows.Forms.PictureBox();
             this.panelSettings = new System.Windows.Forms.Panel();
+            this.richTextBox1 = new System.Windows.Forms.RichTextBox();
             this.tabControl1.SuspendLayout();
             this.tabPage1.SuspendLayout();
             this.tabPage3.SuspendLayout();
@@ -678,13 +683,17 @@ namespace Manager
             this.btnSaveOrder.Name = "btnSaveOrder";
             this.btnSaveOrder.Size = new System.Drawing.Size(120, 35);
             this.btnSaveOrder.TabIndex = 8;
-            this.btnSaveOrder.Text = "Sort Order";
+            this.btnSaveOrder.Text = "Auto Sort";
             this.btnSaveOrder.UseVisualStyleBackColor = false;
             this.btnSaveOrder.Click += new System.EventHandler(this.btnSaveOrder_Click);
             // 
             // tabPage2
             // 
             this.tabPage2.BackColor = System.Drawing.SystemColors.Control;
+            this.tabPage2.Controls.Add(this.richTextBox1);
+            this.tabPage2.Controls.Add(this.label15);
+            this.tabPage2.Controls.Add(this.linkLabel1);
+            this.tabPage2.Controls.Add(this.label14);
             this.tabPage2.Controls.Add(this.harmonyLink);
             this.tabPage2.Controls.Add(this.label6);
             this.tabPage2.Controls.Add(this.label3);
@@ -698,16 +707,49 @@ namespace Manager
             this.tabPage2.TabIndex = 1;
             this.tabPage2.Text = "About";
             // 
+            // label15
+            // 
+            this.label15.AutoSize = true;
+            this.label15.Font = new System.Drawing.Font("Segoe UI", 14F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.label15.Location = new System.Drawing.Point(519, 109);
+            this.label15.Name = "label15";
+            this.label15.Size = new System.Drawing.Size(92, 32);
+            this.label15.TabIndex = 8;
+            this.label15.Text = "Legacy";
+            // 
+            // linkLabel1
+            // 
+            this.linkLabel1.AutoSize = true;
+            this.linkLabel1.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.linkLabel1.Location = new System.Drawing.Point(519, 60);
+            this.linkLabel1.Name = "linkLabel1";
+            this.linkLabel1.Size = new System.Drawing.Size(450, 23);
+            this.linkLabel1.TabIndex = 7;
+            this.linkLabel1.TabStop = true;
+            this.linkLabel1.Text = "https://github.com/coolnether123/shelteredmodmanager";
+            this.linkLabel1.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel1_LinkClicked_2);
+            // 
+            // label14
+            // 
+            this.label14.AutoSize = true;
+            this.label14.Font = new System.Drawing.Font("Segoe UI", 14F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.label14.Location = new System.Drawing.Point(519, 30);
+            this.label14.Name = "label14";
+            this.label14.Size = new System.Drawing.Size(91, 32);
+            this.label14.TabIndex = 6;
+            this.label14.Text = "Github";
+            this.label14.Click += new System.EventHandler(this.label14_Click);
+            // 
             // harmonyLink
             // 
             this.harmonyLink.AutoSize = true;
             this.harmonyLink.Font = new System.Drawing.Font("Segoe UI", 10F);
             this.harmonyLink.Location = new System.Drawing.Point(20, 200);
             this.harmonyLink.Name = "harmonyLink";
-            this.harmonyLink.Size = new System.Drawing.Size(324, 23);
+            this.harmonyLink.Size = new System.Drawing.Size(303, 23);
             this.harmonyLink.TabIndex = 5;
             this.harmonyLink.TabStop = true;
-            this.harmonyLink.Text = "?? https://github.com/pardeike/Harmony";
+            this.harmonyLink.Text = "https://github.com/pardeike/Harmony";
             this.harmonyLink.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel1_LinkClicked_1);
             // 
             // label6
@@ -746,10 +788,10 @@ namespace Manager
             this.doorstopLink.Font = new System.Drawing.Font("Segoe UI", 10F);
             this.doorstopLink.Location = new System.Drawing.Point(20, 130);
             this.doorstopLink.Name = "doorstopLink";
-            this.doorstopLink.Size = new System.Drawing.Size(384, 23);
+            this.doorstopLink.Size = new System.Drawing.Size(363, 23);
             this.doorstopLink.TabIndex = 1;
             this.doorstopLink.TabStop = true;
-            this.doorstopLink.Text = "?? https://github.com/NeighTools/UnityDoorstop";
+            this.doorstopLink.Text = "https://github.com/NeighTools/UnityDoorstop";
             this.doorstopLink.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel2_LinkClicked);
             // 
             // shelteredLink
@@ -758,10 +800,10 @@ namespace Manager
             this.shelteredLink.Font = new System.Drawing.Font("Segoe UI", 10F);
             this.shelteredLink.Location = new System.Drawing.Point(20, 60);
             this.shelteredLink.Name = "shelteredLink";
-            this.shelteredLink.Size = new System.Drawing.Size(462, 23);
+            this.shelteredLink.Size = new System.Drawing.Size(441, 23);
             this.shelteredLink.TabIndex = 0;
             this.shelteredLink.TabStop = true;
-            this.shelteredLink.Text = "?? https://store.steampowered.com/app/356040/Sheltered/";
+            this.shelteredLink.Text = "https://store.steampowered.com/app/356040/Sheltered/";
             this.shelteredLink.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel1_LinkClicked);
             // 
             // grpSettings
@@ -770,7 +812,7 @@ namespace Manager
             this.grpSettings.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
             this.grpSettings.Location = new System.Drawing.Point(369, 15);
             this.grpSettings.Name = "grpSettings";
-            this.grpSettings.Size = new System.Drawing.Size(294, 117);
+            this.grpSettings.Size = new System.Drawing.Size(294, 159);
             this.grpSettings.TabIndex = 1;
             this.grpSettings.TabStop = false;
             this.grpSettings.Text = "Mod Settings WIP";
@@ -789,41 +831,36 @@ namespace Manager
             // 
             // grpDevSettings
             // 
-            this.grpDevSettings.Controls.Add(this.lblLogLevel);
-            this.grpDevSettings.Controls.Add(this.cmbLogLevel);
+            this.grpDevSettings.Controls.Add(this.chkVerboseLogging);
             this.grpDevSettings.Controls.Add(this.lblLogCategories);
             this.grpDevSettings.Controls.Add(this.clbLogCategories);
             this.grpDevSettings.Controls.Add(this.chkIgnoreOrderChecks);
             this.grpDevSettings.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
-            this.grpDevSettings.Location = new System.Drawing.Point(825, 15);
+            this.grpDevSettings.Location = new System.Drawing.Point(707, 15);
             this.grpDevSettings.Name = "grpDevSettings";
-            this.grpDevSettings.Size = new System.Drawing.Size(563, 180);
+            this.grpDevSettings.Size = new System.Drawing.Size(684, 159);
             this.grpDevSettings.TabIndex = 2;
             this.grpDevSettings.TabStop = false;
             this.grpDevSettings.Text = "Developer Settings WIP";
             this.grpDevSettings.Visible = false;
             // 
-            // lblLogLevel
+            // chkVerboseLogging
             // 
-            this.lblLogLevel.AutoSize = true;
-            this.lblLogLevel.Location = new System.Drawing.Point(10, 25);
-            this.lblLogLevel.Name = "lblLogLevel";
-            this.lblLogLevel.Size = new System.Drawing.Size(91, 23);
-            this.lblLogLevel.TabIndex = 0;
-            this.lblLogLevel.Text = "Log Level:";
-            // 
-            // cmbLogLevel
-            // 
-            this.cmbLogLevel.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.cmbLogLevel.Location = new System.Drawing.Point(120, 22);
-            this.cmbLogLevel.Name = "cmbLogLevel";
-            this.cmbLogLevel.Size = new System.Drawing.Size(121, 31);
-            this.cmbLogLevel.TabIndex = 1;
+            this.chkVerboseLogging.AutoSize = true;
+            this.chkVerboseLogging.Location = new System.Drawing.Point(14, 26);
+            this.chkVerboseLogging.Name = "chkVerboseLogging";
+            this.chkVerboseLogging.Size = new System.Drawing.Size(296, 27);
+            this.chkVerboseLogging.TabIndex = 0;
+            this.chkVerboseLogging.Text = "Enable Verbose (Debug) Logging";
+            this.toolTip1.SetToolTip(this.chkVerboseLogging, "Generates a highly detailed mod_manager.log file with extra diagnostic informatio" +
+        "n. Recommended for troubleshooting or mod development.");
+            this.chkVerboseLogging.UseVisualStyleBackColor = true;
+            this.chkVerboseLogging.CheckedChanged += new System.EventHandler(this.chkVerboseLogging_CheckedChanged);
             // 
             // lblLogCategories
             // 
             this.lblLogCategories.AutoSize = true;
-            this.lblLogCategories.Location = new System.Drawing.Point(10, 55);
+            this.lblLogCategories.Location = new System.Drawing.Point(337, 15);
             this.lblLogCategories.Name = "lblLogCategories";
             this.lblLogCategories.Size = new System.Drawing.Size(135, 23);
             this.lblLogCategories.TabIndex = 2;
@@ -833,7 +870,7 @@ namespace Manager
             // 
             this.clbLogCategories.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.clbLogCategories.CheckOnClick = true;
-            this.clbLogCategories.Location = new System.Drawing.Point(151, 55);
+            this.clbLogCategories.Location = new System.Drawing.Point(478, 15);
             this.clbLogCategories.Name = "clbLogCategories";
             this.clbLogCategories.Size = new System.Drawing.Size(200, 102);
             this.clbLogCategories.TabIndex = 3;
@@ -841,7 +878,7 @@ namespace Manager
             // chkIgnoreOrderChecks
             // 
             this.chkIgnoreOrderChecks.AutoSize = true;
-            this.chkIgnoreOrderChecks.Location = new System.Drawing.Point(249, 12);
+            this.chkIgnoreOrderChecks.Location = new System.Drawing.Point(14, 59);
             this.chkIgnoreOrderChecks.Name = "chkIgnoreOrderChecks";
             this.chkIgnoreOrderChecks.Size = new System.Drawing.Size(275, 27);
             this.chkIgnoreOrderChecks.TabIndex = 4;
@@ -868,6 +905,23 @@ namespace Manager
             this.panelSettings.Name = "panelSettings";
             this.panelSettings.Size = new System.Drawing.Size(310, 90);
             this.panelSettings.TabIndex = 2;
+            // 
+            // richTextBox1
+            // 
+            this.richTextBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.richTextBox1.BackColor = System.Drawing.Color.White;
+            this.richTextBox1.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.richTextBox1.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.richTextBox1.Location = new System.Drawing.Point(523, 154);
+            this.richTextBox1.Name = "richTextBox1";
+            this.richTextBox1.ReadOnly = true;
+            this.richTextBox1.ScrollBars = System.Windows.Forms.RichTextBoxScrollBars.Vertical;
+            this.richTextBox1.Size = new System.Drawing.Size(601, 227);
+            this.richTextBox1.TabIndex = 9;
+            this.richTextBox1.Text = "This project is considered legacy because the original Sheltered mod-loader effort from 2019 was left unmaintained and never grew into an active modding framework. At the time, a Unicube developer (on Reddit as UnicubeSheltered) expressed interest in mod support, but no official framework was shipped. On the original mod-loader GitHub repo, Tiller4363 attempted in 2023 to contact benjaminfoo for guidance, but from what I can find, there was no reply and benjaminfoo deleted his reddit account.\r\n\r\nIn 2025, I (Coolnether123) discovered Sheltered and went looking for mods. The only thing I found was the abandoned mod loader, so I decided to pick it up and continue development to enable modding for the game.";
+            this.richTextBox1.TextChanged += new System.EventHandler(this.richTextBox1_TextChanged);
             // 
             // ManagerGUI
             // 
@@ -972,10 +1026,15 @@ namespace Manager
         private System.Windows.Forms.Label lblDependsOn;
         private System.Windows.Forms.Panel panelSettings;
         private System.Windows.Forms.GroupBox grpDevSettings;
-        private System.Windows.Forms.ComboBox cmbLogLevel;
+        private System.Windows.Forms.CheckBox chkVerboseLogging;
         private System.Windows.Forms.CheckedListBox clbLogCategories;
         private System.Windows.Forms.CheckBox chkIgnoreOrderChecks;
-        private System.Windows.Forms.Label lblLogLevel;
         private System.Windows.Forms.Label lblLogCategories;
+        private System.Windows.Forms.ToolTip toolTip1;
+        private System.Windows.Forms.LinkLabel linkLabel1;
+        private System.Windows.Forms.Label label14;
+        private System.Windows.Forms.Label label15;
+        private System.Windows.Forms.RichTextBox richTextBox1;
     }
 }
+

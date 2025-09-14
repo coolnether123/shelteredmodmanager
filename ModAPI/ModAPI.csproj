@@ -54,9 +54,12 @@
   <ItemGroup>
     <Compile Include="IPlugin.cs" />
     <Compile Include="MMLog.cs" />
+    <Compile Include="LoggerExtensions.cs" />
+    <Compile Include="ContextExtensions.cs" />
     <Compile Include="UIFlowGuard.cs" />
     <Compile Include="UIUtil.cs" />
     <Compile Include="Hooks\HarmonyBootstrap.cs" />
+    <Compile Include="Harmony\HarmonyUtil.cs" />
     <Compile Include="Inspector\HierarchyUtil.cs" />
     <Compile Include="Inspector\BoundsHighlighter.cs" />
     <Compile Include="Inspector\RuntimeInspector.cs" />
@@ -68,6 +71,8 @@
     <Compile Include="SceneUtil.cs" />
     <Compile Include="PluginManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Reflection\Safe.cs" />
+    <Compile Include="GameUtil.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

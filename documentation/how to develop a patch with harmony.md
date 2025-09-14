@@ -34,4 +34,8 @@ Tips
 - Use unique Harmony IDs (reverse domain style) to avoid conflicts
 - Use `Traverse` in Harmony for private field/property access when needed
 - Keep patches focused; log with `MMLog.Write("...")` during development
+- Harmony is powerful, but in v0.7 you don’t always need it:
+  - Use Harmony patches when you want to change game logic.
+  - Use UIUtil & context helpers to simply add UI elements.
+  
 - Read https://harmony.pardeike.net/ for more information

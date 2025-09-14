@@ -80,6 +80,22 @@ namespace ModAPI
             return FindByName(nameOrPath);
         }
 
+        /// <summary>
+        /// Finds a panel or logs a warning once per path via MMLog.WarnOnce.
+        /// Returns null if not found.
+        /// </summary>
+        public static GameObject FindPanelOrWarn(IPluginContext ctx, string nameOrPath)
+        {
+            var go = Find(nameOrPath);
+            if (go == null)
+            {
+                var key = "SceneUtil:FindPanel:" + (nameOrPath ?? "");
+                MMLog.WarnOnce(key, "Panel not found: '" + nameOrPath + "'");
+                try { if (ctx != null) ctx.Log.Warn("Panel not found: '" + nameOrPath + "'"); } catch { }
+            }
+            return go;
+        }
+
         // --- Internals -----------------------------------------------------
 
         private static IEnumerable<Transform> GetActiveSceneRoots()

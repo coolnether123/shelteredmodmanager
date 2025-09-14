@@ -72,9 +72,6 @@ public static class MMLog
     // Memory tracking
     private static long _lastMemoryUsage = 0;
     private static readonly List<long> _memoryHistory = new List<long>();
-
-    // WarnOnce keys
-    private static readonly HashSet<string> _warnOnceKeys = new HashSet<string>(StringComparer.Ordinal);
     #endregion
 
     #region Initialization
@@ -100,7 +97,7 @@ public static class MMLog
     {
         try
         {
-            var ini = System.IO.Path.Combine(System.IO.Path.Combine(Directory.GetCurrentDirectory(), "SMM"), "mod_manager.ini");
+            var ini = Path.Combine(Directory.GetCurrentDirectory(), "mod_manager.ini");
             string devMode = null, logLevel = null, logCategories = null;
             if (File.Exists(ini))
             {
@@ -245,20 +242,6 @@ public static class MMLog
     }
 
     /// <summary>
-    /// Log a warning once per unique key. Useful to avoid spamming logs.
-    /// </summary>
-    public static void WarnOnce(string key, string message)
-    {
-        if (string.IsNullOrEmpty(key)) key = "<empty>";
-        lock (_lock)
-        {
-            if (_warnOnceKeys.Contains(key)) return;
-            _warnOnceKeys.Add(key);
-        }
-        WriteInternal(LogLevel.Warning, LogCategory.General, "WarnOnce", message);
-    }
-
-    /// <summary>
     /// Enhanced exception logging with full details
     /// </summary>
     public static void WriteException(Exception ex, string context = "", LogCategory category = LogCategory.General)
@@ -381,7 +364,36 @@ public static class MMLog
         }
     }
 
-    // Removed WriteMemoryInfo
+    /// <summary>
+    /// Memory usage tracking
+    /// </summary>
+    {
+        try
+        {
+            var currentMemory = GC.GetTotalMemory(false);
+            var deltaMemory = currentMemory - _lastMemoryUsage;
+            _lastMemoryUsage = currentMemory;
+            _memoryHistory.Add(currentMemory);
+
+            // Keep only recent history
+            if (_memoryHistory.Count > 100)
+                _memoryHistory.RemoveAt(0);
+
+            var message = new StringBuilder();
+            message.AppendLine($"[MEMORY] {context}");
+            message.AppendLine($"Current: {FormatBytes(currentMemory)}");
+            message.AppendLine($"Delta: {FormatBytes(deltaMemory)}");
+            message.AppendLine($"GC Gen0: {GC.CollectionCount(0)}");
+            message.AppendLine($"GC Gen1: {GC.CollectionCount(1)}");
+            message.AppendLine($"GC Gen2: {GC.CollectionCount(2)}");
+
+            WriteInternal(LogLevel.Debug, LogCategory.Memory, "GC", message.ToString());
+        }
+        catch (Exception ex)
+        {
+            WriteInternal(LogLevel.Warning, LogCategory.Memory, "GC", $"Failed to collect memory info: {ex.Message}");
+        }
+    }
 
     /// <summary>
     /// Scene transition logging
@@ -422,9 +434,106 @@ public static class MMLog
         WriteInternal(LogLevel.Info, LogCategory.General, "Logger", $"Log level changed to: {level}");
     }
 
-    // Removed SetCategoryEnabled: categories controlled by Manager via INI
+    /// <summary>
+    /// Enable/disable specific log categories
+    /// </summary>
+    {
+        lock (_lock)
+        {
+            if (enabled)
+                _enabledCategories.Add(category);
+            else
+                _enabledCategories.Remove(category);
+        }
+        WriteInternal(LogLevel.Debug, LogCategory.General, "Logger", $"Category {category} {(enabled ? "enabled" : "disabled")}");
+    }
 
-    // Removed WriteSystemReport
+    /// <summary>
+    /// Generate comprehensive system report
+    /// </summary>
+    {
+        var report = new StringBuilder();
+        report.AppendLine("================================================================================");
+        report.AppendLine("                          SYSTEM DIAGNOSTIC REPORT");
+        report.AppendLine("================================================================================");
+        report.AppendLine($"Timestamp: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        report.AppendLine($"Uptime: {TimeSpan.FromMilliseconds(Environment.TickCount)}");
+        report.AppendLine();
+
+        // Unity Info
+        report.AppendLine("[UNITY ENVIRONMENT]");
+        report.AppendLine($"Version: {Application.unityVersion}");
+        report.AppendLine($"Platform: {Application.platform}");
+        report.AppendLine($"System Language: {Application.systemLanguage}");
+        report.AppendLine($"Target Frame Rate: {Application.targetFrameRate}");
+        report.AppendLine($"Running in Background: {Application.runInBackground}");
+        report.AppendLine();
+
+        // System Info
+        report.AppendLine("[SYSTEM INFORMATION]");
+        report.AppendLine($"OS: {SystemInfo.operatingSystem}");
+        report.AppendLine($"Processor: {SystemInfo.processorType} ({SystemInfo.processorCount} cores)");
+        report.AppendLine($"Memory: {SystemInfo.systemMemorySize} MB");
+        report.AppendLine($"Graphics: {SystemInfo.graphicsDeviceName}");
+        report.AppendLine($"Graphics Memory: {SystemInfo.graphicsMemorySize} MB");
+        report.AppendLine();
+
+        // Memory Stats
+        report.AppendLine("[MEMORY STATISTICS]");
+        report.AppendLine($"Total Memory: {FormatBytes(GC.GetTotalMemory(false))}");
+        report.AppendLine($"GC Collections - Gen0: {GC.CollectionCount(0)}, Gen1: {GC.CollectionCount(1)}, Gen2: {GC.CollectionCount(2)}");
+        report.AppendLine();
+
+        // Loaded Assemblies
+        report.AppendLine("[LOADED ASSEMBLIES]");
+        var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+        foreach (var assembly in assemblies)
+        {
+            try
+            {
+                report.AppendLine($"  {assembly.GetName().Name} v{assembly.GetName().Version} ({SafeGetLocation(assembly)})");
+            }
+            catch
+            {
+                report.AppendLine($"  {assembly.GetName().Name} (location unavailable)");
+            }
+        }
+        report.AppendLine();
+
+        // Performance Summary
+        if (_performanceHistory.Count > 0)
+        {
+            report.AppendLine("[PERFORMANCE HISTORY]");
+            foreach (var kvp in _performanceHistory)
+            {
+                var times = kvp.Value;
+                if (times.Count > 0)
+                {
+                    var avg = times.Sum() / (double)times.Count;
+                    var max = times.Max();
+                    var min = times.Min();
+                    report.AppendLine($"  {kvp.Key}: Avg={avg:F1}ms, Min={min}ms, Max={max}ms, Samples={times.Count}");
+                }
+            }
+            report.AppendLine();
+        }
+
+        // Mod Statistics
+        if (_modLogCounts.Count > 0)
+        {
+            report.AppendLine("[MOD LOG STATISTICS]");
+            var sortedMods = _modLogCounts.OrderByDescending(x => x.Value).ToArray();
+            foreach (var kvp in sortedMods)
+            {
+                report.AppendLine($"  {kvp.Key}: {kvp.Value} log entries");
+            }
+            report.AppendLine();
+        }
+
+        report.AppendLine("================================================================================");
+
+        WriteInternal(LogLevel.Info, LogCategory.General, "System", report.ToString());
+    }
     #endregion
 
     #region Internal Methods
@@ -673,19 +782,21 @@ public static class MMLog
         WriteInternal(LogLevel.Error, LogCategory.Plugin, "PluginManager", message.ToString());
     }
 
-    // Removed DumpLoggerState
+    /// <summary>
+    /// Debug method to dump current logger state
+    /// </summary>
+    {
+        var state = new StringBuilder();
+        state.AppendLine("[LOGGER STATE]");
+        state.AppendLine($"Min Level: {_minLevel}");
+        state.AppendLine($"Enabled Categories: {string.Join(", ", _enabledCategories.Select(x => x.ToString()).ToArray())}");
+        state.AppendLine($"Log File Size: {FormatBytes(_logFileSize)}");
+        state.AppendLine($"Active Timers: {_activeTimers.Count}");
+        state.AppendLine($"Performance History Entries: {_performanceHistory.Count}");
+        state.AppendLine($"Mod Log Counts: {_modLogCounts.Count}");
+
+        WriteInternal(LogLevel.Debug, LogCategory.General, "Logger", state.ToString());
+    }
     #endregion
-
-    // Disposable scope for measuring operations safely
-    public sealed class MeasureScope : IDisposable
-    {
-        private readonly string _name; private readonly string _details; private bool _stopped;
-        public MeasureScope(string name, string details = "") { _name = name; _details = details; StartTimer(name); }
-        public void Dispose() { if (!_stopped) { StopTimer(_name, _details); _stopped = true; } }
-    }
-
-    public static MeasureScope Measure(string operationName, string details = "")
-    {
-        return new MeasureScope(operationName, details);
-    }
 }
+
