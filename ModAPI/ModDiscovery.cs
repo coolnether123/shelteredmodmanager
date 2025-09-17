@@ -98,41 +98,10 @@ public static class ModDiscovery
         return results;
     }
 
-    // Loads assemblies for a given mod entry, using simple TFM preference
-    // Coolnether123
-    public static List<Assembly> LoadAssemblies(ModEntry entry)
-    {
-        var assemblies = new List<Assembly>();
-        try
+    catch (Exception ex)
         {
-            var asmPath = SelectAssembliesPath(entry.AssembliesPath);
-            if (asmPath == null)
-            {
-                MMLog.Write("No Assemblies found for mod: " + entry.Name + " (" + entry.Id + ")");
-                return assemblies;
-            }
-
-            foreach (var dll in Directory.GetFiles(asmPath, "*.dll"))
-            {
-                try
-                {
-                    MMLog.Write("Loading mod assembly: " + dll);
-                    var asm = Assembly.LoadFile(dll);
-                    assemblies.Add(asm);
-                    try { ModRegistry.RegisterAssemblyForMod(asm, entry); } catch { }
-                }
-                catch (Exception ex)
-                {
-                    MMLog.Write("Failed to load assembly '" + dll + "': " + ex.Message);
-                }
-            }
+            MMLog.Write("Discovery error: " + ex.Message);
         }
-        catch (Exception ex)
-        {
-            MMLog.Write("Assembly load error for mod '" + entry.Id + "': " + ex.Message);
-        }
-        return assemblies;
-    }
 
     // Chooses the assemblies folder either directly under Assemblies or a TFM subfolder
     // For Sheltered/.NET 3.5, prefer net35 if present; else fallback to Assemblies root.

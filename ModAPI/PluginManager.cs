@@ -8,37 +8,20 @@ using UnityEngine;
 
 using static LoadOrderResolver;
 
-/**
-* Original Author: benjaminfoo
-* Maintainer: coolnether123
-* See: https://github.com/benjaminfoo/shelteredmodmanager
-* See: https://code.msdn.microsoft.com/windowsdesktop/Creating-a-simple-plugin-b6174b62
-* 
-* 
-* This class handles the overall plugin-management (like loading and executing them)
-* 
-* BREAKING CHANGE (WIP): Updated to the new context-first plugin API (IModPlugin et al.).
-*  - Each plugin now gets a dedicated parent GameObject for clean teardown.
-*  - Safe per-plugin try/catch so one bad plugin won't break others.
-*  - Optional Update/Shutdown/Scene event hooks via IModUpdate/IModShutdown/IModSceneEvents.
-*  - Honors loadorder.json 'order' and 'enabled' flags before loading.
-*  - Emits clearer diagnostics via a per-mod prefixed logger.
-*  (Coolnether123)
-*/
 public class PluginManager
 {
     private static PluginManager instance;
 
-    private readonly List<IModPlugin> _plugins;          // all loaded plugin instances
-    private readonly List<IModUpdate> _updates;          // plugins that implement IModUpdate
-    private readonly List<IModShutdown> _shutdown;       // plugins that implement IModShutdown
-    private readonly List<IModSceneEvents> _sceneEvents; // plugins that implement IModSceneEvents
+    private readonly List<IModPlugin> _plugins;
+    private readonly List<IModUpdate> _updates;
+    private readonly List<IModShutdown> _shutdown;
+    private readonly List<IModSceneEvents> _sceneEvents;
 
-    private GameObject _loaderRoot;                      // global host object
-    private string _gameRoot;                            // <GameRoot>
-    private string _modsRoot;                            // <GameRoot>/mods
+    private GameObject _loaderRoot;
+    private string _gameRoot;
+    private string _modsRoot;
 
-    public static List<ModEntry> LoadedMods { get; private set; } // Expose loaded mods
+    public static List<ModEntry> LoadedMods { get; private set; }
 
     private PluginManager()
     {
@@ -65,27 +48,19 @@ public class PluginManager
 
     public void loadAssemblies(GameObject doorstepGameObject)
     {
-        
         try { MMLog.WriteDebug("PluginManager: calling HarmonyBootstrap.EnsurePatched()"); ModAPI.Hooks.HarmonyBootstrap.EnsurePatched(); }
         catch (Exception ex) { MMLog.Write("PluginManager: EnsurePatched failed: " + ex.Message); }
 
-        // Build absolute path to the mods directory (from game's data folder)
-        _gameRoot = Directory.GetParent(Application.dataPath).FullName;    // same as before
-        _modsRoot = Path.Combine(_gameRoot, "mods");                       // consistent naming
-        _loaderRoot = doorstepGameObject;                                  // keep a handle for context
+        _gameRoot = Directory.GetParent(Application.dataPath).FullName;
+        _modsRoot = Path.Combine(_gameRoot, "mods");
+        _loaderRoot = doorstepGameObject;
 
-        var assemblies = new List<Assembly>();                             // collect candidate assemblies
-        var activatedTypes = new HashSet<Type>(); // track explicit entry types  Coolnether123
+        var assemblies = new List<Assembly>();
+        var activatedTypes = new HashSet<Type>();
 
-        // Read load order file (unchanged input contract)
         var processedLof = LoadOrderResolver.ReadLoadOrderFile(_modsRoot);
-
-        // Discover all mods (About.json-driven)
         var discovered = ModDiscovery.DiscoverAllMods();
 
-        // Enabled mods filtering:
-        // Behavior change: If loadorder.json exists, treat its 'order' as a strict allow-list (even if empty).
-        // If no loadorder.json is present, load no mods by default to avoid surprising global enable.
         try
         {
             var lofPath = Path.Combine(_modsRoot, "loadorder.json");
@@ -108,24 +83,21 @@ public class PluginManager
                 discovered = new List<ModEntry>();
             }
         }
-        catch { }
+        catch (Exception ex) { MMLog.WarnOnce("PluginManager.loadAssemblies.Filter", "Error filtering mods: " + ex.Message); }
 
-        // Resolve dependency-aware load order
         var resolution = LoadOrderResolver.Resolve(discovered, processedLof.Order ?? new string[0]);
-        var orderedMods = resolution.Mods; // already sorted
-        LoadedMods = orderedMods; // Populate the new static property
+        var orderedMods = resolution.Mods;
+        LoadedMods = orderedMods;
         if (resolution.MissingHardDependencies != null && resolution.MissingHardDependencies.Count > 0)
         {
             foreach (var e in resolution.MissingHardDependencies)
                 MMLog.Write("[loader] dependency error: " + e);
         }
 
-        // Attach a small runner to drive updates and scene events (once)
         var runner = _loaderRoot.GetComponent<PluginRunner>();
         if (runner == null) runner = _loaderRoot.AddComponent<PluginRunner>();
-        runner.Manager = this; // set back-reference // Coolnether123
+        runner.Manager = this;
 
-        // Attach runtime inspector + highlighter (once)
         try
         {
             if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeInspector>() == null)
@@ -133,9 +105,8 @@ public class PluginManager
             if (_loaderRoot.GetComponent<ModAPI.Inspector.BoundsHighlighter>() == null)
                 _loaderRoot.AddComponent<ModAPI.Inspector.BoundsHighlighter>();
         }
-        catch { }
+        catch (Exception ex) { MMLog.WarnOnce("PluginManager.loadAssemblies.Inspector", "Error attaching inspector: " + ex.Message); }
 
-        // Load and start plugins mod-by-mod in resolved order
         foreach (var entry in orderedMods)
         {
             List<Assembly> modAssemblies = null;
@@ -171,7 +142,6 @@ public class PluginManager
                         var ctx = BuildContextFor(type, pluginRoot);
                         _plugins.Add(plugin);
 
-                        // Optional capability caches
                         var u = plugin as IModUpdate; if (u != null) _updates.Add(u);
                         var s = plugin as IModShutdown; if (s != null) _shutdown.Add(s);
                         var se = plugin as IModSceneEvents; if (se != null) _sceneEvents.Add(se);
@@ -190,11 +160,9 @@ public class PluginManager
             }
         }
 
-        // Final load summary (simple)
         MMLog.Write($"[loader] Loaded {_plugins.Count} plugin(s). Updates={_updates.Count}, Shutdown={_shutdown.Count}, SceneEvents={_sceneEvents.Count}");
     }
 
-    // Schedules an action on the next frame via the runner
     internal void EnqueueNextFrame(Action a)
     {
         var runner = _loaderRoot != null ? _loaderRoot.GetComponent<PluginRunner>() : null;
@@ -205,7 +173,6 @@ public class PluginManager
         }
     }
 
-    // Dispatch called by PluginRunner on Unity's Update()
     internal void OnUnityUpdate()
     {
         for (int i = 0; i < _updates.Count; i++)
@@ -215,7 +182,6 @@ public class PluginManager
         }
     }
 
-    // Scene events forwarded by PluginRunner
     internal void OnSceneLoaded(string name)
     {
         for (int i = 0; i < _sceneEvents.Count; i++)
@@ -234,7 +200,6 @@ public class PluginManager
         }
     }
 
-    // Graceful shutdown hook you can call from the host on exit if desired.
     public void ShutdownAll()
     {
         for (int i = _shutdown.Count - 1; i >= 0; i--)
@@ -243,8 +208,6 @@ public class PluginManager
             catch (Exception ex) { MMLog.Write($"[loader] Shutdown() failed: {ex.Message}"); }
         }
     }
-
-    // --- Helpers ---------------------------------------------------------
 
     private string SafeModIdFor(Type type)
     {
@@ -257,17 +220,15 @@ public class PluginManager
     private IPluginContext BuildContextFor(Type type, GameObject pluginRoot)
     {
         ModEntry entry = null;
-        ModRegistry.TryGetModByAssembly(type.Assembly, out entry);  // prefer registry
+        ModRegistry.TryGetModByAssembly(type.Assembly, out entry);
 
-        // Fallback best-effort root (walk up to find About/)
         string asmPath = SafeAssemblyPath(type.Assembly);
         string modRoot = entry != null ? entry.RootPath : ProbeModRootFromAssembly(asmPath);
 
-        // Compose logger and settings
         string modId = entry != null && !string.IsNullOrEmpty(entry.Id) ? entry.Id : (type.Namespace ?? type.Name);
         var log = new PrefixedLogger(modId);
         ModSettings settings = null;
-        try { settings = ModSettings.ForAssembly(type.Assembly); } catch { settings = null; }
+        try { settings = ModSettings.ForAssembly(type.Assembly); } catch (Exception ex) { MMLog.WarnOnce("PluginManager.BuildContextFor", "Error creating settings: " + ex.Message); settings = null; }
 
         return new PluginContextImpl
         {
@@ -284,7 +245,8 @@ public class PluginManager
 
     private static string SafeAssemblyPath(Assembly asm)
     {
-        try { return asm != null ? asm.Location : null; } catch { return null; }
+        try { return asm != null ? asm.Location : null; }
+        catch (Exception ex) { MMLog.WarnOnce("PluginManager.SafeAssemblyPath", "Error getting assembly path: " + ex.Message); return null; }
     }
 
     private static string ProbeModRootFromAssembly(string asmPath)
@@ -299,7 +261,7 @@ public class PluginManager
                 if (Directory.Exists(aboutDir)) return cursor.FullName;
             }
         }
-        catch { }
+        catch (Exception ex) { MMLog.WarnOnce("PluginManager.ProbeModRoot", "Error probing for mod root: " + ex.Message); }
         return null;
     }
 
@@ -317,39 +279,33 @@ public class PluginManager
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { MMLog.WarnOnce("PluginManager.SafeEnumerateAssemblies", "Error enumerating assemblies: " + ex.Message); }
         return list;
     }
 
     private static Assembly SafeLoadAssembly(string path)
     {
-        try { return Assembly.LoadFrom(path); } catch { return null; }
+        try { return Assembly.LoadFrom(path); } catch (Exception ex) { MMLog.WarnOnce("PluginManager.SafeLoadAssembly", "Error loading assembly: " + ex.Message); return null; }
     }
 
-    // Resolves an explicitly declared entryType (About.json) safely
     private static Type ResolveType(string typeName)
     {
         if (string.IsNullOrEmpty(typeName)) return null;
-        try { return Type.GetType(typeName, throwOnError: false); } catch { return null; }
+        try { return Type.GetType(typeName, throwOnError: false); }
+        catch (Exception ex) { MMLog.WarnOnce("PluginManager.ResolveType", "Error resolving type: " + ex.Message); return null; }
     }
 }
 
-// Small runner to drive Update() and scene events for plugins.
-// Attached once to the loader's root GameObject. (New) (Coolnether123)
 public class PluginRunner : MonoBehaviour
 {
     public static bool IsModernUnity { get; private set; }
     private readonly Queue<Action> _nextFrame = new Queue<Action>();
     public PluginManager Manager;
     private bool _useModernApi = false;
-    private string _currentSceneName; // For legacy unload emulation
+    private string _currentSceneName;
 
     public event Action<string> SceneLoaded;
     public event Action<string> SceneUnloaded;
-
-    // Delegate signatures must match the real events
-    private delegate void SceneLoadedHandler(object scene, object mode);
-    private delegate void SceneUnloadedHandler(object scene);
 
     private object _sceneLoadedDelegate;
     private object _sceneUnloadedDelegate;
@@ -366,7 +322,6 @@ public class PluginRunner : MonoBehaviour
     {
         try
         {
-            // Use reflection to see if the modern SceneManager exists
             var sceneManagerType = Type.GetType("UnityEngine.SceneManagement.SceneManager, UnityEngine");
             if (sceneManagerType == null) throw new Exception("Modern SceneManager not found.");
 
@@ -374,11 +329,8 @@ public class PluginRunner : MonoBehaviour
             if (sceneLoadedEvent == null) throw new Exception("sceneLoaded event not found.");
 
             _sceneLoadedDelegate = Delegate.CreateDelegate(sceneLoadedEvent.EventHandlerType, this, GetType().GetMethod("OnSceneLoadedModern", BindingFlags.NonPublic | BindingFlags.Instance));
-            
-            // Subscribe to the event using reflection
             sceneLoadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneLoadedDelegate });
 
-            // Do the same for sceneUnloaded
             var sceneUnloadedEvent = sceneManagerType.GetEvent("sceneUnloaded");
             if(sceneUnloadedEvent != null)
             {
@@ -390,12 +342,11 @@ public class PluginRunner : MonoBehaviour
             _useModernApi = true;
             MMLog.Write("[PluginRunner] Using modern SceneManager events (Unity 5.4+).");
 
-            // Manually trigger for the already loaded scene
             var activeScene = sceneManagerType.GetProperty("activeScene").GetValue(null, null);
             var isLoadedProp = activeScene.GetType().GetProperty("isLoaded");
             if((bool)isLoadedProp.GetValue(activeScene, null))
             {
-                OnSceneLoadedModern(activeScene, null); // Mode is not essential here
+                OnSceneLoadedModern(activeScene, null);
             }
         }
         catch (Exception)
@@ -403,7 +354,6 @@ public class PluginRunner : MonoBehaviour
             IsModernUnity = false;
             MMLog.Write("[PluginRunner] Modern SceneManager not found. Using legacy OnLevelWasLoaded (Unity 5.3).");
             
-            // Manually trigger for legacy
             _currentSceneName = Application.loadedLevelName;
             if (Manager != null && !string.IsNullOrEmpty(_currentSceneName))
             {
@@ -429,11 +379,10 @@ public class PluginRunner : MonoBehaviour
                     sceneUnloadedEvent.GetRemoveMethod().Invoke(null, new object[] { _sceneUnloadedDelegate });
                 }
             }
-            catch {}
+            catch (Exception ex) { MMLog.WarnOnce("PluginRunner.OnDestroy", "Error unsubscribing from scene events: " + ex.Message); }
         }
     }
 
-    // --- MODERN API HANDLERS (called via reflection) ---
     private void OnSceneLoadedModern(object scene, object mode)
     {
         if (Manager != null)
@@ -456,7 +405,6 @@ public class PluginRunner : MonoBehaviour
         }
     }
 
-    // --- LEGACY API PATH ---
     void OnLevelWasLoaded(int level)
     {
         if (!_useModernApi)
@@ -490,7 +438,6 @@ public class PluginRunner : MonoBehaviour
     }
 }
 
-// Adapter that prefixes log lines with the mod id. (New) (Coolnether123)
 internal class PrefixedLogger : IModLogger
 {
     private readonly string _prefix;
@@ -501,7 +448,6 @@ internal class PrefixedLogger : IModLogger
     public void Error(string message) { MMLog.Write($"[{_prefix}] ERROR: {message}"); }
 }
 
-// Private concrete context passed to plugins. (New) (Coolnether123)
 internal class PluginContextImpl : IPluginContext
 {
     public GameObject LoaderRoot { get; set; }
@@ -513,7 +459,7 @@ internal class PluginContextImpl : IPluginContext
     public string ModsRoot { get; set; }
     public bool IsModernUnity { get { return PluginRunner.IsModernUnity; } }
 
-    public Action<Action> Scheduler; // set by PluginManager
+    public Action<Action> Scheduler;
 
     public void RunNextFrame(Action action) { Scheduler?.Invoke(action); }
     public Coroutine StartCoroutine(IEnumerator routine)
@@ -521,16 +467,12 @@ internal class PluginContextImpl : IPluginContext
         return LoaderRoot != null ? LoaderRoot.GetComponent<PluginRunner>().StartCoroutine(routine) : null;
     }
 
-    // Locates a panel by name or path and returns its GameObject.
-    // - name: first active GameObject matching by name (breadth-first)
-    // - path: slash-separated from a root, e.g., "UIRoot/ExpeditionMainPanelNew"
     public GameObject FindPanel(string nameOrPath)
     {
         try { return ModAPI.SceneUtil.Find(nameOrPath); }
-        catch { return null; }
+        catch (Exception ex) { MMLog.WarnOnce("PluginContextImpl.FindPanel", "Error finding panel: " + ex.Message); return null; }
     }
 
-    // Adds (or gets) a component on the target panel. If the panel is not found, returns null.
     public T AddComponentToPanel<T>(string nameOrPath) where T : Component
     {
         var go = FindPanel(nameOrPath);

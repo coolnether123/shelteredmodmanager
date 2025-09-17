@@ -64,7 +64,9 @@ namespace ModAPI
                 }
                 return list.Count > 0;
             }
-            catch { return false; }
+            catch (Exception ex) { MMLog.WarnOnce("GameUtil.TryGetMembers", "Error accessing party members: " + ex.Message); return false; }
         }
     }
+}
+ }
 }

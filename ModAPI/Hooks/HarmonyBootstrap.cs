@@ -45,7 +45,7 @@ namespace ModAPI.Hooks
                 var t = Type.GetType("HarmonyLib.Harmony, 0Harmony", throwOnError: false);
                 return t != null;
             }
-            catch { return false; }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyBootstrap.IsHarmonyAvailable", "Error checking for Harmony: " + ex.Message); return false; }
         }
 
         private static void TryPatch()
@@ -68,15 +68,12 @@ namespace ModAPI.Hooks
                             var who = mb is MethodBase ? ((MethodBase)mb).DeclaringType.FullName + "." + ((MethodBase)mb).Name : (mb != null ? mb.ToString() : "<null>");
                             MMLog.WriteDebug("[HarmonyBootstrap] " + who + " -> " + reason);
                         }
-                        catch { }
+                        catch (Exception ex) { MMLog.WarnOnce("HarmonyBootstrap.OnResult", "Error in OnResult callback: " + ex.Message); }
                     }
                 };
 
                 ModAPI.Harmony.HarmonyUtil.PatchAll(harmony, asm, opts);
                 _installed = true;
-
-                // --- DIAGNOSTIC --- 
-                
 
                 MMLog.WriteDebug("HarmonyBootstrap: ModAPI hooks patched");
                 if (_runnerGo != null) UnityEngine.Object.Destroy(_runnerGo);
@@ -109,7 +106,7 @@ namespace ModAPI.Hooks
                     if (s == "0" || s == "no" || s == "n" || s == "off") return false;
                 }
             }
-            catch { }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyBootstrap.ReadManagerBool", "Error reading mod_manager.ini: " + ex.Message); }
             return fallback;
         }
 
@@ -126,7 +123,7 @@ namespace ModAPI.Hooks
     {
         private float _timer;
         private int _attempts;
-        private const int MaxAttempts = 60; // ~30s at 0.5s interval
+        private const int MaxAttempts = 60;
 
         private void Update()
         {

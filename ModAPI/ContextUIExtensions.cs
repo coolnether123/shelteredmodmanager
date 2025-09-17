@@ -20,7 +20,7 @@ public static class ContextUIExtensions
             while (Time.realtimeSinceStartup < deadline)
             {
                 GameObject go = null;
-                try { go = ModAPI.SceneUtil.Find(nameOrPath); } catch { }
+                try { go = ModAPI.SceneUtil.Find(nameOrPath); } catch (Exception ex) { MMLog.WarnOnce("ContextUIExtensions.RunWhenPanelVisible.Find", "SceneUtil.Find failed: " + ex.Message); }
                 if (go != null && go.activeInHierarchy)
                 {
                     try { action(go); }

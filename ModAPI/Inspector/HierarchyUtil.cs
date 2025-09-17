@@ -11,7 +11,6 @@ namespace ModAPI.Inspector
             var roots = new List<Transform>();
             try
             {
-                // Using Transform enumeration is faster/safer in older Unity versions
                 var all = UnityEngine.Object.FindObjectsOfType<Transform>();
                 for (int i = 0; i < all.Length; i++)
                 {
@@ -19,10 +18,9 @@ namespace ModAPI.Inspector
                     if (t != null && t.parent == null && t.gameObject.activeInHierarchy)
                         roots.Add(t);
                 }
-                // Sort by name for stability
                 roots.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase));
             }
-            catch { }
+            catch (Exception ex) { MMLog.WarnOnce("HierarchyUtil.GetRootTransforms", "Error getting root transforms: " + ex.Message); }
             return roots;
         }
 
@@ -57,7 +55,7 @@ namespace ModAPI.Inspector
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { MMLog.WarnOnce("HierarchyUtil.ComputeHierarchyRendererBounds", "Error computing bounds: " + ex.Message); }
             return combined;
         }
 
@@ -74,4 +72,3 @@ namespace ModAPI.Inspector
         }
     }
 }
-
