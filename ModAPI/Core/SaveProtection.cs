@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using HarmonyLib;
 using UnityEngine;
 
@@ -81,7 +82,7 @@ namespace ModAPI.Core
         internal static class SaveGamePatch
         {
             // Postfix to inject mod data after game saves its own data
-            static void Postfix(object __instance, SaveManager.SaveType type) // __instance is SaveManager
+            public static void Postfix(object __instance, SaveManager.SaveType type) // __instance is SaveManager
             {
                 // Only inject for actual game slots, not GlobalData or Invalid
                 if (type == SaveManager.SaveType.GlobalData || type == SaveManager.SaveType.Invalid) return;
@@ -116,7 +117,7 @@ namespace ModAPI.Core
             private static FieldInfo _pendingModMismatchResolutionField;
 
             // Prefix to read mod data and potentially pause loading
-            static bool Prefix(object __instance) // __instance is SaveManager
+            public static bool Prefix(object __instance) // __instance is SaveManager
             {
                 // Ensure the flag field is accessible
                 if (_pendingModMismatchResolutionField == null)
@@ -177,50 +178,35 @@ namespace ModAPI.Core
                     if (!string.IsNullOrEmpty(mismatchMessage))
                     {
                         MMLog.WriteWarning("Mod Save Mismatch Detected! Displaying alert.");
-                        // Set flag to pause loading
-                        if (_pendingModMismatchResolutionField != null)
-                        {
-                            _pendingModMismatchResolutionField.SetValue(__instance, true);
-                        }
                         
-                        // Display MessageBox
-                        // We need to use the game's MessageBox.Show method
-                        // Assuming MessageBox.Show(string title, string message, MessageBoxButtons buttons, MessageBoxResponse callback)
-                        // We need to find the MessageBox class and its Show method
                         Type messageBoxType = AccessTools.TypeByName("MessageBox");
                         if (messageBoxType != null)
                         {
-                            // Find the MessageBoxButtons enum
                             Type messageBoxButtonsType = AccessTools.Inner(messageBoxType, "MessageBoxButtons");
                             object yesNoButtons = Enum.Parse(messageBoxButtonsType, "YesNo_Buttons");
-
-                            // Find the MessageBoxResponse delegate
                             Type messageBoxResponseType = AccessTools.Inner(messageBoxType, "MessageBoxResponse");
-                            
-                            // Create a delegate for our callback method
-                            // This is tricky as it needs to be a static method that matches the delegate signature
-                            // MessageBoxResponse is delegate void MessageBoxResponse(int response);
                             MethodInfo callbackMethod = AccessTools.Method(typeof(SaveProtectionPatches.LoadGamePatch), nameof(SaveProtectionPatches.LoadGamePatch.OnMessageBoxResponse));
                             Delegate callbackDelegate = Delegate.CreateDelegate(messageBoxResponseType, callbackMethod);
-
-                            // Find the Show method
                             MethodInfo showMethod = AccessTools.Method(messageBoxType, "Show", new Type[] { messageBoxButtonsType, typeof(string), messageBoxResponseType });
+
                             if (showMethod != null)
                             {
+                                if (_pendingModMismatchResolutionField != null)
+                                {
+                                    _pendingModMismatchResolutionField.SetValue(__instance, true);
+                                }
                                 showMethod.Invoke(null, new object[] { yesNoButtons, mismatchMessage, callbackDelegate });
+                                return false; // Pause loading
                             }
                             else
                             {
-                                MMLog.WriteError("LoadGamePatch: MessageBox.Show method not found with expected signature.");
-                                ModAPI.UI.ModSaveAlertManager.Instance.ShowMismatchAlert(mismatchMessage); // Fallback to simple alert
+                                MMLog.WriteError("LoadGamePatch: MessageBox.Show method not found with expected signature. Save will load automatically.");
                             }
                         }
                         else
                         {
-                            MMLog.WriteError("LoadGamePatch: MessageBox type not found. Falling back to simple alert.");
-                            ModAPI.UI.ModSaveAlertManager.Instance.ShowMismatchAlert(mismatchMessage); // Fallback to simple alert
+                            MMLog.WriteError("LoadGamePatch: MessageBox type not found. Save will load automatically.");
                         }
-                        return false; // Pause loading
                     }
                 }
                 catch (Exception ex)
@@ -231,7 +217,7 @@ namespace ModAPI.Core
             }
 
             // Callback for MessageBox response
-            static void OnMessageBoxResponse(int response)
+            public static void OnMessageBoxResponse(int response)
             {
                 // Get SaveManager instance
                 SaveManager saveManager = SaveManager.instance;
@@ -252,17 +238,17 @@ namespace ModAPI.Core
                     MMLog.WriteDebug("LoadGamePatch: User chose to load save despite mismatch.");
                     // Resume loading by setting state and letting Update() continue
                     // This is a bit of a hack, but should re-enter the state machine
-                    AccessTools.Method(typeof(SaveManager), "SetState").Invoke(saveManager, new object[] { (SaveManager.SaveState)Enum.Parse(typeof(SaveManager.SaveState), "LoadingData") });
+                    AccessTools.Method(typeof(SaveManager), "SetState").Invoke(saveManager, new object[] { Enum.Parse(AccessTools.Inner(typeof(SaveManager), "SaveState"), "LoadingData") });
                 }
                 else // No (Cancel Load)
                 {
                     MMLog.WriteDebug("LoadGamePatch: User chose to cancel load due to mismatch.");
                     // Transition to Idle state and go back to main menu
-                    AccessTools.Method(typeof(SaveManager), "SetState").Invoke(saveManager, new object[] { (SaveManager.SaveState)Enum.Parse(typeof(SaveManager.SaveState), "Idle") });
+                    AccessTools.Method(typeof(SaveManager), "SetState").Invoke(saveManager, new object[] { Enum.Parse(AccessTools.Inner(typeof(SaveManager), "SaveState"), "Idle") });
                     // Go back to main menu/slot selection
                     if (UIPanelManager.instance != null)
                     {
-                        UIPanelManager.instance.PopPanel(UIPanelManager.instance.CurrentPanel); // Pop current panel (likely SlotSelectionPanel)
+                        UIPanelManager.instance.PopPanel(AccessTools.Property(typeof(UIPanelManager), "CurrentPanel").GetValue(UIPanelManager.instance, null) as BasePanel); // Pop current panel (likely SlotSelectionPanel)
                         LoadingScreen.Instance.ShowLoadingScreen("MenuScene"); // Go to main menu scene
                     }
                 }
