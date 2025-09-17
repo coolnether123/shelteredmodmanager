@@ -46,7 +46,7 @@ namespace ModAPI
                 parties = map;
                 return map.Count > 0;
             }
-            catch { parties = (IDictionary<int, ExplorationParty>)new Dictionary<int, ExplorationParty>(); return false; }
+            catch (Exception ex) { MMLog.WarnOnce("GameUtil.TryGetParties", "Error getting exploration parties: " + ex.Message); parties = (IDictionary<int, ExplorationParty>)new Dictionary<int, ExplorationParty>(); return false; }
         }
 
         public static bool TryGetMembers(ExplorationParty party, out IList<PartyMember> members)
@@ -67,6 +67,4 @@ namespace ModAPI
             catch (Exception ex) { MMLog.WarnOnce("GameUtil.TryGetMembers", "Error accessing party members: " + ex.Message); return false; }
         }
     }
-}
- }
 }

@@ -3,7 +3,7 @@ using HarmonyLib;
 using UnityEngine;
 
 
-namespace ModAPI.Hooks
+namespace ModAPI.Harmony
 {
     [HarmonyPatch(typeof(MainMenuPanel), "OnShow")]
     internal static class MainMenuPanel_OnShow_ResetProxyState

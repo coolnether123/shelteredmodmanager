@@ -67,6 +67,8 @@ public static class ContextExtensions
             {
                 if (ModAPI.SceneUtil.GetCurrentSceneName() == sceneName)
                 {
+                    // If the target scene is already loaded and active, run the action immediately (or next frame)
+                    // without waiting for a scene load event, optimizing execution.
                     StartCoroutine(RunNextFrame(action));
                     return;
                 }

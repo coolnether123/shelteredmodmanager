@@ -48,16 +48,40 @@ public class PluginManager
 
     public void loadAssemblies(GameObject doorstepGameObject)
     {
-        try { MMLog.WriteDebug("PluginManager: calling HarmonyBootstrap.EnsurePatched()"); ModAPI.Hooks.HarmonyBootstrap.EnsurePatched(); }
-        catch (Exception ex) { MMLog.Write("PluginManager: EnsurePatched failed: " + ex.Message); }
+        // 1. Initialize core loader components and Harmony
+        InitializeLoader(doorstepGameObject);
+
+        // 2. Discover and order mods based on loadorder.json and dependencies
+        var orderedMods = DiscoverAndOrderMods();
+
+        // 3. Attach inspector tools for debugging (if not already present)
+        AttachInspectorTools();
+
+        // 4. Load mod assemblies and initialize plugins
+        LoadAndInitializePlugins(orderedMods);
+
+        MMLog.Write($"[loader] Loaded {_plugins.Count} plugin(s). Updates={_updates.Count}, Shutdown={_shutdown.Count}, SceneEvents={_sceneEvents.Count}");
+    }
+
+    private void InitializeLoader(GameObject doorstepGameObject)
+    {
+        try { ModAPI.Harmony.HarmonyBootstrap.EnsurePatched(); }
+        catch (Exception ex) { MMLog.Write("PluginManager: HarmonyBootstrap.EnsurePatched failed: " + ex.Message); }
+
+        // Apply save protection patches
+        ModAPI.Core.SaveProtectionPatches.ApplyPatches(new HarmonyLib.Harmony("ShelteredModManager.SaveProtection"));
 
         _gameRoot = Directory.GetParent(Application.dataPath).FullName;
         _modsRoot = Path.Combine(_gameRoot, "mods");
         _loaderRoot = doorstepGameObject;
 
-        var assemblies = new List<Assembly>();
-        var activatedTypes = new HashSet<Type>();
+        var runner = _loaderRoot.GetComponent<PluginRunner>();
+        if (runner == null) runner = _loaderRoot.AddComponent<PluginRunner>();
+        runner.Manager = this;
+    }
 
+    private List<ModEntry> DiscoverAndOrderMods()
+    {
         var processedLof = LoadOrderResolver.ReadLoadOrderFile(_modsRoot);
         var discovered = ModDiscovery.DiscoverAllMods();
 
@@ -83,21 +107,20 @@ public class PluginManager
                 discovered = new List<ModEntry>();
             }
         }
-        catch (Exception ex) { MMLog.WarnOnce("PluginManager.loadAssemblies.Filter", "Error filtering mods: " + ex.Message); }
+        catch (Exception ex) { MMLog.WarnOnce("PluginManager.DiscoverAndOrderMods.Filter", "Error filtering mods: " + ex.Message); }
 
         var resolution = LoadOrderResolver.Resolve(discovered, processedLof.Order ?? new string[0]);
-        var orderedMods = resolution.Mods;
-        LoadedMods = orderedMods;
+        LoadedMods = resolution.Mods; // Update static property
         if (resolution.MissingHardDependencies != null && resolution.MissingHardDependencies.Count > 0)
         {
             foreach (var e in resolution.MissingHardDependencies)
                 MMLog.Write("[loader] dependency error: " + e);
         }
+        return LoadedMods;
+    }
 
-        var runner = _loaderRoot.GetComponent<PluginRunner>();
-        if (runner == null) runner = _loaderRoot.AddComponent<PluginRunner>();
-        runner.Manager = this;
-
+    private void AttachInspectorTools()
+    {
         try
         {
             if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeInspector>() == null)
@@ -105,8 +128,11 @@ public class PluginManager
             if (_loaderRoot.GetComponent<ModAPI.Inspector.BoundsHighlighter>() == null)
                 _loaderRoot.AddComponent<ModAPI.Inspector.BoundsHighlighter>();
         }
-        catch (Exception ex) { MMLog.WarnOnce("PluginManager.loadAssemblies.Inspector", "Error attaching inspector: " + ex.Message); }
+        catch (Exception ex) { MMLog.WarnOnce("PluginManager.AttachInspectorTools", "Error attaching inspector: " + ex.Message); }
+    }
 
+    private void LoadAndInitializePlugins(List<ModEntry> orderedMods)
+    {
         foreach (var entry in orderedMods)
         {
             List<Assembly> modAssemblies = null;
@@ -159,8 +185,6 @@ public class PluginManager
                 }
             }
         }
-
-        MMLog.Write($"[loader] Loaded {_plugins.Count} plugin(s). Updates={_updates.Count}, Shutdown={_shutdown.Count}, SceneEvents={_sceneEvents.Count}");
     }
 
     internal void EnqueueNextFrame(Action a)

@@ -98,14 +98,42 @@ public static class ModDiscovery
         return results;
     }
 
-    catch (Exception ex)
+    public static List<Assembly> LoadAssemblies(ModEntry entry)
+    {
+        var assemblies = new List<Assembly>();
+        if (entry == null) return assemblies;
+
+        var selectedPath = SelectAssembliesPath(entry.AssembliesPath);
+        if (string.IsNullOrEmpty(selectedPath) || !Directory.Exists(selectedPath))
         {
-            MMLog.Write("Discovery error: " + ex.Message);
+            MMLog.WriteDebug($"No assemblies found for mod '{entry.Id}' at '{entry.AssembliesPath}' or selected path '{selectedPath}'.");
+            return assemblies;
         }
 
-    // Chooses the assemblies folder either directly under Assemblies or a TFM subfolder
-    // For Sheltered/.NET 3.5, prefer net35 if present; else fallback to Assemblies root.
-    // Coolnether123
+        foreach (var dllPath in Directory.GetFiles(selectedPath, "*.dll", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                var asm = Assembly.LoadFrom(dllPath);
+                assemblies.Add(asm);
+                ModRegistry.RegisterAssemblyForMod(asm, entry);
+                MMLog.WriteDebug($"Loaded assembly '{asm.FullName}' for mod '{entry.Id}'.");
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"Failed to load assembly '{dllPath}' for mod '{entry.Id}': {ex.Message}");
+            }
+        }
+        return assemblies;
+    }
+
+    /// <summary>
+    /// Selects the appropriate assemblies folder for a mod based on Target Framework Monikers (TFMs).
+    /// Prioritizes specific TFM subfolders (e.g., 'net35', 'netstandard2.0') before falling back
+    /// to the root 'Assemblies' directory. This ensures compatibility with various Unity versions.
+    /// </summary>
+    /// <param name="assembliesRoot">The root path of the mod's Assemblies directory.</param>
+    /// <returns>The path to the selected assemblies folder, or null if no valid folder is found.</returns>
     private static string SelectAssembliesPath(string assembliesRoot)
     {
         if (string.IsNullOrEmpty(assembliesRoot) || !Directory.Exists(assembliesRoot))

@@ -122,6 +122,8 @@ namespace ModAPI
             catch (Exception ex)
             {
                 MMLog.WarnOnce("SceneUtil.GetActiveSceneRoots.Modern", "Error getting modern scene roots: " + ex.Message);
+                // Fallback for older Unity versions or specific scene loading scenarios
+                // where SceneManager might not be fully initialized or accessible.
                 var all = UnityEngine.Object.FindObjectsOfType<Transform>();
                 for (int i = 0; i < all.Length; i++)
                 {

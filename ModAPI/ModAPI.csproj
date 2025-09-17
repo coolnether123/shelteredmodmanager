@@ -52,27 +52,27 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="IPlugin.cs" />
-    <Compile Include="MMLog.cs" />
-    <Compile Include="LoggerExtensions.cs" />
-    <Compile Include="ContextExtensions.cs" />
-    <Compile Include="UIFlowGuard.cs" />
-    <Compile Include="UIUtil.cs" />
-    <Compile Include="Hooks\HarmonyBootstrap.cs" />
+    <Compile Include="Core\IPlugin.cs" />
+    <Compile Include="Core\MMLog.cs" />
+    <Compile Include="Core\LoggerExtensions.cs" />
+    <Compile Include="Core\ContextExtensions.cs" />
+    <Compile Include="UI\UIFlowGuard.cs" />
+    <Compile Include="UI\UIUtil.cs" />
+    <Compile Include="Harmony\HarmonyBootstrap.cs" />
     <Compile Include="Harmony\HarmonyUtil.cs" />
     <Compile Include="Inspector\HierarchyUtil.cs" />
     <Compile Include="Inspector\BoundsHighlighter.cs" />
     <Compile Include="Inspector\RuntimeInspector.cs" />
-    <Compile Include="LoadOrderResolver.cs" />
-    <Compile Include="ModRegistry.cs" />
-    <Compile Include="ModSettings.cs" />
-    <Compile Include="ModAbout.cs" />
-    <Compile Include="ModDiscovery.cs" />
-    <Compile Include="SceneUtil.cs" />
-    <Compile Include="PluginManager.cs" />
+    <Compile Include="Core\LoadOrderResolver.cs" />
+    <Compile Include="Core\ModRegistry.cs" />
+    <Compile Include="Core\ModSettings.cs" />
+    <Compile Include="Core\ModAbout.cs" />
+    <Compile Include="Core\ModDiscovery.cs" />
+    <Compile Include="Util\SceneUtil.cs" />
+    <Compile Include="Core\PluginManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Reflection\Safe.cs" />
-    <Compile Include="GameUtil.cs" />
+    <Compile Include="Util\GameUtil.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
