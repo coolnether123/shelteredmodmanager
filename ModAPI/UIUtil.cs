@@ -360,7 +360,7 @@ public static class UIUtil
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { MMLog.WarnOnce("UIUtil.FindUIFont", "Error finding UI font: " + ex.Message); }
         return null;
     }
 

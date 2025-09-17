@@ -7,13 +7,8 @@ using UnityEngine;
 
 namespace ModAPI.Harmony
 {
-    /// <summary>
-    /// Safer Harmony patching helpers with gating and readiness checks.
-    /// </summary>
     public static class HarmonyUtil
     {
-        // ---- Attributes ----------------------------------------------------
-
         [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
         public sealed class DebugPatchAttribute : Attribute
         {
@@ -30,27 +25,22 @@ namespace ModAPI.Harmony
             public DangerousAttribute(string reason) { Reason = reason; }
         }
 
-        // ---- Options -------------------------------------------------------
-
         public sealed class PatchOptions
         {
             public bool AllowDebugPatches;
             public bool AllowDangerousPatches;
             public bool AllowStructReturns;
-            public string[] Before;   // global Before ids (best-effort)
-            public string[] After;    // global After ids (best-effort)
-            public int? Priority;     // global priority (best-effort)
-            public Action<object, string> OnResult; // per-target applied/skipped reason (Type or MethodBase)
+            public string[] Before;
+            public string[] After;
+            public int? Priority;
+            public Action<object, string> OnResult;
         }
 
-        // Denylist for sensitive targets unless explicitly allowed
         private static readonly HashSet<string> SensitiveDeny = new HashSet<string>(StringComparer.Ordinal)
         {
             "ExplorationParty.PopState",
             "FamilyMember.OnDestroy"
         };
-
-        // ---- PatchAll with gating -----------------------------------------
 
         public static void PatchAll(HarmonyLib.Harmony h, Assembly asm, PatchOptions options)
         {
@@ -61,24 +51,20 @@ namespace ModAPI.Harmony
             {
                 try
                 {
-                    // Skip non-patch classes quickly
                     if (!HasHarmonyPatchAttributes(type)) continue;
 
-                    // Gate: [DebugPatch]
                     if (!options.AllowDebugPatches && HasAttribute<DebugPatchAttribute>(type))
                     {
                         options.OnResult?.Invoke((object)type, "skipped: DebugPatch not enabled");
                         continue;
                     }
 
-                    // Gate: [Dangerous]
                     if (!options.AllowDangerousPatches && HasAttribute<DangerousAttribute>(type))
                     {
                         options.OnResult?.Invoke((object)type, "skipped: Dangerous not enabled");
                         continue;
                     }
 
-                    // Attempt to resolve target methods for struct-return/sensitive checks
                     var targets = TryGetTargets(type);
                     if (targets != null)
                     {
@@ -100,11 +86,9 @@ namespace ModAPI.Harmony
                         if (skip) continue;
                     }
 
-                    // Apply patches via Harmony's PatchClassProcessor
                     var proc = new PatchClassProcessor(h, type);
                     var patched = proc.Patch();
 
-                    // Report results
                     if (patched != null && patched.Count > 0)
                     {
                         foreach (var m in patched)
@@ -122,7 +106,6 @@ namespace ModAPI.Harmony
             }
         }
 
-        // Convenience: read common toggles from plugin context settings
         public static void PatchAll(HarmonyLib.Harmony h, Assembly asm, IPluginContext ctx)
         {
             var opts = new PatchOptions();
@@ -135,7 +118,7 @@ namespace ModAPI.Harmony
                     opts.AllowStructReturns = ctx.Settings.GetBool("allowStructReturns", false);
                 }
             }
-            catch { }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.PatchAll.Settings", "Error reading settings: " + ex.Message); }
             opts.OnResult = (mb, reason) =>
             {
                 try
@@ -143,7 +126,7 @@ namespace ModAPI.Harmony
                     var who = mb is MethodBase ? ((MethodBase)mb).DeclaringType.FullName + "." + ((MethodBase)mb).Name : (mb != null ? mb.ToString() : "<null>");
                     ctx?.Log?.Info("Patch: " + who + " -> " + reason);
                 }
-                catch { }
+                catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.PatchAll.OnResult", "Error in OnResult callback: " + ex.Message); }
             };
             PatchAll(h, asm, opts);
         }
@@ -153,19 +136,20 @@ namespace ModAPI.Harmony
             var mi = m as MethodInfo;
             if (mi == null) return false;
             try { return mi.ReturnType != null && mi.ReturnType.IsValueType && mi.ReturnType != typeof(void); }
-            catch { return false; }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.IsStructReturn", "Error checking for struct return: " + ex.Message); return false; }
         }
 
         private static string TargetKey(MethodBase mb)
         {
-            try { return mb.DeclaringType.FullName + "." + mb.Name; } catch { return "<unknown>"; }
+            try { return mb.DeclaringType.FullName + "." + mb.Name; }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.TargetKey", "Error getting target key: " + ex.Message); return "<unknown>"; }
         }
 
         private static IEnumerable<Type> SafeTypes(Assembly asm)
         {
             try { return asm.GetTypes(); }
             catch (ReflectionTypeLoadException rtle) { return rtle.Types.Where(t => t != null); }
-            catch { return Enumerable.Empty<Type>(); }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.SafeTypes", "Error getting types from assembly: " + ex.Message); return Enumerable.Empty<Type>(); }
         }
 
         private static bool HasHarmonyPatchAttributes(Type t)
@@ -174,17 +158,17 @@ namespace ModAPI.Harmony
             {
                 return t.GetCustomAttributes(true).Any(a => string.Equals(a.GetType().FullName, "HarmonyLib.HarmonyPatch", StringComparison.Ordinal));
             }
-            catch { return false; }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.HasHarmonyPatchAttributes", "Error checking for Harmony attributes: " + ex.Message); return false; }
         }
 
         private static bool HasAttribute<T>(Type t) where T : Attribute
         {
-            try { return t.GetCustomAttributes(typeof(T), false).FirstOrDefault() != null; } catch { return false; }
+            try { return t.GetCustomAttributes(typeof(T), false).FirstOrDefault() != null; }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.HasAttribute", "Error checking for attribute: " + ex.Message); return false; }
         }
 
         private static IEnumerable<MethodBase> TryGetTargets(Type patchClass)
         {
-            // 1) TargetMethods(): IEnumerable<MethodBase>
             try
             {
                 var tm = patchClass.GetMethod("TargetMethods", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static, null, Type.EmptyTypes, null);
@@ -199,9 +183,8 @@ namespace ModAPI.Harmony
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.TryGetTargets.TargetMethods", "Error invoking TargetMethods: " + ex.Message); }
 
-            // 2) TargetMethod(): MethodBase
             try
             {
                 var tm = patchClass.GetMethod("TargetMethod", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static, null, Type.EmptyTypes, null);
@@ -211,9 +194,8 @@ namespace ModAPI.Harmony
                     if (mb != null) return new[] { mb };
                 }
             }
-            catch { }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.TryGetTargets.TargetMethod", "Error invoking TargetMethod: " + ex.Message); }
 
-            // 3) HarmonyPatch(type, methodName) attributes
             try
             {
                 var attrs = patchClass.GetCustomAttributes(true);
@@ -239,16 +221,14 @@ namespace ModAPI.Harmony
                         var mb = targetType.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
                         if (mb != null) list.Add(mb);
                     }
-                    catch { }
+                    catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.TryGetTargets.GetMethod", "Error getting method: " + ex.Message); }
                 }
                 if (list.Count > 0) return list;
             }
-            catch { }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.TryGetTargets.Attributes", "Error reading HarmonyPatch attributes: " + ex.Message); }
 
             return null;
         }
-
-        // ---- Readiness gates ----------------------------------------------
 
         public static bool IsLoaded<TManager>() where TManager : UnityEngine.Object
         {
@@ -260,7 +240,7 @@ namespace ModAPI.Harmony
                 var saveable = mgr as ISaveable;
                 return saveable != null ? SaveManager.instance.HasBeenLoaded(saveable) : true;
             }
-            catch { return false; }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.IsLoaded", "Error checking if manager is loaded: " + ex.Message); return false; }
         }
 
         public static void PatchWhenLoaded<TManager>(HarmonyLib.Harmony h, Action applyPatches) where TManager : UnityEngine.Object
@@ -281,24 +261,20 @@ namespace ModAPI.Harmony
         {
             try
             {
-                // Common Unity pattern: public static T Instance { get; }
                 var p = t.GetProperty("Instance", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
                 if (p != null) return p.GetValue(null, null);
             }
-            catch { }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.GetSingletonInstance.Instance", "Error getting singleton instance (Instance): " + ex.Message); }
             try
             {
-                // Some classes use 'instance'
                 var p = t.GetProperty("instance", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
                 if (p != null) return p.GetValue(null, null);
             }
-            catch { }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.GetSingletonInstance.instance", "Error getting singleton instance (instance): " + ex.Message); }
             return null;
         }
 
         private static void SafeInvoke(Action a) { try { a(); } catch (Exception ex) { MMLog.Write("PatchWhenLoaded action failed: " + ex.Message); } }
-
-        // ---- Runner --------------------------------------------------------
 
         private class LoadGateRunner : MonoBehaviour
         {
@@ -321,11 +297,12 @@ namespace ModAPI.Harmony
 
             private void Update()
             {
-                int count = _queue.Count; // cap one per frame
+                int count = _queue.Count;
                 if (count <= 0) return;
                 var it = _queue.Peek();
                 bool ready = false;
-                try { ready = it.Condition(); } catch { ready = false; }
+                try { ready = it.Condition(); }
+                catch (Exception ex) { MMLog.WarnOnce("LoadGateRunner.Update", "Condition check failed: " + ex.Message); ready = false; }
                 if (ready)
                 {
                     _queue.Dequeue();

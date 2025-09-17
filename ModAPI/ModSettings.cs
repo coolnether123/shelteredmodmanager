@@ -85,12 +85,12 @@ public class ModSettings
                                 modId = about != null ? about.id : null;
                             }
                         }
-                        catch { }
+                        catch (Exception ex) { MMLog.WarnOnce("ModSettings.ForAssembly.ReadAbout", "Error reading About.json: " + ex.Message); }
                         return new ModSettings(modId, cursor.FullName);
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { MMLog.WarnOnce("ModSettings.ForAssembly.Probe", "Error probing for mod root: " + ex.Message); }
         }
 
         // Last resort: no known root (legacy loose DLLs). Root is dll folder.

@@ -71,7 +71,7 @@ public static class ContextExtensions
                     return;
                 }
             }
-            catch { }
+            catch (Exception ex) { MMLog.WarnOnce("ContextExtensions.RunWhenSceneReady.Check", "Failed to check current scene: " + ex.Message); }
 
             _items.Add(new Item { SceneName = sceneName, Action = action, Deadline = Time.realtimeSinceStartup + 60f });
         }

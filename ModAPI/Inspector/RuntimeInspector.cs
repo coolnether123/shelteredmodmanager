@@ -282,8 +282,8 @@ namespace ModAPI.Inspector
             // Fields
             FieldInfo[] fields = new FieldInfo[0];
             PropertyInfo[] props = new PropertyInfo[0];
-            try { fields = type.GetFields(flags); } catch { }
-            try { props = type.GetProperties(flags); } catch { }
+            try { fields = type.GetFields(flags); } catch (Exception ex) { MMLog.WarnOnce("RuntimeInspector.DrawComponentFields.GetFields", "Error getting fields: " + ex.Message); }
+            try { props = type.GetProperties(flags); } catch (Exception ex) { MMLog.WarnOnce("RuntimeInspector.DrawComponentFields.GetProperties", "Error getting properties: " + ex.Message); }
 
             // Keep it readable, skip Unity's heavy internals
             for (int i = 0; i < fields.Length; i++)

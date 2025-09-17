@@ -8,20 +8,8 @@ using System.Text;
 using System.Threading;
 using UnityEngine;
 
-/// <summary>
-/// Enhanced logging system for the Sheltered Mod Loader.
-/// Provides comprehensive debugging capabilities including:
-/// - Multi-level logging (Debug, Info, Warning, Error, Fatal)
-/// - Detailed exception logging with stack traces
-/// - Plugin lifecycle tracking with performance timing
-/// - Dependency resolution debugging
-/// - Memory usage monitoring
-/// - Assembly loading diagnostics
-/// - Automatic log rotation and filtering
-/// </summary>
 public static class MMLog
 {
-    #region Log Levels
     public enum LogLevel
     {
         Debug = 0,
@@ -46,38 +34,27 @@ public static class MMLog
         Network,
         IO
     }
-    #endregion
 
-    #region Private Fields
     private static readonly object _lock = new object();
     private static string _logPath;
-    // Archived log files will use timestamped filenames
     private static LogLevel _minLevel = LogLevel.Info;
     private static readonly HashSet<LogCategory> _enabledCategories = new HashSet<LogCategory>();
     private static readonly Dictionary<string, int> _modLogCounts = new Dictionary<string, int>();
     private static long _logFileSize = 0;
     private static readonly long _maxLogFileSize = 10 * 1024 * 1024; // 10MB
 
-    // Spam aggregation state
     private static string _lastMsg;
     private static int _repeatCount;
     private static DateTime _lastWriteUtc;
     private static DateTime _repeatStartTime;
     private static readonly TimeSpan _repeatFlushInterval = TimeSpan.FromSeconds(5);
 
-    // Performance tracking
     private static readonly Dictionary<string, Stopwatch> _activeTimers = new Dictionary<string, Stopwatch>();
     private static readonly Dictionary<string, List<long>> _performanceHistory = new Dictionary<string, List<long>>();
 
-    // Memory tracking
-    private static long _lastMemoryUsage = 0;
-    private static readonly List<long> _memoryHistory = new List<long>();
-
-    // WarnOnce keys
     private static readonly HashSet<string> _warnOnceKeys = new HashSet<string>(StringComparer.Ordinal);
-    #endregion
+    private static readonly Dictionary<string, string> _iniSettings = new Dictionary<string, string>();
 
-    #region Initialization
     static MMLog()
     {
         var baseDir = Directory.GetCurrentDirectory();
@@ -85,7 +62,6 @@ public static class MMLog
         _logPath = Path.Combine(baseDir, "mod_manager.log");
         try { if (File.Exists(_logPath)) _logFileSize = new FileInfo(_logPath).Length; } catch { _logFileSize = 0; }
 
-        // Initialize with default categories
         _enabledCategories.Add(LogCategory.General);
         _enabledCategories.Add(LogCategory.Loader);
         _enabledCategories.Add(LogCategory.Plugin);
@@ -95,7 +71,6 @@ public static class MMLog
         WriteStartupBanner();
     }
 
-    // Read Manager-authored settings from mod_manager.ini in the game directory.
     private static void InitializeFromManagerIni()
     {
         try
@@ -112,6 +87,7 @@ public static class MMLog
                     var idx = line.IndexOf('='); if (idx <= 0) continue;
                     var key = line.Substring(0, idx).Trim();
                     var val = line.Substring(idx + 1).Trim();
+                    _iniSettings[key] = val;
                     if (key.Equals("DevMode", StringComparison.OrdinalIgnoreCase)) devMode = val;
                     else if (key.Equals("LogLevel", StringComparison.OrdinalIgnoreCase)) logLevel = val;
                     else if (key.Equals("LogCategories", StringComparison.OrdinalIgnoreCase)) logCategories = val;
@@ -150,9 +126,9 @@ public static class MMLog
     private static void WriteStartupBanner()
     {
         var banner = new StringBuilder();
-        banner.AppendLine("================================================================================");
+        banner.AppendLine("=================================================================================");
         banner.AppendLine("                    SHELTERED MOD LOADER - DEBUG LOG");
-        banner.AppendLine("================================================================================");
+        banner.AppendLine("=================================================================================");
         banner.AppendLine($"Session Started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         banner.AppendLine($"Game Version: {Application.version}");
         banner.AppendLine($"Unity Version: {Application.unityVersion}");
@@ -163,13 +139,22 @@ public static class MMLog
         banner.AppendLine($"Active Categories: {string.Join(", ", _enabledCategories.Select(x => x.ToString()).ToArray())}");
         banner.AppendLine($"Process ID: {Process.GetCurrentProcess().Id}");
         banner.AppendLine($"Thread ID: {Thread.CurrentThread.ManagedThreadId}");
-        banner.AppendLine("================================================================================");
 
-        try { File.AppendAllText(_logPath, banner.ToString(), Encoding.UTF8); }
-        catch { /* Swallow startup logging errors */ }
+        if (_iniSettings.Count > 0)
+        {
+            banner.AppendLine("---" + "Effective INI Settings---");
+            foreach (var kvp in _iniSettings)
+            {
+                banner.AppendLine($"{kvp.Key} = {kvp.Value}");
+            }
+        }
+
+        banner.AppendLine("=================================================================================");
+
+        try { File.AppendAllText(_logPath, banner.ToString(), Encoding.UTF8); } 
+        catch { }
     }
 
-    // .NET 3.5 compatible enum parsing
     private static LogLevel? TryParseLogLevel(string value)
     {
         try
@@ -193,60 +178,37 @@ public static class MMLog
             return null;
         }
     }
-    #endregion
 
-    #region Public API
-    /// <summary>
-    /// Basic logging method for backwards compatibility
-    /// </summary>
     public static void Write(string message)
     {
         WriteInternal(LogLevel.Info, LogCategory.General, GetCallerInfo(), message);
     }
 
-    /// <summary>
-    /// Debug logging with category support
-    /// </summary>
     public static void WriteDebug(string message, LogCategory category = LogCategory.General)
     {
         WriteInternal(LogLevel.Debug, category, GetCallerInfo(), message);
     }
 
-    /// <summary>
-    /// Info level logging
-    /// </summary>
     public static void WriteInfo(string message, LogCategory category = LogCategory.General)
     {
         WriteInternal(LogLevel.Info, category, GetCallerInfo(), message);
     }
 
-    /// <summary>
-    /// Warning level logging
-    /// </summary>
     public static void WriteWarning(string message, LogCategory category = LogCategory.General)
     {
         WriteInternal(LogLevel.Warning, category, GetCallerInfo(), message);
     }
 
-    /// <summary>
-    /// Error level logging
-    /// </summary>
     public static void WriteError(string message, LogCategory category = LogCategory.General)
     {
         WriteInternal(LogLevel.Error, category, GetCallerInfo(), message);
     }
 
-    /// <summary>
-    /// Fatal error logging
-    /// </summary>
     public static void WriteFatal(string message, LogCategory category = LogCategory.General)
     {
         WriteInternal(LogLevel.Fatal, category, GetCallerInfo(), message);
     }
 
-    /// <summary>
-    /// Log a warning once per unique key. Useful to avoid spamming logs.
-    /// </summary>
     public static void WarnOnce(string key, string message)
     {
         if (string.IsNullOrEmpty(key)) key = "<empty>";
@@ -258,9 +220,6 @@ public static class MMLog
         WriteInternal(LogLevel.Warning, LogCategory.General, "WarnOnce", message);
     }
 
-    /// <summary>
-    /// Enhanced exception logging with full details
-    /// </summary>
     public static void WriteException(Exception ex, string context = "", LogCategory category = LogCategory.General)
     {
         if (ex == null) return;
@@ -282,10 +241,9 @@ public static class MMLog
             message.AppendLine(ex.StackTrace);
         }
 
-        // Log inner exceptions recursively
         var innerEx = ex.InnerException;
         int depth = 1;
-        while (innerEx != null && depth < 10) // Prevent infinite recursion
+        while (innerEx != null && depth < 10)
         {
             message.AppendLine($"--- Inner Exception #{depth} ---");
             message.AppendLine($"Type: {innerEx.GetType().FullName}");
@@ -302,9 +260,6 @@ public static class MMLog
         WriteInternal(LogLevel.Error, category, GetCallerInfo(), message.ToString());
     }
 
-    /// <summary>
-    /// Plugin lifecycle logging with detailed context
-    /// </summary>
     public static void WritePluginLifecycle(string pluginName, string phase, string details = "", bool isError = false)
     {
         var level = isError ? LogLevel.Error : LogLevel.Info;
@@ -315,9 +270,6 @@ public static class MMLog
         WriteInternal(level, LogCategory.Plugin, "PluginManager", message);
     }
 
-    /// <summary>
-    /// Assembly loading diagnostics
-    /// </summary>
     public static void WriteAssemblyInfo(Assembly assembly, string operation, string details = "")
     {
         var message = new StringBuilder();
@@ -334,18 +286,12 @@ public static class MMLog
         WriteInternal(LogLevel.Debug, LogCategory.Assembly, "ModDiscovery", message.ToString());
     }
 
-    /// <summary>
-    /// Dependency resolution logging
-    /// </summary>
     public static void WriteDependencyInfo(string modId, string operation, string details)
     {
         var message = $"[DEPENDENCY-{operation.ToUpper()}] {modId}: {details}";
         WriteInternal(LogLevel.Debug, LogCategory.Dependency, "LoadOrderResolver", message);
     }
 
-    /// <summary>
-    /// Performance timing helpers
-    /// </summary>
     public static void StartTimer(string operationName)
     {
         lock (_lock)
@@ -353,7 +299,6 @@ public static class MMLog
             if (!_activeTimers.ContainsKey(operationName))
                 _activeTimers[operationName] = new Stopwatch();
 
-            // .NET 3.5 compatible restart
             var timer = _activeTimers[operationName];
             timer.Stop();
             timer.Reset();
@@ -381,29 +326,18 @@ public static class MMLog
         }
     }
 
-    // Removed WriteMemoryInfo
-
-    /// <summary>
-    /// Scene transition logging
-    /// </summary>
     public static void WriteSceneInfo(string sceneName, string operation)
     {
         var message = $"[SCENE-{operation.ToUpper()}] {sceneName}";
         WriteInternal(LogLevel.Info, LogCategory.Scene, "SceneManager", message);
     }
 
-    /// <summary>
-    /// Configuration change logging
-    /// </summary>
     public static void WriteConfigChange(string modId, string key, string oldValue, string newValue)
     {
         var message = $"[CONFIG-CHANGE] {modId}: {key} = '{oldValue}' -> '{newValue}'";
         WriteInternal(LogLevel.Debug, LogCategory.Configuration, "ModSettings", message);
     }
 
-    /// <summary>
-    /// Force flush pending logs and perform maintenance
-    /// </summary>
     public static void Flush()
     {
         lock (_lock)
@@ -413,21 +347,12 @@ public static class MMLog
         }
     }
 
-    /// <summary>
-    /// Set minimum log level dynamically
-    /// </summary>
     public static void SetLogLevel(LogLevel level)
     {
         _minLevel = level;
         WriteInternal(LogLevel.Info, LogCategory.General, "Logger", $"Log level changed to: {level}");
     }
 
-    // Removed SetCategoryEnabled: categories controlled by Manager via INI
-
-    // Removed WriteSystemReport
-    #endregion
-
-    #region Internal Methods
     private static void WriteInternal(LogLevel level, LogCategory category, string source, string message)
     {
         if (level < _minLevel) return;
@@ -440,7 +365,7 @@ public static class MMLog
         {
             if (!_enabledCategories.Contains(category) && level < LogLevel.Error)
                 return;
-            // Handle spam aggregation
+
             if (!string.IsNullOrEmpty(_lastMsg) && string.Equals(comparableMessage, _lastMsg, StringComparison.Ordinal))
             {
                 if (_repeatCount == 0)
@@ -455,17 +380,14 @@ public static class MMLog
                 return;
             }
 
-            // Flush any pending repeats
             if (_repeatCount > 0)
             {
                 FlushRepeat_NoLock(now);
             }
 
-            // Write the new message
             var formattedMessage = FormatLogMessage(level, category, source, message, now);
             WriteToFile(formattedMessage);
 
-            // Track statistics
             TrackModLogCount(source);
 
             _lastMsg = comparableMessage;
@@ -496,7 +418,6 @@ public static class MMLog
         }
         catch
         {
-            // Swallow file I/O errors to prevent cascading failures
         }
     }
 
@@ -534,13 +455,12 @@ public static class MMLog
             }
             catch (Exception ex)
             {
-                // If rotation fails, just truncate the current log
                 try
                 {
                     File.WriteAllText(_logPath, $"[LOG ROTATION FAILED: {ex.Message}]\n");
                     _logFileSize = 0;
                 }
-                catch { /* Final fallback - give up on logging */ }
+                catch { }
             }
         }
     }
@@ -563,7 +483,6 @@ public static class MMLog
         var history = _performanceHistory[operation];
         history.Add(milliseconds);
 
-        // Keep only recent samples
         if (history.Count > 50)
             history.RemoveAt(0);
     }
@@ -585,44 +504,23 @@ public static class MMLog
 
     private static string SafeGetLocation(Assembly assembly)
     {
-        try { return assembly.Location; }
+        try { return assembly.Location; } 
         catch { return "Dynamic/Unknown"; }
     }
 
-    // .NET 3.5 compatible IsDynamic check
     private static bool CheckIsDynamic(Assembly assembly)
     {
         try
         {
-            // In .NET 3.5, we can't directly check IsDynamic
-            // Instead, check if Location throws or returns empty
             var location = assembly.Location;
             return string.IsNullOrEmpty(location);
         }
         catch
         {
-            return true; // Assume dynamic if we can't get location
+            return true;
         }
     }
 
-    private static string FormatBytes(long bytes)
-    {
-        string[] suffixes = { "B", "KB", "MB", "GB" };
-        int counter = 0;
-        decimal number = bytes;
-        while (Math.Round(number / 1024) >= 1)
-        {
-            number /= 1024;
-            counter++;
-        }
-        return string.Format("{0:n1} {1}", number, suffixes[counter]);
-    }
-    #endregion
-
-    #region Debug Utilities
-    /// <summary>
-    /// Enhanced plugin error logging specifically requested by user
-    /// </summary>
     public static void WritePluginError(string pluginName, string phase, Exception ex)
     {
         var message = new StringBuilder();
@@ -644,7 +542,6 @@ public static class MMLog
                 message.AppendLine(ex.StackTrace);
             }
 
-            // Handle specific common exceptions
             if (ex is ReflectionTypeLoadException)
             {
                 var rtle = ex as ReflectionTypeLoadException;
@@ -673,10 +570,6 @@ public static class MMLog
         WriteInternal(LogLevel.Error, LogCategory.Plugin, "PluginManager", message.ToString());
     }
 
-    // Removed DumpLoggerState
-    #endregion
-
-    // Disposable scope for measuring operations safely
     public sealed class MeasureScope : IDisposable
     {
         private readonly string _name; private readonly string _details; private bool _stopped;

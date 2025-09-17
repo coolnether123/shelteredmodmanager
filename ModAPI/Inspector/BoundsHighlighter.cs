@@ -50,7 +50,7 @@ namespace ModAPI.Inspector
                     _lineMat.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
                 }
             }
-            catch { }
+            catch (Exception ex) { MMLog.WarnOnce("BoundsHighlighter.EnsureMaterial", "Error creating line material: " + ex.Message); }
         }
 
         private static void DrawBounds(Bounds b)
