@@ -433,7 +433,7 @@ public static class MMLog
         if (level < _minLevel) return;
         if (message == null) message = string.Empty;
 
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now;
         var comparableMessage = FormatLogMessage(level, category, source, message, now, false);
 
         lock (_lock)

@@ -73,6 +73,7 @@ namespace Manager
 
 
         public static string GameRootPath { get; set; }
+        public static string GameBitness { get; set; }
 
         private static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
         {

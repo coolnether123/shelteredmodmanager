@@ -96,6 +96,47 @@ namespace ModAPI
             return go;
         }
 
+        /// <summary>
+        /// Gets the name of the currently active scene, using the best available API.
+        /// </summary>
+        public static string GetCurrentSceneName()
+        {
+            try
+            {
+                // Modern API (Unity 5.4+)
+                var sceneManagerType = Type.GetType("UnityEngine.SceneManagement.SceneManager, UnityEngine");
+                if (sceneManagerType != null)
+                {
+                    var getActiveSceneMethod = sceneManagerType.GetMethod("GetActiveScene", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
+                    if (getActiveSceneMethod != null)
+                    {
+                        var activeScene = getActiveSceneMethod.Invoke(null, null);
+                        var nameProperty = activeScene.GetType().GetProperty("name");
+                        return (string)nameProperty.GetValue(activeScene, null);
+                    }
+                }
+            }
+            catch { }
+
+            // Legacy API (Unity 5.3)
+            try
+            {
+                return Application.loadedLevelName;
+            }
+            catch { }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Checks if a scene with the given name is currently loaded and active.
+        /// </summary>
+        public static bool IsSceneLoaded(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return false;
+            return string.Equals(GetCurrentSceneName(), sceneName, StringComparison.Ordinal);
+        }
+
         // --- Internals -----------------------------------------------------
 
         private static IEnumerable<Transform> GetActiveSceneRoots()

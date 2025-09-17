@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public static class ContextExtensions
 {
@@ -40,13 +39,33 @@ public static class ContextExtensions
     private class ContextHelper : MonoBehaviour
     {
         private readonly System.Collections.Generic.List<Item> _items = new System.Collections.Generic.List<Item>();
+        private PluginRunner _runner;
+
+        private void Awake()
+        {
+            _runner = GetComponent<PluginRunner>();
+            if (_runner == null) 
+            {
+                MMLog.WriteError("ContextHelper requires a PluginRunner on the same GameObject.");
+                return;
+            }
+            _runner.SceneLoaded += OnSceneLoaded;
+        }
+
+        private void OnDestroy()
+        {
+            if (_runner != null)
+            {
+                _runner.SceneLoaded -= OnSceneLoaded;
+            }
+        }
+
         public void RunWhenSceneReady(string sceneName, Action action)
         {
             // Already loaded?
             try
             {
-                var s = SceneManager.GetActiveScene();
-                if (s.IsValid() && s.name == sceneName)
+                if (ModAPI.SceneUtil.GetCurrentSceneName() == sceneName)
                 {
                     StartCoroutine(RunNextFrame(action));
                     return;
@@ -55,16 +74,15 @@ public static class ContextExtensions
             catch { }
 
             _items.Add(new Item { SceneName = sceneName, Action = action, Deadline = Time.realtimeSinceStartup + 60f });
-            SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
-        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        private void OnSceneLoaded(string sceneName)
         {
-            if (_items.Count == 0) { SceneManager.sceneLoaded -= OnSceneLoaded; return; }
+            if (_items.Count == 0) return;
             for (int i = _items.Count - 1; i >= 0; i--)
             {
                 var it = _items[i];
-                if (scene.name == it.SceneName)
+                if (sceneName == it.SceneName)
                 {
                     _items.RemoveAt(i);
                     StartCoroutine(RunNextFrame(it.Action));
@@ -75,12 +93,10 @@ public static class ContextExtensions
                     MMLog.WriteDebug("RunWhenSceneReady timed out for " + it.SceneName);
                 }
             }
-            if (_items.Count == 0) SceneManager.sceneLoaded -= OnSceneLoaded;
         }
 
         private IEnumerator RunNextFrame(Action a)
-        {
-            yield return null; // ensure scene objects are initialized
+        {            yield return null; // ensure scene objects are initialized
             try { a(); } catch (Exception ex) { MMLog.Write("RunWhenSceneReady failed: " + ex.Message); }
         }
 

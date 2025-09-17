@@ -224,10 +224,14 @@ namespace ModAPI.Harmony
                     if (!string.Equals(at.FullName, "HarmonyLib.HarmonyPatch", StringComparison.Ordinal))
                         continue;
 
-                    var typeProp = at.GetProperty("type");
-                    var nameProp = at.GetProperty("methodName");
-                    Type targetType = typeProp != null ? typeProp.GetValue(a, null) as Type : null;
-                    string methodName = nameProp != null ? nameProp.GetValue(a, null) as string : null;
+                    var typeProp = at.GetProperty("type") ?? (MemberInfo)at.GetField("type");
+                    var nameProp = at.GetProperty("methodName") ?? (MemberInfo)at.GetField("methodName");
+                    Type targetType = typeProp is PropertyInfo tp
+                        ? tp.GetValue(a, null) as Type
+                        : (typeProp is FieldInfo tf ? tf.GetValue(a) as Type : null);
+                    string methodName = nameProp is PropertyInfo np
+                        ? np.GetValue(a, null) as string
+                        : (nameProp is FieldInfo nf ? nf.GetValue(a) as string : null);
                     if (targetType == null || string.IsNullOrEmpty(methodName)) continue;
 
                     try

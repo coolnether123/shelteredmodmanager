@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
-using UnityEngine.SceneManagement;
+
 using static LoadOrderResolver;
 
 /**
@@ -198,7 +198,11 @@ public class PluginManager
     internal void EnqueueNextFrame(Action a)
     {
         var runner = _loaderRoot != null ? _loaderRoot.GetComponent<PluginRunner>() : null;
-        if (runner != null) runner.Enqueue(a);
+        if (runner != null) 
+        {
+            MMLog.Write("Runner type: " + runner.GetType().FullName);
+            runner.Enqueue(a);
+        }
     }
 
     // Dispatch called by PluginRunner on Unity's Update()
@@ -334,54 +338,155 @@ public class PluginManager
 // Attached once to the loader's root GameObject. (New) (Coolnether123)
 public class PluginRunner : MonoBehaviour
 {
+    public static bool IsModernUnity { get; private set; }
     private readonly Queue<Action> _nextFrame = new Queue<Action>();
-    public PluginManager Manager; // set by PluginManager
+    public PluginManager Manager;
+    private bool _useModernApi = false;
+    private string _currentSceneName; // For legacy unload emulation
 
-    public void Enqueue(Action a)
+    public event Action<string> SceneLoaded;
+    public event Action<string> SceneUnloaded;
+
+    // Delegate signatures must match the real events
+    private delegate void SceneLoadedHandler(object scene, object mode);
+    private delegate void SceneUnloadedHandler(object scene);
+
+    private object _sceneLoadedDelegate;
+    private object _sceneUnloadedDelegate;
+
+    public void Enqueue(Action action)
     {
-        if (a != null) _nextFrame.Enqueue(a);
+        lock (_nextFrame)
+        {
+            _nextFrame.Enqueue(action);
+        }
     }
 
     private void Awake()
     {
-        // subscribe to scene events once
-        SceneManager.sceneLoaded += OnSceneLoadedInternal;
-        SceneManager.sceneUnloaded += OnSceneUnloadedInternal;
-
-        // Manually trigger for the already loaded scene, as the event would have been missed
-        var activeScene = SceneManager.GetActiveScene();
-        if (activeScene.isLoaded)
+        try
         {
-            OnSceneLoadedInternal(activeScene, LoadSceneMode.Single);
+            // Use reflection to see if the modern SceneManager exists
+            var sceneManagerType = Type.GetType("UnityEngine.SceneManagement.SceneManager, UnityEngine");
+            if (sceneManagerType == null) throw new Exception("Modern SceneManager not found.");
+
+            var sceneLoadedEvent = sceneManagerType.GetEvent("sceneLoaded");
+            if (sceneLoadedEvent == null) throw new Exception("sceneLoaded event not found.");
+
+            _sceneLoadedDelegate = Delegate.CreateDelegate(sceneLoadedEvent.EventHandlerType, this, GetType().GetMethod("OnSceneLoadedModern", BindingFlags.NonPublic | BindingFlags.Instance));
+            
+            // Subscribe to the event using reflection
+            sceneLoadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneLoadedDelegate });
+
+            // Do the same for sceneUnloaded
+            var sceneUnloadedEvent = sceneManagerType.GetEvent("sceneUnloaded");
+            if(sceneUnloadedEvent != null)
+            {
+                _sceneUnloadedDelegate = Delegate.CreateDelegate(sceneUnloadedEvent.EventHandlerType, this, GetType().GetMethod("OnSceneUnloadedModern", BindingFlags.NonPublic | BindingFlags.Instance));
+                sceneUnloadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneUnloadedDelegate });
+            }
+
+            IsModernUnity = true;
+            _useModernApi = true;
+            MMLog.Write("[PluginRunner] Using modern SceneManager events (Unity 5.4+).");
+
+            // Manually trigger for the already loaded scene
+            var activeScene = sceneManagerType.GetProperty("activeScene").GetValue(null, null);
+            var isLoadedProp = activeScene.GetType().GetProperty("isLoaded");
+            if((bool)isLoadedProp.GetValue(activeScene, null))
+            {
+                OnSceneLoadedModern(activeScene, null); // Mode is not essential here
+            }
+        }
+        catch (Exception)
+        {
+            IsModernUnity = false;
+            MMLog.Write("[PluginRunner] Modern SceneManager not found. Using legacy OnLevelWasLoaded (Unity 5.3).");
+            
+            // Manually trigger for legacy
+            _currentSceneName = Application.loadedLevelName;
+            if (Manager != null && !string.IsNullOrEmpty(_currentSceneName))
+            {
+                Manager.OnSceneLoaded(_currentSceneName);
+                SceneLoaded?.Invoke(_currentSceneName);
+            }
         }
     }
 
     private void OnDestroy()
     {
-        SceneManager.sceneLoaded -= OnSceneLoadedInternal;
-        SceneManager.sceneUnloaded -= OnSceneUnloadedInternal;
+        if (_useModernApi && _sceneLoadedDelegate != null)
+        {
+            try
+            {
+                var sceneManagerType = Type.GetType("UnityEngine.SceneManagement.SceneManager, UnityEngine");
+                var sceneLoadedEvent = sceneManagerType.GetEvent("sceneLoaded");
+                sceneLoadedEvent.GetRemoveMethod().Invoke(null, new object[] { _sceneLoadedDelegate });
+
+                if(_sceneUnloadedDelegate != null)
+                {
+                    var sceneUnloadedEvent = sceneManagerType.GetEvent("sceneUnloaded");
+                    sceneUnloadedEvent.GetRemoveMethod().Invoke(null, new object[] { _sceneUnloadedDelegate });
+                }
+            }
+            catch {}
+        }
+    }
+
+    // --- MODERN API HANDLERS (called via reflection) ---
+    private void OnSceneLoadedModern(object scene, object mode)
+    {
+        if (Manager != null)
+        {
+            var nameProp = scene.GetType().GetProperty("name");
+            string sceneName = (string)nameProp.GetValue(scene, null);
+            Manager.OnSceneLoaded(sceneName);
+            SceneLoaded?.Invoke(sceneName);
+        }
+    }
+
+    private void OnSceneUnloadedModern(object scene)
+    {
+        if (Manager != null)
+        {
+            var nameProp = scene.GetType().GetProperty("name");
+            string sceneName = (string)nameProp.GetValue(scene, null);
+            Manager.OnSceneUnloaded(sceneName);
+            SceneUnloaded?.Invoke(sceneName);
+        }
+    }
+
+    // --- LEGACY API PATH ---
+    void OnLevelWasLoaded(int level)
+    {
+        if (!_useModernApi)
+        {
+            var newSceneName = Application.loadedLevelName;
+            if (Manager != null && _currentSceneName != newSceneName)
+            {
+                if (!string.IsNullOrEmpty(_currentSceneName))
+                {
+                    Manager.OnSceneUnloaded(_currentSceneName);
+                    SceneUnloaded?.Invoke(_currentSceneName);
+                }
+                Manager.OnSceneLoaded(newSceneName);
+                SceneLoaded?.Invoke(newSceneName);
+                _currentSceneName = newSceneName;
+            }
+        }
     }
 
     private void Update()
     {
-        // pump next-frame actions
-        while (_nextFrame.Count > 0)
+        lock (_nextFrame)
         {
-            var a = _nextFrame.Dequeue();
-            try { a(); } catch (Exception ex) { MMLog.Write($"[loader] next-frame action failed: {ex.Message}"); }
+            while (_nextFrame.Count > 0)
+            {
+                var a = _nextFrame.Dequeue();
+                try { a(); } catch (Exception ex) { MMLog.Write($"[loader] next-frame action failed: {ex.Message}"); }
+            }
         }
-
         if (Manager != null) Manager.OnUnityUpdate();
-    }
-
-    private void OnSceneLoadedInternal(Scene scene, LoadSceneMode mode)
-    {
-        if (Manager != null) Manager.OnSceneLoaded(scene.name);
-    }
-
-    private void OnSceneUnloadedInternal(Scene scene)
-    {
-        if (Manager != null) Manager.OnSceneUnloaded(scene.name);
     }
 }
 
@@ -406,6 +511,7 @@ internal class PluginContextImpl : IPluginContext
     public IModLogger Log { get; set; }
     public string GameRoot { get; set; }
     public string ModsRoot { get; set; }
+    public bool IsModernUnity { get { return PluginRunner.IsModernUnity; } }
 
     public Action<Action> Scheduler; // set by PluginManager
 

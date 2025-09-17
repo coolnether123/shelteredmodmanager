@@ -64,6 +64,7 @@ public interface IPluginContext
     IModLogger Log { get; }                // mod-prefixed logger
     string GameRoot { get; }               // e.g., <Sheltered install dir>
     string ModsRoot { get; }               // e.g., <GameRoot>/mods
+    bool IsModernUnity { get; }           // true if running on Unity 5.4+ (e.g., EGS version)
 
     void RunNextFrame(Action action);      // queues an action for next frame
     Coroutine StartCoroutine(IEnumerator routine);

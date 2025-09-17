@@ -51,6 +51,11 @@
     <Compile Include="Commands\ClearCommand.cs" />
     <Compile Include="Commands\HelpCommand.cs" />
     <Compile Include="Commands\SceneInfoCommand.cs" />
+    <Compile Include="Commands\EnableVanCommand.cs" />
+    <Compile Include="Commands\ExpeditionAttackCommand.cs" />
+    <Compile Include="Commands\ItemCommand.cs" />
+    <Compile Include="Commands\TimeCommand.cs" />
+    <Compile Include="Commands\UpgradeCommand.cs" />
     <Compile Include="ConsolePlugin.cs" />
     <Compile Include="ConsoleWindowComponent.cs" />
     <Compile Include="ICommand.cs" />
