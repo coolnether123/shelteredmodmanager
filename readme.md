@@ -3,7 +3,7 @@
 Original Author: benjaminfoo
 Maintainer: Coolnether123
 
-# Legacy | Coolnether123
+# Legacy
 This project is considered legacy because the original Sheltered mod-loader effort from 2019 was left unmaintained and never grew into an active modding framework. At the time, a Unicube developer (on Reddit as UnicubeSheltered) expressed interest in mod support, but no official framework was shipped. On the original mod-loader GitHub repo, Tiller4363 attempted in 2023 to contact benjaminfoo for guidance, but from what I can find, there was no reply and benjaminfoo deleted his reddit account.
 
 In 2025, I (Coolnether123) discovered Sheltered and went looking for mods. The only thing I found was the abandoned mod loader, so I decided to pick it up and continue development to enable modding for the game.
@@ -46,36 +46,33 @@ Simple UI exposing loader state and loaded plugins while in-game.
 
 ## Installation
 - Backup your game directory (zip the entire Sheltered folder)
-- Download [Release v0.6](https://github.com/coolnether123/shelteredmodmanager/releases/tag/v0.6)  
+- Download [Release v0.7](TODO CREATE)  
 - Copy its content in the same space as the games exe
 - Launch `SMM\\Manager.exe` from your game folder
-- Use the browse for sheltered exe button and navigate to the exe
+- If sheltered exe is not found use the browse for sheltered exe button and navigate to the exe
 
 ## Compilation
 - Target Framework: .NET Framework 3.5
-- Architecture: Doorstop builds x64 to match the 64‑bit (Epic) game; older Steam 32‑bit assemblies are referenced where applicable
+- Architecture: Doorstop 4.4.1 64‑bit (Epic) / 32-bit (Steam)
 - Harmony: Lib.Harmony 2.4.1
 
 ## Mod Structure
-Mods can be legacy loose DLLs or folder-based with metadata currently for v0.6:
+Mods can be legacy loose DLLs or folder-based with metadata currently for v0.7:
 
 ```
 Sheltered/
 └─ mods/
-   ├─ enabled/
-   │  └─ MyCoolMod/                ← one folder per mod
-   │     ├─ About/                 ← metadata & preview
-   │     │  ├─ About.json          ← JSON details for the mod (renamed)
-   │     │  └─ preview.png         ← for the manager UI could also have an icon png
-   │     ├─ Assemblies/            ← compiled code (pick the best TFM at runtime)
-   │     │  └─ MyCoolMod.dll
-   │     ├─ Assets/                ← optional data the mod defines
-   │     │  ├─ Textures/
-   │     │  ├─ Audio/
-   │     │  └─ Localization/
-   │     └─ Config/                ← default cfg the mod can read
-   └─ disabled/
-      └─ ...
+    └─ MyCoolMod/                ← one folder per mod
+         ├─ About/                 ← metadata & preview
+         │  ├─ About.json          ← JSON details for the mod (renamed)
+         │  └─ preview.png         ← for the manager UI could also have an icon png
+         ├─ Assemblies/            ← compiled code (pick the best TFM at runtime)
+         │  └─ MyCoolMod.dll
+         ├─ Assets/                ← optional data the mod defines
+         │  ├─ Textures/
+         │  ├─ Audio/
+         │  └─ Localization/
+         └─ Config/                ← default cfg the mod can read 
 ```
 
 Example About.json

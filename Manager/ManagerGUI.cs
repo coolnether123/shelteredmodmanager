@@ -344,6 +344,7 @@ namespace Manager
             var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             settings["GamePath"] = uiGamePath.Text;
             settings["DarkMode"] = darkModeToggle.Checked.ToString();
+            settings["GameBitness"] = Program.GameBitness; // Save the detected bitness
 
             if (grpDevSettings != null) // Add null check for the parent group box
             {
@@ -384,15 +385,61 @@ namespace Manager
             string logLevel = "Info"; // Default
             string logCategories = "General,Loader,Plugin,Assembly"; // Default
             string ignoreOrderChecks = "false";
+            string gameBitness = null; // New setting
 
 
             settings.TryGetValue("GamePath", out gamePath);
+
+            if (string.IsNullOrEmpty(gamePath) || !File.Exists(gamePath))
+            {
+                try
+                {
+                    string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                    var exeDirInfo = new DirectoryInfo(exeDir);
+                    DirectoryInfo parentDir = Directory.GetParent(exeDir);
+
+                    string gameDir = null;
+                    if (exeDirInfo.Name.Equals("sheltered", StringComparison.OrdinalIgnoreCase))
+                    {
+                        gameDir = exeDir;
+                    }
+                    else if (parentDir != null && parentDir.Name.Equals("sheltered", StringComparison.OrdinalIgnoreCase))
+                    {
+                        gameDir = parentDir.FullName;
+                    }
+
+                    if (gameDir != null)
+                    {
+                        string[] possibleExeNames = { "Sheltered.exe", "ShelteredWindows64_EOS.exe" };
+                        string foundGameExe = null;
+                        foreach (var exeName in possibleExeNames)
+                        {
+                            string potentialPath = Path.Combine(gameDir, exeName);
+                            if (File.Exists(potentialPath))
+                            {
+                                foundGameExe = potentialPath;
+                                break;
+                            }
+                        }
+
+                        if (foundGameExe != null)
+                        {
+                            gamePath = foundGameExe;
+                            settings["GamePath"] = gamePath;
+                            WriteIniSettings(settings); // Persist auto-detected path
+                        }
+                    }
+                }
+                catch { /* Ignore errors during auto-detection */ }
+            }
+
             settings.TryGetValue("DarkMode", out darkMode);
 
             settings.TryGetValue("DevMode", out devMode);
             settings.TryGetValue("LogLevel", out logLevel);
             settings.TryGetValue("LogCategories", out logCategories);
             settings.TryGetValue("IgnoreOrderChecks", out ignoreOrderChecks);
+            settings.TryGetValue("GameBitness", out gameBitness); // Read new setting
 
 
             if (!string.IsNullOrEmpty(gamePath) && File.Exists(gamePath))
@@ -441,6 +488,9 @@ namespace Manager
                 chkIgnoreOrderChecks.Checked = ignore;
                 chkIgnoreOrderChecks.Enabled = chkDevMode.Checked;
             }
+
+            // Set Program.GameBitness from loaded setting
+            Program.GameBitness = gameBitness; 
 
             uiLaunchButton.Enabled = File.Exists(uiGamePath.Text);
             uiOpenGameDir.Enabled = File.Exists(uiGamePath.Text);
@@ -525,7 +575,8 @@ namespace Manager
                 File.WriteAllLines(iniPath, ini.ToArray());
 
                 // Copy correct bitness winhttp.dll next to the exe (best-effort)
-                try { CopyWinhttpForGame(gameDir, DetectIsExe64Bit(uiGamePath.Text)); } catch { }
+                bool currentIs64Bit = DetectIsExe64Bit(uiGamePath.Text);
+                CopyWinhttpForGame(gameDir, currentIs64Bit);
             }
             catch (Exception ex)
             {
@@ -561,7 +612,7 @@ namespace Manager
             try
             {
                 string target = Path.Combine(gameDir, "winhttp.dll");
-                if (File.Exists(target)) return; // already present
+                // Always copy to ensure correct bitness and version
 
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory; // Manager base
                 List<string> search = new List<string>();
