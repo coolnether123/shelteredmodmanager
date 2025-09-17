@@ -4,7 +4,7 @@ using System.Reflection;
 using UnityEngine;
 using HarmonyLib;
 
-namespace ModAPI.Hooks
+namespace ModAPI.Harmony
 {
     internal static class HarmonyBootstrap
     {
