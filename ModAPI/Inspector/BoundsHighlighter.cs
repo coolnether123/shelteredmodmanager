@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using ModAPI.Core;
 
 namespace ModAPI.Inspector
 {

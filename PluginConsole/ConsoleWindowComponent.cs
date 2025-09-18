@@ -1,6 +1,7 @@
 ﻿using System;
 using UnityEngine;
 using ConsoleCommands;
+using ModAPI.Core;
 
 
 class ConsoleWindowComponent : MonoBehaviour

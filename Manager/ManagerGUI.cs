@@ -6,6 +6,7 @@ using System.Linq;
 using System.Drawing;
 using System.Web.Script.Serialization;
 using ModAPI;
+using ModAPI.Core;
 
 
 /**

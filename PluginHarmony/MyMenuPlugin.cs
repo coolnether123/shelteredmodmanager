@@ -1,5 +1,7 @@
 ﻿using HarmonyLib;
 using UnityEngine;
+using ModAPI.Core;
+using ModAPI.UI;
 
 /// <summary>
 /// Example plugin that adds a simple cyan label to the Main Menu
