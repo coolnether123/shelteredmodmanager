@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using ModAPI.Core;
 
 namespace Manager
 {
@@ -211,9 +212,83 @@ namespace Manager
         private void uiAvailbleModsListView_DoubleClick(object sender, EventArgs e) { button1_Click(sender, e); }
         private void uiInstalledModsListView_DoubleClick(object sender, EventArgs e) { button2_Click(sender, e); }
 
-        private void btnMoveUpEnabled_Click(object sender, EventArgs e) { SaveCurrentOrderToDisk(); }
-        private void btnMoveDownEnabled_Click(object sender, EventArgs e) { SaveCurrentOrderToDisk(); }
-        private void btnSaveOrder_Click(object sender, EventArgs e) { SaveCurrentOrderToDisk(); System.Windows.Forms.MessageBox.Show("Mods order saved.", "Info", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information); }
+        private void btnMoveUpEnabled_Click(object sender, EventArgs e)
+        {
+            if (uiInstalledModsListView.SelectedItem == null) return;
+            int index = uiInstalledModsListView.SelectedIndex;
+            if (index <= 0) return;
+
+            var item = uiInstalledModsListView.SelectedItem;
+            uiInstalledModsListView.Items.RemoveAt(index);
+            uiInstalledModsListView.Items.Insert(index - 1, item);
+            uiInstalledModsListView.SelectedIndex = index - 1;
+            _orderDirty = true;
+            SaveCurrentOrderToDisk();
+        }
+        private void btnMoveDownEnabled_Click(object sender, EventArgs e)
+        {
+            if (uiInstalledModsListView.SelectedItem == null) return;
+            int index = uiInstalledModsListView.SelectedIndex;
+            if (index < 0 || index >= uiInstalledModsListView.Items.Count - 1) return;
+
+            var item = uiInstalledModsListView.SelectedItem;
+            uiInstalledModsListView.Items.RemoveAt(index);
+            uiInstalledModsListView.Items.Insert(index + 1, item);
+            uiInstalledModsListView.SelectedIndex = index + 1;
+            _orderDirty = true;
+            SaveCurrentOrderToDisk();
+        }
+        private void btnSaveOrder_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                var enabledItems = uiInstalledModsListView.Items.Cast<ModListItem>().ToList();
+                var discoveredMods = ToModEntries(enabledItems);
+                var currentOrder = enabledItems.Select(m => m.Id).ToList();
+
+                var resolution = LoadOrderResolver.Resolve(discoveredMods, currentOrder);
+
+                if (resolution.MissingHardDependencies.Any() || resolution.CycledModIds.Any())
+                {
+                    var error = new System.Text.StringBuilder();
+                    error.AppendLine("Could not automatically sort due to errors:");
+                    if (resolution.MissingHardDependencies.Any())
+                    {
+                        error.AppendLine("\nMissing Dependencies:");
+                        foreach(var msg in resolution.MissingHardDependencies) error.AppendLine("- " + msg);
+                    }
+                    if (resolution.CycledModIds.Any())
+                    {
+                        error.AppendLine("\nCyclical Dependencies Detected:");
+                        error.AppendLine("- " + string.Join(", ", resolution.CycledModIds.ToArray()));
+                    }
+                    System.Windows.Forms.MessageBox.Show(error.ToString(), "Auto-Sort Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+                    return;
+                }
+
+                var sortedMods = resolution.Mods;
+                var itemsById = enabledItems.ToDictionary(m => m.Id, StringComparer.OrdinalIgnoreCase);
+
+                uiInstalledModsListView.BeginUpdate();
+                uiInstalledModsListView.Items.Clear();
+                foreach (var sortedMod in sortedMods)
+                {
+                    if (itemsById.ContainsKey(sortedMod.Id))
+                    {
+                        uiInstalledModsListView.Items.Add(itemsById[sortedMod.Id]);
+                    }
+                }
+                uiInstalledModsListView.EndUpdate();
+
+                SaveCurrentOrderToDisk();
+
+                System.Windows.Forms.MessageBox.Show("Mods have been automatically sorted based on their dependencies.", "Auto-Sort Complete", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show("An error occurred during auto-sort: " + ex.Message, "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+            }
+        }
 
         private void SaveCurrentOrderToDisk()
         {

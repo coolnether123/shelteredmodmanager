@@ -5,157 +5,141 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
-/**
- * Author: coolnether123
- * Discovers mods in mods/enabled, reads About/About.json, and loads assemblies.
- * Kept modular to keep PluginManager lean and focused.
- * Coolnether123
- */
-public class ModEntry
+namespace ModAPI.Core
 {
-    public string Id;            // normalized id                              
-    public string Name;          // display name                                
-    public string Version;       // optional version string                  
-    public string RootPath;      // mod root folder                            
-    public string AboutPath;     // path to About/About.json                    
-    public string AssembliesPath;// path to Assemblies folder                   
-    public ModAbout About; // parsed about                             
-}
-
-public static class ModDiscovery
-{
-    // Finds enabled mods with About/About.json and returns descriptors
-    // Coolnether123
-    public static List<ModEntry> DiscoverAllMods()
+    /**
+     * Author: coolnether123
+     * Discovers mods in mods/enabled, reads About/About.json, and loads assemblies.
+     * Kept modular to keep PluginManager lean and focused.
+     * Coolnether123
+     */
+    public class ModEntry
     {
-        var results = new List<ModEntry>();
-        try
-        {
-            string gameRootPath = Directory.GetParent(Application.dataPath).FullName;
-            string modsRoot = Path.Combine(gameRootPath, "mods");
-
-            if (!Directory.Exists(modsRoot))
-            {
-                MMLog.Write("No 'mods' directory found. Skipping discovery.");
-                return results;
-            }
-
-            foreach (var dir in Directory.GetDirectories(modsRoot))
-            {
-                var name = Path.GetFileName(dir);
-                if (string.Equals(name, "disabled", StringComparison.OrdinalIgnoreCase)) continue;
-
-                var about = Path.Combine(dir, "About");
-                var aboutJson = Path.Combine(about, "About.json"); 
-                if (!File.Exists(aboutJson))
-                {
-                    // Not a about-driven mod; will be handled by legacy loader
-                    continue;
-                }
-
-                try
-                {
-                    var text = File.ReadAllText(aboutJson);
-                    var modAbout = JsonUtility.FromJson<ModAbout>(text);
-                    if (modAbout == null)
-                    {
-                        MMLog.Write("Failed to parse About.json in: " + dir);
-                        continue;
-                    }
-
-                    // Validate required fields (basic)
-                    if (string.IsNullOrEmpty(modAbout.id) || string.IsNullOrEmpty(modAbout.name) ||
-                        string.IsNullOrEmpty(modAbout.version) || string.IsNullOrEmpty(modAbout.description) ||
-                        modAbout.authors == null || modAbout.authors.Length == 0)
-                    {
-                        MMLog.Write("About.json missing required fields in: " + dir);
-                        continue;
-                    }
-
-                    var entry = new ModEntry
-                    {
-                        Id = NormId(modAbout.id),
-                        Name = modAbout.name,
-                        Version = modAbout.version,
-                        RootPath = dir,
-                        AboutPath = aboutJson,
-                        AssembliesPath = Path.Combine(dir, "Assemblies"),
-                        About = modAbout
-                    };
-
-                    results.Add(entry);
-                }
-                catch (Exception ex)
-                {
-                    MMLog.Write("Error reading About.json in '" + dir + "': " + ex.Message);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            MMLog.Write("Discovery error: " + ex.Message);
-        }
-        return results;
+        public string Id;            // normalized id                              
+        public string Name;          // display name                                
+        public string Version;       // optional version string                  
+        public string RootPath;      // mod root folder                            
+        public string AboutPath;     // path to About/About.json                    
+        public string AssembliesPath;// path to Assemblies folder                   
+        public ModAbout About; // parsed about                             
     }
 
-    public static List<Assembly> LoadAssemblies(ModEntry entry)
+    public static class ModDiscovery
     {
-        var assemblies = new List<Assembly>();
-        if (entry == null) return assemblies;
-
-        var selectedPath = SelectAssembliesPath(entry.AssembliesPath);
-        if (string.IsNullOrEmpty(selectedPath) || !Directory.Exists(selectedPath))
+        // Finds enabled mods with About/About.json and returns descriptors
+        // Coolnether123
+        public static List<ModEntry> DiscoverAllMods()
         {
-            MMLog.WriteDebug($"No assemblies found for mod '{entry.Id}' at '{entry.AssembliesPath}' or selected path '{selectedPath}'.");
-            return assemblies;
-        }
-
-        foreach (var dllPath in Directory.GetFiles(selectedPath, "*.dll", SearchOption.TopDirectoryOnly))
-        {
+            var results = new List<ModEntry>();
             try
             {
-                var asm = Assembly.LoadFrom(dllPath);
-                assemblies.Add(asm);
-                ModRegistry.RegisterAssemblyForMod(asm, entry);
-                MMLog.WriteDebug($"Loaded assembly '{asm.FullName}' for mod '{entry.Id}'.");
+                string gameRootPath = Directory.GetParent(Application.dataPath).FullName;
+                string modsRoot = Path.Combine(gameRootPath, "mods");
+
+                if (!Directory.Exists(modsRoot))
+                {
+                    MMLog.Write("No 'mods' directory found. Skipping discovery.");
+                    return results;
+                }
+
+                foreach (var dir in Directory.GetDirectories(modsRoot))
+                {
+                    var name = Path.GetFileName(dir);
+                    if (string.Equals(name, "disabled", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    var about = Path.Combine(dir, "About");
+                    var aboutJson = Path.Combine(about, "About.json");
+                    if (!File.Exists(aboutJson))
+                    {
+                        // Not a about-driven mod; will be handled by legacy loader
+                        continue;
+                    }
+
+                    try
+                    {
+                        var text = File.ReadAllText(aboutJson);
+                        var modAbout = JsonUtility.FromJson<ModAbout>(text);
+                        if (modAbout == null)
+                        {
+                            MMLog.Write("Failed to parse About.json in: " + dir);
+                            continue;
+                        }
+
+                        // Validate required fields (basic)
+                        if (string.IsNullOrEmpty(modAbout.id) || string.IsNullOrEmpty(modAbout.name) ||
+                            string.IsNullOrEmpty(modAbout.version) || string.IsNullOrEmpty(modAbout.description) ||
+                            modAbout.authors == null || modAbout.authors.Length == 0)
+                        {
+                            MMLog.Write("About.json missing required fields in: " + dir);
+                            continue;
+                        }
+
+                        var entry = new ModEntry
+                        {
+                            Id = NormId(modAbout.id),
+                            Name = modAbout.name,
+                            Version = modAbout.version,
+                            RootPath = dir,
+                            AboutPath = aboutJson,
+                            AssembliesPath = Path.Combine(dir, "Assemblies"),
+                            About = modAbout
+                        };
+
+                        results.Add(entry);
+                    }
+                    catch (Exception ex)
+                    {
+                        MMLog.Write("Error reading About.json in '" + dir + "': " + ex.Message);
+                    }
+                }
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"Failed to load assembly '{dllPath}' for mod '{entry.Id}': {ex.Message}");
+                MMLog.Write("Discovery error: " + ex.Message);
             }
+            return results;
         }
-        return assemblies;
-    }
 
-    /// <summary>
-    /// Selects the appropriate assemblies folder for a mod based on Target Framework Monikers (TFMs).
-    /// Prioritizes specific TFM subfolders (e.g., 'net35', 'netstandard2.0') before falling back
-    /// to the root 'Assemblies' directory. This ensures compatibility with various Unity versions.
-    /// </summary>
-    /// <param name="assembliesRoot">The root path of the mod's Assemblies directory.</param>
-    /// <returns>The path to the selected assemblies folder, or null if no valid folder is found.</returns>
-    private static string SelectAssembliesPath(string assembliesRoot)
-    {
-        if (string.IsNullOrEmpty(assembliesRoot) || !Directory.Exists(assembliesRoot))
-            return null;
-
-        // Look for known TFMs in descending preference for older Unity
-        var tfms = new[] { "net35", "net3.5", "netstandard2.0", "net20", "net40", "net45", "net472", "net48" };
-        foreach (var t in tfms)
+        public static List<Assembly> LoadAssemblies(ModEntry entry)
         {
-            var candidate = Path.Combine(assembliesRoot, t);
-            if (Directory.Exists(candidate) && Directory.GetFiles(candidate, "*.dll").Length > 0)
-                return candidate;
+            var assemblies = new List<Assembly>();
+            if (entry == null)
+            {
+                MMLog.WriteDebug("[Trace] LoadAssemblies: entry was null.");
+                return assemblies;
+            }
+
+            MMLog.WriteDebug($"[Trace] LoadAssemblies: Processing entry '{entry.Id}' with AssembliesPath: '{entry.AssembliesPath}'");
+
+            if (!Directory.Exists(entry.AssembliesPath))
+            {
+                MMLog.WriteDebug($"[Trace] LoadAssemblies: Directory does not exist: '{entry.AssembliesPath}'");
+                return assemblies;
+            }
+
+            var dllFiles = Directory.GetFiles(entry.AssembliesPath, "*.dll", SearchOption.AllDirectories);
+            MMLog.WriteDebug($"[Trace] LoadAssemblies: Found {dllFiles.Length} DLL(s): {string.Join(", ", dllFiles)}");
+
+            foreach (var dllPath in dllFiles)
+            {
+                MMLog.WriteDebug($"[Trace] LoadAssemblies: Attempting to load '{dllPath}'...");
+                try
+                {
+                    var asm = Assembly.LoadFrom(dllPath);
+                    assemblies.Add(asm);
+                    ModRegistry.RegisterAssemblyForMod(asm, entry);
+                    MMLog.WriteDebug($"[Trace] LoadAssemblies: SUCCESS loading assembly '{asm.FullName}' for mod '{entry.Id}'.");
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError($"[Trace] LoadAssemblies: FAILED to load assembly '{dllPath}' for mod '{entry.Id}': {ex.ToString()}");
+                }
+            }
+            return assemblies;
         }
 
-        // Fallback to Assemblies root
-        if (Directory.GetFiles(assembliesRoot, "*.dll").Length > 0)
-            return assembliesRoot;
 
-        return null;
+
+        private static string NormId(string s) => (s ?? "").Trim().ToLowerInvariant();
     }
-
-    
-
-    private static string NormId(string s) => (s ?? "").Trim().ToLowerInvariant();
 }

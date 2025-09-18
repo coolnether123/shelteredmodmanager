@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
+using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {

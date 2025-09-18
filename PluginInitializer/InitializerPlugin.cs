@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using ModAPI.Core;
 
 /**
 * Author: benjaminfoo

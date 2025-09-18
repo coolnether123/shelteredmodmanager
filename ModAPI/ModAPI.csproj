@@ -33,7 +33,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>..\..\..\..\..\Epic Games\Sheltered\mods\0Harmony\Assemblies\0Harmony.dll</HintPath>
+      <HintPath>..\mods\0Harmony\Assemblies\0Harmony.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
@@ -70,6 +70,7 @@
     <Compile Include="Core\ModDiscovery.cs" />
     <Compile Include="Util\SceneUtil.cs" />
     <Compile Include="Core\PluginManager.cs" />
+    <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Reflection\Safe.cs" />
     <Compile Include="Util\GameUtil.cs" />

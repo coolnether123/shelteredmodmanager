@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
+using ModAPI.Core;
 using HarmonyLib;
 
 namespace ModAPI.Harmony

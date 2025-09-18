@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Text;
 using ModAPI.Inspector;
+using ModAPI.Core;
 
 public class HierarchyPrinter : MonoBehaviour
 {

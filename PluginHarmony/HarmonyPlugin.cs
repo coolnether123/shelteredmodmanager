@@ -3,6 +3,7 @@ using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
 using System.Collections.Generic;
+using ModAPI.Core;
 
 /**
  * Maintainer: coolnether123

@@ -1,5 +1,6 @@
 using System.Text;
 using ConsoleCommands;
+using ModAPI.Core;
 
 namespace PluginConsole.Commands
 {
