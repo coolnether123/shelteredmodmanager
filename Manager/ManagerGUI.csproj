@@ -56,10 +56,10 @@
     <Reference Include="Assembly-CSharp">
       <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
     </Reference>
-    <ProjectReference Include="..\ModAPI\ModAPI.csproj">
-      <Project>{3C99D6BF-A4A9-45DC-BEF1-5717ECE2A687}</Project>
-      <Name>ModAPI</Name>
-    </ProjectReference>
+    <Reference Include="ModAPI, Version=1.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ModAPI\bin\Debug\ModAPI.dll</HintPath>
+    </Reference>
     <Reference Include="System.Core" />
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
@@ -150,7 +150,8 @@ mkdir "%25BUILD_PATH%25"
 
 :: initialize the \Dist\SMM\ directory
 rd /s /q "%25SMM_PATH%25"
-mkdir "%25SMM_PATH%25"
+mkdir "%25SMM_PATH%25"\
+mkdir "%25SMM_PATH%25"\bin
 
 
 
@@ -161,9 +162,8 @@ copy "%25PROJECT_MANAGER%25"\"%25SUB_DIR%25"\Manager.exe "%25SMM_PATH%25"\
 copy "%25PROJECT_MODAPI%25"\"%25SUB_DIR%25"\ModAPI.dll "%25SMM_PATH%25"\
 
 :: Copy the Doorstop-Hoock and its config the Dist-directory 
-copy "%25PROJECT_DOORSTOP%25"\"%25SUB_DIR%25"\Doorstop.dll "%25SMM_PATH%25"\
-copy "%25PROJECT_DOORSTOP%25"\"%25SUB_DIR%25"\Doorstop.pdb "%25SMM_PATH%25"\
-copy "%25LIB_DIR%25"\doorstop_config.ini "%25BUILD_PATH%25"\
+copy "%25PROJECT_DOORSTOP%25"\"%25SUB_DIR%25"\Doorstop.dll "%25SMM_PATH%25"\bin\
+
 copy "%25LIB_DIR%25"\winhttp.dll "%25BUILD_PATH%25"\
 
 
@@ -179,8 +179,8 @@ copy "%25PROJECT_PLUGIN_CONSOLE%25"\"%25SUB_DIR%25\"\PluginConsole.pdb "%25MODS_
 copy "%25PROJECT_PLUGIN_DEBUG_GUI%25"\"%25SUB_DIR%25"\PluginDebugGUI.dll "%25MODS_PATH%25"\
 copy "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25"\PluginHarmony.dll "%25MODS_PATH%25"\
 copy "%25PROJECT_PLUGIN_INITIALIZER%25"\"%25SUB_DIR%25"\PluginInitializer.dll "%25MODS_PATH%25"\
-if exist "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25\"\0Harmony.dll copy "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25\"\0Harmony.dll "%25MODS_PATH%25"\
-if exist "%25SolutionDir%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" copy "%25SolutionDir%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" "%25MODS_PATH%25"\
+if exist "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25\"\0Harmony.dll copy "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25\"\0Harmony.dll "%25SMM_PATH%25"\bin\
+if exist "%25SolutionDir%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" copy "%25SolutionDir%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" "%25SMM_PATH%25"\bin\
 </PostBuildEvent>
   </PropertyGroup>
 </Project>
