@@ -40,6 +40,9 @@
       <HintPath>..\..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Manager">
+      <HintPath>..\Manager\bin\Debug\Manager.exe</HintPath>
+    </Reference>
     <Reference Include="System.Core" />
     <Reference Include="System" />
     <Reference Include="UnityEngine">

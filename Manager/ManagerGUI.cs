@@ -7,6 +7,7 @@ using System.Drawing;
 using System.Web.Script.Serialization;
 using ModAPI;
 using ModAPI.Core;
+using Manager;
 
 
 /**
@@ -156,7 +157,13 @@ namespace Manager
                 // Add mods with missing hard dependencies to hard issues for red coloring
                 foreach (var errorMsg in eval.MissingHardDependencies)
                 {
-                    var match = System.Text.RegularExpressions.Regex.Match(errorMsg, "^Mod '([^']*)' has a missing hard dependency:");
+                    if (ManagerSettings.SkipHarmonyDependencyCheck && errorMsg.ToLowerInvariant().Contains("harmony"))
+                    {
+                        continue;
+                    }
+                        
+
+                        var match = System.Text.RegularExpressions.Regex.Match(errorMsg, "^Mod '([^']*)' has a missing hard dependency:");
                     if (match.Success)
                     {
                         _hardIssueIds.Add(match.Groups[1].Value);
@@ -301,11 +308,12 @@ namespace Manager
         private Dictionary<string, string> ReadIniSettings()
         {
             var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            if (!File.Exists(MOD_MANAGER_INI_FILE)) return settings;
+            string iniPath = GetModManagerIniPath(); // Use helper for path
+            if (!File.Exists(iniPath)) return settings;
 
             try
             {
-                foreach (var line in File.ReadAllLines(MOD_MANAGER_INI_FILE))
+                foreach (var line in File.ReadAllLines(iniPath))
                 {
                     var parts = line.Split(new[] { '=' }, 2);
                     if (parts.Length == 2)
@@ -316,7 +324,7 @@ namespace Manager
             }
             catch (Exception ex)
             {
-                System.Windows.Forms.MessageBox.Show($"Error reading settings from {MOD_MANAGER_INI_FILE}: {ex.Message}", "Settings Error", System.Windows.Forms.MessageBoxButtons.OK,
+                System.Windows.Forms.MessageBox.Show($"Error reading settings from {MOD_MANAGER_INI_FILE}: {ex.Message}", "Settings Error", (System.Windows.Forms.MessageBoxButtons)0,
  System.Windows.Forms.MessageBoxIcon.Error);
             }
             return settings;
@@ -331,7 +339,8 @@ namespace Manager
                 {
                     lines.Add($"{kvp.Key}={kvp.Value}");
                 }
-                File.WriteAllLines(MOD_MANAGER_INI_FILE, lines.ToArray());
+                string iniPath = GetModManagerIniPath(); // Use helper for path
+                File.WriteAllLines(iniPath, lines.ToArray());
             }
             catch (Exception ex)
             {
@@ -346,6 +355,7 @@ namespace Manager
             settings["GamePath"] = uiGamePath.Text;
             settings["DarkMode"] = darkModeToggle.Checked.ToString();
             settings["GameBitness"] = Program.GameBitness; // Save the detected bitness
+            settings["SkipHarmonyDependencyCheck"] = ManagerSettings.SkipHarmonyDependencyCheck.ToString(); // Save new setting
 
             if (grpDevSettings != null) // Add null check for the parent group box
             {
@@ -386,141 +396,156 @@ namespace Manager
             string logLevel = "Info"; // Default
             string logCategories = "General,Loader,Plugin,Assembly"; // Default
             string ignoreOrderChecks = "false";
-            string gameBitness = null; // New setting
-
-
-            settings.TryGetValue("GamePath", out gamePath);
-
-            if (string.IsNullOrEmpty(gamePath) || !File.Exists(gamePath))
-            {
-                try
-                {
-                    string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                    var exeDirInfo = new DirectoryInfo(exeDir);
-                    DirectoryInfo parentDir = Directory.GetParent(exeDir);
-
-                    string gameDir = null;
-                    if (exeDirInfo.Name.Equals("sheltered", StringComparison.OrdinalIgnoreCase))
-                    {
-                        gameDir = exeDir;
-                    }
-                    else if (parentDir != null && parentDir.Name.Equals("sheltered", StringComparison.OrdinalIgnoreCase))
-                    {
-                        gameDir = parentDir.FullName;
-                    }
-
-                    if (gameDir != null)
-                    {
-                        string[] possibleExeNames = { "Sheltered.exe", "ShelteredWindows64_EOS.exe" };
-                        string foundGameExe = null;
-                        foreach (var exeName in possibleExeNames)
+                        string gameBitness = null; // New setting
+                        string skipHarmonyDependencyCheck = "false"; // New setting
+            
+                        settings.TryGetValue("GamePath", out gamePath);
+            
+                        if (string.IsNullOrEmpty(gamePath) || !File.Exists(gamePath))
                         {
-                            string potentialPath = Path.Combine(gameDir, exeName);
-                            if (File.Exists(potentialPath))
+                            try
                             {
-                                foundGameExe = potentialPath;
-                                break;
+                                string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                                var exeDirInfo = new DirectoryInfo(exeDir);
+                                DirectoryInfo parentDir = Directory.GetParent(exeDir);
+            
+                                string gameDir = null;
+                                if (exeDirInfo.Name.Equals("sheltered", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    gameDir = exeDir;
+                                }
+                                else if (parentDir != null && parentDir.Name.Equals("sheltered", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    gameDir = parentDir.FullName;
+                                }
+            
+                                if (gameDir != null)
+                                {
+                                    string[] possibleExeNames = { "Sheltered.exe", "ShelteredWindows64_EOS.exe" };
+                                    string foundGameExe = null;
+                                    foreach (var exeName in possibleExeNames)
+                                    {
+                                        string potentialPath = Path.Combine(gameDir, exeName);
+                                        if (File.Exists(potentialPath))
+                                        {
+                                            foundGameExe = potentialPath;
+                                            break;
+                                        }
+                                    }
+            
+                                    if (foundGameExe != null)
+                                    {
+                                        gamePath = foundGameExe;
+                                        settings["GamePath"] = gamePath;
+                                        WriteIniSettings(settings); // Persist auto-detected path
+                                    }
+                                }
                             }
+                            catch { /* Ignore errors during auto-detection */ }
                         }
-
-                        if (foundGameExe != null)
+            
+                        settings.TryGetValue("DarkMode", out darkMode);
+            
+                        settings.TryGetValue("DevMode", out devMode);
+                        settings.TryGetValue("LogLevel", out logLevel);
+                        settings.TryGetValue("LogCategories", out logCategories);
+                        settings.TryGetValue("IgnoreOrderChecks", out ignoreOrderChecks);
+                        settings.TryGetValue("GameBitness", out gameBitness); // Read new setting
+                        settings.TryGetValue("SkipHarmonyDependencyCheck", out skipHarmonyDependencyCheck); // Read new setting
+            
+                        if (!string.IsNullOrEmpty(gamePath) && File.Exists(gamePath))
                         {
-                            gamePath = foundGameExe;
-                            settings["GamePath"] = gamePath;
-                            WriteIniSettings(settings); // Persist auto-detected path
+                            uiGamePath.Text = gamePath;
+                            uiModsPath.Text = Path.Combine(Path.GetDirectoryName(gamePath), "mods");
+                            Program.GameRootPath = gamePath;
+                        }
+                        else
+                        {
+                            uiGamePath.Text = DEFAULT_VALUE;
+                            Program.GameRootPath = null;
+                        }
+            
+                        bool isDark;
+                        if (bool.TryParse(darkMode, out isDark))
+                        {
+                            darkModeToggle.Checked = isDark;
+                        }
+            
+                        bool isDev;
+                        if (bool.TryParse(devMode, out isDev))
+                        {
+                            chkDevMode.Checked = isDev;
+                        }
+            
+                        // Load Verbose toggle based on LogLevel
+                        chkVerboseLogging.Checked = (logLevel != null && logLevel.Equals("Debug", StringComparison.OrdinalIgnoreCase));
+            
+                        // Load LogCategories (hard-coded to avoid runtime dependency on ModAPI/MMLog)
+                        clbLogCategories.Items.AddRange(new object[] {
+                            "General","Loader","Plugin","Assembly","Dependency","Configuration",
+                            "Performance","Memory","Scene","UI","Network","IO"
+                        });
+                        var enabledCategories = new HashSet<string>((logCategories ?? "").Split(','), StringComparer.OrdinalIgnoreCase);
+                        for (int i = 0; i < clbLogCategories.Items.Count; i++)
+                        {
+                            clbLogCategories.SetItemChecked(i, enabledCategories.Contains(clbLogCategories.Items[i].ToString()));
+                        }
+                        clbLogCategories.Enabled = chkVerboseLogging != null && chkVerboseLogging.Checked;
+            
+                        // Ignore order checks toggle visibility/state
+                        bool ignore;
+                        if (chkIgnoreOrderChecks != null && bool.TryParse(ignoreOrderChecks, out ignore))
+                        {
+                            chkIgnoreOrderChecks.Checked = ignore;
+                            chkIgnoreOrderChecks.Enabled = chkDevMode.Checked;
+                        }
+            
+                        // Set Program.GameBitness from loaded setting
+                        Program.GameBitness = gameBitness;
+            
+                        // Set ManagerSettings.SkipHarmonyDependencyCheck
+                        bool isSkipHarmonyDependencyCheck;
+                        if (bool.TryParse(skipHarmonyDependencyCheck, out isSkipHarmonyDependencyCheck))
+                        {
+                            ManagerSettings.SkipHarmonyDependencyCheck = isSkipHarmonyDependencyCheck;
+                        }
+            
+                        uiLaunchButton.Enabled = File.Exists(uiGamePath.Text);
+                        uiOpenGameDir.Enabled = File.Exists(uiGamePath.Text);
+                    }
+            
+                    /// <summary>
+                    /// Helper to get the absolute path to mod_manager.ini
+                    /// </summary>
+                    private string GetModManagerIniPath()
+                    {
+                        string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                        return Path.Combine(exeDir, MOD_MANAGER_INI_FILE);
+                    }
+            
+                    /// <summary>
+                    /// Locate the game exe
+                    /// </summary>
+                    private void onLocate(object sender, EventArgs e)
+                    {
+                        fileDialog.RestoreDirectory = true;
+                        fileDialog.Title = "Locate Sheltered.exe ...";
+                        fileDialog.DefaultExt = "exe";
+                        fileDialog.Filter = "exe files (*.exe)|*.exe|All files (*.*)|*.*";
+            
+                        if (fileDialog.ShowDialog() == DialogResult.OK)
+                        {
+                            uiGamePath.Text = fileDialog.FileName;
+                            uiModsPath.Text = Path.Combine(Path.GetDirectoryName(fileDialog.FileName), "mods");
+                            Program.GameRootPath = fileDialog.FileName;
+                            SaveSettings(); // Save setting on change
+                            try { SetupDoorstop(); } catch { }
+            
+                            // Immediately refresh the mod lists based on the newly selected game/mods path
+                            try { updateAvailableMods(); } catch { }
                         }
                     }
-                }
-                catch { /* Ignore errors during auto-detection */ }
-            }
-
-            settings.TryGetValue("DarkMode", out darkMode);
-
-            settings.TryGetValue("DevMode", out devMode);
-            settings.TryGetValue("LogLevel", out logLevel);
-            settings.TryGetValue("LogCategories", out logCategories);
-            settings.TryGetValue("IgnoreOrderChecks", out ignoreOrderChecks);
-            settings.TryGetValue("GameBitness", out gameBitness); // Read new setting
-
-
-            if (!string.IsNullOrEmpty(gamePath) && File.Exists(gamePath))
-            {
-                uiGamePath.Text = gamePath;
-                uiModsPath.Text = Path.Combine(Path.GetDirectoryName(gamePath), "mods");
-                Program.GameRootPath = gamePath;
-            }
-            else
-            {
-                uiGamePath.Text = DEFAULT_VALUE;
-                Program.GameRootPath = null;
-            }
-
-            bool isDark;
-            if (bool.TryParse(darkMode, out isDark))
-            {
-                darkModeToggle.Checked = isDark;
-            }
-
-            bool isDev;
-            if (bool.TryParse(devMode, out isDev))
-            {
-                chkDevMode.Checked = isDev;
-            }
-
-            // Load Verbose toggle based on LogLevel
-            chkVerboseLogging.Checked = (logLevel != null && logLevel.Equals("Debug", StringComparison.OrdinalIgnoreCase));
-
-            // Load LogCategories (hard-coded to avoid runtime dependency on ModAPI/MMLog)
-            clbLogCategories.Items.AddRange(new object[] {
-                "General","Loader","Plugin","Assembly","Dependency","Configuration",
-                "Performance","Memory","Scene","UI","Network","IO"
-            });
-            var enabledCategories = new HashSet<string>((logCategories ?? "").Split(','), StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < clbLogCategories.Items.Count; i++)
-            {
-                clbLogCategories.SetItemChecked(i, enabledCategories.Contains(clbLogCategories.Items[i].ToString()));
-            }
-            clbLogCategories.Enabled = chkVerboseLogging != null && chkVerboseLogging.Checked;
-
-            // Ignore order checks toggle visibility/state
-            bool ignore;
-            if (chkIgnoreOrderChecks != null && bool.TryParse(ignoreOrderChecks, out ignore))
-            {
-                chkIgnoreOrderChecks.Checked = ignore;
-                chkIgnoreOrderChecks.Enabled = chkDevMode.Checked;
-            }
-
-            // Set Program.GameBitness from loaded setting
-            Program.GameBitness = gameBitness; 
-
-            uiLaunchButton.Enabled = File.Exists(uiGamePath.Text);
-            uiOpenGameDir.Enabled = File.Exists(uiGamePath.Text);
-        }
-
-        /// <summary>
-        /// Locate the game exe
-        /// </summary>
-        private void onLocate(object sender, EventArgs e)
-        {
-            fileDialog.RestoreDirectory = true;
-            fileDialog.Title = "Locate Sheltered.exe ...";
-            fileDialog.DefaultExt = "exe";
-            fileDialog.Filter = "exe files (*.exe)|*.exe|All files (*.*)|*.*";
-
-            if (fileDialog.ShowDialog() == DialogResult.OK)
-            {
-                uiGamePath.Text = fileDialog.FileName;
-                uiModsPath.Text = Path.Combine(Path.GetDirectoryName(fileDialog.FileName), "mods");
-                Program.GameRootPath = fileDialog.FileName;
-                SaveSettings(); // Save setting on change
-                try { SetupDoorstop(); } catch { }
-
-                // Immediately refresh the mod lists based on the newly selected game/mods path
-                try { updateAvailableMods(); } catch { }
-            }
-        }
-
-        private void btnApplySettings_Click(object sender, EventArgs e)
+                    private void btnApplySettings_Click(object sender, EventArgs e)
         {
             SaveSettings();
         }
@@ -554,25 +579,34 @@ namespace Manager
             {
                 if (string.IsNullOrEmpty(uiGamePath.Text) || !File.Exists(uiGamePath.Text)) return;
                 string gameDir = Path.GetDirectoryName(uiGamePath.Text);
-                string iniPath = Path.Combine(gameDir, "doorstop_config.ini");
 
-                // Ensure SMM directory exists (target assembly lives here)
-                string smmDir = Path.Combine(gameDir, "SMM");
-                Directory.CreateDirectory(smmDir);
+                // --- FIX 1: COPY THE LOADER FILES ---
+                // Copy the entire SMM directory (containing Doorstop.dll, ModAPI.dll, etc.)
+                // from the Manager's location to the game's directory.
+                string managerSmmDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SMM");
+                string gameSmmDir = Path.Combine(gameDir, "SMM");
+                if (Directory.Exists(managerSmmDir))
+                {
+                    // We use a helper method to copy recursively, which you already have.
+                    CopyDirectory(managerSmmDir, gameSmmDir, true);
+                }
+                else
+                {
+                    System.Windows.Forms.MessageBox.Show("Could not find the 'SMM' directory next to the manager executable. Mod loading will fail.",
+                        "Configuration Error", (System.Windows.Forms.MessageBoxButtons)1, System.Windows.Forms.MessageBoxIcon.Error);
+                    return;
+                }
 
-                // Build a list of all 'Assemblies' folders for enabled mods.
+                // --- FIX 2: CORRECTLY CONSTRUCT AND USE THE DLL SEARCH PATH ---
                 var searchPaths = new List<string>();
-                searchPaths.Add(uiModsPath.Text); // Always include the root mods folder for legacy/loose DLLs.
+                // The root mods folder is a good fallback.
+                searchPaths.Add(uiModsPath.Text);
 
                 try
                 {
+                    // Add the 'Assemblies' folder for each enabled mod.
                     var enabledModIds = new HashSet<string>(ReadOrderFromFile(uiModsPath.Text) ?? new string[0], StringComparer.OrdinalIgnoreCase);
                     var allDiscoveredMods = DiscoverModsFromRoot(uiModsPath.Text);
-
-                    System.Windows.Forms.MessageBox.Show(
-                $"Found {enabledModIds.Count} enabled mod(s) in loadorder.json.\n" +
-                $"Found {allDiscoveredMods.Count} total mods in mods folder.",
-                "SMM Debug - Discovery");
 
                     foreach (var mod in allDiscoveredMods)
                     {
@@ -588,44 +622,48 @@ namespace Manager
                 }
                 catch (Exception ex)
                 {
-                    // Log or show an error if you want, but we can proceed with just the root mods path.
                     System.Windows.Forms.MessageBox.Show("Could not build detailed assembly search paths: " + ex.Message,
-                        "Warning", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
+                        "Warning", (System.Windows.Forms.MessageBoxButtons)1, System.Windows.Forms.MessageBoxIcon.Warning);
                 }
 
                 // Create a list of relative paths and join them with semicolons.
                 var relativePaths = searchPaths
-                    .Distinct() // Avoid duplicates
+                    .Distinct(StringComparer.OrdinalIgnoreCase) // Avoid duplicates
                     .Select(p => GetRelativePath(gameDir, p))
                     .ToList();
 
                 string dllSearchPath = string.Join(";", relativePaths.ToArray());
 
-                System.Windows.Forms.MessageBox.Show(
-           "The following search path will be written to doorstop_config.ini:\n\n" + dllSearchPath,
-           "SMM Debug - Final Path");
-
-                // Doorstop v4 config (General section)
+                // --- CONFIGURE DOORSTOP.INI ---
+                string iniPath = Path.Combine(gameDir, "doorstop_config.ini");
                 var ini = new List<string>();
                 ini.Add("# Auto-generated by Sheltered Mod Manager");
                 ini.Add("[General]");
                 ini.Add("enabled=true");
+                // IMPORTANT: The target assembly must exist at this path inside the game directory.
+                // The file copy logic above ensures this. This path assumes your project structure is:
+                // Manager.exe
+                // SMM/
+                //   bin/
+                //     Doorstop.dll
+                //   ModAPI.dll
+                //   ...
                 ini.Add("target_assembly=SMM\\bin\\Doorstop.dll");
                 ini.Add("redirect_output_log=true");
                 ini.Add("");
                 ini.Add("[UnityMono]");
-                string relativeModsPath = GetRelativePath(gameDir, uiModsPath.Text);
-                ini.Add("dll_search_path_override=" + relativeModsPath);
+                // Use the correctly built search path here.
+                ini.Add("dll_search_path_override=" + dllSearchPath);
                 ini.Add("debug_enabled=false");
                 ini.Add("debug_address=127.0.0.1:10000");
                 ini.Add("debug_suspend=false");
                 File.WriteAllLines(iniPath, ini.ToArray());
 
-                // Copy correct bitness winhttp.dll next to the exe (best-effort)
+                // Copy correct bitness winhttp.dll next to the exe
                 bool currentIs64Bit = DetectIsExe64Bit(uiGamePath.Text);
                 CopyWinhttpForGame(gameDir, currentIs64Bit);
 
-                // Copy mods from project to game directory
+                // Copy mods from project to game directory (this part seems fine)
                 try
                 {
                     string projectModsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "mods");
@@ -633,7 +671,6 @@ namespace Manager
                     if (Directory.Exists(projectModsPath))
                     {
                         CopyDirectory(projectModsPath, gameModsPath, true);
-                        System.Windows.Forms.MessageBox.Show("Mods copied to game directory.", "Mod Sync", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
                     }
                 }
                 catch (Exception ex)
@@ -647,7 +684,7 @@ namespace Manager
                     "Configuration Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
             }
         }
-        
+
         // Returns true if the specified exe is 64-bit (PE machine AMD64), false if 32-bit (I386)
         private bool DetectIsExe64Bit(string exePath)
         {

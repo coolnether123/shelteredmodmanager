@@ -344,14 +344,7 @@ namespace Manager
             catch { }
         }
 
-        // No-op handlers for designer wires (avoid breaking if missing)
-        private void uiInstalledModsListView_SelectedIndexChanged(object sender, EventArgs e) { }
-        private void uiAvailbleModsListView_SelectedIndexChanged(object sender, EventArgs e) { }
-        private void uiInstaledLabel_Click(object sender, EventArgs e) { }
-        private void tabPage1_Click(object sender, EventArgs e) { }
-        private void label14_Click(object sender, EventArgs e) { }
-        private void linkLabel1_LinkClicked_2(object sender, LinkLabelLinkClickedEventArgs e) { }
-        private void richTextBox1_TextChanged(object sender, EventArgs e) { }
+
     }
 }
 

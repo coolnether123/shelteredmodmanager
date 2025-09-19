@@ -56,9 +56,8 @@
     <Reference Include="Assembly-CSharp">
       <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
     </Reference>
-    <Reference Include="ModAPI, Version=1.0.0.0, Culture=neutral, processorArchitecture=AMD64">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ModAPI\bin\Debug\ModAPI.dll</HintPath>
+    <Reference Include="ModAPI">
+      <HintPath>..\..\..\..\..\Epic Games\Sheltered\SMM\ModAPI.dll</HintPath>
     </Reference>
     <Reference Include="System.Core" />
     <Reference Include="System" />
@@ -67,6 +66,7 @@
     <Reference Include="System.Web.Extensions" />
     <Reference Include="UnityEngine">
       <HintPath>..\..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>False</Private>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -76,6 +76,7 @@
     <Compile Include="ManagerGUI.Designer.cs">
       <DependentUpon>ManagerGUI.cs</DependentUpon>
     </Compile>
+    <Compile Include="ManagerSettings.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="ThemeManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

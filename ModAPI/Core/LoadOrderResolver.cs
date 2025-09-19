@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
+
 namespace ModAPI.Core
 {
     /**
@@ -331,6 +332,8 @@ namespace ModAPI.Core
                     {
                         var constraint = ParseConstraint(dep);
                         if (constraint == null) continue;
+
+
 
                         if (!byId.ContainsKey(constraint.ID))
                         {

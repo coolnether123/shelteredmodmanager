@@ -146,7 +146,6 @@ namespace Manager
             this.tabPage1.Size = new System.Drawing.Size(1367, 523);
             this.tabPage1.TabIndex = 0;
             this.tabPage1.Text = "Game Setup";
-            this.tabPage1.Click += new System.EventHandler(this.tabPage1_Click);
             // 
             // uiOpenGameDir
             // 
@@ -294,7 +293,6 @@ namespace Manager
             this.uiInstaledLabel.Size = new System.Drawing.Size(138, 25);
             this.uiInstaledLabel.TabIndex = 3;
             this.uiInstaledLabel.Text = "Enabled Mods";
-            this.uiInstaledLabel.Click += new System.EventHandler(this.uiInstaledLabel_Click);
             // 
             // uiAvailableLabel
             // 
@@ -317,7 +315,6 @@ namespace Manager
             this.uiInstalledModsListView.Name = "uiInstalledModsListView";
             this.uiInstalledModsListView.Size = new System.Drawing.Size(250, 464);
             this.uiInstalledModsListView.TabIndex = 1;
-            this.uiInstalledModsListView.SelectedIndexChanged += new System.EventHandler(this.uiInstalledModsListView_SelectedIndexChanged);
             this.uiInstalledModsListView.DoubleClick += new System.EventHandler(this.uiInstalledModsListView_DoubleClick);
             // 
             // uiAvailbleModsListView
@@ -331,7 +328,6 @@ namespace Manager
             this.uiAvailbleModsListView.Name = "uiAvailbleModsListView";
             this.uiAvailbleModsListView.Size = new System.Drawing.Size(250, 464);
             this.uiAvailbleModsListView.TabIndex = 0;
-            this.uiAvailbleModsListView.SelectedIndexChanged += new System.EventHandler(this.uiAvailbleModsListView_SelectedIndexChanged);
             this.uiAvailbleModsListView.DoubleClick += new System.EventHandler(this.uiAvailbleModsListView_DoubleClick);
             // 
             // grpDetails
@@ -722,7 +718,6 @@ namespace Manager
             this.richTextBox1.Size = new System.Drawing.Size(601, 227);
             this.richTextBox1.TabIndex = 9;
             this.richTextBox1.Text = resources.GetString("richTextBox1.Text");
-            this.richTextBox1.TextChanged += new System.EventHandler(this.richTextBox1_TextChanged);
             // 
             // label15
             // 
@@ -744,7 +739,6 @@ namespace Manager
             this.linkLabel1.TabIndex = 7;
             this.linkLabel1.TabStop = true;
             this.linkLabel1.Text = "https://github.com/coolnether123/shelteredmodmanager";
-            this.linkLabel1.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel1_LinkClicked_2);
             // 
             // label14
             // 
@@ -755,7 +749,6 @@ namespace Manager
             this.label14.Size = new System.Drawing.Size(91, 32);
             this.label14.TabIndex = 6;
             this.label14.Text = "Github";
-            this.label14.Click += new System.EventHandler(this.label14_Click);
             // 
             // harmonyLink
             // 
