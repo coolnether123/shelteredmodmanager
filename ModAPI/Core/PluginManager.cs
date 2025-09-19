@@ -25,6 +25,7 @@ namespace ModAPI.Core
 
         public static List<ModEntry> LoadedMods { get; private set; }
 
+
         private PluginManager()
         {
             _plugins = new List<IModPlugin>();
@@ -50,9 +51,9 @@ namespace ModAPI.Core
 
         public void loadAssemblies(GameObject doorstepGameObject)
         {
+
             // 1. Initialize core loader components and Harmony
             InitializeLoader(doorstepGameObject);
-
             // 2. Discover and order mods based on loadorder.json and dependencies
             var orderedMods = DiscoverAndOrderMods();
 
