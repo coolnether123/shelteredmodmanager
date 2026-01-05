@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows.Forms;
-using ModAPI.Core;
 
 namespace Manager
 {
@@ -48,11 +48,52 @@ namespace Manager
                 }
                 catch { }
 
+                // Validate load order before launch
+                try
+                {
+                    var modsRoot = Path.Combine(Path.GetDirectoryName(uiGamePath.Text), "mods");
+                    var enabledIds = new List<string>(ReadOrderFromFile(modsRoot) ?? new string[0]);
+                    var allDiscovered = DiscoverModsFromRoot(modsRoot);
+                    var enabledSet = new HashSet<string>(enabledIds, StringComparer.OrdinalIgnoreCase);
+                    var enabledMods = allDiscovered.Where(m => enabledSet.Contains(m.Id)).ToList();
+                    var modInfos = ToModEntries(enabledMods);
+                    var eval = LoadOrderResolver.Evaluate(modInfos, enabledIds);
+
+                    if (eval.MissingHardDependencies.Any() || eval.CycledModIds.Any())
+                    {
+                        var sb = new StringBuilder();
+                        sb.AppendLine("Mod dependency issues detected. Continue anyway?");
+                        if (eval.MissingHardDependencies.Any())
+                        {
+                            sb.AppendLine();
+                            sb.AppendLine("Missing Dependencies:");
+                            foreach (var msg in eval.MissingHardDependencies) sb.AppendLine("- " + msg);
+                        }
+                        if (eval.CycledModIds.Any())
+                        {
+                            sb.AppendLine();
+                            sb.AppendLine("Cyclical Dependencies:");
+                            sb.AppendLine("- " + string.Join(", ", eval.CycledModIds.ToArray()));
+                        }
+
+                        var choice = System.Windows.Forms.MessageBox.Show(
+                            sb.ToString(),
+                            "Load Order Issues",
+                            System.Windows.Forms.MessageBoxButtons.YesNo,
+                            System.Windows.Forms.MessageBoxIcon.Warning,
+                            System.Windows.Forms.MessageBoxDefaultButton.Button2);
+
+                        if (choice != DialogResult.Yes) return;
+                    }
+                }
+                catch { }
+
                 var startInfo = new ProcessStartInfo();
                 startInfo.FileName = uiGamePath.Text;
                 startInfo.WorkingDirectory = Path.GetDirectoryName(uiGamePath.Text);
                 startInfo.UseShellExecute = false;
                 Process.Start(startInfo);
+
             }
             catch (Exception ex)
             {
@@ -78,8 +119,9 @@ namespace Manager
                 if (!File.Exists(winhttpPath)) missing.Add("winhttp.dll (in game folder)");
 
                 string smmDir = Path.Combine(gameDir, "SMM");
-                string doorstopDll = Path.Combine(smmDir, "Doorstop.dll");
-                if (!File.Exists(doorstopDll)) missing.Add("SMM/Doorstop.dll");
+                string doorstopDllRoot = Path.Combine(smmDir, "Doorstop.dll");
+                string doorstopDllBin = Path.Combine(smmDir, "bin\\Doorstop.dll");
+                if (!File.Exists(doorstopDllRoot) && !File.Exists(doorstopDllBin)) missing.Add("SMM/Doorstop.dll");
 
                 string modapiDll = Path.Combine(smmDir, "ModAPI.dll");
                 if (!File.Exists(modapiDll)) missing.Add("SMM/ModAPI.dll");
@@ -347,4 +389,3 @@ namespace Manager
 
     }
 }
-

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -32,7 +32,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\Dist\SMM\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -41,7 +41,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>..\Dist\SMM\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -53,19 +53,13 @@
     <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
-    </Reference>
-    <Reference Include="ModAPI">
-      <HintPath>..\..\..\..\..\Epic Games\Sheltered\SMM\ModAPI.dll</HintPath>
-    </Reference>
     <Reference Include="System.Core" />
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="UnityEngine">
-      <HintPath>..\..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
@@ -79,6 +73,7 @@
     <Compile Include="ManagerSettings.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="ThemeManager.cs" />
+    <Compile Include="LoadOrderResolver.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\Settings.Designer.cs">
       <AutoGen>True</AutoGen>
@@ -102,6 +97,7 @@
       <DependentUpon>ManagerGUI.cs</DependentUpon>
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Shared\ModAboutReader.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="logo.jpg" />
@@ -123,65 +119,38 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Lib.Harmony">
-      <Version>2.4.1</Version>
+      <Version>2.4.2</Version>
     </PackageReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>SET BUILD_PATH=$(SolutionDir)\Dist
-SET SMM_PATH=$(SolutionDir)\Dist\SMM
-SET MODS_PATH=$(SolutionDir)\Dist\mods
+    <PostBuildEvent>SET BASE=$(SolutionDir)
+SET CONFIG=$(Configuration)
+SET SMM_DIR=%25BASE%25Dist\SMM
+SET BIN_DIR=%25SMM_DIR%25\bin
+SET MODS_DIR=%25BASE%25Dist\mods
+SET DOORSTOP_DLL=%25BASE%25Doorstop\bin\%25CONFIG%25\Doorstop.dll
+SET MODAPI_DLL=%25BASE%25Dist\SMM\ModAPI.dll
+SET MANAGER_EXE=%25TargetPath%25
 
-SET LIB_DIR=$(SolutionDir)\libs
-SET PROJECT_DOORSTOP=$(SolutionDir)\Doorstop
-SET PROJECT_MANAGER=$(SolutionDir)\Manager
-SET PROJECT_MODAPI=$(SolutionDir)\ModAPI
+mkdir "%25SMM_DIR%25" 2&gt;nul
+mkdir "%25BIN_DIR%25" 2&gt;nul
+mkdir "%25MODS_DIR%25" 2&gt;nul
 
-SET PROJECT_PLUGIN_CONSOLE=$(SolutionDir)\PluginConsole
-SET PROJECT_PLUGIN_DEBUG_GUI=$(SolutionDir)\PluginDebugGUI
-SET PROJECT_PLUGIN_HARMONY=$(SolutionDir)\PluginHarmony
-SET PROJECT_PLUGIN_INITIALIZER=$(SolutionDir)\PluginInitializer
+if exist "%25MANAGER_EXE%25" copy /y "%25MANAGER_EXE%25" "%25SMM_DIR%25\"
+if exist "%25MODAPI_DLL%25" copy /y "%25MODAPI_DLL%25" "%25SMM_DIR%25\"
+if exist "%25DOORSTOP_DLL%25" copy /y "%25DOORSTOP_DLL%25" "%25BIN_DIR%25\"
 
+if exist "%25BASE%25libs\winhttp.dll" copy /y "%25BASE%25libs\winhttp.dll" "%25BASE%25Dist\"
 
-SET SUB_DIR=\bin\$(Configuration)\
+if exist "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.dll" copy /y "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.dll" "%25MODS_DIR%25\"
+if exist "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.pdb" copy /y "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.pdb" "%25MODS_DIR%25\"
+if exist "%25BASE%25PluginDebugGUI\bin\%25CONFIG%25\PluginDebugGUI.dll" copy /y "%25BASE%25PluginDebugGUI\bin\%25CONFIG%25\PluginDebugGUI.dll" "%25MODS_DIR%25\"
+if exist "%25BASE%25PluginHarmony\bin\%25CONFIG%25\PluginHarmony.dll" copy /y "%25BASE%25PluginHarmony\bin\%25CONFIG%25\PluginHarmony.dll" "%25MODS_DIR%25\"
+if exist "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" copy /y "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" "%25MODS_DIR%25\"
 
-:: initialize the \Dist\ directory
-rd /s /q "%25BUILD_PATH%25"
-mkdir "%25BUILD_PATH%25"
-
-:: initialize the \Dist\SMM\ directory
-rd /s /q "%25SMM_PATH%25"
-mkdir "%25SMM_PATH%25"\
-mkdir "%25SMM_PATH%25"\bin
-
-
-
-:: Copy the manager exe to the Dist-directory 
-copy "%25PROJECT_MANAGER%25"\"%25SUB_DIR%25"\Manager.exe "%25SMM_PATH%25"\
-
-:: Copy the Mod-API.dll to the Dist-directory 
-copy "%25PROJECT_MODAPI%25"\"%25SUB_DIR%25"\ModAPI.dll "%25SMM_PATH%25"\
-
-:: Copy the Doorstop-Hoock and its config the Dist-directory 
-copy "%25PROJECT_DOORSTOP%25"\"%25SUB_DIR%25"\Doorstop.dll "%25SMM_PATH%25"\bin\
-
-copy "%25LIB_DIR%25"\winhttp.dll "%25BUILD_PATH%25"\
-
-
-:: initialize the \Dist\mods - directory
-if exist "%25MODS_PATH%25" rd /s /q "%25MODS_PATH%25"
-mkdir "%25MODS_PATH%25"
-
-
-
-:: Copy the Mod-API.dll to the Dist-directory 
-copy "%25PROJECT_PLUGIN_CONSOLE%25"\"%25SUB_DIR%25\"\PluginConsole.dll "%25MODS_PATH%25"\
-copy "%25PROJECT_PLUGIN_CONSOLE%25"\"%25SUB_DIR%25\"\PluginConsole.pdb "%25MODS_PATH%25"\
-copy "%25PROJECT_PLUGIN_DEBUG_GUI%25"\"%25SUB_DIR%25"\PluginDebugGUI.dll "%25MODS_PATH%25"\
-copy "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25"\PluginHarmony.dll "%25MODS_PATH%25"\
-copy "%25PROJECT_PLUGIN_INITIALIZER%25"\"%25SUB_DIR%25"\PluginInitializer.dll "%25MODS_PATH%25"\
-if exist "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25\"\0Harmony.dll copy "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25\"\0Harmony.dll "%25SMM_PATH%25"\bin\
-if exist "%25SolutionDir%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" copy "%25SolutionDir%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" "%25SMM_PATH%25"\bin\
+if exist "%25BASE%25PluginHarmony\bin\%25CONFIG%25\0Harmony.dll" copy /y "%25BASE%25PluginHarmony\bin\%25CONFIG%25\0Harmony.dll" "%25BIN_DIR%25\"
+if exist "%25BASE%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" copy /y "%25BASE%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" "%25BIN_DIR%25\"
 </PostBuildEvent>
   </PropertyGroup>
 </Project>

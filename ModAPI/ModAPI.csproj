@@ -17,19 +17,20 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\Dist\SMM\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <PlatformTarget>x64</PlatformTarget>
+    <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>..\Dist\SMM\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
@@ -37,20 +38,21 @@
       <Private>False</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>..\..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\Assembly-CSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Manager">
       <HintPath>..\Manager\bin\Debug\Manager.exe</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="System.Core" />
     <Reference Include="System" />
     <Reference Include="UnityEngine">
-      <HintPath>..\..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>..\..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.UI.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
@@ -66,11 +68,13 @@
     <Compile Include="Inspector\HierarchyUtil.cs" />
     <Compile Include="Inspector\BoundsHighlighter.cs" />
     <Compile Include="Inspector\RuntimeInspector.cs" />
-    <Compile Include="Core\LoadOrderResolver.cs" />
     <Compile Include="Core\ModRegistry.cs" />
     <Compile Include="Core\ModSettings.cs" />
     <Compile Include="Core\ModAbout.cs" />
+    <Compile Include="Core\ModEntry.cs" />
+    <Compile Include="Core\ModAboutReader.cs" />
     <Compile Include="Core\ModDiscovery.cs" />
+    <Compile Include="Core\RuntimeCompat.cs" />
     <Compile Include="Util\SceneUtil.cs" />
     <Compile Include="Core\PluginManager.cs" />
     <Compile Include="Core\SaveProtection.cs" />
