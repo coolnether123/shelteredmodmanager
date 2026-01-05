@@ -1,23 +1,52 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
 
-namespace ModAPI.Core
+namespace Manager
 {
+    // Lightweight types used by the Manager to avoid ModAPI dependency.
+    public static class ModTypes
+    {
+        [Serializable]
+        public class ModAboutInfo
+        {
+            public string id;
+            public string name;
+            public string version;
+            public string description;
+            public string entryType;
+            public string[] authors;
+            public string[] dependsOn;
+            public string[] loadBefore;
+            public string[] loadAfter;
+            public string[] tags;
+            public string website;
+        }
+
+        public class ModInfo
+        {
+            public string Id;
+            public string Name;
+            public string RootPath;
+            public ModAboutInfo About;
+        }
+    }
+
     /**
      * (Coolnether123) Result of the load order resolution, containing the sorted list and any errors.
      */
     public class ResolutionResult
     {
-        public readonly List<ModEntry> Mods;
+        public readonly List<ModTypes.ModInfo> Mods;
         public readonly List<string> MissingHardDependencies;
         public readonly HashSet<string> CycledModIds;
 
-        public ResolutionResult(List<ModEntry> mods, List<string> errors, HashSet<string> cycledModIds)
+        public ResolutionResult(List<ModTypes.ModInfo> mods, List<string> errors, HashSet<string> cycledModIds)
         {
             Mods = mods;
             MissingHardDependencies = errors;
@@ -160,9 +189,9 @@ namespace ModAPI.Core
         /**
          * (Coolnether123) Main entry point for resolving mod load order.
          */
-        public static ResolutionResult Resolve(List<ModEntry> discovered, IEnumerable<string> userOrder)
+        public static ResolutionResult Resolve(List<ModTypes.ModInfo> discovered, IEnumerable<string> userOrder)
         {
-            Dictionary<string, ModEntry> byId;
+            Dictionary<string, ModTypes.ModInfo> byId;
             List<string> ids;
             Dictionary<string, int> priority;
             InitializeModData(discovered, userOrder, out byId, out ids, out priority);
@@ -171,7 +200,7 @@ namespace ModAPI.Core
 
             var sortResult = PerformTopologicalSort(ids, graphResult.Adj, graphResult.Indeg, priority);
 
-            var resultMods = new List<ModEntry>(sortResult.SortedIds.Count);
+            var resultMods = new List<ModTypes.ModInfo>(sortResult.SortedIds.Count);
             foreach (var id in sortResult.SortedIds)
                 if (byId.ContainsKey(id)) resultMods.Add(byId[id]);
 
@@ -182,12 +211,12 @@ namespace ModAPI.Core
          * (Coolnether123) Evaluates an existing user order for dependency issues.
          * Returns both the correctly sorted order and sets of misordered ids.
          */
-        public static OrderEvaluation Evaluate(List<ModEntry> discovered, IEnumerable<string> userOrder)
+        public static OrderEvaluation Evaluate(List<ModTypes.ModInfo> discovered, IEnumerable<string> userOrder)
         {
-            if (discovered == null) discovered = new List<ModEntry>();
+            if (discovered == null) discovered = new List<ModTypes.ModInfo>();
             if (userOrder == null) userOrder = new string[0];
 
-            Dictionary<string, ModEntry> byId;
+            Dictionary<string, ModTypes.ModInfo> byId;
             List<string> ids;
             Dictionary<string, int> priority;
             InitializeModData(discovered, userOrder, out byId, out ids, out priority);
@@ -243,7 +272,7 @@ namespace ModAPI.Core
         /**
          * (Coolnether123) Extracts a unique ID for a given mod.
          */
-        private static string GetModId(ModEntry m)
+        private static string GetModId(ModTypes.ModInfo m)
         {
             // (Coolnether123) ID fallback order: About.id -> ModEntry.Id -> Name -> RootPath.
             var id = (m.About != null && !string.IsNullOrEmpty(m.About.id)) ? m.About.id.Trim().ToLowerInvariant() : (m.Id ?? m.Name ?? m.RootPath);
@@ -255,9 +284,9 @@ namespace ModAPI.Core
         /**
          * (Coolnether123) Prepares data structures for sorting, mapping mods by ID and priority.
          */
-        private static void InitializeModData(List<ModEntry> discovered, IEnumerable<string> userOrder, out Dictionary<string, ModEntry> byId, out List<string> ids, out Dictionary<string, int> priority)
+        private static void InitializeModData(List<ModTypes.ModInfo> discovered, IEnumerable<string> userOrder, out Dictionary<string, ModTypes.ModInfo> byId, out List<string> ids, out Dictionary<string, int> priority)
         {
-            byId = new Dictionary<string, ModEntry>(ModIdComparer);
+            byId = new Dictionary<string, ModTypes.ModInfo>(ModIdComparer);
             ids = new List<string>();
             foreach (var m in discovered)
             {
@@ -271,7 +300,7 @@ namespace ModAPI.Core
                 {
                     // (Coolnether123) Warn on duplicate mod ID; keep first entry.
                     var existing = byId[id];
-                    MMLog.Write($"Warning: Duplicate mod ID '{id}' detected. Keeping '{existing.RootPath}', ignoring '{m.RootPath}'.");
+                    // Debug.WriteLine($"Warning: Duplicate mod ID '{id}' detected. Keeping '{existing.RootPath}', ignoring '{m.RootPath}'.");
                 }
             }
 
@@ -295,7 +324,7 @@ namespace ModAPI.Core
         /**
          * (Coolnether123) Constructs the dependency graph from all discovered mods.
          */
-        private static GraphBuilderResult BuildDependencyGraph(List<ModEntry> discovered, Dictionary<string, ModEntry> byId)
+        private static GraphBuilderResult BuildDependencyGraph(List<ModTypes.ModInfo> discovered, Dictionary<string, ModTypes.ModInfo> byId)
         {
             var result = new GraphBuilderResult();
             var adj = result.Adj;
@@ -415,13 +444,13 @@ namespace ModAPI.Core
                     version = new Version(versionStr); 
                 }
                 catch (Exception e) {
-                    MMLog.Write($"Warning: Could not parse version '{versionStr}' in dependency string '{raw}'. Ignoring version constraint. Error: {e.Message}");
+                    // Debug.WriteLine($"Warning: Could not parse version '{versionStr}' in dependency string '{raw}'. Ignoring version constraint. Error: {e.Message}");
                 }
             }
             
             // (Coolnether123) Warn on ambiguous constraints (e.g. 'id >=').
             if (!string.IsNullOrEmpty(op) && version == null || string.IsNullOrEmpty(op) && version != null) {
-                MMLog.Write($"Warning: Ambiguous version constraint in '{raw}'. Treating as simple dependency on '{id}'.");
+                // Debug.WriteLine($"Warning: Ambiguous version constraint in '{raw}'. Treating as simple dependency on '{id}'.");
                 return new ModConstraint(id);
             }
             
@@ -522,7 +551,7 @@ namespace ModAPI.Core
                 // Unresolvable hard cycle: add remaining nodes by priority.
                 if (resolvedFromCycle.Count < remainingNodes.Count)
                 {
-                    MMLog.Write("Unresolvable load order cycle detected.");
+                    // Debug.WriteLine("Unresolvable load order cycle detected.");
                     foreach (var id in remainingNodes)
                     {
                         if (!resolvedFromCycle.Contains(id)) cycled.Add(id);
@@ -569,7 +598,7 @@ namespace ModAPI.Core
             }
             catch (Exception ex)
             {
-                MMLog.Write("Failed to read loadorder.json: " + ex.Message);
+                // Debug.WriteLine("Failed to read loadorder.json: " + ex.Message);
             }
             return processedData;
         }

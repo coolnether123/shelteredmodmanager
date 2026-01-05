@@ -5,10 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Drawing;
 using System.Web.Script.Serialization;
-using ModAPI;
-using ModAPI.Core;
 using Manager;
-
 
 /**
  * Author: benjaminfoo
@@ -28,6 +25,7 @@ namespace Manager
         public string currentGameDirectoryPath = DEFAULT_VALUE;
 
         private OpenFileDialog fileDialog = new OpenFileDialog();
+        private static readonly string ManagerLogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "mod_manager.log");
 
         // Model for mod items shown in lists (Coolnether123)
         private class ModListItem
@@ -37,7 +35,7 @@ namespace Manager
             public string RootPath;        // mod folder or dll folder
             public bool IsDirectory;       // true for folder-based mods
             public bool HasAbout;       // About/About.json exists
-            public ModAbout About;   // may be null
+            public ModTypes.ModAboutInfo About;   // may be null
             public string PreviewPath;     // About/preview.png if exists
             public bool IsEnabled;         // Enabled/disabled status
             public override string ToString() { return DisplayName; }
@@ -89,6 +87,12 @@ namespace Manager
             try { uiInstalledModsListView.SelectionMode = SelectionMode.MultiExtended; } catch { }
             // Owner-draw to color code misordered mods
             try { uiInstalledModsListView.DrawMode = DrawMode.OwnerDrawFixed; uiInstalledModsListView.DrawItem += uiInstalledModsListView_DrawItem; } catch { }
+            try
+            {
+                uiAvailbleModsListView.SelectedIndexChanged += OnModSelectionChanged;
+                uiInstalledModsListView.SelectedIndexChanged += OnModSelectionChanged;
+            }
+            catch { }
 
             LoadSettings(); // Load all settings from INI
             updateAvailableMods();
@@ -96,6 +100,8 @@ namespace Manager
             // Apply the initial theme to all controls
             ThemeManager.IsDarkMode = darkModeToggle.Checked;
             ThemeManager.ApplyTheme(this);
+
+            UpdateModDetails(null);
         }
 
         /// <summary>
@@ -112,6 +118,7 @@ namespace Manager
 
             uiAvailbleModsListView.Items.Clear();
             uiInstalledModsListView.Items.Clear();
+            UpdateModDetails(null);
 
             // Discover all mods
             var allMods = DiscoverModsFromRoot(uiModsPath.Text);
@@ -176,23 +183,20 @@ namespace Manager
             try { uiInstalledModsListView.Invalidate(); } catch { }
         }
 
-        // Convert UI items to ModAPI ModEntry list for resolver
-        private List<ModEntry> ToModEntries(List<ModListItem> items)
+        // Convert UI items to lightweight mod info for resolver
+        private List<ModTypes.ModInfo> ToModEntries(List<ModListItem> items)
         {
-            var list = new List<ModEntry>();
+            var list = new List<ModTypes.ModInfo>();
             foreach (var it in items)
             {
                 try
                 {
                     var aboutPath = Path.Combine(it.RootPath ?? string.Empty, "About\\About.json");
-                    list.Add(new ModEntry
+                    list.Add(new ModTypes.ModInfo
                     {
                         Id = (it.Id ?? string.Empty).Trim().ToLowerInvariant(),
                         Name = it.DisplayName,
-                        Version = it.About != null ? it.About.version : null,
                         RootPath = it.RootPath,
-                        AboutPath = File.Exists(aboutPath) ? aboutPath : null,
-                        AssembliesPath = Path.Combine(it.RootPath ?? string.Empty, "Assemblies"),
                         About = it.About
                     });
                 }
@@ -250,38 +254,105 @@ namespace Manager
 
         private ModListItem BuildItemFromDirectory(string dir)
         {
-            var aboutDir = Path.Combine(dir, "About");
-            var aboutJson = Path.Combine(aboutDir, "About.json");
-            ModAbout about = null;
-            string id = null, display = Path.GetFileName(dir);
-            string preview = null;
-            if (File.Exists(aboutJson))
-            {
-                try
-                {
-                    var text = File.ReadAllText(aboutJson);
-                    about = new JavaScriptSerializer().Deserialize<ModAbout>(text);
-                    if (about != null)
-                    {
-                        id = string.IsNullOrEmpty(about.id) ? null : about.id.Trim().ToLowerInvariant();
-                        display = string.IsNullOrEmpty(about.name) ? display : about.name;
-                    }
-                }
-                catch { } // Ignore exceptions during JSON deserialization
-                var prev = Path.Combine(aboutDir, "preview.png");
-                if (File.Exists(prev)) preview = prev;
-            }
+            ModTypes.ModAboutInfo about;
+            string normalizedId, display, preview;
+            var hasAbout = ModAboutReader.TryLoad(dir, out about, out normalizedId, out display, out preview);
+
+            var fallbackDisplay = Path.GetFileName(dir);
+            var finalDisplay = !string.IsNullOrEmpty(display) ? display : fallbackDisplay;
+            var finalId = !string.IsNullOrEmpty(normalizedId) ? normalizedId : finalDisplay.ToLowerInvariant();
+
             return new ModListItem
             {
-                DisplayName = display,
-                Id = id ?? display.ToLowerInvariant(),
+                DisplayName = finalDisplay,
+                Id = finalId,
                 RootPath = dir,
                 IsDirectory = true,
-                HasAbout = File.Exists(aboutJson),
+                HasAbout = hasAbout,
                 About = about,
                 PreviewPath = preview,
                 IsEnabled = false
             };
+        }
+
+        private void OnModSelectionChanged(object sender, EventArgs e)
+        {
+            try
+            {
+                var listBox = sender as ListBox;
+                var item = listBox != null ? listBox.SelectedItem as ModListItem : null;
+                if (item == null)
+                {
+                    // If nothing selected in the sender, try the other list for single-selection convenience.
+                    if (listBox == uiAvailbleModsListView && uiInstalledModsListView.SelectedItem != null)
+                        item = uiInstalledModsListView.SelectedItem as ModListItem;
+                    else if (listBox == uiInstalledModsListView && uiAvailbleModsListView.SelectedItem != null)
+                        item = uiAvailbleModsListView.SelectedItem as ModListItem;
+                }
+                UpdateModDetails(item);
+            }
+            catch { UpdateModDetails(null); }
+        }
+
+        private void UpdateModDetails(ModListItem item)
+        {
+            if (item == null)
+            {
+                ClearModDetails();
+                return;
+            }
+
+            var about = item.About;
+            lblName.Text = about != null && !string.IsNullOrEmpty(about.name) ? about.name : item.DisplayName;
+            lblId.Text = about != null && !string.IsNullOrEmpty(about.id) ? about.id : item.Id;
+            lblVersion.Text = about != null && !string.IsNullOrEmpty(about.version) ? about.version : "Unknown";
+
+            if (about != null && about.authors != null && about.authors.Length > 0)
+                lblAuthors.Text = string.Join(", ", about.authors);
+            else
+                lblAuthors.Text = "Unknown";
+
+            if (about != null && about.tags != null && about.tags.Length > 0)
+                lblTags.Text = string.Join(", ", about.tags);
+            else
+                lblTags.Text = "None";
+
+            if (about != null && about.dependsOn != null && about.dependsOn.Length > 0)
+                lblDependsOn.Text = string.Join(", ", about.dependsOn);
+            else
+                lblDependsOn.Text = "None";
+
+            lblWebsite.Text = about != null && !string.IsNullOrEmpty(about.website) ? about.website : "None";
+            rtbDescription.Text = about != null && !string.IsNullOrEmpty(about.description) ? about.description : "No description provided.";
+
+            try
+            {
+                if (!string.IsNullOrEmpty(item.PreviewPath) && File.Exists(item.PreviewPath))
+                {
+                    pbPreview.ImageLocation = item.PreviewPath;
+                    pbPreview.Visible = true;
+                }
+                else
+                {
+                    pbPreview.Image = null;
+                    pbPreview.ImageLocation = null;
+                    pbPreview.Visible = false;
+                }
+            }
+            catch { }
+        }
+
+        private void ClearModDetails()
+        {
+            lblName.Text = "Name: -";
+            lblId.Text = "ID: -";
+            lblVersion.Text = "Version: -";
+            lblAuthors.Text = "Authors: -";
+            lblTags.Text = "Tags: -";
+            lblDependsOn.Text = "Depends On: -";
+            lblWebsite.Text = "Website: -";
+            rtbDescription.Text = string.Empty;
+            try { pbPreview.Image = null; pbPreview.ImageLocation = null; pbPreview.Visible = false; } catch { }
         }
 
         private List<ModListItem> ApplySavedOrder(List<ModListItem> items, string[] order)
@@ -583,18 +654,90 @@ namespace Manager
                 // --- FIX 1: COPY THE LOADER FILES ---
                 // Copy the entire SMM directory (containing Doorstop.dll, ModAPI.dll, etc.)
                 // from the Manager's location to the game's directory.
-                string managerSmmDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SMM");
+                var baseDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string managerSmmDir = Path.Combine(baseDir, "SMM");
                 string gameSmmDir = Path.Combine(gameDir, "SMM");
-                if (Directory.Exists(managerSmmDir))
+
+                // If Manager.exe itself lives in an SMM folder, use that folder directly.
+                if (!Directory.Exists(managerSmmDir))
                 {
-                    // We use a helper method to copy recursively, which you already have.
+                    var baseName = Path.GetFileName(baseDir);
+                    if (!string.IsNullOrEmpty(baseName) && baseName.Equals("SMM", StringComparison.OrdinalIgnoreCase))
+                    {
+                        managerSmmDir = baseDir;
+                    }
+                    else
+                    {
+                        var parent = Directory.GetParent(baseDir);
+                        var sibling = parent != null ? Path.Combine(parent.FullName, "SMM") : null;
+                        if (!string.IsNullOrEmpty(sibling) && Directory.Exists(sibling))
+                        {
+                            managerSmmDir = sibling;
+                        }
+                    }
+                }
+
+                bool samePath = string.Equals(
+                    Path.GetFullPath(managerSmmDir ?? string.Empty).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    Path.GetFullPath(gameSmmDir ?? string.Empty).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    StringComparison.OrdinalIgnoreCase);
+
+                if (Directory.Exists(managerSmmDir) && !samePath)
+                {
+                    SafeLog($"Copying SMM from '{managerSmmDir}' to '{gameSmmDir}'.");
                     CopyDirectory(managerSmmDir, gameSmmDir, true);
+                }
+                else if (!Directory.Exists(managerSmmDir))
+                {
+                    SafeLog($"SMM source folder not found near manager (looked for '{managerSmmDir}').");
+                    System.Windows.Forms.MessageBox.Show("Could not find the 'SMM' directory alongside the manager. Continuing without copying SMM files; mod loading may fail.",
+                        "Configuration Warning", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
                 }
                 else
                 {
-                    System.Windows.Forms.MessageBox.Show("Could not find the 'SMM' directory next to the manager executable. Mod loading will fail.",
-                        "Configuration Error", (System.Windows.Forms.MessageBoxButtons)1, System.Windows.Forms.MessageBoxIcon.Error);
-                    return;
+                    SafeLog("Manager is running from the target SMM folder; skipping copy.");
+                }
+
+                // Ensure critical files exist in game SMM\bin
+                try
+                {
+                    var gameBinDir = Path.Combine(gameSmmDir, "bin");
+                    var managerBinDir = Path.Combine(managerSmmDir, "bin");
+                    Directory.CreateDirectory(gameBinDir);
+                    var sourceDoorstop = Path.Combine(managerBinDir, "Doorstop.dll");
+                    var targetDoorstop = Path.Combine(gameBinDir, "Doorstop.dll");
+                    if (File.Exists(sourceDoorstop))
+                    {
+                        File.Copy(sourceDoorstop, targetDoorstop, true);
+                        SafeLog($"Copied Doorstop to '{targetDoorstop}'.");
+                    }
+                    else
+                    {
+                        SafeLog($"Doorstop.dll missing at '{sourceDoorstop}'.");
+                    }
+
+                    var sourceModApi = Path.Combine(managerSmmDir, "ModAPI.dll");
+                    var targetModApi = Path.Combine(gameSmmDir, "ModAPI.dll");
+                    if (File.Exists(sourceModApi))
+                    {
+                        try
+                        {
+                            File.Copy(sourceModApi, targetModApi, true);
+                            SafeLog($"Copied ModAPI to '{targetModApi}'.");
+                        }
+                        catch (Exception ex)
+                        {
+                            SafeLog($"ModAPI copy failed (likely locked) from '{sourceModApi}' to '{targetModApi}': {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        SafeLog($"ModAPI.dll missing at '{sourceModApi}'.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    SafeLog("Error ensuring critical files in SMM/bin: " + ex.Message);
                 }
 
                 // --- FIX 2: CORRECTLY CONSTRUCT AND USE THE DLL SEARCH PATH ---
@@ -773,7 +916,7 @@ namespace Manager
             return Uri.UnescapeDataString(relativeUri.ToString()).Replace('/', Path.DirectorySeparatorChar);
         }
 
-        // Helper to recursively copy a directory
+        // Helper to recursively copy a directory (skips Manager.exe; logs/ignores locked files)
         private void CopyDirectory(string sourceDir, string destinationDir, bool recursive)
         {
             var dir = new DirectoryInfo(sourceDir);
@@ -786,8 +929,17 @@ namespace Manager
 
             foreach (FileInfo file in dir.GetFiles())
             {
-                string targetFilePath = Path.Combine(destinationDir, file.Name);
-                file.CopyTo(targetFilePath, true);
+                if (file.Name.Equals("Manager.exe", StringComparison.OrdinalIgnoreCase)) continue;
+                try
+                {
+                    string targetFilePath = Path.Combine(destinationDir, file.Name);
+                    file.CopyTo(targetFilePath, true);
+                }
+                catch (Exception ex)
+                {
+                    // Ignore locked files (e.g., ModAPI.dll in use) and continue copying others.
+                    SafeLog($"CopyDirectory: skipped '{file.FullName}': {ex.Message}");
+                }
             }
 
             if (recursive)
@@ -798,6 +950,15 @@ namespace Manager
                     CopyDirectory(subDir.FullName, newDestinationDir, true);
                 }
             }
+        }
+
+        private void SafeLog(string message)
+        {
+            try
+            {
+                File.AppendAllText(ManagerLogPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}{Environment.NewLine}");
+            }
+            catch { }
         }
     }
 }

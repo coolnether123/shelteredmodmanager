@@ -127,13 +127,15 @@ namespace ModAPI.Core
 
         private static void WriteStartupBanner()
         {
+            var unityVersion = RuntimeCompat.UnityVersion;
+            var gameVersion = RuntimeCompat.GameVersion;
             var banner = new StringBuilder();
             banner.AppendLine("=================================================================================");
             banner.AppendLine("                    SHELTERED MOD LOADER - DEBUG LOG");
             banner.AppendLine("=================================================================================");
             banner.AppendLine($"Session Started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-            banner.AppendLine($"Game Version: {Application.version}");
-            banner.AppendLine($"Unity Version: {Application.unityVersion}");
+            banner.AppendLine($"Game Version: {gameVersion}");
+            banner.AppendLine($"Unity Version: {unityVersion}");
             banner.AppendLine($"Platform: {Application.platform}");
             banner.AppendLine($"Data Path: {Application.dataPath}");
             banner.AppendLine($"Persistent Data: {Application.persistentDataPath}");
@@ -156,6 +158,8 @@ namespace ModAPI.Core
             try { File.AppendAllText(_logPath, banner.ToString(), Encoding.UTF8); } 
             catch { }
         }
+
+        // Version probes are centralized in RuntimeCompat to keep 5.3/5.6 differences in one place.
 
         private static LogLevel? TryParseLogLevel(string value)
         {

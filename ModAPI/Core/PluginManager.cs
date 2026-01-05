@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using HarmonyLib;
+using ModAPI.Harmony;
 using UnityEngine;
-
-using static ModAPI.Core.LoadOrderResolver;
 
 namespace ModAPI.Core
 {
@@ -51,75 +51,93 @@ namespace ModAPI.Core
 
         public void loadAssemblies(GameObject doorstepGameObject)
         {
-
-            // 1. Initialize core loader components and Harmony
             InitializeLoader(doorstepGameObject);
-            // 2. Discover and order mods based on loadorder.json and dependencies
-            var orderedMods = DiscoverAndOrderMods();
 
-            // 3. Attach inspector tools for debugging (if not already present)
+            var orderedModIds = ReadLoadOrderFromFile(_modsRoot);
+            DiscoverAndOrderMods(orderedModIds);
+
             AttachInspectorTools();
-
-            // 4. Load mod assemblies and initialize plugins
-            LoadAndInitializePlugins(orderedMods);
+            LoadAndInitializePlugins(LoadedMods);
 
             MMLog.Write($"[loader] Loaded {_plugins.Count} plugin(s). Updates={_updates.Count}, Shutdown={_shutdown.Count}, SceneEvents={_sceneEvents.Count}");
         }
 
         private void InitializeLoader(GameObject doorstepGameObject)
         {
-            try { ModAPI.Harmony.HarmonyBootstrap.EnsurePatched(); }
-            catch (Exception ex) { MMLog.Write("PluginManager: HarmonyBootstrap.EnsurePatched failed: " + ex.Message); }
-
-            // Apply save protection patches
-            SaveProtectionPatches.ApplyPatches(new HarmonyLib.Harmony("ShelteredModManager.SaveProtection"));
-
             _gameRoot = Directory.GetParent(Application.dataPath).FullName;
             _modsRoot = Path.Combine(_gameRoot, "mods");
-            _loaderRoot = doorstepGameObject;
 
-            var runner = _loaderRoot.GetComponent<PluginRunner>();
-            if (runner == null) runner = _loaderRoot.AddComponent<PluginRunner>();
+            _loaderRoot = doorstepGameObject != null ? doorstepGameObject : new GameObject("ModAPI.Loader");
+            UnityEngine.Object.DontDestroyOnLoad(_loaderRoot);
+
+            var runner = _loaderRoot.GetComponent<PluginRunner>() ?? _loaderRoot.AddComponent<PluginRunner>();
             runner.Manager = this;
-        }
 
-        private List<ModEntry> DiscoverAndOrderMods()
-        {
-            var processedLof = LoadOrderResolver.ReadLoadOrderFile(_modsRoot);
-            var discovered = ModDiscovery.DiscoverAllMods();
-
+            HarmonyBootstrap.EnsurePatched();
             try
             {
-                var lofPath = Path.Combine(_modsRoot, "loadorder.json");
-                var hasLoadOrder = File.Exists(lofPath);
-                if (hasLoadOrder)
+                var harmony = new HarmonyLib.Harmony("ShelteredModManager.PluginManager");
+                SaveProtectionPatches.ApplyPatches(harmony);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("PluginManager.InitializeLoader", "Failed to apply save protection patches: " + ex.Message);
+            }
+        }
+
+        private List<string> ReadLoadOrderFromFile(string modsRoot)
+        {
+            var orderedIds = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var path = Path.Combine(modsRoot ?? string.Empty, "loadorder.json");
+                if (!File.Exists(path)) return orderedIds;
+
+                var json = File.ReadAllText(path);
+                var obj = JsonUtility.FromJson<SimpleLoadOrder>(json);
+                if (obj != null && obj.order != null)
                 {
-                    var allowed = new HashSet<string>(processedLof.Order ?? new string[0], StringComparer.OrdinalIgnoreCase);
-                    discovered = discovered.Where(m => allowed.Contains(m.Id)).ToList();
-                    if (processedLof.Mods != null && processedLof.Mods.Count > 0)
+                    foreach (var raw in obj.order)
                     {
-                        discovered = discovered.Where(m => {
-                            ModStatusEntry st;
-                            return !processedLof.Mods.TryGetValue(m.Id, out st) || st.enabled;
-                        }).ToList();
+                        if (string.IsNullOrEmpty(raw)) continue;
+                        var id = raw.Trim().ToLowerInvariant();
+                        if (seen.Add(id)) orderedIds.Add(id);
                     }
                 }
-                else
+            }
+            catch (Exception ex)
+            {
+                MMLog.Write("Failed to read loadorder.json: " + ex.Message);
+            }
+            return orderedIds;
+        }
+
+        private class SimpleLoadOrder { public string[] order; }
+
+        private void DiscoverAndOrderMods(List<string> orderedModIds)
+        {
+            var discovered = ModDiscovery.DiscoverAllMods();
+            if (orderedModIds == null || orderedModIds.Count == 0)
+            {
+                LoadedMods = discovered;
+                return;
+            }
+
+            var ordered = new List<ModEntry>();
+            var enabled = new HashSet<string>(orderedModIds, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var id in orderedModIds)
+            {
+                var mod = discovered.FirstOrDefault(m => string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase));
+                if (mod != null)
                 {
-                    MMLog.Write("[loader] No loadorder.json found. Skipping all mods until one is created by the Manager.");
-                    discovered = new List<ModEntry>();
+                    ordered.Add(mod);
                 }
             }
-            catch (Exception ex) { MMLog.WarnOnce("PluginManager.DiscoverAndOrderMods.Filter", "Error filtering mods: " + ex.Message); }
 
-            var resolution = LoadOrderResolver.Resolve(discovered, processedLof.Order ?? new string[0]);
-            LoadedMods = resolution.Mods; // Update static property
-            if (resolution.MissingHardDependencies != null && resolution.MissingHardDependencies.Count > 0)
-            {
-                foreach (var e in resolution.MissingHardDependencies)
-                    MMLog.Write("[loader] dependency error: " + e);
-            }
-            return LoadedMods;
+            // Keep loaded mods aligned with enabled list only.
+            LoadedMods = ordered;
         }
 
         private void AttachInspectorTools()
@@ -136,12 +154,18 @@ namespace ModAPI.Core
 
         private void LoadAndInitializePlugins(List<ModEntry> orderedMods)
         {
+            MMLog.Write($"[loader] LoadAndInitializePlugins: Starting with {orderedMods.Count} mods");
+
             foreach (var entry in orderedMods)
             {
+                MMLog.Write($"[loader] Processing mod: {entry.Id}");
+
                 List<Assembly> modAssemblies = null;
                 try
                 {
+                    MMLog.Write($"[loader] Loading assemblies for {entry.Id} from {entry.AssembliesPath}");
                     modAssemblies = ModDiscovery.LoadAssemblies(entry);
+                    MMLog.Write($"[loader] Loaded {modAssemblies.Count} assemblies for {entry.Id}");
                 }
                 catch (Exception ex)
                 {
@@ -155,12 +179,14 @@ namespace ModAPI.Core
                     try { types = asm.GetTypes(); }
                     catch (ReflectionTypeLoadException rtle) { types = rtle.Types.Where(x => x != null).ToArray(); }
 
+                    MMLog.Write($"[loader] Found {types.Length} types in assembly {asm.FullName}");
+
                     foreach (var type in types)
                     {
                         if (type == null || type.IsAbstract || !type.IsClass) continue;
                         if (!typeof(IModPlugin).IsAssignableFrom(type)) continue;
 
-                        MMLog.WriteDebug($"[loader] Found potential plugin: {type.FullName}");
+                        MMLog.Write($"[loader] Found IModPlugin: {type.FullName}");
 
                         try
                         {
@@ -175,9 +201,9 @@ namespace ModAPI.Core
                             var s = plugin as IModShutdown; if (s != null) _shutdown.Add(s);
                             var se = plugin as IModSceneEvents; if (se != null) _sceneEvents.Add(se);
 
-                            MMLog.WriteDebug($"[loader] Initializing plugin: {type.FullName}");
+                            MMLog.Write($"[loader] Initializing plugin: {type.FullName}");
                             plugin.Initialize(ctx);
-                            MMLog.WriteDebug($"[loader] Starting plugin: {type.FullName}");
+                            MMLog.Write($"[loader] Starting plugin: {type.FullName}");
                             plugin.Start(ctx);
                             ctx.Log.Info("Started.");
                         }
@@ -188,6 +214,8 @@ namespace ModAPI.Core
                     }
                 }
             }
+
+            MMLog.Write($"[loader] LoadAndInitializePlugins complete. Total plugins loaded: {_plugins.Count}");
         }
 
         internal void EnqueueNextFrame(Action a)
@@ -349,44 +377,50 @@ namespace ModAPI.Core
         {
             try
             {
-                var sceneManagerType = Type.GetType("UnityEngine.SceneManagement.SceneManager, UnityEngine");
-                if (sceneManagerType == null) throw new Exception("Modern SceneManager not found.");
-
-                var sceneLoadedEvent = sceneManagerType.GetEvent("sceneLoaded");
-                if (sceneLoadedEvent == null) throw new Exception("sceneLoaded event not found.");
-
-                _sceneLoadedDelegate = Delegate.CreateDelegate(sceneLoadedEvent.EventHandlerType, this, GetType().GetMethod("OnSceneLoadedModern", BindingFlags.NonPublic | BindingFlags.Instance));
-                sceneLoadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneLoadedDelegate });
-
-                var sceneUnloadedEvent = sceneManagerType.GetEvent("sceneUnloaded");
-                if (sceneUnloadedEvent != null)
+                if (RuntimeCompat.IsModernSceneApi)
                 {
-                    _sceneUnloadedDelegate = Delegate.CreateDelegate(sceneUnloadedEvent.EventHandlerType, this, GetType().GetMethod("OnSceneUnloadedModern", BindingFlags.NonPublic | BindingFlags.Instance));
-                    sceneUnloadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneUnloadedDelegate });
+                    var sceneManagerType = Type.GetType("UnityEngine.SceneManagement.SceneManager, UnityEngine");
+                    var sceneLoadedEvent = sceneManagerType?.GetEvent("sceneLoaded");
+                    if (sceneLoadedEvent != null)
+                    {
+                        _sceneLoadedDelegate = Delegate.CreateDelegate(sceneLoadedEvent.EventHandlerType, this, GetType().GetMethod("OnSceneLoadedModern", BindingFlags.NonPublic | BindingFlags.Instance));
+                        sceneLoadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneLoadedDelegate });
+                    }
+
+                    var sceneUnloadedEvent = sceneManagerType?.GetEvent("sceneUnloaded");
+                    if (sceneUnloadedEvent != null)
+                    {
+                        _sceneUnloadedDelegate = Delegate.CreateDelegate(sceneUnloadedEvent.EventHandlerType, this, GetType().GetMethod("OnSceneUnloadedModern", BindingFlags.NonPublic | BindingFlags.Instance));
+                        sceneUnloadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneUnloadedDelegate });
+                    }
+
+                    IsModernUnity = true;
+                    _useModernApi = true;
+                    MMLog.Write("[PluginRunner] Using modern SceneManager events (Unity 5.4+).");
+
+                    try
+                    {
+                        var activeSceneProp = sceneManagerType?.GetProperty("activeScene");
+                        var activeScene = activeSceneProp != null ? activeSceneProp.GetValue(null, null) : null;
+                        var isLoadedProp = activeScene != null ? activeScene.GetType().GetProperty("isLoaded") : null;
+                        if (activeScene != null && isLoadedProp != null && (bool)isLoadedProp.GetValue(activeScene, null))
+                        {
+                            OnSceneLoadedModern(activeScene, null);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MMLog.WarnOnce("PluginRunner.ActiveScene", "Failed to read activeScene: " + ex.Message);
+                    }
                 }
-
-                IsModernUnity = true;
-                _useModernApi = true;
-                MMLog.Write("[PluginRunner] Using modern SceneManager events (Unity 5.4+).");
-
-                var activeScene = sceneManagerType.GetProperty("activeScene").GetValue(null, null);
-                var isLoadedProp = activeScene.GetType().GetProperty("isLoaded");
-                if ((bool)isLoadedProp.GetValue(activeScene, null))
+                else
                 {
-                    OnSceneLoadedModern(activeScene, null);
+                    ThrowLegacyFallback();
                 }
             }
             catch (Exception)
             {
-                IsModernUnity = false;
-                MMLog.Write("[PluginRunner] Modern SceneManager not found. Using legacy OnLevelWasLoaded (Unity 5.3).");
-
-                _currentSceneName = Application.loadedLevelName;
-                if (Manager != null && !string.IsNullOrEmpty(_currentSceneName))
-                {
-                    Manager.OnSceneLoaded(_currentSceneName);
-                    SceneLoaded?.Invoke(_currentSceneName);
-                }
+                ThrowLegacyFallback();
             }
         }
 
@@ -462,6 +496,20 @@ namespace ModAPI.Core
                 }
             }
             if (Manager != null) Manager.OnUnityUpdate();
+        }
+
+        private void ThrowLegacyFallback()
+        {
+            if (_useModernApi) return;
+            IsModernUnity = false;
+            MMLog.Write("[PluginRunner] Modern SceneManager not found. Using legacy OnLevelWasLoaded (Unity 5.3).");
+
+            _currentSceneName = Application.loadedLevelName;
+            if (Manager != null && !string.IsNullOrEmpty(_currentSceneName))
+            {
+                Manager.OnSceneLoaded(_currentSceneName);
+                SceneLoaded?.Invoke(_currentSceneName);
+            }
         }
     }
 
