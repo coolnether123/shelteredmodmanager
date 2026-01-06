@@ -59,6 +59,7 @@
   <ItemGroup>
     <Compile Include="Content\ContentRegistry.cs" />
     <Compile Include="Content\ContentResolver.cs" />
+    <Compile Include="Content\ContentInjector.cs" />
     <Compile Include="Core\IPlugin.cs" />
     <Compile Include="Core\MMLog.cs" />
     <Compile Include="Core\LoggerExtensions.cs" />
@@ -80,11 +81,13 @@
     <Compile Include="Content\AssetLoader.cs" />
     <Compile Include="Util\SceneCompat.cs" />
     <Compile Include="Util\SceneUtil.cs" />
+    <Compile Include="Util\PersistentDataAPI.cs" />
     <Compile Include="Core\PluginManager.cs" />
     <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Reflection\Safe.cs" />
     <Compile Include="Util\GameUtil.cs" />
+    <Compile Include="Events\GameEvents.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
