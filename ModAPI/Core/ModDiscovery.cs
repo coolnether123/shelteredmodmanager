@@ -7,16 +7,11 @@ using UnityEngine;
 
 namespace ModAPI.Core
 {
-    /**
-     * Author: coolnether123
-     * Discovers mods in mods/enabled, reads About/About.json, and loads assemblies.
-     * Kept modular to keep PluginManager lean and focused.
-     * Coolnether123
-     */
     public static class ModDiscovery
     {
-        // Finds enabled mods with About/About.json and returns descriptors
-        // Coolnether123
+        /// <summary>
+        /// Finds mods with About/About.json and returns descriptors.
+        /// </summary>
         public static List<ModEntry> DiscoverAllMods()
         {
             var results = new List<ModEntry>();

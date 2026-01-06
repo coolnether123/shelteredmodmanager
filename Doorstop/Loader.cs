@@ -6,26 +6,13 @@ using System.Linq;
 using System.Threading;
 using UnityEngine;
 
-/**
- * Author: Coolnether123
- * 
- * A multi-stage, coroutine-based bootstrap for loading mods into Unity,
- * ensuring mods are loaded on the main thread after the game scene is initialized.
- * 
- * Based on the original ShelteredModManager project by benjaminfoo.
- */
-
-
 #region Entrypoint
 namespace Doorstop
 {
     public static class Entrypoint
     {
         /// <summary>
-        /// This is the initial entry point called by Unity Doorstop.
-        /// Its only responsibility is to safely kick off the mod loading process
-        /// on a background thread to avoid blocking the game's startup sequence.
-        /// All logging and error handling starts here.
+        /// Initial entry point invoked by Doorstop. Logs basics then starts the loader handshake.
         /// </summary>
         public static void Start()
         {
@@ -65,10 +52,8 @@ public static class Loader
     internal static bool BootstrapTriggered = false;
 
     /// <summary>
-    /// Launches the bootstrap process. Unity APIs must run on the main thread,
-    /// and Unity's internal calls are only registered after the first scene load.
-    /// We therefore wait for a real Unity log callback (which only fires after init)
-    /// and trigger from there.
+    /// Launches the bootstrap process. We wait for a Unity log callback to ensure
+    /// 5.3 internal calls are registered before creating GameObjects.
     /// </summary>
     public static void Launch()
     {

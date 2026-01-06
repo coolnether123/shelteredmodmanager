@@ -10,6 +10,9 @@ using UnityEngine;
 
 namespace ModAPI.Core
 {
+    /// <summary>
+    /// Discovers mods, loads assemblies, and wires plugin lifecycle callbacks.
+    /// </summary>
     public class PluginManager
     {
         private static PluginManager instance;
@@ -62,6 +65,9 @@ namespace ModAPI.Core
             MMLog.Write($"[loader] Loaded {_plugins.Count} plugin(s). Updates={_updates.Count}, Shutdown={_shutdown.Count}, SceneEvents={_sceneEvents.Count}");
         }
 
+        /// <summary>
+        /// Creates the loader GameObject, attaches the runner, and applies core patches.
+        /// </summary>
         private void InitializeLoader(GameObject doorstepGameObject)
         {
             _gameRoot = Directory.GetParent(Application.dataPath).FullName;
@@ -115,6 +121,9 @@ namespace ModAPI.Core
 
         private class SimpleLoadOrder { public string[] order; }
 
+        /// <summary>
+        /// Discovers mods on disk and applies load order if present.
+        /// </summary>
         private void DiscoverAndOrderMods(List<string> orderedModIds)
         {
             var discovered = ModDiscovery.DiscoverAllMods();
@@ -351,6 +360,9 @@ namespace ModAPI.Core
         }
     }
 
+    /// <summary>
+    /// Hosts plugin lifecycle, update ticks, and scene events with 5.3/5.6 compatibility.
+    /// </summary>
     public class PluginRunner : MonoBehaviour
     {
         public static bool IsModernUnity { get; private set; }
