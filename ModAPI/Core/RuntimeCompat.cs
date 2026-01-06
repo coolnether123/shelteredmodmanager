@@ -5,8 +5,8 @@ using UnityEngine;
 namespace ModAPI.Core
 {
     /// <summary>
-    /// Centralized compatibility helpers for supporting both Unity 5.3 (x86) and 5.6 (x64).
-    /// Keep all version-conditional logic here so mods can rely on a single surface.
+    /// Compatibility helpers for supporting both Unity 5.3 (x86) and 5.6 (x64).
+    /// Keep version-conditional logic here so mods can call one API surface.
     /// </summary>
     public static class RuntimeCompat
     {
@@ -35,7 +35,7 @@ namespace ModAPI.Core
         }
 
         /// <summary>
-        /// Unity 5.4+ provides SceneManager.sceneLoaded. On 5.3 this event is missing.
+        /// True when modern SceneManager events exist (Unity 5.4+); false on 5.3.
         /// </summary>
         public static bool IsModernSceneApi
         {

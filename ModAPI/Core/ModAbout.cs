@@ -3,13 +3,9 @@ using UnityEngine;
 
 namespace ModAPI.Core
 {
-    /**
-     * Author: coolnether123
-     * This file defines the ModAbout class and related types.
-     * It is deserialized from About/About.json using UnityEngine.JsonUtility.
-     * Fields are public to comply with JsonUtility requirements.
-     *
-     */
+    /// <summary>
+    /// DTO for About/About.json. Fields remain public for JsonUtility.
+    /// </summary>
     [Serializable]
     public class ModAbout
     {

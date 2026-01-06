@@ -7,15 +7,11 @@ using System.Drawing;
 using System.Web.Script.Serialization;
 using Manager;
 
-/**
- * Author: benjaminfoo
- * Maintainer: Coolnether123
- * See: https://github.com/benjaminfoo/shelteredmodmanager
- * 
- * This class contains the user interface for the mod-manager. 
- */
 namespace Manager
 {
+    /// <summary>
+    /// WinForms UI for configuring Sheltered mods, managing load order, and launching the game.
+    /// </summary>
     public partial class ManagerGUI : Form
     {
         public static string DEFAULT_VALUE = "None";

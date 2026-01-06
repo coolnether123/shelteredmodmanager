@@ -57,6 +57,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Content\ContentRegistry.cs" />
+    <Compile Include="Content\ContentResolver.cs" />
     <Compile Include="Core\IPlugin.cs" />
     <Compile Include="Core\MMLog.cs" />
     <Compile Include="Core\LoggerExtensions.cs" />
@@ -75,6 +77,8 @@
     <Compile Include="Core\ModAboutReader.cs" />
     <Compile Include="Core\ModDiscovery.cs" />
     <Compile Include="Core\RuntimeCompat.cs" />
+    <Compile Include="Content\AssetLoader.cs" />
+    <Compile Include="Util\SceneCompat.cs" />
     <Compile Include="Util\SceneUtil.cs" />
     <Compile Include="Core\PluginManager.cs" />
     <Compile Include="Core\SaveProtection.cs" />
