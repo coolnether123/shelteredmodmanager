@@ -66,10 +66,17 @@ namespace ModAPI.Harmony
                     {
                         try
                         {
-                            var who = mb is MethodBase ? ((MethodBase)mb).DeclaringType.FullName + "." + ((MethodBase)mb).Name : (mb != null ? mb.ToString() : "<null>");
+                            // DynamicMethod can have null DeclaringType; guard to avoid noisy warnings.
+                            var method = mb as MethodBase;
+                            var declaring = method != null ? (method.DeclaringType != null ? method.DeclaringType.FullName : "<dynamic>") : null;
+                            var who = method != null ? declaring + "." + method.Name : (mb != null ? mb.ToString() : "<null>");
                             MMLog.WriteDebug("[HarmonyBootstrap] " + who + " -> " + reason);
                         }
-                        catch (Exception ex) { MMLog.WarnOnce("HarmonyBootstrap.OnResult", "Error in OnResult callback: " + ex.Message); }
+                        catch (Exception ex)
+                        {
+                            // Swallow logging errors to avoid WarnOnce spam; only log concise debug info.
+                            MMLog.WriteDebug("[HarmonyBootstrap] OnResult logging skipped: " + ex.Message);
+                        }
                     }
                 };
 

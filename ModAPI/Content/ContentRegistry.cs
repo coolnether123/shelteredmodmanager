@@ -11,6 +11,11 @@ namespace ModAPI.Content
     /// </summary>
     public static class ContentRegistry
     {
+        private const int CustomItemTypeStart = 10000;
+        private const int CustomItemTypeRange = 900000;
+
+        private static readonly HashSet<int> _claimedIds = new HashSet<int>();
+
         /// <summary>Items to add to the game (IDs must be unique).</summary>
         public static readonly List<ItemDefinition> Items = new List<ItemDefinition>();
 
@@ -34,7 +39,27 @@ namespace ModAPI.Content
             {
                 try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
             }
+            EnsureCustomTypeId(def);
             Items.Add(def);
+        }
+
+        /// <summary>
+        /// Registers an item with deterministic custom item ID derived from modId + itemId.
+        /// Returns the assigned integer ID (>= 10000).
+        /// </summary>
+        public static int RegisterCustomItem(string modId, string itemId, ItemDefinition def)
+        {
+            if (def == null) throw new ArgumentNullException(nameof(def));
+            if (string.IsNullOrEmpty(modId)) throw new ArgumentNullException(nameof(modId));
+            if (string.IsNullOrEmpty(itemId)) throw new ArgumentNullException(nameof(itemId));
+
+            def.Id = string.IsNullOrEmpty(def.Id) ? itemId : def.Id;
+            EnsureOwner(def);
+
+            var id = ClaimCustomItemId(modId, itemId);
+            def.CustomTypeId = id;
+            Items.Add(def);
+            return id;
         }
 
         /// <summary>Register a new recipe.</summary>
@@ -57,6 +82,64 @@ namespace ModAPI.Content
             if (entry == null) throw new ArgumentNullException(nameof(entry));
             LootEntries.Add(entry);
         }
+
+        internal static int EnsureCustomTypeId(ItemDefinition def)
+        {
+            EnsureOwner(def);
+            if (def.CustomTypeId.HasValue) return def.CustomTypeId.Value;
+
+            var modId = ResolveModId(def.OwnerAssembly);
+            var itemKey = !string.IsNullOrEmpty(def.Id) ? def.Id : def.DisplayName ?? Guid.NewGuid().ToString("N");
+            var id = ClaimCustomItemId(modId, itemKey);
+            def.CustomTypeId = id;
+            return id;
+        }
+
+        private static int ClaimCustomItemId(string modId, string itemId)
+        {
+            var seed = (modId ?? "mod") + "|" + (itemId ?? "item");
+            var hash = seed.GetHashCode();
+            var positive = hash == int.MinValue ? int.MaxValue : Math.Abs(hash);
+            var id = CustomItemTypeStart + (positive % CustomItemTypeRange);
+
+            if (!_claimedIds.Add(id))
+            {
+                var baseId = id;
+                for (int attempt = 1; attempt < 50; attempt++)
+                {
+                    var candidate = baseId + attempt;
+                    if (candidate >= CustomItemTypeStart + CustomItemTypeRange)
+                        candidate = CustomItemTypeStart + (candidate % CustomItemTypeRange);
+                    if (_claimedIds.Add(candidate))
+                    {
+                        id = candidate;
+                        break;
+                    }
+                }
+                if (!_claimedIds.Contains(id))
+                    throw new InvalidOperationException($"No available custom item ID for {modId}.{itemId}");
+            }
+
+            return id;
+        }
+
+        private static void EnsureOwner(ItemDefinition def)
+        {
+            if (def.OwnerAssembly != null) return;
+            try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
+        }
+
+        private static string ResolveModId(System.Reflection.Assembly asm)
+        {
+            try
+            {
+                Core.ModEntry entry;
+                if (Core.ModRegistry.TryGetModByAssembly(asm, out entry) && entry != null && !string.IsNullOrEmpty(entry.Id))
+                    return entry.Id;
+            }
+            catch { }
+            try { return asm != null ? asm.GetName().Name : "mod"; } catch { return "mod"; }
+        }
     }
 
     /// <summary>Defines a new item and its assets.</summary>
@@ -70,6 +153,7 @@ namespace ModAPI.Content
         public string Category;          // optional in-game category
         public Dictionary<string, string> Metadata = new Dictionary<string, string>(); // extra key/value data
         internal System.Reflection.Assembly OwnerAssembly;
+        internal int? CustomTypeId;
 
         // Fluent helpers for convenience
         public ItemDefinition WithId(string id) { Id = id; return this; }

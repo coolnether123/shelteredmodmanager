@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Diagnostics;
 using HarmonyLib;
 using ModAPI.Harmony;
 using UnityEngine;
@@ -21,6 +22,7 @@ namespace ModAPI.Core
         private readonly List<IModUpdate> _updates;
         private readonly List<IModShutdown> _shutdown;
         private readonly List<IModSceneEvents> _sceneEvents;
+        private int _loadErrors;
 
         private GameObject _loaderRoot;
         private string _gameRoot;
@@ -54,7 +56,12 @@ namespace ModAPI.Core
 
         public void loadAssemblies(GameObject doorstepGameObject)
         {
+            var stopwatch = Stopwatch.StartNew();
+            _loadErrors = 0;
+
             InitializeLoader(doorstepGameObject);
+            LogAssemblyResolution();
+            LogSceneApiDetection();
 
             var orderedModIds = ReadLoadOrderFromFile(_modsRoot);
             DiscoverAndOrderMods(orderedModIds);
@@ -63,6 +70,10 @@ namespace ModAPI.Core
             LoadAndInitializePlugins(LoadedMods);
 
             MMLog.Write($"[loader] Loaded {_plugins.Count} plugin(s). Updates={_updates.Count}, Shutdown={_shutdown.Count}, SceneEvents={_sceneEvents.Count}");
+
+            stopwatch.Stop();
+            var ms = stopwatch.ElapsedMilliseconds;
+            MMLog.Write($"[Loader] Startup complete in {ms}ms. Loaded {_plugins.Count} plugin(s), {_loadErrors} error(s).");
         }
 
         /// <summary>
@@ -89,6 +100,55 @@ namespace ModAPI.Core
             {
                 MMLog.WarnOnce("PluginManager.InitializeLoader", "Failed to apply save protection patches: " + ex.Message);
             }
+        }
+
+        private void LogAssemblyResolution()
+        {
+            MMLog.Write("[Assembly Resolution]");
+            int failures = 0;
+
+            failures += LogAssembly("ModAPI", Assembly.GetExecutingAssembly());
+            failures += LogAssembly("0Harmony", ResolveAssemblyByType("HarmonyLib.Harmony, 0Harmony"));
+
+            MMLog.Write($"[Assembly Resolution] Failed Assemblies: {failures}");
+        }
+
+        private int LogAssembly(string name, Assembly asm)
+        {
+            if (asm == null)
+            {
+                MMLog.Write($"[Assembly Resolution] {name}.dll: <missing> ✗");
+                return 1;
+            }
+
+            var path = SafeAssemblyLocation(asm);
+            MMLog.Write($"[Assembly Resolution] {name}.dll: {path} ✓");
+            return 0;
+        }
+
+        private Assembly ResolveAssemblyByType(string typeName)
+        {
+            try
+            {
+                var t = Type.GetType(typeName, throwOnError: false);
+                return t != null ? t.Assembly : null;
+            }
+            catch { return null; }
+        }
+
+        private string SafeAssemblyLocation(Assembly asm)
+        {
+            try { return asm.Location; } catch { return "<location unavailable>"; }
+        }
+
+        private void LogSceneApiDetection()
+        {
+            var modernAvailable = RuntimeCompat.IsModernSceneApi;
+            var usingModern = PluginRunner.IsModernUnity;
+            MMLog.Write("[Scene API Detection]");
+            MMLog.Write($"Modern SceneManager: {(modernAvailable ? "AVAILABLE" : "NOT AVAILABLE (Unity 5.3)")}"); 
+            MMLog.Write($"Using: {(usingModern ? "Modern SceneManager events" : "Legacy OnLevelWasLoaded")}");
+            MMLog.Write("Status: ✓ Ready");
         }
 
         private List<string> ReadLoadOrderFromFile(string modsRoot)
@@ -179,6 +239,7 @@ namespace ModAPI.Core
                 catch (Exception ex)
                 {
                     MMLog.Write($"[loader] failed to load assemblies for '{entry.Id}': {ex.Message}");
+                    _loadErrors++;
                     continue;
                 }
 
@@ -219,6 +280,7 @@ namespace ModAPI.Core
                         catch (Exception ex)
                         {
                             MMLog.WriteError($"[loader] error starting plugin '{type.FullName}': {ex.Message}");
+                            _loadErrors++;
                         }
                     }
                 }
@@ -387,50 +449,9 @@ namespace ModAPI.Core
 
         private void Awake()
         {
-            try
-            {
-                if (RuntimeCompat.IsModernSceneApi)
-                {
-                    var sceneManagerType = Type.GetType("UnityEngine.SceneManagement.SceneManager, UnityEngine");
-                    var sceneLoadedEvent = sceneManagerType?.GetEvent("sceneLoaded");
-                    if (sceneLoadedEvent != null)
-                    {
-                        _sceneLoadedDelegate = Delegate.CreateDelegate(sceneLoadedEvent.EventHandlerType, this, GetType().GetMethod("OnSceneLoadedModern", BindingFlags.NonPublic | BindingFlags.Instance));
-                        sceneLoadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneLoadedDelegate });
-                    }
-
-                    var sceneUnloadedEvent = sceneManagerType?.GetEvent("sceneUnloaded");
-                    if (sceneUnloadedEvent != null)
-                    {
-                        _sceneUnloadedDelegate = Delegate.CreateDelegate(sceneUnloadedEvent.EventHandlerType, this, GetType().GetMethod("OnSceneUnloadedModern", BindingFlags.NonPublic | BindingFlags.Instance));
-                        sceneUnloadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneUnloadedDelegate });
-                    }
-
-                    IsModernUnity = true;
-                    _useModernApi = true;
-                    MMLog.Write("[PluginRunner] Using modern SceneManager events (Unity 5.4+).");
-
-                    try
-                    {
-                        var activeSceneProp = sceneManagerType?.GetProperty("activeScene");
-                        var activeScene = activeSceneProp != null ? activeSceneProp.GetValue(null, null) : null;
-                        var isLoadedProp = activeScene != null ? activeScene.GetType().GetProperty("isLoaded") : null;
-                        if (activeScene != null && isLoadedProp != null && (bool)isLoadedProp.GetValue(activeScene, null))
-                        {
-                            OnSceneLoadedModern(activeScene, null);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        MMLog.WarnOnce("PluginRunner.ActiveScene", "Failed to read activeScene: " + ex.Message);
-                    }
-                }
-                else
-                {
-                    ThrowLegacyFallback();
-                }
-            }
-            catch (Exception)
+            _useModernApi = TryHookModernSceneEvents();
+            IsModernUnity = _useModernApi;
+            if (!_useModernApi)
             {
                 ThrowLegacyFallback();
             }
@@ -508,6 +529,80 @@ namespace ModAPI.Core
                 }
             }
             if (Manager != null) Manager.OnUnityUpdate();
+        }
+
+        private bool TryHookModernSceneEvents()
+        {
+            try
+            {
+                if (!RuntimeCompat.IsModernSceneApi)
+                {
+                    MMLog.WriteDebug("[PluginRunner] SceneManager modern API not detected (Unity 5.3?).");
+                    return false;
+                }
+
+                var sceneManagerType = Type.GetType("UnityEngine.SceneManagement.SceneManager, UnityEngine");
+                if (sceneManagerType == null)
+                {
+                    MMLog.WriteDebug("[PluginRunner] SceneManager type not found.");
+                    return false;
+                }
+
+                var sceneLoadedEvent = sceneManagerType.GetEvent("sceneLoaded");
+                if (sceneLoadedEvent == null)
+                {
+                    MMLog.WriteError("[PluginRunner] SceneManager.sceneLoaded event not found.");
+                    return false;
+                }
+
+                var sceneUnloadedEvent = sceneManagerType.GetEvent("sceneUnloaded");
+                var onLoadedMethod = GetType().GetMethod("OnSceneLoadedModern", BindingFlags.NonPublic | BindingFlags.Instance);
+                var onUnloadedMethod = GetType().GetMethod("OnSceneUnloadedModern", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (onLoadedMethod == null)
+                {
+                    MMLog.WriteError("[PluginRunner] OnSceneLoadedModern method missing.");
+                    return false;
+                }
+                if (onUnloadedMethod == null)
+                {
+                    MMLog.WriteError("[PluginRunner] OnSceneUnloadedModern method missing.");
+                    return false;
+                }
+
+                _sceneLoadedDelegate = Delegate.CreateDelegate(sceneLoadedEvent.EventHandlerType, this, onLoadedMethod);
+                sceneLoadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneLoadedDelegate });
+
+                if (sceneUnloadedEvent != null)
+                {
+                    _sceneUnloadedDelegate = Delegate.CreateDelegate(sceneUnloadedEvent.EventHandlerType, this, onUnloadedMethod);
+                    sceneUnloadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneUnloadedDelegate });
+                }
+
+                IsModernUnity = true;
+                MMLog.WriteDebug("[PluginRunner] Modern scene events hooked successfully.");
+
+                try
+                {
+                    var activeSceneProp = sceneManagerType.GetProperty("activeScene");
+                    var activeScene = activeSceneProp != null ? activeSceneProp.GetValue(null, null) : null;
+                    var isLoadedProp = activeScene != null ? activeScene.GetType().GetProperty("isLoaded") : null;
+                    if (activeScene != null && isLoadedProp != null && (bool)isLoadedProp.GetValue(activeScene, null))
+                    {
+                        OnSceneLoadedModern(activeScene, null);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WarnOnce("PluginRunner.ActiveScene", "Failed to read activeScene: " + ex.Message);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[PluginRunner] Failed to hook modern scene events: " + ex.Message);
+                return false;
+            }
         }
 
         private void ThrowLegacyFallback()

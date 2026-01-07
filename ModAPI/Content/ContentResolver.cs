@@ -14,6 +14,7 @@ namespace ModAPI.Content
     {
         public static List<ResolvedItem> ResolveItems()
         {
+            MMLog.Write($"[ContentResolver] ResolveItems called. ContentRegistry.Items count: {ContentRegistry.Items.Count}");
             var resolved = new List<ResolvedItem>();
             foreach (var def in ContentRegistry.Items)
             {
@@ -28,7 +29,9 @@ namespace ModAPI.Content
                     Icon = icon,
                     Prefab = prefab
                 });
+                MMLog.Write($"[ContentResolver] Resolved item: {def.Id} (assembly: {asm?.GetName().Name ?? "null"})");
             }
+            MMLog.Write($"[ContentResolver] ResolveItems complete: {resolved.Count} items");
             return resolved;
         }
 
