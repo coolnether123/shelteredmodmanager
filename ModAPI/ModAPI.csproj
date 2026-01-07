@@ -60,12 +60,12 @@
     <Compile Include="Content\ContentRegistry.cs" />
     <Compile Include="Content\ContentResolver.cs" />
     <Compile Include="Content\ContentInjector.cs" />
+    <Compile Include="Content\InventoryIntegration.cs" />
     <Compile Include="Core\IPlugin.cs" />
     <Compile Include="Core\MMLog.cs" />
     <Compile Include="Core\LoggerExtensions.cs" />
     <Compile Include="Core\ContextExtensions.cs" />
     <Compile Include="UI\UIFlowGuard.cs" />
-    <Compile Include="UI\UIUtil.cs" />
     <Compile Include="Harmony\HarmonyBootstrap.cs" />
     <Compile Include="Harmony\HarmonyUtil.cs" />
     <Compile Include="Inspector\HierarchyUtil.cs" />

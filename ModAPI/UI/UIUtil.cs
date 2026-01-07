@@ -150,23 +150,15 @@ namespace ModAPI.UI
         }
 
         /// <summary>
-        /// Options for UIUtil.CreateLabel that control text, font, color, size,
-        /// alignment, depth, and on‑screen placement.
-        ///
-        /// Typical usage:
-        ///   UIPanel used;
-        ///   var opts = new UIUtil.UILabelOptions {
-        ///       text = "Hello World",
-        ///       color = Color.cyan,
-        ///       fontSize = 20,
-        ///       alignment = NGUIText.Alignment.Center,
-        ///       anchor = UIUtil.AnchorCorner.TopRight,
-        ///       pixelOffset = new Vector2(-10, -10)
-        ///   };
-        ///   UIUtil.CreateLabel(parentGameObject, opts, out used);
-        ///
-        /// This object can be reused or shared; missing/unspecified values are
-        /// assigned sensible defaults by UIUtil.CreateLabel.
+        /// Options for UIUtil.CreateLabel covering text/font/color/size/alignment, depth, and placement.
+        /// Anchor + pixelOffset control where the label appears in NGUI virtual coordinates (1 unit ~= 1 pixel).
+        /// Example: TopRight + offset(-10, -10) = 10px left/down from the top-right corner.
+        /// Field notes:
+        ///   - effect/effectColor configure outline/drop-shadow.
+        ///   - relativeDepth lifts above nearby UI; absoluteDepth overrides if set.
+        ///   - uiFontName searches existing UIFonts by substring; falls back to TTF via trueTypeFontName (Arial by default).
+        ///   - resizeFreely lets UILabel auto-size to content; disable for fixed-size labels.
+        /// This object can be reused; missing values get sensible defaults.
         /// </summary>
         [Serializable]
         public class UILabelOptions

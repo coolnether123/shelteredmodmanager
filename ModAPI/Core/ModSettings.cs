@@ -57,55 +57,18 @@ namespace ModAPI.Core
         public static ModSettings ForAssembly(Assembly asm)
         {
             if (asm == null) asm = Assembly.GetCallingAssembly();
+
             ModEntry entry;
-            if (ModRegistry.TryGetModByAssembly(asm, out entry))
+            if (!ModRegistry.TryGetModByAssembly(asm, out entry) || entry == null)
             {
-                return new ModSettings(entry.About != null ? entry.About.id : null, entry.RootPath);
+                var asmPath = SafeLocation(asm) ?? "<unknown>";
+                throw new InvalidOperationException(
+                    $"Assembly {asm.FullName} is not registered with ModRegistry. " +
+                    $"Did PluginManager.LoadAssemblies() run? (Assembly location: {asmPath})");
             }
 
-            // Fallback: best-effort guess by walking up from the assembly path
-            string asmPath = SafeLocation(asm);
-            if (!string.IsNullOrEmpty(asmPath))
-            {
-                try
-                {
-                    var dir = new DirectoryInfo(Path.GetDirectoryName(asmPath));
-                    // Expect .../mods/enabled/<ModName>/Assemblies/(tfm?)/This.dll
-                    for (var cursor = dir; cursor != null; cursor = cursor.Parent)
-                    {
-                        var aboutJson = Path.Combine(cursor.FullName, "About");
-                        if (Directory.Exists(aboutJson))
-                        {
-                            string aboutFile = Path.Combine(aboutJson, "About.json");
-                            string modId = null;
-                            try
-                            {
-                                if (File.Exists(aboutFile))
-                                {
-                                    var text = File.ReadAllText(aboutFile);
-                                    var about = JsonUtility.FromJson<ModAbout>(text);
-                                    modId = about != null ? about.id : null;
-                                }
-                            }
-                            catch (Exception ex) { MMLog.WarnOnce("ModSettings.ForAssembly.ReadAbout", "Error reading About.json: " + ex.Message); }
-                            return new ModSettings(modId, cursor.FullName);
-                        }
-                    }
-                }
-                catch (Exception ex) { MMLog.WarnOnce("ModSettings.ForAssembly.Probe", "Error probing for mod root: " + ex.Message); }
-            }
-
-            // Last resort: no known root (legacy loose DLLs). Root is dll folder.
-            try
-            {
-                var root = Path.GetDirectoryName(asmPath);
-                return new ModSettings(null, root);
-            }
-            catch
-            {
-                // As a final fallback, use current directory
-                return new ModSettings(null, Directory.GetCurrentDirectory());
-            }
+            MMLog.WriteDebug($"Loaded settings for {entry.Id} from {entry.RootPath}");
+            return new ModSettings(entry.About != null ? entry.About.id : null, entry.RootPath);
         }
 
         // Convenience for typical plugin callsites (Coolnether123)
