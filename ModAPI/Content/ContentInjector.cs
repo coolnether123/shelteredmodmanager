@@ -171,16 +171,30 @@ namespace ModAPI.Content
         {
             static void Postfix(ItemButtonBase __instance)
             {
-                if ((int)__instance.m_type >= CustomItemTypeStart && ResolvedByType.TryGetValue(__instance.m_type, out var res))
+                if ((int)__instance.m_type >= CustomItemTypeStart)
                 {
-                    var uiSprite = __instance.GetComponentInChildren<UISprite>();
-                    if (uiSprite != null) uiSprite.alpha = 0f;
+                    MMLog.Write($"[Patch_Icon] UpdateSprite called for custom item type: {__instance.m_type} ({(int)__instance.m_type})");
+                    
+                    if (ResolvedByType.TryGetValue(__instance.m_type, out var res))
+                    {
+                        MMLog.Write($"[Patch_Icon] Found resolved item: {res.Definition.Id}, Icon is null: {res.Icon == null}");
+                        
+                        var uiSprite = __instance.GetComponentInChildren<UISprite>();
+                        if (uiSprite != null)
+                        {
+                            uiSprite.alpha = 0f;
+                            MMLog.Write("[Patch_Icon] Hid original UISprite");
+                        }
 
-                    var ui2d = __instance.GetComponent<UI2DSprite>() ?? __instance.gameObject.AddComponent<UI2DSprite>();
-                    ui2d.sprite2D = res.Icon;
-                    ui2d.depth = 100;
-                    ui2d.width = 48; // Force scale up for 16x16 icons
-                    ui2d.height = 48;
+                        var ui2d = __instance.GetComponent<UI2DSprite>() ?? __instance.gameObject.AddComponent<UI2DSprite>();
+                        ui2d.sprite2D = res.Icon;
+                        ui2d.depth = 100;
+                        MMLog.Write($"[Patch_Icon] Applied UI2DSprite with sprite: {res.Icon?.name ?? "NULL"}");
+                    }
+                    else
+                    {
+                        MMLog.Write($"[Patch_Icon] No resolved item found for type {__instance.m_type}");
+                    }
                 }
             }
         }
