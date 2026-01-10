@@ -1,3 +1,4 @@
+using ModAPI.Core;
 using System;
 using System.Collections;
 using UnityEngine;
@@ -22,7 +23,7 @@ namespace ModAPI.UI
                 while (Time.realtimeSinceStartup < deadline)
                 {
                     GameObject go = null;
-                    try { go = ModAPI.Util.SceneUtil.Find(nameOrPath); } catch (Exception ex) { MMLog.WarnOnce("ContextUIExtensions.RunWhenPanelVisible.Find", "SceneUtil.Find failed: " + ex.Message); }
+                    try { go = ModAPI.SceneUtil.Find(nameOrPath); } catch (Exception ex) { MMLog.WarnOnce("ContextUIExtensions.RunWhenPanelVisible.Find", "SceneUtil.Find failed: " + ex.Message); }
                     if (go != null && go.activeInHierarchy)
                     {
                         try { action(go); }
