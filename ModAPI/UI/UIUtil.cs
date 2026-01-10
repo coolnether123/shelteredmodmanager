@@ -361,6 +361,20 @@ namespace ModAPI.UI
 
         // --- internals -----------------------------------------------------------
 
+        public static UIButton FindAnyButtonTemplate()
+        {
+            var all = UnityEngine.Object.FindObjectsOfType<UIButton>();
+            if (all != null && all.Length > 0)
+            {
+                foreach (var b in all)
+                {
+                    if (b != null && b.gameObject.activeInHierarchy) return b;
+                }
+                return all[0];
+            }
+            return null;
+        }
+
         private static UIWidget.Pivot PivotFor(AnchorCorner a)
         {
             switch (a)

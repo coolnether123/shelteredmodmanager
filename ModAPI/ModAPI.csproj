@@ -66,8 +66,12 @@
     <Compile Include="Core\LoggerExtensions.cs" />
     <Compile Include="Core\ContextExtensions.cs" />
     <Compile Include="UI\UIFlowGuard.cs" />
+    <Compile Include="UI\UIUtil.cs" />
+    <Compile Include="UI\ModManagerPanel.cs" />
+    <Compile Include="UI\ContextUIExtensions.cs" />
     <Compile Include="Harmony\HarmonyBootstrap.cs" />
     <Compile Include="Harmony\HarmonyUtil.cs" />
+    <Compile Include="Harmony\MainMenuPatches.cs" />
     <Compile Include="Inspector\HierarchyUtil.cs" />
     <Compile Include="Inspector\BoundsHighlighter.cs" />
     <Compile Include="Inspector\RuntimeInspector.cs" />
