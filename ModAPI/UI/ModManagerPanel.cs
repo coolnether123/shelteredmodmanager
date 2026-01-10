@@ -163,6 +163,11 @@ namespace ModAPI.UI
                         var labels = clone.GetComponentsInChildren<UILabel>(true);
                         foreach (var l in labels) UnityEngine.Object.Destroy(l.gameObject);
                         
+                        // CRITICAL: Destroy all colliders to prevent click-through to scenario buttons
+                        var colliders = clone.GetComponentsInChildren<Collider>(true);
+                        foreach (var c in colliders) UnityEngine.Object.Destroy(c);
+                        MMLog.Write("[ModManagerPanel] Destroyed " + colliders.Length + " colliders from cloned book");
+                        
                         // Set depth for background elements
                         var widgets = clone.GetComponentsInChildren<UIWidget>(true);
                         foreach (var w in widgets)
@@ -669,6 +674,10 @@ namespace ModAPI.UI
             if (mod.About != null && !string.IsNullOrEmpty(mod.About.description))
                 desc = mod.About.description;
             _detailDescription.text = desc;
+            
+            // CRITICAL: Reset description position to start (Y=150) when switching mods
+            _detailDescription.transform.localPosition = new Vector3(0f, 150f, 0f);
+            
             MMLog.Write("[ModManagerPanel] Description updated to: '" + desc.Substring(0, Math.Min(50, desc.Length)) + "...' (position: " + _detailDescription.transform.localPosition + ")");
             
             // Force NGUI to update
