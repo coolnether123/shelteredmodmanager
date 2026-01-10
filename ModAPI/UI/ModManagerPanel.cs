@@ -27,6 +27,8 @@ namespace ModAPI.UI
         private UIButton _backButton;
         private bool _bookFound;
         private bool _initialized = false;
+        private NGUIScrollHelper _scrollHelper;
+        private List<GameObject> _modButtonObjects = new List<GameObject>();
 
         public static void ShowPanel()
         {
@@ -97,6 +99,24 @@ namespace ModAPI.UI
                 // Show first mod by default
                 var mods = PluginManager.LoadedMods;
                 if (mods.Count > 0) ShowDetails(mods[0]);
+                
+                // --- SETUP SCROLLING for mod list ---
+                // Available space: from startY (160) to just above back button (-300)
+                // This gives us room for ~5 buttons before needing to scroll
+                // Only scroll when mouse is over left page (X: -600 to 0)
+                if (_modButtonObjects.Count > 0)
+                {
+                    _scrollHelper = gameObject.AddComponent<NGUIScrollHelper>();
+                    _scrollHelper.Initialize(
+                        items: _modButtonObjects,
+                        startY: 160f,
+                        itemSpacing: 90f,
+                        minY: -300f, // Just above back button area
+                        maxY: 160f,  // Starting position
+                        minX: -600f, // Left page left edge
+                        maxX: 0f     // Left page right edge (center of book)
+                    );
+                }
             }
             catch (Exception ex) 
             { 
@@ -392,6 +412,7 @@ namespace ModAPI.UI
                 UIEventListener.Get(btnGO).onClick = (g) => ShowDetails(capture);
                 
                 _modButtons.Add(btn);
+                _modButtonObjects.Add(btnGO); // For scroll helper
                 
                 MMLog.Write("[ModManagerPanel] Mod button " + (i+1) + ": '" + mod.Name + "' at " + pos);
             }
@@ -412,22 +433,81 @@ namespace ModAPI.UI
             // Authors - centered
             _detailAuthors = CreateSimpleLabel("", rightX, 195f, 20, new Color(0.3f, 0.3f, 0.45f), NGUIText.Alignment.Center, 420);
             
-            // Description - on right page with proper wrapping
-            // Note: TTF fonts need ClampContent to respect width boundaries
-            _detailDescription = CreateSimpleLabel("", rightX, 80f, 32, textColor, NGUIText.Alignment.Left, 450);
-            _detailDescription.overflowMethod = UILabel.Overflow.ClampContent;
-            _detailDescription.maxLineCount = 0; // No line limit
-            _detailDescription.multiLine = true; // Enable multi-line
+            // Description - scrollable on right page
+            // Create a clipping panel for the description area
+            var descContainer = new GameObject("DescriptionContainer");
+            descContainer.transform.parent = transform;
+            descContainer.transform.localPosition = new Vector3(rightX, -90f, 0f); // Below authors line
+            descContainer.transform.localRotation = Quaternion.identity;
+            descContainer.transform.localScale = Vector3.one;
+            descContainer.layer = gameObject.layer;
             
-            // CRITICAL: For TTF fonts, must set spacingX and spacingY explicitly
+            // CRITICAL: Add BoxCollider so UIScrollView can detect mouse input
+            var descCollider = descContainer.AddComponent<BoxCollider>();
+            descCollider.center = Vector3.zero;
+            descCollider.size = new Vector3(460f, 460f, 1f); // Match clip region
+            descCollider.isTrigger = true;
+            
+            MMLog.Write("[ModManagerPanel] Description container collider added: " + descCollider.size);
+            
+            // Add UIPanel for clipping
+            var descPanel = descContainer.AddComponent<UIPanel>();
+            descPanel.depth = 10019; // Just below text depth
+            descPanel.clipping = UIDrawCall.Clipping.SoftClip;
+            descPanel.baseClipRegion = new Vector4(0, 0, 460, 460); // Width x Height of visible area (reduced to fit)
+            
+            // Add UIScrollView for scrolling
+            var scrollView = descContainer.AddComponent<UIScrollView>();
+            scrollView.movement = UIScrollView.Movement.Vertical;
+            scrollView.dragEffect = UIScrollView.DragEffect.MomentumAndSpring;
+            scrollView.scrollWheelFactor = 0.5f; // Increase for more responsive scrolling
+            scrollView.momentumAmount = 10f;
+            scrollView.restrictWithinPanel = true;
+            scrollView.disableDragIfFits = true;
+            
+            MMLog.Write("[ModManagerPanel] UIScrollView created with movement=Vertical, scrollWheelFactor=0.5");
+            
+            // Create the description label inside the scroll view
+            // IMPORTANT: Create without parent first to avoid position conflicts
+            var descLabelGO = new GameObject("DescriptionLabel");
+            descLabelGO.transform.parent = descContainer.transform;
+            descLabelGO.transform.localPosition = new Vector3(0f, 150f, 0f); // Start below authors
+            descLabelGO.transform.localRotation = Quaternion.identity;
+            descLabelGO.transform.localScale = Vector3.one;
+            descLabelGO.layer = gameObject.layer;
+            
+            // Add UIWidget first (required for UIScrollView bounds calculation)
+            var descWidget = descLabelGO.AddComponent<UIWidget>();
+            descWidget.depth = 10020;
+            descWidget.pivot = UIWidget.Pivot.Top;
+            
+            _detailDescription = descLabelGO.AddComponent<UILabel>();
+            _detailDescription.text = "";
+            _detailDescription.fontSize = 32;
+            _detailDescription.color = textColor;
+            _detailDescription.alignment = NGUIText.Alignment.Left;
+            _detailDescription.width = 440;
+            _detailDescription.depth = 10020;
+            _detailDescription.overflowMethod = UILabel.Overflow.ResizeHeight;
+            _detailDescription.maxLineCount = 0;
+            _detailDescription.multiLine = true;
             _detailDescription.spacingX = 0;
             _detailDescription.spacingY = 0;
+            _detailDescription.pivot = UIWidget.Pivot.Top;
             
-            // Re-set dimensions after font is assigned to ensure they stick
-            _detailDescription.width = 450;
-            _detailDescription.height = 350;
+            // Assign font
+            Font arialFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            if (arialFont != null)
+            {
+                _detailDescription.trueTypeFont = arialFont;
+                _detailDescription.bitmapFont = null;
+            }
             
-            MMLog.Write("[ModManagerPanel] Detail labels: Title(300,275) Version(300,230) Authors(300,195) Desc(300,80)");
+            // CRITICAL: Tell UIScrollView to recalculate bounds
+            // This must happen after the label is created and positioned
+            scrollView.ResetPosition();
+            
+            MMLog.Write("[ModManagerPanel] Detail labels: Title(300,275) Version(300,230) Authors(300,195) Desc(scrollable at 300,-90)");
         }
 
         private void CreateBackButton(UIButton template)
@@ -607,6 +687,15 @@ namespace ModAPI.UI
             _detailDescription.ProcessText();
             _detailDescription.MarkAsChanged();
             
+            // CRITICAL: Reset UIScrollView bounds after text changes
+            var scrollView = _detailDescription.transform.parent.GetComponent<UIScrollView>();
+            if (scrollView != null)
+            {
+                scrollView.ResetPosition();
+                scrollView.UpdateScrollbars(true); // Force immediate update
+                MMLog.Write("[ModManagerPanel] UIScrollView bounds reset. Content height: " + _detailDescription.height + ", Panel height: 460");
+            }
+            
             // DETAILED DEBUGGING FOR DESCRIPTION
             MMLog.Write("[ModManagerPanel] === DESCRIPTION DEBUG ===");
             MMLog.Write("[ModManagerPanel] Text: '" + desc.Substring(0, Math.Min(50, desc.Length)) + "...'");
@@ -654,5 +743,48 @@ namespace ModAPI.UI
         public override bool PausesGameInput() => true;
         public override bool PausesGameTime() => true;
         public override bool Popup() => false;
+        
+        // Manual description scrolling
+        void Update()
+        {
+            if (_detailDescription == null) return;
+            
+            // Check if description needs scrolling (height > clip area)
+            if (_detailDescription.height <= 460) return;
+            
+            // Check for scroll input
+            float scroll = Input.GetAxis("Mouse ScrollWheel");
+            if (scroll == 0f)
+                scroll = Input.mouseScrollDelta.y;
+            
+            if (scroll == 0f) return;
+            
+            // Check if mouse is over right page (description area)
+            Vector3 mousePos = Input.mousePosition;
+            float uiX = (mousePos.x - Screen.width / 2f);
+            
+            // Right page is roughly X: 50 to 550
+            if (uiX < 50f || uiX > 600f) return;
+            
+            // Adjust description Y position
+            // Scroll DOWN (negative scroll) = text moves UP (increase Y) to show more below
+            // Scroll UP (positive scroll) = text moves DOWN (decrease Y) to show content above
+            Vector3 pos = _detailDescription.transform.localPosition;
+            float scrollSpeed = 50f; // pixels per scroll unit
+            
+            // INVERT: negative scroll (down) should increase Y (text moves up)
+            pos.y -= scroll * scrollSpeed;
+            
+            // Clamp: Start at 150 (top), can go UP to show more content (higher Y values)
+            float minY = 150f; // Starting/top position - text at top of clip area
+            float maxY = 150f + (_detailDescription.height - 460f); // Fully scrolled - shows bottom of text
+            
+            pos.y = Mathf.Clamp(pos.y, minY, maxY);
+            
+            _detailDescription.transform.localPosition = pos;
+            
+            MMLog.Write(string.Format("[ModManagerPanel] Description scrolled to Y={0:F1} (range: {1:F1} to {2:F1})", 
+                pos.y, minY, maxY));
+        }
     }
 }
