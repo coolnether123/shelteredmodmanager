@@ -68,6 +68,7 @@
     <Compile Include="UI\UIFlowGuard.cs" />
     <Compile Include="UI\UIUtil.cs" />
     <Compile Include="UI\ModManagerPanel.cs" />
+    <Compile Include="UI\NGUIScrollHelper.cs" />
     <Compile Include="UI\ContextUIExtensions.cs" />
     <Compile Include="Harmony\HarmonyBootstrap.cs" />
     <Compile Include="Harmony\HarmonyUtil.cs" />
