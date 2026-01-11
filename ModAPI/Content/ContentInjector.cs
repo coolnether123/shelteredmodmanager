@@ -16,6 +16,8 @@ namespace ModAPI.Content
         private static readonly Dictionary<ItemManager.ItemType, ResolvedItem> ResolvedByType = new Dictionary<ItemManager.ItemType, ResolvedItem>();
         public static IEnumerable<ItemManager.ItemType> RegisteredTypes => ResolvedByType.Keys;
         private static readonly Dictionary<ItemManager.ItemType, GameItemDefinition> RuntimeDefinitions = new Dictionary<ItemManager.ItemType, GameItemDefinition>();
+        private static readonly Dictionary<ItemManager.ItemType, CookingRecipe> _cookingRecipes = new Dictionary<ItemManager.ItemType, CookingRecipe>();
+        private static readonly HashSet<ItemManager.ItemType> _rawFoodTypes = new HashSet<ItemManager.ItemType>();
 
         private static bool _bootstrapped;
         private static readonly object Sync = new object();
@@ -45,6 +47,7 @@ namespace ModAPI.Content
 
                 // 3. Inject Recipes
                 InjectRecipes();
+                InjectCookingRecipes();
 
                 _bootstrapped = true;
                 MMLog.Write("[ContentInjector] Injection complete.");
@@ -155,6 +158,16 @@ namespace ModAPI.Content
                 SetField(def, "m_Contamination", definition.Contamination);
                 SetField(def, "m_LoadCarrySlots", definition.LoadCarrySlots);
                 
+                
+                // Validation: ObjectType requires Object category
+                if (definition.ObjectType != ObjectManager.ObjectType.Undefined && 
+                    definition.Category != ItemCategory.Object)
+                {
+                    MMLog.Write($"[ContentInjector] WARNING: Item '{definition.Id}' has ObjectType " +
+                                $"but Category is {definition.Category}, not Object. " +
+                                $"Item may not spawn correctly.");
+                }
+                
                 // Object Properties
                 SetField(def, "m_ObjectType", definition.ObjectType);
                 SetField(def, "m_ObjectLevel", definition.ObjectLevel);
@@ -164,6 +177,9 @@ namespace ModAPI.Content
 
                 SetField(def, "m_CraftStackSize", definition.CraftStackSize);
                 SetField(def, "m_ItemType", itemType);
+
+                // Track raw food types for cooking system
+                if (definition.IsRawFood) _rawFoodTypes.Add(itemType);
 
                 RuntimeDefinitions[itemType] = def;
                 MMLog.Write($"[ContentInjector] Built definition for {definition.Id} (Category: {category}, Stack: {definition.StackSize})");
@@ -232,6 +248,14 @@ namespace ModAPI.Content
                 };
                 
                 recipe.location = MapStation(def.Station);
+
+                // Set unlockFlag via reflection if it exists and is specified
+                if (!string.IsNullOrEmpty(def.UnlockFlag))
+                {
+                    // Note: Game's Recipe class doesn't appear to have unlockFlag field
+                    // Unlocking is handled via CraftingManager.UnlockRecipe(id) method
+                    // This field is kept for future compatibility
+                }
 
                 // ResultCount is now handled by the item's m_CraftStackSize
                 // which was already set in BuildRuntimeDefinitions for custom items.
@@ -329,6 +353,9 @@ namespace ModAPI.Content
                 {
                     recipe.Result = outType;
                 }
+
+                if (patch.SetUnique.HasValue) recipe.unique = patch.SetUnique.Value;
+                if (patch.SetLocked.HasValue) recipe.locked = patch.SetLocked.Value;
                 
                 MMLog.Write($"[ContentInjector] Patched recipe '{patch.TargetRecipeId}' successfully.");
             }
@@ -568,6 +595,23 @@ namespace ModAPI.Content
                     
                     if (__instance.m_sprite != null)
                         __instance.m_sprite.alpha = locked ? 1f : 0f;
+                }
+            }
+        }
+
+        private static void InjectCookingRecipes()
+        {
+            _cookingRecipes.Clear();
+            foreach (var recipe in ContentRegistry.CookingRecipes)
+            {
+                if (ResolveItemType(recipe.RawItemId, out var rawType))
+                {
+                    _cookingRecipes[rawType] = recipe;
+                    MMLog.Write($"[ContentInjector] Injected cooking recipe: {rawType} -> {recipe.CookedItemId ?? "self"} (x{recipe.HungerMultiplier})");
+                }
+                else
+                {
+                    MMLog.Write($"[ContentInjector] WARNING: Cooking recipe raw item '{recipe.RawItemId}' could not be resolved.");
                 }
             }
         }
