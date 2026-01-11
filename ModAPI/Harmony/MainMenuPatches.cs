@@ -94,7 +94,6 @@ namespace ModAPI.Harmony
             if (TransitioningToMods && tween != null && tween.direction == AnimationOrTween.Direction.Reverse)
             {
                 TransitioningToMods = false;
-                MMLog.Write("[MainMenuPatch] Transitioning to ModManagerPanel.");
                 ModManagerPanel.ShowPanel();
                 return false; // Skip original logic (which would push GameModeSelectionPanel)
             }
