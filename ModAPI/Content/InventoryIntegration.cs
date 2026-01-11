@@ -116,4 +116,43 @@ namespace ModAPI.Content
             }
         }
     }
+
+    /// <summary>
+    /// Debug patches to verify item addition flow for custom items.
+    /// </summary>
+    [HarmonyPatch]
+    internal static class InventoryDebugPatches
+    {
+        [HarmonyPatch(typeof(InventoryManager), "AddNewItem")]
+        [HarmonyPostfix]
+        static void Postfix_AddNewItem(ItemManager.ItemType item)
+        {
+            if ((int)item >= 10000)
+            {
+                MMLog.Write($"[InventoryDebug] AddNewItem called for custom item: {item} ({(int)item})");
+                VerifyItemInInventory(item);
+            }
+        }
+
+        [HarmonyPatch(typeof(InventoryManager), "AddExistingItem", new[] { typeof(ItemInstance) })]
+        [HarmonyPostfix]
+        static void Postfix_AddExistingItem(ItemInstance item)
+        {
+            if (item != null && (int)item.Type >= 10000)
+            {
+                MMLog.Write($"[InventoryDebug] AddExistingItem called for custom item: {item.Type} ({(int)item.Type})");
+                VerifyItemInInventory(item.Type);
+            }
+        }
+
+        static void VerifyItemInInventory(ItemManager.ItemType type)
+        {
+            if (InventoryManager.Instance != null)
+            {
+                int current = InventoryManager.Instance.GetItemCountInStorage(type, true);
+                int total = InventoryManager.Instance.GetNumItemsOfType(type);
+                MMLog.Write($"[InventoryDebug] Verification for {type}: Storage={current}, Total={total}");
+            }
+        }
+    }
 }

@@ -70,6 +70,7 @@
     <Compile Include="UI\ModManagerPanel.cs" />
     <Compile Include="UI\NGUIScrollHelper.cs" />
     <Compile Include="UI\ContextUIExtensions.cs" />
+    <Compile Include="UI\UIPatches.cs" />
     <Compile Include="Harmony\HarmonyBootstrap.cs" />
     <Compile Include="Harmony\HarmonyUtil.cs" />
     <Compile Include="Harmony\MainMenuPatches.cs" />

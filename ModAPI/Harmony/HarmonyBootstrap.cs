@@ -81,6 +81,25 @@ namespace ModAPI.Harmony
                 };
 
                 ModAPI.Harmony.HarmonyUtil.PatchAll(harmony, asm, opts);
+                
+                // Explicitly verify UIPatches was discovered and patched
+                try
+                {
+                    var uiPatchesType = asm.GetType("ModAPI.UI.UIPatches");
+                    if (uiPatchesType != null)
+                    {
+                        MMLog.Write($"[HarmonyBootstrap] UIPatches type found: {uiPatchesType.FullName}");
+                    }
+                    else
+                    {
+                        MMLog.Write("[HarmonyBootstrap] WARNING: UIPatches type NOT found in assembly!");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MMLog.Write($"[HarmonyBootstrap] Error checking for UIPatches: {ex.Message}");
+                }
+                
                 _installed = true;
 
                 MMLog.WriteDebug("HarmonyBootstrap: ModAPI hooks patched");
