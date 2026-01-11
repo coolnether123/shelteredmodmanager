@@ -34,30 +34,19 @@ namespace ModAPI.UI
                     return;
                 }
 
-                MMLog.Write($"[UIPatches] About to check {ContentInjector.RegisteredTypes.Count()} registered types");
-
                 int itemsAdded = 0;
-                // The vanilla code loops over Enum.GetValues(ItemType), missing high IDs.
-                // We append any custom items found in player inventory.
                 foreach (var type in ContentInjector.RegisteredTypes)
                 {
-                    MMLog.Write($"[UIPatches] Checking registered type: {type} ({(int)type})");
                     int count = InventoryManager.Instance.GetNumItemsOfType(type);
-                    MMLog.Write($"[UIPatches] - Inventory count for {type}: {count}");
-                    
                     if (count > 0)
                     {
-                        bool added = __instance.m_items.AddItem(type, count);
-                        MMLog.Write($"[UIPatches] - AddItem result for {type}: {added}");
-                        if (added)
-                        {
+                        if (__instance.m_items.AddItem(type, count))
                             itemsAdded++;
-                            MMLog.Write($"[UIPatches] Successfully added custom item {type} to StoragePanel (count: {count})");
-                        }
                     }
                 }
                 
-                MMLog.Write($"[UIPatches] StoragePanel.OnShow complete: {itemsAdded} custom items added");
+                if (itemsAdded > 0)
+                    MMLog.Write($"[UIPatches] StoragePanel.OnShow: Added {itemsAdded} custom item types from player inventory.");
             }
             catch (Exception ex)
             {
@@ -105,42 +94,62 @@ namespace ModAPI.UI
         {
             try
             {
-                MMLog.Write("[UIPatches] ItemFabricationPanel.OnShow postfix called!");
-                
-                if (ItemManager.Instance == null || InventoryManager.Instance == null)
-                {
-                    MMLog.Write("[UIPatches] ItemManager or InventoryManager is null, skipping");
-                    return;
-                }
+                if (ItemManager.Instance == null || InventoryManager.Instance == null) return;
 
                 foreach (var type in ContentInjector.RegisteredTypes)
                 {
                     ItemDefinition def = ItemManager.Instance.GetItemDefinition(type);
                     if (def == null) continue;
 
-                    // Storage Items (items to salvage)
                     if (def.ScrapValue > 0)
                     {
                         int count = InventoryManager.Instance.GetNumItemsOfType(type);
-                        if (count > 0)
-                        {
-                            __instance.m_storageItems.AddItem(type, count);
-                            MMLog.Write($"[UIPatches] Added custom item {type} to ItemFabricationPanel storage (count: {count})");
-                        }
+                        if (count > 0) __instance.m_storageItems.AddItem(type, count);
                     }
 
-                    // Selection Items (items that can be fabricated)
-                    // Note: Mostly for 'Normal' category items with costs defined
                     if (def.Category == ItemManager.ItemCategory.Normal && def.BaseFabricationTime > 0 && def.FabricationCost > 0)
                     {
                         __instance.m_selectionItems.AddItem(type, 1);
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) { MMLog.Write($"[UIPatches] ERROR in ItemFabricationPanel.OnShow: {ex}"); }
+        }
+
+        [HarmonyPatch(typeof(TradingPanel), "OnShow")]
+        [HarmonyPostfix]
+        static void Postfix_TradingPanel_OnShow(TradingPanel __instance)
+        {
+            try
             {
-                MMLog.Write($"[UIPatches] ERROR in ItemFabricationPanel.OnShow: {ex}");
+                if (InventoryManager.Instance == null) return;
+
+                foreach (var type in ContentInjector.RegisteredTypes)
+                {
+                    int count = InventoryManager.Instance.GetNumItemsOfType(type);
+                    if (count > 0) __instance.m_playerItems.AddItem(type, count);
+                    
+                    // Note: NPC items in TradingPanel are usually populated via MapRegion or Encounter, 
+                    // which is handled by our Loot Injection patches.
+                }
             }
+            catch (Exception ex) { MMLog.Write($"[UIPatches] ERROR in TradingPanel.OnShow: {ex}"); }
+        }
+
+        [HarmonyPatch(typeof(ItemTransferPanel), "OnShow")]
+        [HarmonyPostfix]
+        static void Postfix_ItemTransferPanel_OnShow(ItemTransferPanel __instance)
+        {
+            try
+            {
+                // ItemTransferPanel is complex as it can show two arbitrary inventories.
+                // However, the common case is Shelter vs Region.
+                // Our other patches ensure Region and Shelter inventories contain the items,
+                // but if this panel still uses Enum.GetValues in OnShow to filter/re-add, we need this.
+                // Upon review of decompiled code, it uses GetLeftSideItems callback.
+                // If the callback returns our items, ItemGrid.UpdateItems -> AddItem_Stacked will handle it.
+            }
+            catch (Exception ex) { MMLog.Write($"[UIPatches] ERROR in ItemTransferPanel.OnShow: {ex}"); }
         }
     }
 }
