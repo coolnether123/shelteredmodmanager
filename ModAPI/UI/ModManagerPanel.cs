@@ -102,8 +102,8 @@ namespace ModAPI.UI
                 
                 // --- SETUP SCROLLING for mod list ---
                 // Available space: from startY (160) to just above back button (-300)
-                // This gives us room for ~5 buttons before needing to scroll
-                // Only scroll when mouse is over left page (X: -600 to 0)
+                // This gives us room for ~5-6 buttons before needing to scroll.
+                // We restrict scrolling input to the left page bounds (X: -600 to 0).
                 if (_modButtonObjects.Count > 0)
                 {
                     _scrollHelper = gameObject.AddComponent<NGUIScrollHelper>();
@@ -111,10 +111,10 @@ namespace ModAPI.UI
                         items: _modButtonObjects,
                         startY: 160f,
                         itemSpacing: 90f,
-                        minY: -300f, // Just above back button area
-                        maxY: 160f,  // Starting position
-                        minX: -600f, // Left page left edge
-                        maxX: 0f     // Left page right edge (center of book)
+                        minY: -300f, 
+                        maxY: 160f,  
+                        minX: -600f, 
+                        maxX: 0f     
                     );
                 }
             }
@@ -133,7 +133,8 @@ namespace ModAPI.UI
                 BasePanel scenarioPanel = FindScenarioPanel();
                 if (scenarioPanel == null) return false;
 
-                MMLog.Write("[ModManagerPanel] Found scenario panel: " + scenarioPanel.name);
+                // We clone the book visuals from the ScenarioSelectionPanel to maintain game's aesthetic.
+                MMLog.Write("[ModAPI] Loading Mod Manager UI...");
                 
                 foreach (Transform child in scenarioPanel.transform)
                 {
@@ -163,10 +164,10 @@ namespace ModAPI.UI
                         var labels = clone.GetComponentsInChildren<UILabel>(true);
                         foreach (var l in labels) UnityEngine.Object.Destroy(l.gameObject);
                         
-                        // CRITICAL: Destroy all colliders to prevent click-through to scenario buttons
+                        // CRITICAL: Destroy all colliders to prevent click-through to scenario buttons.
+                        // Since we clone the entire background tree, we must ensure old button targets are dead.
                         var colliders = clone.GetComponentsInChildren<Collider>(true);
                         foreach (var c in colliders) UnityEngine.Object.Destroy(c);
-                        MMLog.Write("[ModManagerPanel] Destroyed " + colliders.Length + " colliders from cloned book");
                         
                         // Set depth for background elements
                         var widgets = clone.GetComponentsInChildren<UIWidget>(true);
@@ -178,40 +179,8 @@ namespace ModAPI.UI
                         
                         clone.SetActive(true);
                         
-                        // Log book bounds
-                        var bookSprites = clone.GetComponentsInChildren<UISprite>(true);
-                        if (bookSprites.Length > 0)
-                        {
-                            // Find largest sprite (the book background)
-                            UISprite largestSprite = bookSprites[0];
-                            int maxArea = largestSprite.width * largestSprite.height;
-                            foreach (var s in bookSprites)
-                            {
-                                int area = s.width * s.height;
-                                if (area > maxArea)
-                                {
-                                    maxArea = area;
-                                    largestSprite = s;
-                                }
-                            }
-                            
-                            Vector3 pos = largestSprite.transform.localPosition;
-                            float halfW = largestSprite.width * 0.5f;
-                            float halfH = largestSprite.height * 0.5f;
-                            
-                            MMLog.Write("[ModManagerPanel] === BOOK BOUNDS ===");
-                            MMLog.Write("[ModManagerPanel] Center: (" + pos.x + ", " + pos.y + ")");
-                            MMLog.Write("[ModManagerPanel] Size: " + largestSprite.width + " x " + largestSprite.height);
-                            MMLog.Write("[ModManagerPanel] Top-Left: (" + (pos.x - halfW) + ", " + (pos.y + halfH) + ")");
-                            MMLog.Write("[ModManagerPanel] Top-Right: (" + (pos.x + halfW) + ", " + (pos.y + halfH) + ")");
-                            MMLog.Write("[ModManagerPanel] Bottom-Left: (" + (pos.x - halfW) + ", " + (pos.y - halfH) + ")");
-                            MMLog.Write("[ModManagerPanel] Bottom-Right: (" + (pos.x + halfW) + ", " + (pos.y - halfH) + ")");
-                            MMLog.Write("[ModManagerPanel] Left Page Center: (" + (pos.x - halfW/2) + ", " + pos.y + ")");
-                            MMLog.Write("[ModManagerPanel] Right Page Center: (" + (pos.x + halfW/2) + ", " + pos.y + ")");
-                            MMLog.Write("[ModManagerPanel] ==================");
-                        }
-                        
-                        return true; // Found and cloned book
+                        // Found and cloned book visuals successfully.
+                        return true; 
                     }
                 }
             }
@@ -291,7 +260,6 @@ namespace ModAPI.UI
                         if (name.Contains("back") || name.Contains("cancel"))
                         {
                             defaultPos = btn.transform.localPosition;
-                            MMLog.Write("[ModManagerPanel] Found back button at: " + defaultPos);
                             break;
                         }
                     }
@@ -412,14 +380,12 @@ namespace ModAPI.UI
                     btn.isEnabled = true;
                 }
                 
-                // Hook up click event
+                // Hook up click event with a closure-friendly copy of the mod entry
                 var capture = mod;
                 UIEventListener.Get(btnGO).onClick = (g) => ShowDetails(capture);
                 
                 _modButtons.Add(btn);
-                _modButtonObjects.Add(btnGO); // For scroll helper
-                
-                MMLog.Write("[ModManagerPanel] Mod button " + (i+1) + ": '" + mod.Name + "' at " + pos);
+                _modButtonObjects.Add(btnGO); // For the scroll helper to track
             }
         }
 
@@ -447,30 +413,27 @@ namespace ModAPI.UI
             descContainer.transform.localScale = Vector3.one;
             descContainer.layer = gameObject.layer;
             
-            // CRITICAL: Add BoxCollider so UIScrollView can detect mouse input
+            // Add BoxCollider so UIScrollView can detect scroll wheel and drag events.
             var descCollider = descContainer.AddComponent<BoxCollider>();
             descCollider.center = Vector3.zero;
-            descCollider.size = new Vector3(460f, 460f, 1f); // Match clip region
+            descCollider.size = new Vector3(460f, 460f, 1f); 
             descCollider.isTrigger = true;
             
-            MMLog.Write("[ModManagerPanel] Description container collider added: " + descCollider.size);
-            
-            // Add UIPanel for clipping
+            // Add UIPanel for clipping.
             var descPanel = descContainer.AddComponent<UIPanel>();
-            descPanel.depth = 10019; // Just below text depth
+            descPanel.depth = 10019; 
             descPanel.clipping = UIDrawCall.Clipping.SoftClip;
-            descPanel.baseClipRegion = new Vector4(0, 0, 460, 460); // Width x Height of visible area (reduced to fit)
+            descPanel.baseClipRegion = new Vector4(0, 0, 460, 460); // Width x Height area.
             
-            // Add UIScrollView for scrolling
+            // Add UIScrollView for basic momentum logic.
+            // Note: Manual scrolling is handled in Update() to bypass NGUI coordinate quirks.
             var scrollView = descContainer.AddComponent<UIScrollView>();
             scrollView.movement = UIScrollView.Movement.Vertical;
             scrollView.dragEffect = UIScrollView.DragEffect.MomentumAndSpring;
-            scrollView.scrollWheelFactor = 0.5f; // Increase for more responsive scrolling
+            scrollView.scrollWheelFactor = 0.5f; 
             scrollView.momentumAmount = 10f;
             scrollView.restrictWithinPanel = true;
             scrollView.disableDragIfFits = true;
-            
-            MMLog.Write("[ModManagerPanel] UIScrollView created with movement=Vertical, scrollWheelFactor=0.5");
             
             // Create the description label inside the scroll view
             // IMPORTANT: Create without parent first to avoid position conflicts
@@ -500,7 +463,8 @@ namespace ModAPI.UI
             _detailDescription.spacingY = 0;
             _detailDescription.pivot = UIWidget.Pivot.Top;
             
-            // Assign font
+            // Font choice: TrueType Arial is used for descriptions to ensure high readability 
+            // and consistent scaling compared to some fixed-resolution bitmap fonts in-game.
             Font arialFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
             if (arialFont != null)
             {
@@ -508,11 +472,7 @@ namespace ModAPI.UI
                 _detailDescription.bitmapFont = null;
             }
             
-            // CRITICAL: Tell UIScrollView to recalculate bounds
-            // This must happen after the label is created and positioned
             scrollView.ResetPosition();
-            
-            MMLog.Write("[ModManagerPanel] Detail labels: Title(300,275) Version(300,230) Authors(300,195) Desc(scrollable at 300,-90)");
         }
 
         private void CreateBackButton(UIButton template)
@@ -579,8 +539,6 @@ namespace ModAPI.UI
             
             UIEventListener.Get(btnGO).onClick = (g) => OnCancel();
             _backButton = btn;
-            
-            MMLog.Write("[ModManagerPanel] Back button at: " + backPos);
         }
 
         private UILabel CreateSimpleLabel(string text, float x, float y, int fontSize, Color color, NGUIText.Alignment alignment, int width)
@@ -643,31 +601,22 @@ namespace ModAPI.UI
 
         private void ShowDetails(ModEntry mod)
         {
-            if (mod == null) 
-            {
-                MMLog.WriteError("[ModManagerPanel] ShowDetails called with null mod!");
-                return;
-            }
+            if (mod == null) return;
             
-            MMLog.Write("[ModManagerPanel] === ShowDetails START for: " + mod.Name + " ===");
-            
-            // Update title
+            // Update title (Upper case for book aesthetic)
             string titleText = mod.Name.ToUpper();
             _detailTitle.text = titleText;
-            MMLog.Write("[ModManagerPanel] Title updated to: '" + titleText + "' (position: " + _detailTitle.transform.localPosition + ")");
             
             // Update version
             string versionText = "Version " + mod.Version;
             _detailVersion.text = versionText;
-            MMLog.Write("[ModManagerPanel] Version updated to: '" + versionText + "' (position: " + _detailVersion.transform.localPosition + ")");
             
-            // Update authors
+            // Update authors (Join multiple authors if present)
             string authors = "Unknown";
             if (mod.About?.authors != null && mod.About.authors.Length > 0)
                 authors = string.Join(", ", mod.About.authors);
             string authorsText = "By " + authors;
             _detailAuthors.text = authorsText;
-            MMLog.Write("[ModManagerPanel] Authors updated to: '" + authorsText + "' (position: " + _detailAuthors.transform.localPosition + ")");
             
             // Update description
             string desc = "No description available.";
@@ -675,54 +624,28 @@ namespace ModAPI.UI
                 desc = mod.About.description;
             _detailDescription.text = desc;
             
-            // CRITICAL: Reset description position to start (Y=150) when switching mods
+            // CRITICAL: Reset description position to start (Y=150) when switching mods.
+            // This ensures long descriptions from previous mods don't leave the view scrolled down.
             _detailDescription.transform.localPosition = new Vector3(0f, 150f, 0f);
             
-            MMLog.Write("[ModManagerPanel] Description updated to: '" + desc.Substring(0, Math.Min(50, desc.Length)) + "...' (position: " + _detailDescription.transform.localPosition + ")");
-            
-            // Force NGUI to update
+            // Force NGUI to update text geometry
             _detailTitle.ProcessText();
             _detailTitle.MarkAsChanged();
-            MMLog.Write("[ModManagerPanel] Title ProcessText and MarkAsChanged called. Visible: " + _detailTitle.isVisible + ", Alpha: " + _detailTitle.alpha);
-            
             _detailVersion.ProcessText();
             _detailVersion.MarkAsChanged();
-            MMLog.Write("[ModManagerPanel] Version ProcessText and MarkAsChanged called. Visible: " + _detailVersion.isVisible + ", Alpha: " + _detailVersion.alpha);
-            
             _detailAuthors.ProcessText();
             _detailAuthors.MarkAsChanged();
-            MMLog.Write("[ModManagerPanel] Authors ProcessText and MarkAsChanged called. Visible: " + _detailAuthors.isVisible + ", Alpha: " + _detailAuthors.alpha);
-            
             _detailDescription.ProcessText();
             _detailDescription.MarkAsChanged();
             
-            // CRITICAL: Reset UIScrollView bounds after text changes
+            // Re-sync UIScrollView bounds now that content text has changed height.
+            // SoftClip depends on proper bounds to fade out text correctly.
             var scrollView = _detailDescription.transform.parent.GetComponent<UIScrollView>();
             if (scrollView != null)
             {
                 scrollView.ResetPosition();
-                scrollView.UpdateScrollbars(true); // Force immediate update
-                MMLog.Write("[ModManagerPanel] UIScrollView bounds reset. Content height: " + _detailDescription.height + ", Panel height: 460");
+                scrollView.UpdateScrollbars(true); 
             }
-            
-            // DETAILED DEBUGGING FOR DESCRIPTION
-            MMLog.Write("[ModManagerPanel] === DESCRIPTION DEBUG ===");
-            MMLog.Write("[ModManagerPanel] Text: '" + desc.Substring(0, Math.Min(50, desc.Length)) + "...'");
-            MMLog.Write("[ModManagerPanel] Position: " + _detailDescription.transform.localPosition);
-            MMLog.Write("[ModManagerPanel] Width: " + _detailDescription.width + " Height: " + _detailDescription.height);
-            MMLog.Write("[ModManagerPanel] Line Width: " + _detailDescription.lineWidth + " Line Height: " + _detailDescription.lineHeight);
-            MMLog.Write("[ModManagerPanel] Pivot: " + _detailDescription.pivot);
-            MMLog.Write("[ModManagerPanel] FontSize: " + _detailDescription.fontSize + " DefaultFontSize: " + _detailDescription.defaultFontSize);
-            MMLog.Write("[ModManagerPanel] Font: " + (_detailDescription.bitmapFont != null ? "Bitmap:" + _detailDescription.bitmapFont.name : "TTF:" + (_detailDescription.trueTypeFont != null ? _detailDescription.trueTypeFont.name : "NULL")));
-            MMLog.Write("[ModManagerPanel] Overflow: " + _detailDescription.overflowMethod);
-            MMLog.Write("[ModManagerPanel] ProcessedText Length: " + _detailDescription.processedText.Length);
-            MMLog.Write("[ModManagerPanel] Visible: " + _detailDescription.isVisible + " Alpha: " + _detailDescription.alpha + " Depth: " + _detailDescription.depth);
-            MMLog.Write("[ModManagerPanel] LocalSize: " + _detailDescription.localSize);
-            MMLog.Write("[ModManagerPanel] ===========================");
-            
-            MMLog.Write("[ModManagerPanel] Description ProcessText and MarkAsChanged called. Visible: " + _detailDescription.isVisible + ", Alpha: " + _detailDescription.alpha);
-            
-            MMLog.Write("[ModManagerPanel] === ShowDetails END ===");
         }
 
         public override void OnShow()

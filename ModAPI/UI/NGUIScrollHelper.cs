@@ -44,7 +44,7 @@ namespace ModAPI.UI
             float availableHeight = maxY - minY;
             _maxVisibleItems = Mathf.FloorToInt(availableHeight / itemSpacing) + 1;
             
-            MMLog.Write("[NGUIScrollHelper] Initialized with " + items.Count + " items, max visible: " + _maxVisibleItems);
+            MMLog.Write("[NGUIScrollHelper] Initialized with " + items.Count + " items.");
             
             UpdateItemPositions();
         }
@@ -53,30 +53,12 @@ namespace ModAPI.UI
         
         void Update()
         {
-            _frameCount++;
+            if (_items == null || _items.Count == 0 || _items.Count <= _maxVisibleItems) return;
             
-            // Log every 60 frames to confirm Update is running
-            if (_frameCount % 60 == 0)
-            {
-                MMLog.Write("[NGUIScrollHelper] Update alive, offset=" + _currentOffset + " items=" + (_items != null ? _items.Count : 0));
-            }
-            
-            if (_items == null || _items.Count == 0)
-            {
-                if (_frameCount % 60 == 0) MMLog.Write("[NGUIScrollHelper] No items to scroll");
-                return;
-            }
-            
-            if (_items.Count <= _maxVisibleItems)
-            {
-                if (_frameCount % 60 == 0) MMLog.Write("[NGUIScrollHelper] All items visible, no scroll needed");
-                return;
-            }
-            
-            // Mouse wheel scrolling - but only if mouse is in our bounds
+            // Mouse wheel scrolling - restricted to horizontal bounds defined in Initialize()
             float scroll = Input.GetAxis("Mouse ScrollWheel");
             
-            // Also try raw mouse scroll
+            // Fallback to delta for some Unity versions/input setups
             if (scroll == 0f)
             {
                 scroll = Input.mouseScrollDelta.y;
@@ -84,50 +66,26 @@ namespace ModAPI.UI
             
             if (scroll != 0f)
             {
-                // Check if mouse is within our horizontal bounds
-                // Need to convert screen mouse position to UI coordinates
+                // Convert screen mouse position to UI coordinates for the boundary check
                 Vector3 mousePos = Input.mousePosition;
-                
-                // Convert to UI space (NGUI uses screen height as reference)
-                float screenHeight = Screen.height;
                 float uiX = (mousePos.x - Screen.width / 2f);
                 
-                // Check horizontal bounds
-                if (uiX < _minX || uiX > _maxX)
-                {
-                    if (_frameCount % 120 == 0)
-                    {
-                        MMLog.Write(string.Format("[NGUIScrollHelper] Scroll ignored - mouse X {0:F1} outside bounds [{1:F1}, {2:F1}]", 
-                            uiX, _minX, _maxX));
-                    }
-                    return; // Mouse not in our scroll area
-                }
-                
-                MMLog.Write("[NGUIScrollHelper] Scroll input detected: " + scroll + " at mouse X: " + uiX);
+                // Only scroll if mouse is within the specified horizontal range (e.g. over the left page)
+                if (uiX < _minX || uiX > _maxX) return; 
                 
                 int previousOffset = _currentOffset;
                 
-                // Scroll up (positive) = decrease offset (show earlier items)
-                // Scroll down (negative) = increase offset (show later items)
                 if (scroll > 0f && _currentOffset > 0)
                 {
                     _currentOffset--;
-                    MMLog.Write("[NGUIScrollHelper] Scrolling up, new offset: " + _currentOffset);
                 }
                 else if (scroll < 0f && _currentOffset < _items.Count - _maxVisibleItems)
                 {
                     _currentOffset++;
-                    MMLog.Write("[NGUIScrollHelper] Scrolling down, new offset: " + _currentOffset);
                 }
-                else
-                {
-                    MMLog.Write("[NGUIScrollHelper] At scroll boundary, offset: " + _currentOffset + " max: " + (_items.Count - _maxVisibleItems));
-                }
-                
                 if (_currentOffset != previousOffset)
                 {
                     UpdateItemPositions();
-                    MMLog.Write("[NGUIScrollHelper] Updated positions, offset now: " + _currentOffset);
                 }
             }
         }
