@@ -165,7 +165,11 @@ namespace ModAPI.Content
         public static void RegisterCookingRecipe(CookingRecipe recipe)
         {
             if (recipe == null) throw new ArgumentNullException(nameof(recipe));
-            if (string.IsNullOrEmpty(recipe.RawItemId)) throw new ArgumentException("RawItemId is required");
+            if (string.IsNullOrEmpty(recipe.RawItemId)) 
+                throw new ArgumentException("RawItemId is required", nameof(recipe));
+            if (recipe.CookTimeSeconds <= 0)
+                throw new ArgumentException("CookTimeSeconds must be > 0", nameof(recipe));
+            
             CookingRecipes.Add(recipe);
         }
 
@@ -403,7 +407,7 @@ namespace ModAPI.Content
 
         /// <summary>Type of placeable object this item creates (requires matching level).</summary>
         public ObjectManager.ObjectType ObjectType = ObjectManager.ObjectType.Undefined;
-        /// <summary>Level of the placeable object (1-5).</summary>
+        /// <summary>Level of the placeable object (1-5, default 1).</summary>
         public int ObjectLevel = 1;
 
         public List<RecipeIngredient> RecyclingIngredients = new List<RecipeIngredient>();
@@ -527,6 +531,8 @@ namespace ModAPI.Content
         public List<RecipeIngredient> AddIngredients = new List<RecipeIngredient>();
         public List<string> RemoveIngredientIds = new List<string>();
         public List<RecipeIngredient> ReplaceIngredients = new List<RecipeIngredient>();
+        public bool? SetUnique;  // null = no change
+        public bool? SetLocked;
         public bool ReplaceOutput;
         public string NewResultItemId;
 
@@ -556,6 +562,9 @@ namespace ModAPI.Content
             NewResultItemId = itemId;
             return this;
         }
+
+        public RecipePatch AsUnique(bool unique = true) { SetUnique = unique; return this; }
+        public RecipePatch AsLocked(bool locked = true) { SetLocked = locked; return this; }
     }
 
     /// <summary>Patches an existing item's properties.</summary>
@@ -602,7 +611,8 @@ namespace ModAPI.Content
         public string RawItemId;
         /// <summary>
         /// The item produced after cooking. 
-        /// If null, the item type remains the same (like vanilla Meat).
+        /// If null or same as RawItemId, the item is cooked "in place"
+        /// (like vanilla Meat which stays Meat but gains a multiplier).
         /// </summary>
         public string CookedItemId;
         /// <summary>Bonus hunger reduction applied when cooked.</summary>
