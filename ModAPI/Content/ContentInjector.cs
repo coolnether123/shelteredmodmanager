@@ -25,6 +25,47 @@ namespace ModAPI.Content
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void OnUnityLoad() => TryBootstrap();
 
+        /// <summary>
+        /// Query cooking recipes injected by mods.
+        /// Use this when writing Harmony patches to hook into FamilyAI cooking.
+        /// </summary>
+        /// <param name="rawItemType">The raw food item type</param>
+        /// <param name="recipe">The cooking recipe if found</param>
+        /// <returns>True if a cooking recipe exists for this item</returns>
+        public static bool TryGetCookingRecipe(ItemManager.ItemType rawItemType, out CookingRecipe recipe)
+        {
+            return _cookingRecipes.TryGetValue(rawItemType, out recipe);
+        }
+
+        /// <summary>
+        /// Get all cooking recipes registered by mods.
+        /// Use this when you need to enumerate all cooking transformations.
+        /// </summary>
+        /// <returns>Read-only dictionary of raw item types to cooking recipes</returns>
+        public static IReadOnlyDictionary<ItemManager.ItemType, CookingRecipe> GetCookingRecipes()
+        {
+            return _cookingRecipes;
+        }
+
+        /// <summary>
+        /// Check if an item is marked as raw food (can be cooked).
+        /// </summary>
+        /// <param name="itemType">The item type to check</param>
+        /// <returns>True if the item is raw food</returns>
+        public static bool IsRawFood(ItemManager.ItemType itemType)
+        {
+            return _rawFoodTypes.Contains(itemType);
+        }
+
+        /// <summary>
+        /// Get all item types marked as raw food.
+        /// </summary>
+        /// <returns>Read-only collection of raw food item types</returns>
+        public static IReadOnlyCollection<ItemManager.ItemType> GetRawFoodTypes()
+        {
+            return _rawFoodTypes;
+        }
+
         public static void NotifyManagerReady(string name) => TryBootstrap();
 
         private static void TryBootstrap()
