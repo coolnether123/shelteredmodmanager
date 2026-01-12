@@ -94,6 +94,28 @@
     <Compile Include="Reflection\Safe.cs" />
     <Compile Include="Util\GameUtil.cs" />
     <Compile Include="Events\GameEvents.cs" />
+    <Compile Include="Custom Saves\PlatformSaveProxy.cs" />
+    <Compile Include="Custom Saves\SaveExitPanelOnCancelPatch.cs" />
+    <Compile Include="Custom Saves\SaveManager_Injection_Patch.cs" />
+    <Compile Include="Custom Saves\SaveManager_SaveToCurrentSlot_Patch.cs" />
+    <Compile Include="Custom Saves\paging\PagingManager.cs" />
+    <Compile Include="Custom Saves\paging\SlotSelectionPatches.cs" />
+    <Compile Include="Custom Saves\saves\CRC32.cs" />
+    <Compile Include="Custom Saves\saves\DirectoryProvider.cs" />
+    <Compile Include="Custom Saves\saves\Events.cs" />
+    <Compile Include="Custom Saves\saves\ExpandedVanillaSaves.cs" />
+    <Compile Include="Custom Saves\saves\IdGenerator.cs" />
+    <Compile Include="Custom Saves\saves\ISaveApi.cs" />
+    <Compile Include="Custom Saves\saves\Models.cs" />
+    <Compile Include="Custom Saves\saves\NameSanitizer.cs" />
+    <Compile Include="Custom Saves\saves\PreviewAuto.cs" />
+    <Compile Include="Custom Saves\saves\PreviewCapture.cs" />
+    <Compile Include="Custom Saves\saves\SaveManagerInspector.cs" />
+    <Compile Include="Custom Saves\saves\SaveManager_SaveGlobalData_Patch.cs" />
+    <Compile Include="Custom Saves\saves\SaveManager_UpdateSaveData_Patch.cs" />
+    <Compile Include="Custom Saves\saves\SaveRegistryCore.cs" />
+    <Compile Include="Custom Saves\saves\ScenarioRegistry.cs" />
+    <Compile Include="Custom Saves\saves\ScenarioSaves.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
