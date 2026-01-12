@@ -11,17 +11,23 @@ namespace ModAPI.Harmony
     [HarmonyPatch(typeof(MainMenu), "OnShow")]
     public static class MainMenu_OnShow_Patch
     {
-        private static bool _buttonAdded = false;
-
         public static void Postfix(MainMenu __instance)
         {
-            if (_buttonAdded) return;
-
             try
             {
                 var tableField = typeof(MainMenu).GetField("m_table", BindingFlags.NonPublic | BindingFlags.Instance);
                 var table = (UITablePivot)tableField?.GetValue(__instance);
                 if (table == null) return;
+
+                // Check if we already have a Mods button in this table instance
+                foreach (Transform child in table.transform)
+                {
+                    if (child.name == "Button_Mods")
+                    {
+                        MMLog.WriteDebug("[MainMenuPatch] Mods button already exists in table.");
+                        return;
+                    }
+                }
 
                 UIButton templateBtn = null;
                 if (table.children != null)
@@ -65,7 +71,6 @@ namespace ModAPI.Harmony
                     var updateMethod = typeof(MainMenu).GetMethod("UpdateButtonTable", BindingFlags.NonPublic | BindingFlags.Instance);
                     updateMethod?.Invoke(__instance, null);
 
-                    _buttonAdded = true;
                     MMLog.Write("[MainMenuPatch] Injected Mods button with transition handling.");
                 }
             }
