@@ -39,8 +39,8 @@ namespace ModAPI.Hooks
                     {
                         var familyName = Traverse.Create(slotInfo).Field("m_familyName").GetValue<string>();
                         var daysSurvived = Traverse.Create(slotInfo).Field("m_daysSurvived").GetValue<int>();
-                        var saveTime = Traverse.Create(slotInfo).Field("m_saveTime").GetValue<string>();
-                        MMLog.Write($"  - Slot: {i + 1}, State: {state}, Family: '{familyName}', Days: {daysSurvived}, Updated: {saveTime}");
+                        var dateSaved = Traverse.Create(slotInfo).Field("m_dateSaved").GetValue<string>();
+                        MMLog.Write($"  - Slot: {i + 1}, State: {state}, Family: '{familyName}', Days: {daysSurvived}, Updated: {dateSaved}");
                     }
                     else
                     {
@@ -131,8 +131,20 @@ namespace ModAPI.Hooks
                         Traverse.Create(slotInfo).Field("m_familyName").SetValue(entry.saveInfo.familyName);
                         Traverse.Create(slotInfo).Field("m_daysSurvived").SetValue(entry.saveInfo.daysSurvived);
                         Traverse.Create(slotInfo).Field("m_diffSetting").SetValue(entry.saveInfo.difficulty);
-                        Traverse.Create(slotInfo).Field("m_saveTime").SetValue(entry.saveInfo.saveTime ?? entry.updatedAt);
-                        MMLog.WriteDebug($"[RefreshSaveSlotInfo] Slot {i} state: Loaded. Family: {entry.saveInfo.familyName}, Days: {entry.saveInfo.daysSurvived}");
+                        var rawTime = entry.saveInfo.saveTime ?? entry.updatedAt;
+                        string displayTime = rawTime;
+                        try
+                        {
+                            if (DateTime.TryParse(rawTime, out var dt))
+                                displayTime = dt.ToLocalTime().ToString("g");
+                        }
+                        catch { }
+
+                        var tSlot = Traverse.Create(slotInfo);
+                        if (tSlot.Field("m_dateSaved").FieldExists()) tSlot.Field("m_dateSaved").SetValue(displayTime);
+                        if (tSlot.Field("m_saveTime").FieldExists()) tSlot.Field("m_saveTime").SetValue(displayTime);
+
+                        MMLog.WriteDebug($"[RefreshSaveSlotInfo] Slot {i} state: Loaded. Family: {entry.saveInfo.familyName}, Days: {entry.saveInfo.daysSurvived}, Time: {displayTime}");
                     }
                     else
                     {

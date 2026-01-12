@@ -280,7 +280,7 @@ namespace ModAPI.Saves
             {
                 var sd = new SaveData(xmlBytes);
                 var info = sd.info;
-                MMLog.Write($"[TryUpdateEntryInfo] Extracted Info: Family='{info.m_familyName}', Days={info.m_daysSurvived}, Difficulty={info.m_diffSetting}");
+                MMLog.Write($"[TryUpdateEntryInfo] Extracted Info: Family='{info.m_familyName}', Days={info.m_daysSurvived}, Difficulty={info.m_diffSetting}, Time='{info.m_saveTime}'");
                 entry.saveInfo.daysSurvived = info.m_daysSurvived;
                 entry.saveInfo.difficulty = info.m_diffSetting;
                 entry.saveInfo.familyName = info.m_familyName;
