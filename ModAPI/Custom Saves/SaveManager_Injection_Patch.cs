@@ -11,27 +11,35 @@ namespace ModAPI.Hooks
     {
         static void Postfix(SaveManager __instance)
         {
+            Inject(__instance);
+        }
+
+        // Public helper method to force injection immediately
+        public static void Inject(SaveManager instance)
+        {
+            if (instance == null) return;
+
             try
             {
-                // 1. Get the current vanilla saver
-                var traverse = Traverse.Create(__instance);
-                var vanillaScript = traverse.Field("m_saveScript").GetValue<PlatformSave_Base>();
+                var traverse = Traverse.Create(instance);
+                var currentScript = traverse.Field("m_saveScript").GetValue<PlatformSave_Base>();
 
-                // 2. Check if we already injected it (to prevent double injection)
-                if (vanillaScript != null && !(vanillaScript is PlatformSaveProxy))
+                // Only inject if it's NOT ALREADY a proxy
+                if (currentScript != null && !(currentScript is PlatformSaveProxy))
                 {
+                    MMLog.Write("[Injection] --------------------------------------------------");
                     MMLog.Write("[Injection] Swapping vanilla PlatformSave_PC with PlatformSaveProxy.");
+                    MMLog.Write("[Injection] --------------------------------------------------");
+
+                    var proxy = new PlatformSaveProxy(currentScript);
                     
-                    // 3. Wrap the vanilla saver in our Proxy
-                    var proxy = new PlatformSaveProxy(vanillaScript);
-                    
-                    // 4. Inject it back into the private field
+                    // Inject into private field
                     traverse.Field("m_saveScript").SetValue(proxy);
                 }
             }
             catch (Exception ex)
             {
-                MMLog.WriteError("[Injection] Critical error during SaveManager proxy injection: " + ex);
+                MMLog.WriteError("[Injection] FATAL ERROR during proxy injection: " + ex);
             }
         }
     }

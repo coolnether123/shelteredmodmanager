@@ -11,17 +11,23 @@ namespace ModAPI.Hooks
     {
         static bool Prefix(SaveManager __instance)
         {
-            // We just log for debugging. We MUST return true to let the game
-            // set its internal flags (isSaving = true), otherwise the UI hangs.
-            // The actual interception happens inside PlatformSaveProxy now.
-            
+            // 1. FORCE INJECTION NOW
+            // If the Awake patch was missed, this line saves the day.
+            SaveManager_Injection_Patch.Inject(__instance);
+
+            // 2. Logging
             var slot = (SaveManager.SaveType)Traverse.Create(__instance).Field("m_slotInUse").GetValue<int>();
             
-            if (PlatformSaveProxy.NextSave.ContainsKey(slot) || PlatformSaveProxy.ActiveCustomSave != null)
+            if (PlatformSaveProxy.NextSave.ContainsKey(slot))
             {
-                 MMLog.Write($"[SaveToCurrentSlot] Custom context detected for {slot}. Passing execution to Proxy.");
+                 MMLog.Write($"[SaveToCurrentSlot] Pending NEW GAME detected for {slot}. Proxy is injected and waiting.");
+            }
+            else if (PlatformSaveProxy.ActiveCustomSave != null)
+            {
+                 MMLog.Write($"[SaveToCurrentSlot] Active CUSTOM SESSION detected for {slot}. Proxy is injected and waiting.");
             }
 
+            // 3. Return true to let vanilla logic run (which calls our Proxy)
             return true; 
         }
     }
