@@ -41,8 +41,8 @@ namespace ModAPI.Content
         /// Get all cooking recipes registered by mods.
         /// Use this when you need to enumerate all cooking transformations.
         /// </summary>
-        /// <returns>Read-only dictionary of raw item types to cooking recipes</returns>
-        public static IReadOnlyDictionary<ItemManager.ItemType, CookingRecipe> GetCookingRecipes()
+        /// <returns>Dictionary of raw item types to cooking recipes (do not modify)</returns>
+        public static Dictionary<ItemManager.ItemType, CookingRecipe> GetCookingRecipes()
         {
             return _cookingRecipes;
         }
@@ -60,8 +60,8 @@ namespace ModAPI.Content
         /// <summary>
         /// Get all item types marked as raw food.
         /// </summary>
-        /// <returns>Read-only collection of raw food item types</returns>
-        public static IReadOnlyCollection<ItemManager.ItemType> GetRawFoodTypes()
+        /// <returns>Enumerable of raw food item types</returns>
+        public static IEnumerable<ItemManager.ItemType> GetRawFoodTypes()
         {
             return _rawFoodTypes;
         }
