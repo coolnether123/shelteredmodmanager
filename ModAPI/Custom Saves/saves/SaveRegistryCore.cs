@@ -98,14 +98,14 @@ namespace ModAPI.Saves
                     entry.updatedAt = DateTime.UtcNow.ToString("o");
                     if (xmlBytes != null)
                     {
-                        WriteEntryFile(saveId, xmlBytes, out long size, out uint crc);
+                        WriteEntryFile(entry.absoluteSlot, xmlBytes, out long size, out uint crc);
                         entry.fileSize = size;
                         entry.crc32 = crc;
                         TryUpdateEntryInfo(entry, xmlBytes);
                     }
                     m.entries[i] = entry;
                     SaveManifestFile(m);
-                    MMLog.WriteDebug($"OverwriteSave scenario={_scenarioId} id={saveId} size={entry.fileSize}");
+                    MMLog.WriteDebug($"OverwriteSave scenario={_scenarioId} id={saveId} slot={entry.absoluteSlot} size={entry.fileSize}");
                     return entry;
                 }
             }
@@ -118,12 +118,13 @@ namespace ModAPI.Saves
             var list = new List<SaveEntry>(m.entries);
             var idx = list.FindIndex(e => e.id == saveId);
             if (idx < 0) return false;
+            var entry = list[idx];
             list.RemoveAt(idx);
             m.entries = list.ToArray();
             SaveManifestFile(m);
-            try { File.Delete(DirectoryProvider.EntryPath(_scenarioId, saveId)); } catch { }
+            try { File.Delete(DirectoryProvider.EntryPath(_scenarioId, entry.absoluteSlot)); } catch { }
             try { File.Delete(DirectoryProvider.PreviewPath(_scenarioId, saveId)); } catch { }
-            MMLog.WriteDebug($"DeleteSave scenario={_scenarioId} id={saveId}");
+            MMLog.WriteDebug($"DeleteSave scenario={_scenarioId} id={saveId} slot={entry.absoluteSlot}");
             return true;
         }
 
@@ -143,16 +144,90 @@ namespace ModAPI.Saves
                     }
                     else
                     {
-                        // Don't rebuild here, just create a new one. Rebuilding can be a separate utility.
                         _manifest = new SaveManifest();
                     }
                 }
                 catch (Exception ex)
                 {
                     MMLog.Write($"Manifest load error for '{_scenarioId}': " + ex.Message);
-                    _manifest = new SaveManifest(); // Start fresh on error
+                    _manifest = new SaveManifest();
                 }
+
+                // Auto-discovery: Reconcile manifest with actual files on disk
+                ReconcileManifestWithSlots(_manifest);
+
                 return _manifest;
+            }
+        }
+
+        private void ReconcileManifestWithSlots(SaveManifest m)
+        {
+            try
+            {
+                var scenarioRoot = DirectoryProvider.ScenarioRoot(_scenarioId);
+                if (!Directory.Exists(scenarioRoot)) return;
+
+                var dirs = Directory.GetDirectories(scenarioRoot, "Slot_*");
+                var entries = new List<SaveEntry>(m.entries ?? new SaveEntry[0]);
+                bool changed = false;
+
+                foreach (var dir in dirs)
+                {
+                    var dirName = Path.GetFileName(dir);
+                    var numPart = dirName.Substring(5); // "Slot_" is 5 chars
+                    if (int.TryParse(numPart, out int absoluteSlot))
+                    {
+                        var savePath = Path.Combine(dir, "SaveData.xml");
+                        if (File.Exists(savePath))
+                        {
+                            // Check if this slot is already known
+                            var existing = entries.Find(e => e.absoluteSlot == absoluteSlot);
+                            if (existing == null)
+                            {
+                                MMLog.Write($"[SaveRegistryCore] Discovered orphaned save in {dirName}. Adding to manifest.");
+                                
+                                // Create new entry
+                                var newEntry = new SaveEntry
+                                {
+                                    id = IdGenerator.NewId(),
+                                    absoluteSlot = absoluteSlot,
+                                    name = $"Slot {absoluteSlot}",
+                                    createdAt = File.GetCreationTimeUtc(savePath).ToString("o"),
+                                    updatedAt = File.GetLastWriteTimeUtc(savePath).ToString("o"),
+                                    scenarioId = _scenarioId,
+                                    saveInfo = new SaveInfo()
+                                };
+
+                                // Parse metadata
+                                try
+                                {
+                                    var bytes = File.ReadAllBytes(savePath);
+                                    newEntry.fileSize = bytes.Length;
+                                    newEntry.crc32 = CRC32.Compute(bytes);
+                                    TryUpdateEntryInfo(newEntry, bytes);
+                                }
+                                catch (Exception ex)
+                                {
+                                    MMLog.WriteError($"Error parsing discovered save in {dirName}: " + ex.Message);
+                                }
+
+                                entries.Add(newEntry);
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+
+                if (changed)
+                {
+                    entries.Sort((a, b) => a.absoluteSlot.CompareTo(b.absoluteSlot));
+                    m.entries = entries.ToArray();
+                    SaveManifestFile(m);
+                }
+            }
+            catch (Exception ex) 
+            {
+                MMLog.WriteError("[SaveRegistryCore] Error reconciling slots: " + ex.Message);
             }
         }
 
@@ -180,9 +255,9 @@ namespace ModAPI.Saves
             }
         }
 
-        private void WriteEntryFile(string saveId, byte[] xmlBytes, out long fileSize, out uint crc)
+        private void WriteEntryFile(int absoluteSlot, byte[] xmlBytes, out long fileSize, out uint crc)
         {
-            var path = DirectoryProvider.EntryPath(_scenarioId, saveId);
+            var path = DirectoryProvider.EntryPath(_scenarioId, absoluteSlot);
             var tmp = path + ".tmp";
             fileSize = 0; crc = 0;
             try
@@ -195,7 +270,7 @@ namespace ModAPI.Saves
             }
             catch (Exception ex)
             {
-                MMLog.Write($"WriteEntryFile error for '{_scenarioId}/{saveId}': " + ex.Message);
+                MMLog.Write($"WriteEntryFile error for Slot_{absoluteSlot}': " + ex.Message);
             }
         }
 

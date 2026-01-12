@@ -56,13 +56,26 @@ namespace ModAPI.Saves
             return path;
         }
 
+        public static string SlotRoot(string scenarioId, int absoluteSlot)
+        {
+            var path = Path.Combine(ScenarioRoot(scenarioId), $"Slot_{absoluteSlot}");
+            EnsureDir(path);
+            return path;
+        }
+
         public static string ManifestPath(string scenarioId)
         {
             return Path.Combine(ScenarioRoot(scenarioId), "manifest.json");
         }
 
+        public static string EntryPath(string scenarioId, int absoluteSlot)
+        {
+            return Path.Combine(SlotRoot(scenarioId, absoluteSlot), "SaveData.xml");
+        }
+
         public static string EntryPath(string scenarioId, string saveId)
         {
+            // Legacy fall-back
             return Path.Combine(ScenarioRoot(scenarioId), NameSanitizer.SanitizeId(saveId) + ".xml");
         }
 

@@ -100,7 +100,7 @@ namespace ModAPI.Hooks
                     var entry = saveApi.Get(saveId);
                     if (entry == null) return false;
 
-                    var path = DirectoryProvider.EntryPath(scenarioId, saveId);
+                    var path = DirectoryProvider.EntryPath(scenarioId, entry.absoluteSlot);
                     if (!File.Exists(path)) return false;
 
                     _customLoadedXml = File.ReadAllText(path);
