@@ -402,7 +402,7 @@ namespace ModAPI.Content
             }
         }
 
-        private static bool ResolveItemType(string id, out ItemManager.ItemType type)
+        public static bool ResolveItemType(string id, out ItemManager.ItemType type)
         {
             if (ItemKeyToType.TryGetValue(id, out type)) return true;
             if (TryParseEnum<ItemManager.ItemType>(id, out type)) return true;
