@@ -23,5 +23,6 @@ namespace ModAPI.Core
         public string[] loadAfter;   // optional soft ordering                    
         public string[] tags;        // optional tags                             
         public string website;       // optional website                          
+        public string missingModWarning; // optional warning if mod is missing from save
     }
 }

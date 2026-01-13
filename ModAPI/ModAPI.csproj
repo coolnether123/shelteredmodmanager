@@ -77,6 +77,7 @@
     <Compile Include="UI\NGUIScrollHelper.cs" />
     <Compile Include="UI\ContextUIExtensions.cs" />
     <Compile Include="UI\UIPatches.cs" />
+    <Compile Include="UI\UIDebug.cs" />
     <Compile Include="Harmony\HarmonyBootstrap.cs" />
     <Compile Include="Harmony\HarmonyUtil.cs" />
     <Compile Include="Harmony\HarmonyHelper.cs" />
@@ -107,6 +108,8 @@
     <Compile Include="Custom Saves\SaveManager_SaveToCurrentSlot_Patch.cs" />
     <Compile Include="Custom Saves\paging\PagingManager.cs" />
     <Compile Include="Custom Saves\paging\SlotSelectionPatches.cs" />
+    <Compile Include="Custom Saves\paging\SaveVerification.cs" />
+    <Compile Include="Custom Saves\paging\SaveDetailsWindow.cs" />
     <Compile Include="Custom Saves\saves\CRC32.cs" />
     <Compile Include="Custom Saves\saves\DirectoryProvider.cs" />
     <Compile Include="Custom Saves\saves\Events.cs" />

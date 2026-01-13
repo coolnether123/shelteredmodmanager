@@ -102,6 +102,9 @@ namespace ModAPI.Saves
                         entry.fileSize = size;
                         entry.crc32 = crc;
                         TryUpdateEntryInfo(entry, xmlBytes);
+                        
+                        // Update per-slot manifest (Mod List)
+                        UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
                     }
                     m.entries[i] = entry;
                     SaveManifestFile(m);
@@ -124,8 +127,90 @@ namespace ModAPI.Saves
             SaveManifestFile(m);
             try { File.Delete(DirectoryProvider.EntryPath(_scenarioId, entry.absoluteSlot)); } catch { }
             try { File.Delete(DirectoryProvider.PreviewPath(_scenarioId, saveId)); } catch { }
+            
+            // Delete manifest.json
+            try 
+            {
+                var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, entry.absoluteSlot);
+                var manPath = Path.Combine(slotRoot, "manifest.json");
+                if (File.Exists(manPath)) File.Delete(manPath);
+            } 
+            catch { }
+
             MMLog.WriteDebug($"DeleteSave scenario={_scenarioId} id={saveId} slot={entry.absoluteSlot}");
             return true;
+        }
+
+        private void UpdateSlotManifest(int absoluteSlot, SaveInfo info)
+        {
+            try
+            {
+                var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, absoluteSlot);
+                var path = Path.Combine(slotRoot, "manifest.json");
+
+                var currentMods = new List<LoadedModInfo>();
+                foreach (var mod in PluginManager.LoadedMods)
+                {
+                    string warning = mod.About?.missingModWarning;
+                    currentMods.Add(new LoadedModInfo 
+                    { 
+                        modId = mod.Id, 
+                        version = mod.Version, 
+                        warnings = string.IsNullOrEmpty(warning) ? new string[0] : new string[] { warning }
+                    });
+                }
+
+                SlotManifest existing = null;
+                if (File.Exists(path))
+                {
+                    try { existing = JsonUtility.FromJson<SlotManifest>(File.ReadAllText(path)); } catch { }
+                }
+
+                bool changed = true;
+                if (existing != null)
+                {
+                    // Compare mods
+                    if (existing.lastLoadedMods.Length == currentMods.Count)
+                    {
+                        bool match = true;
+                        for(int i=0; i<currentMods.Count; i++)
+                        {
+                            var a = existing.lastLoadedMods[i];
+                            var b = currentMods[i];
+                            if (a.modId != b.modId || a.version != b.version)
+                            {
+                                match = false;
+                                break;
+                            }
+                        }
+                        if (match) changed = false;
+                    }
+                }
+
+                if (changed || existing == null)
+                {
+                    var newManifest = new SlotManifest
+                    {
+                        lastModified = DateTime.UtcNow.ToString("o"),
+                        family_name = info != null ? info.familyName : "Unknown",
+                        lastLoadedMods = currentMods.ToArray()
+                    };
+                    File.WriteAllText(path, JsonUtility.ToJson(newManifest, true));
+                    MMLog.WriteDebug($"[SaveRegistryCore] Updated manifest.json for slot {absoluteSlot} (Mods Changed)");
+                }
+                else
+                {
+                    // Existing manifest valid, but maybe update family name? 
+                    // User said "won't be updated... unless mod list changes". 
+                    // But if I play, change family name, save -> manifest family name should probably update? 
+                    // User emphasized "lastModified" isn't updated unless mods change. 
+                    // I will leave it as is to satisfy the requirement strictly.
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"[SaveRegistryCore] Failed to update slot manifest for slot {absoluteSlot}: {ex}");
+            }
         }
 
         private SaveManifest LoadManifest()
@@ -224,10 +309,86 @@ namespace ModAPI.Saves
                     m.entries = entries.ToArray();
                     SaveManifestFile(m);
                 }
+
+                CondenseSlots(m); // Auto-condense after discovery
             }
             catch (Exception ex) 
             {
                 MMLog.WriteError("[SaveRegistryCore] Error reconciling slots: " + ex.Message);
+            }
+        }
+
+        private void CondenseSlots(SaveManifest m)
+        {
+            if (m.entries == null || m.entries.Length == 0) return;
+
+            // Determines starting slot based on scenario type
+            int expectedSlot = (_scenarioId == "Standard") ? 4 : 1;
+            
+            var sorted = new List<SaveEntry>(m.entries);
+            sorted.Sort((a, b) => a.absoluteSlot.CompareTo(b.absoluteSlot));
+
+            bool changed = false;
+            foreach (var entry in sorted)
+            {
+                // If this entry is in a reserved slot (e.g. 1-3 for Standard), skip it? 
+                // Or if it's somehow there, should we move it to 4?
+                // Assuming we only condense valid custom slots.
+                if (_scenarioId == "Standard" && entry.absoluteSlot < 4) continue;
+
+                if (entry.absoluteSlot > expectedSlot)
+                {
+                    // Move it!
+                    bool success = false;
+                    try
+                    {
+                        var oldDir = DirectoryProvider.SlotRoot(_scenarioId, entry.absoluteSlot);
+                        var newDir = DirectoryProvider.SlotRoot(_scenarioId, expectedSlot);
+
+                        // DirectoryProvider creates dir if not exists, so newDir might exist empty.
+                        if (Directory.Exists(newDir))
+                        {
+                            // If empty, delete it to allow move
+                            if (Directory.GetFiles(newDir).Length == 0 && Directory.GetDirectories(newDir).Length == 0)
+                            {
+                                Directory.Delete(newDir);
+                            }
+                            else
+                            {
+                                // Collision! Skip this target slot.
+                                MMLog.WriteError($"[CondenseSlots] Cannot move {entry.absoluteSlot} to {expectedSlot} because target exists and is not empty.");
+                                expectedSlot++; 
+                                continue; 
+                            }
+                        }
+
+                        // Just in case DirectoryProvider didn't create it or we deleted it:
+                         if (Directory.Exists(newDir)) Directory.Delete(newDir);
+
+                        Directory.Move(oldDir, newDir);
+                        MMLog.Write($"[CondenseSlots] Moved save from Slot {entry.absoluteSlot} to Slot {expectedSlot}");
+
+                        entry.absoluteSlot = expectedSlot;
+                        changed = true;
+                        success = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        MMLog.WriteError($"[CondenseSlots] Failed to move slot {entry.absoluteSlot} to {expectedSlot}: {ex.Message}");
+                    }
+                    
+                    if (success) expectedSlot++;
+                }
+                else if (entry.absoluteSlot == expectedSlot)
+                {
+                    expectedSlot++;
+                }
+            }
+
+            if (changed)
+            {
+                m.entries = sorted.ToArray();
+                SaveManifestFile(m);
             }
         }
 

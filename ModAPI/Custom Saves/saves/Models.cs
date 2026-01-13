@@ -131,5 +131,22 @@ namespace ModAPI.Saves
         void OnContinue();
         void OnAbort();
     }
+
+    [Serializable]
+    public class LoadedModInfo
+    {
+        public string modId;
+        public string version;
+        public string[] warnings = new string[0];
+    }
+
+    [Serializable]
+    public class SlotManifest
+    {
+        public int manifestVersion = 1;
+        public string lastModified;
+        public string family_name;
+        public LoadedModInfo[] lastLoadedMods = new LoadedModInfo[0];
+    }
 }
 

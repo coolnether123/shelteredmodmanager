@@ -76,6 +76,10 @@ namespace ModAPI.Hooks
                         if (!btn.gameObject.activeSelf) btn.gameObject.SetActive(true);
                     }
                 }
+                
+                // Hide verification icons when on vanilla page
+                SaveVerification.UpdateIcons(__instance);
+                
                 return true;
             }
 
@@ -154,6 +158,9 @@ namespace ModAPI.Hooks
                 }
 
                 t.Method("RefreshSlotLabels").GetValue();
+                
+                // Update Verification Icons
+                SaveVerification.UpdateIcons(__instance);
             }
             catch (Exception ex)
             {
@@ -226,26 +233,8 @@ namespace ModAPI.Hooks
                     int apiPage = page - 1;
                     MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] chosenSlotIndex: {chosenSlotIndex}, apiPage: {apiPage}");
 
-                    var allSaves = ExpandedVanillaSaves.List();
-                    var savesOnPage = new SaveEntry[3];
-                    foreach (var save in allSaves)
-                    {
-                        int saveSlot = save.absoluteSlot;
-                        if (saveSlot > 0)
-                        {
-                            int saveApiPage = (saveSlot - 4) / 3;
-                            if (saveApiPage == apiPage)
-                            {
-                                int slotIndexOnPage = (saveSlot - 4) % 3;
-                                if (slotIndexOnPage >= 0 && slotIndexOnPage < 3)
-                                {
-                                    savesOnPage[slotIndexOnPage] = save;
-                                }
-                            }
-                        }
-                    }
-                    var entry = (chosenSlotIndex < savesOnPage.Length) ? savesOnPage[chosenSlotIndex] : null;
-
+                    var entry = ExpandedVanillaSaves.FindByUIPosition(chosenSlotIndex + 1, apiPage, 3);
+                    
                     var virtualSaveType = (SaveManager.SaveType)(chosenSlotIndex + 1);
                     MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] virtualSaveType: {virtualSaveType}");
 
@@ -265,6 +254,33 @@ namespace ModAPI.Hooks
                     }
                     else // Loading an existing expanded game
                     {
+                        // VERIFICATION
+                        var slotRoot = DirectoryProvider.SlotRoot("Standard", entry.absoluteSlot);
+                        var manPath = System.IO.Path.Combine(slotRoot, "manifest.json");
+                        SlotManifest manifest = null;
+                        if (System.IO.File.Exists(manPath)) try { manifest = JsonUtility.FromJson<SlotManifest>(System.IO.File.ReadAllText(manPath)); } catch {}
+                        
+                        var state = SaveVerification.Verify(manifest);
+
+                        // If NOT mismatch, we load normally. 
+                        // User requirement: "If the player clicks to play the slot... if the mods don’t match the context window should open... saying load anyway."
+                        // Logic: Green (Match) -> Load. Yellow (Ver Diff) is mismatch?
+                        // User says: "Green: ID matches AND Version matches... ID matches BUT Version is different (Load Anyway, but warn)... ID missing entirely (Red)"
+                        // So only GREEN allows direct load?
+                        // "Reload game with... button should be greged out ... if the only diff is version number"
+                        
+                        if (state != SaveVerification.VerificationState.Match)
+                        {
+                             // Open Details Window
+                             SaveDetailsWindow.Show(entry, manifest, state, true, () => {
+                                 // Load Callback
+                                 MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] Load Anyway clicked for {entry.id}");
+                                 PlatformSaveProxy.SetNextLoad(virtualSaveType, "Standard", entry.id);
+                                 SaveManager.instance.SetSlotToLoad(chosenSlotIndex + 1);
+                             });
+                             return false; // Block immediate load
+                        }
+
                         MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] Loading existing game with id: {entry.id}");
                         MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] Calling SetNextLoad with type={virtualSaveType}, scenarioId=Standard, saveId={entry.id}");
                         PlatformSaveProxy.SetNextLoad(virtualSaveType, "Standard", entry.id);

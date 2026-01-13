@@ -105,7 +105,16 @@ namespace ModAPI.Hooks.Paging
             if (newPage == p) return;
 
             SetPage(panel, newPage);
-            ModAPI.Saves.Events.RaisePageChanged(newPage);
+            ModAPI.Saves.Events.RaisePageChanged(newPage); // Triggers RefreshSaveSlotInfo patch which updates UI
+
+            // Tutorial Check
+            if (newPage == 1 && PlayerPrefs.GetInt("ModAPI_HasSeenCustomSavesHelp", 0) == 0)
+            {
+                PlayerPrefs.SetInt("ModAPI_HasSeenCustomSavesHelp", 1);
+                PlayerPrefs.Save();
+                MessageBox.Show(MessageBoxButtons.Okay_Button, "Welcome to Custom Saves!\n\nPage 2+ contains unlimited custom saves.\nUse arrows to navigate pages.\nSlots 1-3 are vanilla.");
+            }
+
             panel.RefreshSaveSlotInfo(); // This will trigger our Postfix patch to update the UI
             Update(panel);
         }
