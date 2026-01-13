@@ -37,9 +37,9 @@ namespace Manager
         }
     }
 
-    /**
-     * (Coolnether123) Result of the load order resolution, containing the sorted list and any errors.
-     */
+    /// <summary>
+    /// Represents the result of a load order resolution, including the sorted collection and any validation errors.
+    /// </summary>
     public class ResolutionResult
     {
         public readonly List<ModTypes.ModInfo> Mods;
@@ -66,11 +66,10 @@ namespace Manager
         }
     }
 
-    /**
-     * (Coolnether123) Detailed evaluation of the current user order against dependency rules.
-     * Provides sets of mods that are misordered (hard/soft), the resolved sorted ids,
-     * and any missing hard dependencies or cycles encountered.
-     */
+    /// <summary>
+    /// Provides a detailed evaluation of a user-defined load order against dependency constraints.
+    /// Identifies misordered mods (hard/soft violations) and reports missing dependencies or cycles.
+    /// </summary>
     public class OrderEvaluation
     {
         public readonly List<string> EnabledOrder;               // normalized from user
@@ -97,10 +96,10 @@ namespace Manager
         }
     }
 
-    /**
-     * (Coolnether123) Resolves mod load order based on dependencies and user-defined priorities.
-     * Uses Kahn's algorithm for topological sorting.
-     */
+    /// <summary>
+    /// Resolves mod load order by analyzing dependencies and priorities.
+    /// Implements Kahn's algorithm for robust topological sorting.
+    /// </summary>
     public static class LoadOrderResolver
     {
         // (Coolnether123) Structure of the loadorder.json file.
@@ -152,7 +151,9 @@ namespace Manager
                 Operator = op;
             }
 
-            // (Coolnether123) Checks if a version satisfies the constraint.
+            /// <summary>
+            /// Evaluates whether the provided version string satisfies the defined constraint.
+            /// </summary>
             public bool IsSatisfiedBy(string versionString)
             {
                 if (Version == null || string.IsNullOrEmpty(Operator)) return true; // No version constraint.
@@ -178,7 +179,9 @@ namespace Manager
         // (Coolnether123) Case-insensitive comparer for mod IDs.
         private static readonly StringComparer ModIdComparer = StringComparer.OrdinalIgnoreCase;
 
-        // (Coolnether123) Holds the resulting dependency graph.
+        /// <summary>
+        /// Contains the intermediate adjacency list and in-degree counts during graph construction.
+        /// </summary>
         private class GraphBuilderResult
         {
             public readonly Dictionary<string, HashSet<Edge>> Adj = new Dictionary<string, HashSet<Edge>>(ModIdComparer);
@@ -281,9 +284,9 @@ namespace Manager
             return id;
         }
 
-        /**
-         * (Coolnether123) Prepares data structures for sorting, mapping mods by ID and priority.
-         */
+        /// <summary>
+        /// Initializes the mod data mapping and establishes initial priorities from the existing user order.
+        /// </summary>
         private static void InitializeModData(List<ModTypes.ModInfo> discovered, IEnumerable<string> userOrder, out Dictionary<string, ModTypes.ModInfo> byId, out List<string> ids, out Dictionary<string, int> priority)
         {
             byId = new Dictionary<string, ModTypes.ModInfo>(ModIdComparer);

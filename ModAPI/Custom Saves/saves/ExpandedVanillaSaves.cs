@@ -25,6 +25,8 @@ namespace ModAPI.Saves
         public static bool Delete(string saveId) => _registry.DeleteSave(saveId);
         public static SaveEntry Get(string saveId) => _registry.GetSave(saveId);
         public static SaveEntry Overwrite(string saveId, SaveOverwriteOptions opts, byte[] xmlBytes) => _registry.OverwriteSave(saveId, opts, xmlBytes);
+        
+        internal static void UpdateManifest(int absoluteSlot, SaveInfo info) => _registry.UpdateSlotManifest(absoluteSlot, info);
 
         internal static void Debug_ListAllSaves()
         {

@@ -258,7 +258,7 @@ namespace ModAPI.Hooks
                         var slotRoot = DirectoryProvider.SlotRoot("Standard", entry.absoluteSlot);
                         var manPath = System.IO.Path.Combine(slotRoot, "manifest.json");
                         SlotManifest manifest = null;
-                        if (System.IO.File.Exists(manPath)) try { manifest = JsonUtility.FromJson<SlotManifest>(System.IO.File.ReadAllText(manPath)); } catch {}
+                        if (System.IO.File.Exists(manPath)) try { manifest = ModAPI.Saves.SaveRegistryCore.DeserializeSlotManifest(System.IO.File.ReadAllText(manPath)); } catch {}
                         
                         var state = SaveVerification.Verify(manifest);
 

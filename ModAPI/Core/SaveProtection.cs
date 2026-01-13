@@ -12,7 +12,7 @@ namespace ModAPI.Core
     [Serializable]
     public class ModSaveData
     {
-        public List<ModInfo> mods = new List<ModInfo>();
+        public ModInfo[] mods;
 
         [Serializable]
         public class ModInfo
@@ -24,14 +24,16 @@ namespace ModAPI.Core
         public static ModSaveData FromCurrentMods()
         {
             var data = new ModSaveData();
+            var list = new List<ModInfo>();
             foreach (var modEntry in PluginManager.LoadedMods)
             {
-                data.mods.Add(new ModInfo
+                list.Add(new ModInfo
                 {
                     id = modEntry.Id,
                     version = modEntry.Version
                 });
             }
+            data.mods = list.ToArray();
             return data;
         }
     }
@@ -101,6 +103,22 @@ namespace ModAPI.Core
                     string modDataKey = "ModAPI_ModData";
                     data.SaveLoad(modDataKey, ref json);
                     MMLog.WriteDebug($"SaveGamePatch: Injected mod data: {json}");
+
+                    // NEW: Update the external manifest.json so the Manager and Restart diagnostics are accurate
+                    try
+                    {
+                        var info = new ModAPI.Saves.SaveInfo
+                        {
+                            familyName = data.info != null ? data.info.m_familyName : "Unknown",
+                            daysSurvived = data.info != null ? data.info.m_daysSurvived : 0,
+                            saveTime = data.info != null ? data.info.m_saveTime : DateTime.Now.ToString()
+                        };
+                        ModAPI.Saves.ExpandedVanillaSaves.UpdateManifest((int)type, info);
+                    }
+                    catch (Exception ex)
+                    {
+                        MMLog.WriteError("SaveGamePatch: Failed to update external manifest during StartSave: " + ex.Message);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -173,7 +191,7 @@ namespace ModAPI.Core
                     MMLog.WriteDebug($"LoadGamePatch: Saved mod data: {modDataJson}");
 
                     // Perform comparison and get mismatch message
-                    string mismatchMessage = GetMismatchMessage(savedModData.mods);
+                    string mismatchMessage = GetMismatchMessage(savedModData.mods != null ? new List<ModSaveData.ModInfo>(savedModData.mods) : new List<ModSaveData.ModInfo>());
 
                     if (!string.IsNullOrEmpty(mismatchMessage))
                     {

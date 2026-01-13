@@ -171,7 +171,7 @@ namespace ModAPI.Hooks.Paging
                 if (File.Exists(manPath))
                 {
                     try { 
-                        manifest = JsonUtility.FromJson<SlotManifest>(File.ReadAllText(manPath)); 
+                        manifest = ModAPI.Saves.SaveRegistryCore.DeserializeSlotManifest(File.ReadAllText(manPath)); 
                         state = Verify(manifest);
                     } catch { }
                 }
@@ -188,7 +188,7 @@ namespace ModAPI.Hooks.Paging
                 }
 
                 Color color = state == VerificationState.Match ? Color.green : 
-                             (state == VerificationState.VersionMismatch ? Color.yellow : Color.red);
+                             (state == VerificationState.Missing ? Color.red : Color.yellow);
 
                 if (childSprite != null)
                 {
@@ -220,34 +220,48 @@ namespace ModAPI.Hooks.Paging
             UIDebug.LogTimed("UpdateIcons complete");
         }
 
-        public enum VerificationState { Match, VersionMismatch, Missing }
+        public enum VerificationState { Match, VersionMismatch, Warning, Missing }
 
         public static VerificationState Verify(SlotManifest manifest)
         {
             if (manifest == null) return VerificationState.Match; 
             if (manifest.lastLoadedMods == null) return VerificationState.Match;
 
-            var active = PluginManager.LoadedMods;
+            var activeMods = PluginManager.LoadedMods;
             
-            // Check for Missing Mods (Case Insensitive)
+            // 1. Check for Missing Mods (Critical - Red)
             foreach(var savedMod in manifest.lastLoadedMods)
             {
-                 var activeMod = active.Find(m => string.Equals(m.Id, savedMod.modId, StringComparison.OrdinalIgnoreCase));
-                 if (activeMod == null) return VerificationState.Missing; // Red
+                 var activeMod = activeMods.Find(m => string.Equals(m.Id, savedMod.modId, StringComparison.OrdinalIgnoreCase));
+                 if (activeMod == null) return VerificationState.Missing; 
             }
 
-            // Check for Version Mismatch
-            bool mismatch = false;
+            // 2. Check for Version Mismatches (Warning - Yellow)
+            bool versionMismatch = false;
             foreach(var savedMod in manifest.lastLoadedMods)
             {
-                 var activeMod = active.Find(m => string.Equals(m.Id, savedMod.modId, StringComparison.OrdinalIgnoreCase));
+                 var activeMod = activeMods.Find(m => string.Equals(m.Id, savedMod.modId, StringComparison.OrdinalIgnoreCase));
                  if (activeMod != null && activeMod.Version != savedMod.version)
                  {
-                     mismatch = true;
+                     versionMismatch = true;
                  }
             }
 
-            return mismatch ? VerificationState.VersionMismatch : VerificationState.Match;
+            // 3. Check for Extra Mods (Warning - Yellow)
+            // If user has more mods active than the save intended
+            bool extraMods = false;
+            foreach (var activeMod in activeMods)
+            {
+                if (!manifest.lastLoadedMods.Any(m => string.Equals(m.modId, activeMod.Id, StringComparison.OrdinalIgnoreCase)))
+                {
+                    extraMods = true;
+                }
+            }
+
+            if (versionMismatch) return VerificationState.VersionMismatch;
+            if (extraMods) return VerificationState.Warning;
+
+            return VerificationState.Match;
         }
     }
 }
