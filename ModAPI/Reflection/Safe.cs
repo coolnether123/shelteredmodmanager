@@ -67,6 +67,33 @@ namespace ModAPI.Reflection
             return defaultValue;
         }
 
+        public static bool SetField(object obj, string name, object value)
+        {
+            if (obj == null || string.IsNullOrEmpty(name)) return false;
+            try
+            {
+                Type type; object instance; BindingFlags flags;
+                ResolveTarget(obj, out type, out instance, out flags);
+                var f = type.GetField(name, flags);
+                if (f != null)
+                {
+                    f.SetValue(instance, value);
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteDebug("Safe.SetField error: " + ex.Message);
+            }
+            return false;
+        }
+
+        public static bool InvokeMethod(object obj, string methodName, params object[] args)
+        {
+            object dummy;
+            return TryCall<object>(obj, methodName, out dummy, true, args);
+        }
+
         // --- Method helpers -------------------------------------------------
 
         public static bool TryCall<T>(object obj, string methodName, out T result, params object[] args)
