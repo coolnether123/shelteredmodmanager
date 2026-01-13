@@ -97,6 +97,10 @@
       <DependentUpon>ManagerGUI.cs</DependentUpon>
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="ManagerGUI.Restart.cs">
+      <DependentUpon>ManagerGUI.cs</DependentUpon>
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Shared\ModAboutReader.cs" />
   </ItemGroup>
   <ItemGroup>

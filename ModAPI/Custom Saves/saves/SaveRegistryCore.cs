@@ -8,8 +8,7 @@ using ModAPI.Core;
 namespace ModAPI.Saves
 {
     /// <summary>
-    /// Internal core logic for managing a single collection of save files within a specific directory.
-    /// This class is not public and is used by ExpandedVanillaSaves and ScenarioSaves.
+    /// Provides central logic for managing mod-aware save files, including manifest discovery and verification.
     /// </summary>
     internal class SaveRegistryCore : ISaveApi
     {
@@ -141,7 +140,7 @@ namespace ModAPI.Saves
             return true;
         }
 
-        private void UpdateSlotManifest(int absoluteSlot, SaveInfo info)
+        internal void UpdateSlotManifest(int absoluteSlot, SaveInfo info)
         {
             try
             {
@@ -149,21 +148,34 @@ namespace ModAPI.Saves
                 var path = Path.Combine(slotRoot, "manifest.json");
 
                 var currentMods = new List<LoadedModInfo>();
-                foreach (var mod in PluginManager.LoadedMods)
+                var loaded = PluginManager.LoadedMods;
+                
+                if (loaded == null)
                 {
-                    string warning = mod.About?.missingModWarning;
-                    currentMods.Add(new LoadedModInfo 
-                    { 
-                        modId = mod.Id, 
-                        version = mod.Version, 
-                        warnings = string.IsNullOrEmpty(warning) ? new string[0] : new string[] { warning }
-                    });
+                    MMLog.WriteError("[SaveRegistryCore] PluginManager.LoadedMods is NULL!");
+                }
+                else
+                {
+                    MMLog.Write($"[SaveRegistryCore] UpdateSlotManifest: Gathering {loaded.Count} active mods.");
+                    foreach (var mod in loaded)
+                    {
+                        if (mod == null) { MMLog.WriteError("[SaveRegistryCore] Found null mod entry in LoadedMods!"); continue; }
+                        
+                        string warning = mod.About?.missingModWarning;
+                        currentMods.Add(new LoadedModInfo 
+                        { 
+                            modId = mod.Id, 
+                            version = mod.Version, 
+                            warnings = string.IsNullOrEmpty(warning) ? new string[0] : new string[] { warning }
+                        });
+                        MMLog.WriteDebug($"[SaveRegistryCore]   - Active: {mod.Id} v{mod.Version}");
+                    }
                 }
 
                 SlotManifest existing = null;
                 if (File.Exists(path))
                 {
-                    try { existing = JsonUtility.FromJson<SlotManifest>(File.ReadAllText(path)); } catch { }
+                    try { existing = DeserializeSlotManifest(File.ReadAllText(path)); } catch { }
                 }
 
                 bool changed = true;
@@ -195,16 +207,17 @@ namespace ModAPI.Saves
                         family_name = info != null ? info.familyName : "Unknown",
                         lastLoadedMods = currentMods.ToArray()
                     };
-                    File.WriteAllText(path, JsonUtility.ToJson(newManifest, true));
+                    string slotJson = SerializeSlotManifest(newManifest);
+                    MMLog.Write($"[SaveRegistryCore] SLOT {absoluteSlot} Manifest JSON to write:\n{slotJson}");
+                    MMLog.Write($"[SaveRegistryCore] SLOT {absoluteSlot} currentMods.Count = {currentMods.Count}, newManifest.lastLoadedMods.Length = {newManifest.lastLoadedMods.Length}");
+                    File.WriteAllText(path, slotJson);
                     MMLog.WriteDebug($"[SaveRegistryCore] Updated manifest.json for slot {absoluteSlot} (Mods Changed)");
                 }
                 else
                 {
-                    // Existing manifest valid, but maybe update family name? 
-                    // User said "won't be updated... unless mod list changes". 
-                    // But if I play, change family name, save -> manifest family name should probably update? 
-                    // User emphasized "lastModified" isn't updated unless mods change. 
-                    // I will leave it as is to satisfy the requirement strictly.
+                    // Mod configuration is identical to the existing manifest; skipping update.
+                    // To strictly adhere to requirements, manifest metadata (including 'lastModified')
+                    // is only synchronized when the active mod list changes.
                 }
             }
             catch (Exception ex)
@@ -403,6 +416,7 @@ namespace ModAPI.Saves
                     MMLog.Write($"[SaveRegistryCore] Saving manifest file to: {path}");
                     var tmp = path + ".tmp";
                     var json = JsonUtility.ToJson(m, true);
+                    MMLog.Write($"[SaveRegistryCore] Writing manifest JSON: {json}");
 
                     File.WriteAllText(tmp, json, Encoding.UTF8);
 
@@ -465,6 +479,143 @@ namespace ModAPI.Saves
             string candidate;
             do { candidate = name + " (" + i++ + ")"; } while (existing.Contains(candidate));
             return candidate;
+        }
+
+        private static string SerializeSlotManifest(SlotManifest manifest)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("{");
+            sb.AppendLine($"    \"manifestVersion\": {manifest.manifestVersion},");
+            sb.AppendLine($"    \"lastModified\": \"{EscapeJson(manifest.lastModified)}\",");
+            sb.AppendLine($"    \"family_name\": \"{EscapeJson(manifest.family_name)}\",");
+            
+            // Serialize lastLoadedMods array
+            sb.Append("    \"lastLoadedMods\": [");
+            if (manifest.lastLoadedMods != null && manifest.lastLoadedMods.Length > 0)
+            {
+                sb.AppendLine();
+                for (int i = 0; i < manifest.lastLoadedMods.Length; i++)
+                {
+                    var mod = manifest.lastLoadedMods[i];
+                    sb.Append("        {");
+                    sb.Append($" \"modId\": \"{EscapeJson(mod.modId)}\",");
+                    sb.Append($" \"version\": \"{EscapeJson(mod.version)}\",");
+                    sb.Append(" \"warnings\": [");
+                    if (mod.warnings != null && mod.warnings.Length > 0)
+                    {
+                        for (int j = 0; j < mod.warnings.Length; j++)
+                        {
+                            sb.Append($"\"{EscapeJson(mod.warnings[j])}\"");
+                            if (j < mod.warnings.Length - 1) sb.Append(", ");
+                        }
+                    }
+                    sb.Append("] }");
+                    if (i < manifest.lastLoadedMods.Length - 1) sb.AppendLine(",");
+                    else sb.AppendLine();
+                }
+                sb.AppendLine("    ]");
+            }
+            else
+            {
+                sb.AppendLine("]");
+            }
+            
+            sb.Append("}");
+            return sb.ToString();
+        }
+
+        private static string EscapeJson(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            return value
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\n", "\\n")
+                .Replace("\r", "\\r")
+                .Replace("\t", "\\t");
+        }
+
+        /// <summary>
+        /// Deserializes a SlotManifest from its custom JSON representation.
+        /// Utilizes a lightweight line-based parser to avoid dependency on complex JSON libraries in the core loader.
+        /// </summary>
+        internal static SlotManifest DeserializeSlotManifest(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return null;
+            
+            var manifest = new SlotManifest();
+            var mods = new List<LoadedModInfo>();
+            
+            try
+            {
+                var lines = json.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    var line = lines[i].Trim();
+                    
+                    if (line.Contains("\"manifestVersion\""))
+                    {
+                        manifest.manifestVersion = ExtractInt(line);
+                    }
+                    else if (line.Contains("\"lastModified\""))
+                    {
+                        manifest.lastModified = ExtractString(line);
+                    }
+                    else if (line.Contains("\"family_name\""))
+                    {
+                        manifest.family_name = ExtractString(line);
+                    }
+                    else if (line.Contains("\"modId\""))
+                    {
+                        // Start of a mod entry
+                        var mod = new LoadedModInfo();
+                        mod.modId = ExtractString(line);
+                        
+                        // Look ahead for version and warnings on the same line
+                        if (i < lines.Length && line.Contains("\"version\""))
+                        {
+                            var versionStart = line.IndexOf("\"version\"");
+                            mod.version = ExtractString(line.Substring(versionStart));
+                        }
+                        
+                        mods.Add(mod);
+                    }
+                }
+                
+                manifest.lastLoadedMods = mods.ToArray();
+            }
+            catch
+            {
+                // Fall back to empty manifest
+                manifest.lastLoadedMods = new LoadedModInfo[0];
+            }
+            
+            return manifest;
+        }
+
+        private static string ExtractString(string line)
+        {
+            var start = line.IndexOf(":") + 1;
+            if (start <= 0) return "";
+            
+            var valueStart = line.IndexOf("\"", start) + 1;
+            if (valueStart <= start) return "";
+            
+            var valueEnd = line.IndexOf("\"", valueStart);
+            if (valueEnd <= valueStart) return "";
+            
+            return line.Substring(valueStart, valueEnd - valueStart);
+        }
+
+        private static int ExtractInt(string line)
+        {
+            var start = line.IndexOf(":") + 1;
+            if (start <= 0) return 0;
+            
+            var valueStr = line.Substring(start).Trim().TrimEnd(',');
+            int result;
+            int.TryParse(valueStr, out result);
+            return result;
         }
     }
 }

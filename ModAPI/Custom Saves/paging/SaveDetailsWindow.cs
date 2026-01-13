@@ -9,10 +9,29 @@ using ModAPI.UI;
 
 namespace ModAPI.Hooks.Paging
 {
+    /// <summary>
+    /// Modal window showing save verification details.
+    /// Displays active mods vs. save mods with status indicators.
+    /// </summary>
     internal class SaveDetailsWindow : MonoBehaviour
     {
         private static GameObject _instance;
-
+        private static Texture2D _whiteTexture;
+        
+        // Colors for status indicators
+        private static readonly Color COLOR_MATCH = new Color(0.3f, 0.9f, 0.3f);
+        private static readonly Color COLOR_VERSION_DIFF = new Color(0.9f, 0.9f, 0.2f);
+        private static readonly Color COLOR_MISSING = new Color(0.9f, 0.3f, 0.3f);
+        private static readonly Color COLOR_HEADER = new Color(0.9f, 0.85f, 0.7f);
+        private static readonly Color COLOR_TEXT = Color.white;
+        private static readonly Color COLOR_SUBTEXT = new Color(0.7f, 0.7f, 0.7f);
+        
+        // Layout constants for the modal window
+        private const int WINDOW_WIDTH = 800;
+        private const int WINDOW_HEIGHT = 600;
+        private const int COLUMN_WIDTH = 350;
+        private const int ROW_HEIGHT = 45;
+        
         public static void Show(SaveEntry entry, SlotManifest manifest, SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway = null)
         {
             UIDebug.LogTimed("SaveDetailsWindow.Show called");
@@ -25,292 +44,494 @@ namespace ModAPI.Hooks.Paging
                 return;
             }
             
-            UIDebug.LogTimed($"Overlay panel created: {panel.name}, Depth={panel.depth}");
+            // Create shared white texture
+            if (_whiteTexture == null)
+            {
+                _whiteTexture = new Texture2D(2, 2);
+                for (int x = 0; x < 2; x++)
+                    for (int y = 0; y < 2; y++)
+                        _whiteTexture.SetPixel(x, y, Color.white);
+                _whiteTexture.Apply();
+            }
 
-            var root = new GameObject("WindowContent");
+            var root = new GameObject("SaveDetailsWindow");
             root.transform.SetParent(panel.transform, false);
             root.layer = panel.gameObject.layer;
             root.transform.localPosition = Vector3.zero;
             root.transform.localScale = Vector3.one;
+            
+            _instance = root;
 
-            // Dark background using UITexture with generated white texture
-            var bgObj = new GameObject("BackgroundOverlay");
-            bgObj.transform.SetParent(root.transform, false);
-            bgObj.layer = root.layer;
-            
-            var bgTexture = bgObj.AddComponent<UITexture>();
-            
-            // Create 2x2 white texture for tinting
-            var whiteTex = new Texture2D(2, 2);
-            for (int x = 0; x < 2; x++)
-                for (int y = 0; y < 2; y++)
-                    whiteTex.SetPixel(x, y, Color.white);
-            whiteTex.Apply();
-            
-            bgTexture.mainTexture = whiteTex;
-            bgTexture.depth = 0; 
-            bgTexture.width = 3000;
-            bgTexture.height = 3000;
-            bgTexture.color = new Color(0f, 0f, 0f, 0.90f);
-            
-            UIDebug.LogTimed("Background created using UITexture with generated white texture");
-            
-            // Click blocker
-            var blocker = bgObj.AddComponent<BoxCollider>();
-            blocker.size = new Vector3(3000, 3000, 1);
-            
-            // Get font - MUST have a font or crash
+            // Get font
             UIFont uiFont = null;
             Font ttfFont = null;
-            
             var sampleLabel = UnityEngine.Object.FindObjectOfType<UILabel>();
             if (sampleLabel != null)
             {
                 uiFont = sampleLabel.bitmapFont;
                 ttfFont = sampleLabel.trueTypeFont;
             }
-            
-            // Guaranteed fallback
             if (uiFont == null && ttfFont == null)
-            {
                 ttfFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
-                UIDebug.LogTimed("Using Arial.ttf fallback font");
-            }
-            else
-            {
-                UIDebug.LogTimed($"Using font: UIFont={uiFont?.name ?? "null"}, TTF={ttfFont?.name ?? "null"}");
-            }
-            
-            // Simple visible test label using NGUI directly
-            var testLabelGO = new GameObject("TestLabel");
-            testLabelGO.transform.SetParent(root.transform, false);
-            testLabelGO.layer = root.layer;
-            testLabelGO.transform.localPosition = new Vector3(0, 100, 0);
-            
-            var testLabel = testLabelGO.AddComponent<UILabel>();
-            testLabel.text = $"SAVE DETAILS: {entry?.name ?? "Unknown"}\nState: {state}\nClick below to close";
-            testLabel.fontSize = 32;
-            testLabel.depth = 150;
-            testLabel.color = Color.white;
-            testLabel.overflowMethod = UILabel.Overflow.ResizeFreely;
-            testLabel.alignment = NGUIText.Alignment.Center;
-            testLabel.bitmapFont = uiFont;
-            testLabel.trueTypeFont = ttfFont;
 
-            // Close button (simple text button for now)
-            var closeBtnGO = new GameObject("CloseButton");
-            closeBtnGO.transform.SetParent(root.transform, false);
-            closeBtnGO.layer = root.layer;
-            closeBtnGO.transform.localPosition = new Vector3(0, -100, 0);
-            
-            var closeLabel = closeBtnGO.AddComponent<UILabel>();
-            closeLabel.text = "[ CLOSE ]";
-            closeLabel.fontSize = 28;
-            closeLabel.depth = 151;
-            closeLabel.color = Color.yellow;
-            closeLabel.overflowMethod = UILabel.Overflow.ResizeFreely;
-            closeLabel.alignment = NGUIText.Alignment.Center;
-            closeLabel.bitmapFont = uiFont;
-            closeLabel.trueTypeFont = ttfFont;
-            
-            var closeCol = closeBtnGO.AddComponent<BoxCollider>();
-            closeCol.size = new Vector3(200, 50, 1);
-            
-            var closeBtn = closeBtnGO.AddComponent<UIButton>();
-            closeBtn.tweenTarget = closeBtnGO;
-            
-            EventDelegate.Set(closeBtn.onClick, () => {
-                UIDebug.LogTimed("Close button clicked");
-                Destroy(root);
-            });
-            
-            UIDebug.VerifyDelegateCount(closeBtn, 1, "CloseButton");
-            
-            _instance = root;
-            
-            // Full diagnostics
-            UIDebug.LogTimed("Window created - running diagnostics...");
-            UIDebug.LogCameraInfo();
-            UIDebug.TakeSnapshot(root, "SaveDetailsWindow Root");
-            UIDebug.TakeSnapshot(closeBtnGO, "SaveDetailsWindow CloseButton");
-            UIDebug.LogAllPanels();
+            // Create the window
+            var win = root.AddComponent<SaveDetailsWindow>();
+            win.BuildFullUI(root.transform, entry, manifest, state, isAttemptingLoad, onLoadAnyway, uiFont, ttfFont);
         }
 
-        private void BuildUI(Transform root, SaveEntry entry, SlotManifest manifest, SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway)
+        private void BuildFullUI(Transform root, SaveEntry entry, SlotManifest manifest, 
+            SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway,
+            UIFont uiFont, Font ttfFont)
         {
-            // ... (keep previous UI building code) ...
+            int layer = root.gameObject.layer;
             
-            // Title
-            var title = UIHelper.CreateLabel(root, "Save Verification: " + entry.name, 32, TextAnchor.UpperCenter);
-            title.transform.localPosition = new Vector3(0, 260, 0);
-
-            // Columns
-            // Active Mods
-            // ... (keep previous Active Mods code) ...
-            var lblActive = UIHelper.CreateLabel(root, "Active Mods", 24, TextAnchor.UpperCenter);
-            lblActive.transform.localPosition = new Vector3(-200, 220, 0);
-
-            var listActive = UIHelper.CreateLabel(root, "", 18, TextAnchor.UpperLeft);
-            listActive.transform.localPosition = new Vector3(-350, 190, 0);
-            listActive.width = 300;
-            listActive.height = 400;
+            // === DARK OVERLAY ===
+            CreateTexturedBox(root, "DarkOverlay", Vector3.zero, 3000, 3000, 
+                new Color(0f, 0f, 0f, 0.92f), 0, true);
             
-            var mods = PluginManager.LoadedMods;
-            string activeText = "";
-            foreach(var m in mods) activeText += $"{m.Name} (v{m.Version})\n";
-            listActive.text = activeText;
-
-            // Saved Mods
-            // ... (keep previous Saved Mods code) ...
-            var lblSaved = UIHelper.CreateLabel(root, "Last Loaded Mods", 24, TextAnchor.UpperCenter);
-            lblSaved.transform.localPosition = new Vector3(200, 220, 0);
-
-            var listSaved = UIHelper.CreateLabel(root, "", 18, TextAnchor.UpperLeft);
-            listSaved.transform.localPosition = new Vector3(50, 190, 0);
-            listSaved.width = 300;
-            listSaved.height = 400;
-
-            string savedText = "";
-            var warnings = new List<string>();
-
-            if (manifest != null && manifest.lastLoadedMods != null)
+            // === MAIN WINDOW PANEL ===
+            var windowBg = CreateTexturedBox(root, "WindowBackground", Vector3.zero, 
+                WINDOW_WIDTH, WINDOW_HEIGHT, new Color(0.15f, 0.12f, 0.1f, 0.98f), 10, false);
+            
+            // Border
+            CreateTexturedBox(root, "WindowBorder", Vector3.zero, 
+                WINDOW_WIDTH + 4, WINDOW_HEIGHT + 4, new Color(0.5f, 0.4f, 0.3f, 1f), 9, false);
+            
+            // === HEADER ===
+            var titleLabel = CreateLabel(root, "Title", "SAVE VERIFICATION DETAILS",
+                new Vector3(0, WINDOW_HEIGHT/2 - 30, 0), 28, COLOR_HEADER, uiFont, ttfFont, 100);
+            titleLabel.alignment = NGUIText.Alignment.Center;
+            
+            // Subtitle with family name and days
+            // FIX: Access properties via saveInfo
+            string familyName = entry?.saveInfo?.familyName ?? "Unknown";
+            int days = entry?.saveInfo?.daysSurvived ?? 0;
+            var subtitleLabel = CreateLabel(root, "Subtitle", $"Family: \"{familyName}\" (Day {days})",
+                new Vector3(0, WINDOW_HEIGHT/2 - 60, 0), 20, COLOR_SUBTEXT, uiFont, ttfFont, 100);
+            subtitleLabel.alignment = NGUIText.Alignment.Center;
+            
+            // === CLOSE [X] BUTTON ===
+            var closeBtn = CreateButton(root, "CloseBtn", "[X]", 
+                new Vector3(WINDOW_WIDTH/2 - 40, WINDOW_HEIGHT/2 - 30, 0), 
+                24, COLOR_TEXT, uiFont, ttfFont, 150, 40, () => {
+                    UIDebug.LogTimed("Close button clicked");
+                    Close();
+                });
+            
+            // === ANALYZE MODS ===
+            // PluginManager.LoadedMods returns List<ModEntry>
+            var activeMods = PluginManager.LoadedMods;
+            var savedMods = manifest?.lastLoadedMods ?? new LoadedModInfo[0];
+            var discovered = ModDiscovery.DiscoverAllMods();
+            
+            // Build comparison data
+            var comparison = BuildModComparison(activeMods, savedMods);
+            
+            // === COLUMN HEADERS ===
+            int headerY = WINDOW_HEIGHT/2 - 100;
+            
+            CreateLabel(root, "ActiveHeader", "ACTIVE MODS",
+                new Vector3(-WINDOW_WIDTH/4, headerY, 0), 22, COLOR_HEADER, uiFont, ttfFont, 100)
+                .alignment = NGUIText.Alignment.Center;
+            
+            CreateLabel(root, "SavedHeader", "LAST LOADED MODS (IN SAVE)",
+                new Vector3(WINDOW_WIDTH/4, headerY, 0), 22, COLOR_HEADER, uiFont, ttfFont, 100)
+                .alignment = NGUIText.Alignment.Center;
+            
+            // Divider line
+            CreateTexturedBox(root, "HeaderDivider", new Vector3(0, headerY - 20, 0),
+                WINDOW_WIDTH - 60, 2, COLOR_SUBTEXT, 50, false);
+            
+            // === MOD LISTS ===
+            int listStartY = headerY - 50;
+            int rowIndex = 0;
+            
+            // Active mods column (left)
+            foreach (var mod in activeMods)
             {
-                foreach(var m in manifest.lastLoadedMods)
-                {
-                    savedText += $"{m.modId} (v{m.version})\n";
-                    // Check presence
-                    var activeMod = mods.Find(x => x.Id == m.modId);
-                    if (activeMod == null)
-                    {
-                        // Missing
-                        savedText += $"  [MISSING]\n";
-                        if (m.warnings != null) warnings.AddRange(m.warnings);
-                    }
-                    else if (activeMod.Version != m.version)
-                    {
-                        savedText += $"  [VER DIFF]\n";
-                    }
-                }
+                int y = listStartY - (rowIndex * ROW_HEIGHT);
+                // ModEntry has .Id, .Name, .Version (PascalCase)
+                var status = comparison.Find(c => c.activeId == mod.Id);
+                Color color = status != null ? GetStatusColor(status.status) : COLOR_MATCH;
+                
+                string icon = "✓";
+                string suffix = (status != null && status.status == ModCompareStatus.Extra) ? " [EXTRA]" : "";
+                
+                CreateLabel(root, $"ActiveMod_{rowIndex}", $"{icon} {mod.Name}{suffix}",
+                    new Vector3(-WINDOW_WIDTH/4 - 100, y, 0), 18, color, uiFont, ttfFont, 100);
+                CreateLabel(root, $"ActiveVer_{rowIndex}", $"   v{mod.Version}",
+                    new Vector3(-WINDOW_WIDTH/4 - 100, y - 18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
+                rowIndex++;
             }
-            listSaved.text = savedText;
-
-
-            // Warnings
+            
+            // Saved mods column (right)
+            rowIndex = 0;
+            var warnings = new List<string>();
+            
+            foreach (var saved in savedMods)
+            {
+                int y = listStartY - (rowIndex * ROW_HEIGHT);
+                // LoadedModInfo has .modId, .version (camelCase)
+                var status = comparison.Find(c => c.savedId == saved.modId);
+                ModCompareStatus compareStatus = status?.status ?? ModCompareStatus.Match;
+                Color color = GetStatusColor(compareStatus);
+                
+                string icon = "✓";
+                string suffix = "";
+                
+                switch (compareStatus)
+                {
+                    case ModCompareStatus.Missing:
+                        icon = "✗";
+                        suffix = " [MISSING]";
+                        if (saved.warnings != null && saved.warnings.Length > 0)
+                        {
+                            foreach (var w in saved.warnings)
+                                warnings.Add($"[{saved.modId}] {w}");
+                        }
+                        break;
+                    case ModCompareStatus.VersionDiff:
+                        icon = "~";
+                        suffix = " [VER DIFF]";
+                        break;
+                }
+                
+                CreateLabel(root, $"SavedMod_{rowIndex}", $"{icon} {saved.modId}{suffix}",
+                    new Vector3(WINDOW_WIDTH/4 - 100, y, 0), 18, color, uiFont, ttfFont, 100);
+                
+                string verText = compareStatus == ModCompareStatus.VersionDiff && status != null
+                    ? $"   (save: v{saved.version}, active: v{status.activeVersion})"
+                    : $"   v{saved.version}";
+                CreateLabel(root, $"SavedVer_{rowIndex}", verText,
+                    new Vector3(WINDOW_WIDTH/4 - 100, y - 18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
+                rowIndex++;
+            }
+            
+            // === WARNINGS SECTION ===
+            int warningY = -WINDOW_HEIGHT/2 + 180;
+            
             if (warnings.Count > 0)
             {
-                var warnLabel = UIHelper.CreateLabel(root, "WARNINGS:", 22, TextAnchor.UpperLeft);
-                warnLabel.color = Color.red;
-                warnLabel.transform.localPosition = new Vector3(-350, -100, 0);
+                CreateLabel(root, "WarningHeader", "⚠️ WARNINGS FROM MISSING MODS:",
+                    new Vector3(-WINDOW_WIDTH/2 + 40, warningY, 0), 18, COLOR_MISSING, uiFont, ttfFont, 100);
                 
-                string wText = string.Join("\n", warnings.ToArray());
-                var warnContent = UIHelper.CreateLabel(root, wText, 18, TextAnchor.UpperLeft);
-                warnContent.color = Color.yellow;
-                warnContent.transform.localPosition = new Vector3(-350, -130, 0);
+                CreateTexturedBox(root, "WarningBg", new Vector3(0, warningY - 50, 0),
+                    WINDOW_WIDTH - 60, 80, new Color(0.3f, 0.1f, 0.1f, 0.8f), 40, false);
+                
+                string warningText = string.Join("\n", warnings.Take(3).ToArray());
+                if (warnings.Count > 3) warningText += $"\n... and {warnings.Count - 3} more";
+                
+                var warnLabel = CreateLabel(root, "WarningText", warningText,
+                    new Vector3(-WINDOW_WIDTH/2 + 50, warningY - 25, 0), 14, COLOR_TEXT, uiFont, ttfFont, 100);
+                warnLabel.overflowMethod = UILabel.Overflow.ClampContent;
+                warnLabel.width = WINDOW_WIDTH - 100;
             }
-
-            // Buttons
-            // Reload & Restart
-            bool safeToReload = true;
-            bool anyIdMismatch = false; // Initialize here
-            var discovered = ModDiscovery.DiscoverAllMods(); // Move this up
-
-            if (manifest != null && manifest.lastLoadedMods != null)
+            
+            // === BUTTON ROW ===
+            int buttonY = -WINDOW_HEIGHT/2 + 60;
+            
+            // Determine button states
+            bool hasMissing = comparison.Any(c => c.status == ModCompareStatus.Missing);
+            bool hasVersionDiff = comparison.Any(c => c.status == ModCompareStatus.VersionDiff);
+            bool hasExtra = comparison.Any(c => c.status == ModCompareStatus.Extra);
+            bool allMatch = !hasMissing && !hasVersionDiff && !hasExtra;
+            
+            // Can reload if: missing mods exist AND they're available on disk
+            // ModEntry.Id vs LoadedModInfo.modId
+            bool canReload = !allMatch;
+            if (hasMissing)
             {
-                // 1. Check if all saved mods are installed
-                foreach(var m in manifest.lastLoadedMods)
+                // Check if all missing mods are actually present in Discovered mods
+                var missingEntries = comparison.Where(c => c.status == ModCompareStatus.Missing);
+                bool allMissingAvailable = true;
+                foreach(var m in missingEntries)
                 {
-                    if (!discovered.Exists(d => string.Equals(d.Id, m.modId, StringComparison.OrdinalIgnoreCase)))
+                    if (!discovered.Exists(d => d.Id.Equals(m.savedId, StringComparison.OrdinalIgnoreCase)))
                     {
-                        safeToReload = false; // Missing from disk
+                        allMissingAvailable = false;
                         break;
                     }
                 }
-
-                // 2. Check for ID mismatch vs Active
-                if (safeToReload)
+                if (!allMissingAvailable) canReload = false;
+            }
+            
+            // RELOAD WITH SAVE MODS button
+            Color reloadColor = canReload ? COLOR_HEADER : COLOR_SUBTEXT;
+            // Capture these for the lambda
+            int absoluteSlot = entry.absoluteSlot; 
+            
+            var reloadBtn = CreateButton(root, "ReloadBtn", "RELOAD WITH SAVE MODS",
+                new Vector3(-WINDOW_WIDTH/4, buttonY, 0), 18, reloadColor, uiFont, ttfFont, 240, 45,
+                canReload ? (Action)(() => CreateRestartRequest(absoluteSlot, manifest)) : null);
+            
+            if (!canReload)
+            {
+                string reason = allMatch ? "(Mods match - safe to play)" : 
+                               (hasVersionDiff || hasExtra) && !hasMissing ? "(Version/extra mod diff only - not critical)" :
+                               "(Some mods not installed)";
+                CreateLabel(root, "ReloadHint", reason,
+                    new Vector3(-WINDOW_WIDTH/4, buttonY - 30, 0), 12, COLOR_SUBTEXT, uiFont, ttfFont, 100)
+                    .alignment = NGUIText.Alignment.Center;
+            }
+            
+            // LOAD ANYWAY button (always enabled if from slot selection)
+            if (isAttemptingLoad)
+            {
+                var loadBtn = CreateButton(root, "LoadAnywayBtn", "LOAD ANYWAY",
+                    new Vector3(WINDOW_WIDTH/4, buttonY, 0), 18, COLOR_HEADER, uiFont, ttfFont, 180, 45,
+                    () => {
+                        onLoadAnyway?.Invoke();
+                        Close();
+                    });
+                
+                CreateLabel(root, "LoadHint", "(Accept risk, load now)",
+                    new Vector3(WINDOW_WIDTH/4, buttonY - 30, 0), 12, COLOR_SUBTEXT, uiFont, ttfFont, 100)
+                    .alignment = NGUIText.Alignment.Center;
+            }
+            
+            // === STATUS LINE ===
+            string statusText = allMatch ? "✓ Mods match - safe to play" :
+                               hasMissing && hasVersionDiff ? $"⚠ {comparison.Count(c => c.status == ModCompareStatus.Missing)} missing, {comparison.Count(c => c.status == ModCompareStatus.VersionDiff)} version diff" :
+                               hasMissing ? $"⚠ {comparison.Count(c => c.status == ModCompareStatus.Missing)} mod(s) missing" :
+                               hasExtra && !hasMissing ? $"⚠ {comparison.Count(c => c.status == ModCompareStatus.Extra)} extra mod(s) active" :
+                               $"~ {comparison.Count(c => c.status == ModCompareStatus.VersionDiff)} version difference(s)";
+            
+            Color statusColor = allMatch ? COLOR_MATCH : (hasMissing ? COLOR_MISSING : COLOR_VERSION_DIFF);
+            var statusLabel = CreateLabel(root, "Status", statusText,
+                new Vector3(0, -WINDOW_HEIGHT/2 + 20, 0), 16, statusColor, uiFont, ttfFont, 100);
+            statusLabel.alignment = NGUIText.Alignment.Center;
+            
+            UIDebug.LogTimed($"Window built. Active={activeMods.Count}, Saved={savedMods.Length}, Comparison={comparison.Count}");
+        }
+        
+        // === COMPARISON LOGIC ===
+        
+        private enum ModCompareStatus { Match, VersionDiff, Extra, Missing }
+        
+        private class ModCompareEntry
+        {
+            public string activeId;
+            public string activeVersion;
+            public string savedId;
+            public string savedVersion;
+            public ModCompareStatus status;
+        }
+        
+        private List<ModCompareEntry> BuildModComparison(List<ModEntry> active, LoadedModInfo[] saved)
+        {
+            var result = new List<ModCompareEntry>();
+            
+            // 1. Check saved mods against active (Missing/Match/VersionDiff)
+            foreach (var s in saved)
+            {
+                var entry = new ModCompareEntry { savedId = s.modId, savedVersion = s.version };
+                var match = active.Find(a => a.Id.Equals(s.modId, StringComparison.OrdinalIgnoreCase));
+                
+                if (match == null)
                 {
-                    var active = PluginManager.LoadedMods; // Define active here
-
-                    // If counts differ, mismatch (active has extra or fewer)
-                    if (manifest.lastLoadedMods.Length != active.Count) 
-                        anyIdMismatch = true;
-                    else
-                    {
-                        // Same count, check if all saved mods are active (Set equality)
-                        foreach(var m in manifest.lastLoadedMods)
-                        {
-                            if (!active.Exists(a => string.Equals(a.Id, m.modId, StringComparison.OrdinalIgnoreCase)))
-                            {
-                                anyIdMismatch = true;
-                                break;
-                            }
-                        }
-                    }
+                    entry.status = ModCompareStatus.Missing;
                 }
+                else
+                {
+                    entry.activeId = match.Id;
+                    entry.activeVersion = match.Version;
+                    entry.status = match.Version == s.version ? ModCompareStatus.Match : ModCompareStatus.VersionDiff;
+                }
+                
+                result.Add(entry);
+            }
+
+            // 2. Check active mods for extras
+            foreach (var a in active)
+            {
+                if (!saved.Any(s => string.Equals(s.modId, a.Id, StringComparison.OrdinalIgnoreCase)))
+                {
+                    result.Add(new ModCompareEntry {
+                        activeId = a.Id,
+                        activeVersion = a.Version,
+                        status = ModCompareStatus.Extra
+                    });
+                }
+            }
+            
+            return result;
+        }
+        
+        private Color GetStatusColor(ModCompareStatus status)
+        {
+            switch (status)
+            {
+                case ModCompareStatus.Match: return COLOR_MATCH;
+                case ModCompareStatus.VersionDiff: return COLOR_VERSION_DIFF;
+                case ModCompareStatus.Extra: return COLOR_VERSION_DIFF; // Yellow for extra
+                case ModCompareStatus.Missing: return COLOR_MISSING;
+                default: return COLOR_TEXT;
+            }
+        }
+        
+        // === UI HELPERS ===
+        
+        private GameObject CreateTexturedBox(Transform parent, string name, Vector3 pos, int w, int h, Color color, int depth, bool addCollider)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.layer = parent.gameObject.layer;
+            go.transform.localPosition = pos;
+            
+            var tex = go.AddComponent<UITexture>();
+            tex.mainTexture = _whiteTexture;
+            tex.width = w;
+            tex.height = h;
+            tex.depth = depth;
+            tex.color = color;
+            
+            if (addCollider)
+            {
+                var col = go.AddComponent<BoxCollider>();
+                col.size = new Vector3(w, h, 1);
+            }
+            
+            return go;
+        }
+        
+        private UILabel CreateLabel(Transform parent, string name, string text, Vector3 pos, int fontSize, Color color, UIFont uiFont, Font ttfFont, int depth)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.layer = parent.gameObject.layer;
+            go.transform.localPosition = pos;
+            
+            var label = go.AddComponent<UILabel>();
+            label.text = text;
+            label.fontSize = fontSize;
+            label.color = color;
+            label.depth = depth;
+            label.overflowMethod = UILabel.Overflow.ResizeFreely;
+            label.bitmapFont = uiFont;
+            label.trueTypeFont = ttfFont;
+            
+            return label;
+        }
+        
+        private GameObject CreateButton(Transform parent, string name, string text, Vector3 pos, int fontSize, Color color, UIFont uiFont, Font ttfFont, int w, int h, Action onClick)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.layer = parent.gameObject.layer;
+            go.transform.localPosition = pos;
+            
+            // Background
+            var bg = go.AddComponent<UITexture>();
+            bg.mainTexture = _whiteTexture;
+            bg.width = w;
+            bg.height = h;
+            bg.depth = 100;
+            bg.color = new Color(0.25f, 0.2f, 0.15f, 1f);
+            
+            // Label (child)
+            var labelGo = new GameObject("Label");
+            labelGo.transform.SetParent(go.transform, false);
+            labelGo.layer = go.layer;
+            
+            var label = labelGo.AddComponent<UILabel>();
+            label.text = text;
+            label.fontSize = fontSize;
+            label.color = color;
+            label.depth = 101;
+            label.overflowMethod = UILabel.Overflow.ResizeFreely;
+            label.alignment = NGUIText.Alignment.Center;
+            label.bitmapFont = uiFont;
+            label.trueTypeFont = ttfFont;
+            
+            // Collider
+            var col = go.AddComponent<BoxCollider>();
+            col.size = new Vector3(w, h, 1);
+            
+            // Button
+            var btn = go.AddComponent<UIButton>();
+            btn.tweenTarget = go;
+            
+            if (onClick != null)
+            {
+                EventDelegate.Set(btn.onClick, () => onClick());
             }
             else
             {
-                // No manifest -> Vanilla save. 
-                if (PluginManager.LoadedMods.Count > 0) anyIdMismatch = true;
+                btn.isEnabled = false;
+                bg.color = new Color(0.15f, 0.12f, 0.1f, 1f);
+                label.color = COLOR_SUBTEXT;
             }
             
-            bool enableReload = safeToReload && anyIdMismatch;
-
-            var btnReloadObj = UIFactory.CreateIconButton(root, "Button", new Vector3(-150, -250, 0), 1f, () => {
-                if (!enableReload) return;
-                ApplyLoadOrderAndRestart(manifest);
-            });
-            UIHelper.CreateLabel(btnReloadObj.transform, "Reload & Restart", 20, TextAnchor.MiddleCenter);
-            if (!enableReload) btnReloadObj.GetComponent<UIButton>().isEnabled = false;
-
-            // Load Anyway
-            if (isAttemptingLoad)
+            return go;
+        }
+        
+        private void Close()
+        {
+            if (_instance != null)
             {
-                var btnLoadObj = UIFactory.CreateIconButton(root, "Button", new Vector3(150, -250, 0), 1f, () => {
-                   if (onLoadAnyway != null) onLoadAnyway();
-                   Destroy(root);
-                });
-                UIHelper.CreateLabel(btnLoadObj.transform, "Load Anyway", 20, TextAnchor.MiddleCenter);
+                Destroy(_instance);
+                _instance = null;
             }
-
-            // Close (X)
-            var btnCloseObj = UIFactory.CreateIconButton(root, "Cancel", new Vector3(350, 260, 0), 0.8f, () => Destroy(root));
+        }
+        
+        // === RESTART REQUEST LOGIC ===
+        
+        [Serializable]
+        private class RestartRequest
+        {
+            public string Action;
+            public string LoadFromManifest;
         }
 
-        private void ApplyLoadOrderAndRestart(SlotManifest manifest)
+        private void CreateRestartRequest(int slotNumber, SlotManifest manifest)
         {
-            // 1. Construct new load order
-            var newOrder = new SimpleLoadOrder { order = new string[0] };
-            if (manifest != null && manifest.lastLoadedMods != null)
-            {
-                newOrder.order = manifest.lastLoadedMods.Select(m => m.modId).ToArray();
-            }
-
-            // 2. Write loadorder.json
             try
             {
-                 // Assuming mods/loadorder.json location is standard.
-                 // PluginManager uses _modsRoot but it's private. 
-                 // We can derive it.
-                 var modsRoot = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "mods");
-                 var path = Path.Combine(modsRoot, "loadorder.json");
-                 File.WriteAllText(path, JsonUtility.ToJson(newOrder, true));
-                 MMLog.Write("[SaveDetailsWindow] Updated loadorder.json to match save.");
-                 
-                 // 3. Write restart.flag
-                 var flagPath = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "restart.flag");
-                 File.WriteAllText(flagPath, "restart");
-                 MMLog.Write("[SaveDetailsWindow] Created restart.flag.");
+                // We don't overwrite loadorder.json. 
+                // We create a restart.json file in SMM/Bin for the Manager to handle.
+                
+                // Assuming standard path: Sheltered/SMM/Bin/restart.json
+                var gameRoot = Directory.GetParent(Application.dataPath).FullName;
+                var smmBin = Path.Combine(Path.Combine(gameRoot, "SMM"), "Bin");
+
+                if (!Directory.Exists(smmBin))
+                {
+                    // Fallback try - maybe SMM is elsewhere?
+                    // But usually mod tools are in root.
+                }
+                
+                // Construct path to manifest
+                // Typically: mods/ModAPI/Saves/Standard/Slot_X/manifest.json
+                var modsRoot = Path.Combine(gameRoot, "mods");
+                var slotDir = Path.Combine(Path.Combine(Path.Combine(modsRoot, "ModAPI"), "Saves"), Path.Combine("Standard", $"Slot_{slotNumber}"));
+                var manifestPath = Path.Combine(slotDir, "manifest.json");
+
+                var req = new RestartRequest
+                {
+                    Action = "Restart",
+                    LoadFromManifest = manifestPath
+                };
+                
+                string json = JsonUtility.ToJson(req, true);
+                
+                // Write to SMM/Bin/restart.json
+                string restartPath = Path.Combine(smmBin, "restart.json");
+                
+                // Ensure directory exists
+                Directory.CreateDirectory(smmBin);
+                
+                File.WriteAllText(restartPath, json);
+                MMLog.Write($"[SaveDetailsWindow] Created restart request at: {restartPath}");
+                MMLog.Write($"[SaveDetailsWindow] Payload: {json}");
+
+                Application.Quit();
             }
             catch (Exception ex)
             {
-                MMLog.WriteError("Failed to update load order or create restart flag: " + ex);
+                MMLog.WriteError("Failed to create restart request: " + ex);
+                // Show error to user? For now just log.
             }
-
-            // 4. Quit
-            Application.Quit();
         }
 
-        private class SimpleLoadOrder { public string[] order; }
     }
 }

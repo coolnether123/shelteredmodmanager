@@ -8,10 +8,11 @@ namespace ModAPI.UI
 {
     /// <summary>
     /// Mod Manager panel that displays installed mods in a book-style UI similar to Scenario Selection.
-    /// Uses proper NGUI widget positioning and depth management.
+    /// Manages widget positioning, depth management, and mod details display.
     /// </summary>
     public class ModManagerPanel : BasePanel
     {
+        public static bool IsShowingModManager = false;
         private static ModManagerPanel _instance;
         public static bool IsShowingInstance => _instance != null && _instance.IsShowing();
 
@@ -650,8 +651,21 @@ namespace ModAPI.UI
 
         public override void OnShow()
         {
+            IsShowingModManager = true;
             base.OnShow();
             if (_tween != null) _tween.PlayForward();
+        }
+
+        public override void OnHide(bool hiddenForPopup)
+        {
+            IsShowingModManager = false;
+            base.OnHide(hiddenForPopup);
+        }
+
+        public override void OnClose()
+        {
+            IsShowingModManager = false;
+            base.OnClose();
         }
 
         public override void OnCancel()
@@ -676,7 +690,9 @@ namespace ModAPI.UI
         public override bool PausesGameTime() => true;
         public override bool Popup() => false;
         
-        // Manual description scrolling
+        /// <summary>
+        /// Handles manual scrolling for the mod description label.
+        /// </summary>
         void Update()
         {
             if (_detailDescription == null) return;

@@ -21,7 +21,7 @@ namespace Manager
         public string currentGameDirectoryPath = DEFAULT_VALUE;
 
         private OpenFileDialog fileDialog = new OpenFileDialog();
-        private static readonly string ManagerLogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "mod_manager.log");
+        private static readonly string ManagerLogPath = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(AppDomain.CurrentDomain.BaseDirectory)), "mod_manager.log");
 
         // Model for mod items shown in lists (Coolnether123)
         private class ModListItem
@@ -47,6 +47,9 @@ namespace Manager
         // Dependency evaluation result for color coding
         private HashSet<string> _hardIssueIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private HashSet<string> _softIssueIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        
+        // Timer to poll for restart requests from ModAPI
+        private System.Windows.Forms.Timer _restartPollTimer = null;
 
         private CheckBox darkModeToggle;
 
@@ -98,6 +101,15 @@ namespace Manager
             ThemeManager.ApplyTheme(this);
 
             UpdateModDetails(null);
+            
+            // Check for ModAPI restart request immediately
+            CheckAndHandleRestartRequest();
+            
+            // Start polling for restart requests every 2 seconds
+            _restartPollTimer = new System.Windows.Forms.Timer();
+            _restartPollTimer.Interval = 2000; // 2 seconds
+            _restartPollTimer.Tick += (senderTimer, argsTimer) => CheckAndHandleRestartRequest();
+            _restartPollTimer.Start();
         }
 
         /// <summary>

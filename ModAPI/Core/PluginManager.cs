@@ -145,10 +145,7 @@ namespace ModAPI.Core
         {
             var modernAvailable = RuntimeCompat.IsModernSceneApi;
             var usingModern = PluginRunner.IsModernUnity;
-            MMLog.Write("[Scene API Detection]");
-            MMLog.Write($"Modern SceneManager: {(modernAvailable ? "AVAILABLE" : "NOT AVAILABLE (Unity 5.3)")}"); 
-            MMLog.Write($"Using: {(usingModern ? "Modern SceneManager events" : "Legacy OnLevelWasLoaded")}");
-            MMLog.Write("Status: ✓ Ready");
+            MMLog.Write($"[Loader] Assembly resolution and Scene API detection complete.");
         }
 
         private List<string> ReadLoadOrderFromFile(string modsRoot)
@@ -158,7 +155,7 @@ namespace ModAPI.Core
             try
             {
                 var path = Path.Combine(modsRoot ?? string.Empty, "loadorder.json");
-                if (!File.Exists(path)) return orderedIds;
+                if (!File.Exists(path)) return null;
 
                 var json = File.ReadAllText(path);
                 var obj = JsonUtility.FromJson<SimpleLoadOrder>(json);
@@ -179,6 +176,7 @@ namespace ModAPI.Core
             return orderedIds;
         }
 
+        [Serializable]
         private class SimpleLoadOrder { public string[] order; }
 
         /// <summary>
@@ -187,26 +185,48 @@ namespace ModAPI.Core
         private void DiscoverAndOrderMods(List<string> orderedModIds)
         {
             var discovered = ModDiscovery.DiscoverAllMods();
-            if (orderedModIds == null || orderedModIds.Count == 0)
+            MMLog.WriteDebug($"[PluginManager] DiscoverAndOrderMods: {discovered.Count} mods found on disk.");
+            foreach (var m in discovered) MMLog.WriteDebug($"[PluginManager]   - On Disk: '{m.Id}' at '{m.RootPath}'");
+
+            if (orderedModIds == null)
             {
+                MMLog.WriteDebug("[PluginManager] No load order provided (loadorder.json missing). Enabling ALL discovered mods.");
                 LoadedMods = discovered;
                 return;
             }
 
+            if (orderedModIds.Count == 0)
+            {
+                MMLog.Write("[PluginManager] Explicit empty load order found. Enabling NO mods.");
+                LoadedMods = new List<ModEntry>();
+                return;
+            }
+
+            MMLog.WriteDebug($"[PluginManager] Applying load order (contains {orderedModIds.Count} IDs).");
             var ordered = new List<ModEntry>();
-            var enabled = new HashSet<string>(orderedModIds, StringComparer.OrdinalIgnoreCase);
+            var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var id in orderedModIds)
             {
+                MMLog.WriteDebug($"[PluginManager]   Looking for ordered ID: '{id}'");
                 var mod = discovered.FirstOrDefault(m => string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase));
                 if (mod != null)
                 {
-                    ordered.Add(mod);
+                    if (seenIds.Add(mod.Id))
+                    {
+                        ordered.Add(mod);
+                        MMLog.WriteDebug($"[PluginManager]     FOUND and enabled: {mod.Id}");
+                    }
+                }
+                else
+                {
+                    MMLog.WriteDebug($"[PluginManager]     NOT FOUND on disk: {id}");
                 }
             }
 
-            // Keep loaded mods aligned with enabled list only.
+            // Ensure LoadedMods only contains the successfully discovered and enabled mods.
             LoadedMods = ordered;
+            MMLog.WriteDebug($"[PluginManager] Final LoadedMods count: {LoadedMods.Count}");
         }
 
         private void AttachInspectorTools()
