@@ -380,9 +380,6 @@ namespace ModAPI.Saves
 
                         Directory.Move(oldDir, newDir);
                         MMLog.Write($"[CondenseSlots] Moved save from Slot {entry.absoluteSlot} to Slot {expectedSlot}");
-
-                        entry.absoluteSlot = expectedSlot;
-                        changed = true;
                         success = true;
                     }
                     catch (Exception ex)
@@ -390,7 +387,13 @@ namespace ModAPI.Saves
                         MMLog.WriteError($"[CondenseSlots] Failed to move slot {entry.absoluteSlot} to {expectedSlot}: {ex.Message}");
                     }
                     
-                    if (success) expectedSlot++;
+                    if (success)
+                    {
+                        entry.absoluteSlot = expectedSlot;
+                        changed = true;
+                        expectedSlot++;
+                    }
+                    // If move failed, keep entry.absoluteSlot as-is and don't modify manifest
                 }
                 else if (entry.absoluteSlot == expectedSlot)
                 {
@@ -536,86 +539,112 @@ namespace ModAPI.Saves
         }
 
         /// <summary>
-        /// Deserializes a SlotManifest from its custom JSON representation.
-        /// Utilizes a lightweight line-based parser to avoid dependency on complex JSON libraries in the core loader.
+        /// Deserializes a SlotManifest from JSON using Unity's JsonUtility.
+        /// This matches the serializer used in SerializeSlotManifest and handles edge cases
+        /// like quotes and newlines in mod names/warnings.
         /// </summary>
         internal static SlotManifest DeserializeSlotManifest(string json)
         {
-            if (string.IsNullOrEmpty(json)) return null;
-            
-            var manifest = new SlotManifest();
-            var mods = new List<LoadedModInfo>();
+            return JsonUtility.FromJson<SlotManifest>(json) ?? new SlotManifest();
+        }
+
+        /// <summary>
+        /// Reads SaveInfo from a save file's XML data.
+        /// Extracts familyName, daysSurvived, and difficulty from the SaveInfo group.
+        /// </summary>
+        public static SaveInfo ReadSaveInfoFromXml(byte[] xmlBytes)
+        {
+            var info = new SaveInfo();
+            if (xmlBytes == null || xmlBytes.Length == 0) return info;
+
+            try
+            {
+                var sd = new SaveData(xmlBytes);
+                var gameInfo = sd.info;
+                info.familyName = gameInfo.m_familyName;
+                info.daysSurvived = gameInfo.m_daysSurvived;
+                info.difficulty = gameInfo.m_diffSetting;
+                info.saveTime = gameInfo.m_saveTime;
+                sd.Finished();
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"[SaveRegistryCore] Failed to read SaveInfo from XML: {ex.Message}");
+            }
+
+            return info;
+        }
+
+        /// <summary>
+        /// Reads SaveInfo from a vanilla save slot (1-3).
+        /// Handles the XOR decryption used by the game's PlatformSave_PC.
+        /// </summary>
+        public static SaveInfo ReadVanillaSaveInfo(int slotNumber)
+        {
+            var info = new SaveInfo();
             
             try
             {
-                var lines = json.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                for (int i = 0; i < lines.Length; i++)
+                // Get the vanilla save path (same as PlatformSave_PC.GetSavePath)
+                string savesPath = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "saves");
+                string fileName;
+                
+                switch (slotNumber)
                 {
-                    var line = lines[i].Trim();
-                    
-                    if (line.Contains("\"manifestVersion\""))
-                    {
-                        manifest.manifestVersion = ExtractInt(line);
-                    }
-                    else if (line.Contains("\"lastModified\""))
-                    {
-                        manifest.lastModified = ExtractString(line);
-                    }
-                    else if (line.Contains("\"family_name\""))
-                    {
-                        manifest.family_name = ExtractString(line);
-                    }
-                    else if (line.Contains("\"modId\""))
-                    {
-                        // Start of a mod entry
-                        var mod = new LoadedModInfo();
-                        mod.modId = ExtractString(line);
-                        
-                        // Look ahead for version and warnings on the same line
-                        if (i < lines.Length && line.Contains("\"version\""))
-                        {
-                            var versionStart = line.IndexOf("\"version\"");
-                            mod.version = ExtractString(line.Substring(versionStart));
-                        }
-                        
-                        mods.Add(mod);
-                    }
+                    case 1: fileName = "savedata_01.dat"; break;
+                    case 2: fileName = "savedata_02.dat"; break;
+                    case 3: fileName = "savedata_03.dat"; break;
+                    default: return info;
                 }
                 
-                manifest.lastLoadedMods = mods.ToArray();
+                string fullPath = Path.Combine(savesPath, fileName);
+                MMLog.WriteDebug($"[SaveRegistryCore] Looking for vanilla save at: {fullPath}");
+                
+                if (!File.Exists(fullPath))
+                {
+                    MMLog.WriteDebug($"[SaveRegistryCore] Vanilla save file not found: {fullPath}");
+                    return info;
+                }
+                
+                // Read and decrypt the file (XOR cipher from PlatformSave_PC)
+                byte[] encryptedData = File.ReadAllBytes(fullPath);
+                byte[] decryptedData = DecryptVanillaSave(encryptedData);
+                
+                // Parse the decrypted XML
+                info = ReadSaveInfoFromXml(decryptedData);
+                MMLog.WriteDebug($"[SaveRegistryCore] Read vanilla slot {slotNumber}: family='{info.familyName}', days={info.daysSurvived}");
             }
-            catch
+            catch (Exception ex)
             {
-                // Fall back to empty manifest
-                manifest.lastLoadedMods = new LoadedModInfo[0];
+                MMLog.WriteError($"[SaveRegistryCore] Failed to read vanilla save info for slot {slotNumber}: {ex.Message}");
             }
             
-            return manifest;
+            return info;
         }
-
-        private static string ExtractString(string line)
+        
+        /// <summary>
+        /// Decrypts vanilla save data using the XOR cipher from PlatformSave_PC.
+        /// </summary>
+        private static byte[] DecryptVanillaSave(byte[] encryptedData)
         {
-            var start = line.IndexOf(":") + 1;
-            if (start <= 0) return "";
+            if (encryptedData == null || encryptedData.Length == 0)
+                return encryptedData;
             
-            var valueStart = line.IndexOf("\"", start) + 1;
-            if (valueStart <= start) return "";
+            // XOR keys from PlatformSave_PC
+            byte[] xorKey = new byte[] { 172, 242, 115, 58, 254, 222, 170, 33, 48, 13, 167, 21, 139, 109, 74, 186, 171 };
+            byte[] xorOrder = new byte[] { 0, 2, 4, 1, 6, 15, 13, 16, 8, 3, 12, 10, 5, 9, 11, 7, 14 };
             
-            var valueEnd = line.IndexOf("\"", valueStart);
-            if (valueEnd <= valueStart) return "";
+            byte[] decrypted = new byte[encryptedData.Length];
+            int keyIndex = 0;
             
-            return line.Substring(valueStart, valueEnd - valueStart);
-        }
-
-        private static int ExtractInt(string line)
-        {
-            var start = line.IndexOf(":") + 1;
-            if (start <= 0) return 0;
+            for (int i = 0; i < encryptedData.Length; i++)
+            {
+                decrypted[i] = (byte)(encryptedData[i] ^ xorKey[xorOrder[keyIndex++]]);
+                if (keyIndex >= xorOrder.Length)
+                    keyIndex = 0;
+            }
             
-            var valueStr = line.Substring(start).Trim().TrimEnd(',');
-            int result;
-            int.TryParse(valueStr, out result);
-            return result;
+            return decrypted;
         }
     }
 }
