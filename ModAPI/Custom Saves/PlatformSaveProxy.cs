@@ -14,6 +14,9 @@ namespace ModAPI.Hooks
     {
         public class Target { public string scenarioId; public string saveId; }
 
+        private static readonly object _nextLoadLock = new object();
+        private static readonly object _nextSaveLock = new object();
+        
         public static readonly Dictionary<SaveManager.SaveType, Target> NextLoad = new Dictionary<SaveManager.SaveType, Target>();
         public static readonly Dictionary<SaveManager.SaveType, Target> NextSave = new Dictionary<SaveManager.SaveType, Target>();
         public static SaveEntry ActiveCustomSave;
@@ -49,20 +52,23 @@ namespace ModAPI.Hooks
             MMLog.WriteDebug($"[PlatformSaveProxy] PlatformSave called for {type}");
 
             // 1. CHECK FOR NEW GAME OR SLOT SWAP
-            if (NextSave.TryGetValue(type, out var target))
+            lock (_nextSaveLock)
             {
-                MMLog.Write($"[Proxy] Intercepting Vanilla Save ({type}) -> Redirecting to Custom ID: {target.saveId}");
-                
-                // This writes the file to ModAPI/Saves/Standard/... AND parses metadata
-                var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, null, data);
-                
-                // Set this as the active save for the rest of the session
-                ActiveCustomSave = entry;
-                
-                // Clear the "Next" target so we don't get stuck
-                NextSave.Remove(type); 
-                
-                return true; // We handled it, don't let vanilla run
+                if (NextSave.TryGetValue(type, out var target))
+                {
+                    MMLog.Write($"[Proxy] Intercepting Vanilla Save ({type}) -> Redirecting to Custom ID: {target.saveId}");
+                    
+                    // This writes the file to ModAPI/Saves/Standard/... AND parses metadata
+                    var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, null, data);
+                    
+                    // Set this as the active save for the rest of the session
+                    ActiveCustomSave = entry;
+                    
+                    // Clear the "Next" target so we don't get stuck
+                    NextSave.Remove(type); 
+                    
+                    return true; // We handled it, don't let vanilla run
+                }
             }
 
             // 2. CHECK FOR EXISTING LOADED CUSTOM GAME
@@ -85,36 +91,38 @@ namespace ModAPI.Hooks
         {
             MMLog.WriteDebug($"[PlatformSaveProxy] Intercepted PlatformLoad call for SaveType: {type}.");
 
-            Target nextLoadTarget;
-            if (NextLoad.TryGetValue(type, out nextLoadTarget))
+            lock (_nextLoadLock)
             {
-                try
+                if (NextLoad.TryGetValue(type, out var nextLoadTarget))
                 {
-                    var scenarioId = nextLoadTarget.scenarioId;
-                    var saveId = nextLoadTarget.saveId;
+                    try
+                    {
+                        var scenarioId = nextLoadTarget.scenarioId;
+                        var saveId = nextLoadTarget.saveId;
 
-                    ISaveApi saveApi = ExpandedVanillaSaves.IsStandardScenario(scenarioId)
-                        ? ExpandedVanillaSaves.Instance
-                        : ScenarioSaves.GetRegistry(scenarioId);
+                        ISaveApi saveApi = ExpandedVanillaSaves.IsStandardScenario(scenarioId)
+                            ? ExpandedVanillaSaves.Instance
+                            : ScenarioSaves.GetRegistry(scenarioId);
 
-                    var entry = saveApi.Get(saveId);
-                    if (entry == null) return false;
+                        var entry = saveApi.Get(saveId);
+                        if (entry == null) return false;
 
-                    var path = DirectoryProvider.EntryPath(scenarioId, entry.absoluteSlot);
-                    if (!File.Exists(path)) return false;
+                        var path = DirectoryProvider.EntryPath(scenarioId, entry.absoluteSlot);
+                        if (!File.Exists(path)) return false;
 
-                    _customLoadedXml = File.ReadAllText(path);
-                    ActiveCustomSave = entry;
-                    MMLog.Write($"[PlatformSaveProxy] Set active custom save to ID: {entry?.id} after loading.");
-                    NextLoad.Remove(type);
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    MMLog.WriteError("PlatformSaveProxy custom load error: " + ex);
-                    _customLoadedXml = null;
-                    ActiveCustomSave = null;
-                    return false;
+                        _customLoadedXml = File.ReadAllText(path);
+                        ActiveCustomSave = entry;
+                        MMLog.Write($"[PlatformSaveProxy] Set active custom save to ID: {entry?.id} after loading.");
+                        NextLoad.Remove(type);
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        MMLog.WriteError("PlatformSaveProxy custom load error: " + ex);
+                        _customLoadedXml = null;
+                        ActiveCustomSave = null;
+                        return false;
+                    }
                 }
             }
 
@@ -137,13 +145,19 @@ namespace ModAPI.Hooks
         public static void SetNextLoad(SaveManager.SaveType type, string scenarioId, string saveId)
         {
             MMLog.WriteDebug($"[PlatformSaveProxy] SetNextLoad: type={type}, scenarioId={scenarioId}, saveId={saveId}");
-            NextLoad[type] = new Target { scenarioId = scenarioId, saveId = saveId };
+            lock (_nextLoadLock)
+            {
+                NextLoad[type] = new Target { scenarioId = scenarioId, saveId = saveId };
+            }
         }
 
         public static void SetNextSave(SaveManager.SaveType type, string scenarioId, string saveId)
         {
             MMLog.WriteDebug($"[PlatformSaveProxy] SetNextSave: type={type}, scenarioId={scenarioId}, saveId={saveId}");
-            NextSave[type] = new Target { scenarioId = scenarioId, saveId = saveId };
+            lock (_nextSaveLock)
+            {
+                NextSave[type] = new Target { scenarioId = scenarioId, saveId = saveId };
+            }
         }
     }
 }

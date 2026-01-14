@@ -25,12 +25,12 @@ namespace ModAPI.Saves
                 var go = new GameObject("PreviewAutoRunner");
                 Object.DontDestroyOnLoad(go);
                 var runner = go.AddComponent<PreviewAutoRunner>();
-                runner.StartCoroutine(CaptureCoroutine(entry));
+                runner.StartCoroutine(CaptureCoroutine(entry, go));
             }
             catch { }
         }
 
-        private static IEnumerator CaptureCoroutine(SaveEntry entry)
+        private static IEnumerator CaptureCoroutine(SaveEntry entry, GameObject runner)
         {
             yield return new WaitForEndOfFrame();
             var width = Screen.width; var height = Screen.height;
@@ -39,6 +39,7 @@ namespace ModAPI.Saves
             tex.Apply();
             PreviewCapture.CapturePNG(entry.scenarioId, entry.id, tex);
             Object.Destroy(tex);
+            Object.Destroy(runner); // Clean up GameObject after capture
             MMLog.WriteDebug($"Preview captured for scenario={entry.scenarioId} id={entry.id} size={width}x{height}");
         }
     }

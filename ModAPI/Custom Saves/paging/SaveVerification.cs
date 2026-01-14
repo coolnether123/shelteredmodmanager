@@ -13,6 +13,14 @@ namespace ModAPI.Hooks.Paging
     {
         // Key icons by the button INSTANCE to handle page swapping correctly
         private static Dictionary<SaveSlotButton, GameObject> _slotIcons = new Dictionary<SaveSlotButton, GameObject>();
+        
+        // Colors for status indicators (brighter for dark brown background)
+        private static readonly Color COLOR_MATCH = new Color(0.3f, 1.0f, 0.3f);
+        private static readonly Color COLOR_VERSION_DIFF = new Color(1.0f, 1.0f, 0.2f);
+        private static readonly Color COLOR_MISSING = new Color(1.0f, 0.3f, 0.3f);
+
+        private static UIFont _cachedUIFont;
+        private static Font _cachedTTFFont;
 
         public static void UpdateIcons(SlotSelectionPanel panel)
         {
@@ -82,10 +90,12 @@ namespace ModAPI.Hooks.Paging
 
                 if (target == null && absoluteSlot <= 3)
                 {
+                    // For vanilla slots 1-3, create entry and read family name from save file
                     target = new SaveEntry { 
                         id = "vanilla_slot_" + absoluteSlot,
                         absoluteSlot = absoluteSlot,
-                        name = "Slot " + absoluteSlot
+                        name = "Slot " + absoluteSlot,
+                        saveInfo = SaveRegistryCore.ReadVanillaSaveInfo(absoluteSlot)
                     };
                 }
 
@@ -104,7 +114,7 @@ namespace ModAPI.Hooks.Paging
                     
                     // Background: Create a UITexture with a white pixel texture
                     // This is the ONLY way to get a colored box in NGUI without sprites
-                    var bgTexture = iconGO.AddComponent<UITexture>();
+                    var bgTex = iconGO.AddComponent<UITexture>();
                     
                     // Create a simple 2x2 white texture
                     var whiteTex = new Texture2D(2, 2);
@@ -113,12 +123,12 @@ namespace ModAPI.Hooks.Paging
                             whiteTex.SetPixel(x, y, Color.white);
                     whiteTex.Apply();
                     
-                    bgTexture.mainTexture = whiteTex;
-                    bgTexture.depth = baseDepth;
-                    bgTexture.width = 60;
-                    bgTexture.height = 60;
-                    bgTexture.pivot = UIWidget.Pivot.Center;
-                    bgTexture.color = new Color(0.3f, 0.25f, 0.2f, 0.9f); // Dark brown, more opaque
+                    bgTex.mainTexture = whiteTex;
+                    bgTex.depth = baseDepth;
+                    bgTex.width = 60;
+                    bgTex.height = 60;
+                    bgTex.pivot = UIWidget.Pivot.Center;
+                    bgTex.color = new Color(0.3f, 0.25f, 0.2f, 0.9f); // Dark brown, more opaque
                     
                     MMLog.WriteDebug($"[SaveVerification] Created UITexture background with white texture");
                     
@@ -138,6 +148,17 @@ namespace ModAPI.Hooks.Paging
                     col.size = new Vector3(70, 70, 1);
                     var uiBtn = iconGO.AddComponent<UIButton>();
                     uiBtn.tweenTarget = iconGO; 
+                    
+                    // Initial setup of cached fonts if missing
+                    if (_cachedUIFont == null && _cachedTTFFont == null)
+                    {
+                        var label = panel.GetComponentInChildren<UILabel>();
+                        if (label != null)
+                        {
+                            _cachedUIFont = label.bitmapFont;
+                            _cachedTTFFont = label.trueTypeFont;
+                        }
+                    }
                     
                     _slotIcons[btn] = iconGO;
                 }
@@ -160,6 +181,22 @@ namespace ModAPI.Hooks.Paging
                 UISprite childSprite = iconChildObj != null ? iconChildObj.GetComponent<UISprite>() : null;
                 var currentBgSprite = iconGO.GetComponent<UISprite>();
                 var iconButton = iconGO.GetComponent<UIButton>();
+                var bgTexture = iconGO.GetComponent<UITexture>();
+                
+                // DEBUG: Log button visual state
+                MMLog.WriteDebug($"[SaveVerification] Slot {absoluteSlot}: Button State = {iconButton.state}, IsEnabled = {iconButton.isEnabled}");
+                if (bgTexture != null)
+                {
+                    MMLog.WriteDebug($"[SaveVerification] Slot {absoluteSlot}: BG Color = {bgTexture.color}, Alpha = {bgTexture.alpha}");
+                    MMLog.WriteDebug($"[SaveVerification] Slot {absoluteSlot}: Widget Depth = {bgTexture.depth}, Panel Depth = {NGUITools.FindInParents<UIPanel>(iconGO)?.depth}");
+                }
+                
+                // Check for tweens
+                var tweenAlpha = iconGO.GetComponent<TweenAlpha>();
+                if (tweenAlpha != null)
+                {
+                    MMLog.WriteDebug($"[SaveVerification] Slot {absoluteSlot}: Has TweenAlpha! from={tweenAlpha.from}, to={tweenAlpha.to}, value={tweenAlpha.value}");
+                }
                 
                 // Get Manifest and State
                 var slotRoot = DirectoryProvider.SlotRoot("Standard", absoluteSlot); 
@@ -176,24 +213,64 @@ namespace ModAPI.Hooks.Paging
                     } catch { }
                 }
 
-                // Sprite selection
-                string spriteName = "Checkmark";
-                if (sampleAtlas.GetSprite("Checkmark") != null) spriteName = "Checkmark";
-                else if (sampleAtlas.GetSprite("Tick") != null) spriteName = "Tick";
-                
-                if (state == VerificationState.Missing)
+                // Sprite selection - ensure we have a label for the character icons
+                UILabel childLabel = iconChildObj != null ? iconChildObj.GetComponent<UILabel>() : null;
+                if (childLabel == null && iconChildObj != null)
                 {
-                    if (sampleAtlas.GetSprite("Cancel") != null) spriteName = "Cancel";
-                    else if (sampleAtlas.GetSprite("Close") != null) spriteName = "Close";
+                    childLabel = iconChildObj.gameObject.AddComponent<UILabel>();
+                    if (childSprite != null) childSprite.enabled = false;
+                    
+                    childLabel.bitmapFont = _cachedUIFont;
+                    childLabel.trueTypeFont = _cachedTTFFont;
+                    childLabel.fontSize = 32;
+                    childLabel.pivot = UIWidget.Pivot.Center;
+                    // Use depth relative to background - retrieve baseDepth from background texture
+                    var parentBgTex = iconChildObj.parent.GetComponent<UITexture>();
+                    int labelDepth = (parentBgTex != null ? parentBgTex.depth : 100) + 10;
+                    childLabel.depth = labelDepth;
+                    childLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
+                    childLabel.width = 50;
+                    childLabel.height = 50;
                 }
 
-                Color color = state == VerificationState.Match ? Color.green : 
-                             (state == VerificationState.Missing ? Color.red : Color.yellow);
-
-                if (childSprite != null)
+                if (childLabel != null)
                 {
-                    childSprite.spriteName = spriteName;
-                    childSprite.color = color;
+                    // Ensure fonts are still valid if they were null during creation
+                    if (childLabel.bitmapFont == null && childLabel.trueTypeFont == null)
+                    {
+                        childLabel.bitmapFont = _cachedUIFont;
+                        childLabel.trueTypeFont = _cachedTTFFont;
+                    }
+                }
+
+                // Determine icon and color based on state
+                string iconPrefix = "✓";
+                Color iconColor = COLOR_MATCH;
+                
+                switch (state)
+                {
+                    case VerificationState.Match:
+                        iconPrefix = "✓";
+                        iconColor = COLOR_MATCH;
+                        break;
+                    case VerificationState.VersionMismatch:
+                        iconPrefix = "~";
+                        iconColor = COLOR_VERSION_DIFF;
+                        break;
+                    case VerificationState.Warning:
+                        iconPrefix = "~";
+                        iconColor = COLOR_VERSION_DIFF;
+                        break;
+                    case VerificationState.Missing:
+                        iconPrefix = "✗";
+                        iconColor = COLOR_MISSING;
+                        break;
+                }
+                
+                if (childLabel != null)
+                {
+                    childLabel.text = iconPrefix;
+                    childLabel.color = iconColor;
                 }
                 
                 // Debug: Full snapshot on first button only
