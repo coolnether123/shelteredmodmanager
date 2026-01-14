@@ -331,7 +331,53 @@ namespace Manager
                 lblDependsOn.Text = "None";
 
             lblWebsite.Text = about != null && !string.IsNullOrEmpty(about.website) ? about.website : "None";
-            rtbDescription.Text = about != null && !string.IsNullOrEmpty(about.description) ? about.description : "No description provided.";
+            
+            // Check ModAPI version compatibility
+            string modApiInfo = "ModAPI: Unknown";
+            try
+            {
+                // Get installed ModAPI version from SMM folder
+                string gameDir = !string.IsNullOrEmpty(uiGamePath.Text) && File.Exists(uiGamePath.Text)
+                    ? Path.GetDirectoryName(uiGamePath.Text)
+                    : null;
+                    
+                if (!string.IsNullOrEmpty(gameDir))
+                {
+                    string smmPath = Path.Combine(gameDir, "SMM");
+                    string installedVersion = AssemblyVersionChecker.GetInstalledModApiVersion(smmPath);
+                    
+                    // Scan mod assemblies for required version
+                    var modAssemblies = AssemblyVersionChecker.ScanModAssemblies(item.RootPath);
+                    
+                    if (modAssemblies.Count > 0)
+                    {
+                        var firstRequirement = modAssemblies.FirstOrDefault(a => !string.IsNullOrEmpty(a.ApiVersion));
+                        
+                        if (!string.IsNullOrEmpty(firstRequirement.ApiVersion))
+                        {
+                            bool compatible = AssemblyVersionChecker.IsCompatible(installedVersion, firstRequirement.ApiVersion);
+                            string compatText = compatible ? "✓" : "⚠";
+                            modApiInfo = $"ModAPI: {firstRequirement.ApiVersion} {compatText}";
+                            
+                            if (!compatible && !string.IsNullOrEmpty(installedVersion))
+                            {
+                                modApiInfo += $" (Installed: {installedVersion})";
+                            }
+                        }
+                    }
+                    else if (!string.IsNullOrEmpty(installedVersion))
+                    {
+                        modApiInfo = $"ModAPI: {installedVersion} (no DLL found)";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                modApiInfo = $"ModAPI: Error - {ex.Message}";
+            }
+            
+            rtbDescription.Text = (about != null && !string.IsNullOrEmpty(about.description) ? about.description : "No description provided.") 
+                + "\n\n" + modApiInfo;
 
             try
             {

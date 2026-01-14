@@ -486,66 +486,173 @@ namespace ModAPI.Saves
 
         private static string SerializeSlotManifest(SlotManifest manifest)
         {
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("{");
-            sb.AppendLine($"    \"manifestVersion\": {manifest.manifestVersion},");
-            sb.AppendLine($"    \"lastModified\": \"{EscapeJson(manifest.lastModified)}\",");
-            sb.AppendLine($"    \"family_name\": \"{EscapeJson(manifest.family_name)}\",");
-            
-            // Serialize lastLoadedMods array
-            sb.Append("    \"lastLoadedMods\": [");
-            if (manifest.lastLoadedMods != null && manifest.lastLoadedMods.Length > 0)
-            {
-                sb.AppendLine();
-                for (int i = 0; i < manifest.lastLoadedMods.Length; i++)
-                {
-                    var mod = manifest.lastLoadedMods[i];
-                    sb.Append("        {");
-                    sb.Append($" \"modId\": \"{EscapeJson(mod.modId)}\",");
-                    sb.Append($" \"version\": \"{EscapeJson(mod.version)}\",");
-                    sb.Append(" \"warnings\": [");
-                    if (mod.warnings != null && mod.warnings.Length > 0)
-                    {
-                        for (int j = 0; j < mod.warnings.Length; j++)
-                        {
-                            sb.Append($"\"{EscapeJson(mod.warnings[j])}\"");
-                            if (j < mod.warnings.Length - 1) sb.Append(", ");
-                        }
-                    }
-                    sb.Append("] }");
-                    if (i < manifest.lastLoadedMods.Length - 1) sb.AppendLine(",");
-                    else sb.AppendLine();
-                }
-                sb.AppendLine("    ]");
-            }
-            else
-            {
-                sb.AppendLine("]");
-            }
-            
-            sb.Append("}");
-            return sb.ToString();
+            // Use Unity's JsonUtility for consistent serialization/deserialization
+            // Manual StringBuilder approach was prone to formatting errors that JsonUtility.FromJson dislikes
+            return JsonUtility.ToJson(manifest, true);
         }
 
-        private static string EscapeJson(string value)
-        {
-            if (string.IsNullOrEmpty(value)) return "";
-            return value
-                .Replace("\\", "\\\\")
-                .Replace("\"", "\\\"")
-                .Replace("\n", "\\n")
-                .Replace("\r", "\\r")
-                .Replace("\t", "\\t");
-        }
 
         /// <summary>
-        /// Deserializes a SlotManifest from JSON using Unity's JsonUtility.
-        /// This matches the serializer used in SerializeSlotManifest and handles edge cases
-        /// like quotes and newlines in mod names/warnings.
+        /// Deserializes a SlotManifest from JSON.
         /// </summary>
+        /// <remarks>
+        /// IMPORTANT: Unity's JsonUtility.FromJson fails to deserialize arrays of objects when 
+        /// they are written in compact/inline format like: { "modId": "...", "version": "..." }
+        /// 
+        /// This happens because early versions used StringBuilder to serialize manifests with 
+        /// inline object formatting. JsonUtility is extremely strict about whitespace and only
+        /// reliably deserializes the multi-line format it produces itself.
+        /// 
+        /// To maintain backward compatibility with existing save files, we manually parse the
+        /// lastLoadedMods array while letting JsonUtility handle simple scalar fields.
+        /// </remarks>
         internal static SlotManifest DeserializeSlotManifest(string json)
         {
-            return JsonUtility.FromJson<SlotManifest>(json) ?? new SlotManifest();
+            if (string.IsNullOrEmpty(json)) return new SlotManifest();
+            
+            var result = new SlotManifest();
+            
+            try
+            {
+                // Parse basic fields with JsonUtility (it handles these fine)
+                result = JsonUtility.FromJson<SlotManifest>(json) ?? new SlotManifest();
+                
+                // Manual parse for lastLoadedMods array since JsonUtility struggles with inline objects
+                var mods = new List<LoadedModInfo>();
+                
+                // Find the lastLoadedMods array content
+                int arrayStart = json.IndexOf("\"lastLoadedMods\"");
+                if (arrayStart >= 0)
+                {
+                    int bracketStart = json.IndexOf('[', arrayStart);
+                    if (bracketStart >= 0)
+                    {
+                        // Find matching closing bracket by counting depth (handles nested [] in warnings)
+                        int bracketDepth = 0;
+                        int bracketEnd = -1;
+                        for (int i = bracketStart; i < json.Length; i++)
+                        {
+                            if (json[i] == '[') bracketDepth++;
+                            else if (json[i] == ']')
+                            {
+                                bracketDepth--;
+                                if (bracketDepth == 0)
+                                {
+                                    bracketEnd = i;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (bracketEnd > bracketStart)
+                        {
+                            string arrayContent = json.Substring(bracketStart + 1, bracketEnd - bracketStart - 1);
+                            
+                            // Find each object {...} in the array (also count depth to handle nested objects)
+                            int depth = 0;
+                            int objStart = -1;
+                            for (int i = 0; i < arrayContent.Length; i++)
+                            {
+                                char c = arrayContent[i];
+                                if (c == '{')
+                                {
+                                    if (depth == 0) objStart = i;
+                                    depth++;
+                                }
+                                else if (c == '}')
+                                {
+                                    depth--;
+                                    if (depth == 0 && objStart >= 0)
+                                    {
+                                        string objJson = arrayContent.Substring(objStart, i - objStart + 1);
+                                        var mod = ParseLoadedModInfo(objJson);
+                                        if (mod != null) mods.Add(mod);
+                                        objStart = -1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                result.lastLoadedMods = mods.ToArray();
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"[DeserializeSlotManifest] Parse error: {ex.Message}");
+            }
+            
+            return result;
+        }
+        
+        private static LoadedModInfo ParseLoadedModInfo(string objJson)
+        {
+            try
+            {
+                var info = new LoadedModInfo();
+                
+                // Extract modId
+                info.modId = ExtractJsonStringValue(objJson, "modId");
+                
+                // Extract version
+                info.version = ExtractJsonStringValue(objJson, "version");
+                
+                // Extract warnings array (simple case - just get string values)
+                var warnings = new List<string>();
+                int warningsStart = objJson.IndexOf("\"warnings\"");
+                if (warningsStart >= 0)
+                {
+                    int arrStart = objJson.IndexOf('[', warningsStart);
+                    int arrEnd = objJson.IndexOf(']', arrStart);
+                    if (arrStart >= 0 && arrEnd > arrStart)
+                    {
+                        string arrContent = objJson.Substring(arrStart + 1, arrEnd - arrStart - 1).Trim();
+                        if (!string.IsNullOrEmpty(arrContent))
+                        {
+                            // Simple string array parsing
+                            var parts = arrContent.Split(',');
+                            foreach (var part in parts)
+                            {
+                                string trimmed = part.Trim().Trim('"');
+                                if (!string.IsNullOrEmpty(trimmed)) warnings.Add(trimmed);
+                            }
+                        }
+                    }
+                }
+                info.warnings = warnings.ToArray();
+                
+                return info;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        
+        private static string ExtractJsonStringValue(string json, string key)
+        {
+            string pattern = "\"" + key + "\"";
+            int keyIndex = json.IndexOf(pattern);
+            if (keyIndex < 0) return "";
+            
+            int colonIndex = json.IndexOf(':', keyIndex + pattern.Length);
+            if (colonIndex < 0) return "";
+            
+            // Find the opening quote
+            int quoteStart = json.IndexOf('"', colonIndex);
+            if (quoteStart < 0) return "";
+            
+            // Find the closing quote (handle escaped quotes)
+            int quoteEnd = quoteStart + 1;
+            while (quoteEnd < json.Length)
+            {
+                if (json[quoteEnd] == '"' && json[quoteEnd - 1] != '\\')
+                    break;
+                quoteEnd++;
+            }
+            
+            if (quoteEnd >= json.Length) return "";
+            return json.Substring(quoteStart + 1, quoteEnd - quoteStart - 1);
         }
 
         /// <summary>
