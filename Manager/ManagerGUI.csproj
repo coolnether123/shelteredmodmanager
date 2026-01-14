@@ -102,6 +102,7 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Shared\ModAboutReader.cs" />
+    <Compile Include="AssemblyVersionChecker.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="logo.jpg" />

@@ -207,10 +207,19 @@ namespace ModAPI.Hooks.Paging
 
                 if (File.Exists(manPath))
                 {
-                    try { 
-                        manifest = ModAPI.Saves.SaveRegistryCore.DeserializeSlotManifest(File.ReadAllText(manPath)); 
+                    try 
+                    { 
+                        string json = File.ReadAllText(manPath);
+                        MMLog.WriteDebug($"[SaveVerification] Reading manifest from: {manPath}");
+                        MMLog.WriteDebug($"[SaveVerification] Manifest JSON content:\n{json}");
+                        manifest = ModAPI.Saves.SaveRegistryCore.DeserializeSlotManifest(json);
+                        MMLog.WriteDebug($"[SaveVerification] Deserialized manifest: version={manifest?.manifestVersion}, modsCount={manifest?.lastLoadedMods?.Length ?? 0}");
                         state = Verify(manifest);
-                    } catch { }
+                    } 
+                    catch (Exception ex)
+                    {
+                        MMLog.WriteError($"[SaveVerification] Failed to deserialize manifest for slot {absoluteSlot}: {ex.Message}\n{ex.StackTrace}");
+                    }
                 }
 
                 // Sprite selection - ensure we have a label for the character icons
@@ -247,24 +256,29 @@ namespace ModAPI.Hooks.Paging
                 // Determine icon and color based on state
                 string iconPrefix = "✓";
                 Color iconColor = COLOR_MATCH;
+                float yOffset = 0f;
                 
                 switch (state)
                 {
                     case VerificationState.Match:
                         iconPrefix = "✓";
                         iconColor = COLOR_MATCH;
+                        yOffset = 0f;
                         break;
                     case VerificationState.VersionMismatch:
                         iconPrefix = "~";
                         iconColor = COLOR_VERSION_DIFF;
+                        yOffset = -20f;
                         break;
                     case VerificationState.Warning:
                         iconPrefix = "~";
                         iconColor = COLOR_VERSION_DIFF;
+                        yOffset = -20f;
                         break;
                     case VerificationState.Missing:
                         iconPrefix = "✗";
                         iconColor = COLOR_MISSING;
+                        yOffset = 0f;
                         break;
                 }
                 
@@ -274,10 +288,10 @@ namespace ModAPI.Hooks.Paging
                     childLabel.color = iconColor;
                 }
                 
-                // Ensure Icon child is vertically centered (small Y offset for font baseline)
+                // Ensure Icon child is vertically centered based on character
                 if (iconChildObj != null)
                 {
-                    iconChildObj.localPosition = new Vector3(0, -20, 0);
+                    iconChildObj.localPosition = new Vector3(0, yOffset, 0);
                 }
                 
                 // Debug: Full snapshot on first button only
