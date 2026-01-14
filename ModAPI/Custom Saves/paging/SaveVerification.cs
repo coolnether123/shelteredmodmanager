@@ -222,15 +222,16 @@ namespace ModAPI.Hooks.Paging
                     
                     childLabel.bitmapFont = _cachedUIFont;
                     childLabel.trueTypeFont = _cachedTTFFont;
-                    childLabel.fontSize = 32;
+                    childLabel.fontSize = 48; // Larger font for better visibility
                     childLabel.pivot = UIWidget.Pivot.Center;
+                    childLabel.alignment = NGUIText.Alignment.Center; // Center text horizontally
                     // Use depth relative to background - retrieve baseDepth from background texture
                     var parentBgTex = iconChildObj.parent.GetComponent<UITexture>();
                     int labelDepth = (parentBgTex != null ? parentBgTex.depth : 100) + 10;
                     childLabel.depth = labelDepth;
-                    childLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
-                    childLabel.width = 50;
-                    childLabel.height = 50;
+                    childLabel.overflowMethod = UILabel.Overflow.ResizeFreely; // Let it size naturally
+                    childLabel.width = 60; // Match parent box size
+                    childLabel.height = 60;
                 }
 
                 if (childLabel != null)
@@ -271,6 +272,12 @@ namespace ModAPI.Hooks.Paging
                 {
                     childLabel.text = iconPrefix;
                     childLabel.color = iconColor;
+                }
+                
+                // Ensure Icon child is vertically centered (small Y offset for font baseline)
+                if (iconChildObj != null)
+                {
+                    iconChildObj.localPosition = new Vector3(0, -20, 0);
                 }
                 
                 // Debug: Full snapshot on first button only
