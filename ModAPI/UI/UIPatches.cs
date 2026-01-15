@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEngine;
 using ModAPI.Content;
 using ModAPI.Core;
+using ModAPI.Events;
 
 namespace ModAPI.UI
 {
@@ -150,6 +151,86 @@ namespace ModAPI.UI
                 // If the callback returns our items, ItemGrid.UpdateItems -> AddItem_Stacked will handle it.
             }
             catch (Exception ex) { MMLog.Write($"[UIPatches] ERROR in ItemTransferPanel.OnShow: {ex}"); }
+        }
+        
+        // ============================================================================
+        // UI Lifecycle Event Patches (Phase 1: Event System Expansion)
+        // ============================================================================
+        
+        /// <summary>
+        /// Hook UIPanelManager.PushPanel to fire OnPanelOpened event.
+        /// This is a public method so we can safely patch it.
+        /// </summary>
+        [HarmonyPatch(typeof(UIPanelManager), "PushPanel")]
+        [HarmonyPostfix]
+        static void Postfix_UIPanelManager_PushPanel(BasePanel panel)
+        {
+            try
+            {
+                UIEvents.RaisePanelOpened(panel);
+            }
+            catch (Exception ex)
+            {
+                MMLog.Write($"[UIPatches] ERROR in UIPanelManager.PushPanel postfix: {ex}");
+            }
+        }
+        
+        /// <summary>
+        /// Hook UIPanelManager.PopPanel to fire OnPanelClosed event.
+        /// Note: PopPanel is private, but Harmony can still patch it.
+        /// We use Postfix to get the returned panel.
+        /// </summary>
+        [HarmonyPatch(typeof(UIPanelManager), "PopPanel")]
+        [HarmonyPostfix]
+        static void Postfix_UIPanelManager_PopPanel(BasePanel __result)
+        {
+            try
+            {
+                if (__result != null)
+                {
+                    UIEvents.RaisePanelClosed(__result);
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.Write($"[UIPatches] ERROR in UIPanelManager.PopPanel postfix: {ex}");
+            }
+        }
+        
+        /// <summary>
+        /// Hook BasePanel.OnResume to fire OnPanelResumed event.
+        /// This fires when a panel returns to the top of the stack.
+        /// </summary>
+        [HarmonyPatch(typeof(BasePanel), "OnResume")]
+        [HarmonyPostfix]
+        static void Postfix_BasePanel_OnResume(BasePanel __instance)
+        {
+            try
+            {
+                UIEvents.RaisePanelResumed(__instance);
+            }
+            catch (Exception ex)
+            {
+                MMLog.Write($"[UIPatches] ERROR in BasePanel.OnResume postfix: {ex}");
+            }
+        }
+        
+        /// <summary>
+        /// Hook BasePanel.OnPause to fire OnPanelPaused event.
+        /// This fires when another panel is pushed above this one.
+        /// </summary>
+        [HarmonyPatch(typeof(BasePanel), "OnPause")]
+        [HarmonyPostfix]
+        static void Postfix_BasePanel_OnPause(BasePanel __instance)
+        {
+            try
+            {
+                UIEvents.RaisePanelPaused(__instance);
+            }
+            catch (Exception ex)
+            {
+                MMLog.Write($"[UIPatches] ERROR in BasePanel.OnPause postfix: {ex}");
+            }
         }
     }
 }

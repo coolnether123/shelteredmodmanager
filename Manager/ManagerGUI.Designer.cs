@@ -933,7 +933,7 @@ namespace Manager
             this.Name = "ManagerGUI";
             this.Padding = new System.Windows.Forms.Padding(10);
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "Sheltered Mod Manager v0.7";
+            this.Text = "Sheltered Mod Manager v1.0";
             this.Load += new System.EventHandler(this.Form1_Load);
             this.tabControl1.ResumeLayout(false);
             this.tabPage1.ResumeLayout(false);

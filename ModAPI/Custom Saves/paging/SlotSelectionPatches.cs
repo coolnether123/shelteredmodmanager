@@ -221,7 +221,74 @@ namespace ModAPI.Hooks
         {
             {
                 int page = PagingManager.GetPage(__instance);
-                if (page == 0) return true;
+                
+                // For vanilla saves (page 0), check for mod mismatches BEFORE allowing vanilla load
+                if (page == 0)
+                {
+                    try
+                    {
+                        var t = Traverse.Create(__instance);
+                        int chosenSlotIndex = t.Field("m_selectedSlot").GetValue<int>();
+                        
+                        // Only check slots 1-3 (indices 0-2)
+                        if (chosenSlotIndex >= 0 && chosenSlotIndex < 3)
+                        {
+                            var slotRoot = DirectoryProvider.SlotRoot("Standard", chosenSlotIndex + 1);
+                            var manPath = System.IO.Path.Combine(slotRoot, "manifest.json");
+                            SlotManifest manifest = null;
+                            
+                            if (System.IO.File.Exists(manPath))
+                            {
+                                try 
+                                { 
+                                    manifest = ModAPI.Saves.SaveRegistryCore.DeserializeSlotManifest(System.IO.File.ReadAllText(manPath)); 
+                                } 
+                                catch { }
+                                
+                                if (manifest != null)
+                                {
+                                    var state = SaveVerification.Verify(manifest);
+                                    
+                                    if (state != SaveVerification.VerificationState.Match)
+                                    {
+                                        // Mismatch detected - show dialog WITHOUT starting vanilla load
+                                        var vanillaSaveInfo = ModAPI.Saves.SaveRegistryCore.ReadVanillaSaveInfo(chosenSlotIndex + 1);
+                                        var entry = new ModAPI.Saves.SaveEntry
+                                        {
+                                            id = $"vanilla_slot_{chosenSlotIndex + 1}",
+                                            absoluteSlot = chosenSlotIndex + 1,
+                                            saveInfo = new ModAPI.Saves.SaveInfo
+                                            {
+                                                familyName = vanillaSaveInfo != null ? vanillaSaveInfo.familyName : manifest.family_name ?? "Unknown",
+                                                daysSurvived = vanillaSaveInfo != null ? vanillaSaveInfo.daysSurvived : 0,
+                                                saveTime = vanillaSaveInfo != null ? vanillaSaveInfo.saveTime : System.DateTime.Now.ToString()
+                                            }
+                                        };
+                                        
+                                        var virtualSaveType = (SaveManager.SaveType)(chosenSlotIndex + 1);
+                                        
+                                        SaveDetailsWindow.Show(entry, manifest, state, true, () => {
+                                            // Load Anyway callback - trigger vanilla load
+                                            MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] Load Anyway clicked for vanilla slot {chosenSlotIndex + 1}");
+                                            // Set force load flag to bypass LoadGamePatch check
+                                            ModAPI.Core.SaveProtectionPatches.LoadGamePatch._forceLoad = true;
+                                            SaveManager.instance.SetSlotToLoad(chosenSlotIndex + 1);
+                                        });
+                                        
+                                        return false; // Block vanilla load until user decides
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MMLog.WriteError($"[OnSlotChosen vanilla check] Error: {ex}");
+                    }
+                    
+                    // No mismatch or error - allow vanilla behavior
+                    return true;
+                }
 
                 try
                 {

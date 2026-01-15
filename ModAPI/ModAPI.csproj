@@ -105,6 +105,9 @@
     <Compile Include="Reflection\Safe.cs" />
     <Compile Include="Util\GameUtil.cs" />
     <Compile Include="Events\GameEvents.cs" />
+    <Compile Include="Events\ModEventBus.cs" />
+    <Compile Include="Events\UIEvents.cs" />
+    <Compile Include="Core\ModAPIRegistry.cs" />
     <Compile Include="Custom Saves\PlatformSaveProxy.cs" />
     <Compile Include="Custom Saves\SaveExitPanelOnCancelPatch.cs" />
     <Compile Include="Custom Saves\SaveManager_Injection_Patch.cs" />

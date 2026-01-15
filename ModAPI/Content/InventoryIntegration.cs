@@ -22,7 +22,7 @@ namespace ModAPI.Content
         {
             MMLog.Write("[InventoryIntegration] Postfix patch called!");
             
-            // CRITICAL: Ensure ContentInjector has run before we try to add slots
+            // Ensure ContentInjector has run before we try to add slots
             // The RuntimeInitializeOnLoadMethod trigger sometimes doesn't fire in time,
             // so we manually trigger it here as a fallback
             try

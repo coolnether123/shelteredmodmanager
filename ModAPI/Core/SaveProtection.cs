@@ -5,6 +5,8 @@ using System.Reflection;
 using System.Text;
 using HarmonyLib;
 using UnityEngine;
+using ModAPI.Saves;
+using ModAPI.Hooks.Paging;
 
 namespace ModAPI.Core
 {
@@ -80,7 +82,7 @@ namespace ModAPI.Core
         }
 
         // Patch for game saving
-        [HarmonyPatch]
+        // Note: This class uses manual patching in ApplyPatches(), not Harmony attributes
         internal static class SaveGamePatch
         {
             // Postfix to inject mod data after game saves its own data
@@ -128,184 +130,169 @@ namespace ModAPI.Core
         }
 
         // Patch for game loading
-        [HarmonyPatch]
+        // Note: This class uses manual patching in ApplyPatches(), not Harmony attributes
         internal static class LoadGamePatch
         {
-            // Flag to indicate if we are waiting for user confirmation on mod mismatch
-            private static FieldInfo _pendingModMismatchResolutionField;
+            // State tracking for the load interruption
+            private static bool _isWaitingForUser = false;
+            internal static bool _forceLoad = false; // Internal so OnSlotChosen can set it
 
             // Prefix to read mod data and potentially pause loading
             public static bool Prefix(object __instance) // __instance is SaveManager
             {
-                // Ensure the flag field is accessible
-                if (_pendingModMismatchResolutionField == null)
-                {
-                    _pendingModMismatchResolutionField = AccessTools.Field(typeof(SaveManager), "m_pendingModMismatchResolution");
-                    if (_pendingModMismatchResolutionField == null)
-                    {
-                        MMLog.WriteError("LoadGamePatch: Could not find m_pendingModMismatchResolution field in SaveManager. Mod mismatch resolution will not pause load.");
-                    }
-                }
+                // If we are waiting for user input, pause the load
+                if (_isWaitingForUser) return false;
 
-                // If we are already waiting for user input, keep pausing the load
-                if (_pendingModMismatchResolutionField != null && (bool)_pendingModMismatchResolutionField.GetValue(__instance))
+                // If user confirmed load, proceed without checks
+                if (_forceLoad)
                 {
-                    return false; // Skip original method
+                    _forceLoad = false; // Reset for next time
+                    return true;
                 }
 
                 // Access the private m_data field from the SaveManager instance
                 SaveData data = AccessTools.Field(typeof(SaveManager), "m_data").GetValue(__instance) as SaveData;
                 if (data == null) return true; // Continue with original method if SaveData is null
 
-                // Only process for actual game slots, not GlobalData or Invalid
-                // m_currentType holds the SaveType being loaded
+                // Only process for actual game slots
                 SaveManager.SaveType type = (SaveManager.SaveType)AccessTools.Field(typeof(SaveManager), "m_currentType").GetValue(__instance);
-                if (type == SaveManager.SaveType.GlobalData || type == SaveManager.SaveType.Invalid) return true; // Continue
+                if (type == SaveManager.SaveType.GlobalData || type == SaveManager.SaveType.Invalid) return true;
 
                 try
                 {
-                    MMLog.WriteDebug($"LoadGamePatch: Reading mod data for slot {type} from save.");
+                    MMLog.WriteDebug($"[LoadGamePatch] Checking mod data for slot {type}.");
+
+                    List<ModSaveData.ModInfo> savedMods = null;
+
+                    // 1. Try reading from SaveData (internal save file)
                     string modDataJson = null;
                     string modDataKey = "ModAPI_ModData";
-
-                    // Use SaveData's SaveLoad method to retrieve our JSON string
-                    if (!data.SaveLoad(modDataKey, ref modDataJson))
+                    if (data.SaveLoad(modDataKey, ref modDataJson) && !string.IsNullOrEmpty(modDataJson))
                     {
-                        MMLog.WriteDebug("LoadGamePatch: No mod data found in save. Assuming unmodded save or old format.");
-                        return true; // Continue with original method
+                        var parsed = JsonUtility.FromJson<ModSaveData>(modDataJson);
+                        if (parsed != null && parsed.mods != null)
+                        {
+                            savedMods = new List<ModSaveData.ModInfo>(parsed.mods);
+                            MMLog.WriteDebug($"[LoadGamePatch] Found embedded mod data. Count: {savedMods.Count}");
+                        }
                     }
 
-                    if (string.IsNullOrEmpty(modDataJson))
+                    // 2. Fallback: Try reading from external manifest.json
+                    if (savedMods == null)
                     {
-                        MMLog.WriteDebug("LoadGamePatch: Empty mod data found in save.");
-                        return true; // Continue with original method
+                        try
+                        {
+                            // Convert SaveType to slot index
+                            int slotIndex = (int)type; 
+                             
+                            var manifest = ModAPI.Saves.SaveRegistryCore.ReadSlotManifest("Standard", slotIndex);
+                            if (manifest != null && manifest.lastLoadedMods != null)
+                            {
+                                savedMods = manifest.lastLoadedMods.Select(m => new ModSaveData.ModInfo { id = m.modId, version = m.version }).ToList();
+                                MMLog.WriteDebug($"[LoadGamePatch] Found external manifest data. Count: {savedMods.Count}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            MMLog.WriteDebug("[LoadGamePatch] Failed to check external manifest: " + ex.Message);
+                        }
                     }
 
-                    ModSaveData savedModData = JsonUtility.FromJson<ModSaveData>(modDataJson);
-                    if (savedModData == null || savedModData.mods == null)
+                    // If still no data, imply unmodded save.
+                    if (savedMods == null)
                     {
-                        MMLog.WriteWarning("LoadGamePatch: Failed to parse mod data from save.");
-                        return true; // Continue with original method
+                        MMLog.WriteDebug("[LoadGamePatch] No mod data found anywhere. Assuming clean/vanilla save.");
+                        return true; 
                     }
 
-                    MMLog.WriteDebug($"LoadGamePatch: Saved mod data: {modDataJson}");
+                    // 3. Compare with active mods
+                    var manifestForUI = new ModAPI.Saves.SlotManifest 
+                    { 
+                        lastLoadedMods = savedMods.Select(m => new ModAPI.Saves.LoadedModInfo { modId = m.id, version = m.version }).ToArray() 
+                    };
 
-                    // Perform comparison and get mismatch message
-                    string mismatchMessage = GetMismatchMessage(savedModData.mods != null ? new List<ModSaveData.ModInfo>(savedModData.mods) : new List<ModSaveData.ModInfo>());
+                    var currentState = SaveVerification.Verify(manifestForUI);
 
-                    if (!string.IsNullOrEmpty(mismatchMessage))
+                    if (currentState != SaveVerification.VerificationState.Match)
                     {
-                        MMLog.WriteWarning("Mod Save Mismatch Detected! Displaying alert.");
+                        MMLog.WriteWarning($"[LoadGamePatch] Mismatch detected ({currentState}) for slot {type}. Pausing load to show UI.");
                         
-                        Type messageBoxType = AccessTools.TypeByName("MessageBox");
-                        if (messageBoxType != null)
-                        {
-                            Type messageBoxButtonsType = AccessTools.Inner(messageBoxType, "MessageBoxButtons");
-                            object yesNoButtons = Enum.Parse(messageBoxButtonsType, "YesNo_Buttons");
-                            Type messageBoxResponseType = AccessTools.Inner(messageBoxType, "MessageBoxResponse");
-                            MethodInfo callbackMethod = AccessTools.Method(typeof(SaveProtectionPatches.LoadGamePatch), nameof(SaveProtectionPatches.LoadGamePatch.OnMessageBoxResponse));
-                            Delegate callbackDelegate = Delegate.CreateDelegate(messageBoxResponseType, callbackMethod);
-                            MethodInfo showMethod = AccessTools.Method(messageBoxType, "Show", new Type[] { messageBoxButtonsType, typeof(string), messageBoxResponseType });
+                        _isWaitingForUser = true;
 
-                            if (showMethod != null)
-                            {
-                                if (_pendingModMismatchResolutionField != null)
-                                {
-                                    _pendingModMismatchResolutionField.SetValue(__instance, true);
-                                }
-                                showMethod.Invoke(null, new object[] { yesNoButtons, mismatchMessage, callbackDelegate });
-                                return false; // Pause loading
-                            }
-                            else
-                            {
-                                MMLog.WriteError("LoadGamePatch: MessageBox.Show method not found with expected signature. Save will load automatically.");
-                            }
-                        }
-                        else
+                        // Hide loading screen immediately (vanilla code may have already shown it)
+                        try
                         {
-                            MMLog.WriteError("LoadGamePatch: MessageBox type not found. Save will load automatically.");
+                            if (LoadingScreen.Instance != null && LoadingScreen.Instance.gameObject.activeInHierarchy)
+                            {
+                                LoadingScreen.Instance.gameObject.SetActive(false);
+                                MMLog.WriteDebug("[LoadGamePatch] Hid LoadingScreen before showing details dialog.");
+                            }
                         }
+                        catch (Exception ex) { MMLog.WriteError("Error pre-hiding loading screen: " + ex); }
+
+                        // Create dummy entry for UI (needs family name)
+                        var entry = new ModAPI.Saves.SaveEntry
+                        {
+                            id = "temp_load_entry",
+                            absoluteSlot = (int)type,
+                            saveInfo = new ModAPI.Saves.SaveInfo 
+                            { 
+                                familyName = data.info != null ? data.info.m_familyName : "Unknown",
+                                daysSurvived = data.info != null ? data.info.m_daysSurvived : 0,
+                                saveTime = data.info != null ? data.info.m_saveTime : DateTime.Now.ToString()
+                            }
+                        };
+
+                        // Open UI
+                        ModAPI.Hooks.Paging.SaveDetailsWindow.Show(entry, manifestForUI, currentState, true, 
+                        () => 
+                        {
+                            MMLog.WriteDebug("[LoadGamePatch] User accepted load.");
+                            _isWaitingForUser = false;
+                            _forceLoad = true;
+                        },
+                        () =>
+                        {
+                            MMLog.WriteDebug("[LoadGamePatch] User cancelled load.");
+                            _isWaitingForUser = false;
+                            
+                            // Reset state to Idle using Reflection
+                            try 
+                            {
+                                var saveStateEnum = typeof(SaveManager).GetNestedType("SaveState", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                                if (saveStateEnum != null)
+                                {
+                                    var idleState = Enum.Parse(saveStateEnum, "Idle");
+                                    var setStateMethod = AccessTools.Method(typeof(SaveManager), "SetState");
+                                    if (setStateMethod != null)
+                                    {
+                                        setStateMethod.Invoke(SaveManager.instance, new object[] { idleState });
+                                    }
+                                }
+                            }
+                            catch (Exception ex) { MMLog.WriteError("Error resetting SaveManager state: " + ex); }
+
+                            // Hide Loading Screen / Spinner
+                            try
+                            {
+                                if (LoadingScreen.Instance != null && LoadingScreen.Instance.gameObject.activeInHierarchy)
+                                {
+                                    LoadingScreen.Instance.gameObject.SetActive(false);
+                                    MMLog.WriteDebug("[LoadGamePatch] Disabled LoadingScreen instance.");
+                                }
+                            }
+                            catch (Exception ex) { MMLog.WriteError("Error hiding loading screen: " + ex); }
+                        });
+
+                        return false; // Pause loading
                     }
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError("LoadGamePatch: Error during mod data comparison or alert display: " + ex.Message);
-                }
-                return true; // Continue with original method if no mismatch or error
-            }
-
-            // Callback for MessageBox response
-            public static void OnMessageBoxResponse(int response)
-            {
-                // Get SaveManager instance
-                SaveManager saveManager = SaveManager.instance;
-                if (saveManager == null)
-                {
-                    MMLog.WriteError("LoadGamePatch.OnMessageBoxResponse: SaveManager instance is null.");
-                    return;
+                    MMLog.WriteError("LoadGamePatch: Error during verification: " + ex.ToString());
                 }
 
-                // Clear the pending flag
-                if (_pendingModMismatchResolutionField != null)
-                {
-                    _pendingModMismatchResolutionField.SetValue(saveManager, false);
-                }
-
-                if (response == 1) // Yes (Load Anyway)
-                {
-                    MMLog.WriteDebug("LoadGamePatch: User chose to load save despite mismatch.");
-                    // Resume loading by setting state and letting Update() continue
-                    // This is a bit of a hack, but should re-enter the state machine
-                    AccessTools.Method(typeof(SaveManager), "SetState").Invoke(saveManager, new object[] { Enum.Parse(AccessTools.Inner(typeof(SaveManager), "SaveState"), "LoadingData") });
-                }
-                else // No (Cancel Load)
-                {
-                    MMLog.WriteDebug("LoadGamePatch: User chose to cancel load due to mismatch.");
-                    // Transition to Idle state and go back to main menu
-                    AccessTools.Method(typeof(SaveManager), "SetState").Invoke(saveManager, new object[] { Enum.Parse(AccessTools.Inner(typeof(SaveManager), "SaveState"), "Idle") });
-                    // Go back to main menu/slot selection
-                    if (UIPanelManager.instance != null)
-                    {
-                        UIPanelManager.instance.PopPanel(AccessTools.Property(typeof(UIPanelManager), "CurrentPanel").GetValue(UIPanelManager.instance, null) as BasePanel); // Pop current panel (likely SlotSelectionPanel)
-                        LoadingScreen.Instance.ShowLoadingScreen("MenuScene"); // Go to main menu scene
-                    }
-                }
-            }
-
-            private static string GetMismatchMessage(List<ModSaveData.ModInfo> savedMods)
-            {
-                var currentMods = PluginManager.LoadedMods.Select(m => new ModSaveData.ModInfo { id = m.Id, version = m.Version }).ToList();
-
-                var missingMods = savedMods.Where(sm => !currentMods.Any(cm => cm.id == sm.id && cm.version == sm.version)).ToList();
-                var newMods = currentMods.Where(cm => !savedMods.Any(sm => sm.id == cm.id && sm.version == sm.version)).ToList();
-
-                if (missingMods.Any() || newMods.Any())
-                {
-                    StringBuilder sb = new StringBuilder();
-                    sb.AppendLine("Mod Save Mismatch Detected!");
-                    sb.AppendLine("---------------------------------");
-                    if (missingMods.Any())
-                    {
-                        sb.AppendLine("Missing mods from save:");
-                        foreach (var m in missingMods)
-                        {
-                            sb.AppendLine($"  - {m.id} v{m.version}");
-                        }
-                    }
-                    if (newMods.Any())
-                    {
-                        if (missingMods.Any()) sb.AppendLine(); // Add a blank line if both sections exist
-                        sb.AppendLine("New mods not in save:");
-                        foreach (var m in newMods)
-                        {
-                            sb.AppendLine($"  - {m.id} v{m.version}");
-                        }
-                    }
-                    sb.AppendLine("---------------------------------");
-                    sb.AppendLine("Do you want to load this save anyway?");
-                    return sb.ToString();
-                }
-                return null;
+                return true; // Continue with original method
             }
         }
     }

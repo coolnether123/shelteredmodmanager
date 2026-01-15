@@ -179,7 +179,7 @@ namespace ModAPI.Saves
                 }
 
                 bool changed = true;
-                if (existing != null)
+                if (existing != null && existing.lastLoadedMods != null)
                 {
                     // Compare mods
                     if (existing.lastLoadedMods.Length == currentMods.Count)
@@ -727,6 +727,27 @@ namespace ModAPI.Saves
             }
             
             return info;
+        }
+
+        /// <summary>
+        /// Reads the manifest.json for a specific slot.
+        /// </summary>
+        internal static SlotManifest ReadSlotManifest(string scenarioId, int absoluteSlot)
+        {
+            try
+            {
+                var slotRoot = DirectoryProvider.SlotRoot(scenarioId, absoluteSlot);
+                var path = Path.Combine(slotRoot, "manifest.json");
+                if (File.Exists(path))
+                {
+                    return DeserializeSlotManifest(File.ReadAllText(path));
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteDebug($"[SaveRegistryCore] Failed to read slot manifest for {scenarioId}/{absoluteSlot}: {ex.Message}");
+            }
+            return null;
         }
         
         /// <summary>
