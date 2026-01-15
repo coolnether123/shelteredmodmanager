@@ -67,6 +67,9 @@ namespace ModAPI.Core
 
             var dllFiles = Directory.GetFiles(entry.AssembliesPath, "*.dll", SearchOption.AllDirectories);
 
+            // Register mod by ID (once per mod, before loading DLLs)
+            ModRegistry.RegisterModById(entry);
+            
             foreach (var dllPath in dllFiles)
             {
                 try

@@ -165,8 +165,8 @@ namespace ModAPI.UI
                         var labels = clone.GetComponentsInChildren<UILabel>(true);
                         foreach (var l in labels) UnityEngine.Object.Destroy(l.gameObject);
                         
-                        // CRITICAL: Destroy all colliders to prevent click-through to scenario buttons.
-                        // Since we clone the entire background tree, we must ensure old button targets are dead.
+                        // Destroy all colliders to prevent click-through to scenario buttons
+                        // since we clone the entire background tree including old button targets
                         var colliders = clone.GetComponentsInChildren<Collider>(true);
                         foreach (var c in colliders) UnityEngine.Object.Destroy(c);
                         
@@ -208,7 +208,7 @@ namespace ModAPI.UI
             var col = blocker.AddComponent<BoxCollider>();
             col.size = new Vector3(10000, 10000, 1);
             
-            // IMPORTANT: Just block clicks, don't trigger any action
+            // Block clicks without triggering any action
             UIEventListener.Get(blocker).onClick = (g) => { /* Do nothing, just block */ };
         }
 
@@ -245,35 +245,7 @@ namespace ModAPI.UI
             return UIUtil.FindAnyButtonTemplate();
         }
         
-        private Vector3 FindBackButtonPosition()
-        {
-            Vector3 defaultPos = new Vector3(-460f, -370f, 0); // Lower default position
-            
-            try
-            {
-                BasePanel scenarioPanel = FindScenarioPanel();
-                if (scenarioPanel != null)
-                {
-                    var buttons = scenarioPanel.GetComponentsInChildren<UIButton>(true);
-                    foreach (var btn in buttons)
-                    {
-                        string name = btn.name.ToLower();
-                        if (name.Contains("back") || name.Contains("cancel"))
-                        {
-                            defaultPos = btn.transform.localPosition;
-                            break;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteError("[ModManagerPanel] Error finding back button position: " + ex.Message);
-            }
-            
-            return defaultPos;
-        }
-
+        
         private BasePanel FindScenarioPanel()
         {
             // Try hierarchy traversal first
@@ -321,7 +293,7 @@ namespace ModAPI.UI
                 btnGO.name = "ModBtn_" + mod.Id;
                 btnGO.layer = gameObject.layer;
                 
-                // CRITICAL: Remove localization components that override text
+                // Remove localization components that override text
                 var localize = btnGO.GetComponentsInChildren<UILocalize>(true);
                 foreach (var loc in localize) UnityEngine.Object.DestroyImmediate(loc);
                 
@@ -478,7 +450,8 @@ namespace ModAPI.UI
 
         private void CreateBackButton(UIButton template)
         {
-            Vector3 backPos = FindBackButtonPosition();
+            // Back button positioned at bottom-left, moved down 40px from original
+            Vector3 backPos = new Vector3(-460f, -410f, 0);
             
             // Clone back button
             var btnGO = (GameObject)UnityEngine.Object.Instantiate(template.gameObject);
@@ -566,7 +539,7 @@ namespace ModAPI.UI
             else if (alignment == NGUIText.Alignment.Left)
                 label.pivot = UIWidget.Pivot.Center; // Still center pivot, text flows left
             
-            // CRITICAL: Font assignment with fallback
+            // Font assignment with fallback to ensure text is visible
             bool fontSet = false;
             
             // Try bitmap font from existing labels
@@ -625,8 +598,8 @@ namespace ModAPI.UI
                 desc = mod.About.description;
             _detailDescription.text = desc;
             
-            // CRITICAL: Reset description position to start (Y=150) when switching mods.
-            // This ensures long descriptions from previous mods don't leave the view scrolled down.
+            // Reset description position to start (Y=150) when switching mods
+            // to prevent scrolled state from carrying over
             _detailDescription.transform.localPosition = new Vector3(0f, 150f, 0f);
             
             // Force NGUI to update text geometry

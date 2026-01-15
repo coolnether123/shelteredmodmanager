@@ -32,7 +32,7 @@ namespace ModAPI.Hooks.Paging
         private const int COLUMN_WIDTH = 400;
         private const int ROW_HEIGHT = 42;
         
-        public static void Show(SaveEntry entry, SlotManifest manifest, SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway = null)
+        public static void Show(SaveEntry entry, SlotManifest manifest, SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway = null, Action onCancel = null)
         {
             UIDebug.LogTimed("SaveDetailsWindow.Show called");
             if (_instance != null) Destroy(_instance);
@@ -76,13 +76,15 @@ namespace ModAPI.Hooks.Paging
 
             // Create the window
             var win = root.AddComponent<SaveDetailsWindow>();
-            win.BuildFullUI(root.transform, entry, manifest, state, isAttemptingLoad, onLoadAnyway, uiFont, ttfFont);
+            win.BuildFullUI(root.transform, entry, manifest, state, isAttemptingLoad, onLoadAnyway, onCancel, uiFont, ttfFont);
         }
 
         private void BuildFullUI(Transform root, SaveEntry entry, SlotManifest manifest, 
-            SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway,
+            SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway, Action onCancel,
             UIFont uiFont, Font ttfFont)
         {
+            _onCancel = onCancel;
+
             int layer = root.gameObject.layer;
             
             // === DARK OVERLAY ===
@@ -124,7 +126,10 @@ namespace ModAPI.Hooks.Paging
             // Positioned according to new width
             var closeBtn = CreateButton(root, "CloseBtn", "CLOSE", 
                 new Vector3(WINDOW_WIDTH/2 - 80, WINDOW_HEIGHT/2 - 60, 0), 
-                20, primaryTextColor, uiFont, ttfFont, 100, 40, () => Close());
+                20, primaryTextColor, uiFont, ttfFont, 100, 40, () => {
+                    onCancel?.Invoke();
+                    Close();
+                });
             
             // === ANALYZE MODS ===
             var activeMods = PluginManager.LoadedMods;
@@ -147,10 +152,21 @@ namespace ModAPI.Hooks.Paging
             CreateTexturedBox(root, "HeaderDivider", new Vector3(0, headerY - 25, 0),
                 WINDOW_WIDTH - 200, 2, new Color(0, 0, 0, 0.2f), 50, false);
             
-            // === MOD LISTS ===
+            // === MOD LISTS (SCROLLABLE) ===
             int listStartY = headerY - 55;
-
-
+            int listAreaHeight = 320; // Available height for mod list (before buttons/warnings)
+            int maxVisibleRows = listAreaHeight / ROW_HEIGHT;
+            
+            // Create container for scroll content
+            var modListContainer = new GameObject("ModListContainer");
+            modListContainer.transform.SetParent(root, false);
+            modListContainer.layer = root.gameObject.layer;
+            modListContainer.transform.localPosition = Vector3.zero;
+            
+            // Track all mod row GameObjects for scrolling
+            var modRowObjects = new List<GameObject>();
+            int totalRows = Math.Max(activeMods.Count, savedMods.Length);
+            
             int rowIndex = 0;
             
             // Active mods column (left)
@@ -170,13 +186,21 @@ namespace ModAPI.Hooks.Paging
                     case ModCompareStatus.VersionDiff: iconPrefix = "~"; break; 
                 }
                 
-                var nameLabel = CreateLabel(root, $"ActiveMod_{rowIndex}", $"{iconPrefix} {mod.Name}{suffix}",
-                    new Vector3(-WINDOW_WIDTH/4, y, 0), 18, color, uiFont, ttfFont, 100);
+                // Create a row container to group name and version labels
+                var rowGO = new GameObject($"ActiveRow_{rowIndex}");
+                rowGO.transform.SetParent(modListContainer.transform, false);
+                rowGO.layer = modListContainer.layer;
+                rowGO.transform.localPosition = new Vector3(-WINDOW_WIDTH/4, y, 0);
+                
+                var nameLabel = CreateLabel(rowGO.transform, $"Name", $"{iconPrefix} {mod.Name}{suffix}",
+                    Vector3.zero, 18, color, uiFont, ttfFont, 100);
                 nameLabel.alignment = NGUIText.Alignment.Center;
                 
-                var verLabel = CreateLabel(root, $"ActiveVer_{rowIndex}", $"   v{mod.Version}",
-                    new Vector3(-WINDOW_WIDTH/4, y - 18, 0), 14, clipboardFound ? new Color(0.4f, 0.4f, 0.4f) : COLOR_SUBTEXT, uiFont, ttfFont, 100);
+                var verLabel = CreateLabel(rowGO.transform, $"Version", $"   v{mod.Version}",
+                    new Vector3(0, -18, 0), 14, clipboardFound ? new Color(0.4f, 0.4f, 0.4f) : COLOR_SUBTEXT, uiFont, ttfFont, 100);
                 verLabel.alignment = NGUIText.Alignment.Center;
+                
+                modRowObjects.Add(rowGO);
                 rowIndex++;
             }
             
@@ -197,24 +221,52 @@ namespace ModAPI.Hooks.Paging
                 
                 switch (compareStatus)
                 {
-                    case ModCompareStatus.Missing: icon = "✗"; suffix = " [MISSING]"; break;
+                    case ModCompareStatus.Missing: 
+                        icon = "✗"; 
+                        suffix = " [MISSING]";
+                        // Collect warnings from missing mods
+                        if (saved.warnings != null && saved.warnings.Length > 0)
+                        {
+                            foreach (var w in saved.warnings)
+                            {
+                                if (!string.IsNullOrEmpty(w)) warnings.Add($"[{saved.modId}] {w}");
+                            }
+                        }
+                        break;
                     case ModCompareStatus.VersionDiff: icon = "~"; suffix = " [VER DIFF]"; break;
                 }
                 
                 var diskMod = discovered.Find(d => d.Id.Equals(saved.modId, StringComparison.OrdinalIgnoreCase));
                 string displayName = diskMod != null ? diskMod.Name : saved.modId;
 
-                var savedName = CreateLabel(root, $"SavedMod_{rowIndex}", $"{icon} {displayName}{suffix}",
-                    new Vector3(WINDOW_WIDTH/4, y, 0), 18, color, uiFont, ttfFont, 100);
+                // Create a row container
+                var rowGO = new GameObject($"SavedRow_{rowIndex}");
+                rowGO.transform.SetParent(modListContainer.transform, false);
+                rowGO.layer = modListContainer.layer;
+                rowGO.transform.localPosition = new Vector3(WINDOW_WIDTH/4, y, 0);
+
+                var savedName = CreateLabel(rowGO.transform, $"Name", $"{icon} {displayName}{suffix}",
+                    Vector3.zero, 18, color, uiFont, ttfFont, 100);
                 savedName.alignment = NGUIText.Alignment.Center;
                 
                 string verText = compareStatus == ModCompareStatus.VersionDiff && status != null
                     ? $"   (save: v{saved.version}, active: v{status.activeVersion})"
                     : $"   v{saved.version}";
-                var savedVer = CreateLabel(root, $"SavedVer_{rowIndex}", verText,
-                    new Vector3(WINDOW_WIDTH/4, y - 18, 0), 14, clipboardFound ? new Color(0.4f, 0.4f, 0.4f) : COLOR_SUBTEXT, uiFont, ttfFont, 100);
+                var savedVer = CreateLabel(rowGO.transform, $"Version", verText,
+                    new Vector3(0, -18, 0), 14, clipboardFound ? new Color(0.4f, 0.4f, 0.4f) : COLOR_SUBTEXT, uiFont, ttfFont, 100);
                 savedVer.alignment = NGUIText.Alignment.Center;
+                
+                modRowObjects.Add(rowGO);
                 rowIndex++;
+            }
+            
+            // Add scroll helper if content exceeds visible area
+            if (totalRows > maxVisibleRows)
+            {
+                var scrollHelper = modListContainer.AddComponent<ModListScrollHelper>();
+                scrollHelper.Initialize(modRowObjects, listStartY, ROW_HEIGHT, 
+                    listStartY - listAreaHeight, listStartY, 
+                    -WINDOW_WIDTH/2, WINDOW_WIDTH/2); // Full width for scroll input
             }
             
             // === WARNINGS SECTION ===
@@ -265,11 +317,11 @@ namespace ModAPI.Hooks.Paging
             
             // RELOAD WITH SAVE MODS button
             Color requestedBrown = new Color(113f/255f, 82f/255f, 62f/255f);
-            int absoluteSlot = entry.absoluteSlot; 
+            int absoluteSlot = entry?.absoluteSlot ?? 0; 
             
             var reloadBtn = CreateButton(root, "ReloadBtn", "AUTO-LOAD MODS",
                 new Vector3(-WINDOW_WIDTH/4, buttonY, 0), 18, Color.white, uiFont, ttfFont, 240, 45,
-                canReload ? (Action)(() => CreateRestartRequest(absoluteSlot, manifest)) : null);
+                canReload ? (Action)(() => CreateRestartRequest(absoluteSlot, manifest, entry)) : null);
             
             // Apply requested color to background
             var reloadTex = reloadBtn.GetComponent<UITexture>();
@@ -371,11 +423,19 @@ namespace ModAPI.Hooks.Paging
             return result;
         }
         
+        private Action _onCancel;
+
+        private void SetOnCancel(Action onCancel)
+        {
+            _onCancel = onCancel;
+        }
+
         private void Update()
         {
             // Handle Escape to close this window WITHOUT propagating to underlying panels
             if (Input.GetKeyDown(KeyCode.Escape))
             {
+                _onCancel?.Invoke();
                 Close();
                 // Mark input as consumed to prevent underlying panels from also receiving Escape
                 Input.ResetInputAxes();
@@ -625,7 +685,7 @@ namespace ModAPI.Hooks.Paging
             public string LoadFromManifest;
         }
 
-        private void CreateRestartRequest(int slotNumber, SlotManifest manifest)
+        private void CreateRestartRequest(int slotNumber, SlotManifest manifest, SaveEntry entry)
         {
             try
             {
@@ -647,6 +707,41 @@ namespace ModAPI.Hooks.Paging
                 var modsRoot = Path.Combine(gameRoot, "mods");
                 var slotDir = Path.Combine(Path.Combine(Path.Combine(modsRoot, "ModAPI"), "Saves"), Path.Combine("Standard", $"Slot_{slotNumber}"));
                 var manifestPath = Path.Combine(slotDir, "manifest.json");
+
+                MMLog.Write($"[SaveDetailsWindow] Checking for manifest at: {manifestPath}");
+                
+                // Ensure manifest exists before restart
+                if (!File.Exists(manifestPath))
+                {
+                    MMLog.Write($"[SaveDetailsWindow] Manifest doesn't exist, creating minimal manifest");
+                    Directory.CreateDirectory(slotDir);
+                    
+                    // Create minimal manifest with empty mod list
+                    var minimalManifest = new SlotManifest
+                    {
+                        manifestVersion = 1,
+                        lastModified = DateTime.UtcNow.ToString("o"),
+                        family_name = entry != null ? entry.saveInfo.familyName : "Unknown",
+                        lastLoadedMods = new LoadedModInfo[0]
+                    };
+                    
+                    string manifestJson = JsonUtility.ToJson(minimalManifest, true);
+                    File.WriteAllText(manifestPath, manifestJson);
+                    MMLog.Write($"[SaveDetailsWindow] Wrote manifest to: {manifestPath}");
+                    MMLog.Write($"[SaveDetailsWindow] Manifest content: {manifestJson}");
+                    
+                    // Verify it was written
+                    if (!File.Exists(manifestPath))
+                    {
+                        MMLog.WriteError($"[SaveDetailsWindow] ERROR: Failed to write manifest to {manifestPath}!");
+                        return;
+                    }
+                    MMLog.Write($"[SaveDetailsWindow] Verified manifest file exists");
+                }
+                else
+                {
+                    MMLog.Write($"[SaveDetailsWindow] Manifest already exists at: {manifestPath}");
+                }
 
                 var req = new RestartRequest
                 {
@@ -675,5 +770,85 @@ namespace ModAPI.Hooks.Paging
             }
         }
 
+    }
+    
+    /// <summary>
+    /// Helper component for scrolling the mod comparison list in SaveDetailsWindow.
+    /// Moves all row GameObjects together on the Y axis when the user scrolls.
+    /// </summary>
+    internal class ModListScrollHelper : MonoBehaviour
+    {
+        private List<GameObject> _items = new List<GameObject>();
+        private Dictionary<GameObject, float> _originalYPositions = new Dictionary<GameObject, float>();
+        private float _scrollOffset = 0f;
+        private float _minOffset;  // Minimum scroll offset (0 = at top)
+        private float _maxOffset;  // Maximum scroll offset (positive = scrolled down)
+        private float _rowHeight;
+        private float _minX;
+        private float _maxX;
+        
+        /// <summary>
+        /// Initialize the scroll helper with row items and bounds.
+        /// </summary>
+        public void Initialize(List<GameObject> items, float startY, float rowHeight, 
+            float minY, float maxY, float minX, float maxX)
+        {
+            _items = items;
+            _rowHeight = rowHeight;
+            _minX = minX;
+            _maxX = maxX;
+            
+            // Store original Y positions for each item
+            foreach (var item in items)
+            {
+                if (item != null)
+                {
+                    _originalYPositions[item] = item.transform.localPosition.y;
+                }
+            }
+            
+            // Calculate scroll limits based on content vs visible area
+            float visibleHeight = maxY - minY;
+            float contentHeight = items.Count * rowHeight;
+            
+            _minOffset = 0f;  // Can't scroll up past top
+            _maxOffset = Mathf.Max(0f, contentHeight - visibleHeight); // Can scroll down this much
+            
+            MMLog.WriteDebug($"[ModListScrollHelper] Initialized: {items.Count} items, maxOffset={_maxOffset}");
+        }
+        
+        void Update()
+        {
+            if (_items == null || _items.Count == 0) return;
+            if (_maxOffset <= 0) return; // No scrolling needed
+            
+            // Check for scroll input
+            float scroll = Input.GetAxis("Mouse ScrollWheel");
+            if (scroll == 0f) scroll = Input.mouseScrollDelta.y;
+            if (scroll == 0f) return;
+            
+            // Check if mouse is within the window bounds
+            Vector3 mousePos = Input.mousePosition;
+            float uiX = mousePos.x - Screen.width / 2f;
+            if (uiX < _minX || uiX > _maxX) return;
+            
+            // Update scroll offset
+            // Scroll down (negative scroll wheel) = increase offset = content moves up
+            float scrollSpeed = _rowHeight; // Scroll by one row
+            _scrollOffset -= scroll * scrollSpeed;
+            _scrollOffset = Mathf.Clamp(_scrollOffset, _minOffset, _maxOffset);
+            
+            // Apply offset to all items using their original positions
+            foreach (var item in _items)
+            {
+                if (item == null || !_originalYPositions.ContainsKey(item)) continue;
+                
+                float originalY = _originalYPositions[item];
+                var pos = item.transform.localPosition;
+                
+                // Apply scroll offset: content moving up means subtract from Y
+                item.transform.localPosition = new Vector3(pos.x, originalY - _scrollOffset, pos.z);
+            }
+        }
     }
 }

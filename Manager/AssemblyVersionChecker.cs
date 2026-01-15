@@ -10,11 +10,17 @@ namespace Manager
     /// </summary>
     public static class AssemblyVersionChecker
     {
+        public struct ModAssemblyVersion
+        {
+            public string DllName;
+            public string ApiVersion;
+        }
+
         /// <summary>
         /// Gets the version of ModAPI.dll from the SMM folder.
         /// </summary>
         /// <param name="smmPath">Path to the SMM folder containing ModAPI.dll</param>
-        /// <returns>Version string (e.g., "0.7.0.0") or null if not found</returns>
+        /// <returns>Version string (e.g., "1.0.0.0") or null if not found</returns>
         public static string GetInstalledModApiVersion(string smmPath)
         {
             try
@@ -76,7 +82,7 @@ namespace Manager
         /// <summary>
         /// Checks if a mod's required ModAPI version is compatible with the installed version.
         /// </summary>
-        /// <param name="installedVersion">Installed ModAPI version (e.g., "0.7.0.0")</param>
+        /// <param name="installedVersion">Installed ModAPI version (e.g., "1.0.0.0")</param>
         /// <param name="requiredVersion">Version the mod was compiled against</param>
         /// <returns>True if compatible (exact match), false otherwise</returns>
         public static bool IsCompatible(string installedVersion, string requiredVersion)
@@ -91,7 +97,7 @@ namespace Manager
                 var installed = new Version(installedVersion);
                 var required = new Version(requiredVersion);
 
-                // For now, require exact major.minor match (0.7.x.x compatible with 0.7.y.z)
+                // For now, require exact major.minor match (1.0.x.x compatible with 1.0.y.z)
                 return installed.Major == required.Major && installed.Minor == required.Minor;
             }
             catch
@@ -104,10 +110,10 @@ namespace Manager
         /// Scans a mod directory's Assemblies folder and returns version info for all DLLs.
         /// </summary>
         /// <param name="modPath">Root path of the mod</param>
-        /// <returns>List of (dllName, requiredApiVersion) tuples</returns>
-        public static List<(string DllName, string ApiVersion)> ScanModAssemblies(string modPath)
+        /// <returns>List of ModAssemblyVersion structs</returns>
+        public static List<ModAssemblyVersion> ScanModAssemblies(string modPath)
         {
-            var results = new List<(string, string)>();
+            var results = new List<ModAssemblyVersion>();
 
             try
             {
@@ -129,7 +135,7 @@ namespace Manager
                     }
 
                     string apiVersion = GetModRequiredApiVersion(dllPath);
-                    results.Add((fileName, apiVersion));
+                    results.Add(new ModAssemblyVersion { DllName = fileName, ApiVersion = apiVersion });
                 }
             }
             catch (Exception ex)

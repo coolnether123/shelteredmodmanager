@@ -42,15 +42,22 @@ namespace Manager
             {
                 Log($"Parsing manifest at: {path}");
                 Log($"Success: {success}");
-                if (success && manifest != null && manifest.lastLoadedMods != null)
+                if (success && manifest != null)
                 {
-                    Log($"lastLoadedMods count: {manifest.lastLoadedMods.Length}");
-                    for(int i=0; i < Math.Min(5, manifest.lastLoadedMods.Length); i++)
+                    if (manifest.lastLoadedMods != null && manifest.lastLoadedMods.Length > 0)
                     {
-                        var m = manifest.lastLoadedMods[i];
-                        Log($"[{i}] {m.modId} v{m.version}");
+                        Log($"lastLoadedMods count: {manifest.lastLoadedMods.Length}");
+                        for(int i=0; i < Math.Min(5, manifest.lastLoadedMods.Length); i++)
+                        {
+                            var m = manifest.lastLoadedMods[i];
+                            Log($"[{i}] {m.modId} v{m.version}");
+                        }
+                        if (manifest.lastLoadedMods.Length > 5) Log($"... and {manifest.lastLoadedMods.Length - 5} more.");
                     }
-                    if (manifest.lastLoadedMods.Length > 5) Log($"... and {manifest.lastLoadedMods.Length - 5} more.");
+                    else
+                    {
+                        Log("lastLoadedMods: empty or null (save has no mods)");
+                    }
                 }
             }
 
@@ -140,6 +147,7 @@ namespace Manager
                 {
                     RestartDiagnostics.Log($"Failed to parse restart.json: {ex.Message}");
                     RestartDiagnostics.LogRestartRequest(null, restartPath, false, true);
+                    try { File.Delete(restartPath); } catch { } // Delete restart.json to prevent infinite restart loop
                     return;
                 }
 
@@ -149,6 +157,7 @@ namespace Manager
                     if (!File.Exists(req.LoadFromManifest))
                     {
                         RestartDiagnostics.Log($"Manifest not found at: {req.LoadFromManifest}");
+                        try { File.Delete(restartPath); } catch { } // Delete restart.json to prevent infinite restart loop
                         return;
                     }
 
@@ -164,17 +173,21 @@ namespace Manager
                     {
                         RestartDiagnostics.Log($"Failed to parse manifest: {ex.Message}");
                         RestartDiagnostics.LogManifestParse(null, req.LoadFromManifest, false);
+                        try { File.Delete(restartPath); } catch { } // Delete restart.json to prevent infinite restart loop
                         return;
                     }
 
-                    if (manifest != null && manifest.lastLoadedMods != null)
+                    if (manifest != null)
                     {
+                        // Treat missing/null lastLoadedMods as an empty array
+                        var modsFromManifest = manifest.lastLoadedMods ?? new ManagerLoadedModInfo[0];
+                        
                         // Capture old order for diff
                         var oldOrder = ReadOrderFromFile(uiModsPath.Text).ToList();
 
                         // 2. Extract Mod IDs
                         var newOrder = new List<string>();
-                        foreach(var m in manifest.lastLoadedMods)
+                        foreach(var m in modsFromManifest)
                         {
                             if (!string.IsNullOrEmpty(m.modId)) newOrder.Add(m.modId);
                         }
@@ -191,20 +204,28 @@ namespace Manager
                         // 4. Validate (Pre-flight for logic issues)
                         bool safeToLaunch = true;
                         
-                        // Check dependencies
-                        var allDiscovered = DiscoverModsFromRoot(uiModsPath.Text);
-                        var enabledSet = new HashSet<string>(newOrder, StringComparer.OrdinalIgnoreCase);
-                        var enabledMods = allDiscovered.Where(m => enabledSet.Contains(m.Id)).ToList();
-                        var modInfos = ToModEntries(enabledMods);
-                        var eval = LoadOrderResolver.Evaluate(modInfos, newOrder);
-
-                        RestartDiagnostics.LogPreFlightCheck(eval, !eval.MissingHardDependencies.Any() && !eval.CycledModIds.Any());
-
-                        if (eval.MissingHardDependencies.Any() || eval.CycledModIds.Any())
+                        // Only check dependencies if there are mods to check
+                        if (newOrder.Count > 0)
                         {
-                            safeToLaunch = false;
-                            MessageBox.Show("The save's mod list has dependency issues (missing mods or cycles).\n\nPlease review the load order before launching.", 
-                                "Restart Interrupted", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            // Check dependencies
+                            var allDiscovered = DiscoverModsFromRoot(uiModsPath.Text);
+                            var enabledSet = new HashSet<string>(newOrder, StringComparer.OrdinalIgnoreCase);
+                            var enabledMods = allDiscovered.Where(m => enabledSet.Contains(m.Id)).ToList();
+                            var modInfos = ToModEntries(enabledMods);
+                            var eval = LoadOrderResolver.Evaluate(modInfos, newOrder);
+
+                            RestartDiagnostics.LogPreFlightCheck(eval, !eval.MissingHardDependencies.Any() && !eval.CycledModIds.Any());
+
+                            if (eval.MissingHardDependencies.Any() || eval.CycledModIds.Any())
+                            {
+                                safeToLaunch = false;
+                                MessageBox.Show("The save's mod list has dependency issues (missing mods or cycles).\n\nPlease review the load order before launching.", 
+                                    "Restart Interrupted", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            }
+                        }
+                        else
+                        {
+                            RestartDiagnostics.Log("No mods in manifest - skipping dependency check.");
                         }
 
                         // 5. Delete restart file

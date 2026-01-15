@@ -56,14 +56,13 @@ namespace ModAPI.Harmony
                     {
                         if (l != null)
                         {
-                            l.fontSize = 26; 
+                            l.fontSize = 32; 
                             l.overflowMethod = UILabel.Overflow.ShrinkContent;
                         }
                     }
 
                     modsBtn.onClick.Clear();
                     EventDelegate.Add(modsBtn.onClick, () => HandleModsClick(__instance));
-                    UIEventListener.Get(modsBtn.gameObject).onClick = (go) => HandleModsClick(__instance);
 
                     modsBtn.gameObject.SetActive(true);
                     table.Reposition();
