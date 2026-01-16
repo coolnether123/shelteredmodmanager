@@ -50,7 +50,7 @@
     <StartupObject>Manager.Program</StartupObject>
   </PropertyGroup>
   <PropertyGroup>
-    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Core" />
@@ -103,17 +103,51 @@
     </Compile>
     <Compile Include="Shared\ModAboutReader.cs" />
     <Compile Include="AssemblyVersionChecker.cs" />
+    <!-- New modular architecture -->
+    <Compile Include="MainForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <!-- Core Models -->
+    <Compile Include="Core\Models\ModItem.cs" />
+    <Compile Include="Core\Models\AppSettings.cs" />
+    <!-- Core Services -->
+    <Compile Include="Core\Services\SettingsService.cs" />
+    <Compile Include="Core\Services\ModDiscoveryService.cs" />
+    <Compile Include="Core\Services\LoadOrderService.cs" />
+    <!-- Custom Controls -->
+    <Compile Include="Controls\SearchBox.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\ModListView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\ModDetailsPanel.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\ActionButton.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <!-- View Tabs -->
+    <Compile Include="Views\GameSetupTab.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\ModManagerTab.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\SettingsTab.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\AboutTab.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="logo.jpg" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="icon.ico" />
-    <None Include="logo.png" />
+    <EmbeddedResource Include="Icon.png" />
+    <EmbeddedResource Include="Icon.ico" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
