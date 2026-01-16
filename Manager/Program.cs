@@ -1,9 +1,9 @@
 using System;
-using System.Collections.Generic; // Added for List, if needed elsewhere, but not strictly for this snippet
-using System.Linq; // Added for Linq, if needed elsewhere, but not strictly for this snippet
+using System.Collections.Generic;
 using System.Windows.Forms;
-using System.Reflection; // Added for Assembly
-using System.IO; // Added for Path
+using System.Reflection;
+using System.IO;
+using System.Threading;
 
 namespace Manager
 {
@@ -22,53 +22,70 @@ namespace Manager
                 // Global exception handlers for better crash diagnostics
                 try
                 {
-                    System.Windows.Forms.Application.SetUnhandledExceptionMode(System.Windows.Forms.UnhandledExceptionMode.CatchException);
-                    System.Windows.Forms.Application.ThreadException += (sender, e) =>
-                    {
-                        try
-                        {
-                            System.Windows.Forms.MessageBox.Show(
-                                "An unexpected error occurred:\n\n" + e.Exception.Message + "\n\n" + e.Exception.StackTrace,
-                                "Sheltered Mod Manager - Error",
-                                System.Windows.Forms.MessageBoxButtons.OK,
-                                System.Windows.Forms.MessageBoxIcon.Error);
-                        }
-                        catch { }
-                    };
-                    AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
-                    {
-                        try
-                        {
-                            var ex = e.ExceptionObject as Exception;
-                            var msg = ex != null ? (ex.Message + "\n\n" + ex.StackTrace) : (e.ExceptionObject != null ? e.ExceptionObject.ToString() : "Unknown error");
-                            System.Windows.Forms.MessageBox.Show(
-                                "An unexpected error occurred (non-UI):\n\n" + msg,
-                                "Sheltered Mod Manager - Error",
-                                System.Windows.Forms.MessageBoxButtons.OK,
-                                System.Windows.Forms.MessageBoxIcon.Error);
-                        }
-                        catch { }
-                    };
+                    Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+                    Application.ThreadException += Application_ThreadException;
+                    AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
                 }
                 catch { }
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new ManagerGUI());
+                Application.Run(new MainForm());
             }
             catch (Exception ex)
             {
                 try
                 {
-                    System.Windows.Forms.MessageBox.Show(
+                    MessageBox.Show(
                         "Manager failed to start:\n\n" + ex.Message + "\n\n" +
                         "If this persists, ensure .NET Framework 3.5 is installed.",
                         "Sheltered Mod Manager",
-                        System.Windows.Forms.MessageBoxButtons.OK,
-                        System.Windows.Forms.MessageBoxIcon.Error);
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
                 }
                 catch { }
             }
+        }
+
+        private static void Application_ThreadException(object sender, ThreadExceptionEventArgs e)
+        {
+            try
+            {
+                MessageBox.Show(
+                    "An unexpected error occurred:\n\n" + e.Exception.Message + "\n\n" + e.Exception.StackTrace,
+                    "Sheltered Mod Manager - Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+            catch { }
+        }
+
+        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            try
+            {
+                Exception ex = e.ExceptionObject as Exception;
+                string msg;
+                if (ex != null)
+                {
+                    msg = ex.Message + "\n\n" + ex.StackTrace;
+                }
+                else if (e.ExceptionObject != null)
+                {
+                    msg = e.ExceptionObject.ToString();
+                }
+                else
+                {
+                    msg = "Unknown error";
+                }
+
+                MessageBox.Show(
+                    "An unexpected error occurred (non-UI):\n\n" + msg,
+                    "Sheltered Mod Manager - Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+            catch { }
         }
 
 
@@ -110,4 +127,3 @@ namespace Manager
         }
     }
 }
-

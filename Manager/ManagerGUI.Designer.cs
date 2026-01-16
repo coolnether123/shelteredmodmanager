@@ -899,7 +899,7 @@ namespace Manager
             // 
             this.pictureBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.pictureBox1.Image = global::Manager.Properties.Resources.logo1;
+            this.pictureBox1.Image = null; // logo1 missing from resources
             this.pictureBox1.Location = new System.Drawing.Point(20, 15);
             this.pictureBox1.Name = "pictureBox1";
             this.pictureBox1.Size = new System.Drawing.Size(343, 159);
