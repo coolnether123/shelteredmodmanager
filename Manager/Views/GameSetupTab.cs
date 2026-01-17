@@ -44,6 +44,7 @@ namespace Manager.Views
 
         // Log viewer
         private Label _logLabel;
+        private Panel _logContainer;
         private RichTextBox _logTextBox;
         private Button _clearLogButton;
         private Button _loadGameLogButton;
@@ -211,14 +212,22 @@ namespace Manager.Views
             _loadGameLogButton.FlatStyle = FlatStyle.Flat;
             _loadGameLogButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
+            // Log container with square border
+            _logContainer = new Panel();
+            _logContainer.Location = new Point(20, 285);
+            _logContainer.Size = new Size(600, 150); // Dynamic sizing handled in Load event
+            _logContainer.BorderStyle = BorderStyle.FixedSingle;
+            _logContainer.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom;
+
             _logTextBox = new RichTextBox();
-            _logTextBox.Location = new Point(20, 285);
-            _logTextBox.Size = new Size(620, 150);
+            _logTextBox.Location = new Point(0, 0);
+            _logTextBox.Dock = DockStyle.Fill;
             _logTextBox.Font = new Font("Consolas", 9f);
             _logTextBox.ReadOnly = true;
-            _logTextBox.BorderStyle = BorderStyle.FixedSingle;
+            _logTextBox.BorderStyle = BorderStyle.None;
             _logTextBox.ScrollBars = RichTextBoxScrollBars.Vertical;
-            _logTextBox.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom;
+
+            _logContainer.Controls.Add(_logTextBox);
 
             // Add controls
             this.Controls.Add(_gamePathLabel);
@@ -234,7 +243,7 @@ namespace Manager.Views
             this.Controls.Add(_logLabel);
             this.Controls.Add(_clearLogButton);
             this.Controls.Add(_loadGameLogButton);
-            this.Controls.Add(_logTextBox);
+            this.Controls.Add(_logContainer);
 
             this.ResumeLayout();
         }
@@ -249,6 +258,13 @@ namespace Manager.Views
             _gamePathTextBox.TextChanged += GamePathTextBox_TextChanged;
             _clearLogButton.Click += ClearLogButton_Click;
             _loadGameLogButton.Click += LoadGameLogButton_Click;
+            this.Load += GameSetupTab_Load;
+        }
+
+        private void GameSetupTab_Load(object sender, EventArgs e)
+        {
+            // Recalculate log container width now that parent is sized
+            _logContainer.Width = this.ClientSize.Width - 40;
         }
 
         private void LoadGameLogButton_Click(object sender, EventArgs e)
@@ -274,8 +290,11 @@ namespace Manager.Views
             }
 
             string timestamp = DateTime.Now.ToString("HH:mm:ss");
+            bool atBottom = _logTextBox.SelectionStart == _logTextBox.TextLength;
             _logTextBox.AppendText("[" + timestamp + "] " + message + "\n");
-            _logTextBox.ScrollToCaret();
+            
+            if (atBottom)
+                _logTextBox.ScrollToCaret();
         }
 
         private void BrowseButton_Click(object sender, EventArgs e)
@@ -442,6 +461,7 @@ namespace Manager.Views
                 _modsCountLabel.ForeColor = Color.LightGray;
                 _modApiVersionLabel.ForeColor = Color.LightGray;
                 _logLabel.ForeColor = Color.White;
+                _logContainer.BackColor = Color.FromArgb(60, 60, 60);
                 _logTextBox.BackColor = Color.FromArgb(30, 30, 32);
                 _logTextBox.ForeColor = Color.LightGray;
                 
@@ -464,6 +484,7 @@ namespace Manager.Views
                 _modsCountLabel.ForeColor = SystemColors.ControlText;
                 _modApiVersionLabel.ForeColor = SystemColors.ControlText;
                 _logLabel.ForeColor = SystemColors.ControlText;
+                _logContainer.BackColor = SystemColors.ControlDark;
                 _logTextBox.BackColor = SystemColors.Window;
                 _logTextBox.ForeColor = SystemColors.WindowText;
                 

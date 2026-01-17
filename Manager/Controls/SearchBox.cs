@@ -231,5 +231,14 @@ namespace Manager.Controls
                 _clearButton.ForeColor = Color.Gray;
             }
         }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && _debounceTimer != null)
+            {
+                _debounceTimer.Dispose();
+                _debounceTimer = null;
+            }
+            base.Dispose(disposing);
+        }
     }
 }

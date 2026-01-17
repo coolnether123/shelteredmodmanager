@@ -39,8 +39,8 @@ namespace Manager.Views
         private CheckBox _ignoreOrderCheckBox;
 
         // Actions
-        private Button _saveButton;
         private Button _resetButton;
+        private Timer _saveDebounceTimer;
 
         // State
         private AppSettings _settings;
@@ -60,6 +60,7 @@ namespace Manager.Views
         public SettingsTab()
         {
             InitializeComponent();
+            SetupSaveDebounce();
             WireEvents();
         }
 
@@ -162,12 +163,7 @@ namespace Manager.Views
             _devSettingsGroup.Controls.Add(_ignoreOrderCheckBox);
 
             // Action buttons - positioned below the dev group when visible
-            _saveButton = new Button();
-            _saveButton.Text = "Save Settings";
-            _saveButton.Font = new Font("Segoe UI", 10f);
-            _saveButton.Location = new Point(20, yPos + 10);  // Will be repositioned
-            _saveButton.Size = new Size(120, 35);
-            _saveButton.FlatStyle = FlatStyle.Flat;
+
 
             _resetButton = new Button();
             _resetButton.Text = "Reset to Defaults";
@@ -182,7 +178,6 @@ namespace Manager.Views
             this.Controls.Add(_separator);
             this.Controls.Add(_devModeCheckBox);
             this.Controls.Add(_devSettingsGroup);
-            this.Controls.Add(_saveButton);
             this.Controls.Add(_resetButton);
 
             this.ResumeLayout();
@@ -198,8 +193,32 @@ namespace Manager.Views
             {
                 baseY = _devSettingsGroup.Bottom + 15;
             }
-            _saveButton.Top = baseY;
             _resetButton.Top = baseY;
+            _resetButton.Left = 20; // Align to left
+        }
+
+        private void SetupSaveDebounce()
+        {
+            _saveDebounceTimer = new Timer();
+            _saveDebounceTimer.Interval = 500; // 500ms delay
+            _saveDebounceTimer.Tick += SaveDebounceTimer_Tick;
+        }
+
+        private void TriggerSave()
+        {
+            if (_suppressEvents) return;
+            
+            _saveDebounceTimer.Stop();
+            _saveDebounceTimer.Start();
+        }
+
+        private void SaveDebounceTimer_Tick(object sender, EventArgs e)
+        {
+            _saveDebounceTimer.Stop();
+            UpdateSettingsFromUI();
+            
+            if (SettingsChanged != null)
+                SettingsChanged(_settings);
         }
 
         private void WireEvents()
@@ -210,7 +229,6 @@ namespace Manager.Views
             _skipHarmonyCheckBox.CheckedChanged += SkipHarmonyCheckBox_CheckedChanged;
             _ignoreOrderCheckBox.CheckedChanged += IgnoreOrderCheckBox_CheckedChanged;
             _logCategoriesListBox.ItemCheck += LogCategoriesListBox_ItemCheck;
-            _saveButton.Click += SaveButton_Click;
             _resetButton.Click += ResetButton_Click;
         }
 
@@ -222,6 +240,8 @@ namespace Manager.Views
                 if (_settings != null) _settings.DarkMode = _isDarkMode;
                 if (DarkModeChanged != null)
                     DarkModeChanged(_isDarkMode);
+                
+                TriggerSave();
             }
         }
 
@@ -232,6 +252,7 @@ namespace Manager.Views
             
             // Reposition buttons
             UpdateButtonPositions();
+            TriggerSave();
         }
 
         private void VerboseLoggingCheckBox_CheckedChanged(object sender, EventArgs e)
@@ -239,18 +260,24 @@ namespace Manager.Views
             _logCategoriesListBox.Enabled = _verboseLoggingCheckBox.Checked;
             if (_settings != null) 
                 _settings.LogLevel = _verboseLoggingCheckBox.Checked ? "Debug" : "Info";
+            
+            TriggerSave();
         }
 
         private void SkipHarmonyCheckBox_CheckedChanged(object sender, EventArgs e)
         {
             if (_settings != null) 
                 _settings.SkipHarmonyDependencyCheck = _skipHarmonyCheckBox.Checked;
+            
+            TriggerSave();
         }
 
         private void IgnoreOrderCheckBox_CheckedChanged(object sender, EventArgs e)
         {
             if (_settings != null) 
                 _settings.IgnoreOrderChecks = _ignoreOrderCheckBox.Checked;
+            
+            TriggerSave();
         }
 
         private void LogCategoriesListBox_ItemCheck(object sender, ItemCheckEventArgs e)
@@ -273,13 +300,7 @@ namespace Manager.Views
             }
         }
 
-        private void SaveButton_Click(object sender, EventArgs e)
-        {
-            UpdateSettingsFromUI();
-            if (SettingsChanged != null)
-                SettingsChanged(_settings);
-            MessageBox.Show("Settings saved!", "Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
+
 
         private void ResetButton_Click(object sender, EventArgs e)
         {
@@ -369,10 +390,6 @@ namespace Manager.Views
                 _skipHarmonyCheckBox.ForeColor = Color.White;
                 _ignoreOrderCheckBox.ForeColor = Color.White;
                 
-                _saveButton.BackColor = Color.FromArgb(70, 70, 70);
-                _saveButton.ForeColor = Color.White;
-                _saveButton.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
-                
                 _resetButton.BackColor = Color.FromArgb(70, 70, 70);
                 _resetButton.ForeColor = Color.White;
                 _resetButton.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
@@ -391,10 +408,6 @@ namespace Manager.Views
                 _logCategoriesListBox.ForeColor = SystemColors.WindowText;
                 _skipHarmonyCheckBox.ForeColor = SystemColors.ControlText;
                 _ignoreOrderCheckBox.ForeColor = SystemColors.ControlText;
-                
-                _saveButton.BackColor = SystemColors.Control;
-                _saveButton.ForeColor = SystemColors.ControlText;
-                _saveButton.FlatAppearance.BorderColor = SystemColors.ControlDark;
                 
                 _resetButton.BackColor = SystemColors.Control;
                 _resetButton.ForeColor = SystemColors.ControlText;

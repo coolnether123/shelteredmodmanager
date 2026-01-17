@@ -11,7 +11,7 @@ namespace Manager.Core.Models
         // Paths
         private string _gamePath = string.Empty;
         private string _modsPath = string.Empty;
-        private bool _darkMode = false;
+        private bool _darkMode = true;
         private string _lastSelectedModId = string.Empty;
         private bool _devMode = false;
         private string _logLevel = "Info";

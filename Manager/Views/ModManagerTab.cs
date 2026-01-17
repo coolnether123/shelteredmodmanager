@@ -51,6 +51,7 @@ namespace Manager.Views
         {
             InitializeComponent();
             WireEvents();
+            ButtonPanel_Resize(null, EventArgs.Empty);
         }
 
         /// <summary>
@@ -67,80 +68,164 @@ namespace Manager.Views
 
         private void InitializeComponent()
         {
+            this._availableList = new Manager.Controls.ModListView();
+            this._buttonPanel = new System.Windows.Forms.Panel();
+            this._enableButton = new Manager.Controls.ActionButton();
+            this._disableButton = new Manager.Controls.ActionButton();
+            this._moveUpButton = new Manager.Controls.ActionButton();
+            this._moveDownButton = new Manager.Controls.ActionButton();
+            this._saveOrderButton = new Manager.Controls.ActionButton();
+            this._enabledList = new Manager.Controls.ModListView();
+            this._detailsPanel = new Manager.Controls.ModDetailsPanel();
+            this._buttonPanel.SuspendLayout();
             this.SuspendLayout();
-            this.Padding = new Padding(15);
+            // 
+            // _availableList
+            // 
+            this._availableList.Dock = System.Windows.Forms.DockStyle.Left;
+            this._availableList.Location = new System.Drawing.Point(15, 15);
+            this._availableList.MinimumSize = new System.Drawing.Size(200, 150);
+            this._availableList.Name = "_availableList";
+            this._availableList.SelectedItem = null;
+            this._availableList.ShowSearch = true;
+            this._availableList.Size = new System.Drawing.Size(280, 150);
+            this._availableList.TabIndex = 3;
+            this._availableList.Title = "Available Mods";
+            // 
+            // _buttonPanel
+            // 
+            this._buttonPanel.Controls.Add(this._enableButton);
+            this._buttonPanel.Controls.Add(this._disableButton);
+            this._buttonPanel.Controls.Add(this._moveUpButton);
+            this._buttonPanel.Controls.Add(this._moveDownButton);
+            this._buttonPanel.Controls.Add(this._saveOrderButton);
+            this._buttonPanel.Dock = System.Windows.Forms.DockStyle.Left;
+            this._buttonPanel.Location = new System.Drawing.Point(295, 15);
+            this._buttonPanel.MinimumSize = new System.Drawing.Size(130, 300);
+            this._buttonPanel.Name = "_buttonPanel";
+            this._buttonPanel.Size = new System.Drawing.Size(130, 300);
+            this._buttonPanel.TabIndex = 2;
+            // 
+            // _enableButton
+            // 
+            this._enableButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(120)))), ((int)(((byte)(215)))));
+            this._enableButton.Cursor = System.Windows.Forms.Cursors.Hand;
+            this._enableButton.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(100)))), ((int)(((byte)(180)))));
+            this._enableButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this._enableButton.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this._enableButton.ForeColor = System.Drawing.Color.White;
+            this._enableButton.IsPrimary = true;
+            this._enableButton.Location = new System.Drawing.Point(0, 0);
+            this._enableButton.MinimumSize = new System.Drawing.Size(100, 35);
+            this._enableButton.Name = "_enableButton";
+            this._enableButton.Size = new System.Drawing.Size(110, 35);
+            this._enableButton.TabIndex = 0;
+            this._enableButton.Text = "Add >>";
+            this._enableButton.UseVisualStyleBackColor = false;
+            // 
+            // _disableButton
+            // 
+            this._disableButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(240)))), ((int)(((byte)(240)))), ((int)(((byte)(240)))));
+            this._disableButton.Cursor = System.Windows.Forms.Cursors.Hand;
+            this._disableButton.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(180)))), ((int)(((byte)(180)))), ((int)(((byte)(180)))));
+            this._disableButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this._disableButton.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this._disableButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(60)))), ((int)(((byte)(60)))), ((int)(((byte)(60)))));
+            this._disableButton.IsPrimary = false;
+            this._disableButton.Location = new System.Drawing.Point(0, 0);
+            this._disableButton.MinimumSize = new System.Drawing.Size(100, 35);
+            this._disableButton.Name = "_disableButton";
+            this._disableButton.Size = new System.Drawing.Size(110, 35);
+            this._disableButton.TabIndex = 1;
+            this._disableButton.Text = "<< Remove";
+            this._disableButton.UseVisualStyleBackColor = false;
+            // 
+            // _moveUpButton
+            // 
+            this._moveUpButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(240)))), ((int)(((byte)(240)))), ((int)(((byte)(240)))));
+            this._moveUpButton.Cursor = System.Windows.Forms.Cursors.Hand;
+            this._moveUpButton.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(180)))), ((int)(((byte)(180)))), ((int)(((byte)(180)))));
+            this._moveUpButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this._moveUpButton.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this._moveUpButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(60)))), ((int)(((byte)(60)))), ((int)(((byte)(60)))));
+            this._moveUpButton.IsPrimary = false;
+            this._moveUpButton.Location = new System.Drawing.Point(0, 0);
+            this._moveUpButton.MinimumSize = new System.Drawing.Size(100, 35);
+            this._moveUpButton.Name = "_moveUpButton";
+            this._moveUpButton.Size = new System.Drawing.Size(110, 35);
+            this._moveUpButton.TabIndex = 2;
+            this._moveUpButton.Text = "Move Up";
+            this._moveUpButton.UseVisualStyleBackColor = false;
+            // 
+            // _moveDownButton
+            // 
+            this._moveDownButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(240)))), ((int)(((byte)(240)))), ((int)(((byte)(240)))));
+            this._moveDownButton.Cursor = System.Windows.Forms.Cursors.Hand;
+            this._moveDownButton.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(180)))), ((int)(((byte)(180)))), ((int)(((byte)(180)))));
+            this._moveDownButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this._moveDownButton.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this._moveDownButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(60)))), ((int)(((byte)(60)))), ((int)(((byte)(60)))));
+            this._moveDownButton.IsPrimary = false;
+            this._moveDownButton.Location = new System.Drawing.Point(0, 0);
+            this._moveDownButton.MinimumSize = new System.Drawing.Size(100, 35);
+            this._moveDownButton.Name = "_moveDownButton";
+            this._moveDownButton.Size = new System.Drawing.Size(110, 35);
+            this._moveDownButton.TabIndex = 3;
+            this._moveDownButton.Text = "Move Down";
+            this._moveDownButton.UseVisualStyleBackColor = false;
+            // 
+            // _saveOrderButton
+            // 
+            this._saveOrderButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(120)))), ((int)(((byte)(215)))));
+            this._saveOrderButton.Cursor = System.Windows.Forms.Cursors.Hand;
+            this._saveOrderButton.Enabled = false;
+            this._saveOrderButton.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(100)))), ((int)(((byte)(180)))));
+            this._saveOrderButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this._saveOrderButton.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this._saveOrderButton.ForeColor = System.Drawing.Color.White;
+            this._saveOrderButton.IsPrimary = true;
+            this._saveOrderButton.Location = new System.Drawing.Point(0, 0);
+            this._saveOrderButton.MinimumSize = new System.Drawing.Size(100, 35);
+            this._saveOrderButton.Name = "_saveOrderButton";
+            this._saveOrderButton.Size = new System.Drawing.Size(110, 35);
+            this._saveOrderButton.TabIndex = 4;
+            this._saveOrderButton.Text = "Save Order";
+            this._saveOrderButton.UseVisualStyleBackColor = false;
+            // 
+            // _enabledList
+            // 
+            this._enabledList.Dock = System.Windows.Forms.DockStyle.Left;
+            this._enabledList.Location = new System.Drawing.Point(425, 15);
+            this._enabledList.MinimumSize = new System.Drawing.Size(200, 150);
+            this._enabledList.Name = "_enabledList";
+            this._enabledList.SelectedItem = null;
+            this._enabledList.ShowSearch = true;
+            this._enabledList.Size = new System.Drawing.Size(280, 150);
+            this._enabledList.TabIndex = 1;
+            this._enabledList.Title = "Active Load Order";
+            // 
+            // _detailsPanel
+            // 
+            this._detailsPanel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._detailsPanel.InstalledModApiVersion = null;
+            this._detailsPanel.Location = new System.Drawing.Point(705, 15);
+            this._detailsPanel.MinimumSize = new System.Drawing.Size(300, 400);
+            this._detailsPanel.Name = "_detailsPanel";
+            this._detailsPanel.Padding = new System.Windows.Forms.Padding(12);
+            this._detailsPanel.Size = new System.Drawing.Size(300, 400);
+            this._detailsPanel.TabIndex = 0;
+            // 
+            // ModManagerTab
+            // 
+            this.Controls.Add(this._detailsPanel);
+            this.Controls.Add(this._enabledList);
+            this.Controls.Add(this._buttonPanel);
+            this.Controls.Add(this._availableList);
+            this.Name = "ModManagerTab";
+            this.Padding = new System.Windows.Forms.Padding(15);
+            this._buttonPanel.ResumeLayout(false);
+            this.ResumeLayout(false);
 
-            // LEFT: Available mods list
-            _availableList = new ModListView();
-            _availableList.Title = "Available Mods";
-            _availableList.ShowSearch = true;
-            _availableList.Dock = DockStyle.Left;
-            _availableList.Width = 280;
-
-            // CENTER: Action buttons
-            _buttonPanel = new Panel();
-            _buttonPanel.Dock = DockStyle.Left;
-            _buttonPanel.Width = 130;
-            _buttonPanel.Padding = new Padding(10, 80, 10, 10);
-
-            _enableButton = new ActionButton();
-            _enableButton.Text = "Add >>";
-            _enableButton.IsPrimary = true;
-            _enableButton.Width = 110;
-            _enableButton.Height = 35;
-            _enableButton.Top = 120;
-
-            _disableButton = new ActionButton();
-            _disableButton.Text = "<< Remove";
-            _disableButton.Width = 110;
-            _disableButton.Height = 35;
-            _disableButton.Top = 165;
-
-            _moveUpButton = new ActionButton();
-            _moveUpButton.Text = "Move Up";
-            _moveUpButton.Width = 110;
-            _moveUpButton.Height = 35;
-            _moveUpButton.Top = 230;
-
-            _moveDownButton = new ActionButton();
-            _moveDownButton.Text = "Move Down";
-            _moveDownButton.Width = 110;
-            _moveDownButton.Height = 35;
-            _moveDownButton.Top = 275;
-
-            _saveOrderButton = new ActionButton();
-            _saveOrderButton.Text = "Save Order";
-            _saveOrderButton.IsPrimary = true;
-            _saveOrderButton.Width = 110;
-            _saveOrderButton.Height = 35;
-            _saveOrderButton.Top = 340;
-            _saveOrderButton.Enabled = false;
-
-            _buttonPanel.Controls.Add(_enableButton);
-            _buttonPanel.Controls.Add(_disableButton);
-            _buttonPanel.Controls.Add(_moveUpButton);
-            _buttonPanel.Controls.Add(_moveDownButton);
-            _buttonPanel.Controls.Add(_saveOrderButton);
-
-            // CENTER-RIGHT: Enabled mods list
-            _enabledList = new ModListView();
-            _enabledList.Title = "Active Load Order";
-            _enabledList.ShowSearch = true;
-            _enabledList.Dock = DockStyle.Left;
-            _enabledList.Width = 280;
-
-            // RIGHT: Details panel
-            _detailsPanel = new ModDetailsPanel();
-            _detailsPanel.Dock = DockStyle.Fill;
-            _detailsPanel.MinimumSize = new Size(300, 400);
-
-            // Add in order (right to left for docking to work correctly)
-            this.Controls.Add(_detailsPanel);
-            this.Controls.Add(_enabledList);
-            this.Controls.Add(_buttonPanel);
-            this.Controls.Add(_availableList);
-
-            this.ResumeLayout();
         }
 
         private void WireEvents()
@@ -163,6 +248,35 @@ namespace Manager.Views
             // Open folder
             _detailsPanel.OpenFolderClicked += DetailsPanel_OpenFolderClicked;
             _detailsPanel.WebsiteClicked += DetailsPanel_WebsiteClicked;
+
+            // Resize handling
+            _buttonPanel.Resize += ButtonPanel_Resize;
+        }
+
+        private void ButtonPanel_Resize(object sender, EventArgs e)
+        {
+            // Center buttons vertically in the panel
+            int buttonHeight = 35;
+            int spacing = 10;
+            int groupSpacing = 20; // Extra space between button groups
+            
+            // Calculate total height: 2 buttons + gap + 2 buttons + gap + 1 button
+            int totalHeight = (buttonHeight * 5) + (spacing * 2) + (groupSpacing * 2);
+            int startY = Math.Max(10, (_buttonPanel.Height - totalHeight) / 2);
+            int centerX = Math.Max(0, (_buttonPanel.Width - 110) / 2);
+            
+            // Position Add/Remove group
+            _enableButton.Location = new Point(centerX, startY);
+            _disableButton.Location = new Point(centerX, startY + buttonHeight + spacing);
+            
+            // Position Move Up/Down group (with extra spacing)
+            int moveGroupY = startY + (buttonHeight * 2) + spacing + groupSpacing;
+            _moveUpButton.Location = new Point(centerX, moveGroupY);
+            _moveDownButton.Location = new Point(centerX, moveGroupY + buttonHeight + spacing);
+            
+            // Position Save Order button (with extra spacing)
+            int saveY = moveGroupY + (buttonHeight * 2) + spacing + groupSpacing;
+            _saveOrderButton.Location = new Point(centerX, saveY);
         }
 
         private void AvailableList_SelectionChanged(object sender, ModItem mod)
@@ -281,6 +395,13 @@ namespace Manager.Views
 
             RefreshMods();
             MarkOrderDirty();
+            
+            // Raise event to update status counts
+            if (OrderSaved != null)
+            {
+                var enabledIds = _enabledList.Items.Select(m => m.Id).ToArray();
+                OrderSaved(enabledIds);
+            }
         }
 
         private void DisableSelectedMods()
@@ -295,6 +416,13 @@ namespace Manager.Views
 
             RefreshMods();
             MarkOrderDirty();
+            
+            // Raise event to update status counts
+            if (OrderSaved != null)
+            {
+                var enabledIds = _enabledList.Items.Select(m => m.Id).ToArray();
+                OrderSaved(enabledIds);
+            }
         }
 
         private void MoveSelectedUp()

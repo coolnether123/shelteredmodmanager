@@ -117,7 +117,9 @@ namespace Manager.Core.Services
         {
             if (settings == null) return;
 
-            var data = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            // Read existing keys first to preserve unknown ones
+            var data = ReadIniFile();
+            
             data["GamePath"] = settings.GamePath ?? string.Empty;
             data["DarkMode"] = settings.DarkMode.ToString();
             data["DevMode"] = settings.DevMode.ToString();
