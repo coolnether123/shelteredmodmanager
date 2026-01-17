@@ -206,4 +206,4 @@ This framework is intended to be the base for all future Sheltered mods.
 
 - **Issues:** [GitHub Issues](https://github.com/coolnether123/shelteredmodmanager/issues)
 - **Nexus Comments:** [Sheltered Mod Manager](https://nexusmods.com/sheltered/mods/1)
-- **Documentation:** [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
+- **Documentation:** [API Documentation](documentation/ModAPI_Documentation.md)

@@ -75,73 +75,85 @@ namespace Manager.Views
             _authorLabel.Location = new Point(20, yPos);
             yPos += 40;
 
-            // Description
+            int rightColumnX = 600;
+            int rightColumnY = 135; // Align with description top
+
             _descriptionBox = new RichTextBox();
-            _descriptionBox.Text = "A comprehensive mod loader and manager for Sheltered. " +
-                   "Enables loading custom mods, managing load order, and provides a powerful API for mod developers.\n\n" +
-                   "Features:\n" +
-                   "- Mod discovery and load order management\n" +
-                   "- Dependency resolution\n" +
-                   "- ModAPI version compatibility checking\n" +
-                   "- Unlimited save slots with verification\n" +
-                   "- Dark mode support";
+            _descriptionBox.Text =
+                "Sheltered Mod Manager is a modding framework for Sheltered (Unicube/Team17).\n" +
+                "It includes a plugin loader, ModAPI, and custom save tools.\n\n" +
+
+                "Core features:\n" +
+                "• Loads ModAPI plugins and Harmony patches.\n" +
+                "• Resolves dependencies and load order via About.json.\n" +
+                "• Adds unlimited custom save slots with save mod tracking + verification.\n" +
+                "• Supports Steam (32-bit) and Epic (64-bit) builds via UnityDoorstop.\n\n" +
+
+                "Notes:\n" +
+                "• Custom saves are stored separately from vanilla saves.\n" +
+                "• Deleting saves may reindex remaining slots.\n\n" +
+
+                "Originally created by benjaminfoo (2019). Maintained by Coolnether123 (2025–present).";
+
             _descriptionBox.Font = new Font("Segoe UI", 10f);
             _descriptionBox.Location = new Point(20, yPos);
-            _descriptionBox.Size = new Size(500, 140);
+            _descriptionBox.Size = new Size(rightColumnX - 60, this.Height - yPos - 20); // Maintain gap to right column
             _descriptionBox.ReadOnly = true;
             _descriptionBox.BorderStyle = BorderStyle.None;
-            yPos += 160;
+            _descriptionBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom;
 
             // Links section
             _linksLabel = new Label();
-            _linksLabel.Text = "Links";
+            _linksLabel.Text = "Resources & Community";
             _linksLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
             _linksLabel.AutoSize = true;
-            _linksLabel.Location = new Point(20, yPos);
-            yPos += 30;
+            _linksLabel.Location = new Point(rightColumnX, rightColumnY);
+            rightColumnY += 30;
 
             _nexusLink = new LinkLabel();
-            _nexusLink.Text = "Nexus Mods";
+            _nexusLink.Text = "Nexus Mods Portal";
             _nexusLink.Font = new Font("Segoe UI", 10f);
             _nexusLink.AutoSize = true;
-            _nexusLink.Location = new Point(30, yPos);
+            _nexusLink.Location = new Point(rightColumnX + 10, rightColumnY);
             _nexusLink.LinkClicked += NexusLink_LinkClicked;
-            yPos += 25;
+            rightColumnY += 25;
 
             _githubLink = new LinkLabel();
-            _githubLink.Text = "GitHub Repository";
+            _githubLink.Text = "Official GitHub Repository";
             _githubLink.Font = new Font("Segoe UI", 10f);
             _githubLink.AutoSize = true;
-            _githubLink.Location = new Point(30, yPos);
+            _githubLink.Location = new Point(rightColumnX + 10, rightColumnY);
             _githubLink.LinkClicked += GithubLink_LinkClicked;
-            yPos += 25;
+            rightColumnY += 25;
 
             _discordLink = new LinkLabel();
-            _discordLink.Text = "Discord Community";
+            _discordLink.Text = "Modding Discord Community";
             _discordLink.Font = new Font("Segoe UI", 10f);
             _discordLink.AutoSize = true;
-            _discordLink.Location = new Point(30, yPos);
+            _discordLink.Location = new Point(rightColumnX + 10, rightColumnY);
             _discordLink.LinkClicked += DiscordLink_LinkClicked;
-            yPos += 40;
+            rightColumnY += 50;
 
             // Credits section
             _creditsLabel = new Label();
-            _creditsLabel.Text = "Credits & Thanks";
+            _creditsLabel.Text = "Credits & Acknowledgments";
             _creditsLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
             _creditsLabel.AutoSize = true;
-            _creditsLabel.Location = new Point(20, yPos);
-            yPos += 30;
+            _creditsLabel.Location = new Point(rightColumnX, rightColumnY);
+            rightColumnY += 30;
 
             _creditsBox = new RichTextBox();
-            _creditsBox.Text = "- Team17 - Sheltered game\n" +
-                   "- NeighTools - Unity Doorstop\n" +
-                   "- Pardeike - Harmony patching library\n" +
-                   "- The Sheltered modding community";
+            _creditsBox.Text = "• Unicube & Team17: Developers and publishers of Sheltered.\n" +
+                   "• benjaminfoo: Architecture of the original 2019 mod loader.\n" +
+                   "• NeighTools: Creators of the UnityDoorstop injection framework.\n" +
+                   "• Andreas Pardeike: Developer of the Harmony patching library.\n" +
+                   "• The Sheltered Modding Community: For continuous feedback and mod creation.";
             _creditsBox.Font = new Font("Segoe UI", 10f);
-            _creditsBox.Location = new Point(20, yPos);
-            _creditsBox.Size = new Size(500, 100);
+            _creditsBox.Location = new Point(rightColumnX, rightColumnY);
+            _creditsBox.Size = new Size(this.Width - rightColumnX - 40, this.Height - rightColumnY - 20); // Dynamic width and height
             _creditsBox.ReadOnly = true;
             _creditsBox.BorderStyle = BorderStyle.None;
+            _creditsBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right;
 
             // Add controls
             this.Controls.Add(_titleLabel);

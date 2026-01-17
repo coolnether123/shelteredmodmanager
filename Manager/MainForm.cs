@@ -30,9 +30,6 @@ namespace Manager
         private Label _modsCountLabel;
         private Label _modApiVersionLabel;
         private Panel _headerStatusPanel;
-
-        // Tab contents
-        private GameSetupTab _gameSetupTab;
         private ModManagerTab _modManagerTab;
         private SettingsTab _settingsTab;
         private AboutTab _aboutTab;
@@ -45,7 +42,8 @@ namespace Manager
         // State
         private AppSettings _settings;
         private Timer _restartPollTimer;
-
+        private Panel headerPanel;
+        private GameSetupTab _gameSetupTab;
         private const string APP_VERSION = "1.0.0";
 
         public MainForm()
@@ -78,7 +76,7 @@ namespace Manager
                 using (var stream = assembly.GetManifestResourceStream("Manager.Icon.png"))
                 {
                     if (stream != null && _logoBox != null) 
-                        _logoBox.Image = Image.FromStream(stream);
+                        _logoBox.Image = new Bitmap(stream);
                 }
             }
             catch { }
@@ -110,110 +108,220 @@ namespace Manager
 
         private void InitializeComponent()
         {
+            this.headerPanel = new System.Windows.Forms.Panel();
+            this._logoBox = new System.Windows.Forms.PictureBox();
+            this._titleLabel = new System.Windows.Forms.Label();
+            this._headerStatusPanel = new System.Windows.Forms.Panel();
+            this._modApiVersionLabel = new System.Windows.Forms.Label();
+            this._modsCountLabel = new System.Windows.Forms.Label();
+            this._statusLabel = new System.Windows.Forms.Label();
+            this._tabControl = new System.Windows.Forms.TabControl();
+            this._gameSetupPage = new System.Windows.Forms.TabPage();
+            this._modManagerPage = new System.Windows.Forms.TabPage();
+            this._modManagerTab = new Manager.Views.ModManagerTab();
+            this._settingsPage = new System.Windows.Forms.TabPage();
+            this._settingsTab = new Manager.Views.SettingsTab();
+            this._aboutPage = new System.Windows.Forms.TabPage();
+            this._aboutTab = new Manager.Views.AboutTab();
+            this._gameSetupTab = new Manager.Views.GameSetupTab();
+            this.headerPanel.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this._logoBox)).BeginInit();
+            this._headerStatusPanel.SuspendLayout();
+            this._tabControl.SuspendLayout();
+            this._gameSetupPage.SuspendLayout();
+            this._modManagerPage.SuspendLayout();
+            this._settingsPage.SuspendLayout();
+            this._aboutPage.SuspendLayout();
             this.SuspendLayout();
-
-            // Form settings
+            // 
+            // headerPanel
+            // 
+            this.headerPanel.Controls.Add(this._logoBox);
+            this.headerPanel.Controls.Add(this._titleLabel);
+            this.headerPanel.Controls.Add(this._headerStatusPanel);
+            this.headerPanel.Dock = System.Windows.Forms.DockStyle.Top;
+            this.headerPanel.Location = new System.Drawing.Point(0, 0);
+            this.headerPanel.Name = "headerPanel";
+            this.headerPanel.Padding = new System.Windows.Forms.Padding(15, 10, 15, 10);
+            this.headerPanel.Size = new System.Drawing.Size(1182, 75);
+            this.headerPanel.TabIndex = 1;
+            // 
+            // _logoBox
+            // 
+            this._logoBox.Location = new System.Drawing.Point(15, 5);
+            this._logoBox.Name = "_logoBox";
+            this._logoBox.Size = new System.Drawing.Size(50, 50);
+            this._logoBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
+            this._logoBox.TabIndex = 0;
+            this._logoBox.TabStop = false;
+            // 
+            // _titleLabel
+            // 
+            this._titleLabel.AutoSize = true;
+            this._titleLabel.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold);
+            this._titleLabel.Location = new System.Drawing.Point(75, 15);
+            this._titleLabel.Name = "_titleLabel";
+            this._titleLabel.Size = new System.Drawing.Size(329, 37);
+            this._titleLabel.TabIndex = 1;
+            this._titleLabel.Text = "Sheltered Mod Manager";
+            // 
+            // _headerStatusPanel
+            // 
+            this._headerStatusPanel.Controls.Add(this._modApiVersionLabel);
+            this._headerStatusPanel.Controls.Add(this._modsCountLabel);
+            this._headerStatusPanel.Controls.Add(this._statusLabel);
+            this._headerStatusPanel.Dock = System.Windows.Forms.DockStyle.Right;
+            this._headerStatusPanel.Location = new System.Drawing.Point(917, 10);
+            this._headerStatusPanel.Name = "_headerStatusPanel";
+            this._headerStatusPanel.Padding = new System.Windows.Forms.Padding(0, 0, 15, 0);
+            this._headerStatusPanel.Size = new System.Drawing.Size(250, 55);
+            this._headerStatusPanel.TabIndex = 2;
+            // 
+            // _modApiVersionLabel
+            // 
+            this._modApiVersionLabel.Dock = System.Windows.Forms.DockStyle.Top;
+            this._modApiVersionLabel.Font = new System.Drawing.Font("Segoe UI", 8.5F);
+            this._modApiVersionLabel.Location = new System.Drawing.Point(0, 38);
+            this._modApiVersionLabel.Name = "_modApiVersionLabel";
+            this._modApiVersionLabel.Size = new System.Drawing.Size(235, 18);
+            this._modApiVersionLabel.TabIndex = 0;
+            this._modApiVersionLabel.Text = "ModAPI Version: Unknown";
+            this._modApiVersionLabel.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            // 
+            // _modsCountLabel
+            // 
+            this._modsCountLabel.Dock = System.Windows.Forms.DockStyle.Top;
+            this._modsCountLabel.Font = new System.Drawing.Font("Segoe UI", 8.5F);
+            this._modsCountLabel.Location = new System.Drawing.Point(0, 20);
+            this._modsCountLabel.Name = "_modsCountLabel";
+            this._modsCountLabel.Size = new System.Drawing.Size(235, 18);
+            this._modsCountLabel.TabIndex = 1;
+            this._modsCountLabel.Text = "Active Mods: 0";
+            this._modsCountLabel.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            // 
+            // _statusLabel
+            // 
+            this._statusLabel.Dock = System.Windows.Forms.DockStyle.Top;
+            this._statusLabel.Font = new System.Drawing.Font("Segoe UI", 9.5F, System.Drawing.FontStyle.Bold);
+            this._statusLabel.ForeColor = System.Drawing.Color.LightGreen;
+            this._statusLabel.Location = new System.Drawing.Point(0, 0);
+            this._statusLabel.Name = "_statusLabel";
+            this._statusLabel.Size = new System.Drawing.Size(235, 20);
+            this._statusLabel.TabIndex = 2;
+            this._statusLabel.Text = "Status: Ready";
+            this._statusLabel.TextAlign = System.Drawing.ContentAlignment.BottomRight;
+            // 
+            // _tabControl
+            // 
+            this._tabControl.Controls.Add(this._gameSetupPage);
+            this._tabControl.Controls.Add(this._modManagerPage);
+            this._tabControl.Controls.Add(this._settingsPage);
+            this._tabControl.Controls.Add(this._aboutPage);
+            this._tabControl.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._tabControl.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this._tabControl.Location = new System.Drawing.Point(0, 75);
+            this._tabControl.Name = "_tabControl";
+            this._tabControl.Padding = new System.Drawing.Point(15, 8);
+            this._tabControl.SelectedIndex = 0;
+            this._tabControl.Size = new System.Drawing.Size(1182, 628);
+            this._tabControl.TabIndex = 0;
+            // 
+            // _gameSetupPage
+            // 
+            this._gameSetupPage.Controls.Add(this._gameSetupTab);
+            this._gameSetupPage.Location = new System.Drawing.Point(4, 42);
+            this._gameSetupPage.Name = "_gameSetupPage";
+            this._gameSetupPage.Size = new System.Drawing.Size(1174, 582);
+            this._gameSetupPage.TabIndex = 0;
+            this._gameSetupPage.Text = "Game Setup";
+            // 
+            // _modManagerPage
+            // 
+            this._modManagerPage.Controls.Add(this._modManagerTab);
+            this._modManagerPage.Location = new System.Drawing.Point(4, 42);
+            this._modManagerPage.Name = "_modManagerPage";
+            this._modManagerPage.Size = new System.Drawing.Size(1174, 582);
+            this._modManagerPage.TabIndex = 1;
+            this._modManagerPage.Text = "Mod Manager";
+            // 
+            // _modManagerTab
+            // 
+            this._modManagerTab.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._modManagerTab.Location = new System.Drawing.Point(0, 0);
+            this._modManagerTab.Name = "_modManagerTab";
+            this._modManagerTab.Padding = new System.Windows.Forms.Padding(15);
+            this._modManagerTab.Size = new System.Drawing.Size(1174, 582);
+            this._modManagerTab.TabIndex = 0;
+            // 
+            // _settingsPage
+            // 
+            this._settingsPage.Controls.Add(this._settingsTab);
+            this._settingsPage.Location = new System.Drawing.Point(4, 42);
+            this._settingsPage.Name = "_settingsPage";
+            this._settingsPage.Size = new System.Drawing.Size(1174, 582);
+            this._settingsPage.TabIndex = 2;
+            this._settingsPage.Text = "Settings";
+            // 
+            // _settingsTab
+            // 
+            this._settingsTab.AutoScroll = true;
+            this._settingsTab.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._settingsTab.Location = new System.Drawing.Point(0, 0);
+            this._settingsTab.Name = "_settingsTab";
+            this._settingsTab.Padding = new System.Windows.Forms.Padding(20);
+            this._settingsTab.Size = new System.Drawing.Size(1174, 582);
+            this._settingsTab.TabIndex = 0;
+            // 
+            // _aboutPage
+            // 
+            this._aboutPage.Controls.Add(this._aboutTab);
+            this._aboutPage.Location = new System.Drawing.Point(4, 42);
+            this._aboutPage.Name = "_aboutPage";
+            this._aboutPage.Size = new System.Drawing.Size(1174, 582);
+            this._aboutPage.TabIndex = 3;
+            this._aboutPage.Text = "About";
+            // 
+            // _aboutTab
+            // 
+            this._aboutTab.AppVersion = "1.0.0";
+            this._aboutTab.Author = "Coolnether123";
+            this._aboutTab.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._aboutTab.Location = new System.Drawing.Point(0, 0);
+            this._aboutTab.Name = "_aboutTab";
+            this._aboutTab.Padding = new System.Windows.Forms.Padding(20);
+            this._aboutTab.Size = new System.Drawing.Size(1174, 582);
+            this._aboutTab.TabIndex = 0;
+            // 
+            // _gameSetupTab
+            // 
+            this._gameSetupTab.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._gameSetupTab.Location = new System.Drawing.Point(0, 0);
+            this._gameSetupTab.Name = "_gameSetupTab";
+            this._gameSetupTab.Padding = new System.Windows.Forms.Padding(20);
+            this._gameSetupTab.Size = new System.Drawing.Size(1174, 582);
+            this._gameSetupTab.TabIndex = 0;
+            // 
+            // MainForm
+            // 
+            this.ClientSize = new System.Drawing.Size(1182, 703);
+            this.Controls.Add(this._tabControl);
+            this.Controls.Add(this.headerPanel);
+            this.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.MinimumSize = new System.Drawing.Size(900, 600);
+            this.Name = "MainForm";
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Sheltered Mod Manager";
-            this.Size = new Size(1200, 750);
-            this.MinimumSize = new Size(900, 600);
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.Font = new Font("Segoe UI", 9f);
-            
-            // Header panel with logo
-            var headerPanel = new Panel();
-            headerPanel.Dock = DockStyle.Top;
-            headerPanel.Height = 75;
-            headerPanel.Padding = new Padding(15, 10, 15, 10);
+            this.headerPanel.ResumeLayout(false);
+            this.headerPanel.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this._logoBox)).EndInit();
+            this._headerStatusPanel.ResumeLayout(false);
+            this._tabControl.ResumeLayout(false);
+            this._gameSetupPage.ResumeLayout(false);
+            this._modManagerPage.ResumeLayout(false);
+            this._settingsPage.ResumeLayout(false);
+            this._aboutPage.ResumeLayout(false);
+            this.ResumeLayout(false);
 
-            _logoBox = new PictureBox();
-            _logoBox.Size = new Size(50, 50);
-            _logoBox.SizeMode = PictureBoxSizeMode.Zoom;
-            _logoBox.Location = new Point(15, 5);
-            
-            _titleLabel = new Label();
-            _titleLabel.Text = "Sheltered Mod Manager";
-            _titleLabel.Font = new Font("Segoe UI", 16f, FontStyle.Bold);
-            _titleLabel.AutoSize = true;
-            _titleLabel.Location = new Point(75, 15);
-
-            headerPanel.Controls.Add(_logoBox);
-            headerPanel.Controls.Add(_titleLabel);
-
-            _headerStatusPanel = new Panel();
-            _headerStatusPanel.Dock = DockStyle.Right;
-            _headerStatusPanel.Width = 250;
-            _headerStatusPanel.Padding = new Padding(0, 0, 15, 0);
-
-            _statusLabel = new Label();
-            _statusLabel.Text = "Status: Ready";
-            _statusLabel.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
-            _statusLabel.ForeColor = Color.LightGreen;
-            _statusLabel.Height = 20;
-            _statusLabel.Dock = DockStyle.Top;
-            _statusLabel.TextAlign = ContentAlignment.BottomRight;
-
-            _modsCountLabel = new Label();
-            _modsCountLabel.Text = "Active Mods: 0";
-            _modsCountLabel.Font = new Font("Segoe UI", 8.5f);
-            _modsCountLabel.Height = 18;
-            _modsCountLabel.Dock = DockStyle.Top;
-            _modsCountLabel.TextAlign = ContentAlignment.MiddleRight;
-
-            _modApiVersionLabel = new Label();
-            _modApiVersionLabel.Text = "ModAPI Version: Unknown";
-            _modApiVersionLabel.Font = new Font("Segoe UI", 8.5f);
-            _modApiVersionLabel.Height = 18;
-            _modApiVersionLabel.Dock = DockStyle.Top;
-            _modApiVersionLabel.TextAlign = ContentAlignment.MiddleRight;
-
-            // Add in REVERSE order for Dock.Top to stack them correctly: Status at top
-            _headerStatusPanel.Controls.Add(_modApiVersionLabel);
-            _headerStatusPanel.Controls.Add(_modsCountLabel);
-            _headerStatusPanel.Controls.Add(_statusLabel);
-            headerPanel.Controls.Add(_headerStatusPanel);
-
-            // Tab control
-            _tabControl = new TabControl();
-            _tabControl.Dock = DockStyle.Fill;
-            _tabControl.Font = new Font("Segoe UI", 10f);
-            _tabControl.Padding = new Point(15, 8);
-
-            // Create tab pages
-            _gameSetupPage = new TabPage("Game Setup");
-            _modManagerPage = new TabPage("Mod Manager");
-            _settingsPage = new TabPage("Settings");
-            _aboutPage = new TabPage("About");
-
-            // Create tab contents
-            _gameSetupTab = new GameSetupTab();
-            _gameSetupTab.Dock = DockStyle.Fill;
-            
-            _modManagerTab = new ModManagerTab();
-            _modManagerTab.Dock = DockStyle.Fill;
-            
-            _settingsTab = new SettingsTab();
-            _settingsTab.Dock = DockStyle.Fill;
-            
-            _aboutTab = new AboutTab();
-            _aboutTab.Dock = DockStyle.Fill;
-
-            // Add contents to pages
-            _gameSetupPage.Controls.Add(_gameSetupTab);
-            _modManagerPage.Controls.Add(_modManagerTab);
-            _settingsPage.Controls.Add(_settingsTab);
-            _aboutPage.Controls.Add(_aboutTab);
-
-            // Add pages to tab control
-            _tabControl.TabPages.Add(_gameSetupPage);
-            _tabControl.TabPages.Add(_modManagerPage);
-            _tabControl.TabPages.Add(_settingsPage);
-            _tabControl.TabPages.Add(_aboutPage);
-
-            // Add to form
-            this.Controls.Add(_tabControl);
-            this.Controls.Add(headerPanel);
-
-            this.ResumeLayout();
         }
 
         private void WireEvents()
@@ -936,5 +1044,10 @@ namespace Manager
         }
 
         #endregion
+
+        private void _gameSetupTab_Load(object sender, EventArgs e)
+        {
+
+        }
     }
 }

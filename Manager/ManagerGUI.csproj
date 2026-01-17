@@ -64,12 +64,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ManagerGUI.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="ManagerGUI.Designer.cs">
-      <DependentUpon>ManagerGUI.cs</DependentUpon>
-    </Compile>
     <Compile Include="ManagerSettings.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="ThemeManager.cs" />
@@ -80,9 +74,6 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
-    <EmbeddedResource Include="ManagerGUI.resx">
-      <DependentUpon>ManagerGUI.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -92,14 +83,6 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
       <DesignTime>True</DesignTime>
-    </Compile>
-    <Compile Include="ManagerGUI.LaunchAndPreflight.cs">
-      <DependentUpon>ManagerGUI.cs</DependentUpon>
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="ManagerGUI.Restart.cs">
-      <DependentUpon>ManagerGUI.cs</DependentUpon>
-      <SubType>Form</SubType>
     </Compile>
     <Compile Include="Shared\ModAboutReader.cs" />
     <Compile Include="AssemblyVersionChecker.cs" />
@@ -140,6 +123,9 @@
     <Compile Include="Views\AboutTab.cs">
       <SubType>UserControl</SubType>
     </Compile>
+    <EmbeddedResource Include="Views\ModManagerTab.resx">
+      <DependentUpon>ModManagerTab.cs</DependentUpon>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <None Include="Properties\Settings.settings">
@@ -155,11 +141,6 @@
       <ProductName>.NET Framework 3.5 SP1</ProductName>
       <Install>true</Install>
     </BootstrapperPackage>
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Lib.Harmony">
-      <Version>2.4.2</Version>
-    </PackageReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
