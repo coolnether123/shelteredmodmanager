@@ -2,7 +2,7 @@
 
 <img src="/documentation/logo.png" width="600">
 
-**A comprehensive modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Team17**
+**A modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Unicube & Team17**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.0.0-blue)]()
@@ -26,9 +26,9 @@ In 2025, I (Coolnether123) discovered Sheltered and went looking for mods. The o
 
 ## About
 
-Sheltered Mod Manager (SMM) adds files alongside the game. It does not overwrite core game assets. It does add a loader DLL (winhttp.dll) and config files to hook at startup. It includes a plugin API, unlimited save slots with mod tracking, and tools for players and mod creators.
+Sheltered Mod Manager (SMM) adds files alongside the game. It does not overwrite core game assets. It adds a loader DLL (winhttp.dll) and config files to hook at startup. It includes a plugin API, unlimited save slots with mod tracking, and tools for players and mod creators.
 
-The goal of SMM is to provide a stable, extensible foundation for Sheltered mods, for both players and mod authors. The game is harder to mod in, the ModAPI system is being built to allow developers access to more of Sheltered. Custom save systems are built in with helpers to help devs saving their data in saves.
+The goal of SMM is to provide a stable foundation for Sheltered mods, for both players and mod authors. The developer API is actively growing, with more features planned for future updates.
 
 ## Core features
 
@@ -91,10 +91,9 @@ A “Mods” button is added to the main menu.
 
 ## Uninstall
 
-1. Disable all mods in the manager
-2. Delete the `mods` and `SMM` folders
-3. Remove doorstop_config.ini, mod_manager.log, and winhttp.dll
-4. Verify game files via Steam/Epic if needed
+1. Delete the `mods` and `SMM` folders
+2. Remove doorstop_config.ini, mod_manager.log, and winhttp.dll
+3. Verify game files via Steam/Epic if any issues arise
 
 Your vanilla save files are not deleted.
 Custom saves are stored in mods/ModAPI/... (back this folder up if you want to keep them).
@@ -181,29 +180,44 @@ Sheltered/
 
 ## For mod authors
 
-The ModAPI uses a context first approach. Currently all documentation on the API and how to mod Sheltered is in the documentation. Future updates will move this to be more standard.
+The Developer API is in early development. See the documentation folder for current capabilities.
 
-Current APIs provide:
-1. Creating custom items and food
-2. Hooking into common GameEvent triggers
-3. UI Utilities and Helpers
-4. Creating icons
-5. Tools for Debugging NGUI
+Currently available:
+* Item and food injection
+* Custom crafting recipes
+* Event subscriptions (day cycles, save/load, UI panels)
+* Harmony integration for runtime patching
+* Runtime inspector (F9)
 
-This framework is intended to be the base for all future Sheltered mods. 
+Planned for future updates:
+* NPC & Character manipulation
+* Combat encounter events
+* Quest system integration
+* Faction hooks 
 
 ---
 
 ## Credits
 
-- **[Team17](https://www.team17.com/)** - For creating Sheltered
-- **benjaminfoo** — Original 2019 mod loader foundation (used with permission)
+- **Coolnether123** - 2025 Active Development & Maintenance
+- **benjaminfoo** - Original 2019 mod loader foundation (used with permission)
+- **[Team17](https://www.team17.com/)** - For publishing Sheltered
+- **Unicube** - Original game developers
 - **[NeighTools](https://github.com/NeighTools)** - UnityDoorstop injection framework
 - **[Andreas Pardeike](https://github.com/pardeike)** - Harmony runtime patching library
-- **Coolnether123** - 2025 Active Maintainer
 
 ## Support & Community
 
 - **Issues:** [GitHub Issues](https://github.com/coolnether123/shelteredmodmanager/issues)
 - **Nexus Comments:** [Sheltered Mod Manager](https://nexusmods.com/sheltered/mods/1)
-- **Documentation:** [API Documentation](documentation/ModAPI_Documentation.md)
+
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [How to Develop a Plugin](documentation/how%20to%20develop%20a%20plugin.md) | Getting started with mod development |
+| [ModAPI Developer Guide](documentation/ModAPI_Developer_Guide.md) | Comprehensive API usage guide |
+| [Events Guide](documentation/Events_Guide.md) | Game and UI event subscriptions |
+| [Harmony Patches](documentation/how%20to%20develop%20a%20patch%20with%20harmony.md) | Runtime code patching |
+| [Settings Format](documentation/SETTINGS.md) | Mod configuration files |
+| [API Reference](documentation/ModAPI_Documentation.md) | Technical API reference |

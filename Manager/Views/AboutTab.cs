@@ -105,6 +105,7 @@ namespace Manager.Views
             // Links section
             _linksLabel = new Label();
             _linksLabel.Text = "Resources & Community";
+            _linksLabel.UseMnemonic = false;
             _linksLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
             _linksLabel.AutoSize = true;
             _linksLabel.Location = new Point(rightColumnX, rightColumnY);
@@ -137,6 +138,7 @@ namespace Manager.Views
             // Credits section
             _creditsLabel = new Label();
             _creditsLabel.Text = "Credits & Acknowledgments";
+            _creditsLabel.UseMnemonic = false;
             _creditsLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
             _creditsLabel.AutoSize = true;
             _creditsLabel.Location = new Point(rightColumnX, rightColumnY);
@@ -147,7 +149,7 @@ namespace Manager.Views
                    "• benjaminfoo: Architecture of the original 2019 mod loader.\n" +
                    "• NeighTools: Creators of the UnityDoorstop injection framework.\n" +
                    "• Andreas Pardeike: Developer of the Harmony patching library.\n" +
-                   "• The Sheltered Modding Community: For continuous feedback and mod creation.";
+                   "• Those testing and seeing this: Thank you from Coolnether123";
             _creditsBox.Font = new Font("Segoe UI", 10f);
             _creditsBox.Location = new Point(rightColumnX, rightColumnY);
             _creditsBox.Size = new Size(this.Width - rightColumnX - 40, this.Height - rightColumnY - 20); // Dynamic width and height
