@@ -3,6 +3,24 @@
 
 A practical guide covering how to use the ModAPI to create mods for Sheltered.
 
+> **API Status Note:** The Developer API is in early development. This guide documents both implemented and planned features.
+>
+> **Currently Implemented:**
+> - Item and food injection (ContentInjector)
+> - Custom crafting recipes
+> - Event subscriptions (OnNewDay, OnBeforeSave, OnAfterLoad, UI panel events)
+> - Logging and Settings
+> - Inter-mod communication (ModEventBus, ModRegistry)
+> - Runtime Inspector (F9)
+>
+> **Planned for future updates:**
+> - Full PartyHelper and character manipulation
+> - Combat encounter events
+> - Quest system hooks
+> - Advanced UIFactory helpers
+>
+> When in doubt, check the actual ModAPI classes for current capabilities.
+
 ---
 
 ## Table of Contents

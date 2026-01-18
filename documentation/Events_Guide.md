@@ -78,17 +78,25 @@ public static event Action<ExplorationParty> OnPartyReturned;
 ### Example: Tracking Days Survived
 
 ```csharp
+using ModAPI.Core;
 using ModAPI.Events;
 
 public class MyMod : IModPlugin
 {
     private int daysTracked = 0;
+    private IModLogger _log;
+    
+    public void Initialize(IPluginContext ctx)
+    {
+        _log = ctx.Log;
+        _log.Info("MyMod initializing...");
+    }
     
     public void Start(IPluginContext ctx)
     {
         // Subscribe to new day event
         GameEvents.OnNewDay += OnDayChanged;
-        ctx.Log.Info("Subscribed to OnNewDay event");
+        _log.Info("Subscribed to OnNewDay event");
     }
     
     private void OnDayChanged(int dayNumber)
@@ -102,21 +110,29 @@ public class MyMod : IModPlugin
 ### Example: Auto-Save Before Combat
 
 ```csharp
+using ModAPI.Core;
 using ModAPI.Events;
 
 public class CombatSafetyMod : IModPlugin
 {
+    private IModLogger _log;
+    
+    public void Initialize(IPluginContext ctx)
+    {
+        _log = ctx.Log;
+    }
+    
     public void Start(IPluginContext ctx)
     {
         GameEvents.OnCombatStarted += (player, enemy) =>
         {
-            ctx.Log.Info($"Combat started! Player: {player.GetName()}, Enemy: {enemy.GetName()}");
+            _log.Info($"Combat started! Player: {player.GetName()}, Enemy: {enemy.GetName()}");
             
             // Trigger auto-save
             if (SaveManager.instance != null)
             {
                 SaveManager.instance.SaveToCurrentSlot(false);
-                ctx.Log.Info("Auto-saved before combat");
+                _log.Info("Auto-saved before combat");
             }
         };
     }
@@ -160,10 +176,18 @@ public static event Action<GameObject, string> OnButtonClicked;
 ### Example: React to Crafting Panel Opening
 
 ```csharp
+using ModAPI.Core;
 using ModAPI.Events;
 
 public class CraftingHelperMod : IModPlugin
 {
+    private IModLogger _log;
+    
+    public void Initialize(IPluginContext ctx)
+    {
+        _log = ctx.Log;
+    }
+    
     public void Start(IPluginContext ctx)
     {
         UIEvents.OnPanelOpened += panel =>
@@ -173,7 +197,7 @@ public class CraftingHelperMod : IModPlugin
             
             if (panelName == "CraftingPanel" || panelName == "WorkbenchPanel")
             {
-                ctx.Log.Info("Crafting panel opened - showing helper UI");
+                _log.Info("Crafting panel opened - showing helper UI");
                 ShowCraftingHelp();
             }
         };
@@ -708,4 +732,4 @@ foreach (var apiName in apis)
 - ✅ **Unsubscribe** when your mod shuts down
 - ✅ Keep handlers **fast** (defer heavy work)
 
-Happy modding! 🎮
+Happy modding!
