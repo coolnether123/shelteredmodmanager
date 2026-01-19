@@ -39,9 +39,6 @@
       <HintPath>..\..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="PluginConsole">
-      <HintPath>..\..\..\..\..\Epic Games\Sheltered\mods\enabled\PluginConsole\Assemblies\PluginConsole.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="UnityEngine">
       <HintPath>..\..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>

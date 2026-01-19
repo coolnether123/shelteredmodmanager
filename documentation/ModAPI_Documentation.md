@@ -9,7 +9,7 @@ This document outlines the role and purpose of each file within the `ModAPI` pro
 **Secondary Role:** Enables mods to react to events from other mods, creating an ecosystem of compatible and interoperable mods.
 **Key Features:**
 - Thread-safe pub/sub system with type safety
-- Event-name based routing (use reverse-domain notation: "com.author.mod.EventName")
+- Event-name based routing (use notation: "Author.Mod.EventName")
 - Automatic error isolation (one mod's handler error won't crash others)
 - Subscriber count tracking and diagnostics
 
@@ -34,10 +34,10 @@ Dictionary<string, int> GetEventDiagnostics()
 ```csharp
 // Mod A publishes an event
 public class QuestData { public string QuestId; public int Reward; }
-ModEventBus.Publish("com.author.quests.QuestCompleted", new QuestData { QuestId = "first", Reward = 100 });
+ModEventBus.Publish("Author.Quests.QuestCompleted", new QuestData { QuestId = "first", Reward = 100 });
 
 // Mod B subscribes to it
-ModEventBus.Subscribe<QuestData>("com.author.quests.QuestCompleted", data => {
+ModEventBus.Subscribe<QuestData>("Author.Quests.QuestCompleted", data => {
     MMLog.Info($"Quest {data.QuestId} complete! Reward: {data.Reward}");
 });
 ```
@@ -164,7 +164,7 @@ int GetLoadedModCount()
 **Example Usage:**
 ```csharp
 // Simple detection (RimWorld-style)
-if (ModRegistry.Find("com.other.expansion"))
+if (ModRegistry.Find("Other.Expansion"))
 {
     ctx.Log.Info("Expansion detected - enabling advanced features");
     EnableExpandedContent();
@@ -200,7 +200,7 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 **No Manual Registration Required!** Just have an `About.json`:
 ```json
 {
-  "id": "com.myname.mymod",
+  "id": "MyName.MyMod",
   "name": "My Mod",
   "version": "1.0.0"
 }

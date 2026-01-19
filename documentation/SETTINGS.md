@@ -100,7 +100,7 @@ public class MyPlugin : IModPlugin
 
 ## Logging Configuration
 
-Logging is controlled by the Manager and written to `mod_manager.ini` in the game directory at launch.
+Logging is controlled by the Manager and written to `SMM/bin/mod_manager.ini` at launch.
 
 - `DevMode=true|false` enables Debug level and all categories when true
 - `LogLevel=Debug|Info|Warning|Error|Fatal` sets minimum level
