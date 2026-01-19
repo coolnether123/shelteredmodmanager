@@ -59,7 +59,7 @@ namespace ModAPI.Core
 
         static MMLog()
         {
-            var baseDir = Directory.GetCurrentDirectory();
+            var baseDir = Path.Combine(Directory.GetCurrentDirectory(), "SMM");
             Directory.CreateDirectory(baseDir);
             _logPath = Path.Combine(baseDir, "mod_manager.log");
             try { if (File.Exists(_logPath)) _logFileSize = new FileInfo(_logPath).Length; } catch { _logFileSize = 0; }
@@ -77,7 +77,9 @@ namespace ModAPI.Core
         {
             try
             {
-                var ini = System.IO.Path.Combine(System.IO.Path.Combine(Directory.GetCurrentDirectory(), "SMM"), "mod_manager.ini");
+                var smmPath = Path.Combine(Directory.GetCurrentDirectory(), "SMM");
+                var binPath = Path.Combine(smmPath, "bin");
+                var ini = Path.Combine(binPath, "mod_manager.ini");
                 string devMode = null, logLevel = null, logCategories = null;
                 if (File.Exists(ini))
                 {

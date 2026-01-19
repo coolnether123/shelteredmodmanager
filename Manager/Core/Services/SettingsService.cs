@@ -21,7 +21,9 @@ namespace Manager.Core.Services
         public SettingsService()
         {
             string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            _iniPath = Path.Combine(exeDir, INI_FILENAME);
+            string binDir = Path.Combine(exeDir, "bin");
+            if (!Directory.Exists(binDir)) Directory.CreateDirectory(binDir);
+            _iniPath = Path.Combine(binDir, INI_FILENAME);
         }
 
         public SettingsService(string customPath)

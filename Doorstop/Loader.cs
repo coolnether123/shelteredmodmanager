@@ -18,9 +18,10 @@ namespace Doorstop
         {
             try
             {
-                var asm = typeof(Entrypoint).Assembly;
                 string arch = IntPtr.Size == 8 ? "x64" : "x86";
-                File.WriteAllText("mod_manager.log", $"[Doorstop] Sheltered Mod Manager starting ({arch})\n");
+                string smmLog = Path.Combine("SMM", "mod_manager.log");
+                if (!Directory.Exists("SMM")) Directory.CreateDirectory("SMM");
+                File.WriteAllText(smmLog, $"[Doorstop] Sheltered Mod Manager starting ({arch})\n");
                 Loader.Launch();
             }
             catch (System.Exception ex)
@@ -50,7 +51,7 @@ public static class Loader
         }
         catch (System.Exception ex)
         {
-            File.AppendAllText("mod_manager.log", $"[Loader] CRITICAL: {ex}\n");
+            File.AppendAllText(Path.Combine("SMM", "mod_manager.log"), $"[Loader] CRITICAL: {ex}\n");
         }
     }
 }
@@ -78,7 +79,7 @@ public static class UnityInitHook
             }
             if (!Loader.BootstrapTriggered)
             {
-                File.AppendAllText("mod_manager.log", "[Loader] ERROR: Timed out waiting for Unity\n");
+                File.AppendAllText(Path.Combine("SMM", "mod_manager.log"), "[Loader] ERROR: Timed out waiting for Unity\n");
             }
         });
         _poller.IsBackground = true;
@@ -119,12 +120,12 @@ public static class UnityInitHook
         try
         {
             if (!string.IsNullOrEmpty(_unityVersion))
-                File.AppendAllText("mod_manager.log", $"[Doorstop] Unity {_unityVersion} detected\n");
+                File.AppendAllText(Path.Combine("SMM", "mod_manager.log"), $"[Doorstop] Unity {_unityVersion} detected\n");
             DoorstopBootstrap.Trigger();
         }
         catch (System.Exception ex)
         {
-            File.AppendAllText("mod_manager.log", $"[Loader] CRITICAL: {ex}\n");
+            File.AppendAllText(Path.Combine("SMM", "mod_manager.log"), $"[Loader] CRITICAL: {ex}\n");
         }
     }
 
@@ -166,7 +167,7 @@ public static class DoorstopBootstrap
         }
         catch (System.Exception ex)
         {
-            File.AppendAllText("mod_manager.log", $"[Bootstrap] CRITICAL: {ex}\n");
+            File.AppendAllText(Path.Combine("SMM", "mod_manager.log"), $"[Bootstrap] CRITICAL: {ex}\n");
         }
     }
 }
@@ -210,7 +211,7 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
         }
         catch (System.Exception ex)
         {
-            File.AppendAllText("mod_manager.log", $"[Bootstrap] ERROR: {ex}\n");
+            File.AppendAllText(Path.Combine("SMM", "mod_manager.log"), $"[Bootstrap] ERROR: {ex}\n");
         }
     }
 
@@ -225,7 +226,7 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
             timeout -= Time.deltaTime;
             if (timeout <= 0f)
             {
-                File.AppendAllText("mod_manager.log", "[Bootstrap] ERROR: Camera timeout\n");
+                File.AppendAllText(Path.Combine("SMM", "mod_manager.log"), "[Bootstrap] ERROR: Camera timeout\n");
                 yield break;
             }
             yield return null;
@@ -265,7 +266,7 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
 
             if (!System.IO.File.Exists(modApiPath))
             {
-                File.AppendAllText("mod_manager.log", $"[Bootstrap] ERROR: ModAPI.dll not found at {modApiPath}\n");
+                File.AppendAllText(Path.Combine("SMM", "mod_manager.log"), $"[Bootstrap] ERROR: ModAPI.dll not found at {modApiPath}\n");
                 yield break;
             }
 
@@ -277,7 +278,7 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
             var loadMethod = pmType.GetMethod("loadAssemblies");
             loadMethod.Invoke(pm, new object[] { this.gameObject });
             
-            File.AppendAllText("mod_manager.log", "[Doorstop] Handoff to ModAPI complete\n");
+            File.AppendAllText(Path.Combine("SMM", "mod_manager.log"), "[Doorstop] Handoff to ModAPI complete\n");
         }
         catch (System.Exception ex)
         {

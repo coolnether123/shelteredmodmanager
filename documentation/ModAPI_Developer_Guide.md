@@ -9,7 +9,7 @@ A practical guide covering how to use the ModAPI to create mods for Sheltered.
 > - Item and food injection (ContentInjector)
 > - Custom crafting recipes
 > - Event subscriptions (OnNewDay, OnBeforeSave, OnAfterLoad, UI panel events)
-> - Logging and Settings
+> - Logging and Settings (located in `SMM/mod_manager.log`)
 > - Inter-mod communication (ModEventBus, ModRegistry)
 > - Runtime Inspector (F9)
 >
@@ -721,14 +721,14 @@ For advanced mods that need to interact with other mods.
 using ModAPI.Core;
 
 // Simple check
-if (ModRegistry.Find("com.otherauthor.somemod"))
+if (ModRegistry.Find("OtherAuthor.SomeMod"))
 {
     // Enable optional integration features
     EnablePartnerModIntegration();
 }
 
 // Get mod info
-ModEntry mod = ModRegistry.GetMod("com.otherauthor.somemod");
+ModEntry mod = ModRegistry.GetMod("OtherAuthor.SomeMod");
 if (mod != null)
 {
     MMLog.Info($"Found: {mod.Name} v{mod.Version}");
@@ -761,7 +761,7 @@ public void CompleteQuest(string questId, int reward)
     // Your logic...
     
     // Let other mods know
-    ModEventBus.Publish("com.myname.mymod.QuestCompleted", new QuestCompletedData
+    ModEventBus.Publish("MyName.MyMod.QuestCompleted", new QuestCompletedData
     {
         QuestId = questId,
         Reward = reward
@@ -772,7 +772,7 @@ public void CompleteQuest(string questId, int reward)
 ### Subscribing to Other Mods' Events
 
 ```csharp
-ModEventBus.Subscribe<QuestCompletedData>("com.othermod.QuestCompleted", data => 
+ModEventBus.Subscribe<QuestCompletedData>("OtherMod.QuestCompleted", data => 
 {
     MMLog.Info($"Other mod completed quest: {data.QuestId}");
     GiveBonusReward(data.Reward / 10);
@@ -795,7 +795,7 @@ public interface IMyAPI
 ModAPIRegistry.RegisterAPI<IMyAPI>("com.myname.MyAPI", new MyAPIImpl());
 
 // Consume from another mod
-if (ModAPIRegistry.TryGetAPI<IMyAPI>("com.othermod.API", out var api))
+if (ModAPIRegistry.TryGetAPI<IMyAPI>("OtherMod.API", out var api))
 {
     api.RegisterCustomQuest("bonus_quest", myQuestData);
 }

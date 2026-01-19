@@ -87,7 +87,7 @@ A “Mods” button is added to the main menu.
 ## Uninstall
 
 1. Delete the `mods` and `SMM` folders
-2. Remove doorstop_config.ini, mod_manager.log, and winhttp.dll
+2. Remove doorstop_config.ini, SMM\mod_manager.log, and winhttp.dll
 3. Verify game files via Steam/Epic if any issues arise
 
 Your vanilla save files are not deleted.
@@ -147,15 +147,15 @@ Sheltered/
 
 ```json
 {
-  "id": "com.yourname.mycoolmod",
+  "id": "YourName.MyCoolMod",
   "name": "My Cool Mod",
   "version": "1.0.0",
   "authors": ["Your Name"],
   "description": "Adds cool features to Sheltered!",
   "entryType": "MyCoolMod.MyPlugin",
-  "dependsOn": ["com.other.mod>=2.0.0"],
-  "loadBefore": ["com.some.mod"],
-  "loadAfter": ["com.core.api"],
+  "dependsOn": ["OtherAuthor.SomeMod>=2.0.0"],
+  "loadBefore": ["SomeMod"],
+  "loadAfter": ["CoreAPI"],
   "tags": ["QoL", "Items"],
   "website": "https://nexusmods.com/sheltered/mods/123",
   "missingModWarning": "This save uses custom items that will be lost!"
