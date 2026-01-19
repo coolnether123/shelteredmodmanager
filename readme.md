@@ -34,8 +34,8 @@ Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs n
 - Desktop and in-game mod managers
 - Runtime inspector (F9) for debugging
 
-![Desktop Manager](documentation/screenshots/mod_manager_gui.png)
-*The desktop application for managing your mod load order.*
+![Desktop Manager](documentation/screenshots/mod_manager_gui_mods.png)
+*The Mod Manager mods tab allows you to customize your load order, resolve dependencies, and view detailed mod information.*
 
 The API is under active development - see the documentation for current capabilities.
 
@@ -74,7 +74,7 @@ Each save records which mods were active when it was created.
 * One-click “Reload with Save Mods” option
 
 ![Save Verification](documentation/screenshots/mod_ingame_modverification_menu.png)
-*Visualizing mod compatibility per save slot.*
+*The in-game verification system ensures your active mod list matches your save file exactly to prevent corruption.*
 
 ### Unlimited save slots
 
@@ -90,7 +90,7 @@ A “Mods” button is added to the main menu.
 * See versions, authors, and dependencies
 
 ![In-Game Mod Manager](documentation/screenshots/mod_ingame_modsmenu.png)
-*Manage your mods without leaving the game.*
+*Access full mod details, versions, and descriptions directly from the Sheltered main menu.*
 
 # Support
 
