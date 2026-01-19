@@ -252,12 +252,18 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
                 string assemblyPath = System.IO.Path.Combine(smmBinPath, assemblyName + ".dll");
 
                 if (System.IO.File.Exists(assemblyPath))
-                    return System.Reflection.Assembly.LoadFrom(assemblyPath);
+                {
+                    byte[] assemblyBytes = System.IO.File.ReadAllBytes(assemblyPath);
+                    return System.Reflection.Assembly.Load(assemblyBytes);
+                }
 
                 // Also check SMM root
                 assemblyPath = System.IO.Path.Combine(smmPath, assemblyName + ".dll");
                 if (System.IO.File.Exists(assemblyPath))
-                    return System.Reflection.Assembly.LoadFrom(assemblyPath);
+                {
+                    byte[] assemblyBytes = System.IO.File.ReadAllBytes(assemblyPath);
+                    return System.Reflection.Assembly.Load(assemblyBytes);
+                }
 
                 return null;
             };
@@ -271,7 +277,8 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
             }
 
             // Load ModAPI and hand off to PluginManager
-            var modApiAsm = System.Reflection.Assembly.LoadFrom(modApiPath);
+            byte[] modApiBytes = System.IO.File.ReadAllBytes(modApiPath);
+            var modApiAsm = System.Reflection.Assembly.Load(modApiBytes);
             var pmType = modApiAsm.GetType("ModAPI.Core.PluginManager");
             var getInstance = pmType.GetMethod("getInstance", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
             var pm = getInstance.Invoke(null, null);

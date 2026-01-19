@@ -527,10 +527,11 @@ namespace Manager
                     lines.Add("DevMode=" + (_settings.DevMode ? "True" : "False"));
                     lines.Add("LogLevel=" + (_settings.LogLevel ?? "Info"));
                     
-                    var catList = new System.Collections.Generic.List<string>();
-                    foreach (string cat in _settings.LogCategories)
-                        catList.Add(cat);
-                    lines.Add("LogCategories=" + string.Join(",", catList.ToArray()));
+                    // LogCategories disabled in v1.0 - category filtering not currently used
+                    // var catList = new System.Collections.Generic.List<string>();
+                    // foreach (string cat in _settings.LogCategories)
+                    //     catList.Add(cat);
+                    // lines.Add("LogCategories=" + string.Join(",", catList.ToArray()));
                     lines.Add("IgnoreOrderChecks=" + (_settings.IgnoreOrderChecks ? "True" : "False"));
                     File.WriteAllLines(iniPath, lines.ToArray());
                 }

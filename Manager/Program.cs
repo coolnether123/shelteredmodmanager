@@ -119,7 +119,8 @@ namespace Manager
             if (File.Exists(assemblyPath))
             {
                 // MMLog.Write($"[Manager] Resolving assembly: {assemblyName} from {assemblyPath}");
-                return Assembly.LoadFrom(assemblyPath);
+                byte[] assemblyBytes = File.ReadAllBytes(assemblyPath);
+                return Assembly.Load(assemblyBytes);
             }
 
             // If not found, return null to let the default resolution continue or fail

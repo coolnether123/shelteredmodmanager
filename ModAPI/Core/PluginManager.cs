@@ -431,7 +431,16 @@ namespace ModAPI.Core
 
         private static Assembly SafeLoadAssembly(string path)
         {
-            try { return Assembly.LoadFrom(path); } catch (Exception ex) { MMLog.WarnOnce("PluginManager.SafeLoadAssembly", "Error loading assembly: " + ex.Message); return null; }
+            try 
+            { 
+                byte[] assemblyBytes = File.ReadAllBytes(path);
+                return Assembly.Load(assemblyBytes); 
+            } 
+            catch (Exception ex) 
+            { 
+                MMLog.WarnOnce("PluginManager.SafeLoadAssembly", "Error loading assembly: " + ex.Message); 
+                return null; 
+            }
         }
 
         private static Type ResolveType(string typeName)

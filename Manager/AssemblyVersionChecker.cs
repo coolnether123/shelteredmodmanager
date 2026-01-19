@@ -32,8 +32,9 @@ namespace Manager
                     return null;
                 }
 
-                // Use ReflectionOnlyLoadFrom to avoid executing code
-                var assembly = Assembly.ReflectionOnlyLoadFrom(modApiPath);
+                // Load assembly bytes to avoid file locking
+                byte[] assemblyBytes = File.ReadAllBytes(modApiPath);
+                var assembly = Assembly.ReflectionOnlyLoad(assemblyBytes);
                 return assembly.GetName().Version?.ToString();
             }
             catch (Exception ex)
@@ -57,8 +58,9 @@ namespace Manager
                     return null;
                 }
 
-                // Use ReflectionOnlyLoadFrom to avoid executing code
-                var assembly = Assembly.ReflectionOnlyLoadFrom(modDllPath);
+                // Load assembly bytes to avoid file locking
+                byte[] assemblyBytes = File.ReadAllBytes(modDllPath);
+                var assembly = Assembly.ReflectionOnlyLoad(assemblyBytes);
                 var references = assembly.GetReferencedAssemblies();
 
                 // Find the ModAPI reference
