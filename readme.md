@@ -1,3 +1,4 @@
+![Mod Manager GUI](documentation/screenshots/mod_manager_gui.png)
 # Sheltered Mod Manager v1.0
 
 **A modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Unicube & Team17**
@@ -32,6 +33,9 @@ Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs n
 - Developer API for items, recipes, events, and Harmony patching
 - Desktop and in-game mod managers
 - Runtime inspector (F9) for debugging
+
+![Desktop Manager](documentation/screenshots/mod_manager_gui.png)
+*The desktop application for managing your mod load order.*
 
 The API is under active development - see the documentation for current capabilities.
 
@@ -69,6 +73,9 @@ Each save records which mods were active when it was created.
 * Save Details window shows differences
 * One-click “Reload with Save Mods” option
 
+![Save Verification](documentation/screenshots/mod_ingame_modverification_menu.png)
+*Visualizing mod compatibility per save slot.*
+
 ### Unlimited save slots
 
 Removes the vanilla 3-slot limit.
@@ -81,6 +88,9 @@ A “Mods” button is added to the main menu.
 
 * View installed mods
 * See versions, authors, and dependencies
+
+![In-Game Mod Manager](documentation/screenshots/mod_ingame_modsmenu.png)
+*Manage your mods without leaving the game.*
 
 # Support
 

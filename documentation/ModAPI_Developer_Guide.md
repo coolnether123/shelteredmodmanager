@@ -431,6 +431,7 @@ public class MyMod : IModPlugin
 ---
 
 ## UI Events
+![In-Game Mods Menu](screenshots/mod_ingame_modsmenu.png)
 
 **Namespace:** `using ModAPI.Events;`
 
@@ -550,6 +551,7 @@ var label = UIHelper.GetComponent<UILabel>(someObject);
 ---
 
 ## Save System Integration
+![Save Verification](screenshots/mod_ingame_modverification_menu.png)
 
 **Namespace:** `using ModAPI.Saves;`
 

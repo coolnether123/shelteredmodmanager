@@ -54,7 +54,7 @@ public class MyPlugin : IModPlugin
     {
         _log.Info("MyPlugin starting...");
         
-        var harmony = new Harmony("com.yourname.myplugin");
+        var harmony = new Harmony("YourName.MyPlugin");
         harmony.PatchAll(System.Reflection.Assembly.GetExecutingAssembly());
         
         _log.Info("Harmony patches applied.");
@@ -63,7 +63,7 @@ public class MyPlugin : IModPlugin
 ```
 
 ## Tips
-- Use unique Harmony IDs (reverse domain style) to avoid conflicts
+- Use unique Harmony IDs (e.g. "Author.ModName") to avoid conflicts
 - Use `Traverse` in Harmony for private field/property access when needed
 - Keep patches focused; log with `ctx.Log.Info("...")` during development
 - Harmony is powerful, but in v1.0 you don't always need it:
