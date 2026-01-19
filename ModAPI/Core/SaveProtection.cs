@@ -136,6 +136,7 @@ namespace ModAPI.Core
             // State tracking for the load interruption
             private static bool _isWaitingForUser = false;
             internal static bool _forceLoad = false; // Internal so OnSlotChosen can set it
+            private static bool _loadingScreenAlreadyManaged = false; // Track if we've handled the loading screen
 
             // Prefix to read mod data and potentially pause loading
             public static bool Prefix(object __instance) // __instance is SaveManager
@@ -143,10 +144,11 @@ namespace ModAPI.Core
                 // If we are waiting for user input, pause the load
                 if (_isWaitingForUser) return false;
 
-                // If user confirmed load, proceed without checks
+                // If user confirmed load, proceed without checks and reset flag
                 if (_forceLoad)
                 {
                     _forceLoad = false; // Reset for next time
+                    _loadingScreenAlreadyManaged = false; // Reset so vanilla loading can proceed
                     return true;
                 }
 
@@ -218,18 +220,11 @@ namespace ModAPI.Core
                         MMLog.WriteWarning($"[LoadGamePatch] Mismatch detected ({currentState}) for slot {type}. Pausing load to show UI.");
                         
                         _isWaitingForUser = true;
+                        _loadingScreenAlreadyManaged = true; // We're taking control of the loading screen
 
-                        // Hide loading screen immediately (vanilla code may have already shown it)
-                        try
-                        {
-                            if (LoadingScreen.Instance != null && LoadingScreen.Instance.gameObject.activeInHierarchy)
-                            {
-                                LoadingScreen.Instance.gameObject.SetActive(false);
-                                MMLog.WriteDebug("[LoadGamePatch] Hid LoadingScreen before showing details dialog.");
-                            }
-                        }
-                        catch (Exception ex) { MMLog.WriteError("Error pre-hiding loading screen: " + ex); }
-
+                        // Don't hide LoadingScreen - our dialog has its own dark overlay (0.85 alpha) that will appear over it.
+                        // Hiding it here and then having vanilla show it again after "Load Anyway" causes visible flashing.
+                        
                         // Create dummy entry for UI (needs family name)
                         var entry = new ModAPI.Saves.SaveEntry
                         {
@@ -247,9 +242,10 @@ namespace ModAPI.Core
                         ModAPI.Hooks.Paging.SaveDetailsWindow.Show(entry, manifestForUI, currentState, true, 
                         () => 
                         {
-                            MMLog.WriteDebug("[LoadGamePatch] User accepted load.");
+                            MMLog.WriteDebug("[LoadGamePatch] User accepted load. Allowing Update_LoadData to proceed.");
                             _isWaitingForUser = false;
                             _forceLoad = true;
+                            // LoadingScreen should still be visible, vanilla Update_LoadData will complete the transition
                         },
                         () =>
                         {

@@ -75,7 +75,9 @@ namespace ModAPI.Core
             {
                 try
                 {
-                    var asm = Assembly.LoadFrom(dllPath);
+                    // Load assembly bytes to avoid file locking
+                    byte[] assemblyBytes = File.ReadAllBytes(dllPath);
+                    var asm = Assembly.Load(assemblyBytes);
                     assemblies.Add(asm);
                     ModRegistry.RegisterAssemblyForMod(asm, entry);
                 }

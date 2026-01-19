@@ -31,8 +31,7 @@ namespace Manager.Views
 
         // Logging
         private CheckBox _verboseLoggingCheckBox;
-        private Label _logCategoriesLabel;
-        private CheckedListBox _logCategoriesListBox;
+        // Log Categories UI removed for v1.0 - categories hardcoded in ModAPI
 
         // Advanced
         private CheckBox _skipHarmonyCheckBox;
@@ -114,51 +113,31 @@ namespace Manager.Views
             _devSettingsGroup.Text = "Developer Options";
             _devSettingsGroup.Font = new Font("Segoe UI", 10f);
             _devSettingsGroup.Location = new Point(20, yPos);
-            _devSettingsGroup.Size = new Size(500, 280);
+            _devSettingsGroup.Size = new Size(500, 130);  // Reduced height since Log Categories removed
             _devSettingsGroup.Visible = false;
 
-            // Logging within dev group
             _verboseLoggingCheckBox = new CheckBox();
             _verboseLoggingCheckBox.Text = "Verbose Logging (Debug Level)";
             _verboseLoggingCheckBox.Font = new Font("Segoe UI", 10f);
             _verboseLoggingCheckBox.AutoSize = true;
             _verboseLoggingCheckBox.Location = new Point(15, 25);
 
-            _logCategoriesLabel = new Label();
-            _logCategoriesLabel.Text = "Log Categories:";
-            _logCategoriesLabel.Font = new Font("Segoe UI", 9f);
-            _logCategoriesLabel.AutoSize = true;
-            _logCategoriesLabel.Location = new Point(15, 55);
-
-            _logCategoriesListBox = new CheckedListBox();
-            _logCategoriesListBox.Font = new Font("Segoe UI", 9f);
-            _logCategoriesListBox.Location = new Point(15, 80);
-            _logCategoriesListBox.Size = new Size(200, 120);
-            _logCategoriesListBox.CheckOnClick = true;
-            _logCategoriesListBox.Enabled = false;
-
-            // Add log categories
-            foreach (var cat in AppSettings.AllLogCategories)
-            {
-                _logCategoriesListBox.Items.Add(cat);
-            }
+            // Log Categories UI removed for v1.0 - categories hardcoded in ModAPI
 
             // Advanced options
             _skipHarmonyCheckBox = new CheckBox();
             _skipHarmonyCheckBox.Text = "Skip Harmony Dependency Check";
             _skipHarmonyCheckBox.Font = new Font("Segoe UI", 10f);
             _skipHarmonyCheckBox.AutoSize = true;
-            _skipHarmonyCheckBox.Location = new Point(15, 210);
+            _skipHarmonyCheckBox.Location = new Point(15, 55);
 
             _ignoreOrderCheckBox = new CheckBox();
             _ignoreOrderCheckBox.Text = "Ignore Load Order Checks";
             _ignoreOrderCheckBox.Font = new Font("Segoe UI", 10f);
             _ignoreOrderCheckBox.AutoSize = true;
-            _ignoreOrderCheckBox.Location = new Point(15, 240);
+            _ignoreOrderCheckBox.Location = new Point(15, 85);
 
             _devSettingsGroup.Controls.Add(_verboseLoggingCheckBox);
-            _devSettingsGroup.Controls.Add(_logCategoriesLabel);
-            _devSettingsGroup.Controls.Add(_logCategoriesListBox);
             _devSettingsGroup.Controls.Add(_skipHarmonyCheckBox);
             _devSettingsGroup.Controls.Add(_ignoreOrderCheckBox);
 
@@ -228,7 +207,7 @@ namespace Manager.Views
             _verboseLoggingCheckBox.CheckedChanged += VerboseLoggingCheckBox_CheckedChanged;
             _skipHarmonyCheckBox.CheckedChanged += SkipHarmonyCheckBox_CheckedChanged;
             _ignoreOrderCheckBox.CheckedChanged += IgnoreOrderCheckBox_CheckedChanged;
-            _logCategoriesListBox.ItemCheck += LogCategoriesListBox_ItemCheck;
+            // Log Categories event removed - UI no longer exists
             _resetButton.Click += ResetButton_Click;
         }
 
@@ -257,7 +236,7 @@ namespace Manager.Views
 
         private void VerboseLoggingCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            _logCategoriesListBox.Enabled = _verboseLoggingCheckBox.Checked;
+            // Log Categories UI removed - just update LogLevel setting
             if (_settings != null) 
                 _settings.LogLevel = _verboseLoggingCheckBox.Checked ? "Debug" : "Info";
             
@@ -280,25 +259,9 @@ namespace Manager.Views
             TriggerSave();
         }
 
-        private void LogCategoriesListBox_ItemCheck(object sender, ItemCheckEventArgs e)
-        {
-            if (_settings != null)
-            {
-                // Need to use BeginInvoke because ItemCheck fires before the change is applied
-                this.BeginInvoke(new MethodInvoker(UpdateLogCategories));
-            }
-        }
-
-        private void UpdateLogCategories()
-        {
-            if (_settings == null) return;
-            
-            _settings.LogCategories.Clear();
-            foreach (var item in _logCategoriesListBox.CheckedItems)
-            {
-                _settings.LogCategories.Add(item.ToString());
-            }
-        }
+        // Log Categories UI removed for v1.0 - categories hardcoded in ModAPI
+        // private void LogCategoriesListBox_ItemCheck removed
+        // private void UpdateLogCategories removed
 
 
 
@@ -330,14 +293,7 @@ namespace Manager.Views
                     isDebug = string.Equals(_settings.LogLevel, "Debug", StringComparison.OrdinalIgnoreCase);
                 
                 _verboseLoggingCheckBox.Checked = isDebug;
-                _logCategoriesListBox.Enabled = _verboseLoggingCheckBox.Checked;
-
-                // Check matching categories
-                for (int i = 0; i < _logCategoriesListBox.Items.Count; i++)
-                {
-                    var cat = _logCategoriesListBox.Items[i].ToString();
-                    _logCategoriesListBox.SetItemChecked(i, _settings.LogCategories.Contains(cat));
-                }
+                // Log Categories UI removed - no listbox to populate
 
                 _skipHarmonyCheckBox.Checked = _settings.SkipHarmonyDependencyCheck;
                 _ignoreOrderCheckBox.Checked = _settings.IgnoreOrderChecks;
@@ -360,12 +316,7 @@ namespace Manager.Views
             _settings.LogLevel = _verboseLoggingCheckBox.Checked ? "Debug" : "Info";
             _settings.SkipHarmonyDependencyCheck = _skipHarmonyCheckBox.Checked;
             _settings.IgnoreOrderChecks = _ignoreOrderCheckBox.Checked;
-
-            _settings.LogCategories.Clear();
-            foreach (var item in _logCategoriesListBox.CheckedItems)
-            {
-                _settings.LogCategories.Add(item.ToString());
-            }
+            // Log Categories not saved from UI - hardcoded in ModAPI
         }
 
         /// <summary>
@@ -384,9 +335,6 @@ namespace Manager.Views
                 _devSettingsGroup.ForeColor = Color.White;
                 _devSettingsGroup.BackColor = Color.FromArgb(50, 50, 52);
                 _verboseLoggingCheckBox.ForeColor = Color.White;
-                _logCategoriesLabel.ForeColor = Color.White;
-                _logCategoriesListBox.BackColor = Color.FromArgb(60, 60, 60);
-                _logCategoriesListBox.ForeColor = Color.White;
                 _skipHarmonyCheckBox.ForeColor = Color.White;
                 _ignoreOrderCheckBox.ForeColor = Color.White;
                 
@@ -403,9 +351,6 @@ namespace Manager.Views
                 _devSettingsGroup.ForeColor = SystemColors.ControlText;
                 _devSettingsGroup.BackColor = SystemColors.Control;
                 _verboseLoggingCheckBox.ForeColor = SystemColors.ControlText;
-                _logCategoriesLabel.ForeColor = SystemColors.ControlText;
-                _logCategoriesListBox.BackColor = SystemColors.Window;
-                _logCategoriesListBox.ForeColor = SystemColors.WindowText;
                 _skipHarmonyCheckBox.ForeColor = SystemColors.ControlText;
                 _ignoreOrderCheckBox.ForeColor = SystemColors.ControlText;
                 

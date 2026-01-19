@@ -21,6 +21,9 @@ namespace ModAPI.Core
             Fatal = 4
         }
 
+        // TODO: LogCategory system needs to be reworked more directly into ModAPI
+        // For v1.0 release, categories are HARDCODED (no INI customization)
+        // Default categories: General, Loader, Plugin, Assembly
         public enum LogCategory
         {
             General,
@@ -64,6 +67,7 @@ namespace ModAPI.Core
             _logPath = Path.Combine(baseDir, "mod_manager.log");
             try { if (File.Exists(_logPath)) _logFileSize = new FileInfo(_logPath).Length; } catch { _logFileSize = 0; }
 
+            // Hardcoded defaults for v1.0 - same as original behavior
             _enabledCategories.Add(LogCategory.General);
             _enabledCategories.Add(LogCategory.Loader);
             _enabledCategories.Add(LogCategory.Plugin);
@@ -97,28 +101,30 @@ namespace ModAPI.Core
                         else if (key.Equals("LogCategories", StringComparison.OrdinalIgnoreCase)) logCategories = val;
                     }
                 }
-
+                // DevMode or Debug LogLevel = enable ALL categories for verbose logging
                 if (!string.IsNullOrEmpty(devMode) && devMode.ToLower() == "true")
                 {
                     _minLevel = LogLevel.Debug;
+                    // Enable all categories for verbose logging
                     _enabledCategories.Clear();
                     foreach (LogCategory cat in Enum.GetValues(typeof(LogCategory)))
                         _enabledCategories.Add(cat);
                 }
 
                 var level = TryParseLogLevel(logLevel);
-                if (level.HasValue) _minLevel = level.Value;
-
-                if (!string.IsNullOrEmpty(logCategories))
+                if (level.HasValue)
                 {
-                    _enabledCategories.Clear();
-                    var parts = (logCategories ?? string.Empty).Split(',');
-                    foreach (var p in parts)
+                    _minLevel = level.Value;
+                    // If Debug level is set, also enable all categories
+                    if (level.Value == LogLevel.Debug)
                     {
-                        var c = TryParseLogCategory(p.Trim());
-                        if (c.HasValue) _enabledCategories.Add(c.Value);
+                        _enabledCategories.Clear();
+                        foreach (LogCategory cat in Enum.GetValues(typeof(LogCategory)))
+                            _enabledCategories.Add(cat);
                     }
                 }
+
+                // LogCategories INI setting ignored in v1.0 - categories controlled by LogLevel
             }
             catch (Exception ex)
             {
@@ -362,6 +368,7 @@ namespace ModAPI.Core
 
             lock (_lock)
             {
+                // Category filtering enabled - only configured categories log (unless Error level)
                 if (!_enabledCategories.Contains(category) && level < LogLevel.Error)
                     return;
 
