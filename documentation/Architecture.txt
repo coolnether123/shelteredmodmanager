@@ -1,8 +1,0 @@
-# Lifecylce of the project
-This document contains a description of the lifecycle within this project.
-
-1. The Sheltered.exe gets launched (either by the Manager-GUI or somehow else)
-2. This executes the winhttp.dll or the version.dll, which initializes the doorstop-library
-3. The doorstep-library then initializes the Loader of this project (within \Doorstop)
-4. The Loader initializes the ModAPI-, PluginManager- and all the plugins which are stored in the <game_root>\mods directory
-5. The game launches with all plugins started, happy modding!

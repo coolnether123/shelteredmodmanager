@@ -37,7 +37,8 @@ namespace Manager.Core.Services
                     
                     // Skip reserved folder names
                     if (string.Equals(folderName, "disabled", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(folderName, "SMM", StringComparison.OrdinalIgnoreCase))
+                        string.Equals(folderName, "SMM", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(folderName, "ModAPI", StringComparison.OrdinalIgnoreCase))
                         continue;
 
                     var mod = DiscoverMod(dir);

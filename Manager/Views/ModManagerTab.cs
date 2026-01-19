@@ -29,7 +29,6 @@ namespace Manager.Views
         private ActionButton _disableButton;
         private ActionButton _moveUpButton;
         private ActionButton _moveDownButton;
-        private ActionButton _saveOrderButton;
         private Panel _buttonPanel;
 
         // Services
@@ -74,7 +73,6 @@ namespace Manager.Views
             this._disableButton = new Manager.Controls.ActionButton();
             this._moveUpButton = new Manager.Controls.ActionButton();
             this._moveDownButton = new Manager.Controls.ActionButton();
-            this._saveOrderButton = new Manager.Controls.ActionButton();
             this._enabledList = new Manager.Controls.ModListView();
             this._detailsPanel = new Manager.Controls.ModDetailsPanel();
             this._buttonPanel.SuspendLayout();
@@ -98,7 +96,6 @@ namespace Manager.Views
             this._buttonPanel.Controls.Add(this._disableButton);
             this._buttonPanel.Controls.Add(this._moveUpButton);
             this._buttonPanel.Controls.Add(this._moveDownButton);
-            this._buttonPanel.Controls.Add(this._saveOrderButton);
             this._buttonPanel.Dock = System.Windows.Forms.DockStyle.Left;
             this._buttonPanel.Location = new System.Drawing.Point(295, 15);
             this._buttonPanel.MinimumSize = new System.Drawing.Size(130, 300);
@@ -174,24 +171,6 @@ namespace Manager.Views
             this._moveDownButton.Text = "Move Down";
             this._moveDownButton.UseVisualStyleBackColor = false;
             // 
-            // _saveOrderButton
-            // 
-            this._saveOrderButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(120)))), ((int)(((byte)(215)))));
-            this._saveOrderButton.Cursor = System.Windows.Forms.Cursors.Hand;
-            this._saveOrderButton.Enabled = false;
-            this._saveOrderButton.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(100)))), ((int)(((byte)(180)))));
-            this._saveOrderButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this._saveOrderButton.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
-            this._saveOrderButton.ForeColor = System.Drawing.Color.White;
-            this._saveOrderButton.IsPrimary = true;
-            this._saveOrderButton.Location = new System.Drawing.Point(0, 0);
-            this._saveOrderButton.MinimumSize = new System.Drawing.Size(100, 35);
-            this._saveOrderButton.Name = "_saveOrderButton";
-            this._saveOrderButton.Size = new System.Drawing.Size(110, 35);
-            this._saveOrderButton.TabIndex = 4;
-            this._saveOrderButton.Text = "Save Order";
-            this._saveOrderButton.UseVisualStyleBackColor = false;
-            // 
             // _enabledList
             // 
             this._enabledList.Dock = System.Windows.Forms.DockStyle.Left;
@@ -243,7 +222,6 @@ namespace Manager.Views
             _disableButton.Click += DisableButton_Click;
             _moveUpButton.Click += MoveUpButton_Click;
             _moveDownButton.Click += MoveDownButton_Click;
-            _saveOrderButton.Click += SaveOrderButton_Click;
 
             // Open folder
             _detailsPanel.OpenFolderClicked += DetailsPanel_OpenFolderClicked;
@@ -260,8 +238,8 @@ namespace Manager.Views
             int spacing = 10;
             int groupSpacing = 20; // Extra space between button groups
             
-            // Calculate total height: 2 buttons + gap + 2 buttons + gap + 1 button
-            int totalHeight = (buttonHeight * 5) + (spacing * 2) + (groupSpacing * 2);
+            // Calculate total height: 2 buttons + gap + 2 buttons
+            int totalHeight = (buttonHeight * 4) + (spacing * 2) + groupSpacing;
             int startY = Math.Max(10, (_buttonPanel.Height - totalHeight) / 2);
             int centerX = Math.Max(0, (_buttonPanel.Width - 110) / 2);
             
@@ -273,10 +251,6 @@ namespace Manager.Views
             int moveGroupY = startY + (buttonHeight * 2) + spacing + groupSpacing;
             _moveUpButton.Location = new Point(centerX, moveGroupY);
             _moveDownButton.Location = new Point(centerX, moveGroupY + buttonHeight + spacing);
-            
-            // Position Save Order button (with extra spacing)
-            int saveY = moveGroupY + (buttonHeight * 2) + spacing + groupSpacing;
-            _saveOrderButton.Location = new Point(centerX, saveY);
         }
 
         private void AvailableList_SelectionChanged(object sender, ModItem mod)
@@ -319,11 +293,6 @@ namespace Manager.Views
         private void MoveDownButton_Click(object sender, EventArgs e)
         {
             MoveSelectedDown();
-        }
-
-        private void SaveOrderButton_Click(object sender, EventArgs e)
-        {
-            SaveOrder();
         }
 
         private void DetailsPanel_OpenFolderClicked(object sender, string path)
@@ -465,34 +434,11 @@ namespace Manager.Views
             }
         }
 
-        private void SaveOrder()
-        {
-            try
-            {
-                var items = _enabledList.Items;
-                var enabledIds = new List<string>();
-                foreach (var m in items)
-                {
-                    enabledIds.Add(m.Id);
-                }
-                
-                _orderService.SaveOrder(_settings.ModsPath, enabledIds);
-                
-                _orderDirty = false;
-                UpdateButtonStates();
-                
-                if (OrderSaved != null)
-                    OrderSaved(enabledIds.ToArray());
-                
-                MessageBox.Show("Load order saved successfully!", "Saved", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Failed to save load order: " + ex.Message, "Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
+        /*
+         * TODO: Implement mod lists / profiles here.
+         * The load order is now saved instantly upon any change, making the manual 'Save Order' button redundant.
+         * Future work can use this space for managing multiple mod configurations.
+         */
 
         private void MarkOrderDirty()
         {
@@ -536,9 +482,6 @@ namespace Manager.Views
             
             _moveUpButton.Enabled = enabledSelected != null && selectedIndex > 0;
             _moveDownButton.Enabled = enabledSelected != null && selectedIndex >= 0 && selectedIndex < enabledItems.Count - 1;
-            
-            _saveOrderButton.Enabled = _orderDirty;
-            _saveOrderButton.Text = _orderDirty ? "Save Order*" : "Save Order";
         }
 
         /// <summary>
@@ -562,7 +505,6 @@ namespace Manager.Views
             _disableButton.ApplyTheme(isDark);
             _moveUpButton.ApplyTheme(isDark);
             _moveDownButton.ApplyTheme(isDark);
-            _saveOrderButton.ApplyTheme(isDark);
         }
     }
 }

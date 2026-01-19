@@ -469,7 +469,7 @@ namespace ModAPI.Hooks.Paging
             
             try
             {
-                MMLog.Write("[ModAPI] Searching for clipboard visuals...");
+                MMLog.WriteDebug("[ModAPI] Searching for clipboard visuals...");
                 
                 GameObject templateGroup = null;
                 
@@ -498,11 +498,11 @@ namespace ModAPI.Hooks.Paging
                             return true;
                         }
                     }
-                    MMLog.Write("[ModAPI] No clipboard template found. Using fallback.");
+                    MMLog.WriteDebug("[ModAPI] No clipboard template found. Using fallback.");
                     return false;
                 }
 
-                MMLog.Write("[ModAPI] Cloning visuals from: " + templateGroup.name);
+                MMLog.WriteDebug("[ModAPI] Cloning visuals from: " + templateGroup.name);
                 
                 // If it's just a single object (like a sprite GO), clone it directly
                 if (templateGroup.GetComponent<UISprite>() != null || templateGroup.GetComponent<UITexture>() != null)

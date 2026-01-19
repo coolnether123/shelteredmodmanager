@@ -108,11 +108,11 @@ namespace ModAPI.Hooks.Paging
             ModAPI.Saves.Events.RaisePageChanged(newPage); // Triggers RefreshSaveSlotInfo patch which updates UI
 
             // Tutorial Check
-            if (newPage == 1 && PlayerPrefs.GetInt("ModAPI_HasSeenCustomSavesHelp", 0) == 0)
+            if (newPage == 1 && ModPrefs.GetInt("ModAPI_HasSeenCustomSavesHelp", 0) == 0)
             {
-                PlayerPrefs.SetInt("ModAPI_HasSeenCustomSavesHelp", 1);
-                PlayerPrefs.Save();
-                MessageBox.Show(MessageBoxButtons.Okay_Button, "Welcome to Custom Saves!\n\nPage 2+ contains unlimited custom saves.\nUse arrows to navigate pages.\nSlots 1-3 are vanilla.");
+                ModPrefs.SetInt("ModAPI_HasSeenCustomSavesHelp", 1);
+                ModPrefs.Save();
+                MessageBox.Show(MessageBoxButtons.Okay_Button, "Welcome to Custom Saves!\n\nPage 2+ contains unlimited custom saves.\nUse arrows to navigate pages.\n\nNOTE: Deleting a custom save will cause subsequent slots to shift up ('collapse') to fill the gap after reloading the game.\n\nSlots 1-3 are vanilla.");
             }
 
             panel.RefreshSaveSlotInfo(); // This will trigger our Postfix patch to update the UI
