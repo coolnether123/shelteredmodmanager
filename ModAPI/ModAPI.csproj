@@ -94,6 +94,7 @@
     <Compile Include="Core\ModEntry.cs" />
     <Compile Include="Core\ModAboutReader.cs" />
     <Compile Include="Core\ModDiscovery.cs" />
+    <Compile Include="Core\ModPrefs.cs" />
     <Compile Include="Core\RuntimeCompat.cs" />
     <Compile Include="Content\AssetLoader.cs" />
     <Compile Include="Util\SceneCompat.cs" />

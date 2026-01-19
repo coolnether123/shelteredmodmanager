@@ -17,7 +17,6 @@ namespace Manager.Views
         
         private LinkLabel _nexusLink;
         private LinkLabel _githubLink;
-        private LinkLabel _discordLink;
         
         private Label _creditsLabel;
         private RichTextBox _creditsBox;
@@ -80,20 +79,21 @@ namespace Manager.Views
 
             _descriptionBox = new RichTextBox();
             _descriptionBox.Text =
-                "Sheltered Mod Manager is a modding framework for Sheltered (Unicube/Team17).\n" +
-                "It includes a plugin loader, ModAPI, and custom save tools.\n\n" +
+                "Sheltered Mod Manager is a modding framework for Sheltered.\n\n" +
 
                 "Core features:\n" +
-                "• Loads ModAPI plugins and Harmony patches.\n" +
-                "• Resolves dependencies and load order via About.json.\n" +
-                "• Adds unlimited custom save slots with save mod tracking + verification.\n" +
-                "• Supports Steam (32-bit) and Epic (64-bit) builds via UnityDoorstop.\n\n" +
+                "• Unlimited save slots with custom paging UI.\n" +
+                "• Save protection - tracks mods per save and warns on mismatches.\n" +
+                "• In-game mod manager accessible from the main menu.\n" +
+                "• Plugin loader with dependency resolution.\n" +
+                "• Supports Steam (32-bit) and Epic (64-bit) via UnityDoorstop.\n\n" +
 
-                "Notes:\n" +
-                "• Custom saves are stored separately from vanilla saves.\n" +
-                "• Deleting saves may reindex remaining slots.\n\n" +
+                "Developer API (early development):\n" +
+                "• Item and food injection, custom recipes.\n" +
+                "• Event subscriptions and Harmony integration.\n" +
+                "• Runtime inspector (F9).\n\n" +
 
-                "Originally created by benjaminfoo (2019). Maintained by Coolnether123 (2025–present).";
+                "Originally created by benjaminfoo (2019). Maintained by Coolnether123 (2025).";
 
             _descriptionBox.Font = new Font("Segoe UI", 10f);
             _descriptionBox.Location = new Point(20, yPos);
@@ -112,7 +112,7 @@ namespace Manager.Views
             rightColumnY += 30;
 
             _nexusLink = new LinkLabel();
-            _nexusLink.Text = "Nexus Mods Portal";
+            _nexusLink.Text = "Nexus Mods";
             _nexusLink.Font = new Font("Segoe UI", 10f);
             _nexusLink.AutoSize = true;
             _nexusLink.Location = new Point(rightColumnX + 10, rightColumnY);
@@ -120,19 +120,11 @@ namespace Manager.Views
             rightColumnY += 25;
 
             _githubLink = new LinkLabel();
-            _githubLink.Text = "Official GitHub Repository";
+            _githubLink.Text = "GitHub Repository";
             _githubLink.Font = new Font("Segoe UI", 10f);
             _githubLink.AutoSize = true;
             _githubLink.Location = new Point(rightColumnX + 10, rightColumnY);
             _githubLink.LinkClicked += GithubLink_LinkClicked;
-            rightColumnY += 25;
-
-            _discordLink = new LinkLabel();
-            _discordLink.Text = "Modding Discord Community";
-            _discordLink.Font = new Font("Segoe UI", 10f);
-            _discordLink.AutoSize = true;
-            _discordLink.Location = new Point(rightColumnX + 10, rightColumnY);
-            _discordLink.LinkClicked += DiscordLink_LinkClicked;
             rightColumnY += 50;
 
             // Credits section
@@ -145,11 +137,12 @@ namespace Manager.Views
             rightColumnY += 30;
 
             _creditsBox = new RichTextBox();
-            _creditsBox.Text = "• Unicube & Team17: Developers and publishers of Sheltered.\n" +
-                   "• benjaminfoo: Architecture of the original 2019 mod loader.\n" +
-                   "• NeighTools: Creators of the UnityDoorstop injection framework.\n" +
-                   "• Andreas Pardeike: Developer of the Harmony patching library.\n" +
-                   "• Those testing and seeing this: Thank you from Coolnether123";
+            _creditsBox.Text = "• Unicube: Developer of Sheltered.\n" +
+                   "• Team17: Publisher of Sheltered.\n" +
+                   "• benjaminfoo: Original 2019 mod loader foundation.\n" +
+                   "• NeighTools: UnityDoorstop injection framework.\n" +
+                   "• Andreas Pardeike: Harmony patching library.\n" +
+                   "• Coolnether123: 2025 active development.";
             _creditsBox.Font = new Font("Segoe UI", 10f);
             _creditsBox.Location = new Point(rightColumnX, rightColumnY);
             _creditsBox.Size = new Size(this.Width - rightColumnX - 40, this.Height - rightColumnY - 20); // Dynamic width and height
@@ -165,7 +158,6 @@ namespace Manager.Views
             this.Controls.Add(_linksLabel);
             this.Controls.Add(_nexusLink);
             this.Controls.Add(_githubLink);
-            this.Controls.Add(_discordLink);
             this.Controls.Add(_creditsLabel);
             this.Controls.Add(_creditsBox);
 
@@ -182,10 +174,7 @@ namespace Manager.Views
             OpenUrl("https://github.com/coolnether123/shelteredmodmanager");
         }
 
-        private void DiscordLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
-        {
-            OpenUrl("https://discord.gg/sheltered-mods");
-        }
+
 
         private void OpenUrl(string url)
         {
@@ -222,7 +211,6 @@ namespace Manager.Views
                 
                 _nexusLink.LinkColor = Color.LightBlue;
                 _githubLink.LinkColor = Color.LightBlue;
-                _discordLink.LinkColor = Color.LightBlue;
             }
             else
             {
@@ -239,7 +227,6 @@ namespace Manager.Views
                 
                 _nexusLink.LinkColor = SystemColors.HotTrack;
                 _githubLink.LinkColor = SystemColors.HotTrack;
-                _discordLink.LinkColor = SystemColors.HotTrack;
             }
         }
     }

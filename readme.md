@@ -1,7 +1,5 @@
 # Sheltered Mod Manager v1.0
 
-<img src="/documentation/logo.png" width="600">
-
 **A modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Unicube & Team17**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -26,19 +24,16 @@ In 2025, I (Coolnether123) discovered Sheltered and went looking for mods. The o
 
 ## About
 
-Sheltered Mod Manager (SMM) adds files alongside the game. It does not overwrite core game assets. It adds a loader DLL (winhttp.dll) and config files to hook at startup. It includes a plugin API, unlimited save slots with mod tracking, and tools for players and mod creators.
+Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs non-destructively alongside the game.
 
-The goal of SMM is to provide a stable foundation for Sheltered mods, for both players and mod authors. The developer API is actively growing, with more features planned for future updates.
+**Key Features:**
+- Plugin loader with dependency resolution and load order management
+- Unlimited custom save slots with mod tracking and verification
+- Developer API for items, recipes, events, and Harmony patching
+- Desktop and in-game mod managers
+- Runtime inspector (F9) for debugging
 
-## Core features
-
-* A native plugin API for mods
-* Unlimited save slots with safety checks
-* Mod tracking per save file
-* A desktop mod manager
-* An in-game mod manager
-* Developer tools for creating and debugging mods
-
+The API is under active development - see the documentation for current capabilities.
 
 ## Installation
 
@@ -47,7 +42,7 @@ Steam users: install the 32-bit package named Steam.
 Epic users: install the 64-bit package named Epic.
 
 1. **Back up your Sheltered folder**
-2.  Copy the files into the Sheltered game directory
+2.  Copy the (Steam or Epic) files into the Sheltered game directory
    (same folder as `Sheltered.exe` or `ShelteredWindows64_EOS.exe`)
 3. Run `SMM\Manager.exe`
 4. Enable mods and launch the game

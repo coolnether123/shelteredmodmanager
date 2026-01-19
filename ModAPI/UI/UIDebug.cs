@@ -22,7 +22,7 @@ namespace ModAPI.UI
         public static void ResetTiming()
         {
             _startTime = Time.realtimeSinceStartup;
-            MMLog.Write($"[UIDebug] Timing reset at frame {Time.frameCount}");
+            MMLog.WriteDebug($"[UIDebug] Timing reset at frame {Time.frameCount}");
         }
         
         /// <summary>
@@ -31,7 +31,7 @@ namespace ModAPI.UI
         public static void LogTimed(string message)
         {
             float elapsed = _startTime >= 0 ? (Time.realtimeSinceStartup - _startTime) * 1000f : 0f;
-            MMLog.Write($"[UIDebug] [T+{elapsed:F1}ms F{Time.frameCount}] {message}");
+            MMLog.WriteDebug($"[UIDebug] [T+{elapsed:F1}ms F{Time.frameCount}] {message}");
         }
 
         // ==================== CAMERA & RAYCAST (Feature 1) ====================
@@ -113,7 +113,7 @@ namespace ModAPI.UI
             sb.AppendLine($"Current Hovered: {(UICamera.hoveredObject != null ? UICamera.hoveredObject.name : "(none)")}");
             sb.AppendLine($"Mouse Position: {Input.mousePosition}");
             
-            MMLog.Write(sb.ToString());
+            MMLog.WriteDebug(sb.ToString());
         }
 
         // ==================== EFFECTIVE DEPTH (Feature 2) ====================
@@ -141,10 +141,10 @@ namespace ModAPI.UI
             var panelA = a != null ? NGUITools.FindInParents<UIPanel>(a.gameObject) : null;
             var panelB = b != null ? NGUITools.FindInParents<UIPanel>(b.gameObject) : null;
             
-            MMLog.Write($"[UIDebug] Depth Comparison:");
-            MMLog.Write($"  {labelA}: Panel={panelA?.name ?? "null"}({panelA?.depth ?? 0}) + Widget({a?.depth ?? 0}) = Effective {depthA}");
-            MMLog.Write($"  {labelB}: Panel={panelB?.name ?? "null"}({panelB?.depth ?? 0}) + Widget({b?.depth ?? 0}) = Effective {depthB}");
-            MMLog.Write($"  Winner: {(depthA > depthB ? labelA : (depthB > depthA ? labelB : "TIE"))} renders on top");
+            MMLog.WriteDebug($"[UIDebug] Depth Comparison:");
+            MMLog.WriteDebug($"  {labelA}: Panel={panelA?.name ?? "null"}({panelA?.depth ?? 0}) + Widget({a?.depth ?? 0}) = Effective {depthA}");
+            MMLog.WriteDebug($"  {labelB}: Panel={panelB?.name ?? "null"}({panelB?.depth ?? 0}) + Widget({b?.depth ?? 0}) = Effective {depthB}");
+            MMLog.WriteDebug($"  Winner: {(depthA > depthB ? labelA : (depthB > depthA ? labelB : "TIE"))} renders on top");
         }
 
         // ==================== PARENT ACTIVE CHAIN (Feature 3) ====================
@@ -176,7 +176,7 @@ namespace ModAPI.UI
         /// </summary>
         public static void LogParentChain(GameObject go)
         {
-            if (go == null) { MMLog.Write("[UIDebug] LogParentChain: go is null"); return; }
+            if (go == null) { MMLog.WriteDebug("[UIDebug] LogParentChain: go is null"); return; }
             
             var sb = new StringBuilder();
             sb.AppendLine($"[UIDebug] Parent Chain for '{go.name}':");
@@ -194,7 +194,7 @@ namespace ModAPI.UI
                 depth++;
             }
             
-            MMLog.Write(sb.ToString());
+            MMLog.WriteDebug(sb.ToString());
         }
 
         // ==================== WORLD/SCREEN POSITION (Feature 4) ====================
@@ -292,7 +292,7 @@ namespace ModAPI.UI
                 }
             }
             
-            MMLog.Write(sb.ToString());
+            MMLog.WriteDebug(sb.ToString());
         }
         
         /// <summary>
@@ -300,7 +300,7 @@ namespace ModAPI.UI
         /// </summary>
         public static void TraceNextClick()
         {
-            MMLog.Write("[UIDebug] Click tracing enabled - next click will be logged");
+            MMLog.WriteDebug("[UIDebug] Click tracing enabled - next click will be logged");
             // This would need a MonoBehaviour to implement properly
             // For now, call TraceClickAt(Input.mousePosition) manually in your onClick handler
         }
@@ -338,7 +338,7 @@ namespace ModAPI.UI
         /// </summary>
         public static void TakeSnapshot(GameObject go, string label = "")
         {
-            if (go == null) { MMLog.Write($"[UIDebug] TakeSnapshot({label}): go is null"); return; }
+            if (go == null) { MMLog.WriteDebug($"[UIDebug] TakeSnapshot({label}): go is null"); return; }
             
             var sb = new StringBuilder();
             sb.AppendLine($"[UIDebug] ========== SNAPSHOT: {label} ==========");
@@ -423,7 +423,7 @@ namespace ModAPI.UI
             }
             
             sb.AppendLine($"========== END SNAPSHOT ==========");
-            MMLog.Write(sb.ToString());
+            MMLog.WriteDebug(sb.ToString());
         }
 
         // ==================== LEGACY METHODS (kept for compatibility) ====================
@@ -442,7 +442,7 @@ namespace ModAPI.UI
                     ? string.Join(", ", sprites.Take(maxSpritesPerAtlas).Select(s => s.name).ToArray())
                     : "(none)";
                 string suffix = count > maxSpritesPerAtlas ? $"... (+{count - maxSpritesPerAtlas} more)" : "";
-                MMLog.Write($"  [{atlas.name}] ({count} sprites): {names}{suffix}");
+                MMLog.WriteDebug($"  [{atlas.name}] ({count} sprites): {names}{suffix}");
             }
         }
 
@@ -469,7 +469,7 @@ namespace ModAPI.UI
         public static void LogWidgetHierarchy(Transform root, int maxDepth = 5)
         {
             if (root == null) return;
-            MMLog.Write($"[UIDebug] Widget Hierarchy under '{root.name}':");
+            MMLog.WriteDebug($"[UIDebug] Widget Hierarchy under '{root.name}':");
             LogWidgetRecursive(root, 0, maxDepth);
         }
 
@@ -489,7 +489,7 @@ namespace ModAPI.UI
             if (panel != null)
                 sb.Append($" P:d={panel.depth}");
             
-            MMLog.Write(sb.ToString());
+            MMLog.WriteDebug(sb.ToString());
             foreach (Transform child in t) LogWidgetRecursive(child, indent + 1, maxDepth);
         }
 
@@ -520,7 +520,7 @@ namespace ModAPI.UI
             foreach (var p in sorted)
             {
                 var root = NGUITools.FindInParents<UIRoot>(p.gameObject);
-                MMLog.Write($"  [Depth {p.depth}] {p.name} | Clip={p.clipping} Alpha={p.alpha} Layer={p.gameObject.layer} Root={root?.name ?? "NONE"}");
+                MMLog.WriteDebug($"  [Depth {p.depth}] {p.name} | Clip={p.clipping} Alpha={p.alpha} Layer={p.gameObject.layer} Root={root?.name ?? "NONE"}");
             }
         }
 

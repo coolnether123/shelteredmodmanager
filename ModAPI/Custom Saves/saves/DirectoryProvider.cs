@@ -38,6 +38,16 @@ namespace ModAPI.Saves
             }
         }
 
+        public static string UserRoot
+        {
+            get
+            {
+                var root = Path.Combine(ModApiRoot, "User");
+                EnsureDir(root);
+                return root;
+            }
+        }
+
         public static string SavesRoot
         {
             get
@@ -96,15 +106,6 @@ namespace ModAPI.Saves
             var path = Path.Combine(ScenarioRoot(scenarioId), "_corrupt");
             EnsureDir(path);
             return path;
-        }
-
-        public static string GlobalReservationPath
-        {
-            get
-            {
-                var path = Path.Combine(ModApiRoot, "Global.SaveSlots.json");
-                return path;
-            }
         }
 
         public static string LibsRoot

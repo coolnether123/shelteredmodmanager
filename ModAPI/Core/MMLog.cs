@@ -144,15 +144,6 @@ namespace ModAPI.Core
             banner.AppendLine($"Process ID: {Process.GetCurrentProcess().Id}");
             banner.AppendLine($"Thread ID: {Thread.CurrentThread.ManagedThreadId}");
 
-            if (_iniSettings.Count > 0)
-            {
-                banner.AppendLine("---" + "Effective INI Settings---");
-                foreach (var kvp in _iniSettings)
-                {
-                    banner.AppendLine($"{kvp.Key} = {kvp.Value}");
-                }
-            }
-
             banner.AppendLine("=================================================================================");
 
             try { File.AppendAllText(_logPath, banner.ToString(), Encoding.UTF8); } 
@@ -408,8 +399,7 @@ namespace ModAPI.Core
             if (includeTimestamp)
                 sb.Append($"[{timestamp:HH:mm:ss.fff}] ");
             sb.Append($"[{level.ToString().ToUpper().PadRight(5)}] ");
-            sb.Append($"[{category.ToString().ToUpper().PadRight(8)}] ");
-            sb.Append($"[{(source ?? "UNKNOWN").PadRight(12)}] ");
+            sb.Append($"[{(source ?? "Unknown")}] ");
             sb.Append(message);
             return sb.ToString();
         }

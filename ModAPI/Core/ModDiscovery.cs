@@ -33,9 +33,10 @@ namespace ModAPI.Core
                 {
                     var name = Path.GetFileName(dir);
 
-                    if (string.Equals(name, "disabled", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(name, "disabled", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(name, "ModAPI", StringComparison.OrdinalIgnoreCase))
                     {
-                        MMLog.Write($"[Discovery]   Skipped (disabled folder)");
+                        MMLog.WriteDebug($"[Discovery]   Skipped (reserved folder: {name})");
                         continue;
                     }
 

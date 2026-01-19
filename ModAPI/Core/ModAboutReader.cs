@@ -46,7 +46,7 @@ namespace ModAPI.Core
                     About = modAbout
                 };
 
-                MMLog.Write($"[Discovery] Discovered mod: {entry.Id} ({entry.Name})");
+                MMLog.WriteDebug($"[Discovery] Discovered mod: {entry.Id} ({entry.Name})");
                 return entry;
             }
             catch (Exception ex)
