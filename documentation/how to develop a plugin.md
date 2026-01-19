@@ -161,7 +161,7 @@ Sheltered/
 
 ```json
 {
-  "id": "com.yourname.myplugin",
+  "id": "YourName.MyPlugin",
   "name": "My Plugin",
   "version": "1.0.0",
   "authors": ["Your Name"],
@@ -181,6 +181,7 @@ Sheltered/
 ### 7. Enable your mod in the Manager GUI
 
 Run `SMM/Manager.exe`, enable your mod, and launch the game.
+![Mod Manager](screenshots/mod_manager_gui_mods.png)
 
 ---
 
