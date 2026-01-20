@@ -26,7 +26,7 @@ namespace ModAPI.Hooks.Paging
         private static readonly Color COLOR_TEXT = Color.white;
         private static readonly Color COLOR_SUBTEXT = new Color(0.7f, 0.7f, 0.7f);
         
-        // Layout constants for the modal window - adjusted for clipboard aesthetic
+        // Layout constants for the modal window
         private const int WINDOW_WIDTH = 900;
         private const int WINDOW_HEIGHT = 860;
         private const int COLUMN_WIDTH = 400;
@@ -34,7 +34,6 @@ namespace ModAPI.Hooks.Paging
         
         public static void Show(SaveEntry entry, SlotManifest manifest, SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway = null, Action onCancel = null)
         {
-            UIDebug.LogTimed("SaveDetailsWindow.Show called");
             if (_instance != null) Destroy(_instance);
 
             var panel = UIUtil.EnsureOverlayPanel("ModAPI_SaveDetailsWindow", 10000);
@@ -91,23 +90,16 @@ namespace ModAPI.Hooks.Paging
             CreateTexturedBox(root, "DarkOverlay", Vector3.zero, 3000, 3000, 
                 new Color(0f, 0f, 0f, 0.85f), 0, true);
             
-            // === CLONE CLIPBOARD VISUALS ===
-            // Widened root for cloning if needed
-            bool clipboardFound = CloneClipboardVisuals(root);
-            
-            if (!clipboardFound)
-            {
-                // Fallback to textured box if clipboard visual not found
-                CreateTexturedBox(root, "WindowBackground", Vector3.zero, 
-                    WINDOW_WIDTH, WINDOW_HEIGHT, new Color(0.15f, 0.12f, 0.1f, 0.98f), 10, false);
-                CreateTexturedBox(root, "WindowBorder", Vector3.zero, 
-                    WINDOW_WIDTH + 4, WINDOW_HEIGHT + 4, new Color(0.5f, 0.4f, 0.3f, 1f), 9, false);
-            }
+            // === WINDOW BACKGROUND ===
+            CreateTexturedBox(root, "WindowBackground", Vector3.zero, 
+                WINDOW_WIDTH, WINDOW_HEIGHT, new Color(0.15f, 0.12f, 0.1f, 0.98f), 10, false);
+            CreateTexturedBox(root, "WindowBorder", Vector3.zero, 
+                WINDOW_WIDTH + 4, WINDOW_HEIGHT + 4, new Color(0.5f, 0.4f, 0.3f, 1f), 9, false);
 
-            // Text color based on background (Darker if clipboard found)
-            Color primaryTextColor = clipboardFound ? new Color(0.15f, 0.1f, 0.05f) : COLOR_TEXT;
-            Color secondaryTextColor = clipboardFound ? new Color(0.3f, 0.25f, 0.2f) : COLOR_SUBTEXT;
-            Color titleColor = clipboardFound ? new Color(0.2f, 0.15f, 0.1f) : COLOR_HEADER;
+            // Text colors
+            Color primaryTextColor = COLOR_TEXT;
+            Color secondaryTextColor = COLOR_SUBTEXT;
+            Color titleColor = COLOR_HEADER;
             
             // === HEADER ===
             var titleLabel = CreateLabel(root, "Title", "MOD VERIFICATION",
@@ -197,7 +189,7 @@ namespace ModAPI.Hooks.Paging
                 nameLabel.alignment = NGUIText.Alignment.Center;
                 
                 var verLabel = CreateLabel(rowGO.transform, $"Version", $"   v{mod.Version}",
-                    new Vector3(0, -18, 0), 14, clipboardFound ? new Color(0.4f, 0.4f, 0.4f) : COLOR_SUBTEXT, uiFont, ttfFont, 100);
+                    new Vector3(0, -18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
                 verLabel.alignment = NGUIText.Alignment.Center;
                 
                 modRowObjects.Add(rowGO);
@@ -253,7 +245,7 @@ namespace ModAPI.Hooks.Paging
                     ? $"   (save: v{saved.version}, active: v{status.activeVersion})"
                     : $"   v{saved.version}";
                 var savedVer = CreateLabel(rowGO.transform, $"Version", verText,
-                    new Vector3(0, -18, 0), 14, clipboardFound ? new Color(0.4f, 0.4f, 0.4f) : COLOR_SUBTEXT, uiFont, ttfFont, 100);
+                    new Vector3(0, -18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
                 savedVer.alignment = NGUIText.Alignment.Center;
                 
                 modRowObjects.Add(rowGO);
@@ -290,7 +282,6 @@ namespace ModAPI.Hooks.Paging
             }
             
             // === BUTTON ROW ===
-            // Move buttons lower due to taller clipboard
             int buttonY = -WINDOW_HEIGHT/2 + 100;
             
             // Determine button states
@@ -337,23 +328,26 @@ namespace ModAPI.Hooks.Paging
                     .alignment = NGUIText.Alignment.Center;
             }
             
-            // LOAD ANYWAY button
-            if (isAttemptingLoad)
-            {
-                var loadBtn = CreateButton(root, "LoadAnywayBtn", "LOAD ANYWAY",
-                    new Vector3(WINDOW_WIDTH/4, buttonY, 0), 18, Color.white, uiFont, ttfFont, 200, 45,
-                    () => {
-                        onLoadAnyway?.Invoke();
-                        Close();
-                    });
+            // LOAD button - always shown
+            // Text changes based on whether mods match:
+            // - "LOAD SAVE" when mods match (not an "anyway" situation)
+            // - "LOAD ANYWAY" when mods differ (user is overriding warnings)
+            string loadButtonText = allMatch ? "LOAD SAVE" : "LOAD ANYWAY";
+            string loadHintText = allMatch ? "(Mods match)" : "(Override warnings)";
+            
+            var loadBtn = CreateButton(root, "LoadBtn", loadButtonText,
+                new Vector3(WINDOW_WIDTH/4, buttonY, 0), 18, Color.white, uiFont, ttfFont, 200, 45,
+                () => {
+                    onLoadAnyway?.Invoke();
+                    Close();
+                });
 
-                var loadTex = loadBtn.GetComponent<UITexture>();
-                if (loadTex != null) loadTex.color = requestedBrown;
-                
-                CreateLabel(root, "LoadHint", "(Manual override)",
-                    new Vector3(WINDOW_WIDTH/4, buttonY - 30, 0), 12, secondaryTextColor, uiFont, ttfFont, 100)
-                    .alignment = NGUIText.Alignment.Center;
-            }
+            var loadTex = loadBtn.GetComponent<UITexture>();
+            if (loadTex != null) loadTex.color = requestedBrown;
+            
+            CreateLabel(root, "LoadHint", loadHintText,
+                new Vector3(WINDOW_WIDTH/4, buttonY - 30, 0), 12, secondaryTextColor, uiFont, ttfFont, 100)
+                .alignment = NGUIText.Alignment.Center;
             
             // === STATUS LINE ===
             string statusText = allMatch ? "✓ Mods match - safe to play" :
@@ -366,8 +360,6 @@ namespace ModAPI.Hooks.Paging
             var statusLabel = CreateLabel(root, "Status", statusText,
                 new Vector3(0, -WINDOW_HEIGHT/2 + 20, 0), 16, statusColor, uiFont, ttfFont, 100);
             statusLabel.alignment = NGUIText.Alignment.Center;
-            
-            UIDebug.LogTimed($"Window built. Active={activeMods.Count}, Saved={savedMods.Length}, Comparison={comparison.Count}");
         }
         
         // === COMPARISON LOGIC ===
@@ -454,124 +446,7 @@ namespace ModAPI.Hooks.Paging
             }
         }
         
-        // === CLONING HELPERS ===
-        
-        private static GameObject _clipboardTemplate;
-
-        private bool CloneClipboardVisuals(Transform root)
-        {
-            // Use cached template if available
-            if (_clipboardTemplate != null)
-            {
-                CloneSpecificVisual(root, _clipboardTemplate);
-                return true;
-            }
-            
-            try
-            {
-                MMLog.WriteDebug("[ModAPI] Searching for clipboard visuals...");
-                
-                GameObject templateGroup = null;
-                
-                // First-time search: Broad search for any clipboard-like objects or paper sprites
-                var allGos = Resources.FindObjectsOfTypeAll<GameObject>();
-                foreach (var go in allGos)
-                {
-                    string lowName = go.name.ToLower();
-                    if (lowName.Contains("bgfamily") || lowName.Equals("paper") || lowName.Contains("journalpanel"))
-                    {
-                        templateGroup = go;
-                        break;
-                    }
-                }
-                
-                if (templateGroup == null)
-                {
-                    // Fallback search for any UISprite with "Paper" in name
-                    var allSprites = Resources.FindObjectsOfTypeAll<UISprite>();
-                    foreach (var s in allSprites)
-                    {
-                        if (s.name.ToLower().Contains("paper"))
-                        {
-                            _clipboardTemplate = s.gameObject; // Cache it
-                            CloneSpecificVisual(root, s.gameObject);
-                            return true;
-                        }
-                    }
-                    MMLog.WriteDebug("[ModAPI] No clipboard template found. Using fallback.");
-                    return false;
-                }
-
-                MMLog.WriteDebug("[ModAPI] Cloning visuals from: " + templateGroup.name);
-                
-                // If it's just a single object (like a sprite GO), clone it directly
-                if (templateGroup.GetComponent<UISprite>() != null || templateGroup.GetComponent<UITexture>() != null)
-                {
-                    _clipboardTemplate = templateGroup; // Cache it
-                    CloneSpecificVisual(root, templateGroup);
-                    return true;
-                }
-
-                bool foundAny = false;
-                foreach (Transform child in templateGroup.transform)
-                {
-                    string name = child.name.ToLower();
-                    if (name.Contains("bg") || name.Contains("paper") || name.Contains("visual"))
-                    {
-                        var sprite = child.GetComponent<UISprite>();
-                        var tex = child.GetComponent<UITexture>();
-                        if (sprite != null || tex != null)
-                        {
-                            if (!foundAny) _clipboardTemplate = child.gameObject; // Cache first found
-                            CloneSpecificVisual(root, child.gameObject);
-                            foundAny = true;
-                        }
-                    }
-                }
-                return foundAny;
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteError("[SaveDetailsWindow] Error cloning clipboard visuals: " + ex.Message);
-                return false;
-            }
-        }
-
-        private void CloneSpecificVisual(Transform root, GameObject original)
-        {
-            var clone = (GameObject)UnityEngine.Object.Instantiate(original);
-            clone.transform.SetParent(root, false);
-            clone.name = "Cloned_" + original.name;
-            clone.transform.localPosition = Vector3.zero;
-            
-            // Rescale to fit our 900x860 window. 
-            // Most game clipboards are designed for 1080p, let's assume ~800px base height.
-            float scaleFactor = (float)WINDOW_HEIGHT / 800f;
-            clone.transform.localScale = original.transform.localScale * scaleFactor;
-            
-            // Force reasonable dimensions if it's a sprite but has weird scale
-            var sprite = clone.GetComponent<UISprite>();
-            if (sprite != null)
-            {
-                sprite.width = WINDOW_WIDTH;
-                sprite.height = WINDOW_HEIGHT;
-            }
-            
-            clone.transform.localRotation = original.transform.localRotation;
-            clone.layer = root.gameObject.layer;
-
-            foreach (var b in clone.GetComponentsInChildren<UIButton>(true)) UnityEngine.Object.Destroy(b);
-            foreach (var l in clone.GetComponentsInChildren<UILabel>(true)) UnityEngine.Object.Destroy(l.gameObject);
-            foreach (var c in clone.GetComponentsInChildren<Collider>(true)) UnityEngine.Object.Destroy(c);
-
-            var widgets = clone.GetComponentsInChildren<UIWidget>(true);
-            foreach (var w in widgets)
-            {
-                w.gameObject.layer = root.gameObject.layer;
-                w.depth = 10;
-            }
-            clone.SetActive(true);
-        }
+        // === UI HELPER METHODS ===
         
         private GameObject CreateTexturedBox(Transform parent, string name, Vector3 pos, int w, int h, Color color, int depth, bool addCollider)
         {

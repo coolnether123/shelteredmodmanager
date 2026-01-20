@@ -20,6 +20,7 @@ namespace Manager.Core.Models
         private bool _skipHarmonyDependencyCheck = false;
         private string _gameBitness;
         private string _installedModApiVersion;
+        private string _autoCondenseSaves = "ask"; // yes, no, or ask
 
         public AppSettings()
         {
@@ -94,6 +95,12 @@ namespace Manager.Core.Models
         { 
             get { return _installedModApiVersion; } 
             set { _installedModApiVersion = value; } 
+        }
+        
+        public string AutoCondenseSaves 
+        { 
+            get { return _autoCondenseSaves; } 
+            set { _autoCondenseSaves = value; } 
         }
         
         /// <summary>

@@ -57,6 +57,18 @@ namespace ModAPI.Saves
             return m.entries != null ? m.entries.Length : 0;
         }
 
+        public int GetMaxSlot()
+        {
+            var m = LoadManifest();
+            if (m.entries == null || m.entries.Length == 0) return 0;
+            int max = 0;
+            foreach (var e in m.entries)
+            {
+                if (e.absoluteSlot > max) max = e.absoluteSlot;
+            }
+            return max;
+        }
+
         public SaveEntry CreateSave(SaveCreateOptions opts)
         {
             var m = LoadManifest();
@@ -130,7 +142,7 @@ namespace ModAPI.Saves
             // Delete manifest.json
             try 
             {
-                var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, entry.absoluteSlot);
+                var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, entry.absoluteSlot, false);
                 var manPath = Path.Combine(slotRoot, "manifest.json");
                 if (File.Exists(manPath)) File.Delete(manPath);
             } 
@@ -172,53 +184,17 @@ namespace ModAPI.Saves
                     }
                 }
 
-                SlotManifest existing = null;
-                if (File.Exists(path))
+                // Always update the manifest to ensure metadata (family, days, timestamp) and mod list are current.
+                var newManifest = new SlotManifest
                 {
-                    try { existing = DeserializeSlotManifest(File.ReadAllText(path)); } catch { }
-                }
+                    lastModified = DateTime.UtcNow.ToString("o"),
+                    family_name = info != null ? info.familyName : "Unknown",
+                    lastLoadedMods = currentMods.ToArray()
+                };
 
-                bool changed = true;
-                if (existing != null && existing.lastLoadedMods != null)
-                {
-                    // Compare mods
-                    if (existing.lastLoadedMods.Length == currentMods.Count)
-                    {
-                        bool match = true;
-                        for(int i=0; i<currentMods.Count; i++)
-                        {
-                            var a = existing.lastLoadedMods[i];
-                            var b = currentMods[i];
-                            if (a.modId != b.modId || a.version != b.version)
-                            {
-                                match = false;
-                                break;
-                            }
-                        }
-                        if (match) changed = false;
-                    }
-                }
-
-                if (changed || existing == null)
-                {
-                    var newManifest = new SlotManifest
-                    {
-                        lastModified = DateTime.UtcNow.ToString("o"),
-                        family_name = info != null ? info.familyName : "Unknown",
-                        lastLoadedMods = currentMods.ToArray()
-                    };
-                    string slotJson = SerializeSlotManifest(newManifest);
-                    MMLog.Write($"[SaveRegistryCore] SLOT {absoluteSlot} Manifest JSON to write:\n{slotJson}");
-                    MMLog.Write($"[SaveRegistryCore] SLOT {absoluteSlot} currentMods.Count = {currentMods.Count}, newManifest.lastLoadedMods.Length = {newManifest.lastLoadedMods.Length}");
-                    File.WriteAllText(path, slotJson);
-                    MMLog.WriteDebug($"[SaveRegistryCore] Updated manifest.json for slot {absoluteSlot} (Mods Changed)");
-                }
-                else
-                {
-                    // Mod configuration is identical to the existing manifest; skipping update.
-                    // To strictly adhere to requirements, manifest metadata (including 'lastModified')
-                    // is only synchronized when the active mod list changes.
-                }
+                string slotJson = SerializeSlotManifest(newManifest);
+                MMLog.WriteDebug($"[SaveRegistryCore] Updating manifest for Slot {absoluteSlot}. Mods: {currentMods.Count}. JSON:\n{slotJson}");
+                File.WriteAllText(path, slotJson);
             }
             catch (Exception ex)
             {
@@ -238,7 +214,10 @@ namespace ModAPI.Saves
                     if (File.Exists(path))
                     {
                         var json = File.ReadAllText(path);
-                        _manifest = JsonUtility.FromJson<SaveManifest>(json) ?? new SaveManifest();
+                        // IMPORTANT: Unity's JsonUtility.FromJson() cannot deserialize arrays of custom classes
+                        // like SaveEntry[]. It silently returns an empty array. We must use custom parsing.
+                        // See: https://docs.unity3d.com/Manual/JSONSerialization.html
+                        _manifest = DeserializeManifest(json) ?? new SaveManifest();
                     }
                     else
                     {
@@ -323,7 +302,7 @@ namespace ModAPI.Saves
                     SaveManifestFile(m);
                 }
 
-                CondenseSlots(m); // Auto-condense after discovery
+
             }
             catch (Exception ex) 
             {
@@ -355,8 +334,8 @@ namespace ModAPI.Saves
                     bool success = false;
                     try
                     {
-                        var oldDir = DirectoryProvider.SlotRoot(_scenarioId, entry.absoluteSlot);
-                        var newDir = DirectoryProvider.SlotRoot(_scenarioId, expectedSlot);
+                        var oldDir = DirectoryProvider.SlotRoot(_scenarioId, entry.absoluteSlot, false);
+                        var newDir = DirectoryProvider.SlotRoot(_scenarioId, expectedSlot, false);
 
                         // DirectoryProvider creates dir if not exists, so newDir might exist empty.
                         if (Directory.Exists(newDir))
@@ -416,10 +395,10 @@ namespace ModAPI.Saves
                 try
                 {
                     var path = DirectoryProvider.ManifestPath(_scenarioId);
-                    MMLog.Write($"[SaveRegistryCore] Saving manifest file to: {path}");
                     var tmp = path + ".tmp";
-                    var json = JsonUtility.ToJson(m, true);
-                    MMLog.Write($"[SaveRegistryCore] Writing manifest JSON: {json}");
+                    
+                    // Manual JSON serialization - Unity's JsonUtility cannot serialize arrays of custom classes
+                    var json = SerializeManifest(m);
 
                     File.WriteAllText(tmp, json, Encoding.UTF8);
 
@@ -431,6 +410,265 @@ namespace ModAPI.Saves
                     MMLog.Write($"Manifest save error for '{_scenarioId}': " + ex.Message);
                 }
             }
+        }
+        
+        /// <summary>
+        /// Manually serialize SaveManifest to JSON.
+        /// 
+        /// UNITY LIMITATION: Unity's JsonUtility.ToJson() CANNOT serialize arrays of custom classes.
+        /// When you call JsonUtility.ToJson() on a class containing SaveEntry[] (array of custom objects),
+        /// it silently outputs an empty array [], losing all save data. This is a known Unity limitation.
+        /// See: https://docs.unity3d.com/Manual/JSONSerialization.html
+        /// 
+        /// This method manually constructs JSON to ensure all SaveEntry and SaveInfo data is preserved.
+        /// </summary>
+        private static string SerializeManifest(SaveManifest m)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("{");
+            sb.AppendLine($"    \"version\": {m.version},");
+            sb.AppendLine("    \"entries\": [");
+            
+            for (int i = 0; i < m.entries.Length; i++)
+            {
+                var e = m.entries[i];
+                sb.AppendLine("        {");
+                sb.AppendLine($"            \"id\": \"{EscapeJson(e.id ?? "")}\",");
+                sb.AppendLine($"            \"absoluteSlot\": {e.absoluteSlot},");
+                sb.AppendLine($"            \"name\": \"{EscapeJson(e.name ?? "")}\",");
+                sb.AppendLine($"            \"createdAt\": \"{EscapeJson(e.createdAt ?? "")}\",");
+                sb.AppendLine($"            \"updatedAt\": \"{EscapeJson(e.updatedAt ?? "")}\",");
+                sb.AppendLine($"            \"gameVersion\": \"{EscapeJson(e.gameVersion ?? "")}\",");
+                sb.AppendLine($"            \"modApiVersion\": \"{EscapeJson(e.modApiVersion ?? "")}\",");
+                sb.AppendLine($"            \"scenarioId\": \"{EscapeJson(e.scenarioId ?? "")}\",");
+                sb.AppendLine($"            \"scenarioVersion\": \"{EscapeJson(e.scenarioVersion ?? "")}\",");
+                sb.AppendLine($"            \"fileSize\": {e.fileSize},");
+                sb.AppendLine($"            \"crc32\": {e.crc32},");
+                sb.AppendLine($"            \"previewPath\": \"{EscapeJson(e.previewPath ?? "")}\",");
+                sb.AppendLine($"            \"extra\": \"{EscapeJson(e.extra ?? "")}\",");
+                sb.AppendLine("            \"saveInfo\": {");
+                sb.AppendLine($"                \"daysSurvived\": {e.saveInfo?.daysSurvived ?? 0},");
+                sb.AppendLine($"                \"difficulty\": {e.saveInfo?.difficulty ?? 1},");
+                sb.AppendLine($"                \"fog\": {(e.saveInfo?.fog ?? false).ToString().ToLower()},");
+                sb.AppendLine($"                \"mapSize\": {e.saveInfo?.mapSize ?? 0},");
+                sb.AppendLine($"                \"rainDiff\": {e.saveInfo?.rainDiff ?? 1},");
+                sb.AppendLine($"                \"resourceDiff\": {e.saveInfo?.resourceDiff ?? 1},");
+                sb.AppendLine($"                \"breachDiff\": {e.saveInfo?.breachDiff ?? 1},");
+                sb.AppendLine($"                \"factionDiff\": {e.saveInfo?.factionDiff ?? 1},");
+                sb.AppendLine($"                \"moodDiff\": {e.saveInfo?.moodDiff ?? 1},");
+                sb.AppendLine($"                \"familyName\": \"{EscapeJson(e.saveInfo?.familyName ?? "")}\",");
+                sb.AppendLine($"                \"saveTime\": \"{EscapeJson(e.saveInfo?.saveTime ?? "")}\"");
+                sb.AppendLine("            }");
+                sb.Append("        }");
+                if (i < m.entries.Length - 1) sb.Append(",");
+                sb.AppendLine();
+            }
+            
+            sb.AppendLine("    ]");
+            sb.AppendLine("}");
+            return sb.ToString();
+        }
+        
+        private static string EscapeJson(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r");
+        }
+        
+        /// <summary>
+        /// Manually deserialize SaveManifest from JSON.
+        /// 
+        /// UNITY LIMITATION: Unity's JsonUtility.FromJson() CANNOT deserialize arrays of custom classes.
+        /// When parsing JSON with SaveEntry[] (array of custom objects), JsonUtility returns an empty array,
+        /// even when the JSON contains valid data. This is a known Unity limitation.
+        /// See: https://docs.unity3d.com/Manual/JSONSerialization.html
+        /// 
+        /// This method manually parses JSON to extract all SaveEntry and SaveInfo data.
+        /// </summary>
+        private static SaveManifest DeserializeManifest(string json)
+        {
+            var result = new SaveManifest();
+            if (string.IsNullOrEmpty(json)) return result;
+            
+            try
+            {
+                // Parse version
+                result.version = ParseIntField(json, "version", 1);
+                
+                // Parse entries array
+                var entries = new List<SaveEntry>();
+                int entriesStart = json.IndexOf("\"entries\"");
+                if (entriesStart >= 0)
+                {
+                    int arrayStart = json.IndexOf('[', entriesStart);
+                    if (arrayStart >= 0)
+                    {
+                        int arrayEnd = FindMatchingBracket(json, arrayStart, '[', ']');
+                        if (arrayEnd > arrayStart)
+                        {
+                            string arrayContent = json.Substring(arrayStart + 1, arrayEnd - arrayStart - 1);
+                            // Parse each entry object
+                            int pos = 0;
+                            while (pos < arrayContent.Length)
+                            {
+                                int objStart = arrayContent.IndexOf('{', pos);
+                                if (objStart < 0) break;
+                                int objEnd = FindMatchingBracket(arrayContent, objStart, '{', '}');
+                                if (objEnd <= objStart) break;
+                                
+                                string entryJson = arrayContent.Substring(objStart, objEnd - objStart + 1);
+                                var entry = ParseSaveEntry(entryJson);
+                                if (entry != null) entries.Add(entry);
+                                pos = objEnd + 1;
+                            }
+                        }
+                    }
+                }
+                result.entries = entries.ToArray();
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"[SaveRegistryCore] DeserializeManifest error: {ex.Message}");
+            }
+            
+            return result;
+        }
+        
+        private static SaveEntry ParseSaveEntry(string json)
+        {
+            var entry = new SaveEntry();
+            entry.id = ParseStringField(json, "id");
+            entry.absoluteSlot = ParseIntField(json, "absoluteSlot", 0);
+            entry.name = ParseStringField(json, "name");
+            entry.createdAt = ParseStringField(json, "createdAt");
+            entry.updatedAt = ParseStringField(json, "updatedAt");
+            entry.gameVersion = ParseStringField(json, "gameVersion");
+            entry.modApiVersion = ParseStringField(json, "modApiVersion");
+            entry.scenarioId = ParseStringField(json, "scenarioId");
+            entry.scenarioVersion = ParseStringField(json, "scenarioVersion");
+            entry.fileSize = ParseLongField(json, "fileSize", 0);
+            entry.crc32 = (uint)ParseLongField(json, "crc32", 0);
+            entry.previewPath = ParseStringField(json, "previewPath");
+            entry.extra = ParseStringField(json, "extra");
+            
+            // Parse nested saveInfo
+            int saveInfoStart = json.IndexOf("\"saveInfo\"");
+            if (saveInfoStart >= 0)
+            {
+                int objStart = json.IndexOf('{', saveInfoStart);
+                if (objStart >= 0)
+                {
+                    int objEnd = FindMatchingBracket(json, objStart, '{', '}');
+                    if (objEnd > objStart)
+                    {
+                        string infoJson = json.Substring(objStart, objEnd - objStart + 1);
+                        entry.saveInfo = ParseSaveInfo(infoJson);
+                    }
+                }
+            }
+            
+            return entry;
+        }
+        
+        private static SaveInfo ParseSaveInfo(string json)
+        {
+            var info = new SaveInfo();
+            info.daysSurvived = ParseIntField(json, "daysSurvived", 0);
+            info.difficulty = ParseIntField(json, "difficulty", 1);
+            info.fog = ParseBoolField(json, "fog", false);
+            info.mapSize = ParseIntField(json, "mapSize", 0);
+            info.rainDiff = ParseIntField(json, "rainDiff", 1);
+            info.resourceDiff = ParseIntField(json, "resourceDiff", 1);
+            info.breachDiff = ParseIntField(json, "breachDiff", 1);
+            info.factionDiff = ParseIntField(json, "factionDiff", 1);
+            info.moodDiff = ParseIntField(json, "moodDiff", 1);
+            info.familyName = ParseStringField(json, "familyName");
+            info.saveTime = ParseStringField(json, "saveTime");
+            return info;
+        }
+        
+        private static int FindMatchingBracket(string s, int start, char open, char close)
+        {
+            int depth = 0;
+            for (int i = start; i < s.Length; i++)
+            {
+                if (s[i] == open) depth++;
+                else if (s[i] == close) depth--;
+                if (depth == 0) return i;
+            }
+            return -1;
+        }
+        
+        private static string ParseStringField(string json, string field)
+        {
+            string pattern = $"\"{field}\"";
+            int pos = json.IndexOf(pattern);
+            if (pos < 0) return "";
+            int colonPos = json.IndexOf(':', pos + pattern.Length);
+            if (colonPos < 0) return "";
+            int quoteStart = json.IndexOf('"', colonPos + 1);
+            if (quoteStart < 0) return "";
+            int quoteEnd = quoteStart + 1;
+            while (quoteEnd < json.Length)
+            {
+                if (json[quoteEnd] == '"' && json[quoteEnd - 1] != '\\')
+                    break;
+                quoteEnd++;
+            }
+            if (quoteEnd >= json.Length) return "";
+            string value = json.Substring(quoteStart + 1, quoteEnd - quoteStart - 1);
+            // Unescape
+            return value.Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\\"", "\"").Replace("\\\\", "\\");
+        }
+        
+        private static int ParseIntField(string json, string field, int defaultValue)
+        {
+            string pattern = $"\"{field}\"";
+            int pos = json.IndexOf(pattern);
+            if (pos < 0) return defaultValue;
+            int colonPos = json.IndexOf(':', pos + pattern.Length);
+            if (colonPos < 0) return defaultValue;
+            int valStart = colonPos + 1;
+            while (valStart < json.Length && char.IsWhiteSpace(json[valStart])) valStart++;
+            int valEnd = valStart;
+            while (valEnd < json.Length && (char.IsDigit(json[valEnd]) || json[valEnd] == '-')) valEnd++;
+            if (valEnd <= valStart) return defaultValue;
+            if (int.TryParse(json.Substring(valStart, valEnd - valStart), out int result))
+                return result;
+            return defaultValue;
+        }
+        
+        private static long ParseLongField(string json, string field, long defaultValue)
+        {
+            string pattern = $"\"{field}\"";
+            int pos = json.IndexOf(pattern);
+            if (pos < 0) return defaultValue;
+            int colonPos = json.IndexOf(':', pos + pattern.Length);
+            if (colonPos < 0) return defaultValue;
+            int valStart = colonPos + 1;
+            while (valStart < json.Length && char.IsWhiteSpace(json[valStart])) valStart++;
+            int valEnd = valStart;
+            while (valEnd < json.Length && (char.IsDigit(json[valEnd]) || json[valEnd] == '-')) valEnd++;
+            if (valEnd <= valStart) return defaultValue;
+            if (long.TryParse(json.Substring(valStart, valEnd - valStart), out long result))
+                return result;
+            return defaultValue;
+        }
+        
+        private static bool ParseBoolField(string json, string field, bool defaultValue)
+        {
+            string pattern = $"\"{field}\"";
+            int pos = json.IndexOf(pattern);
+            if (pos < 0) return defaultValue;
+            int colonPos = json.IndexOf(':', pos + pattern.Length);
+            if (colonPos < 0) return defaultValue;
+            int valStart = colonPos + 1;
+            while (valStart < json.Length && char.IsWhiteSpace(json[valStart])) valStart++;
+            if (valStart + 4 <= json.Length && json.Substring(valStart, 4).ToLower() == "true")
+                return true;
+            if (valStart + 5 <= json.Length && json.Substring(valStart, 5).ToLower() == "false")
+                return false;
+            return defaultValue;
         }
 
         private void WriteEntryFile(int absoluteSlot, byte[] xmlBytes, out long fileSize, out uint crc)
@@ -463,6 +701,16 @@ namespace ModAPI.Saves
                 entry.saveInfo.difficulty = info.m_diffSetting;
                 entry.saveInfo.familyName = info.m_familyName;
                 entry.saveInfo.saveTime = info.m_saveTime;
+                
+                // Extract all difficulty settings for proper game loading
+                entry.saveInfo.rainDiff = info.m_rainDiff;
+                entry.saveInfo.resourceDiff = info.m_resourceDiff;
+                entry.saveInfo.breachDiff = info.m_breachDiff;
+                entry.saveInfo.factionDiff = info.m_factionDiff;
+                entry.saveInfo.moodDiff = info.m_moodDiff;
+                entry.saveInfo.mapSize = info.m_mapSize;
+                entry.saveInfo.fog = info.m_fog;
+                
                 sd.Finished();
                 MMLog.Write($"[TryUpdateEntryInfo] Successfully updated SaveEntry '{entry.id}'.");
             }
@@ -484,11 +732,60 @@ namespace ModAPI.Saves
             return candidate;
         }
 
+        /// <summary>
+        /// Serializes a SlotManifest to JSON using manual StringBuilder formatting.
+        /// </summary>
+        /// <remarks>
+        /// IMPORTANT: Unity's JsonUtility.ToJson() has a critical limitation - it CANNOT serialize
+        /// arrays of custom classes (like LoadedModInfo[]). When you call JsonUtility.ToJson() on
+        /// a SlotManifest, it will silently omit the 'lastLoadedMods' field from the output JSON,
+        /// even though the array is populated in memory. This causes saves to appear as having 0 mods.
+        /// 
+        /// We must use manual StringBuilder formatting to ensure the mod list is actually written.
+        /// The companion DeserializeSlotManifest() method uses custom parsing to read this format.
+        /// </remarks>
         private static string SerializeSlotManifest(SlotManifest manifest)
         {
-            // Use Unity's JsonUtility for consistent serialization/deserialization
-            // Manual StringBuilder approach was prone to formatting errors that JsonUtility.FromJson dislikes
-            return JsonUtility.ToJson(manifest, true);
+            var sb = new StringBuilder();
+            sb.AppendLine("{");
+            sb.AppendLine($"    \"manifestVersion\": {manifest.manifestVersion},");
+            sb.AppendLine($"    \"lastModified\": \"{manifest.lastModified}\",");
+            sb.AppendLine($"    \"family_name\": \"{manifest.family_name}\"");
+            
+            if (manifest.lastLoadedMods != null && manifest.lastLoadedMods.Length > 0)
+            {
+                sb.AppendLine(",");
+                sb.AppendLine("    \"lastLoadedMods\": [");
+                for (int i = 0; i < manifest.lastLoadedMods.Length; i++)
+                {
+                    var mod = manifest.lastLoadedMods[i];
+                    sb.Append("        { ");
+                    sb.Append($"\"modId\": \"{mod.modId}\", ");
+                    sb.Append($"\"version\": \"{mod.version}\", ");
+                    sb.Append("\"warnings\": [");
+                    
+                    if (mod.warnings != null && mod.warnings.Length > 0)
+                    {
+                        for (int w = 0; w < mod.warnings.Length; w++)
+                        {
+                            sb.Append($"\"{mod.warnings[w]}\"");
+                            if (w < mod.warnings.Length - 1) sb.Append(", ");
+                        }
+                    }
+                    
+                    sb.Append("] }");
+                    if (i < manifest.lastLoadedMods.Length - 1) sb.AppendLine(",");
+                    else sb.AppendLine();
+                }
+                sb.AppendLine("    ]");
+            }
+            else
+            {
+                sb.AppendLine();
+            }
+            
+            sb.Append("}");
+            return sb.ToString();
         }
 
 
@@ -657,7 +954,7 @@ namespace ModAPI.Saves
 
         /// <summary>
         /// Reads SaveInfo from a save file's XML data.
-        /// Extracts familyName, daysSurvived, and difficulty from the SaveInfo group.
+        /// Extracts all game settings including difficulty fields.
         /// </summary>
         public static SaveInfo ReadSaveInfoFromXml(byte[] xmlBytes)
         {
@@ -672,6 +969,16 @@ namespace ModAPI.Saves
                 info.daysSurvived = gameInfo.m_daysSurvived;
                 info.difficulty = gameInfo.m_diffSetting;
                 info.saveTime = gameInfo.m_saveTime;
+                
+                // Extract all difficulty settings for proper game loading
+                info.rainDiff = gameInfo.m_rainDiff;
+                info.resourceDiff = gameInfo.m_resourceDiff;
+                info.breachDiff = gameInfo.m_breachDiff;
+                info.factionDiff = gameInfo.m_factionDiff;
+                info.moodDiff = gameInfo.m_moodDiff;
+                info.mapSize = gameInfo.m_mapSize;
+                info.fog = gameInfo.m_fog;
+                
                 sd.Finished();
             }
             catch (Exception ex)
@@ -688,8 +995,6 @@ namespace ModAPI.Saves
         /// </summary>
         public static SaveInfo ReadVanillaSaveInfo(int slotNumber)
         {
-            var info = new SaveInfo();
-            
             try
             {
                 // Get the vanilla save path (same as PlatformSave_PC.GetSavePath)
@@ -701,16 +1006,14 @@ namespace ModAPI.Saves
                     case 1: fileName = "savedata_01.dat"; break;
                     case 2: fileName = "savedata_02.dat"; break;
                     case 3: fileName = "savedata_03.dat"; break;
-                    default: return info;
+                    default: return null;
                 }
                 
                 string fullPath = Path.Combine(savesPath, fileName);
-                MMLog.WriteDebug($"[SaveRegistryCore] Looking for vanilla save at: {fullPath}");
                 
                 if (!File.Exists(fullPath))
                 {
-                    MMLog.WriteDebug($"[SaveRegistryCore] Vanilla save file not found: {fullPath}");
-                    return info;
+                    return null;  // Return null for empty slots
                 }
                 
                 // Read and decrypt the file (XOR cipher from PlatformSave_PC)
@@ -718,15 +1021,14 @@ namespace ModAPI.Saves
                 byte[] decryptedData = DecryptVanillaSave(encryptedData);
                 
                 // Parse the decrypted XML
-                info = ReadSaveInfoFromXml(decryptedData);
-                MMLog.WriteDebug($"[SaveRegistryCore] Read vanilla slot {slotNumber}: family='{info.familyName}', days={info.daysSurvived}");
+                var info = ReadSaveInfoFromXml(decryptedData);
+                return info;
             }
             catch (Exception ex)
             {
                 MMLog.WriteError($"[SaveRegistryCore] Failed to read vanilla save info for slot {slotNumber}: {ex.Message}");
+                return null;  // Return null on error
             }
-            
-            return info;
         }
 
         /// <summary>
@@ -736,7 +1038,7 @@ namespace ModAPI.Saves
         {
             try
             {
-                var slotRoot = DirectoryProvider.SlotRoot(scenarioId, absoluteSlot);
+                var slotRoot = DirectoryProvider.SlotRoot(scenarioId, absoluteSlot, false);
                 var path = Path.Combine(slotRoot, "manifest.json");
                 if (File.Exists(path))
                 {
@@ -773,6 +1075,211 @@ namespace ModAPI.Saves
             }
             
             return decrypted;
+        }
+
+        /// <summary>
+        /// Checks if there are gaps in the save slot numbers.
+        /// For Standard scenario, slots start at 4 (1-3 are vanilla).
+        /// </summary>
+        public bool HasGaps()
+        {
+            var entries = LoadManifest().entries;
+            if (entries == null || entries.Length == 0) return false;
+
+            int startSlot = (_scenarioId == "Standard") ? 4 : 1;
+            var slots = new List<int>();
+            foreach (var e in entries)
+            {
+                if (_scenarioId == "Standard" && e.absoluteSlot < 4) continue;
+                slots.Add(e.absoluteSlot);
+            }
+            if (slots.Count == 0) 
+            {
+                MMLog.WriteDebug("[SaveCondenseManager] HasGaps: No custom saves in manifest.");
+                return false;
+            }
+
+            slots.Sort();
+            MMLog.WriteDebug($"[SaveCondenseManager] HasGaps: checking {slots.Count} saves. Scenario: {_scenarioId}");
+            int expected = startSlot;
+            foreach (var slot in slots)
+            {
+                if (slot != expected) 
+                {
+                    MMLog.WriteDebug($"[SaveCondenseManager] HasGaps: GAP FOUND! Expected {expected}, found {slot}");
+                    return true;
+                }
+                expected++;
+            }
+            MMLog.WriteDebug("[SaveCondenseManager] HasGaps: No gaps found.");
+            return false;
+        }
+
+        /// <summary>
+        /// Runs the condense operation to close gaps in slot numbers.
+        /// </summary>
+        public void RunCondense()
+        {
+            var m = LoadManifest();
+            CondenseSlots(m);
+        }
+    }
+
+    /// <summary>
+    /// Handles one-time startup check for save slot gaps and user preference for auto-condensing.
+    /// </summary>
+    public static class SaveCondenseManager
+    {
+        private static bool _checked = false;
+        private static bool _pendingPrompt = false;
+
+        /// <summary>
+        /// Checks for gaps in save slots at startup. If gaps exist and user preference is "ask",
+        /// sets a flag to show a prompt when the main menu appears.
+        /// </summary>
+        public static void CheckOnStartup()
+        {
+            if (_checked) return;
+            _checked = true;
+
+            try
+            {
+                MMLog.WriteDebug("[SaveCondenseManager] Starting startup gap check...");
+                var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
+                
+                if (!registry.HasGaps())
+                {
+                    return;
+                }
+
+                var pref = ReadCondensePreference();
+                MMLog.Write($"[SaveCondenseManager] Gaps detected. User preference from INI: '{pref}'");
+
+                if (pref == "yes" || pref == "true")
+                {
+                    MMLog.Write("[SaveCondenseManager] Auto-condensing saves (user preference: yes).");
+                    registry.RunCondense();
+                }
+                else if (pref == "no" || pref == "false")
+                {
+                    MMLog.Write("[SaveCondenseManager] Skipping condense (user preference: no).");
+                }
+                else
+                {
+                    MMLog.Write("[SaveCondenseManager] Preference is 'ask'. Flagging for prompt on Main Menu.");
+                    _pendingPrompt = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"[SaveCondenseManager] Error during startup check: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// Returns true if the user needs to be prompted about condensing.
+        /// </summary>
+        public static bool NeedsPrompt() => _pendingPrompt;
+
+        /// <summary>
+        /// Called when user makes a choice in the prompt dialog.
+        /// </summary>
+        public static void OnUserChoice(bool condense, bool remember)
+        {
+            _pendingPrompt = false;
+
+            if (remember)
+            {
+                WriteCondensePreference(condense ? "yes" : "no");
+            }
+
+            if (condense)
+            {
+                try
+                {
+                    var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
+                    registry.RunCondense();
+                    MMLog.Write("[SaveCondenseManager] Condensed saves per user request.");
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError($"[SaveCondenseManager] Error condensing: {ex}");
+                }
+            }
+        }
+
+        private static string ReadCondensePreference()
+        {
+            try
+            {
+                var ini = DirectoryProvider.ConfigPath;
+                if (!File.Exists(ini)) return "ask";
+
+                foreach (var raw in File.ReadAllLines(ini))
+                {
+                    if (string.IsNullOrEmpty(raw)) continue;
+                    var line = raw.Trim();
+                    if (line.StartsWith("#") || line.StartsWith(";") || line.StartsWith("[")) continue;
+                    var idx = line.IndexOf('=');
+                    if (idx <= 0) continue;
+                    var k = line.Substring(0, idx).Trim();
+                    var v = line.Substring(idx + 1).Trim().ToLowerInvariant();
+                    if (k.Equals("AutoCondenseSaves", StringComparison.OrdinalIgnoreCase))
+                    {
+                        MMLog.Write($"[SaveCondenseManager] Read preference: '{v}'");
+                        return v;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteDebug($"[SaveCondenseManager] Error reading preference: {ex.Message}");
+            }
+            
+            MMLog.Write($"[SaveCondenseManager] Read preference: 'ask' (default)");
+            return "ask";
+        }
+
+        private static void WriteCondensePreference(string value)
+        {
+            try
+            {
+                var ini = DirectoryProvider.ConfigPath;
+                var smmDir = DirectoryProvider.SmmRoot;
+                
+                if (!Directory.Exists(smmDir))
+                    Directory.CreateDirectory(smmDir);
+
+                var lines = new List<string>();
+                bool found = false;
+
+                if (File.Exists(ini))
+                {
+                    foreach (var raw in File.ReadAllLines(ini))
+                    {
+                        var line = raw.Trim();
+                        if (line.StartsWith("AutoCondenseSaves", StringComparison.OrdinalIgnoreCase))
+                        {
+                            lines.Add($"AutoCondenseSaves={value}");
+                            found = true;
+                        }
+                        else
+                        {
+                            lines.Add(raw);
+                        }
+                    }
+                }
+
+                if (!found)
+                    lines.Add($"AutoCondenseSaves={value}");
+
+                File.WriteAllLines(ini, lines.ToArray());
+                MMLog.WriteDebug($"[SaveCondenseManager] Saved preference: AutoCondenseSaves={value}");
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"[SaveCondenseManager] Error writing preference: {ex}");
+            }
         }
     }
 }

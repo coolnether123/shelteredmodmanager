@@ -14,6 +14,9 @@ namespace Manager.Core.Services
     {
         private const string INI_FILENAME = "mod_manager.ini";
         private readonly string _iniPath;
+        private FileSystemWatcher _watcher;
+        private DateTime _lastRead = DateTime.MinValue;
+        private bool _suppressWatcher = false;
         
         public delegate void SettingsChangedHandler(AppSettings settings);
         public event SettingsChangedHandler SettingsChanged;
@@ -21,9 +24,55 @@ namespace Manager.Core.Services
         public SettingsService()
         {
             string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            string binDir = Path.Combine(exeDir, "bin");
+            string smmDir = Path.Combine(exeDir, "SMM");
+            string binDir;
+            
+            if (Directory.Exists(smmDir))
+            {
+                // Deployed mode: use SMM/bin folder for centralized config
+                binDir = Path.Combine(smmDir, "bin");
+            }
+            else
+            {
+                // Local/Dev mode: use Manager/bin folder
+                binDir = Path.Combine(exeDir, "bin");
+            }
+
             if (!Directory.Exists(binDir)) Directory.CreateDirectory(binDir);
             _iniPath = Path.Combine(binDir, INI_FILENAME);
+            
+            SetupWatcher(binDir);
+        }
+
+        private void SetupWatcher(string directory)
+        {
+            try
+            {
+                _watcher = new FileSystemWatcher(directory, INI_FILENAME);
+                _watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size;
+                _watcher.Changed += (s, e) => OnFileChanged();
+                _watcher.Created += (s, e) => OnFileChanged();
+                _watcher.EnableRaisingEvents = true;
+            }
+            catch { }
+        }
+
+        private void OnFileChanged()
+        {
+            if (_suppressWatcher) return;
+            
+            // Debounce: ignore multiple events in short succession
+            if ((DateTime.Now - _lastRead).TotalMilliseconds < 500) return;
+            _lastRead = DateTime.Now;
+
+            try
+            {
+                // Give the other process a tiny bit of time to release the file
+                System.Threading.Thread.Sleep(50);
+                var settings = Load();
+                SettingsChanged?.Invoke(settings);
+            }
+            catch { }
         }
 
         public SettingsService(string customPath)
@@ -108,6 +157,10 @@ namespace Manager.Core.Services
             string bitness;
             if (raw.TryGetValue("GameBitness", out bitness))
                 settings.GameBitness = bitness;
+            
+            string autoCondense;
+            if (raw.TryGetValue("AutoCondenseSaves", out autoCondense))
+                settings.AutoCondenseSaves = autoCondense;
 
             return settings;
         }
@@ -134,6 +187,7 @@ namespace Manager.Core.Services
             data["IgnoreOrderChecks"] = settings.IgnoreOrderChecks.ToString();
             data["SkipHarmonyDependencyCheck"] = settings.SkipHarmonyDependencyCheck.ToString();
             data["GameBitness"] = settings.GameBitness ?? string.Empty;
+            data["AutoCondenseSaves"] = settings.AutoCondenseSaves ?? "ask";
 
             WriteIniFile(data);
             
@@ -174,6 +228,8 @@ namespace Manager.Core.Services
         {
             try
             {
+                _suppressWatcher = true;
+                
                 var lines = new List<string>();
                 lines.Add("# Sheltered Mod Manager Configuration");
                 lines.Add("# Last modified: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
@@ -188,10 +244,17 @@ namespace Manager.Core.Services
                 }
 
                 File.WriteAllLines(_iniPath, lines.ToArray());
+                
+                // Give the watcher time to process any pending events before re-enabling
+                System.Threading.Thread.Sleep(100);
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("Error writing INI: " + ex.Message);
+            }
+            finally
+            {
+                _suppressWatcher = false;
             }
         }
 

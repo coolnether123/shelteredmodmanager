@@ -24,19 +24,13 @@ namespace ModAPI.Hooks.Paging
 
         public static void UpdateIcons(SlotSelectionPanel panel)
         {
-            UIDebug.ResetTiming();
-            UIDebug.LogTimed("UpdateIcons called");
-            
             if (panel == null)
             {
-                MMLog.WriteDebug("[SaveVerification] Panel is null, returning");
                 return;
             }
 
             var buttons = panel.GetComponentsInChildren<SaveSlotButton>(true);
             int page = PagingManager.GetPage(panel);
-
-            MMLog.WriteDebug($"[SaveVerification] Found {buttons.Length} buttons, page = {page}");
 
             // Reset all icons for known buttons
             foreach(var kv in _slotIcons) 
@@ -90,13 +84,30 @@ namespace ModAPI.Hooks.Paging
 
                 if (target == null && absoluteSlot <= 3)
                 {
-                    // For vanilla slots 1-3, create entry and read family name from save file
-                    target = new SaveEntry { 
-                        id = "vanilla_slot_" + absoluteSlot,
-                        absoluteSlot = absoluteSlot,
-                        name = "Slot " + absoluteSlot,
-                        saveInfo = SaveRegistryCore.ReadVanillaSaveInfo(absoluteSlot)
-                    };
+                    // For vanilla slots 1-3, try to read save info
+                    var saveInfo = SaveRegistryCore.ReadVanillaSaveInfo(absoluteSlot);
+                    
+                    // Only create entry if save file actually exists
+                    if (saveInfo != null)
+                    {
+                        target = new SaveEntry { 
+                            id = "vanilla_slot_" + absoluteSlot,
+                            absoluteSlot = absoluteSlot,
+                            name = "Slot " + absoluteSlot,
+                            saveInfo = saveInfo
+                        };
+                    }
+                }
+
+                // Skip icon creation if no save exists
+                if (target == null)
+                {
+                    // Hide icon if it was previously created for this button
+                    if (_slotIcons.ContainsKey(btn))
+                    {
+                        _slotIcons[btn].SetActive(false);
+                    }
+                    continue;
                 }
 
                 // Create/Get Icon GameObject
@@ -129,8 +140,6 @@ namespace ModAPI.Hooks.Paging
                     bgTex.height = 60;
                     bgTex.pivot = UIWidget.Pivot.Center;
                     bgTex.color = new Color(0.3f, 0.25f, 0.2f, 0.9f); // Dark brown, more opaque
-                    
-                    MMLog.WriteDebug($"[SaveVerification] Created UITexture background with white texture");
                     
                     // Icon sprite (checkmark/X) as child
                     var iconChild = new GameObject("Icon");
@@ -167,12 +176,6 @@ namespace ModAPI.Hooks.Paging
                     iconGO = _slotIcons[btn];
                 }
 
-                if (target == null) 
-                {
-                    iconGO.SetActive(false);
-                    continue;
-                }
-
                 iconGO.SetActive(true);
                 // local Z: -20 to win raycast against slot button
                 iconGO.transform.localPosition = new Vector3(-320, 0, -20);
@@ -183,23 +186,8 @@ namespace ModAPI.Hooks.Paging
                 var iconButton = iconGO.GetComponent<UIButton>();
                 var bgTexture = iconGO.GetComponent<UITexture>();
                 
-                // DEBUG: Log button visual state
-                MMLog.WriteDebug($"[SaveVerification] Slot {absoluteSlot}: Button State = {iconButton.state}, IsEnabled = {iconButton.isEnabled}");
-                if (bgTexture != null)
-                {
-                    MMLog.WriteDebug($"[SaveVerification] Slot {absoluteSlot}: BG Color = {bgTexture.color}, Alpha = {bgTexture.alpha}");
-                    MMLog.WriteDebug($"[SaveVerification] Slot {absoluteSlot}: Widget Depth = {bgTexture.depth}, Panel Depth = {NGUITools.FindInParents<UIPanel>(iconGO)?.depth}");
-                }
-                
-                // Check for tweens
-                var tweenAlpha = iconGO.GetComponent<TweenAlpha>();
-                if (tweenAlpha != null)
-                {
-                    MMLog.WriteDebug($"[SaveVerification] Slot {absoluteSlot}: Has TweenAlpha! from={tweenAlpha.from}, to={tweenAlpha.to}, value={tweenAlpha.value}");
-                }
-                
                 // Get Manifest and State
-                var slotRoot = DirectoryProvider.SlotRoot("Standard", absoluteSlot); 
+                var slotRoot = DirectoryProvider.SlotRoot("Standard", absoluteSlot, false); 
                 var manPath = Path.Combine(slotRoot, "manifest.json");
                 
                 VerificationState state = VerificationState.Match;
@@ -210,15 +198,12 @@ namespace ModAPI.Hooks.Paging
                     try 
                     { 
                         string json = File.ReadAllText(manPath);
-                        MMLog.WriteDebug($"[SaveVerification] Reading manifest from: {manPath}");
-                        MMLog.WriteDebug($"[SaveVerification] Manifest JSON content:\n{json}");
                         manifest = ModAPI.Saves.SaveRegistryCore.DeserializeSlotManifest(json);
-                        MMLog.WriteDebug($"[SaveVerification] Deserialized manifest: version={manifest?.manifestVersion}, modsCount={manifest?.lastLoadedMods?.Length ?? 0}");
                         state = Verify(manifest);
                     } 
                     catch (Exception ex)
                     {
-                        MMLog.WriteError($"[SaveVerification] Failed to deserialize manifest for slot {absoluteSlot}: {ex.Message}\n{ex.StackTrace}");
+                        MMLog.WriteError($"[SaveVerification] Failed to deserialize manifest for slot {absoluteSlot}: {ex.Message}");
                     }
                 }
 
@@ -293,12 +278,6 @@ namespace ModAPI.Hooks.Paging
                 {
                     iconChildObj.localPosition = new Vector3(0, yOffset, 0);
                 }
-                
-                // Debug: Full snapshot on first button only
-                if (i == 0)
-                {
-                    UIDebug.TakeSnapshot(iconGO, $"VerificationBtn Slot {absoluteSlot}");
-                }
 
                 var capTarget = target;
                 var capManifest = manifest;
@@ -306,16 +285,9 @@ namespace ModAPI.Hooks.Paging
                 int capSlot = absoluteSlot;
                 
                 EventDelegate.Set(iconButton.onClick, () => {
-                    UIDebug.LogTimed($"Icon clicked for slot {capSlot}");
-                    UIDebug.TraceClickAt(Input.mousePosition);
                     SaveDetailsWindow.Show(capTarget, capManifest, capState, false, null);
                 });
-                
-                // Verify the delegate was added
-                UIDebug.VerifyDelegateCount(iconButton, 1, $"VerificationBtn Slot {absoluteSlot}");
             }
-            
-            UIDebug.LogTimed("UpdateIcons complete");
         }
 
         public enum VerificationState { Match, VersionMismatch, Warning, Missing }

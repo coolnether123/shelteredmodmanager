@@ -82,8 +82,13 @@ namespace ModAPI.Hooks.Paging
             int totalExpanded = ExpandedVanillaSaves.Count();
 
             bool canPrev = p > 0;
-            // Can go to next page if there are saves to display, or if on page 1 (to create the first expanded save)
-            bool canNext = (p == 0) || (totalExpanded > (p - 1) * 3);
+
+            int maxSlot = ExpandedVanillaSaves.GetMaxSlot();
+            int lastSavePage = (maxSlot < 4) ? 0 : (maxSlot - 4) / 3 + 1;
+            
+            // Allow navigation if we are on the vanilla page (to go to first custom page)
+            // or if we hasn't reached the page after the last save yet.
+            bool canNext = (p == 0) || (p <= lastSavePage);
 
             var prevBtn = ui.prev?.GetComponent<UIButton>();
             var nextBtn = ui.next?.GetComponent<UIButton>();
@@ -112,7 +117,7 @@ namespace ModAPI.Hooks.Paging
             {
                 ModPrefs.SetInt("ModAPI_HasSeenCustomSavesHelp", 1);
                 ModPrefs.Save();
-                MessageBox.Show(MessageBoxButtons.Okay_Button, "Welcome to Custom Saves!\n\nPage 2+ contains unlimited custom saves.\nUse arrows to navigate pages.\n\nNOTE: Deleting a custom save will cause subsequent slots to shift up ('collapse') to fill the gap after reloading the game.\n\nSlots 1-3 are vanilla.");
+                MessageBox.Show(MessageBoxButtons.Okay_Button, "Welcome to Custom Saves!\n\nPage 2+ contains unlimited custom saves.\nUse arrows or keyboard to navigate pages.\n\nSaves stay in their slots permanently.\nIf gaps occur (from deleting saves), you'll be\nasked at game startup if you want to reorganize.\n\nSlots 1-3 are vanilla saves.");
             }
 
             panel.RefreshSaveSlotInfo(); // This will trigger our Postfix patch to update the UI

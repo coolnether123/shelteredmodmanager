@@ -28,6 +28,17 @@ namespace ModAPI.Saves
             }
         }
 
+        public static string SmmRoot
+        {
+            get
+            {
+                string gameRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                return Path.Combine(gameRoot, "SMM");
+            }
+        }
+
+        public static string ConfigPath => Path.Combine(Path.Combine(SmmRoot, "bin"), "mod_manager.ini");
+
         public static string ModApiRoot
         {
             get
@@ -58,18 +69,18 @@ namespace ModAPI.Saves
             }
         }
 
-        public static string ScenarioRoot(string scenarioId)
+        public static string ScenarioRoot(string scenarioId, bool create = true)
         {
             scenarioId = NameSanitizer.SanitizeId(scenarioId);
             var path = Path.Combine(SavesRoot, scenarioId);
-            EnsureDir(path);
+            if (create) EnsureDir(path);
             return path;
         }
 
-        public static string SlotRoot(string scenarioId, int absoluteSlot)
+        public static string SlotRoot(string scenarioId, int absoluteSlot, bool create = true)
         {
-            var path = Path.Combine(ScenarioRoot(scenarioId), $"Slot_{absoluteSlot}");
-            EnsureDir(path);
+            var path = Path.Combine(ScenarioRoot(scenarioId, create), $"Slot_{absoluteSlot}");
+            if (create) EnsureDir(path);
             return path;
         }
 

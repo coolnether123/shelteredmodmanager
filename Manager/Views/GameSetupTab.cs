@@ -52,6 +52,8 @@ namespace Manager.Views
         // State
         private AppSettings _settings;
         private bool _isDarkMode = false;
+        private bool _isUpdating = false;
+        private string _lastLoggedPath = null;
 
         /// <summary>
         /// Event raised when game path changes
@@ -315,6 +317,8 @@ namespace Manager.Views
 
         private void GamePathTextBox_TextChanged(object sender, EventArgs e)
         {
+            if (_isUpdating) return;
+
             string path = _gamePathTextBox.Text;
             if (path != null) path = path.Trim();
             
@@ -398,14 +402,23 @@ namespace Manager.Views
         {
             if (_settings == null) return;
 
-            _gamePathTextBox.Text = _settings.GamePath ?? string.Empty;
-            _modsPathTextBox.Text = _settings.ModsPath ?? string.Empty;
+            _isUpdating = true;
+            try
+            {
+                _gamePathTextBox.Text = _settings.GamePath ?? string.Empty;
+                _modsPathTextBox.Text = _settings.ModsPath ?? string.Empty;
+            }
+            finally
+            {
+                _isUpdating = false;
+            }
             
             UpdateStatus(_settings.IsGamePathValid);
 
-            if (_settings.IsGamePathValid)
+            if (_settings.IsGamePathValid && _settings.GamePath != _lastLoggedPath)
             {
                 Log("Loaded configuration - game found");
+                _lastLoggedPath = _settings.GamePath;
             }
         }
 

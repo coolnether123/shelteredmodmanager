@@ -21,6 +21,7 @@ namespace ModAPI.Saves
         public static SaveEntry[] List() => _registry.ListSaves();
         public static SaveEntry[] List(int page, int pageSize) => _registry.ListSaves(page, pageSize);
         public static int Count() => _registry.CountSaves();
+        public static int GetMaxSlot() => _registry.GetMaxSlot();
         public static SaveEntry Create(SaveCreateOptions options) => _registry.CreateSave(options);
         public static bool Delete(string saveId) => _registry.DeleteSave(saveId);
         public static SaveEntry Get(string saveId) => _registry.GetSave(saveId);

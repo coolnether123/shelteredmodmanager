@@ -4,6 +4,8 @@ using System.Reflection;
 using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.UI;
+using ModAPI.Saves;
+using ModAPI.Hooks.Paging;
 using UnityEngine;
 
 namespace ModAPI.Harmony
@@ -15,6 +17,14 @@ namespace ModAPI.Harmony
         {
             try
             {
+                MMLog.Write("[MainMenuPatch] Postfix triggered.");
+                // One-time startup check for save slot gaps
+                SaveCondenseManager.CheckOnStartup();
+                if (SaveCondenseManager.NeedsPrompt())
+                {
+                    CondensePromptDialog.Show();
+                }
+
                 var tableField = typeof(MainMenu).GetField("m_table", BindingFlags.NonPublic | BindingFlags.Instance);
                 var table = (UITablePivot)tableField?.GetValue(__instance);
                 if (table == null) return;
