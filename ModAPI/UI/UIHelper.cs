@@ -210,6 +210,18 @@ namespace ModAPI.UI
             }
         }
 
+        /// <summary>
+        /// Adds a hover tooltip to a GameObject. The GameObject must have a collider for interaction.
+        /// </summary>
+        public static TooltipHelper AddTooltip(GameObject target, Transform root, string text, UIFont uiFont = null, Font ttfFont = null)
+        {
+            if (target == null || root == null) return null;
+            
+            var helper = target.GetComponent<TooltipHelper>() ?? target.AddComponent<TooltipHelper>();
+            helper.Initialize(root, text, uiFont, ttfFont);
+            return helper;
+        }
+
         private static string GetGameObjectPath(GameObject obj)
         {
             string path = "/" + obj.name;
@@ -261,6 +273,143 @@ namespace ModAPI.UI
                     label.pivot = UIWidget.Pivot.BottomRight;
                     label.alignment = NGUIText.Alignment.Right;
                     break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Helper component that shows a tooltip when hovering over an element.
+    /// Attach to any GameObject with a collider to show a tooltip on hover.
+    /// </summary>
+    public class TooltipHelper : MonoBehaviour
+    {
+        private static Texture2D _tooltipBgTexture;
+        private GameObject _tooltipObj;
+        private UILabel _tooltipLabel;
+        private UITexture _tooltipBg;
+        private bool _isHovering = false;
+        private Transform _rootTransform;
+        private string _tooltipText;
+        private UIFont _uiFont;
+        private Font _ttfFont;
+
+        /// <summary>
+        /// Initialize the tooltip with text and font settings.
+        /// </summary>
+        /// <param name="root">The root transform for the tooltip (usually the dialog root)</param>
+        /// <param name="text">The tooltip text to display</param>
+        /// <param name="uiFont">Optional UIFont to use</param>
+        /// <param name="ttfFont">Optional TrueType font to use</param>
+        public void Initialize(Transform root, string text, UIFont uiFont = null, Font ttfFont = null)
+        {
+            _rootTransform = root;
+            _tooltipText = text;
+            _uiFont = uiFont;
+            _ttfFont = ttfFont ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+            
+            if (_tooltipBgTexture == null)
+            {
+                _tooltipBgTexture = new Texture2D(2, 2);
+                for (int x = 0; x < 2; x++)
+                    for (int y = 0; y < 2; y++)
+                        _tooltipBgTexture.SetPixel(x, y, Color.white);
+                _tooltipBgTexture.Apply();
+            }
+        }
+
+        private void OnHover(bool isOver)
+        {
+            _isHovering = isOver;
+            if (!isOver && _tooltipObj != null)
+            {
+                Destroy(_tooltipObj);
+                _tooltipObj = null;
+            }
+        }
+
+        private void Update()
+        {
+            if (_isHovering && _tooltipObj == null)
+            {
+                CreateTooltip();
+            }
+        }
+
+        private void LateUpdate()
+        {
+            if (_isHovering && _tooltipObj != null)
+            {
+                UpdateTooltipPosition();
+            }
+        }
+
+        private void CreateTooltip()
+        {
+            _tooltipObj = new GameObject("Tooltip");
+            _tooltipObj.transform.SetParent(_rootTransform, false);
+            _tooltipObj.layer = _rootTransform.gameObject.layer;
+            _tooltipObj.transform.localScale = Vector3.one;
+            _tooltipObj.transform.localPosition = Vector3.zero;
+            
+            // Background
+            var bgObj = new GameObject("TooltipBg");
+            bgObj.transform.SetParent(_tooltipObj.transform, false);
+            bgObj.layer = _tooltipObj.layer;
+            _tooltipBg = bgObj.AddComponent<UITexture>();
+            _tooltipBg.mainTexture = _tooltipBgTexture;
+            _tooltipBg.color = new Color(0.1f, 0.08f, 0.06f, 0.95f);
+            _tooltipBg.depth = 200;
+            _tooltipBg.pivot = UIWidget.Pivot.Center;
+            
+            // Label
+            var labelObj = new GameObject("TooltipLabel");
+            labelObj.transform.SetParent(_tooltipObj.transform, false);
+            labelObj.layer = _tooltipObj.layer;
+            _tooltipLabel = labelObj.AddComponent<UILabel>();
+            _tooltipLabel.text = _tooltipText;
+            _tooltipLabel.fontSize = 14;
+            _tooltipLabel.color = new Color(0.8f, 0.75f, 0.65f);
+            _tooltipLabel.depth = 201;
+            _tooltipLabel.pivot = UIWidget.Pivot.Center;
+            _tooltipLabel.overflowMethod = UILabel.Overflow.ResizeFreely;
+            _tooltipLabel.bitmapFont = _uiFont;
+            _tooltipLabel.trueTypeFont = _ttfFont;
+            
+            // Size background to fit text
+            int paddingX = 12;
+            int paddingY = 8;
+            _tooltipBg.width = (int)_tooltipLabel.printedSize.x + paddingX * 2;
+            _tooltipBg.height = (int)_tooltipLabel.printedSize.y + paddingY * 2;
+            
+            // Both are centered, so no offset needed
+            _tooltipLabel.transform.localPosition = Vector3.zero;
+            bgObj.transform.localPosition = Vector3.zero;
+        }
+
+        private void UpdateTooltipPosition()
+        {
+            if (_tooltipObj == null) return;
+            
+            // Convert mouse position to UI coordinates
+            var uiRoot = NGUITools.FindInParents<UIRoot>(_rootTransform.gameObject);
+            if (uiRoot == null) return;
+            
+            float ratio = (float)uiRoot.activeHeight / Screen.height;
+            float x = (Input.mousePosition.x - Screen.width * 0.5f) * ratio;
+            float y = (Input.mousePosition.y - Screen.height * 0.5f) * ratio;
+            
+            // Offset tooltip from cursor to be above it
+            // x is already center-aligned due to Pivot.Bottom
+            y += 22; 
+            
+            _tooltipObj.transform.localPosition = new Vector3(x, y, 0);
+        }
+
+        private void OnDestroy()
+        {
+            if (_tooltipObj != null)
+            {
+                Destroy(_tooltipObj);
             }
         }
     }

@@ -23,6 +23,11 @@ namespace Manager.Views
         // Theme
         private Label _themeLabel;
         private CheckBox _darkModeCheckBox;
+        
+        // Save slot organization
+        private Label _autoCondenseLabel;
+        private ComboBox _autoCondenseCombo;
+        
         private Panel _separator;
 
         // Developer mode
@@ -92,6 +97,23 @@ namespace Manager.Views
             _darkModeCheckBox.Location = new Point(30, yPos);
             yPos += 40;
 
+            // Auto-condense saves setting
+            _autoCondenseLabel = new Label();
+            _autoCondenseLabel.Text = "Auto-Organize Save Slots:";
+            _autoCondenseLabel.Font = new Font("Segoe UI", 10f);
+            _autoCondenseLabel.AutoSize = true;
+            _autoCondenseLabel.Location = new Point(30, yPos);
+            yPos += 25;
+            
+            _autoCondenseCombo = new ComboBox();
+            _autoCondenseCombo.Font = new Font("Segoe UI", 10f);
+            _autoCondenseCombo.DropDownStyle = ComboBoxStyle.DropDownList;
+            _autoCondenseCombo.Items.AddRange(new object[] { "Ask each time", "Always organize", "Never organize" });
+            _autoCondenseCombo.SelectedIndex = 0;
+            _autoCondenseCombo.Location = new Point(30, yPos);
+            _autoCondenseCombo.Width = 200;
+            yPos += 45;
+
             // Separator
             _separator = new Panel();
             _separator.BackColor = Color.LightGray;
@@ -154,6 +176,8 @@ namespace Manager.Views
             // Add all controls
             this.Controls.Add(_themeLabel);
             this.Controls.Add(_darkModeCheckBox);
+            this.Controls.Add(_autoCondenseLabel);
+            this.Controls.Add(_autoCondenseCombo);
             this.Controls.Add(_separator);
             this.Controls.Add(_devModeCheckBox);
             this.Controls.Add(_devSettingsGroup);
@@ -207,8 +231,20 @@ namespace Manager.Views
             _verboseLoggingCheckBox.CheckedChanged += VerboseLoggingCheckBox_CheckedChanged;
             _skipHarmonyCheckBox.CheckedChanged += SkipHarmonyCheckBox_CheckedChanged;
             _ignoreOrderCheckBox.CheckedChanged += IgnoreOrderCheckBox_CheckedChanged;
-            // Log Categories event removed - UI no longer exists
+            _autoCondenseCombo.SelectedIndexChanged += AutoCondenseCombo_SelectedIndexChanged;
             _resetButton.Click += ResetButton_Click;
+        }
+
+        private void AutoCondenseCombo_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (_suppressEvents || _settings == null) return;
+
+            string choice = "ask";
+            if (_autoCondenseCombo.SelectedIndex == 1) choice = "yes";
+            else if (_autoCondenseCombo.SelectedIndex == 2) choice = "no";
+
+            _settings.AutoCondenseSaves = choice;
+            TriggerSave();
         }
 
         private void DarkModeCheckBox_CheckedChanged(object sender, EventArgs e)
@@ -298,6 +334,12 @@ namespace Manager.Views
                 _skipHarmonyCheckBox.Checked = _settings.SkipHarmonyDependencyCheck;
                 _ignoreOrderCheckBox.Checked = _settings.IgnoreOrderChecks;
 
+                // Load AutoCondense setting
+                string condensePref = (_settings.AutoCondenseSaves ?? "ask").ToLowerInvariant();
+                if (condensePref == "yes" || condensePref == "true") _autoCondenseCombo.SelectedIndex = 1;
+                else if (condensePref == "no" || condensePref == "false") _autoCondenseCombo.SelectedIndex = 2;
+                else _autoCondenseCombo.SelectedIndex = 0; // ask
+
                 // Update button positions
                 UpdateButtonPositions();
             }
@@ -316,7 +358,11 @@ namespace Manager.Views
             _settings.LogLevel = _verboseLoggingCheckBox.Checked ? "Debug" : "Info";
             _settings.SkipHarmonyDependencyCheck = _skipHarmonyCheckBox.Checked;
             _settings.IgnoreOrderChecks = _ignoreOrderCheckBox.Checked;
-            // Log Categories not saved from UI - hardcoded in ModAPI
+
+            string choice = "ask";
+            if (_autoCondenseCombo.SelectedIndex == 1) choice = "yes";
+            else if (_autoCondenseCombo.SelectedIndex == 2) choice = "no";
+            _settings.AutoCondenseSaves = choice;
         }
 
         /// <summary>
@@ -338,6 +384,11 @@ namespace Manager.Views
                 _skipHarmonyCheckBox.ForeColor = Color.White;
                 _ignoreOrderCheckBox.ForeColor = Color.White;
                 
+                _autoCondenseLabel.ForeColor = Color.White;
+                _autoCondenseCombo.BackColor = Color.FromArgb(60, 60, 62);
+                _autoCondenseCombo.ForeColor = Color.White;
+                _autoCondenseCombo.FlatStyle = FlatStyle.Flat;
+                
                 _resetButton.BackColor = Color.FromArgb(70, 70, 70);
                 _resetButton.ForeColor = Color.White;
                 _resetButton.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
@@ -353,6 +404,11 @@ namespace Manager.Views
                 _verboseLoggingCheckBox.ForeColor = SystemColors.ControlText;
                 _skipHarmonyCheckBox.ForeColor = SystemColors.ControlText;
                 _ignoreOrderCheckBox.ForeColor = SystemColors.ControlText;
+
+                _autoCondenseLabel.ForeColor = SystemColors.ControlText;
+                _autoCondenseCombo.BackColor = SystemColors.Window;
+                _autoCondenseCombo.ForeColor = SystemColors.WindowText;
+                _autoCondenseCombo.FlatStyle = FlatStyle.Standard;
                 
                 _resetButton.BackColor = SystemColors.Control;
                 _resetButton.ForeColor = SystemColors.ControlText;

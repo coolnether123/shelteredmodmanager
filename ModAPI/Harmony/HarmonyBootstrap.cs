@@ -115,7 +115,10 @@ namespace ModAPI.Harmony
         {
             try
             {
-                var ini = System.IO.Path.Combine(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "SMM"), "mod_manager.ini");
+                string gameRoot = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, ".."));
+                string smmDir = System.IO.Path.Combine(gameRoot, "SMM");
+                string binDir = System.IO.Path.Combine(smmDir, "bin");
+                var ini = System.IO.Path.Combine(binDir, "mod_manager.ini");
                 if (!System.IO.File.Exists(ini)) return fallback;
                 foreach (var raw in System.IO.File.ReadAllLines(ini))
                 {

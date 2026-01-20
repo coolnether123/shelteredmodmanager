@@ -117,6 +117,7 @@
     <Compile Include="Custom Saves\paging\SlotSelectionPatches.cs" />
     <Compile Include="Custom Saves\paging\SaveVerification.cs" />
     <Compile Include="Custom Saves\paging\SaveDetailsWindow.cs" />
+    <Compile Include="Custom Saves\paging\CondensePromptDialog.cs" />
     <Compile Include="Custom Saves\saves\CRC32.cs" />
     <Compile Include="Custom Saves\saves\DirectoryProvider.cs" />
     <Compile Include="Custom Saves\saves\Events.cs" />

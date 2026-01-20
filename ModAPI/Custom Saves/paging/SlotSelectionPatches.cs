@@ -22,40 +22,7 @@ namespace ModAPI.Hooks
     {
         static void Postfix(SlotSelectionPanel __instance)
         {
-            // Log custom saves
-            ExpandedVanillaSaves.Debug_ListAllSaves();
-
-            // Log vanilla saves
-            MMLog.Write("--- Debug Listing Vanilla Saves ---");
-            try
-            {
-                var t = Traverse.Create(__instance);
-                var m_slotInfo = t.Field("m_slotInfo").GetValue<System.Collections.IList>();
-                for (int i = 0; i < 3; i++)
-                {
-                    var slotInfo = m_slotInfo[i];
-                    var state = Traverse.Create(slotInfo).Field("m_state").GetValue<SlotSelectionPanel.SlotState>();
-                    if (state == SlotSelectionPanel.SlotState.Loaded)
-                    {
-                        var familyName = Traverse.Create(slotInfo).Field("m_familyName").GetValue<string>();
-                        var daysSurvived = Traverse.Create(slotInfo).Field("m_daysSurvived").GetValue<int>();
-                        var dateSaved = Traverse.Create(slotInfo).Field("m_dateSaved").GetValue<string>();
-                        MMLog.Write($"  - Slot: {i + 1}, State: {state}, Family: '{familyName}', Days: {daysSurvived}, Updated: {dateSaved}");
-                    }
-                    else
-                    {
-                        MMLog.Write($"  - Slot: {i + 1}, State: {state}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteError("Error during vanilla save debug logging: " + ex);
-            }
-            MMLog.Write("--- End of List ---");
-
             PagingManager.Initialize(__instance);
-            MMLog.WriteDebug($"[SlotSelectionPanel_OnShow_Patch] Panel shown. PagingManager initialized for instance: {__instance.name}");
         }
     }
 
@@ -65,7 +32,6 @@ namespace ModAPI.Hooks
         static bool Prefix(SlotSelectionPanel __instance)
         {
             int page = PagingManager.GetPage(__instance);
-            MMLog.WriteDebug($"[RefreshSaveSlotInfo] Entering Prefix. Current page: {page}");
             if (page == 0)
             {
                 var vanillaButtons = __instance.GetComponentsInChildren<SaveSlotButton>(true);
@@ -108,8 +74,6 @@ namespace ModAPI.Hooks
                     }
                 }
 
-                MMLog.WriteDebug($"[RefreshSaveSlotInfo] apiPage: {apiPage}, found {savesOnPage.Length} saves for this page.");
-
                 var t = Traverse.Create(__instance);
                 var m_slotInfo = t.Field("m_slotInfo").GetValue<System.Collections.IList>();
 
@@ -127,14 +91,23 @@ namespace ModAPI.Hooks
                     var slotInfo = m_slotInfo[i];
                     var entry = (i < savesOnPage.Length) ? savesOnPage[i] : null;
 
-                    MMLog.WriteDebug($"[RefreshSaveSlotInfo] Processing slot {i}. Entry: {(entry != null ? entry.id : "NULL")}");
-
                     if (entry != null)
                     {
-                        Traverse.Create(slotInfo).Field("m_state").SetValue(SlotSelectionPanel.SlotState.Loaded);
-                        Traverse.Create(slotInfo).Field("m_familyName").SetValue(entry.saveInfo.familyName);
-                        Traverse.Create(slotInfo).Field("m_daysSurvived").SetValue(entry.saveInfo.daysSurvived);
-                        Traverse.Create(slotInfo).Field("m_diffSetting").SetValue(entry.saveInfo.difficulty);
+                        var tSlot = Traverse.Create(slotInfo);
+                        tSlot.Field("m_state").SetValue(SlotSelectionPanel.SlotState.Loaded);
+                        tSlot.Field("m_familyName").SetValue(entry.saveInfo.familyName);
+                        tSlot.Field("m_daysSurvived").SetValue(entry.saveInfo.daysSurvived);
+                        tSlot.Field("m_diffSetting").SetValue(entry.saveInfo.difficulty);
+                        
+                        // Set all difficulty fields for proper DifficultyManager loading
+                        tSlot.Field("m_rainDiff").SetValue(entry.saveInfo.rainDiff);
+                        tSlot.Field("m_resourceDiff").SetValue(entry.saveInfo.resourceDiff);
+                        tSlot.Field("m_breachDiff").SetValue(entry.saveInfo.breachDiff);
+                        tSlot.Field("m_factionDiff").SetValue(entry.saveInfo.factionDiff);
+                        tSlot.Field("m_moodDiff").SetValue(entry.saveInfo.moodDiff);
+                        tSlot.Field("m_mapSize").SetValue(entry.saveInfo.mapSize);
+                        tSlot.Field("m_fog").SetValue(entry.saveInfo.fog);
+                        
                         var rawTime = entry.saveInfo.saveTime ?? entry.updatedAt;
                         string displayTime = rawTime;
                         try
@@ -144,16 +117,12 @@ namespace ModAPI.Hooks
                         }
                         catch { }
 
-                        var tSlot = Traverse.Create(slotInfo);
                         if (tSlot.Field("m_dateSaved").FieldExists()) tSlot.Field("m_dateSaved").SetValue(displayTime);
                         if (tSlot.Field("m_saveTime").FieldExists()) tSlot.Field("m_saveTime").SetValue(displayTime);
-
-                        MMLog.WriteDebug($"[RefreshSaveSlotInfo] Slot {i} state: Loaded. Family: {entry.saveInfo.familyName}, Days: {entry.saveInfo.daysSurvived}, Time: {displayTime}");
                     }
                     else
                     {
                         Traverse.Create(slotInfo).Field("m_state").SetValue(SlotSelectionPanel.SlotState.Empty);
-                        MMLog.WriteDebug($"[RefreshSaveSlotInfo] Slot {i} state: Empty.");
                     }
                 }
 
@@ -233,7 +202,7 @@ namespace ModAPI.Hooks
                         // Only check slots 1-3 (indices 0-2)
                         if (chosenSlotIndex >= 0 && chosenSlotIndex < 3)
                         {
-                            var slotRoot = DirectoryProvider.SlotRoot("Standard", chosenSlotIndex + 1);
+                            var slotRoot = DirectoryProvider.SlotRoot("Standard", chosenSlotIndex + 1, false);
                             var manPath = System.IO.Path.Combine(slotRoot, "manifest.json");
                             SlotManifest manifest = null;
                             
@@ -269,7 +238,6 @@ namespace ModAPI.Hooks
                                         
                                         SaveDetailsWindow.Show(entry, manifest, state, true, () => {
                                             // Load Anyway callback - trigger vanilla load
-                                            MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] Load Anyway clicked for vanilla slot {chosenSlotIndex + 1}");
                                             // Set force load flag to bypass LoadGamePatch check
                                             ModAPI.Core.SaveProtectionPatches.LoadGamePatch._forceLoad = true;
                                             SaveManager.instance.SetSlotToLoad(chosenSlotIndex + 1);
@@ -298,12 +266,10 @@ namespace ModAPI.Hooks
                     if (chosenSlotIndex > 2) return true; // Should not happen on paged view
 
                     int apiPage = page - 1;
-                    MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] chosenSlotIndex: {chosenSlotIndex}, apiPage: {apiPage}");
 
                     var entry = ExpandedVanillaSaves.FindByUIPosition(chosenSlotIndex + 1, apiPage, 3);
                     
                     var virtualSaveType = (SaveManager.SaveType)(chosenSlotIndex + 1);
-                    MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] virtualSaveType: {virtualSaveType}");
 
                     if (entry == null) // Creating a new game
                     {
@@ -313,7 +279,6 @@ namespace ModAPI.Hooks
                         var created = ExpandedVanillaSaves.Create(new SaveCreateOptions { name = "New Game", absoluteSlot = absoluteSlot });
                         if (created != null)
                         {
-                            MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] Calling SetNextSave with type={virtualSaveType}, scenarioId=Standard, saveId={created.id}");
                             PlatformSaveProxy.SetNextSave(virtualSaveType, "Standard", created.id);
                             SaveManager.instance.SetCurrentSlot(chosenSlotIndex + 1);
                         }
@@ -322,7 +287,7 @@ namespace ModAPI.Hooks
                     else // Loading an existing expanded game
                     {
                         // VERIFICATION
-                        var slotRoot = DirectoryProvider.SlotRoot("Standard", entry.absoluteSlot);
+                        var slotRoot = DirectoryProvider.SlotRoot("Standard", entry.absoluteSlot, false);
                         var manPath = System.IO.Path.Combine(slotRoot, "manifest.json");
                         SlotManifest manifest = null;
                         if (System.IO.File.Exists(manPath)) try { manifest = ModAPI.Saves.SaveRegistryCore.DeserializeSlotManifest(System.IO.File.ReadAllText(manPath)); } catch {}
@@ -341,17 +306,14 @@ namespace ModAPI.Hooks
                              // Open Details Window
                              SaveDetailsWindow.Show(entry, manifest, state, true, () => {
                                  // Load Callback
-                                 MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] Load Anyway clicked for {entry.id}");
                                  PlatformSaveProxy.SetNextLoad(virtualSaveType, "Standard", entry.id);
                                  SaveManager.instance.SetSlotToLoad(chosenSlotIndex + 1);
                              });
                              return false; // Block immediate load
                         }
 
-                        MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] Loading existing game with id: {entry.id}");
-                        MMLog.WriteDebug($"[SlotSelectionPanel_OnSlotChosen_Patch] Calling SetNextLoad with type={virtualSaveType}, scenarioId=Standard, saveId={entry.id}");
                         PlatformSaveProxy.SetNextLoad(virtualSaveType, "Standard", entry.id);
-                        SaveManager.instance.SetSlotToLoad(chosenSlotIndex + 1); // Fix typo: SaveManager.instance
+                        SaveManager.instance.SetSlotToLoad(chosenSlotIndex + 1);
                         return true;
                     }
                 }
@@ -417,7 +379,6 @@ namespace ModAPI.Hooks
         {
             static void Postfix()
             {
-                MMLog.WriteDebug("SlotSelectionPanel.Start postfix fired, ModAPI patches are active.");
             }
         }
 
