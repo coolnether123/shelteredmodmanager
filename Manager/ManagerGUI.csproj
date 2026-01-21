@@ -22,7 +22,7 @@
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <ApplicationVersion>1.0.0.0</ApplicationVersion>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
@@ -32,7 +32,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\Dist\SMM\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -41,7 +41,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>..\Dist\SMM\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -50,34 +50,32 @@
     <StartupObject>Manager.Program</StartupObject>
   </PropertyGroup>
   <PropertyGroup>
-    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
-    </Reference>
     <Reference Include="System.Core" />
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Web.Extensions" />
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ManagerGUI.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="ManagerGUI.Designer.cs">
-      <DependentUpon>ManagerGUI.cs</DependentUpon>
-    </Compile>
+    <Compile Include="ManagerSettings.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="ThemeManager.cs" />
+    <Compile Include="LoadOrderResolver.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\Settings.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
-    <EmbeddedResource Include="ManagerGUI.resx">
-      <DependentUpon>ManagerGUI.cs</DependentUpon>
+    <EmbeddedResource Include="MainForm.resx">
+      <DependentUpon>MainForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
@@ -89,23 +87,56 @@
       <DependentUpon>Resources.resx</DependentUpon>
       <DesignTime>True</DesignTime>
     </Compile>
+    <Compile Include="Shared\ModAboutReader.cs" />
+    <Compile Include="AssemblyVersionChecker.cs" />
+    <!-- New modular architecture -->
+    <Compile Include="MainForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <!-- Core Models -->
+    <Compile Include="Core\Models\ModItem.cs" />
+    <Compile Include="Core\Models\AppSettings.cs" />
+    <!-- Core Services -->
+    <Compile Include="Core\Services\SettingsService.cs" />
+    <Compile Include="Core\Services\ModDiscoveryService.cs" />
+    <Compile Include="Core\Services\LoadOrderService.cs" />
+    <!-- Custom Controls -->
+    <Compile Include="Controls\SearchBox.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\ModListView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\ModDetailsPanel.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\ActionButton.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <!-- View Tabs -->
+    <Compile Include="Views\GameSetupTab.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\ModManagerTab.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\SettingsTab.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\AboutTab.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <EmbeddedResource Include="Views\ModManagerTab.resx">
+      <DependentUpon>ModManagerTab.cs</DependentUpon>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <None Include="logo.jpg" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\ModAPI\ModAPI.csproj">
-      <Project>{3c99d6bf-a4a9-45dc-bef1-5717ece2a687}</Project>
-      <Name>ModAPI</Name>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="icon.ico" />
-    <None Include="logo.png" />
+    <EmbeddedResource Include="Icon.png" />
+    <EmbeddedResource Include="Icon.ico" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
@@ -114,67 +145,35 @@
       <Install>true</Install>
     </BootstrapperPackage>
   </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Lib.Harmony">
-      <Version>2.4.1</Version>
-    </PackageReference>
-  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>SET BUILD_PATH=$(SolutionDir)\Dist
-SET SMM_PATH=$(SolutionDir)\Dist\SMM
-SET MODS_PATH=$(SolutionDir)\Dist\mods
+    <PostBuildEvent>SET BASE=$(SolutionDir)
+SET CONFIG=$(Configuration)
+SET SMM_DIR=%25BASE%25Dist\SMM
+SET BIN_DIR=%25SMM_DIR%25\bin
+SET MODS_DIR=%25BASE%25Dist\mods
+SET DOORSTOP_DLL=%25BASE%25Doorstop\bin\%25CONFIG%25\Doorstop.dll
+SET MODAPI_DLL=%25BASE%25Dist\SMM\ModAPI.dll
+SET MANAGER_EXE=%25TargetPath%25
 
-SET LIB_DIR=$(SolutionDir)\libs
-SET PROJECT_DOORSTOP=$(SolutionDir)\Doorstop
-SET PROJECT_MANAGER=$(SolutionDir)\Manager
-SET PROJECT_MODAPI=$(SolutionDir)\ModAPI
+mkdir "%25SMM_DIR%25" 2&gt;nul
+mkdir "%25BIN_DIR%25" 2&gt;nul
+mkdir "%25MODS_DIR%25" 2&gt;nul
 
-SET PROJECT_PLUGIN_CONSOLE=$(SolutionDir)\PluginConsole
-SET PROJECT_PLUGIN_DEBUG_GUI=$(SolutionDir)\PluginDebugGUI
-SET PROJECT_PLUGIN_HARMONY=$(SolutionDir)\PluginHarmony
-SET PROJECT_PLUGIN_INITIALIZER=$(SolutionDir)\PluginInitializer
+if exist "%25MANAGER_EXE%25" copy /y "%25MANAGER_EXE%25" "%25SMM_DIR%25\"
+if exist "%25MODAPI_DLL%25" copy /y "%25MODAPI_DLL%25" "%25SMM_DIR%25\"
+if exist "%25DOORSTOP_DLL%25" copy /y "%25DOORSTOP_DLL%25" "%25BIN_DIR%25\"
 
+if exist "%25BASE%25libs\winhttp.dll" copy /y "%25BASE%25libs\winhttp.dll" "%25BASE%25Dist\"
 
-SET SUB_DIR=\bin\$(Configuration)\
+if exist "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.dll" copy /y "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.dll" "%25MODS_DIR%25\PluginConsole\Assemblies\"
+if exist "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.pdb" copy /y "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.pdb" "%25MODS_DIR%25\PluginConsole\Assemblies\"
+if exist "%25BASE%25PluginDebugGUI\bin\%25CONFIG%25\PluginDebugGUI.dll" copy /y "%25BASE%25PluginDebugGUI\bin\%25CONFIG%25\PluginDebugGUI.dll" "%25MODS_DIR%25\PluginDebugGUI\Assemblies\"
+if exist "%25BASE%25PluginHarmony\bin\%25CONFIG%25\PluginHarmony.dll" copy /y "%25BASE%25PluginHarmony\bin\%25CONFIG%25\PluginHarmony.dll" "%25MODS_DIR%25\PluginHarmony\Assemblies\"
+if exist "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" copy /y "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" "%25MODS_DIR%25\PluginInitializer\Assemblies\"
 
-:: initialize the \Dist\ directory
-rd /s /q "%25BUILD_PATH%25"
-mkdir "%25BUILD_PATH%25"
-
-:: initialize the \Dist\SMM\ directory
-rd /s /q "%25SMM_PATH%25"
-mkdir "%25SMM_PATH%25"
-
-
-
-:: Copy the manager exe to the Dist-directory 
-copy "%25PROJECT_MANAGER%25"\"%25SUB_DIR%25"\Manager.exe "%25SMM_PATH%25"\
-
-:: Copy the Mod-API.dll to the Dist-directory 
-copy "%25PROJECT_MODAPI%25"\"%25SUB_DIR%25"\ModAPI.dll "%25SMM_PATH%25"\
-
-:: Copy the Doorstop-Hoock and its config the Dist-directory 
-copy "%25PROJECT_DOORSTOP%25"\"%25SUB_DIR%25"\Doorstop.dll "%25SMM_PATH%25"\
-copy "%25PROJECT_DOORSTOP%25"\"%25SUB_DIR%25"\Doorstop.pdb "%25SMM_PATH%25"\
-copy "%25LIB_DIR%25"\doorstop_config.ini "%25BUILD_PATH%25"\
-copy "%25LIB_DIR%25"\winhttp.dll "%25BUILD_PATH%25"\
-
-
-:: initialize the \Dist\mods - directory
-if exist "%25MODS_PATH%25" rd /s /q "%25MODS_PATH%25"
-mkdir "%25MODS_PATH%25"
-
-
-
-:: Copy the Mod-API.dll to the Dist-directory 
-copy "%25PROJECT_PLUGIN_CONSOLE%25"\"%25SUB_DIR%25\"\PluginConsole.dll "%25MODS_PATH%25"\
-copy "%25PROJECT_PLUGIN_CONSOLE%25"\"%25SUB_DIR%25\"\PluginConsole.pdb "%25MODS_PATH%25"\
-copy "%25PROJECT_PLUGIN_DEBUG_GUI%25"\"%25SUB_DIR%25"\PluginDebugGUI.dll "%25MODS_PATH%25"\
-copy "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25"\PluginHarmony.dll "%25MODS_PATH%25"\
-copy "%25PROJECT_PLUGIN_INITIALIZER%25"\"%25SUB_DIR%25"\PluginInitializer.dll "%25MODS_PATH%25"\
-if exist "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25\"\0Harmony.dll copy "%25PROJECT_PLUGIN_HARMONY%25"\"%25SUB_DIR%25\"\0Harmony.dll "%25MODS_PATH%25"\
-if exist "%25SolutionDir%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" copy "%25SolutionDir%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" "%25MODS_PATH%25"\
+if exist "%25BASE%25PluginHarmony\bin\%25CONFIG%25\0Harmony.dll" copy /y "%25BASE%25PluginHarmony\bin\%25CONFIG%25\0Harmony.dll" "%25BIN_DIR%25\"
+if exist "%25BASE%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" copy /y "%25BASE%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" "%25BIN_DIR%25\"
 </PostBuildEvent>
   </PropertyGroup>
 </Project>

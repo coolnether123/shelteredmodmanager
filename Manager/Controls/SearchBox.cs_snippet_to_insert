@@ -1,0 +1,13 @@
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
+            if (disposing && _debounceTimer != null)
+            {
+                _debounceTimer.Dispose();
+                _debounceTimer = null;
+            }
+            base.Dispose(disposing);
+        }

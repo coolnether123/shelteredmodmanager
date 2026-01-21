@@ -1,0 +1,729 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.IO;
+using UnityEngine;
+using ModAPI.Core;
+using ModAPI.Saves;
+using ModAPI.UI;
+
+namespace ModAPI.Hooks.Paging
+{
+    /// <summary>
+    /// Modal window showing save verification details.
+    /// Displays active mods vs. save mods with status indicators.
+    /// </summary>
+    internal class SaveDetailsWindow : MonoBehaviour
+    {
+        private static GameObject _instance;
+        private static Texture2D _whiteTexture;
+        
+        // Colors for status indicators
+        private static readonly Color COLOR_MATCH = new Color(0.3f, 0.9f, 0.3f);
+        private static readonly Color COLOR_VERSION_DIFF = new Color(0.9f, 0.9f, 0.2f);
+        private static readonly Color COLOR_MISSING = new Color(0.9f, 0.3f, 0.3f);
+        private static readonly Color COLOR_HEADER = new Color(0.9f, 0.85f, 0.7f);
+        private static readonly Color COLOR_TEXT = Color.white;
+        private static readonly Color COLOR_SUBTEXT = new Color(0.7f, 0.7f, 0.7f);
+        
+        // Layout constants for the modal window
+        private const int WINDOW_WIDTH = 900;
+        private const int WINDOW_HEIGHT = 860;
+        private const int COLUMN_WIDTH = 400;
+        private const int ROW_HEIGHT = 42;
+        
+        public static void Show(SaveEntry entry, SlotManifest manifest, SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway = null, Action onCancel = null)
+        {
+            if (_instance != null) Destroy(_instance);
+
+            var panel = UIUtil.EnsureOverlayPanel("ModAPI_SaveDetailsWindow", 10000);
+            if (panel == null) 
+            {
+                MMLog.WriteError("[SaveDetailsWindow] Failed to create overlay panel!");
+                return;
+            }
+            
+            // Create shared white texture
+            if (_whiteTexture == null)
+            {
+                _whiteTexture = new Texture2D(2, 2);
+                for (int x = 0; x < 2; x++)
+                    for (int y = 0; y < 2; y++)
+                        _whiteTexture.SetPixel(x, y, Color.white);
+                _whiteTexture.Apply();
+            }
+
+            var root = new GameObject("SaveDetailsWindow");
+            root.transform.SetParent(panel.transform, false);
+            root.layer = panel.gameObject.layer;
+            root.transform.localPosition = Vector3.zero;
+            root.transform.localScale = Vector3.one;
+            
+            _instance = root;
+
+            // Get font
+            UIFont uiFont = null;
+            Font ttfFont = null;
+            var sampleLabel = UnityEngine.Object.FindObjectOfType<UILabel>();
+            if (sampleLabel != null)
+            {
+                uiFont = sampleLabel.bitmapFont;
+                ttfFont = sampleLabel.trueTypeFont;
+            }
+            if (uiFont == null && ttfFont == null)
+                ttfFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
+
+            // Create the window
+            var win = root.AddComponent<SaveDetailsWindow>();
+            win.BuildFullUI(root.transform, entry, manifest, state, isAttemptingLoad, onLoadAnyway, onCancel, uiFont, ttfFont);
+        }
+
+        private void BuildFullUI(Transform root, SaveEntry entry, SlotManifest manifest, 
+            SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway, Action onCancel,
+            UIFont uiFont, Font ttfFont)
+        {
+            _onCancel = onCancel;
+
+            int layer = root.gameObject.layer;
+            
+            // === DARK OVERLAY ===
+            CreateTexturedBox(root, "DarkOverlay", Vector3.zero, 3000, 3000, 
+                new Color(0f, 0f, 0f, 0.85f), 0, true);
+            
+            // === WINDOW BACKGROUND ===
+            CreateTexturedBox(root, "WindowBackground", Vector3.zero, 
+                WINDOW_WIDTH, WINDOW_HEIGHT, new Color(0.15f, 0.12f, 0.1f, 0.98f), 10, false);
+            CreateTexturedBox(root, "WindowBorder", Vector3.zero, 
+                WINDOW_WIDTH + 4, WINDOW_HEIGHT + 4, new Color(0.5f, 0.4f, 0.3f, 1f), 9, false);
+
+            // Text colors
+            Color primaryTextColor = COLOR_TEXT;
+            Color secondaryTextColor = COLOR_SUBTEXT;
+            Color titleColor = COLOR_HEADER;
+            
+            // === HEADER ===
+            var titleLabel = CreateLabel(root, "Title", "MOD VERIFICATION",
+                new Vector3(0, WINDOW_HEIGHT/2 - 70, 0), 32, titleColor, uiFont, ttfFont, 100);
+            titleLabel.alignment = NGUIText.Alignment.Center;
+            
+            // Subtitle with family name and days
+            string familyName = entry?.saveInfo?.familyName;
+            if (string.IsNullOrEmpty(familyName)) familyName = "Unknown";
+            int days = entry?.saveInfo?.daysSurvived ?? 0;
+            var subtitleLabel = CreateLabel(root, "Subtitle", $"Family: \"{familyName}\" - Day {days}",
+                new Vector3(0, WINDOW_HEIGHT/2 - 105, 0), 22, secondaryTextColor, uiFont, ttfFont, 100);
+            subtitleLabel.alignment = NGUIText.Alignment.Center;
+            
+            // === CLOSE [X] BUTTON ===
+            // Positioned according to new width
+            var closeBtn = CreateButton(root, "CloseBtn", "CLOSE", 
+                new Vector3(WINDOW_WIDTH/2 - 80, WINDOW_HEIGHT/2 - 60, 0), 
+                20, primaryTextColor, uiFont, ttfFont, 100, 40, () => {
+                    onCancel?.Invoke();
+                    Close();
+                });
+            
+            // === ANALYZE MODS ===
+            var activeMods = PluginManager.LoadedMods;
+            var savedMods = manifest?.lastLoadedMods ?? new LoadedModInfo[0];
+            var discovered = ModDiscovery.DiscoverAllMods();
+            var comparison = BuildModComparison(activeMods, savedMods);
+            
+            // === COLUMN HEADERS ===
+            int headerY = WINDOW_HEIGHT/2 - 160;
+            
+            CreateLabel(root, "ActiveHeader", "ACTIVE",
+                new Vector3(-WINDOW_WIDTH/4, headerY, 0), 24, titleColor, uiFont, ttfFont, 100)
+                .alignment = NGUIText.Alignment.Center;
+            
+            CreateLabel(root, "SavedHeader", "SAVE FILE",
+                new Vector3(WINDOW_WIDTH/4, headerY, 0), 24, titleColor, uiFont, ttfFont, 100)
+                .alignment = NGUIText.Alignment.Center;
+            
+            // Divider line
+            CreateTexturedBox(root, "HeaderDivider", new Vector3(0, headerY - 25, 0),
+                WINDOW_WIDTH - 200, 2, new Color(0, 0, 0, 0.2f), 50, false);
+            
+            // === MOD LISTS (SCROLLABLE) ===
+            int listStartY = headerY - 55;
+            int listAreaHeight = 320; // Available height for mod list (before buttons/warnings)
+            int maxVisibleRows = listAreaHeight / ROW_HEIGHT;
+            
+            // Create container for scroll content
+            var modListContainer = new GameObject("ModListContainer");
+            modListContainer.transform.SetParent(root, false);
+            modListContainer.layer = root.gameObject.layer;
+            modListContainer.transform.localPosition = Vector3.zero;
+            
+            // Track all mod row GameObjects for scrolling
+            var modRowObjects = new List<GameObject>();
+            int totalRows = Math.Max(activeMods.Count, savedMods.Length);
+            
+            int rowIndex = 0;
+            
+            // Active mods column (left)
+            foreach (var mod in activeMods)
+            {
+                int y = listStartY - (rowIndex * ROW_HEIGHT);
+                var status = comparison.Find(c => c.activeId == mod.Id);
+                ModCompareStatus compareStatus = status?.status ?? ModCompareStatus.Match;
+                Color color = GetStatusColor(compareStatus);
+                
+                string iconPrefix = "✓";
+                string suffix = "";
+                
+                switch (compareStatus)
+                {
+                    case ModCompareStatus.Extra: iconPrefix = "~"; suffix = " [NEW]"; break;
+                    case ModCompareStatus.VersionDiff: iconPrefix = "~"; break; 
+                }
+                
+                // Create a row container to group name and version labels
+                var rowGO = new GameObject($"ActiveRow_{rowIndex}");
+                rowGO.transform.SetParent(modListContainer.transform, false);
+                rowGO.layer = modListContainer.layer;
+                rowGO.transform.localPosition = new Vector3(-WINDOW_WIDTH/4, y, 0);
+                
+                var nameLabel = CreateLabel(rowGO.transform, $"Name", $"{iconPrefix} {mod.Name}{suffix}",
+                    Vector3.zero, 18, color, uiFont, ttfFont, 100);
+                nameLabel.alignment = NGUIText.Alignment.Center;
+                
+                var verLabel = CreateLabel(rowGO.transform, $"Version", $"   v{mod.Version}",
+                    new Vector3(0, -18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
+                verLabel.alignment = NGUIText.Alignment.Center;
+                
+                modRowObjects.Add(rowGO);
+                rowIndex++;
+            }
+            
+            // Saved mods column (right)
+            rowIndex = 0;
+            var warnings = new List<string>();
+            
+            foreach (var saved in savedMods)
+            {
+                int y = listStartY - (rowIndex * ROW_HEIGHT);
+                // LoadedModInfo has .modId, .version (camelCase)
+                var status = comparison.Find(c => c.savedId == saved.modId);
+                ModCompareStatus compareStatus = status?.status ?? ModCompareStatus.Match;
+                Color color = GetStatusColor(compareStatus);
+                
+                string icon = "✓";
+                string suffix = "";
+                
+                switch (compareStatus)
+                {
+                    case ModCompareStatus.Missing: 
+                        icon = "✗"; 
+                        suffix = " [MISSING]";
+                        // Collect warnings from missing mods
+                        if (saved.warnings != null && saved.warnings.Length > 0)
+                        {
+                            foreach (var w in saved.warnings)
+                            {
+                                if (!string.IsNullOrEmpty(w)) warnings.Add($"[{saved.modId}] {w}");
+                            }
+                        }
+                        break;
+                    case ModCompareStatus.VersionDiff: icon = "~"; suffix = " [VER DIFF]"; break;
+                }
+                
+                var diskMod = discovered.Find(d => d.Id.Equals(saved.modId, StringComparison.OrdinalIgnoreCase));
+                string displayName = diskMod != null ? diskMod.Name : saved.modId;
+
+                // Create a row container
+                var rowGO = new GameObject($"SavedRow_{rowIndex}");
+                rowGO.transform.SetParent(modListContainer.transform, false);
+                rowGO.layer = modListContainer.layer;
+                rowGO.transform.localPosition = new Vector3(WINDOW_WIDTH/4, y, 0);
+
+                var savedName = CreateLabel(rowGO.transform, $"Name", $"{icon} {displayName}{suffix}",
+                    Vector3.zero, 18, color, uiFont, ttfFont, 100);
+                savedName.alignment = NGUIText.Alignment.Center;
+                
+                string verText = compareStatus == ModCompareStatus.VersionDiff && status != null
+                    ? $"   (save: v{saved.version}, active: v{status.activeVersion})"
+                    : $"   v{saved.version}";
+                var savedVer = CreateLabel(rowGO.transform, $"Version", verText,
+                    new Vector3(0, -18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
+                savedVer.alignment = NGUIText.Alignment.Center;
+                
+                modRowObjects.Add(rowGO);
+                rowIndex++;
+            }
+            
+            // Add scroll helper if content exceeds visible area
+            if (totalRows > maxVisibleRows)
+            {
+                var scrollHelper = modListContainer.AddComponent<ModListScrollHelper>();
+                scrollHelper.Initialize(modRowObjects, listStartY, ROW_HEIGHT, 
+                    listStartY - listAreaHeight, listStartY, 
+                    -WINDOW_WIDTH/2, WINDOW_WIDTH/2); // Full width for scroll input
+            }
+            
+            // === WARNINGS SECTION ===
+            int warningY = -WINDOW_HEIGHT/2 + 180;
+            
+            if (warnings.Count > 0)
+            {
+                CreateLabel(root, "WarningHeader", "⚠️ WARNINGS FROM MISSING MODS:",
+                    new Vector3(-WINDOW_WIDTH/2 + 40, warningY, 0), 18, COLOR_MISSING, uiFont, ttfFont, 100);
+                
+                CreateTexturedBox(root, "WarningBg", new Vector3(0, warningY - 50, 0),
+                    WINDOW_WIDTH - 60, 80, new Color(0.3f, 0.1f, 0.1f, 0.8f), 40, false);
+                
+                string warningText = string.Join("\n", warnings.Take(3).ToArray());
+                if (warnings.Count > 3) warningText += $"\n... and {warnings.Count - 3} more";
+                
+                var warnLabel = CreateLabel(root, "WarningText", warningText,
+                    new Vector3(-WINDOW_WIDTH/2 + 50, warningY - 25, 0), 14, COLOR_TEXT, uiFont, ttfFont, 100);
+                warnLabel.overflowMethod = UILabel.Overflow.ClampContent;
+                warnLabel.width = WINDOW_WIDTH - 100;
+            }
+            
+            // === BUTTON ROW ===
+            int buttonY = -WINDOW_HEIGHT/2 + 100;
+            
+            // Determine button states
+            bool hasMissing = comparison.Any(c => c.status == ModCompareStatus.Missing);
+            bool hasVersionDiff = comparison.Any(c => c.status == ModCompareStatus.VersionDiff);
+            bool hasExtra = comparison.Any(c => c.status == ModCompareStatus.Extra);
+            bool allMatch = !hasMissing && !hasVersionDiff && !hasExtra;
+            
+            bool canReload = !allMatch;
+            if (hasMissing)
+            {
+                var missingEntries = comparison.Where(c => c.status == ModCompareStatus.Missing);
+                bool allMissingAvailable = true;
+                foreach(var m in missingEntries)
+                {
+                    if (m.savedId != null && !discovered.Exists(d => d.Id.Equals(m.savedId, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        allMissingAvailable = false;
+                        break;
+                    }
+                }
+                if (!allMissingAvailable) canReload = false;
+            }
+            
+            // RELOAD WITH SAVE MODS button
+            Color requestedBrown = new Color(113f/255f, 82f/255f, 62f/255f);
+            int absoluteSlot = entry?.absoluteSlot ?? 0; 
+            
+            var reloadBtn = CreateButton(root, "ReloadBtn", "AUTO-LOAD MODS",
+                new Vector3(-WINDOW_WIDTH/4, buttonY, 0), 18, Color.white, uiFont, ttfFont, 240, 45,
+                canReload ? (Action)(() => CreateRestartRequest(absoluteSlot, manifest, entry)) : null);
+            
+            // Apply requested color to background
+            var reloadTex = reloadBtn.GetComponent<UITexture>();
+            if (reloadTex != null) reloadTex.color = canReload ? requestedBrown : new Color(0.25f, 0.2f, 0.15f, 1f);
+
+            if (!canReload)
+            {
+                string reason = allMatch ? "(Already matching)" : 
+                                (hasVersionDiff || hasExtra) && !hasMissing ? "(Minor differences)" :
+                                "(Some mods missing)";
+                CreateLabel(root, "ReloadHint", reason,
+                    new Vector3(-WINDOW_WIDTH/4, buttonY - 30, 0), 12, secondaryTextColor, uiFont, ttfFont, 100)
+                    .alignment = NGUIText.Alignment.Center;
+            }
+            
+            // LOAD button - always shown
+            // Text changes based on whether mods match:
+            // - "LOAD SAVE" when mods match (not an "anyway" situation)
+            // - "LOAD ANYWAY" when mods differ (user is overriding warnings)
+            string loadButtonText = allMatch ? "LOAD SAVE" : "LOAD ANYWAY";
+            string loadHintText = allMatch ? "(Mods match)" : "(Override warnings)";
+            
+            var loadBtn = CreateButton(root, "LoadBtn", loadButtonText,
+                new Vector3(WINDOW_WIDTH/4, buttonY, 0), 18, Color.white, uiFont, ttfFont, 200, 45,
+                () => {
+                    onLoadAnyway?.Invoke();
+                    Close();
+                });
+
+            var loadTex = loadBtn.GetComponent<UITexture>();
+            if (loadTex != null) loadTex.color = requestedBrown;
+            
+            CreateLabel(root, "LoadHint", loadHintText,
+                new Vector3(WINDOW_WIDTH/4, buttonY - 30, 0), 12, secondaryTextColor, uiFont, ttfFont, 100)
+                .alignment = NGUIText.Alignment.Center;
+            
+            // === STATUS LINE ===
+            string statusText = allMatch ? "✓ Mods match - safe to play" :
+                               hasMissing && hasVersionDiff ? $"⚠ {comparison.Count(c => c.status == ModCompareStatus.Missing)} missing, {comparison.Count(c => c.status == ModCompareStatus.VersionDiff)} version diff" :
+                               hasMissing ? $"⚠ {comparison.Count(c => c.status == ModCompareStatus.Missing)} mod(s) missing" :
+                               hasExtra && !hasMissing ? $"⚠ {comparison.Count(c => c.status == ModCompareStatus.Extra)} extra mod(s) active" :
+                               $"~ {comparison.Count(c => c.status == ModCompareStatus.VersionDiff)} version difference(s)";
+            
+            Color statusColor = allMatch ? COLOR_MATCH : (hasMissing ? COLOR_MISSING : COLOR_VERSION_DIFF);
+            var statusLabel = CreateLabel(root, "Status", statusText,
+                new Vector3(0, -WINDOW_HEIGHT/2 + 20, 0), 16, statusColor, uiFont, ttfFont, 100);
+            statusLabel.alignment = NGUIText.Alignment.Center;
+        }
+        
+        // === COMPARISON LOGIC ===
+        
+        private enum ModCompareStatus { Match, VersionDiff, Extra, Missing }
+        
+        private class ModCompareEntry
+        {
+            public string activeId;
+            public string activeVersion;
+            public string savedId;
+            public string savedVersion;
+            public ModCompareStatus status;
+        }
+        
+        private List<ModCompareEntry> BuildModComparison(List<ModEntry> active, LoadedModInfo[] saved)
+        {
+            var result = new List<ModCompareEntry>();
+            
+            // 1. Check saved mods against active (Missing/Match/VersionDiff)
+            foreach (var s in saved)
+            {
+                var entry = new ModCompareEntry { savedId = s.modId, savedVersion = s.version };
+                var match = active.Find(a => a.Id.Equals(s.modId, StringComparison.OrdinalIgnoreCase));
+                
+                if (match == null)
+                {
+                    entry.status = ModCompareStatus.Missing;
+                }
+                else
+                {
+                    entry.activeId = match.Id;
+                    entry.activeVersion = match.Version;
+                    entry.status = match.Version == s.version ? ModCompareStatus.Match : ModCompareStatus.VersionDiff;
+                }
+                
+                result.Add(entry);
+            }
+
+            // 2. Check active mods for extras
+            foreach (var a in active)
+            {
+                if (!saved.Any(s => string.Equals(s.modId, a.Id, StringComparison.OrdinalIgnoreCase)))
+                {
+                    result.Add(new ModCompareEntry {
+                        activeId = a.Id,
+                        activeVersion = a.Version,
+                        status = ModCompareStatus.Extra
+                    });
+                }
+            }
+            
+            return result;
+        }
+        
+        private Action _onCancel;
+
+        private void SetOnCancel(Action onCancel)
+        {
+            _onCancel = onCancel;
+        }
+
+        private void Update()
+        {
+            // Handle Escape to close this window WITHOUT propagating to underlying panels
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                _onCancel?.Invoke();
+                Close();
+                // Mark input as consumed to prevent underlying panels from also receiving Escape
+                Input.ResetInputAxes();
+            }
+        }
+        
+        private Color GetStatusColor(ModCompareStatus status)
+        {
+            switch (status)
+            {
+                case ModCompareStatus.Match: return new Color(0.2f, 0.6f, 0.2f); // Darker green for paper
+                case ModCompareStatus.VersionDiff: return new Color(0.6f, 0.5f, 0f); // Darker yellow/brown
+                case ModCompareStatus.Extra: return new Color(0.6f, 0.5f, 0f);
+                case ModCompareStatus.Missing: return new Color(0.7f, 0.2f, 0.2f); // Darker red
+                default: return Color.black;
+            }
+        }
+        
+        // === UI HELPER METHODS ===
+        
+        private GameObject CreateTexturedBox(Transform parent, string name, Vector3 pos, int w, int h, Color color, int depth, bool addCollider)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.layer = parent.gameObject.layer;
+            go.transform.localPosition = pos;
+            
+            var tex = go.AddComponent<UITexture>();
+            tex.mainTexture = _whiteTexture;
+            tex.width = w;
+            tex.height = h;
+            tex.depth = depth;
+            tex.color = color;
+            
+            if (addCollider)
+            {
+                var col = go.AddComponent<BoxCollider>();
+                col.size = new Vector3(w, h, 1);
+            }
+            
+            return go;
+        }
+        
+        private UILabel CreateLabel(Transform parent, string name, string text, Vector3 pos, int fontSize, Color color, UIFont uiFont, Font ttfFont, int depth)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.layer = parent.gameObject.layer;
+            go.transform.localPosition = pos;
+            
+            var label = go.AddComponent<UILabel>();
+            label.text = text;
+            label.fontSize = fontSize;
+            label.color = color;
+            label.depth = depth;
+            label.overflowMethod = UILabel.Overflow.ResizeFreely;
+            label.bitmapFont = uiFont;
+            label.trueTypeFont = ttfFont;
+            
+            return label;
+        }
+        
+        private GameObject CreateButton(Transform parent, string name, string text, Vector3 pos, int fontSize, Color color, UIFont uiFont, Font ttfFont, int w, int h, Action onClick)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.layer = parent.gameObject.layer;
+            go.transform.localPosition = pos;
+            
+            // Background
+            var bg = go.AddComponent<UITexture>();
+            bg.mainTexture = _whiteTexture;
+            bg.width = w;
+            bg.height = h;
+            bg.depth = 100;
+            bg.color = new Color(0.44f, 0.32f, 0.24f, 1f); // RGB: 113, 82, 62 default
+            
+            // Label (child)
+            var labelGo = new GameObject("Label");
+            labelGo.transform.SetParent(go.transform, false);
+            labelGo.layer = go.layer;
+            
+            var label = labelGo.AddComponent<UILabel>();
+            label.text = text;
+            label.fontSize = fontSize;
+            label.color = color;
+            label.depth = 101;
+            label.overflowMethod = UILabel.Overflow.ResizeFreely;
+            label.alignment = NGUIText.Alignment.Center;
+            label.bitmapFont = uiFont;
+            label.trueTypeFont = ttfFont;
+            
+            // Collider
+            var col = go.AddComponent<BoxCollider>();
+            col.size = new Vector3(w, h, 1);
+            
+            // Button
+            var btn = go.AddComponent<UIButton>();
+            btn.tweenTarget = go;
+            
+            if (onClick != null)
+            {
+                EventDelegate.Set(btn.onClick, () => onClick());
+            }
+            else
+            {
+                btn.isEnabled = false;
+                bg.color = new Color(0.15f, 0.12f, 0.1f, 1f);
+                label.color = COLOR_SUBTEXT;
+            }
+            
+            return go;
+        }
+        
+        private void Close()
+        {
+            if (_instance != null)
+            {
+                Destroy(_instance);
+                _instance = null;
+            }
+        }
+        
+        // === RESTART REQUEST LOGIC ===
+        
+        [Serializable]
+        private class RestartRequest
+        {
+            public string Action;
+            public string LoadFromManifest;
+        }
+
+        private void CreateRestartRequest(int slotNumber, SlotManifest manifest, SaveEntry entry)
+        {
+            try
+            {
+                // We don't overwrite loadorder.json. 
+                // We create a restart.json file in SMM/Bin for the Manager to handle.
+                
+                // Assuming standard path: Sheltered/SMM/Bin/restart.json
+                var gameRoot = Directory.GetParent(Application.dataPath).FullName;
+                var smmBin = Path.Combine(Path.Combine(gameRoot, "SMM"), "Bin");
+
+                if (!Directory.Exists(smmBin))
+                {
+                    // Fallback try - maybe SMM is elsewhere?
+                    // But usually mod tools are in root.
+                }
+                
+                // Construct path to manifest
+                // Typically: mods/ModAPI/Saves/Standard/Slot_X/manifest.json
+                var modsRoot = Path.Combine(gameRoot, "mods");
+                var slotDir = Path.Combine(Path.Combine(Path.Combine(modsRoot, "ModAPI"), "Saves"), Path.Combine("Standard", $"Slot_{slotNumber}"));
+                var manifestPath = Path.Combine(slotDir, "manifest.json");
+
+                MMLog.Write($"[SaveDetailsWindow] Checking for manifest at: {manifestPath}");
+                
+                // Ensure manifest exists before restart
+                if (!File.Exists(manifestPath))
+                {
+                    MMLog.Write($"[SaveDetailsWindow] Manifest doesn't exist, creating minimal manifest");
+                    Directory.CreateDirectory(slotDir);
+                    
+                    // Create minimal manifest with empty mod list
+                    var minimalManifest = new SlotManifest
+                    {
+                        manifestVersion = 1,
+                        lastModified = DateTime.UtcNow.ToString("o"),
+                        family_name = entry != null ? entry.saveInfo.familyName : "Unknown",
+                        lastLoadedMods = new LoadedModInfo[0]
+                    };
+                    
+                    string manifestJson = JsonUtility.ToJson(minimalManifest, true);
+                    File.WriteAllText(manifestPath, manifestJson);
+                    MMLog.Write($"[SaveDetailsWindow] Wrote manifest to: {manifestPath}");
+                    MMLog.Write($"[SaveDetailsWindow] Manifest content: {manifestJson}");
+                    
+                    // Verify it was written
+                    if (!File.Exists(manifestPath))
+                    {
+                        MMLog.WriteError($"[SaveDetailsWindow] ERROR: Failed to write manifest to {manifestPath}!");
+                        return;
+                    }
+                    MMLog.Write($"[SaveDetailsWindow] Verified manifest file exists");
+                }
+                else
+                {
+                    MMLog.Write($"[SaveDetailsWindow] Manifest already exists at: {manifestPath}");
+                }
+
+                var req = new RestartRequest
+                {
+                    Action = "Restart",
+                    LoadFromManifest = manifestPath
+                };
+                
+                string json = JsonUtility.ToJson(req, true);
+                
+                // Write to SMM/Bin/restart.json
+                string restartPath = Path.Combine(smmBin, "restart.json");
+                
+                // Ensure directory exists
+                Directory.CreateDirectory(smmBin);
+                
+                File.WriteAllText(restartPath, json);
+                MMLog.Write($"[SaveDetailsWindow] Created restart request at: {restartPath}");
+                MMLog.Write($"[SaveDetailsWindow] Payload: {json}");
+
+                Application.Quit();
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("Failed to create restart request: " + ex);
+                // Show error to user? For now just log.
+            }
+        }
+
+    }
+    
+    /// <summary>
+    /// Helper component for scrolling the mod comparison list in SaveDetailsWindow.
+    /// Moves all row GameObjects together on the Y axis when the user scrolls.
+    /// </summary>
+    internal class ModListScrollHelper : MonoBehaviour
+    {
+        private List<GameObject> _items = new List<GameObject>();
+        private Dictionary<GameObject, float> _originalYPositions = new Dictionary<GameObject, float>();
+        private float _scrollOffset = 0f;
+        private float _minOffset;  // Minimum scroll offset (0 = at top)
+        private float _maxOffset;  // Maximum scroll offset (positive = scrolled down)
+        private float _rowHeight;
+        private float _minX;
+        private float _maxX;
+        
+        /// <summary>
+        /// Initialize the scroll helper with row items and bounds.
+        /// </summary>
+        public void Initialize(List<GameObject> items, float startY, float rowHeight, 
+            float minY, float maxY, float minX, float maxX)
+        {
+            _items = items;
+            _rowHeight = rowHeight;
+            _minX = minX;
+            _maxX = maxX;
+            
+            // Store original Y positions for each item
+            foreach (var item in items)
+            {
+                if (item != null)
+                {
+                    _originalYPositions[item] = item.transform.localPosition.y;
+                }
+            }
+            
+            // Calculate scroll limits based on content vs visible area
+            float visibleHeight = maxY - minY;
+            float contentHeight = items.Count * rowHeight;
+            
+            _minOffset = 0f;  // Can't scroll up past top
+            _maxOffset = Mathf.Max(0f, contentHeight - visibleHeight); // Can scroll down this much
+            
+            MMLog.WriteDebug($"[ModListScrollHelper] Initialized: {items.Count} items, maxOffset={_maxOffset}");
+        }
+        
+        void Update()
+        {
+            if (_items == null || _items.Count == 0) return;
+            if (_maxOffset <= 0) return; // No scrolling needed
+            
+            // Check for scroll input
+            float scroll = Input.GetAxis("Mouse ScrollWheel");
+            if (scroll == 0f) scroll = Input.mouseScrollDelta.y;
+            if (scroll == 0f) return;
+            
+            // Check if mouse is within the window bounds
+            Vector3 mousePos = Input.mousePosition;
+            float uiX = mousePos.x - Screen.width / 2f;
+            if (uiX < _minX || uiX > _maxX) return;
+            
+            // Update scroll offset
+            // Scroll down (negative scroll wheel) = increase offset = content moves up
+            float scrollSpeed = _rowHeight; // Scroll by one row
+            _scrollOffset -= scroll * scrollSpeed;
+            _scrollOffset = Mathf.Clamp(_scrollOffset, _minOffset, _maxOffset);
+            
+            // Apply offset to all items using their original positions
+            foreach (var item in _items)
+            {
+                if (item == null || !_originalYPositions.ContainsKey(item)) continue;
+                
+                float originalY = _originalYPositions[item];
+                var pos = item.transform.localPosition;
+                
+                // Apply scroll offset: content moving up means subtract from Y
+                item.transform.localPosition = new Vector3(pos.x, originalY - _scrollOffset, pos.z);
+            }
+        }
+    }
+}

@@ -1,7 +1,8 @@
 using System;
 using System.Linq;
 using System.Collections.Generic; 
-using UnityEngine; 
+using UnityEngine;
+using ModAPI.Core;
 
 // Assuming these are the correct namespaces for the decompiled game classes.
 // You might need to adjust these based on the actual decompiled project structure.
