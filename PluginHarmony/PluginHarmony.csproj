@@ -17,7 +17,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\..\..\..\..\Epic Games\Sheltered\mods\PluginHarmony\Assemblies\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -33,34 +33,34 @@
   <ItemGroup>
     <Reference Include="0Harmony, Version=2.4.1.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll</HintPath>
+      <Private>False</Private>
     </Reference>
-    <Reference Include="Assembly-CSharp, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
-    </Reference>
-    <Reference Include="PluginConsole">
-      <HintPath>..\..\..\..\..\Epic Games\Sheltered\mods\enabled\PluginConsole\Assemblies\PluginConsole.dll</HintPath>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>..\..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="System" />
-    <Reference Include="UnityEngine, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>False</Private>
     </Reference>
-    <Reference Include="UnityEngine.UI, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.UI.dll</HintPath>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>..\..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
     </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="HarmonyPlugin.cs" />
     <Compile Include="LabelComponent.cs" />
+    <Compile Include="MyMenuPlugin.cs" />
+    <Compile Include="HierarchyPrinter.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="SkipIntroAndTitlePatch.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ModAPI\ModAPI.csproj">
       <Project>{3c99d6bf-a4a9-45dc-bef1-5717ece2a687}</Project>
       <Name>ModAPI</Name>
+      <Private>False</Private>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

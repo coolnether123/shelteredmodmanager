@@ -1,135 +1,91 @@
-﻿using System.IO;
-using System.Reflection;
 using HarmonyLib;
+using ModAPI.Core;
+using System;
+using System.Reflection;
 using UnityEngine;
-using System.Collections.Generic;
 
-/**
- * Maintainer: coolnether123
- * 
- *  Updated to IModPlugin with context-first lifecycle.
- */
-public class HarmonyPlugin : IModPlugin 
+/// <summary>
+/// Shows another Harmony example set inside Sheltered.
+/// </summary>
+public class HarmonyPlugin : IModPlugin
 {
-    public HarmonyPlugin() { }
+    private IModLogger _log;
+    private Harmony _harmony;
 
-    // Context-first initialize
     public void Initialize(IPluginContext ctx)
     {
-        // no-op; keep style consistent. Could pre-load state here.
+        _log = ctx.Log;
+        _log.Info("[HarmonyPlugin] Initialize called.");
     }
 
-    // Context-first start
     public void Start(IPluginContext ctx)
     {
-        var harmony = new Harmony("com.coolnether123.shelteredmodmanager");
-        harmony.PatchAll(Assembly.GetExecutingAssembly());
+        _log = ctx.Log;
+        _log.Info("[HarmonyPlugin] Start called. Registering patches...");
 
-        // attach label to this plugin's parent root so it cleans up with the plugin
-        LabelComponent label = ctx.PluginRoot.AddComponent<LabelComponent>(); 
-        label.setTop(30);
-        if (harmony == null) return;
+        HarmonyPluginLogger.Log = _log;
 
-        // Use settings from the context (bound to this mod)
-        try
-        {
-            var settings = ctx.Settings; 
-            if (settings != null)
-            {
-                bool enabled = settings.GetBool("enabled", true);
-                int maxCount = settings.GetInt("maxCount", 10);
-                // Persist (only if changed); mirrors previous example
-                settings.SetBool("enabled", enabled);
-                settings.SetInt("maxCount", maxCount);
-                settings.SaveUser();
-            }
-        }
-        catch { }
+        _harmony = new Harmony("com.shelteredmodmanager.harmonyplugin");
 
-        // Prefer ctx.Log; MMLog still works but ctx.Log prefixes with mod id. (Coolnether123) WIP Plan on making MMLog more robust as a tool)
-        ctx.Log.Info(
-            "Harmony-Plugin initialized. HasAnyPatches=" + Harmony.HasAnyPatches(harmony.Id)
+        _harmony.Patch(
+            original: AccessTools.Method(typeof(ExpeditionMainPanelNew), "Update"),
+            postfix: new HarmonyMethod(typeof(ExpeditionPanelUpdatePatch), nameof(ExpeditionPanelUpdatePatch.Postfix))
         );
 
-        label.setText(
-            "Harmony-Plugin loaded: " + (harmony != null) + "\n"
-            + "Harmony-Id: " + (harmony.Id) + "\n"
-            + "Harmony.hasPatches: " + Harmony.HasAnyPatches(harmony.Id)
+        _harmony.Patch(
+            original: AccessTools.Method(typeof(InventoryManager), "AddNewItem", new Type[] { typeof(ItemManager.ItemType) }),
+            prefix: new HarmonyMethod(typeof(InventoryAddNewItemPatch), nameof(InventoryAddNewItemPatch.Prefix))
         );
+
+        _log.Info("[HarmonyPlugin] Patches applied.");
+    }
+}
+
+[HarmonyPatch]
+public static class ExpeditionPanelUpdatePatch
+{
+    private static float _nextLog;
+    private static int _lastCount;
+
+    public static MethodBase TargetMethod()
+    {
+        return AccessTools.Method(typeof(ExpeditionMainPanelNew), "Update");
     }
 
-    [HarmonyPatch(typeof(CraftingPanel), "GetRecipes")]
-    public static class CraftingPanel_GetRecipes_Patch
+    public static void Postfix(ExpeditionMainPanelNew __instance)
     {
-        public static void Postfix(CraftingPanel __instance)
-        {
-            using (TextWriter tw = File.CreateText(@"harmony_works.log"))
+        if (__instance == null)
+            return;
+
+        if (Time.time < _nextLog)
+            return;
+
+        int count = __instance.route.Count;
+            if (count != _lastCount)
             {
-                tw.WriteLine("HarmonyPlugin and Patches initialized!");
-                tw.Flush();
+                _lastCount = count;
+                HarmonyPluginLogger.Log?.Info($"Expedition route length is now {count}");
             }
-        }
-    }
 
-    [HarmonyPatch(typeof(Obj_Base), "IsRelocationEnabled")]
-    public static class Obj_Base_IsRelocationEnabled_Patch
+        _nextLog = Time.time + 2f;
+    }
+}
+
+[HarmonyPatch]
+public static class InventoryAddNewItemPatch
+{
+    public static MethodBase TargetMethod()
     {
-        public static bool Prefix(ref bool __result)
-        {
-            __result = true;
-            return false;
-        }
+        return AccessTools.Method(typeof(InventoryManager), "AddNewItem", new Type[] { typeof(ItemManager.ItemType) });
     }
 
-    [HarmonyPatch(typeof(Obj_Integrity), "IsInteractionAllowed")]
-    public static class Obj_Integrity_IsInteractionAllowed_Patch
+    public static void Prefix(ItemManager.ItemType itemType)
     {
-        public static bool Prefix(ref bool __result)
-        {
-            __result = true;
-            return false;
-        }
+        HarmonyPluginLogger.Log?.Info($"InventoryManager.AddNewItem called with {itemType}");
     }
+}
 
-    [HarmonyPatch(typeof(Obj_Base), "Update")]
-    public static class Obj_Base_Update_Patch
-    {
-        public static bool Prefix(Obj_Base __instance)
-        {
-            Traverse.Create(__instance).Field("m_Movable").SetValue(true);
-            return true;
-        }
-    }
-
-    /// <summary>
-    /// Test patch to add a new recipe to the crafting panel.
-    /// </summary>
-    [HarmonyPatch(typeof(CraftingPanel), "GetRecipes")]
-    public static class AddHingeRecipe_TestPatch
-    {
-        public static void Postfix(ref List<CraftingManager.Recipe> __result)
-        {
-            MMLog.Write("[HingeTestPatch] Postfix started.");
-            MMLog.Write("[HingeTestPatch] Original recipe count: " + __result.Count);
-
-            // Define the ingredients for our new recipe using verified item types.
-            var ingredients = new CraftingManager.Recipe.Ingredient[]
-            {
-                new CraftingManager.Recipe.Ingredient() { Item = ItemManager.ItemType.Valve, Quantity = 2 },
-                new CraftingManager.Recipe.Ingredient() { Item = ItemManager.ItemType.Cement, Quantity = 1 }
-            };
-
-            // Create the new recipe object using the correct constructor.
-            var newRecipe = new CraftingManager.Recipe(ItemManager.ItemType.Hinge, ingredients);
-
-            // Set other public properties after creation.
-            newRecipe.level = 1;
-            newRecipe.location = CraftingManager.CraftLocation.Workbench;
-
-            // Add our new recipe to the list that the game will use.
-            __result.Add(newRecipe);
-            MMLog.Write("[HingeTestPatch] Recipe for Hinge added successfully.");
-            MMLog.Write("[HingeTestPatch] New recipe count: " + __result.Count);
-        }
-    }
+public static class HarmonyPluginLogger
+{
+    public static IModLogger Log;
 }

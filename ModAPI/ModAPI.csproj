@@ -12,53 +12,127 @@
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\Dist\SMM\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>..\Dist\SMM\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>..\mods\0Harmony\Assemblies\0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Manager">
+      <HintPath>..\Manager\bin\Debug\Manager.exe</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="System.Core" />
     <Reference Include="System" />
-    <Reference Include="UnityEngine, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>..\..\..\..\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="IPlugin.cs" />
-    <Compile Include="MMLog.cs" />
-    <Compile Include="LoadOrderResolver.cs" />
-    <Compile Include="ModRegistry.cs" />
-    <Compile Include="ModSettings.cs" />
-    <Compile Include="ModAbout.cs" />
-    <Compile Include="ModDiscovery.cs" />
-    <Compile Include="PluginManager.cs" />
+    <Compile Include="Content\ContentRegistry.cs" />
+    <Compile Include="Content\ContentResolver.cs" />
+    <Compile Include="Content\ContentInjector.cs" />
+    <Compile Include="Content\InventoryIntegration.cs" />
+    <Compile Include="GameState\ManagerStateHelper.cs" />
+    <Compile Include="Items\InventoryHelper.cs" />
+    <Compile Include="Characters\PartyHelper.cs" />
+    <Compile Include="Characters\PartyPatches.cs" />
+    <Compile Include="Core\IPlugin.cs" />
+    <Compile Include="Core\MMLog.cs" />
+    <Compile Include="Core\LoggerExtensions.cs" />
+    <Compile Include="Core\ContextExtensions.cs" />
+    <Compile Include="UI\UIFlowGuard.cs" />
+    <Compile Include="UI\UIUtil.cs" />
+    <Compile Include="UI\UIHelper.cs" />
+    <Compile Include="UI\UIFactory.cs" />
+    <Compile Include="UI\ModManagerPanel.cs" />
+    <Compile Include="UI\NGUIScrollHelper.cs" />
+    <Compile Include="UI\ContextUIExtensions.cs" />
+    <Compile Include="UI\UIPatches.cs" />
+    <Compile Include="UI\UIDebug.cs" />
+    <Compile Include="Harmony\HarmonyBootstrap.cs" />
+    <Compile Include="Harmony\HarmonyUtil.cs" />
+    <Compile Include="Harmony\HarmonyHelper.cs" />
+    <Compile Include="Harmony\MainMenuPatches.cs" />
+    <Compile Include="Inspector\HierarchyUtil.cs" />
+    <Compile Include="Inspector\BoundsHighlighter.cs" />
+    <Compile Include="Inspector\RuntimeInspector.cs" />
+    <Compile Include="Core\ModRegistry.cs" />
+    <Compile Include="Core\ModSettings.cs" />
+    <Compile Include="Core\ModAbout.cs" />
+    <Compile Include="Core\ModEntry.cs" />
+    <Compile Include="Core\ModAboutReader.cs" />
+    <Compile Include="Core\ModDiscovery.cs" />
+    <Compile Include="Core\ModPrefs.cs" />
+    <Compile Include="Core\RuntimeCompat.cs" />
+    <Compile Include="Content\AssetLoader.cs" />
+    <Compile Include="Util\SceneCompat.cs" />
+    <Compile Include="Util\SceneUtil.cs" />
+    <Compile Include="Util\PersistentDataAPI.cs" />
+    <Compile Include="Core\PluginManager.cs" />
+    <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Lib.Harmony">
-      <Version>2.4.1</Version>
-    </PackageReference>
+    <Compile Include="Reflection\Safe.cs" />
+    <Compile Include="Util\GameUtil.cs" />
+    <Compile Include="Events\GameEvents.cs" />
+    <Compile Include="Events\ModEventBus.cs" />
+    <Compile Include="Events\UIEvents.cs" />
+    <Compile Include="Core\ModAPIRegistry.cs" />
+    <Compile Include="Custom Saves\PlatformSaveProxy.cs" />
+    <Compile Include="Custom Saves\SaveExitPanelOnCancelPatch.cs" />
+    <Compile Include="Custom Saves\SaveManager_Injection_Patch.cs" />
+    <Compile Include="Custom Saves\SaveManager_SaveToCurrentSlot_Patch.cs" />
+    <Compile Include="Custom Saves\paging\PagingManager.cs" />
+    <Compile Include="Custom Saves\paging\SlotSelectionPatches.cs" />
+    <Compile Include="Custom Saves\paging\SaveVerification.cs" />
+    <Compile Include="Custom Saves\paging\SaveDetailsWindow.cs" />
+    <Compile Include="Custom Saves\paging\CondensePromptDialog.cs" />
+    <Compile Include="Custom Saves\saves\CRC32.cs" />
+    <Compile Include="Custom Saves\saves\DirectoryProvider.cs" />
+    <Compile Include="Custom Saves\saves\Events.cs" />
+    <Compile Include="Custom Saves\saves\ExpandedVanillaSaves.cs" />
+    <Compile Include="Custom Saves\saves\IdGenerator.cs" />
+    <Compile Include="Custom Saves\saves\ISaveApi.cs" />
+    <Compile Include="Custom Saves\saves\Models.cs" />
+    <Compile Include="Custom Saves\saves\NameSanitizer.cs" />
+    <Compile Include="Custom Saves\saves\PreviewAuto.cs" />
+    <Compile Include="Custom Saves\saves\PreviewCapture.cs" />
+    <Compile Include="Custom Saves\saves\SaveManagerInspector.cs" />
+    <Compile Include="Custom Saves\saves\SaveManager_SaveGlobalData_Patch.cs" />
+    <Compile Include="Custom Saves\saves\SaveRegistryCore.cs" />
+    <Compile Include="Custom Saves\saves\ScenarioRegistry.cs" />
+    <Compile Include="Custom Saves\saves\ScenarioSaves.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

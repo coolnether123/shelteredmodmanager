@@ -1,146 +1,228 @@
-<img src="/documentation/logo.png">
+![Mod Manager GUI](documentation/screenshots/mod_manager_gui.png)
+# Sheltered Mod Manager v1.0
 
-Original Author: benjaminfoo
-Maintainer: Coolnether123
+**A modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Unicube & Team17**
 
-# Legacy # | Coolnether123
-This project do to lack of interest to actually create a modding scene in Sheltered. In 2019 it was left to github and asking the community to pick it up. On reddit UnicubeSheltered, a dev, said they wanted to add one but didn't build the framework. On the mod loader Github Tiller4363 attempted to reach out to benjaminfoo for help on understanding the project but from everywhere I look benjaminfoo never answered and simply left the sheltered community. In 2025 Coolnether123 (myself) picked up the project. Finding it only after getting Sheltered in Febuary. Finding a love for the game I looked for mods and found this. 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.0.0-blue)]()
 
+> **Credit:** Originally created by benjaminfoo (2019)  
+> **Maintained by:** Coolnether123 (2025-Present)
 
-# Sheltered Mod Manager v0.6
+## License & attribution
 
-This project enables modding support for the game [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Team17.\
-It acts as a drop-in application for a regular installation of Sheltered — no original game files are modified.
+This project is licensed under the MIT License (see LICENSE).
 
-## Architecture
-**Doorstop**\
-Bootstraps the Mod API inside the game using Unity Doorstop and starts the plugin system.
+The original 2019 Sheltered mod loader foundation was created by benjaminfoo. Continued development and public redistribution are performed with the original author’s permission.
 
-**ModAPI**\
-Defines the plugin interfaces and loader. Plugins implement `IModPlugin` and receive an `IPluginContext` with:
-- `PluginRoot` GameObject for attaching behaviours
-- `Mod` (About.json metadata and paths)
-- `Settings` (typed access to Config/default.json + Config/user.json)
-- `Log` (mod-prefixed logger)
-The loader currently resolves dependencies (`dependsOn`), ordering (`loadBefore`/`loadAfter`), and honors `loadorder.json`. This will be moved to more user facing with a sort button.
+Third-party components retain their own licenses (see the Credits section).
 
-**ManagerGUI**\
-Windows UI to locate the game, manage mod enable/disable, and set load order.
+## Legacy
 
-### Plugins
-**PluginInitializer**\
-Displays an early on-screen label so you can confirm the Mod API booted before the console is available.
+This project is considered legacy because the original Sheltered mod-loader effort from 2019 was left unmaintained and never grew into an active modding framework. At the time, a Unicube developer (on Reddit as UnicubeSheltered) expressed interest in mod support, but no official framework was shipped. On the original mod-loader GitHub repo, Tiller4363 attempted in 2023 to contact benjaminfoo for guidance, but from what I can find, there was no reply and benjaminfoo deleted his reddit account.
 
-**PluginConsole**\
-In-game console for interacting with the loader and game objects (help/clear/sceneinfo, WIP).
+In 2025, I (Coolnether123) discovered Sheltered and went looking for mods. The only thing I found was the abandoned mod loader, so I decided to pick it up and continue development to enable modding for the game. 
 
-**PluginHarmony**\
-Includes Harmony (https://github.com/pardeike/Harmony) and demo patches to verify runtime patching.
+## About
 
-**PluginDebugGUI**\
-Simple UI exposing loader state and loaded plugins while in-game.
+Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs non-destructively alongside the game.
+
+**Key Features:**
+- Plugin loader with dependency resolution and load order management
+- Unlimited custom save slots with mod tracking and verification
+- Developer API for items, recipes, events, and Harmony patching
+- Desktop and in-game mod managers
+- Runtime inspector (F9) for debugging
+
+![Desktop Manager](documentation/screenshots/mod_manager_gui_mods.png)
+*The Mod Manager mods tab allows you to customize your load order, resolve dependencies, and view detailed mod information.*
+
+The API is under active development - see the documentation for current capabilities.
 
 ## Installation
-- Backup your game directory (zip the entire Sheltered folder)
-- Download [Release v0.6](https://github.com/coolnether123/shelteredmodmanager/releases/tag/v0.6)  
-- Copy its content in the same space as the games exe
-- Launch `SMM\\Manager.exe` from your game folder
-- Use the browse for sheltered exe button and navigate to the exe
-- Currently a bug with refreshing the mods after this so restarted the mod manager and everything will work from then.
 
-## Compilation
-- Target Framework: .NET Framework 3.5
-- Architecture: Doorstop builds x64 to match the 64‑bit (Epic) game; older Steam 32‑bit assemblies are referenced where applicable
-- Harmony: Lib.Harmony 2.4.1
+Steam users: install the 32-bit package named Steam.
+
+Epic users: install the 64-bit package named Epic.
+
+1. **Back up your Sheltered folder**
+2.  Copy the (Steam or Epic) files into the Sheltered game directory
+   (same folder as `Sheltered.exe` or `ShelteredWindows64_EOS.exe`)
+3. Run `SMM\Manager.exe`
+4. Enable mods and launch the game
+
+If your exe is Sheltered.exe, you’re on Steam. If it’s ShelteredWindows64_EOS.exe, you’re on Epic
+
+### Installing mods
+1. Download mods from *Nexus(Link)*
+2. Move file into mods folder
+3. If the mod is zipped unzip the folder
+4. Enable in Manager.exe
+
+# Features
+### Save protection
+
+Each save records which mods were active when it was created.
+
+* Warns if required mods are missing
+* Warns on version mismatches
+* Visual status icons per save:
+  * ✓ All mods match
+  * ~ Version mismatch
+  * ✗ Missing mods
+* Save Details window shows differences
+* One-click “Reload with Save Mods” option
+
+![Save Verification](documentation/screenshots/mod_ingame_modverification_menu.png)
+*The in-game verification system ensures your active mod list matches your save file exactly to prevent corruption.*
+
+### Unlimited save slots
+
+Removes the vanilla 3-slot limit.
+
+* Paging UI for unlimited saves
+* Works alongside vanilla saves
+### In-game mod manager
+
+A “Mods” button is added to the main menu.
+
+* View installed mods
+* See versions, authors, and dependencies
+
+![In-Game Mod Manager](documentation/screenshots/mod_ingame_modsmenu.png)
+*Access full mod details, versions, and descriptions directly from the Sheltered main menu.*
+
+# Support
+
+## Uninstall
+
+1. Delete the `mods` and `SMM` folders
+2. Remove doorstop_config.ini, SMM\mod_manager.log, and winhttp.dll
+3. Verify game files via Steam/Epic if any issues arise
+
+Your vanilla save files are not deleted.
+Custom saves are stored in mods/ModAPI/... (back this folder up if you want to keep them).
+
+## Vanilla launch note
+
+If winhttp.dll is present, Sheltered will always start with ModAPI enabled, even when launched directly.
+
+To start the game fully vanilla, temporarily move winhttp.dll out of the game directory, then move it back to re-enable mods.
+
+## Compatibility
+
+* **Game:** Sheltered 1.8+
+* **Platforms:** Steam, Epic
+* **Architecture:**
+  * Steam: 32-bit
+  * Epic: 64-bit
+* **OS:** Windows 10 / 11
+* **Unity:** 5.3 and 5.6+ supported
+
+## Developer tools
+
+### Runtime inspector
+
+Press **F9** in-game.
+
+* Scene hierarchy viewer
+* Object picker
+* Component and field inspection
+* Bounds visualization
 
 ## Mod Structure
-Mods can be legacy loose DLLs or folder-based with metadata currently for v0.6:
+
+Mods follow a standardized folder layout:
 
 ```
 Sheltered/
 └─ mods/
-   ├─ enabled/
-   │  └─ MyCoolMod/                ← one folder per mod
-   │     ├─ About/                 ← metadata & preview
-   │     │  ├─ About.json          ← JSON details for the mod (renamed)
-   │     │  └─ preview.png         ← for the manager UI could also have an icon png
-   │     ├─ Assemblies/            ← compiled code (pick the best TFM at runtime)
-   │     │  └─ MyCoolMod.dll
-   │     ├─ Assets/                ← optional data the mod defines
-   │     │  ├─ Textures/
-   │     │  ├─ Audio/
-   │     │  └─ Localization/
-   │     └─ Config/                ← default cfg the mod can read
-   └─ disabled/
-      └─ ...
+    └─ MyCoolMod/                ← Mod root folder
+         ├─ About/                 
+         │  ├─ About.json         ← Mod metadata (REQUIRED)
+         │  ├─ preview.png        ← Preview image for Manager
+         │  └─ icon.png           ← Optional icon
+         ├─ Assemblies/           ← Compiled mod code
+         │  └─ MyCoolMod.dll
+         ├─ Assets/               ← Custom content
+         │  ├─ Textures/
+         │  ├─ Audio/
+         │  └─ Localization/
+         └─ Config/               ← Configuration files
+              ├─ default.json     ← Default settings
+              └─ user.json        ← User overrides
 ```
 
-Example About.json
-------------------
+### About.json Format
+
+```json
 {
-  "id": "com.devname.mycoolmod",        // Required
-  "name": "My Cool Mod",                 // Required
-  "version": "1.2.3",                    // Required
-  "authors": ["You"],                     // Required
-  "entryType": "MyCoolMod.Entry",         // Optional
-  "dependsOn": ["com.other.mod>=2.0.0"],  // Optional
-  "loadBefore": ["com.some.mod"],         // Optional
-  "loadAfter": ["com.core.api"],          // Optional
-  "description": "Adds X to Sheltered.",  // Required
-  "tags": ["QoL","UI"],                  // Optional
-  "website": "https://example.com"        // Optional
-}
-
-## Plugin Authoring
-
-Create a class that implements `IModPlugin` and use the provided context:
-
-```csharp
-using UnityEngine;
-
-public class MyPlugin : IModPlugin
-{
-    public void Initialize(IPluginContext ctx)
-    {
-        // optional: pre-load resources, register services, read settings
-    }
-
-    public void Start(IPluginContext ctx)
-    {
-        // attach behaviours under a per-plugin root
-        ctx.PluginRoot.AddComponent<MyMonoBehaviour>();
-
-        // read/write settings (merged defaults + user overrides)
-        int maxCount = ctx.Settings.GetInt("maxCount", 10);
-        ctx.Settings.SetInt("maxCount", maxCount);
-        ctx.Settings.SaveUser();
-
-        // simple logging, prefixed with your mod id
-        ctx.Log.Info($"MyPlugin started. maxCount={maxCount}");
-    }
+  "id": "YourName.MyCoolMod",
+  "name": "My Cool Mod",
+  "version": "1.0.0",
+  "authors": ["Your Name"],
+  "description": "Adds cool features to Sheltered!",
+  "entryType": "MyCoolMod.MyPlugin",
+  "dependsOn": ["OtherAuthor.SomeMod>=2.0.0"],
+  "loadBefore": ["SomeMod"],
+  "loadAfter": ["CoreAPI"],
+  "tags": ["QoL", "Items"],
+  "website": "https://nexusmods.com/sheltered/mods/123",
+  "missingModWarning": "This save uses custom items that will be lost!"
 }
 ```
 
-Dependencies and order are declared in `About.json` via `dependsOn`, `loadBefore`, and `loadAfter`. Version constraints are supported (e.g., `"com.example.mod >= 1.2.0"`). To use another mod’s public API, reference its DLL and declare a matching `dependsOn` entry. 
+**Required Fields:** `id`, `name`, `version`, `authors`, `description`
 
-## Screenshots
-<img src="/documentation/mod_manager_gui.png">
+**Optional Fields:**
+- `entryType` - Fully qualified class name implementing `IModPlugin`
+- `dependsOn` - Array of mod IDs with optional version constraints (e.g., `">=1.0.0"`)
+- `loadBefore` / `loadAfter` - Load order hints for compatibility
+- `tags` - Categories for filtering (e.g., `"QoL"`, `"UI"`, `"Content"`)
+- `website` - Link to your mod page or documentation
+- `missingModWarning` - Custom message shown when loading a save that used this mod but it's now disabled/missing. Use this to warn players about potential data loss or gameplay issues.
 
-<img src="/documentation/mod_ingame.png">
 
-<img src="/documentation/mod_ingame_2.png">
+## For mod authors
+
+The Developer API is in early development. See the documentation folder for current capabilities.
+
+Currently available:
+* Item and food injection
+* Custom crafting recipes
+* Event subscriptions (day cycles, save/load, UI panels)
+* Harmony integration for runtime patching
+* Runtime inspector (F9)
+
+Planned for future updates:
+* NPC & Character manipulation
+* Combat encounter events
+* Quest system integration
+* Faction hooks 
+
+---
 
 ## Credits
-- [Team 17 for Sheltered](https://store.steampowered.com/app/356040/Sheltered/)
-- [NeighTools for UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)
-- [Pardeike for Harmony](https://github.com/pardeike/Harmony)
 
-### Testing
-Validated on:
-- Windows 10, 64‑bit
-- Doorstop v4 config (shipped), x64
-- Sheltered 1.8 (Epic, 64‑bit)
-- Lib.Harmony 2.4.1
+- **Coolnether123** - 2025 Active Development & Maintenance
+- **benjaminfoo** - Original 2019 mod loader foundation (used with permission)
+- **[Team17](https://www.team17.com/)** - For publishing Sheltered
+- **Unicube** - Original game developers
+- **[NeighTools](https://github.com/NeighTools)** - UnityDoorstop injection framework
+- **[Andreas Pardeike](https://github.com/pardeike)** - Harmony runtime patching library
 
-## License
-MIT — see `LICENSE`.
+## Support & Community
+
+- **Issues:** [GitHub Issues](https://github.com/coolnether123/shelteredmodmanager/issues)
+- **Nexus Comments:** [Sheltered Mod Manager](https://nexusmods.com/sheltered/mods/1)
+
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [How to Develop a Plugin](documentation/how%20to%20develop%20a%20plugin.md) | Getting started with mod development |
+| [ModAPI Developer Guide](documentation/ModAPI_Developer_Guide.md) | Comprehensive API usage guide |
+| [Events Guide](documentation/Events_Guide.md) | Game and UI event subscriptions |
+| [Harmony Patches](documentation/how%20to%20develop%20a%20patch%20with%20harmony.md) | Runtime code patching |
+| [Settings Format](documentation/SETTINGS.md) | Mod configuration files |
+| [API Reference](documentation/ModAPI_Documentation.md) | Technical API reference |

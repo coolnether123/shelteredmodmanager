@@ -1,6 +1,7 @@
 ﻿using System;
 using UnityEngine;
 using ConsoleCommands;
+using ModAPI.Core;
 
 
 class ConsoleWindowComponent : MonoBehaviour
@@ -31,6 +32,7 @@ class ConsoleWindowComponent : MonoBehaviour
 
     void OnGUI()
     {
+        if (ModAPI.UI.ModManagerPanel.IsShowingModManager) return;
         windowRect = GUI.Window(id, windowRect, DoMyWindow, titleText);
     }
 
