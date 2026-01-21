@@ -164,9 +164,19 @@ namespace ModAPI.Harmony
         {
             try
             {
-                return t.GetCustomAttributes(true).Any(a => string.Equals(a.GetType().FullName, "HarmonyLib.HarmonyPatch", StringComparison.Ordinal));
+                // Check class attributes
+                if (t.GetCustomAttributes(true).Any(a => a.GetType().FullName.StartsWith("HarmonyLib.Harmony")))
+                    return true;
+
+                // Check static methods for attributes (standard for multi-patch classes)
+                var methods = t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                return methods.Any(m => m.GetCustomAttributes(true).Any(a => a.GetType().FullName.StartsWith("HarmonyLib.Harmony")));
             }
-            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.HasHarmonyPatchAttributes", "Error checking for Harmony attributes: " + ex.Message); return false; }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("HarmonyUtil.HasHarmonyPatchAttributes", "Error checking for Harmony attributes: " + ex.Message);
+                return false;
+            }
         }
 
         private static bool HasAttribute<T>(Type t) where T : Attribute

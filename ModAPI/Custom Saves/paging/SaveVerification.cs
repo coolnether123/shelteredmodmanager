@@ -6,6 +6,8 @@ using UnityEngine;
 using ModAPI.Core;
 using ModAPI.Saves;
 using ModAPI.UI;
+using ModAPI.Hooks;
+using HarmonyLib;
 
 namespace ModAPI.Hooks.Paging
 {
@@ -285,7 +287,44 @@ namespace ModAPI.Hooks.Paging
                 int capSlot = absoluteSlot;
                 
                 EventDelegate.Set(iconButton.onClick, () => {
-                    SaveDetailsWindow.Show(capTarget, capManifest, capState, false, null);
+                    SaveDetailsWindow.Show(capTarget, capManifest, capState, false, () => {
+                        int virtualSlot = (capSlot <= 3) ? capSlot : ((capSlot - 4) % 3) + 1;
+                        var virtualSaveType = (SaveManager.SaveType)virtualSlot;
+
+                        if (capSlot <= 3)
+                        {
+                            // For vanilla saves, ensure we bypass the anti-mod-mismatch loading block
+                            ModAPI.Core.SaveProtectionPatches.LoadGamePatch._forceLoad = true;
+                        }
+                        else
+                        {
+                            // For custom saves, set the redirect target
+                            PlatformSaveProxy.SetNextLoad(virtualSaveType, "Standard", capTarget.id);
+                            
+                            // Transfer difficulty settings from the manifest/save info
+                            if (capTarget.saveInfo != null)
+                            {
+                                DifficultyManager.StoreMenuDifficultySettings(
+                                    capTarget.saveInfo.rainDiff, 
+                                    capTarget.saveInfo.resourceDiff, 
+                                    capTarget.saveInfo.breachDiff, 
+                                    capTarget.saveInfo.factionDiff, 
+                                    capTarget.saveInfo.moodDiff, 
+                                    capTarget.saveInfo.mapSize, 
+                                    capTarget.saveInfo.fog);
+                            }
+                        }
+
+                        // Try to show the game's loading graphic
+                        try {
+                            var t = Traverse.Create(panel);
+                            var loadingGraphic = t.Field("m_loadingGraphic").GetValue<GameObject>();
+                            if (loadingGraphic != null) loadingGraphic.SetActive(true);
+                        } catch { }
+
+                        // Start the actual load
+                        SaveManager.instance.SetSlotToLoad(virtualSlot);
+                    });
                 });
             }
         }

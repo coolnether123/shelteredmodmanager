@@ -13,7 +13,6 @@ namespace ModAPI.UI
     /// Patches for various game panels that manually iterate through ItemType enum,
     /// causing them to skip modded items with high IDs.
     /// </summary>
-    [HarmonyPatch]
     internal static class UIPatches
     {
         static UIPatches()

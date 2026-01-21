@@ -8,13 +8,22 @@ using ModAPI.Core;
 namespace ModAPI.Saves
 {
     /// <summary>
-    /// Provides central logic for managing mod-aware save files, including manifest discovery and verification.
+    /// Provides central logic for managing mod-aware save files.
+    /// 
+    /// REFACTORED: No longer uses a global manifest.json file.
+    /// - Save entries are discovered by scanning Slot_* directories
+    /// - Save metadata is read from the XML file on demand
+    /// - Per-slot manifest.json files store only mod tracking data
     /// </summary>
     internal class SaveRegistryCore : ISaveApi
     {
         private readonly object _lock = new object();
         private readonly string _scenarioId;
-        private SaveManifest _manifest;
+        
+        // Cache of discovered entries, keyed by absoluteSlot
+        // Invalidated when saves are created/deleted
+        private Dictionary<int, SaveEntry> _entryCache;
+        private bool _cacheValid = false;
 
         public SaveRegistryCore(string scenarioId)
         {
@@ -25,16 +34,36 @@ namespace ModAPI.Saves
         public SaveEntry Get(string saveId) => GetSave(saveId);
         public SaveEntry Overwrite(string saveId, SaveOverwriteOptions opts, byte[] xmlBytes) => OverwriteSave(saveId, opts, xmlBytes);
 
-
+        /// <summary>
+        /// Returns all save entries by scanning Slot_* directories.
+        /// </summary>
         public SaveEntry[] ListSaves()
         {
-            return LoadManifest().entries ?? new SaveEntry[0];
+            return GetValidEntriesList().ToArray();
+        }
+
+        private List<SaveEntry> GetValidEntriesList()
+        {
+            var entries = GetAllEntries();
+            var results = new List<SaveEntry>();
+            
+            foreach (var e in entries.Values)
+            {
+                var savePath = DirectoryProvider.EntryPath(_scenarioId, e.absoluteSlot);
+                if (File.Exists(savePath))
+                {
+                    results.Add(e);
+                }
+            }
+
+            results.Sort((a, b) => a.absoluteSlot.CompareTo(b.absoluteSlot));
+            return results;
         }
 
         public SaveEntry[] ListSaves(int page, int pageSize)
         {
-            var all = LoadManifest().entries;
-            if (all == null) return new SaveEntry[0];
+            var all = ListSaves();
+            if (all == null || all.Length == 0) return new SaveEntry[0];
             int start = Math.Max(0, page * pageSize);
             if (start >= all.Length) return new SaveEntry[0];
             int count = Math.Min(pageSize, all.Length - start);
@@ -46,109 +75,266 @@ namespace ModAPI.Saves
 
         public SaveEntry GetSave(string saveId)
         {
-            foreach (var e in LoadManifest().entries)
+            foreach (var e in GetAllEntries().Values)
                 if (e.id == saveId) return e;
             return null;
         }
 
+        /// <summary>
+        /// Gets a save entry by its absolute slot number.
+        /// </summary>
+        public SaveEntry GetSaveBySlot(int absoluteSlot)
+        {
+            var entries = GetAllEntries();
+            if (entries.TryGetValue(absoluteSlot, out var entry))
+                return entry;
+            return null;
+        }
+
+        /// <summary>
+        /// Deletes a save by its absolute slot number.
+        /// </summary>
+        public bool DeleteBySlot(int absoluteSlot)
+        {
+            MMLog.Write($"[SaveRegistryCore] DeleteBySlot called for slot {absoluteSlot}");
+            
+            var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, absoluteSlot, false);
+            
+            try 
+            { 
+                if (Directory.Exists(slotRoot))
+                {
+                    MMLog.Write($"[SaveRegistryCore] DeleteBySlot: Deleting directory '{slotRoot}'");
+                    Directory.Delete(slotRoot, true);
+                    InvalidateCache();
+                    MMLog.Write($"[SaveRegistryCore] DeleteBySlot: Successfully deleted slot {absoluteSlot}");
+                    return true;
+                }
+                else
+                {
+                    MMLog.WriteError($"[SaveRegistryCore] DeleteBySlot: Directory does not exist: '{slotRoot}'");
+                    return false;
+                }
+            } 
+            catch (Exception ex)
+            { 
+                MMLog.WriteError($"[SaveRegistryCore] DeleteBySlot failed: {ex.Message}");
+                return false;
+            }
+        }
+
         public int CountSaves()
         {
-            var m = LoadManifest();
-            return m.entries != null ? m.entries.Length : 0;
+            return GetValidEntriesList().Count;
         }
 
         public int GetMaxSlot()
         {
-            var m = LoadManifest();
-            if (m.entries == null || m.entries.Length == 0) return 0;
-            int max = 0;
-            foreach (var e in m.entries)
+            var valid = GetValidEntriesList();
+            if (valid.Count == 0) return 0;
+            return valid[valid.Count - 1].absoluteSlot;
+        }
+
+        /// <summary>
+        /// Discovers all save slots by scanning directories.
+        /// Reads metadata from XML files on demand.
+        /// </summary>
+        private Dictionary<int, SaveEntry> GetAllEntries()
+        {
+            lock (_lock)
             {
-                if (e.absoluteSlot > max) max = e.absoluteSlot;
+                if (_cacheValid && _entryCache != null)
+                    return _entryCache;
+
+                _entryCache = new Dictionary<int, SaveEntry>();
+
+                var scenarioRoot = DirectoryProvider.ScenarioRoot(_scenarioId, false);
+                if (!Directory.Exists(scenarioRoot))
+                {
+                    _cacheValid = true;
+                    return _entryCache;
+                }
+
+                var dirs = Directory.GetDirectories(scenarioRoot, "Slot_*");
+                foreach (var dir in dirs)
+                {
+                    var dirName = Path.GetFileName(dir);
+                    var numPart = dirName.Substring(5); // "Slot_" is 5 chars
+                    if (int.TryParse(numPart, out int absoluteSlot))
+                    {
+                        var savePath = Path.Combine(dir, "SaveData.xml");
+                        try
+                        {
+                            // Discover slot even if XML is missing (e.g. newly created slot)
+                            var entry = BuildEntryFromSlot(absoluteSlot, savePath);
+                            if (entry != null)
+                                _entryCache[absoluteSlot] = entry;
+                        }
+                        catch (Exception ex)
+                        {
+                            MMLog.WriteError($"[SaveRegistryCore] Error reading slot {absoluteSlot}: {ex.Message}");
+                        }
+                    }
+                }
+
+                MMLog.WriteDebug($"[SaveRegistryCore] Discovered {_entryCache.Count} saves for scenario '{_scenarioId}'");
+                _cacheValid = true;
+                return _entryCache;
             }
-            return max;
+        }
+
+        /// <summary>
+        /// Builds a SaveEntry by reading metadata from the XML file.
+        /// </summary>
+        private SaveEntry BuildEntryFromSlot(int absoluteSlot, string savePath)
+        {
+            var entry = new SaveEntry
+            {
+                id = $"{_scenarioId}_{absoluteSlot}", // Stable ID based on scenario and slot
+                absoluteSlot = absoluteSlot,
+                name = $"Slot {absoluteSlot}",
+                scenarioId = _scenarioId,
+                saveInfo = new SaveInfo()
+            };
+
+            if (File.Exists(savePath))
+            {
+                try
+                {
+                    var bytes = File.ReadAllBytes(savePath);
+                    entry.createdAt = File.GetCreationTimeUtc(savePath).ToString("o");
+                    entry.updatedAt = File.GetLastWriteTimeUtc(savePath).ToString("o");
+                    entry.fileSize = bytes.Length;
+                    entry.crc32 = CRC32.Compute(bytes);
+
+                    // Parse metadata from XML
+                    TryUpdateEntryInfo(entry, bytes);
+
+                    // Use family name as display name if available
+                    if (!string.IsNullOrEmpty(entry.saveInfo?.familyName))
+                        entry.name = entry.saveInfo.familyName;
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError($"[SaveRegistryCore] Error parsing {savePath}: {ex.Message}");
+                }
+            }
+            else
+            {
+                // Directory exists but no XML yet
+                var dir = Path.GetDirectoryName(savePath);
+                entry.createdAt = Directory.GetCreationTimeUtc(dir).ToString("o");
+                entry.updatedAt = Directory.GetLastWriteTimeUtc(dir).ToString("o");
+                entry.name = "New Game";
+            }
+
+            return entry;
+        }
+
+        /// <summary>
+        /// Invalidates the entry cache, forcing re-discovery on next access.
+        /// </summary>
+        private void InvalidateCache()
+        {
+            lock (_lock)
+            {
+                _cacheValid = false;
+                _entryCache = null;
+            }
         }
 
         public SaveEntry CreateSave(SaveCreateOptions opts)
         {
-            var m = LoadManifest();
-            var id = IdGenerator.NewId();
             var now = DateTime.UtcNow.ToString("o");
             var entry = new SaveEntry
             {
-                id = id,
+                id = $"{_scenarioId}_{opts.absoluteSlot}",
                 absoluteSlot = opts.absoluteSlot,
-                name = UniqueName(m, NameSanitizer.SanitizeName(opts?.name)),
+                name = NameSanitizer.SanitizeName(opts?.name) ?? $"Slot {opts.absoluteSlot}",
                 createdAt = now,
                 updatedAt = now,
                 gameVersion = Application.version,
                 modApiVersion = "1",
                 scenarioId = _scenarioId,
-                scenarioVersion = ScenarioRegistry.GetScenario(_scenarioId).version,
+                scenarioVersion = ScenarioRegistry.GetScenario(_scenarioId)?.version ?? "1.0",
                 saveInfo = new SaveInfo()
             };
 
-            var list = new List<SaveEntry>(m.entries ?? new SaveEntry[0]);
-            list.Add(entry);
-            m.entries = list.ToArray();
-
-            SaveManifestFile(m);
-            MMLog.WriteDebug($"CreateSave scenario={_scenarioId} name='{entry.name}' id={entry.id}");
+            // Ensure slot directory exists
+            DirectoryProvider.SlotRoot(_scenarioId, opts.absoluteSlot, true);
+            
+            InvalidateCache();
+            MMLog.WriteDebug($"CreateSave scenario={_scenarioId} name='{entry.name}' slot={entry.absoluteSlot}");
             return entry;
         }
 
         public SaveEntry OverwriteSave(string saveId, SaveOverwriteOptions opts, byte[] xmlBytes)
         {
-            var m = LoadManifest();
-            for (int i = 0; i < m.entries.Length; i++)
+            // Find entry by ID
+            var entry = GetSave(saveId);
+            if (entry == null) return null;
+
+            if (opts != null && !string.IsNullOrEmpty(opts.name)) 
+                entry.name = NameSanitizer.SanitizeName(opts.name);
+            entry.updatedAt = DateTime.UtcNow.ToString("o");
+            
+            if (xmlBytes != null)
             {
-                if (m.entries[i].id == saveId)
-                {
-                    var entry = m.entries[i];
-                    if (opts != null && !string.IsNullOrEmpty(opts.name)) entry.name = NameSanitizer.SanitizeName(opts.name);
-                    entry.updatedAt = DateTime.UtcNow.ToString("o");
-                    if (xmlBytes != null)
-                    {
-                        WriteEntryFile(entry.absoluteSlot, xmlBytes, out long size, out uint crc);
-                        entry.fileSize = size;
-                        entry.crc32 = crc;
-                        TryUpdateEntryInfo(entry, xmlBytes);
-                        
-                        // Update per-slot manifest (Mod List)
-                        UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
-                    }
-                    m.entries[i] = entry;
-                    SaveManifestFile(m);
-                    MMLog.WriteDebug($"OverwriteSave scenario={_scenarioId} id={saveId} slot={entry.absoluteSlot} size={entry.fileSize}");
-                    return entry;
-                }
+                WriteEntryFile(entry.absoluteSlot, xmlBytes, out long size, out uint crc);
+                entry.fileSize = size;
+                entry.crc32 = crc;
+                TryUpdateEntryInfo(entry, xmlBytes);
+                
+                // Update per-slot manifest (Mod List only)
+                UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
             }
-            return null;
+            
+            InvalidateCache();
+            MMLog.WriteDebug($"OverwriteSave scenario={_scenarioId} id={saveId} slot={entry.absoluteSlot} size={entry.fileSize}");
+            return entry;
         }
 
         public bool DeleteSave(string saveId)
         {
-            var m = LoadManifest();
-            var list = new List<SaveEntry>(m.entries);
-            var idx = list.FindIndex(e => e.id == saveId);
-            if (idx < 0) return false;
-            var entry = list[idx];
-            list.RemoveAt(idx);
-            m.entries = list.ToArray();
-            SaveManifestFile(m);
-            try { File.Delete(DirectoryProvider.EntryPath(_scenarioId, entry.absoluteSlot)); } catch { }
-            try { File.Delete(DirectoryProvider.PreviewPath(_scenarioId, saveId)); } catch { }
+            MMLog.Write($"[SaveRegistryCore] DeleteSave called with ID: '{saveId}'");
             
-            // Delete manifest.json
-            try 
+            var entry = GetSave(saveId);
+            if (entry == null)
             {
-                var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, entry.absoluteSlot, false);
-                var manPath = Path.Combine(slotRoot, "manifest.json");
-                if (File.Exists(manPath)) File.Delete(manPath);
-            } 
-            catch { }
+                MMLog.WriteError($"[SaveRegistryCore] DeleteSave: Entry not found for ID '{saveId}'");
+                return false;
+            }
 
-            MMLog.WriteDebug($"DeleteSave scenario={_scenarioId} id={saveId} slot={entry.absoluteSlot}");
+            MMLog.Write($"[SaveRegistryCore] DeleteSave: Found entry - Slot={entry.absoluteSlot}, Name='{entry.name}'");
+
+            var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, entry.absoluteSlot, false);
+            MMLog.Write($"[SaveRegistryCore] DeleteSave: Slot directory = '{slotRoot}'");
+            
+            // Delete the entire slot directory
+            try 
+            { 
+                if (Directory.Exists(slotRoot))
+                {
+                    MMLog.Write($"[SaveRegistryCore] DeleteSave: Deleting directory '{slotRoot}'");
+                    Directory.Delete(slotRoot, true);
+                    MMLog.Write($"[SaveRegistryCore] DeleteSave: Directory deleted successfully");
+                }
+                else
+                {
+                    MMLog.WriteError($"[SaveRegistryCore] DeleteSave: Directory does not exist: '{slotRoot}'");
+                }
+            } 
+            catch (Exception ex)
+            { 
+                MMLog.WriteError($"[SaveRegistryCore] Failed to delete slot directory: {ex.Message}");
+                return false;
+            }
+            
+            // Delete preview if exists
+            try { File.Delete(DirectoryProvider.PreviewPath(_scenarioId, saveId)); } catch { }
+
+            InvalidateCache();
+            MMLog.Write($"[SaveRegistryCore] DeleteSave: Completed for slot {entry.absoluteSlot}");
             return true;
         }
 
@@ -202,130 +388,28 @@ namespace ModAPI.Saves
             }
         }
 
-        private SaveManifest LoadManifest()
+
+        // REMOVED: LoadManifest() - now using GetAllEntries() for directory-based discovery
+
+
+        // REMOVED: ReconcileManifestWithSlots() - discovery now handled by GetAllEntries()
+
+        /// <summary>
+        /// Condenses save slots to remove gaps in numbering.
+        /// Works directly with directories without using a global manifest.
+        /// </summary>
+        public void CondenseSlots()
         {
-            lock (_lock)
-            {
-                if (_manifest != null) return _manifest;
-
-                var path = DirectoryProvider.ManifestPath(_scenarioId);
-                try
-                {
-                    if (File.Exists(path))
-                    {
-                        var json = File.ReadAllText(path);
-                        // IMPORTANT: Unity's JsonUtility.FromJson() cannot deserialize arrays of custom classes
-                        // like SaveEntry[]. It silently returns an empty array. We must use custom parsing.
-                        // See: https://docs.unity3d.com/Manual/JSONSerialization.html
-                        _manifest = DeserializeManifest(json) ?? new SaveManifest();
-                    }
-                    else
-                    {
-                        _manifest = new SaveManifest();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MMLog.Write($"Manifest load error for '{_scenarioId}': " + ex.Message);
-                    _manifest = new SaveManifest();
-                }
-
-                // Auto-discovery: Reconcile manifest with actual files on disk
-                ReconcileManifestWithSlots(_manifest);
-
-                return _manifest;
-            }
-        }
-
-        private void ReconcileManifestWithSlots(SaveManifest m)
-        {
-            try
-            {
-                var scenarioRoot = DirectoryProvider.ScenarioRoot(_scenarioId);
-                if (!Directory.Exists(scenarioRoot)) return;
-
-                var dirs = Directory.GetDirectories(scenarioRoot, "Slot_*");
-                var entries = new List<SaveEntry>(m.entries ?? new SaveEntry[0]);
-                bool changed = false;
-
-                foreach (var dir in dirs)
-                {
-                    var dirName = Path.GetFileName(dir);
-                    var numPart = dirName.Substring(5); // "Slot_" is 5 chars
-                    if (int.TryParse(numPart, out int absoluteSlot))
-                    {
-                        var savePath = Path.Combine(dir, "SaveData.xml");
-                        if (File.Exists(savePath))
-                        {
-                            // Check if this slot is already known
-                            var existing = entries.Find(e => e.absoluteSlot == absoluteSlot);
-                            if (existing == null)
-                            {
-                                MMLog.Write($"[SaveRegistryCore] Discovered orphaned save in {dirName}. Adding to manifest.");
-                                
-                                // Create new entry
-                                var newEntry = new SaveEntry
-                                {
-                                    id = IdGenerator.NewId(),
-                                    absoluteSlot = absoluteSlot,
-                                    name = $"Slot {absoluteSlot}",
-                                    createdAt = File.GetCreationTimeUtc(savePath).ToString("o"),
-                                    updatedAt = File.GetLastWriteTimeUtc(savePath).ToString("o"),
-                                    scenarioId = _scenarioId,
-                                    saveInfo = new SaveInfo()
-                                };
-
-                                // Parse metadata
-                                try
-                                {
-                                    var bytes = File.ReadAllBytes(savePath);
-                                    newEntry.fileSize = bytes.Length;
-                                    newEntry.crc32 = CRC32.Compute(bytes);
-                                    TryUpdateEntryInfo(newEntry, bytes);
-                                }
-                                catch (Exception ex)
-                                {
-                                    MMLog.WriteError($"Error parsing discovered save in {dirName}: " + ex.Message);
-                                }
-
-                                entries.Add(newEntry);
-                                changed = true;
-                            }
-                        }
-                    }
-                }
-
-                if (changed)
-                {
-                    entries.Sort((a, b) => a.absoluteSlot.CompareTo(b.absoluteSlot));
-                    m.entries = entries.ToArray();
-                    SaveManifestFile(m);
-                }
-
-
-            }
-            catch (Exception ex) 
-            {
-                MMLog.WriteError("[SaveRegistryCore] Error reconciling slots: " + ex.Message);
-            }
-        }
-
-        private void CondenseSlots(SaveManifest m)
-        {
-            if (m.entries == null || m.entries.Length == 0) return;
+            var entries = ListSaves();
+            if (entries == null || entries.Length == 0) return;
 
             // Determines starting slot based on scenario type
             int expectedSlot = (_scenarioId == "Standard") ? 4 : 1;
             
-            var sorted = new List<SaveEntry>(m.entries);
-            sorted.Sort((a, b) => a.absoluteSlot.CompareTo(b.absoluteSlot));
-
             bool changed = false;
-            foreach (var entry in sorted)
+            foreach (var entry in entries)
             {
-                // If this entry is in a reserved slot (e.g. 1-3 for Standard), skip it? 
-                // Or if it's somehow there, should we move it to 4?
-                // Assuming we only condense valid custom slots.
+                // Skip reserved vanilla slots for Standard scenario
                 if (_scenarioId == "Standard" && entry.absoluteSlot < 4) continue;
 
                 if (entry.absoluteSlot > expectedSlot)
@@ -337,7 +421,7 @@ namespace ModAPI.Saves
                         var oldDir = DirectoryProvider.SlotRoot(_scenarioId, entry.absoluteSlot, false);
                         var newDir = DirectoryProvider.SlotRoot(_scenarioId, expectedSlot, false);
 
-                        // DirectoryProvider creates dir if not exists, so newDir might exist empty.
+                        // Check for collision
                         if (Directory.Exists(newDir))
                         {
                             // If empty, delete it to allow move
@@ -347,32 +431,23 @@ namespace ModAPI.Saves
                             }
                             else
                             {
-                                // Collision! Skip this target slot.
-                                MMLog.WriteError($"[CondenseSlots] Cannot move {entry.absoluteSlot} to {expectedSlot} because target exists and is not empty.");
+                                MMLog.WriteError($"[CondenseSlots] Cannot move {entry.absoluteSlot} to {expectedSlot} - target not empty.");
                                 expectedSlot++; 
                                 continue; 
                             }
                         }
 
-                        // Just in case DirectoryProvider didn't create it or we deleted it:
-                         if (Directory.Exists(newDir)) Directory.Delete(newDir);
-
                         Directory.Move(oldDir, newDir);
                         MMLog.Write($"[CondenseSlots] Moved save from Slot {entry.absoluteSlot} to Slot {expectedSlot}");
                         success = true;
+                        changed = true;
                     }
                     catch (Exception ex)
                     {
                         MMLog.WriteError($"[CondenseSlots] Failed to move slot {entry.absoluteSlot} to {expectedSlot}: {ex.Message}");
                     }
                     
-                    if (success)
-                    {
-                        entry.absoluteSlot = expectedSlot;
-                        changed = true;
-                        expectedSlot++;
-                    }
-                    // If move failed, keep entry.absoluteSlot as-is and don't modify manifest
+                    if (success) expectedSlot++;
                 }
                 else if (entry.absoluteSlot == expectedSlot)
                 {
@@ -382,92 +457,15 @@ namespace ModAPI.Saves
 
             if (changed)
             {
-                m.entries = sorted.ToArray();
-                SaveManifestFile(m);
+                InvalidateCache();
             }
         }
 
-        private void SaveManifestFile(SaveManifest m)
-        {
-            lock (_lock)
-            {
-                _manifest = m;
-                try
-                {
-                    var path = DirectoryProvider.ManifestPath(_scenarioId);
-                    var tmp = path + ".tmp";
-                    
-                    // Manual JSON serialization - Unity's JsonUtility cannot serialize arrays of custom classes
-                    var json = SerializeManifest(m);
 
-                    File.WriteAllText(tmp, json, Encoding.UTF8);
-
-                    try { File.Replace(tmp, path, null); }
-                    catch { File.Copy(tmp, path, true); File.Delete(tmp); }
-                }
-                catch (Exception ex)
-                {
-                    MMLog.Write($"Manifest save error for '{_scenarioId}': " + ex.Message);
-                }
-            }
-        }
+        // REMOVED: SaveManifestFile() - no longer using global manifest
         
-        /// <summary>
-        /// Manually serialize SaveManifest to JSON.
-        /// 
-        /// UNITY LIMITATION: Unity's JsonUtility.ToJson() CANNOT serialize arrays of custom classes.
-        /// When you call JsonUtility.ToJson() on a class containing SaveEntry[] (array of custom objects),
-        /// it silently outputs an empty array [], losing all save data. This is a known Unity limitation.
-        /// See: https://docs.unity3d.com/Manual/JSONSerialization.html
-        /// 
-        /// This method manually constructs JSON to ensure all SaveEntry and SaveInfo data is preserved.
-        /// </summary>
-        private static string SerializeManifest(SaveManifest m)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("{");
-            sb.AppendLine($"    \"version\": {m.version},");
-            sb.AppendLine("    \"entries\": [");
-            
-            for (int i = 0; i < m.entries.Length; i++)
-            {
-                var e = m.entries[i];
-                sb.AppendLine("        {");
-                sb.AppendLine($"            \"id\": \"{EscapeJson(e.id ?? "")}\",");
-                sb.AppendLine($"            \"absoluteSlot\": {e.absoluteSlot},");
-                sb.AppendLine($"            \"name\": \"{EscapeJson(e.name ?? "")}\",");
-                sb.AppendLine($"            \"createdAt\": \"{EscapeJson(e.createdAt ?? "")}\",");
-                sb.AppendLine($"            \"updatedAt\": \"{EscapeJson(e.updatedAt ?? "")}\",");
-                sb.AppendLine($"            \"gameVersion\": \"{EscapeJson(e.gameVersion ?? "")}\",");
-                sb.AppendLine($"            \"modApiVersion\": \"{EscapeJson(e.modApiVersion ?? "")}\",");
-                sb.AppendLine($"            \"scenarioId\": \"{EscapeJson(e.scenarioId ?? "")}\",");
-                sb.AppendLine($"            \"scenarioVersion\": \"{EscapeJson(e.scenarioVersion ?? "")}\",");
-                sb.AppendLine($"            \"fileSize\": {e.fileSize},");
-                sb.AppendLine($"            \"crc32\": {e.crc32},");
-                sb.AppendLine($"            \"previewPath\": \"{EscapeJson(e.previewPath ?? "")}\",");
-                sb.AppendLine($"            \"extra\": \"{EscapeJson(e.extra ?? "")}\",");
-                sb.AppendLine("            \"saveInfo\": {");
-                sb.AppendLine($"                \"daysSurvived\": {e.saveInfo?.daysSurvived ?? 0},");
-                sb.AppendLine($"                \"difficulty\": {e.saveInfo?.difficulty ?? 1},");
-                sb.AppendLine($"                \"fog\": {(e.saveInfo?.fog ?? false).ToString().ToLower()},");
-                sb.AppendLine($"                \"mapSize\": {e.saveInfo?.mapSize ?? 0},");
-                sb.AppendLine($"                \"rainDiff\": {e.saveInfo?.rainDiff ?? 1},");
-                sb.AppendLine($"                \"resourceDiff\": {e.saveInfo?.resourceDiff ?? 1},");
-                sb.AppendLine($"                \"breachDiff\": {e.saveInfo?.breachDiff ?? 1},");
-                sb.AppendLine($"                \"factionDiff\": {e.saveInfo?.factionDiff ?? 1},");
-                sb.AppendLine($"                \"moodDiff\": {e.saveInfo?.moodDiff ?? 1},");
-                sb.AppendLine($"                \"familyName\": \"{EscapeJson(e.saveInfo?.familyName ?? "")}\",");
-                sb.AppendLine($"                \"saveTime\": \"{EscapeJson(e.saveInfo?.saveTime ?? "")}\"");
-                sb.AppendLine("            }");
-                sb.Append("        }");
-                if (i < m.entries.Length - 1) sb.Append(",");
-                sb.AppendLine();
-            }
-            
-            sb.AppendLine("    ]");
-            sb.AppendLine("}");
-            return sb.ToString();
-        }
+
+        // REMOVED: SerializeManifest() - no longer needed without global manifest
         
         private static string EscapeJson(string s)
         {
@@ -475,117 +473,8 @@ namespace ModAPI.Saves
             return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r");
         }
         
-        /// <summary>
-        /// Manually deserialize SaveManifest from JSON.
-        /// 
-        /// UNITY LIMITATION: Unity's JsonUtility.FromJson() CANNOT deserialize arrays of custom classes.
-        /// When parsing JSON with SaveEntry[] (array of custom objects), JsonUtility returns an empty array,
-        /// even when the JSON contains valid data. This is a known Unity limitation.
-        /// See: https://docs.unity3d.com/Manual/JSONSerialization.html
-        /// 
-        /// This method manually parses JSON to extract all SaveEntry and SaveInfo data.
-        /// </summary>
-        private static SaveManifest DeserializeManifest(string json)
-        {
-            var result = new SaveManifest();
-            if (string.IsNullOrEmpty(json)) return result;
-            
-            try
-            {
-                // Parse version
-                result.version = ParseIntField(json, "version", 1);
-                
-                // Parse entries array
-                var entries = new List<SaveEntry>();
-                int entriesStart = json.IndexOf("\"entries\"");
-                if (entriesStart >= 0)
-                {
-                    int arrayStart = json.IndexOf('[', entriesStart);
-                    if (arrayStart >= 0)
-                    {
-                        int arrayEnd = FindMatchingBracket(json, arrayStart, '[', ']');
-                        if (arrayEnd > arrayStart)
-                        {
-                            string arrayContent = json.Substring(arrayStart + 1, arrayEnd - arrayStart - 1);
-                            // Parse each entry object
-                            int pos = 0;
-                            while (pos < arrayContent.Length)
-                            {
-                                int objStart = arrayContent.IndexOf('{', pos);
-                                if (objStart < 0) break;
-                                int objEnd = FindMatchingBracket(arrayContent, objStart, '{', '}');
-                                if (objEnd <= objStart) break;
-                                
-                                string entryJson = arrayContent.Substring(objStart, objEnd - objStart + 1);
-                                var entry = ParseSaveEntry(entryJson);
-                                if (entry != null) entries.Add(entry);
-                                pos = objEnd + 1;
-                            }
-                        }
-                    }
-                }
-                result.entries = entries.ToArray();
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteError($"[SaveRegistryCore] DeserializeManifest error: {ex.Message}");
-            }
-            
-            return result;
-        }
-        
-        private static SaveEntry ParseSaveEntry(string json)
-        {
-            var entry = new SaveEntry();
-            entry.id = ParseStringField(json, "id");
-            entry.absoluteSlot = ParseIntField(json, "absoluteSlot", 0);
-            entry.name = ParseStringField(json, "name");
-            entry.createdAt = ParseStringField(json, "createdAt");
-            entry.updatedAt = ParseStringField(json, "updatedAt");
-            entry.gameVersion = ParseStringField(json, "gameVersion");
-            entry.modApiVersion = ParseStringField(json, "modApiVersion");
-            entry.scenarioId = ParseStringField(json, "scenarioId");
-            entry.scenarioVersion = ParseStringField(json, "scenarioVersion");
-            entry.fileSize = ParseLongField(json, "fileSize", 0);
-            entry.crc32 = (uint)ParseLongField(json, "crc32", 0);
-            entry.previewPath = ParseStringField(json, "previewPath");
-            entry.extra = ParseStringField(json, "extra");
-            
-            // Parse nested saveInfo
-            int saveInfoStart = json.IndexOf("\"saveInfo\"");
-            if (saveInfoStart >= 0)
-            {
-                int objStart = json.IndexOf('{', saveInfoStart);
-                if (objStart >= 0)
-                {
-                    int objEnd = FindMatchingBracket(json, objStart, '{', '}');
-                    if (objEnd > objStart)
-                    {
-                        string infoJson = json.Substring(objStart, objEnd - objStart + 1);
-                        entry.saveInfo = ParseSaveInfo(infoJson);
-                    }
-                }
-            }
-            
-            return entry;
-        }
-        
-        private static SaveInfo ParseSaveInfo(string json)
-        {
-            var info = new SaveInfo();
-            info.daysSurvived = ParseIntField(json, "daysSurvived", 0);
-            info.difficulty = ParseIntField(json, "difficulty", 1);
-            info.fog = ParseBoolField(json, "fog", false);
-            info.mapSize = ParseIntField(json, "mapSize", 0);
-            info.rainDiff = ParseIntField(json, "rainDiff", 1);
-            info.resourceDiff = ParseIntField(json, "resourceDiff", 1);
-            info.breachDiff = ParseIntField(json, "breachDiff", 1);
-            info.factionDiff = ParseIntField(json, "factionDiff", 1);
-            info.moodDiff = ParseIntField(json, "moodDiff", 1);
-            info.familyName = ParseStringField(json, "familyName");
-            info.saveTime = ParseStringField(json, "saveTime");
-            return info;
-        }
+
+        // REMOVED: DeserializeManifest(), ParseSaveEntry(), ParseSaveInfo() - no longer needed
         
         private static int FindMatchingBracket(string s, int start, char open, char close)
         {
@@ -720,17 +609,8 @@ namespace ModAPI.Saves
             }
         }
 
-        private static string UniqueName(SaveManifest m, string name)
-        {
-            if (string.IsNullOrEmpty(name)) name = "Unnamed";
-            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var e in m.entries) if (!string.IsNullOrEmpty(e.name)) existing.Add(e.name);
-            if (!existing.Contains(name)) return name;
-            int i = 2;
-            string candidate;
-            do { candidate = name + " (" + i++ + ")"; } while (existing.Contains(candidate));
-            return candidate;
-        }
+
+        // REMOVED: UniqueName() - no longer needed, names come from XML
 
         /// <summary>
         /// Serializes a SlotManifest to JSON using manual StringBuilder formatting.
@@ -750,7 +630,7 @@ namespace ModAPI.Saves
             sb.AppendLine("{");
             sb.AppendLine($"    \"manifestVersion\": {manifest.manifestVersion},");
             sb.AppendLine($"    \"lastModified\": \"{manifest.lastModified}\",");
-            sb.AppendLine($"    \"family_name\": \"{manifest.family_name}\"");
+            sb.Append($"    \"family_name\": \"{manifest.family_name}\"");
             
             if (manifest.lastLoadedMods != null && manifest.lastLoadedMods.Length > 0)
             {
@@ -1083,7 +963,7 @@ namespace ModAPI.Saves
         /// </summary>
         public bool HasGaps()
         {
-            var entries = LoadManifest().entries;
+            var entries = ListSaves();
             if (entries == null || entries.Length == 0) return false;
 
             int startSlot = (_scenarioId == "Standard") ? 4 : 1;
@@ -1120,8 +1000,7 @@ namespace ModAPI.Saves
         /// </summary>
         public void RunCondense()
         {
-            var m = LoadManifest();
-            CondenseSlots(m);
+            CondenseSlots();
         }
     }
 

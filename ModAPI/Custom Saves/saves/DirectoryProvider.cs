@@ -84,10 +84,9 @@ namespace ModAPI.Saves
             return path;
         }
 
-        public static string ManifestPath(string scenarioId)
-        {
-            return Path.Combine(ScenarioRoot(scenarioId), "manifest.json");
-        }
+        // REMOVED: Global ManifestPath() - each slot now has its own manifest.json
+        // The slot-level manifest.json stores only mod tracking data.
+        // Save metadata is read from the XML file on demand.
 
         public static string EntryPath(string scenarioId, int absoluteSlot)
         {
