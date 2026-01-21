@@ -815,7 +815,23 @@ namespace Manager
                 return;
             }
 
+            // Preserve or re-detect mod API version as it's not always in the INI if it's edited externally
+            string version = _settings?.InstalledModApiVersion;
             _settings = settings;
+
+            if (string.IsNullOrEmpty(_settings.InstalledModApiVersion) && !string.IsNullOrEmpty(version))
+            {
+                _settings.InstalledModApiVersion = version;
+            }
+            else if (string.IsNullOrEmpty(_settings.InstalledModApiVersion) && _settings.IsGamePathValid)
+            {
+                try
+                {
+                    string smmPath = Path.Combine(Path.GetDirectoryName(_settings.GamePath), "SMM");
+                    _settings.InstalledModApiVersion = AssemblyVersionChecker.GetInstalledModApiVersion(smmPath);
+                }
+                catch { }
+            }
             
             // Re-initialize tabs with new settings
             _gameSetupTab.Initialize(_settings);
@@ -824,6 +840,7 @@ namespace Manager
             
             // Re-apply theme
             ApplyTheme(_settings.DarkMode);
+            UpdateStatusCounts();
         }
 
         private void SettingsTab_DarkModeChanged(bool isDark)
@@ -1024,6 +1041,7 @@ namespace Manager
                         {
                             _orderService.SaveOrder(_settings.ModsPath, newOrder);
                             _modManagerTab.RefreshMods();
+                            UpdateStatusCounts();
                         }
 
                         // Validate

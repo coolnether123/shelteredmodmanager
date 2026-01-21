@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Diagnostics;
 using HarmonyLib;
 using ModAPI.Harmony;
+using ModAPI.Hooks;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -91,6 +92,10 @@ namespace ModAPI.Core
             runner.Manager = this;
 
             HarmonyBootstrap.EnsurePatched();
+            
+            // Force injection in case SaveManager.Awake already ran before we could patch it
+            try { SaveManager_Injection_Patch.Inject(SaveManager.instance); } catch { }
+
             try
             {
                 var harmony = new HarmonyLib.Harmony("ShelteredModManager.PluginManager");
@@ -145,7 +150,7 @@ namespace ModAPI.Core
         {
             var modernAvailable = RuntimeCompat.IsModernSceneApi;
             var usingModern = PluginRunner.IsModernUnity;
-            MMLog.Write($"[Loader] Assembly resolution and Scene API detection complete.");
+            MMLog.Write($"[Loader] Scene API Detection: ModernAvailable={modernAvailable}, UsingModern={usingModern}");
         }
 
         private List<string> ReadLoadOrderFromFile(string modsRoot)

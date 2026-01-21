@@ -24,7 +24,9 @@ namespace ModAPI.Saves
         public static int GetMaxSlot() => _registry.GetMaxSlot();
         public static SaveEntry Create(SaveCreateOptions options) => _registry.CreateSave(options);
         public static bool Delete(string saveId) => _registry.DeleteSave(saveId);
+        public static bool DeleteBySlot(int absoluteSlot) => _registry.DeleteBySlot(absoluteSlot);
         public static SaveEntry Get(string saveId) => _registry.GetSave(saveId);
+        public static SaveEntry GetBySlot(int absoluteSlot) => _registry.GetSaveBySlot(absoluteSlot);
         public static SaveEntry Overwrite(string saveId, SaveOverwriteOptions opts, byte[] xmlBytes) => _registry.OverwriteSave(saveId, opts, xmlBytes);
         
         internal static void UpdateManifest(int absoluteSlot, SaveInfo info) => _registry.UpdateSlotManifest(absoluteSlot, info);
@@ -47,15 +49,31 @@ namespace ModAPI.Saves
             MMLog.Write("--- End of List ---");
         }
 
-        public static SaveEntry FindByUIPosition(int physicalSlot, int page, int pageSize)
+        public static SaveEntry FindByUIPosition(int physicalSlot, int page, int pageSize, bool mustExist = true)
         {
-            int absoluteIndex = (page * pageSize) + (physicalSlot - 1);
-            var allSaves = _registry.ListSaves(0, int.MaxValue);
-            if (absoluteIndex >= 0 && absoluteIndex < allSaves.Length)
+            // page 0 is vanilla (slots 1-3), custom saves start at page 1 (slots 4+)
+            if (page <= 0) return null;
+
+            // Map UI position (page, slot) to absolute slot number
+            int absoluteSlot = (page - 1) * pageSize + physicalSlot + 3;
+
+            var entry = _registry.GetSaveBySlot(absoluteSlot);
+            
+            if (entry == null)
             {
-                return allSaves[absoluteIndex];
+                MMLog.WriteDebug($"[FindByUIPosition] No entry found for slot {absoluteSlot} (page={page}, physical={physicalSlot})");
             }
-            return null;
+            else
+            {
+                var path = DirectoryProvider.EntryPath(StandardScenarioId, entry.absoluteSlot);
+                bool exists = System.IO.File.Exists(path);
+                MMLog.WriteDebug($"[FindByUIPosition] Slot {absoluteSlot} found. File exists: {exists}. Path: {path}");
+                
+                // If mustExist is true, filter out placeholders for UI
+                if (mustExist && !exists) return null;
+            }
+
+            return entry;
         }
     }
 }

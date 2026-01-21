@@ -145,6 +145,10 @@ namespace ModAPI.Hooks
         public static void SetNextLoad(SaveManager.SaveType type, string scenarioId, string saveId)
         {
             MMLog.WriteDebug($"[PlatformSaveProxy] SetNextLoad: type={type}, scenarioId={scenarioId}, saveId={saveId}");
+            
+            // Safety: Ensure proxy is injected before we register a pending load
+            try { SaveManager_Injection_Patch.Inject(SaveManager.instance); } catch { }
+
             lock (_nextLoadLock)
             {
                 NextLoad[type] = new Target { scenarioId = scenarioId, saveId = saveId };

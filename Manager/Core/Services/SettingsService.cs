@@ -162,6 +162,10 @@ namespace Manager.Core.Services
             if (raw.TryGetValue("AutoCondenseSaves", out autoCondense))
                 settings.AutoCondenseSaves = autoCondense;
 
+            string apiVersion;
+            if (raw.TryGetValue("InstalledModApiVersion", out apiVersion))
+                settings.InstalledModApiVersion = apiVersion;
+
             return settings;
         }
 
@@ -188,6 +192,7 @@ namespace Manager.Core.Services
             data["SkipHarmonyDependencyCheck"] = settings.SkipHarmonyDependencyCheck.ToString();
             data["GameBitness"] = settings.GameBitness ?? string.Empty;
             data["AutoCondenseSaves"] = settings.AutoCondenseSaves ?? "ask";
+            data["InstalledModApiVersion"] = settings.InstalledModApiVersion ?? string.Empty;
 
             WriteIniFile(data);
             

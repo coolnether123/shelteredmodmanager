@@ -39,7 +39,11 @@ namespace ModAPI.Saves
         public SaveInfo saveInfo = new SaveInfo();
     }
 
+    // OBSOLETE: SaveManifest was used for the global manifest.json file.
+    // The system now uses directory-based discovery - each slot is self-contained.
+    // Kept for backwards compatibility but should not be used.
     [Serializable]
+    [Obsolete("No longer used. Save discovery is now directory-based.")]
     public class SaveManifest
     {
         public int version = 1;

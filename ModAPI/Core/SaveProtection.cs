@@ -109,12 +109,24 @@ namespace ModAPI.Core
                     // NEW: Update the external manifest.json so the Manager and Restart diagnostics are accurate
                     try
                     {
+                        // SKIP manifest update here if it's a custom save! 
+                        // The PlatformSaveProxy calls OverwriteSave which already calls UpdateSlotManifest with the correct absolute slot.
+                        // Continuing here would use the vanilla 'type' (1, 2, or 3) and create wrong folders like Slot_1, Slot_2.
+                        if (ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave != null || 
+                            ModAPI.Hooks.PlatformSaveProxy.NextSave.ContainsKey(type))
+                        {
+                            MMLog.WriteDebug($"[SaveGamePatch] Skipping manifest update for {type} (handled by Proxy)");
+                            return;
+                        }
+
                         var info = new ModAPI.Saves.SaveInfo
                         {
                             familyName = data.info != null ? data.info.m_familyName : "Unknown",
                             daysSurvived = data.info != null ? data.info.m_daysSurvived : 0,
                             saveTime = data.info != null ? data.info.m_saveTime : DateTime.Now.ToString()
                         };
+                        
+                        MMLog.WriteDebug($"[SaveGamePatch] Updating manifest for vanilla slot {type}");
                         ModAPI.Saves.ExpandedVanillaSaves.UpdateManifest((int)type, info);
                     }
                     catch (Exception ex)
@@ -184,14 +196,30 @@ namespace ModAPI.Core
                     {
                         try
                         {
-                            // Convert SaveType to slot index
-                            int slotIndex = (int)type; 
-                             
-                            var manifest = ModAPI.Saves.SaveRegistryCore.ReadSlotManifest("Standard", slotIndex);
+                            // Use the actual custom slot if active, or if a load is pending redirect, otherwise fallback to vanilla type
+                            int absoluteSlot = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave?.absoluteSlot ?? (int)type;
+                            
+                            // Check for pending redirects
+                            if (ModAPI.Hooks.PlatformSaveProxy.NextLoad.TryGetValue(type, out var pending))
+                            {
+                                var pendingEntry = pending.scenarioId == "Standard" 
+                                    ? ModAPI.Saves.ExpandedVanillaSaves.Get(pending.saveId)
+                                    : ModAPI.Saves.ScenarioSaves.Get(pending.scenarioId, pending.saveId);
+                                    
+                                if (pendingEntry != null)
+                                {
+                                    absoluteSlot = pendingEntry.absoluteSlot;
+                                    MMLog.WriteDebug($"[LoadGamePatch] Pending load redirect found for {type} -> custom slot {absoluteSlot}");
+                                }
+                            }
+
+                            MMLog.WriteDebug($"[LoadGamePatch] Checking manifest for slot {absoluteSlot} (vanilla type={type})");
+
+                            var manifest = ModAPI.Saves.SaveRegistryCore.ReadSlotManifest("Standard", absoluteSlot);
                             if (manifest != null && manifest.lastLoadedMods != null)
                             {
                                 savedMods = manifest.lastLoadedMods.Select(m => new ModSaveData.ModInfo { id = m.modId, version = m.version }).ToList();
-                                MMLog.WriteDebug($"[LoadGamePatch] Found external manifest data. Count: {savedMods.Count}");
+                                MMLog.WriteDebug($"[LoadGamePatch] Found external manifest data for slot {absoluteSlot}. Count: {savedMods.Count}");
                             }
                         }
                         catch (Exception ex)
@@ -229,7 +257,7 @@ namespace ModAPI.Core
                         var entry = new ModAPI.Saves.SaveEntry
                         {
                             id = "temp_load_entry",
-                            absoluteSlot = (int)type,
+                            absoluteSlot = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave?.absoluteSlot ?? (int)type,
                             saveInfo = new ModAPI.Saves.SaveInfo 
                             { 
                                 familyName = data.info != null ? data.info.m_familyName : "Unknown",

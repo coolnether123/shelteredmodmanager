@@ -94,6 +94,7 @@ namespace ModAPI.Hooks
                     if (entry != null)
                     {
                         var tSlot = Traverse.Create(slotInfo);
+                        MMLog.WriteDebug($"[RefreshSaveSlotInfo] Setting Slot {entry.absoluteSlot} to LOADED. Family='{entry.saveInfo.familyName}'");
                         tSlot.Field("m_state").SetValue(SlotSelectionPanel.SlotState.Loaded);
                         tSlot.Field("m_familyName").SetValue(entry.saveInfo.familyName);
                         tSlot.Field("m_daysSurvived").SetValue(entry.saveInfo.daysSurvived);
@@ -122,6 +123,7 @@ namespace ModAPI.Hooks
                     }
                     else
                     {
+                        MMLog.WriteDebug($"[RefreshSaveSlotInfo] Setting physical slot {i+1} on page {page} to EMPTY");
                         Traverse.Create(slotInfo).Field("m_state").SetValue(SlotSelectionPanel.SlotState.Empty);
                     }
                 }
@@ -260,6 +262,9 @@ namespace ModAPI.Hooks
 
                 try
                 {
+                    if (!__instance.m_inputEnabled || (SaveManager.instance != null && SaveManager.instance.isDeleting))
+                        return false;
+
                     var t = Traverse.Create(__instance);
                     // m_chosenSlot is unreliable (-1 for new games). m_selectedSlot seems to hold the actual UI index.
                     int chosenSlotIndex = t.Field("m_selectedSlot").GetValue<int>();
@@ -267,13 +272,15 @@ namespace ModAPI.Hooks
 
                     int apiPage = page - 1;
 
-                    var entry = ExpandedVanillaSaves.FindByUIPosition(chosenSlotIndex + 1, apiPage, 3);
+                    // Pass the absolute page number (1 for first custom page)
+                    var entry = ExpandedVanillaSaves.FindByUIPosition(chosenSlotIndex + 1, page, 3);
                     
                     var virtualSaveType = (SaveManager.SaveType)(chosenSlotIndex + 1);
 
                     if (entry == null) // Creating a new game
                     {
-                        int absoluteSlot = (apiPage * 3) + chosenSlotIndex + 4;
+                        // page 1 -> slots 4, 5, 6
+                        int absoluteSlot = (page - 1) * 3 + chosenSlotIndex + 4;
                         MMLog.Write($"--- Player clicked slot {absoluteSlot} to start a new game ---");
 
                         var created = ExpandedVanillaSaves.Create(new SaveCreateOptions { name = "New Game", absoluteSlot = absoluteSlot });
@@ -307,14 +314,44 @@ namespace ModAPI.Hooks
                              SaveDetailsWindow.Show(entry, manifest, state, true, () => {
                                  // Load Callback
                                  PlatformSaveProxy.SetNextLoad(virtualSaveType, "Standard", entry.id);
+                                 
+                                 // Transfer difficulty settings just like vanilla does
+                                 DifficultyManager.StoreMenuDifficultySettings(
+                                     entry.saveInfo.rainDiff, 
+                                     entry.saveInfo.resourceDiff, 
+                                     entry.saveInfo.breachDiff, 
+                                     entry.saveInfo.factionDiff, 
+                                     entry.saveInfo.moodDiff, 
+                                     entry.saveInfo.mapSize, 
+                                     entry.saveInfo.fog);
+
+                                  // Show loader if available
+                                  var loadingGraphicLamba = t.Field("m_loadingGraphic").GetValue<GameObject>();
+                                  if (loadingGraphicLamba != null) loadingGraphicLamba.SetActive(true);
+
                                  SaveManager.instance.SetSlotToLoad(chosenSlotIndex + 1);
                              });
                              return false; // Block immediate load
                         }
 
                         PlatformSaveProxy.SetNextLoad(virtualSaveType, "Standard", entry.id);
+                        
+                        // Transfer difficulty settings just like vanilla does
+                        DifficultyManager.StoreMenuDifficultySettings(
+                            entry.saveInfo.rainDiff, 
+                            entry.saveInfo.resourceDiff, 
+                            entry.saveInfo.breachDiff, 
+                            entry.saveInfo.factionDiff, 
+                            entry.saveInfo.moodDiff, 
+                            entry.saveInfo.mapSize, 
+                            entry.saveInfo.fog);
+
+                        // Show loader if available
+                        var loadingGraphicObj = t.Field("m_loadingGraphic").GetValue<GameObject>();
+                        if (loadingGraphicObj != null) loadingGraphicObj.SetActive(true);
+
                         SaveManager.instance.SetSlotToLoad(chosenSlotIndex + 1);
-                        return true;
+                        return false; // STOP vanilla logic to prevent double-firing load
                     }
                 }
                 catch (Exception ex)
@@ -341,12 +378,18 @@ namespace ModAPI.Hooks
                     int selectedSlotIndex = t.Field("m_selectedSlot").GetValue<int>();
                     if (selectedSlotIndex > 2) return true;
 
-                    var entry = ExpandedVanillaSaves.FindByUIPosition(selectedSlotIndex + 1, page - 1, 3);
+                    // We pass mustExist: false here so we can find the entry even if SaveData.xml is missing (for corruption cleanup)
+                    var entry = ExpandedVanillaSaves.FindByUIPosition(selectedSlotIndex + 1, page, 3, false);
 
                     if (entry != null)
                     {
-                        ExpandedVanillaSaves.Delete(entry.id);
+                        MMLog.Write($"[OnDeleteMessageBox] Deleting custom slot {entry.absoluteSlot}...");
+                        ExpandedVanillaSaves.DeleteBySlot(entry.absoluteSlot);
                         t.Field("m_infoNeedsRefresh").SetValue(true);
+                    }
+                    else
+                    {
+                        MMLog.WriteWarning($"[OnDeleteMessageBox] Could not find entry to delete at physical slot {selectedSlotIndex + 1} page {page}");
                     }
                     return false;
                 }
