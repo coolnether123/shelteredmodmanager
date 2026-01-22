@@ -90,13 +90,16 @@ namespace Manager.Core.Services
 
             // Game path with auto-detection fallback
             string gamePath;
-            if (raw.TryGetValue("GamePath", out gamePath) && File.Exists(gamePath))
+            if (raw.TryGetValue("GamePath", out gamePath))
             {
                 settings.GamePath = gamePath;
             }
-            else
+            
+            if (string.IsNullOrEmpty(settings.GamePath) || !File.Exists(settings.GamePath))
             {
-                settings.GamePath = TryAutoDetectGamePath();
+                string detected = TryAutoDetectGamePath();
+                if (!string.IsNullOrEmpty(detected))
+                    settings.GamePath = detected;
             }
 
             // Mods path derived from game path
@@ -267,9 +270,25 @@ namespace Manager.Core.Services
         {
             try
             {
+                string[] exeNames = new string[] { "Sheltered.exe", "ShelteredWindows64_EOS.exe" };
+
+                // 1. Check if game is already running
+                try
+                {
+                    foreach (var exeName in exeNames)
+                    {
+                        var procs = System.Diagnostics.Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exeName));
+                        if (procs.Length > 0)
+                        {
+                            string path = procs[0].MainModule.FileName;
+                            if (File.Exists(path)) return path;
+                        }
+                    }
+                }
+                catch { }
+
+                // 2. Check current directory and parents
                 string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                
-                // Check if we're in the Sheltered folder or a subfolder
                 var searchDirs = new List<string>();
                 searchDirs.Add(exeDir);
                 
@@ -280,10 +299,38 @@ namespace Manager.Core.Services
                 if (parent != null) grandparent = parent.Parent;
                 if (grandparent != null) searchDirs.Add(grandparent.FullName);
 
-                string[] exeNames = new string[] { "Sheltered.exe", "ShelteredWindows64_EOS.exe" };
+                // 3. Check common Steam locations
+                try
+                {
+                    using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 356040"))
+                    {
+                        var installPath = key?.GetValue("InstallLocation") as string;
+                        if (!string.IsNullOrEmpty(installPath)) searchDirs.Add(installPath);
+                    }
+                }
+                catch { }
+
+                try
+                {
+                    using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam"))
+                    {
+                        var steamPath = key?.GetValue("SteamPath") as string;
+                        if (!string.IsNullOrEmpty(steamPath))
+                        {
+                            searchDirs.Add(Path.Combine(steamPath, @"steamapps\common\Sheltered"));
+                        }
+                    }
+                }
+                catch { }
+
+                // Common C: paths
+                searchDirs.Add(@"C:\Program Files (x86)\Steam\steamapps\common\Sheltered");
+                searchDirs.Add(@"C:\Program Files\Steam\steamapps\common\Sheltered");
 
                 foreach (var dir in searchDirs)
                 {
+                    if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) continue;
+
                     foreach (var exeName in exeNames)
                     {
                         string path = Path.Combine(dir, exeName);

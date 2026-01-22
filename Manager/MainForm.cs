@@ -44,7 +44,7 @@ namespace Manager
         private Timer _restartPollTimer;
         private Panel headerPanel;
         private GameSetupTab _gameSetupTab;
-        private const string APP_VERSION = "1.0.0";
+        private const string APP_VERSION = "1.0.1";
 
         public MainForm()
         {
@@ -854,8 +854,11 @@ namespace Manager
         {
             if (_settings.IsModsPathValid)
             {
-                var order = _orderService.ReadOrder(_settings.ModsPath);
-                int count = order.Length;
+                // Only count mods that are both in load order AND discovered on disk
+                var allMods = _discoveryService.DiscoverMods(_settings.ModsPath);
+                var enabledMods = _orderService.GetEnabledMods(allMods, _settings.ModsPath);
+                int count = enabledMods.Count;
+
                 string apiVersion = _settings.InstalledModApiVersion ?? "Unknown";
 
                 _statusLabel.Text = "Status: Ready";
