@@ -26,20 +26,19 @@ namespace Manager
             try
             {
                 string modApiPath = Path.Combine(smmPath, "ModAPI.dll");
-                
-                if (!File.Exists(modApiPath))
-                {
-                    return null;
-                }
+                if (!File.Exists(modApiPath)) return null;
 
-                // Load assembly bytes to avoid file locking
-                byte[] assemblyBytes = File.ReadAllBytes(modApiPath);
-                var assembly = Assembly.ReflectionOnlyLoad(assemblyBytes);
-                return assembly.GetName().Version?.ToString();
+                // Use FileVersionInfo as it's more stable on Windows 7 than ReflectionOnlyLoad
+                var versionInfo = System.Diagnostics.FileVersionInfo.GetVersionInfo(modApiPath);
+                
+                // prefer ProductVersion if available, fallback to FileVersion
+                string v = versionInfo.ProductVersion;
+                if (string.IsNullOrEmpty(v)) v = versionInfo.FileVersion;
+                return v;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[AssemblyVersionChecker] Error reading ModAPI version: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[AssemblyVersionChecker] Error reading ModAPI version: {ex.Message}");
                 return null;
             }
         }

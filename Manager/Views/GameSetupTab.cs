@@ -26,6 +26,7 @@ namespace Manager.Views
         private Label _gamePathLabel;
         private TextBox _gamePathTextBox;
         private Button _browseButton;
+        private Button _detectButton;
         
         private Label _modsPathLabel;
         private TextBox _modsPathTextBox;
@@ -100,6 +101,14 @@ namespace Manager.Views
             _gamePathTextBox.Size = new Size(500, 26);
             _gamePathTextBox.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             _gamePathTextBox.BorderStyle = BorderStyle.FixedSingle;
+            _gamePathTextBox.ReadOnly = false;
+            _gamePathTextBox.AllowDrop = true;
+            _gamePathTextBox.DragEnter += (s, e) => { if (e.Data.GetDataPresent(DataFormats.FileDrop)) e.Effect = DragDropEffects.Copy; };
+            _gamePathTextBox.DragDrop += (s, e) => 
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                if (files.Length > 0) _gamePathTextBox.Text = files[0];
+            };
 
             _browseButton = new Button();
             _browseButton.Text = "Browse...";
@@ -109,6 +118,15 @@ namespace Manager.Views
             _browseButton.Height = 28;
             _browseButton.FlatStyle = FlatStyle.Flat;
             _browseButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            
+            _detectButton = new Button();
+            _detectButton.Text = "Auto-Detect";
+            _detectButton.Font = new Font("Segoe UI", 9f);
+            _detectButton.Location = new Point(625, 48);
+            _detectButton.Width = 100;
+            _detectButton.Height = 28;
+            _detectButton.FlatStyle = FlatStyle.Flat;
+            _detectButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
             // Mods Path Section
             _modsPathLabel = new Label();
@@ -235,6 +253,7 @@ namespace Manager.Views
             this.Controls.Add(_gamePathLabel);
             this.Controls.Add(_gamePathTextBox);
             this.Controls.Add(_browseButton);
+            this.Controls.Add(_detectButton);
             this.Controls.Add(_modsPathLabel);
             this.Controls.Add(_modsPathTextBox);
             this.Controls.Add(_openModsFolderButton);
@@ -253,6 +272,7 @@ namespace Manager.Views
         private void WireEvents()
         {
             _browseButton.Click += BrowseButton_Click;
+            _detectButton.Click += DetectGameButton_Click;
             _openModsFolderButton.Click += OpenModsFolderButton_Click;
             _openGameFolderButton.Click += OpenGameFolderButton_Click;
             _launchButton.Click += LaunchButton_Click;
@@ -301,17 +321,40 @@ namespace Manager.Views
 
         private void BrowseButton_Click(object sender, EventArgs e)
         {
+            BrowseForGame();
+        }
+
+        private void BrowseForGame()
+        {
             using (var dialog = new OpenFileDialog())
             {
                 dialog.Title = "Locate Sheltered.exe";
                 dialog.Filter = "Sheltered Executable|Sheltered.exe;ShelteredWindows64_EOS.exe|All Executables|*.exe";
                 dialog.RestoreDirectory = true;
 
-                if (dialog.ShowDialog() == DialogResult.OK)
+                if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
                     _gamePathTextBox.Text = dialog.FileName;
-                    Log("Game path set: " + dialog.FileName);
+                    Log("Game path set via browser: " + dialog.FileName);
                 }
+            }
+        }
+
+        private void DetectGameButton_Click(object sender, EventArgs e)
+        {
+            Log("Searching for Sheltered installation...");
+            var settingsService = new Manager.Core.Services.SettingsService();
+            string detected = settingsService.Load().GamePath; // This triggers auto-detect if current is invalid
+            
+            if (!string.IsNullOrEmpty(detected) && File.Exists(detected))
+            {
+                _gamePathTextBox.Text = detected;
+                Log("Game found at: " + detected);
+            }
+            else
+            {
+                MessageBox.Show("Could not find Sheltered automatically. Please use 'Browse' to locate Sheltered.exe.", 
+                    "Detection Failed", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -322,7 +365,33 @@ namespace Manager.Views
             string path = _gamePathTextBox.Text;
             if (path != null) path = path.Trim();
             
-            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            if (string.IsNullOrEmpty(path))
+            {
+                _modsPathTextBox.Text = string.Empty;
+                if (_settings != null) _settings.GamePath = string.Empty;
+                UpdateStatus(false);
+                return;
+            }
+
+            // If a directory was provided, try to find the executable within it
+            if (Directory.Exists(path) && !File.Exists(path))
+            {
+                string[] possibleExes = { "Sheltered.exe", "ShelteredWindows64_EOS.exe" };
+                foreach (var exe in possibleExes)
+                {
+                    string fullPath = Path.Combine(path, exe);
+                    if (File.Exists(fullPath))
+                    {
+                        path = fullPath;
+                        _isUpdating = true;
+                        _gamePathTextBox.Text = path;
+                        _isUpdating = false;
+                        break;
+                    }
+                }
+            }
+
+            if (File.Exists(path))
             {
                 string gameDir = Path.GetDirectoryName(path);
                 string modsPath = Path.Combine(gameDir, "mods");
@@ -368,19 +437,44 @@ namespace Manager.Views
 
         private void OpenGameFolderButton_Click(object sender, EventArgs e)
         {
-            if (!string.IsNullOrEmpty(_gamePathTextBox.Text) && File.Exists(_gamePathTextBox.Text))
+            if (_settings == null) return;
+
+            if (!_settings.IsGamePathValid)
             {
-                try
+                BrowseForGame();
+                return;
+            }
+
+            string path = _gamePathTextBox.Text;
+            if (string.IsNullOrEmpty(path)) 
+            {
+                _settings.GamePath = string.Empty; 
+                BrowseForGame();
+                return;
+            }
+
+            try
+            {
+                string dir = null;
+                if (File.Exists(path))
+                    dir = Path.GetDirectoryName(path);
+                else if (Directory.Exists(path))
+                    dir = path;
+
+                if (dir != null)
                 {
-                    string gameDir = Path.GetDirectoryName(_gamePathTextBox.Text);
-                    System.Diagnostics.Process.Start("explorer.exe", gameDir);
-                    Log("Opened game folder");
+                    System.Diagnostics.Process.Start("explorer.exe", dir);
+                    Log("Opened game folder: " + dir);
                 }
-                catch (Exception ex)
+                else
                 {
-                    MessageBox.Show("Failed to open folder: " + ex.Message, "Error",
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Log("Cannot open folder: Path is invalid.");
                 }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to open folder: " + ex.Message, "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -433,6 +527,8 @@ namespace Manager.Views
                 _statusLabel.ForeColor = _isDarkMode ? Color.LightGreen : Color.Green;
                 _launchButton.Enabled = true;
                 _launchVanillaButton.Enabled = true;
+                _openGameFolderButton.Text = "Open Game Folder";
+                _openGameFolderButton.Width = 150;
             }
             else
             {
@@ -440,6 +536,8 @@ namespace Manager.Views
                 _statusLabel.ForeColor = Color.Red;
                 _launchButton.Enabled = false;
                 _launchVanillaButton.Enabled = false;
+                _openGameFolderButton.Text = "Set Game Path (.exe)";
+                _openGameFolderButton.Width = 180;
             }
 
             _modsCountLabel.Text = "Active Mods: " + enabledModCount;
@@ -479,6 +577,7 @@ namespace Manager.Views
                 _logTextBox.ForeColor = Color.LightGray;
                 
                 ApplyDarkThemeToButton(_browseButton);
+                ApplyDarkThemeToButton(_detectButton);
                 ApplyDarkThemeToButton(_openModsFolderButton);
                 ApplyDarkThemeToButton(_openGameFolderButton);
                 ApplyDarkThemeToButton(_clearLogButton);
@@ -502,6 +601,7 @@ namespace Manager.Views
                 _logTextBox.ForeColor = SystemColors.WindowText;
                 
                 ApplyLightThemeToButton(_browseButton);
+                ApplyLightThemeToButton(_detectButton);
                 ApplyLightThemeToButton(_openModsFolderButton);
                 ApplyLightThemeToButton(_openGameFolderButton);
                 ApplyLightThemeToButton(_clearLogButton);
