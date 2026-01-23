@@ -216,14 +216,6 @@ namespace ModAPI.Hooks.Paging
                     case ModCompareStatus.Missing: 
                         icon = "✗"; 
                         suffix = " [MISSING]";
-                        // Collect warnings from missing mods
-                        if (saved.warnings != null && saved.warnings.Length > 0)
-                        {
-                            foreach (var w in saved.warnings)
-                            {
-                                if (!string.IsNullOrEmpty(w)) warnings.Add($"[{saved.modId}] {w}");
-                            }
-                        }
                         break;
                     case ModCompareStatus.VersionDiff: icon = "~"; suffix = " [VER DIFF]"; break;
                 }
@@ -240,6 +232,15 @@ namespace ModAPI.Hooks.Paging
                 var savedName = CreateLabel(rowGO.transform, $"Name", $"{icon} {displayName}{suffix}",
                     Vector3.zero, 18, color, uiFont, ttfFont, 100);
                 savedName.alignment = NGUIText.Alignment.Center;
+                
+                // Collect warnings from missing mods using the display name
+                if (compareStatus == ModCompareStatus.Missing && saved.warnings != null && saved.warnings.Length > 0)
+                {
+                    foreach (var w in saved.warnings)
+                    {
+                        if (!string.IsNullOrEmpty(w)) warnings.Add($"[{displayName}] {w}");
+                    }
+                }
                 
                 string verText = compareStatus == ModCompareStatus.VersionDiff && status != null
                     ? $"   (save: v{saved.version}, active: v{status.activeVersion})"
@@ -262,23 +263,48 @@ namespace ModAPI.Hooks.Paging
             }
             
             // === WARNINGS SECTION ===
-            int warningY = -WINDOW_HEIGHT/2 + 180;
+            int warningY = -WINDOW_HEIGHT/2 + 250; // Raised from 180
             
             if (warnings.Count > 0)
             {
-                CreateLabel(root, "WarningHeader", "⚠️ WARNINGS FROM MISSING MODS:",
-                    new Vector3(-WINDOW_WIDTH/2 + 40, warningY, 0), 18, COLOR_MISSING, uiFont, ttfFont, 100);
+                var warnHeader = CreateLabel(root, "WarningHeader", "⚠️ WARNINGS FROM MISSING MODS:",
+                    new Vector3(0, warningY, 0), 18, COLOR_MISSING, uiFont, ttfFont, 100);
+                warnHeader.alignment = NGUIText.Alignment.Center;
                 
-                CreateTexturedBox(root, "WarningBg", new Vector3(0, warningY - 50, 0),
-                    WINDOW_WIDTH - 60, 80, new Color(0.3f, 0.1f, 0.1f, 0.8f), 40, false);
+                // Red background box
+                int boxHeight = 100;
+                int boxWidth = WINDOW_WIDTH - 60;
+                CreateTexturedBox(root, "WarningBg", new Vector3(0, warningY - 60, 0),
+                    boxWidth, boxHeight, new Color(0.3f, 0.1f, 0.1f, 0.8f), 40, true);
                 
-                string warningText = string.Join("\n", warnings.Take(3).ToArray());
-                if (warnings.Count > 3) warningText += $"\n... and {warnings.Count - 3} more";
+                // Scrollable container with clipping
+                var warnClippedGO = new GameObject("WarningClippedArea");
+                warnClippedGO.transform.SetParent(root, false);
+                warnClippedGO.layer = root.gameObject.layer;
+                // Move closer to camera (-50) to ensure it renders on top of the red box
+                warnClippedGO.transform.localPosition = new Vector3(0, warningY - 60, -50);
                 
-                var warnLabel = CreateLabel(root, "WarningText", warningText,
-                    new Vector3(-WINDOW_WIDTH/2 + 50, warningY - 25, 0), 14, COLOR_TEXT, uiFont, ttfFont, 100);
-                warnLabel.overflowMethod = UILabel.Overflow.ClampContent;
-                warnLabel.width = WINDOW_WIDTH - 100;
+                var warnPanel = warnClippedGO.AddComponent<UIPanel>();
+                warnPanel.depth = 10100; // higher than main panel
+                warnPanel.clipping = UIDrawCall.Clipping.SoftClip;
+                warnPanel.baseClipRegion = new Vector4(0f, 0f, boxWidth, boxHeight);
+                
+                // Construct the warning label within the scrollable area
+                string warningText = string.Join("\n", warnings.ToArray());
+                // Local Z -1 to be slightly in front of the panel just in case
+                var warnLabel = CreateLabel(warnClippedGO.transform, "WarningText", warningText,
+                    new Vector3(0, 0, -1), 15, COLOR_TEXT, uiFont, ttfFont, 120);
+                
+                warnLabel.alignment = NGUIText.Alignment.Center;
+                warnLabel.overflowMethod = UILabel.Overflow.ResizeHeight;
+                warnLabel.width = boxWidth - 40;
+                warnLabel.pivot = UIWidget.Pivot.Center; // Vertical center by default
+                warnLabel.ProcessText();
+                warnLabel.MarkAsChanged();
+                
+                // Add scroll helper for the label
+                var scrollHelper = warnClippedGO.AddComponent<WarningScrollHelper>();
+                scrollHelper.Initialize(warnLabel, boxHeight);
             }
             
             // === BUTTON ROW ===
@@ -429,7 +455,7 @@ namespace ModAPI.Hooks.Paging
             {
                 _onCancel?.Invoke();
                 Close();
-                // Mark input as consumed to prevent underlying panels from also receiving Escape
+                // Consume input to prevent underlying panels from receiving Escape
                 Input.ResetInputAxes();
             }
         }
@@ -578,44 +604,39 @@ namespace ModAPI.Hooks.Paging
                 }
                 
                 // Construct path to manifest
-                // Typically: mods/ModAPI/Saves/Standard/Slot_X/manifest.json
+                // Determine path to the slot manifest: mods/ModAPI/Saves/Standard/Slot_X/manifest.json
                 var modsRoot = Path.Combine(gameRoot, "mods");
                 var slotDir = Path.Combine(Path.Combine(Path.Combine(modsRoot, "ModAPI"), "Saves"), Path.Combine("Standard", $"Slot_{slotNumber}"));
                 var manifestPath = Path.Combine(slotDir, "manifest.json");
 
-                MMLog.Write($"[SaveDetailsWindow] Checking for manifest at: {manifestPath}");
+                MMLog.WriteDebug($"[SaveDetailsWindow] Checking for manifest at: {manifestPath}");
                 
-                // Ensure manifest exists before restart
                 if (!File.Exists(manifestPath))
                 {
-                    MMLog.Write($"[SaveDetailsWindow] Manifest doesn't exist, creating minimal manifest");
+                    MMLog.WriteDebug($"[SaveDetailsWindow] Manifest not found, generating minimal manifest for transition");
                     Directory.CreateDirectory(slotDir);
                     
-                    // Create minimal manifest with empty mod list
                     var minimalManifest = new SlotManifest
                     {
                         manifestVersion = 1,
                         lastModified = DateTime.UtcNow.ToString("o"),
-                        family_name = entry != null ? entry.saveInfo.familyName : "Unknown",
+                        family_name = entry?.saveInfo?.familyName ?? "Unknown",
                         lastLoadedMods = new LoadedModInfo[0]
                     };
                     
                     string manifestJson = JsonUtility.ToJson(minimalManifest, true);
                     File.WriteAllText(manifestPath, manifestJson);
-                    MMLog.Write($"[SaveDetailsWindow] Wrote manifest to: {manifestPath}");
-                    MMLog.Write($"[SaveDetailsWindow] Manifest content: {manifestJson}");
+                    MMLog.WriteDebug($"[SaveDetailsWindow] Wrote minimal manifest. Content:\n{manifestJson}");
                     
-                    // Verify it was written
                     if (!File.Exists(manifestPath))
                     {
-                        MMLog.WriteError($"[SaveDetailsWindow] ERROR: Failed to write manifest to {manifestPath}!");
+                        MMLog.WriteError($"[SaveDetailsWindow] Critical Error: Failed to write manifest to {manifestPath}");
                         return;
                     }
-                    MMLog.Write($"[SaveDetailsWindow] Verified manifest file exists");
                 }
                 else
                 {
-                    MMLog.Write($"[SaveDetailsWindow] Manifest already exists at: {manifestPath}");
+                    MMLog.WriteDebug($"[SaveDetailsWindow] Manifest detected at: {manifestPath}");
                 }
 
                 var req = new RestartRequest
@@ -633,8 +654,8 @@ namespace ModAPI.Hooks.Paging
                 Directory.CreateDirectory(smmBin);
                 
                 File.WriteAllText(restartPath, json);
-                MMLog.Write($"[SaveDetailsWindow] Created restart request at: {restartPath}");
-                MMLog.Write($"[SaveDetailsWindow] Payload: {json}");
+                MMLog.Write($"[SaveDetailsWindow] Application restart requested for automated mod loading. Request saved to: {restartPath}");
+                MMLog.WriteDebug($"[SaveDetailsWindow] Restart Payload: {json}");
 
                 Application.Quit();
             }
@@ -686,10 +707,10 @@ namespace ModAPI.Hooks.Paging
             float visibleHeight = maxY - minY;
             float contentHeight = items.Count * rowHeight;
             
-            _minOffset = 0f;  // Can't scroll up past top
-            _maxOffset = Mathf.Max(0f, contentHeight - visibleHeight); // Can scroll down this much
+            _minOffset = 0f;
+            _maxOffset = Mathf.Max(0f, contentHeight - visibleHeight);
             
-            MMLog.WriteDebug($"[ModListScrollHelper] Initialized: {items.Count} items, maxOffset={_maxOffset}");
+            MMLog.WriteDebug($"[ModListScrollHelper] Initialized with {items.Count} items. Max scroll offset: {_maxOffset}");
         }
         
         void Update()
@@ -707,9 +728,8 @@ namespace ModAPI.Hooks.Paging
             float uiX = mousePos.x - Screen.width / 2f;
             if (uiX < _minX || uiX > _maxX) return;
             
-            // Update scroll offset
-            // Scroll down (negative scroll wheel) = increase offset = content moves up
-            float scrollSpeed = _rowHeight; // Scroll by one row
+            // Update scroll offset (negative scroll = move content up)
+            float scrollSpeed = _rowHeight; 
             _scrollOffset -= scroll * scrollSpeed;
             _scrollOffset = Mathf.Clamp(_scrollOffset, _minOffset, _maxOffset);
             
@@ -721,9 +741,52 @@ namespace ModAPI.Hooks.Paging
                 float originalY = _originalYPositions[item];
                 var pos = item.transform.localPosition;
                 
-                // Apply scroll offset: content moving up means subtract from Y
+                // Offset the item Y position by the scroll amount
                 item.transform.localPosition = new Vector3(pos.x, originalY - _scrollOffset, pos.z);
             }
+        }
+    }
+    
+    /// <summary>
+    /// Helper for scrolling a single long UILabel within a clipped area.
+    /// </summary>
+    internal class WarningScrollHelper : MonoBehaviour
+    {
+        private UILabel _label;
+        private float _clipHeight;
+        private float _scrollY = 0f;
+        
+        public void Initialize(UILabel label, float clipHeight)
+        {
+            _label = label;
+            _clipHeight = clipHeight;
+            _scrollY = 0f;
+        }
+        
+        void Update()
+        {
+            if (_label == null) return;
+            
+            float contentHeight = _label.height;
+            if (contentHeight <= _clipHeight) return;
+            
+            float scroll = Input.GetAxis("Mouse ScrollWheel");
+            if (scroll == 0f) scroll = Input.mouseScrollDelta.y;
+            if (scroll == 0f) return;
+            
+            // Check mouse bounds (roughly center area)
+            Vector3 mousePos = Input.mousePosition;
+            float uiX = mousePos.x - Screen.width / 2f;
+            if (Mathf.Abs(uiX) > 400) return;
+            
+            float scrollSpeed = 30f;
+            _scrollY -= scroll * scrollSpeed;
+            
+            // Limit scroll based on label height vs clip area (Vertical centering logic)
+            float maxScroll = (contentHeight - _clipHeight) / 2f;
+            _scrollY = Mathf.Clamp(_scrollY, -maxScroll, maxScroll);
+            
+            _label.transform.localPosition = new Vector3(0, _scrollY, -1);
         }
     }
 }

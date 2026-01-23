@@ -585,7 +585,7 @@ namespace ModAPI.Saves
             {
                 var sd = new SaveData(xmlBytes);
                 var info = sd.info;
-                MMLog.Write($"[TryUpdateEntryInfo] Extracted Info: Family='{info.m_familyName}', Days={info.m_daysSurvived}, Difficulty={info.m_diffSetting}, Time='{info.m_saveTime}'");
+                MMLog.WriteDebug($"[TryUpdateEntryInfo] Extracted Info: Family='{info.m_familyName}', Days={info.m_daysSurvived}, Difficulty={info.m_diffSetting}, Time='{info.m_saveTime}'");
                 entry.saveInfo.daysSurvived = info.m_daysSurvived;
                 entry.saveInfo.difficulty = info.m_diffSetting;
                 entry.saveInfo.familyName = info.m_familyName;
@@ -601,7 +601,7 @@ namespace ModAPI.Saves
                 entry.saveInfo.fog = info.m_fog;
                 
                 sd.Finished();
-                MMLog.Write($"[TryUpdateEntryInfo] Successfully updated SaveEntry '{entry.id}'.");
+                MMLog.WriteDebug($"[TryUpdateEntryInfo] Successfully refreshed metadata for SaveEntry '{entry.id}'.");
             }
             catch (Exception ex)
             {
