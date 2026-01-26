@@ -23,6 +23,7 @@ namespace ModAPI.Core
         private readonly List<IModUpdate> _updates;
         private readonly List<IModShutdown> _shutdown;
         private readonly List<IModSceneEvents> _sceneEvents;
+        private readonly List<IModSessionEvents> _sessionEvents;
         private int _loadErrors;
 
         private GameObject _loaderRoot;
@@ -38,6 +39,7 @@ namespace ModAPI.Core
             _updates = new List<IModUpdate>();
             _shutdown = new List<IModShutdown>();
             _sceneEvents = new List<IModSceneEvents>();
+            _sessionEvents = new List<IModSessionEvents>();
             LoadedMods = new List<ModEntry>();
         }
 
@@ -82,6 +84,17 @@ namespace ModAPI.Core
         /// </summary>
         private void InitializeLoader(GameObject doorstepGameObject)
         {
+            // --- FIX: Force Link the ModAPI assembly ---
+            // Because plugins are loaded via bytes (no file lock), they live in an anonymous context.
+            // This resolver ensures they link back to the ALREADY LOADED ModAPI instance,
+            // preventing duplicate assembly loads and fixing IsAssignableFrom failures.
+            AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
+            {
+                string name = new AssemblyName(args.Name).Name;
+                if (name == "ModAPI" || name == "ModAPI.Core") return Assembly.GetExecutingAssembly();
+                return null;
+            };
+
             _gameRoot = Directory.GetParent(Application.dataPath).FullName;
             _modsRoot = Path.Combine(_gameRoot, "mods");
 
@@ -100,6 +113,10 @@ namespace ModAPI.Core
             {
                 var harmony = new HarmonyLib.Harmony("ShelteredModManager.PluginManager");
                 SaveProtectionPatches.ApplyPatches(harmony);
+                
+                // Track lifecycle events for plugins
+                ModAPI.Events.GameEvents.OnSessionStarted += OnSessionStarted;
+                ModAPI.Events.GameEvents.OnNewGame += OnNewGame;
             }
             catch (Exception ex)
             {
@@ -109,13 +126,13 @@ namespace ModAPI.Core
 
         private void LogAssemblyResolution()
         {
-            MMLog.Write("[Assembly Resolution]");
+            MMLog.WriteDebug("[Assembly Resolution]");
             int failures = 0;
 
             failures += LogAssembly("ModAPI", Assembly.GetExecutingAssembly());
             failures += LogAssembly("0Harmony", ResolveAssemblyByType("HarmonyLib.Harmony, 0Harmony"));
 
-            MMLog.Write($"[Assembly Resolution] Failed Assemblies: {failures}");
+            MMLog.WriteDebug($"[Assembly Resolution] Failed Assemblies: {failures}");
         }
 
         private int LogAssembly(string name, Assembly asm)
@@ -126,8 +143,8 @@ namespace ModAPI.Core
                 return 1;
             }
 
-            var path = SafeAssemblyLocation(asm);
-            MMLog.Write($"[Assembly Resolution] {name}.dll: {path} ✓");
+            var path = SafeAssemblyPath(asm);
+            MMLog.WriteDebug($"[Assembly Resolution] {name}.dll: {path} ✓");
             return 0;
         }
 
@@ -150,7 +167,7 @@ namespace ModAPI.Core
         {
             var modernAvailable = RuntimeCompat.IsModernSceneApi;
             var usingModern = PluginRunner.IsModernUnity;
-            MMLog.Write($"[Loader] Scene API Detection: ModernAvailable={modernAvailable}, UsingModern={usingModern}");
+            MMLog.WriteDebug($"[Loader] Scene API Detection: ModernAvailable={modernAvailable}, UsingModern={usingModern}");
         }
 
         private List<string> ReadLoadOrderFromFile(string modsRoot)
@@ -252,14 +269,14 @@ namespace ModAPI.Core
 
             foreach (var entry in orderedMods)
             {
-                MMLog.Write($"[loader] Processing mod: {entry.Id}");
+                MMLog.WriteDebug($"[loader] Processing mod: {entry.Id}");
 
                 List<Assembly> modAssemblies = null;
                 try
                 {
-                    MMLog.Write($"[loader] Loading assemblies for {entry.Id} from {entry.AssembliesPath}");
+                    MMLog.WriteDebug($"[loader] Loading assemblies for {entry.Id} from {entry.AssembliesPath}");
                     modAssemblies = ModDiscovery.LoadAssemblies(entry);
-                    MMLog.Write($"[loader] Loaded {modAssemblies.Count} assemblies for {entry.Id}");
+                    MMLog.WriteDebug($"[loader] Loaded {modAssemblies.Count} assemblies for {entry.Id}");
                 }
                 catch (Exception ex)
                 {
@@ -268,20 +285,24 @@ namespace ModAPI.Core
                     continue;
                 }
 
+                // Register mod and its assemblies in the global registry for cross-mod access and lookup
+                ModRegistry.Register(entry);
                 foreach (var asm in modAssemblies)
                 {
+                    ModRegistry.RegisterAssemblyForMod(asm, entry);
+
                     Type[] types = new Type[0];
                     try { types = asm.GetTypes(); }
                     catch (ReflectionTypeLoadException rtle) { types = rtle.Types.Where(x => x != null).ToArray(); }
 
-                    MMLog.Write($"[loader] Found {types.Length} types in assembly {asm.FullName}");
+                    MMLog.WriteDebug($"[loader] Found {types.Length} types in assembly {asm.FullName}");
 
                     foreach (var type in types)
                     {
                         if (type == null || type.IsAbstract || !type.IsClass) continue;
                         if (!typeof(IModPlugin).IsAssignableFrom(type)) continue;
 
-                        MMLog.Write($"[loader] Found IModPlugin: {type.FullName}");
+                        MMLog.WriteDebug($"[loader] Found IModPlugin: {type.FullName}");
 
                         try
                         {
@@ -295,10 +316,35 @@ namespace ModAPI.Core
                             var u = plugin as IModUpdate; if (u != null) _updates.Add(u);
                             var s = plugin as IModShutdown; if (s != null) _shutdown.Add(s);
                             var se = plugin as IModSceneEvents; if (se != null) _sceneEvents.Add(se);
-
-                            MMLog.Write($"[loader] Initializing plugin: {type.FullName}");
+                            var ss = plugin as IModSessionEvents; if (ss != null) _sessionEvents.Add(ss);
+                            
+                            // Register the settings provider if the plugin implements it
+                            MMLog.WriteDebug($"[loader] Initializing plugin: {type.FullName}");
                             plugin.Initialize(ctx);
-                            MMLog.Write($"[loader] Starting plugin: {type.FullName}");
+                            
+                            // Initialize Settings AFTER plugin has had a chance to create its config object
+                            var sp = plugin as ModAPI.Spine.ISettingsProvider;
+                            if (sp != null && entry != null)
+                            {
+                                entry.SettingsProvider = sp;
+                                try 
+                                {
+                                    // Auto-Load
+                                    object settingsObj = sp.GetSettingsObject();
+                                    if (settingsObj != null) 
+                                    {
+                                        var defs = sp.GetSettings();
+                                        ModAPI.Spine.SettingsSerializer.Load(entry.Id, settingsObj, defs);
+                                        sp.OnSettingsLoaded(); // Notify plugin
+                                        MMLog.Write($"[loader] Spine settings loaded for {entry.Id}");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    MMLog.WriteError($"[loader] Error auto-loading settings for {entry.Id}: {ex.Message}");
+                                }
+                            }
+                            MMLog.WriteDebug($"[loader] Starting plugin: {type.FullName}");
                             plugin.Start(ctx);
                             ctx.Log.Info("Started.");
                         }
@@ -351,6 +397,24 @@ namespace ModAPI.Core
             }
         }
 
+        internal void OnSessionStarted()
+        {
+            for (int i = 0; i < _sessionEvents.Count; i++)
+            {
+                try { _sessionEvents[i].OnSessionStarted(); }
+                catch (Exception ex) { MMLog.Write($"[loader] OnSessionStarted failed: {ex.Message}"); }
+            }
+        }
+
+        internal void OnNewGame()
+        {
+            for (int i = 0; i < _sessionEvents.Count; i++)
+            {
+                try { _sessionEvents[i].OnNewGame(); }
+                catch (Exception ex) { MMLog.Write($"[loader] OnNewGame failed: {ex.Message}"); }
+            }
+        }
+
         public void ShutdownAll()
         {
             for (int i = _shutdown.Count - 1; i >= 0; i--)
@@ -388,6 +452,7 @@ namespace ModAPI.Core
                 Mod = entry,
                 Settings = settings,
                 Log = log,
+                Game = new GameHelperImpl(),
                 GameRoot = _gameRoot,
                 ModsRoot = _modsRoot,
                 Scheduler = (Action a) => EnqueueNextFrame(a)
@@ -438,8 +503,7 @@ namespace ModAPI.Core
         {
             try 
             { 
-                byte[] assemblyBytes = File.ReadAllBytes(path);
-                return Assembly.Load(assemblyBytes); 
+                return Assembly.LoadFrom(path);
             } 
             catch (Exception ex) 
             { 
@@ -671,6 +735,7 @@ namespace ModAPI.Core
         public ModEntry Mod { get; set; }
         public ModSettings Settings { get; set; }
         public IModLogger Log { get; set; }
+        public IGameHelper Game { get; set; }
         public string GameRoot { get; set; }
         public string ModsRoot { get; set; }
         public bool IsModernUnity { get { return PluginRunner.IsModernUnity; } }

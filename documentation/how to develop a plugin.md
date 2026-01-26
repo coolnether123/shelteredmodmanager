@@ -1,4 +1,4 @@
-# How to Develop a Plugin | Sheltered Mod Manager v1.0
+# How to Develop a Plugin | Sheltered Mod Manager v1.0.1
 
 ## Prerequisites
 - Visual Studio 2017+ or JetBrains Rider
@@ -208,6 +208,13 @@ public interface IModSceneEvents
     void OnSceneLoaded(string sceneName);
     void OnSceneUnloaded(string sceneName);
 }
+
+// Session Lifecycle (v1.0.1)
+public interface IModSessionEvents
+{
+    void OnSessionStarted(); // Called when session starts (Load/New Game)
+    void OnNewGame();        // Called specifically for New Games
+}
 ```
 
 Example:
@@ -237,6 +244,7 @@ The `IPluginContext` gives you access to:
 | `PluginRoot` | Per-plugin GameObject for your components |
 | `LoaderRoot` | Global loader GameObject |
 | `Mod` | Your mod's metadata (About.json) |
+| `Game` | Unified game state helper (v1.0.1) |
 | `GameRoot` | Path to Sheltered install directory |
 | `ModsRoot` | Path to mods folder |
 | `IsModernUnity` | True if running Unity 5.4+ (Epic version) |

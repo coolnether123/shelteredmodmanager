@@ -11,7 +11,7 @@ namespace ModAPI.Harmony
     {
         static HarmonyBootstrap()
         {
-            MMLog.Write("[HarmonyBootstrap] Static constructor called. ModAPI.dll is loading.");
+            MMLog.WriteDebug("[HarmonyBootstrap] Static constructor called. ModAPI.dll is loading.");
         }
 
         private static bool _installed;
@@ -88,7 +88,7 @@ namespace ModAPI.Harmony
                     var uiPatchesType = asm.GetType("ModAPI.UI.UIPatches");
                     if (uiPatchesType != null)
                     {
-                        MMLog.Write($"[HarmonyBootstrap] UIPatches type found: {uiPatchesType.FullName}");
+                        MMLog.WriteDebug($"[HarmonyBootstrap] UIPatches type found: {uiPatchesType.FullName}");
                     }
                     else
                     {

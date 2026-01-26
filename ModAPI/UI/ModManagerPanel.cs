@@ -26,6 +26,7 @@ namespace ModAPI.UI
         private UILabel _detailDescription;
         
         private UIButton _backButton;
+        private UIButton _settingsButton;
         private bool _bookFound;
         private bool _initialized = false;
         private NGUIScrollHelper _scrollHelper;
@@ -97,6 +98,9 @@ namespace ModAPI.UI
                 // Back button
                 CreateBackButton(buttonTemplate);
 
+                // Settings button
+                CreateSettingsButton(buttonTemplate);
+
                 // Show first mod by default
                 var mods = PluginManager.LoadedMods;
                 if (mods.Count > 0) ShowDetails(mods[0]);
@@ -135,7 +139,7 @@ namespace ModAPI.UI
                 if (scenarioPanel == null) return false;
 
                 // We clone the book visuals from the ScenarioSelectionPanel to maintain game's aesthetic.
-                MMLog.Write("[ModAPI] Loading Mod Manager UI...");
+                ModAPI.Core.MMLog.WriteDebug("[ModAPI] Loading Mod Manager UI...");
                 
                 foreach (Transform child in scenarioPanel.transform)
                 {
@@ -389,14 +393,14 @@ namespace ModAPI.UI
             // Add BoxCollider so UIScrollView can detect scroll wheel and drag events.
             var descCollider = descContainer.AddComponent<BoxCollider>();
             descCollider.center = Vector3.zero;
-            descCollider.size = new Vector3(460f, 460f, 1f); 
+            descCollider.size = new Vector3(460f, 360f, 1f); 
             descCollider.isTrigger = true;
             
             // Add UIPanel for clipping.
             var descPanel = descContainer.AddComponent<UIPanel>();
             descPanel.depth = 10019; 
             descPanel.clipping = UIDrawCall.Clipping.SoftClip;
-            descPanel.baseClipRegion = new Vector4(0, 0, 460, 460); // Width x Height area.
+            descPanel.baseClipRegion = new Vector4(0, 0, 460, 360); // Width x Height area.
             
             // Add UIScrollView for basic momentum logic.
             // Note: Manual scrolling is handled in Update() to bypass NGUI coordinate quirks.
@@ -515,6 +519,80 @@ namespace ModAPI.UI
             _backButton = btn;
         }
 
+        private void CreateSettingsButton(UIButton template)
+        {
+            // Positioned under description, above back button area's counterpart on right page
+            Vector3 pos = new Vector3(300f, -305f, 0); // Centered on right page, closer to description area
+            
+            var btnGO = (GameObject)UnityEngine.Object.Instantiate(template.gameObject);
+            btnGO.transform.parent = transform;
+            btnGO.name = "SettingsButton";
+            btnGO.layer = gameObject.layer;
+            
+            // Cleanup
+            var localize = btnGO.GetComponentsInChildren<UILocalize>(true);
+            foreach (var loc in localize) UnityEngine.Object.DestroyImmediate(loc);
+            
+            var buttonMsgs = btnGO.GetComponentsInChildren<UIButtonMessage>(true);
+            foreach (var msg in buttonMsgs) UnityEngine.Object.DestroyImmediate(msg);
+            
+            btnGO.SetActive(true);
+            btnGO.transform.localPosition = pos;
+            btnGO.transform.localRotation = Quaternion.identity;
+            btnGO.transform.localScale = Vector3.one;
+            
+            // Size
+            var widget = btnGO.GetComponent<UIWidget>();
+            if (widget != null)
+            {
+                widget.width = 200;
+                widget.height = 50;
+                widget.depth = 10015;
+            }
+            
+            // Label
+            var label = btnGO.GetComponentInChildren<UILabel>();
+            if (label != null)
+            {
+                var labelLocalize = label.GetComponent<UILocalize>();
+                if (labelLocalize != null) UnityEngine.Object.DestroyImmediate(labelLocalize);
+                
+                label.text = "SETTINGS";
+                label.fontSize = 22;
+                label.color = new Color(0.1f, 0.1f, 0.1f);
+                label.alignment = NGUIText.Alignment.Center;
+                label.depth = 10020;
+                label.ProcessText();
+                label.MarkAsChanged();
+            }
+            
+            // Depths
+            var sprites = btnGO.GetComponentsInChildren<UISprite>(true);
+            foreach (var s in sprites) s.depth = 10015;
+            
+            var btn = btnGO.GetComponent<UIButton>();
+            if (btn != null)
+            {
+                if (btn.onClick != null) btn.onClick.Clear();
+                btn.isEnabled = true;
+            }
+            
+            UIEventListener.Get(btnGO).onClick = (g) => 
+            {
+                // Capture current mod
+                // We need to store current mod in a field since ShowDetails sets it
+                if (_currentMod != null)
+                {
+                    ModSettingsPanel.Show(_currentMod);
+                }
+            };
+            
+            _settingsButton = btn;
+            
+            // Only hide initially - will be shown by ShowDetails if applicable
+            btnGO.SetActive(false); 
+        }
+
         private UILabel CreateSimpleLabel(string text, float x, float y, int fontSize, Color color, NGUIText.Alignment alignment, int width)
         {
             var go = new GameObject("Label_" + text.Replace(" ", "_"));
@@ -620,7 +698,17 @@ namespace ModAPI.UI
                 scrollView.ResetPosition();
                 scrollView.UpdateScrollbars(true); 
             }
+
+            // Update Settings Button
+            _currentMod = mod;
+            if (_settingsButton != null)
+            {
+                bool hasSettings = mod.SettingsProvider != null;
+                _settingsButton.gameObject.SetActive(hasSettings);
+            }
         }
+        
+        private ModEntry _currentMod;
 
         public override void OnShow()
         {
@@ -671,7 +759,7 @@ namespace ModAPI.UI
             if (_detailDescription == null) return;
             
             // Check if description needs scrolling (height > clip area)
-            if (_detailDescription.height <= 460) return;
+            if (_detailDescription.height <= 360) return;
             
             // Check for scroll input
             float scroll = Input.GetAxis("Mouse ScrollWheel");
@@ -698,7 +786,7 @@ namespace ModAPI.UI
             
             // Clamp: Start at 150 (top), can go UP to show more content (higher Y values)
             float minY = 150f; // Starting/top position - text at top of clip area
-            float maxY = 150f + (_detailDescription.height - 460f); // Fully scrolled - shows bottom of text
+            float maxY = 150f + (_detailDescription.height - 360f); // Fully scrolled - shows bottom of text
             
             pos.y = Mathf.Clamp(pos.y, minY, maxY);
             

@@ -186,8 +186,10 @@ namespace Manager.Controls
             _descriptionBox.Location = new Point(12, 335);
             _descriptionBox.Size = new Size(280, 150);
             _descriptionBox.ReadOnly = true;
+            _descriptionBox.Multiline = true;
+            _descriptionBox.WordWrap = true;
             _descriptionBox.BorderStyle = BorderStyle.FixedSingle;
-            _descriptionBox.ScrollBars = RichTextBoxScrollBars.Vertical;
+            _descriptionBox.ScrollBars = RichTextBoxScrollBars.ForcedVertical;
 
             // Open folder button
             _openFolderButton = new Button();

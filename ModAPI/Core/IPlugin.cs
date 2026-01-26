@@ -41,6 +41,13 @@ namespace ModAPI.Core
         void OnSceneUnloaded(string sceneName);
     }
 
+    // Optional session events (opt-in) (v1.0.1) - Signals the lifecycle of a play session
+    public interface IModSessionEvents
+    {
+        void OnSessionStarted();               // called when a game session starts (New Game or Load)
+        void OnNewGame();                      // called specifically when a New Game is initialized
+    }
+
     /**
      * Context passed into plugins. This gives access to:
      *  - LoaderRoot: a global host GameObject created by the loader
@@ -49,6 +56,7 @@ namespace ModAPI.Core
      *  - Settings:   typed helpers for Config/default.json + Config/user.json
      *  - Log:        a logger that prefixes with the mod id for easier diagnostics
      *  - GameRoot/ModsRoot: convenience paths derived from the running game
+     *  - Game:       unified helper for commonly accessed game state (storage, objects)
      *  - Scheduling helpers: RunNextFrame / StartCoroutine for main-thread work
      *  - UI helpers: FindPanel("UIRoot/SomePanel") and AddComponentToPanel<T>(name)
      *
@@ -64,6 +72,7 @@ namespace ModAPI.Core
         ModEntry Mod { get; }                  // discovered mod entry (About, paths, id)
         ModSettings Settings { get; }          // settings accessor bound to this mod
         IModLogger Log { get; }                // mod-prefixed logger
+        IGameHelper Game { get; }              // unified game state helper
         string GameRoot { get; }               // e.g., <Sheltered install dir>
         string ModsRoot { get; }               // e.g., <GameRoot>/mods
         bool IsModernUnity { get; }           // true if running on Unity 5.4+ (e.g., EGS version)
@@ -80,6 +89,29 @@ namespace ModAPI.Core
         // Example: ctx.AddComponentToPanel<MyPartySetupLogic>("ExpeditionMainPanelNew");
         // Returns the component instance attached to that panel (or null if panel not found).
         T AddComponentToPanel<T>(string nameOrPath) where T : Component;
+    }
+
+    /// <summary>
+    /// High-level helpers for commonly accessed game state (v1.0.1).
+    /// Addresses the "Unified Home Storage" and "Game Logic" feedback.
+    /// </summary>
+    public interface IGameHelper
+    {
+        /// <summary>
+        /// Get the total count of an item across all shelter storage managers
+        /// (Inventory, Food, Water, Entertainment).
+        /// </summary>
+        int GetTotalOwned(string itemId);
+
+        /// <summary>
+        /// Get the total count of an item in the primary item inventory.
+        /// </summary>
+        int GetInventoryCount(string itemId);
+
+        /// <summary>
+        /// Try to find a player by their character ID.
+        /// </summary>
+        FamilyMember FindMember(string characterId);
     }
 
     // Simple logger abstraction so plugins don't depend directly on MMLog static

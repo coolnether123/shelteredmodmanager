@@ -56,7 +56,7 @@ namespace ModAPI.Hooks
             {
                 if (NextSave.TryGetValue(type, out var target))
                 {
-                    MMLog.Write($"[Proxy] Intercepting Vanilla Save ({type}) -> Redirecting to Custom ID: {target.saveId}");
+                    MMLog.WriteDebug($"[Proxy] Intercepting Vanilla Save ({type}) -> Redirecting to Custom ID: {target.saveId}");
                     
                     // This writes the file to ModAPI/Saves/Standard/... AND parses metadata
                     var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, null, data);
@@ -67,18 +67,24 @@ namespace ModAPI.Hooks
                     // Clear the "Next" target so we don't get stuck
                     NextSave.Remove(type); 
                     
-                    return true; // We handled it, don't let vanilla run
+                    if (entry != null)
+                        MMLog.Write($"[Proxy] Saved custom slot: {entry.id}");
+
+                    return true; // We handled it
                 }
             }
 
             // 2. CHECK FOR EXISTING LOADED CUSTOM GAME
             if (ActiveCustomSave != null)
             {
-                MMLog.Write($"[Proxy] Saving Active Custom Game: {ActiveCustomSave.id}");
+                MMLog.WriteDebug($"[Proxy] Saving Active Custom Game: {ActiveCustomSave.id}");
                 
                 // Update the file and metadata
                 ActiveCustomSave = ExpandedVanillaSaves.Instance.Overwrite(ActiveCustomSave.id, null, data);
                 
+                if (ActiveCustomSave != null)
+                    MMLog.Write($"[Proxy] Saved custom slot: {ActiveCustomSave.id}");
+
                 return true; // We handled it
             }
 
@@ -112,7 +118,7 @@ namespace ModAPI.Hooks
 
                         _customLoadedXml = File.ReadAllText(path);
                         ActiveCustomSave = entry;
-                        MMLog.Write($"[PlatformSaveProxy] Set active custom save to ID: {entry?.id} after loading.");
+                        MMLog.WriteDebug($"[PlatformSaveProxy] Set active custom save to ID: {entry?.id} after loading.");
                         NextLoad.Remove(type);
                         return true;
                     }

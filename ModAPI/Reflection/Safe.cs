@@ -56,6 +56,13 @@ namespace ModAPI.Reflection
             return false;
         }
 
+        public static T GetField<T>(object obj, string name)
+        {
+            T val;
+            TryGetField(obj, name, out val);
+            return val;
+        }
+
         public static T GetFieldOrDefault<T>(object obj, string name, T defaultValue)
         {
             T v;
@@ -84,6 +91,62 @@ namespace ModAPI.Reflection
             catch (Exception ex)
             {
                 MMLog.WriteDebug("Safe.SetField error: " + ex.Message);
+            }
+            return false;
+        }
+
+        // --- Property helpers -----------------------------------------------
+
+        public static bool TryGetProperty<T>(object obj, string name, out T value)
+        {
+            value = default(T);
+            if (obj == null || string.IsNullOrEmpty(name)) return false;
+
+            try
+            {
+                Type type; object instance; BindingFlags flags;
+                ResolveTarget(obj, out type, out instance, out flags);
+
+                var p = type.GetProperty(name, flags);
+                if (p != null)
+                {
+                    object raw = p.GetValue(instance, null);
+                    if (TryCast(raw, out value))
+                        return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteDebug("Safe.TryGetProperty error: " + ex.Message);
+            }
+
+            return false;
+        }
+
+        public static T GetProperty<T>(object obj, string name)
+        {
+            T val;
+            TryGetProperty(obj, name, out val);
+            return val;
+        }
+
+        public static bool SetProperty(object obj, string name, object value)
+        {
+            if (obj == null || string.IsNullOrEmpty(name)) return false;
+            try
+            {
+                Type type; object instance; BindingFlags flags;
+                ResolveTarget(obj, out type, out instance, out flags);
+                var p = type.GetProperty(name, flags);
+                if (p != null && p.CanWrite)
+                {
+                    p.SetValue(instance, value, null);
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteDebug("Safe.SetProperty error: " + ex.Message);
             }
             return false;
         }

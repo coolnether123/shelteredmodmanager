@@ -1,135 +1,84 @@
-using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Linq;
 
 namespace ModAPI.Core
 {
-    /**
-     * Mod-to-Assembly registry to resolve a plugin's mod root/id at runtime.
-     * Author: Coolnether123
-     */
+    /// <summary>
+    /// Central registry for all discovered and loaded mods.
+    /// </summary>
     public static class ModRegistry
     {
-        // Map assembly.Location (full path) -> ModEntry (discovered)
-        private static readonly Dictionary<string, ModEntry> _byAssemblyPath = new Dictionary<string, ModEntry>(StringComparer.OrdinalIgnoreCase);
+        private static Dictionary<string, ModEntry> _modsById = new Dictionary<string, ModEntry>(System.StringComparer.OrdinalIgnoreCase);
+        private static Dictionary<Assembly, ModEntry> _modByAssembly = new Dictionary<Assembly, ModEntry>();
 
-        // Registers an assembly as belonging to a discovered mod
-        public static void RegisterAssemblyForMod(Assembly asm, ModEntry entry)
+        public static void Register(ModEntry entry)
         {
-            if (asm == null || entry == null) return;
-            string key = SafeLocation(asm);
-            if (key == null) return;
-            _byAssemblyPath[key] = entry;
-        }
-
-        // Attempts to resolve the ModEntry for a given assembly 
-        public static bool TryGetModByAssembly(Assembly asm, out ModEntry entry)
-        {
-            entry = null;
-            string key = SafeLocation(asm);
-            if (key == null) return false;
-            return _byAssemblyPath.TryGetValue(key, out entry);
+            if (entry != null && !string.IsNullOrEmpty(entry.Id))
+            {
+                _modsById[entry.Id] = entry;
+            }
         }
 
-        private static string SafeLocation(Assembly asm)
-        {
-            try { return asm.Location; } catch { return null; }
-        }
-        
-        // ============================================================================
-        // Mod Discovery Utilities (Phase 1: Event System Expansion)
-        // ============================================================================
-        
-        // Track all registered mods by ID
-        private static readonly Dictionary<string, ModEntry> _byModId = new Dictionary<string, ModEntry>(StringComparer.OrdinalIgnoreCase);
-        
         /// <summary>
-        /// Register a mod entry by its ID for quick lookup.
-        /// Called internally by PluginManager during mod discovery.
+        /// Alias for Register - registers a mod by its ID.
         /// </summary>
-        internal static void RegisterModById(ModEntry entry)
+        public static void RegisterModById(ModEntry entry)
         {
-            if (entry == null || string.IsNullOrEmpty(entry.Id))
-                return;
-            
-            _byModId[entry.Id] = entry;
-            MMLog.WriteDebug($"[ModRegistry] Registered mod: {entry.Id} ({entry.Name})");
+            Register(entry);
         }
-        
-        /// <summary>
-        /// Check if a mod with the given ID is loaded and enabled.
-        /// Example: ModRegistry.Find("com.myname.mymod")
-        /// </summary>
-        /// <param name="modId">Mod ID to check</param>
-        /// <returns>True if the mod is loaded and enabled</returns>
-        public static bool Find(string modId)
+
+        public static void RegisterAssemblyForMod(Assembly assembly, ModEntry mod)
         {
-            if (string.IsNullOrEmpty(modId))
-                return false;
-            
-            return _byModId.ContainsKey(modId);
+            if (assembly != null && mod != null)
+            {
+                _modByAssembly[assembly] = mod;
+            }
         }
-        
-        /// <summary>
-        /// Get a mod entry by its ID.
-        /// </summary>
-        /// <param name="modId">Mod ID to retrieve</param>
-        /// <returns>ModEntry or null if not found</returns>
+
         public static ModEntry GetMod(string modId)
         {
-            if (string.IsNullOrEmpty(modId))
-                return null;
-            
-            ModEntry entry;
-            return _byModId.TryGetValue(modId, out entry) ? entry : null;
+            if (string.IsNullOrEmpty(modId)) return null;
+            _modsById.TryGetValue(modId, out var entry);
+            return entry;
         }
-        
-        /// <summary>
-        /// Try to get a mod entry by its ID.
-        /// </summary>
-        /// <param name="modId">Mod ID to retrieve</param>
-        /// <param name="entry">Output ModEntry</param>
-        /// <returns>True if mod was found</returns>
+
+        public static bool TryGetModByAssembly(Assembly assembly, out ModEntry mod)
+        {
+            if (assembly == null)
+            {
+                mod = null;
+                return false;
+            }
+            return _modByAssembly.TryGetValue(assembly, out mod);
+        }
+
+        public static IEnumerable<ModEntry> GetAllMods() => _modsById.Values;
+
+        // Add these back as thin wrappers
+        public static bool Find(string modId)
+            => GetMod(modId) != null;
+
         public static bool TryGetMod(string modId, out ModEntry entry)
-        {
-            entry = GetMod(modId);
-            return entry != null;
-        }
-        
-        /// <summary>
-        /// Get all loaded mod IDs.
-        /// </summary>
-        /// <returns>List of loaded mod IDs</returns>
+            => (entry = GetMod(modId)) != null;
+
         public static List<string> GetLoadedModIds()
-        {
-            return new List<string>(_byModId.Keys);
-        }
-        
-        /// <summary>
-        /// Get all loaded mod entries.
-        /// </summary>
-        /// <returns>List of ModEntry objects</returns>
+            => new List<string>(GetAllMods().Select(m => m.Id));
+
         public static List<ModEntry> GetLoadedMods()
-        {
-            return new List<ModEntry>(_byModId.Values);
-        }
-        
-        /// <summary>
-        /// Get count of loaded mods.
-        /// </summary>
-        /// <returns>Number of loaded mods</returns>
+            => new List<ModEntry>(GetAllMods());
+
         public static int GetLoadedModCount()
-        {
-            return _byModId.Count;
-        }
-        
-        /// <summary>
-        /// Check if any mods are loaded.
-        /// </summary>
-        /// <returns>True if at least one mod is loaded</returns>
+            => GetAllMods().Count();
+
         public static bool HasLoadedMods()
+            => GetLoadedModCount() > 0;
+
+
+        public static void Clear()
         {
-            return _byModId.Count > 0;
+            _modsById.Clear();
+            _modByAssembly.Clear();
         }
     }
 }

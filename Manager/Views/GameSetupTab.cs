@@ -235,7 +235,7 @@ namespace Manager.Views
             // Log container with square border
             _logContainer = new Panel();
             _logContainer.Location = new Point(20, 285);
-            _logContainer.Size = new Size(600, 150); // Dynamic sizing handled in Load event
+            _logContainer.Size = new Size(600, 100); 
             _logContainer.BorderStyle = BorderStyle.FixedSingle;
             _logContainer.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom;
 
@@ -244,8 +244,10 @@ namespace Manager.Views
             _logTextBox.Dock = DockStyle.Fill;
             _logTextBox.Font = new Font("Consolas", 9f);
             _logTextBox.ReadOnly = true;
+            _logTextBox.Multiline = true;
+            _logTextBox.WordWrap = true;
             _logTextBox.BorderStyle = BorderStyle.None;
-            _logTextBox.ScrollBars = RichTextBoxScrollBars.Vertical;
+            _logTextBox.ScrollBars = RichTextBoxScrollBars.ForcedVertical;
 
             _logContainer.Controls.Add(_logTextBox);
 
@@ -285,8 +287,10 @@ namespace Manager.Views
 
         private void GameSetupTab_Load(object sender, EventArgs e)
         {
-            // Recalculate log container width now that parent is sized
-            _logContainer.Width = this.ClientSize.Width - 40;
+            // Sync log container size to parent tab dimensions with standard 20px padding.
+            // This establishes the correct relative distance for the Bottom anchor.
+            _logContainer.Width = this.ClientSize.Width - 40; // 20px on each side
+            _logContainer.Height = this.ClientSize.Height - _logContainer.Top - 20; // 20px margin from bottom
         }
 
         private void LoadGameLogButton_Click(object sender, EventArgs e)

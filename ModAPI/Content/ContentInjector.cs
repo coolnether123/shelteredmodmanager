@@ -70,7 +70,7 @@ namespace ModAPI.Content
 
         private static void TryBootstrap()
         {
-            MMLog.Write($"[ContentInjector] TryBootstrap called. Bootstrapped={_bootstrapped}, ItemManager={(ItemManager.Instance != null)}, CraftingManager={(CraftingManager.Instance != null)}");
+            MMLog.WriteDebug($"[ContentInjector] TryBootstrap called. Bootstrapped={_bootstrapped}, ItemManager={(ItemManager.Instance != null)}, CraftingManager={(CraftingManager.Instance != null)}");
             if (_bootstrapped || ItemManager.Instance == null || CraftingManager.Instance == null) return;
 
             lock (Sync)
@@ -103,7 +103,7 @@ namespace ModAPI.Content
             var im = ItemManager.Instance;
             if (ContentRegistry.ItemPatches.Count == 0) return;
 
-            MMLog.Write($"[ContentInjector] Applying {ContentRegistry.ItemPatches.Count} item patches...");
+            MMLog.WriteDebug($"[ContentInjector] Applying {ContentRegistry.ItemPatches.Count} item patches...");
 
             foreach (var patch in ContentRegistry.ItemPatches)
             {
@@ -129,7 +129,7 @@ namespace ModAPI.Content
                 if (patch.NewRecyclingIngredients != null) SetRecyclingIngredients(def, patch.NewRecyclingIngredients);
                 if (patch.NewCategory.HasValue) SetField(def, "m_Category", (ItemManager.ItemCategory)patch.NewCategory.Value);
 
-                MMLog.Write($"[ContentInjector] Patched item '{patch.TargetItemId}' successfully.");
+                MMLog.WriteDebug($"[ContentInjector] Patched item '{patch.TargetItemId}' successfully.");
             }
         }
 
@@ -151,16 +151,16 @@ namespace ModAPI.Content
             ItemKeyToType.Clear();
             ResolvedByType.Clear();
             var items = ContentResolver.ResolveItems();
-            MMLog.Write($"[ContentInjector] BuildItemMap: ContentResolver returned {items.Count} items");
+            MMLog.WriteDebug($"[ContentInjector] BuildItemMap: ContentResolver returned {items.Count} items");
             foreach (var item in items)
             {
                 if (item?.Definition == null) continue;
                 var typeId = (ItemManager.ItemType)ContentRegistry.EnsureCustomTypeId(item.Definition);
                 ItemKeyToType[item.Definition.Id] = typeId;
                 ResolvedByType[typeId] = item;
-                MMLog.Write($"[ContentInjector] Mapped item: {item.Definition.Id} -> {typeId} ({(int)typeId})");
+                MMLog.WriteDebug($"[ContentInjector] Mapped item: {item.Definition.Id} -> {typeId} ({(int)typeId})");
             }
-            MMLog.Write($"[ContentInjector] BuildItemMap complete: {ResolvedByType.Count} items mapped");
+            MMLog.WriteDebug($"[ContentInjector] BuildItemMap complete: {ResolvedByType.Count} items mapped");
         }
 
         private static void BuildRuntimeDefinitions()
@@ -223,7 +223,7 @@ namespace ModAPI.Content
                 if (definition.IsRawFood) _rawFoodTypes.Add(itemType);
 
                 RuntimeDefinitions[itemType] = def;
-                MMLog.Write($"[ContentInjector] Built definition for {definition.Id} (Category: {category}, Stack: {definition.StackSize})");
+                MMLog.WriteDebug($"[ContentInjector] Built definition for {definition.Id} (Category: {category}, Stack: {definition.StackSize})");
             }
         }
 
@@ -234,14 +234,14 @@ namespace ModAPI.Content
             if (Safe.TryGetField(im, "m_ItemDefinitions", out Dictionary<ItemManager.ItemType, GameItemDefinition> dict))
             {
                 foreach (var kvp in RuntimeDefinitions) dict[kvp.Key] = kvp.Value;
-                MMLog.Write($"[ContentInjector] Injected {RuntimeDefinitions.Count} items into ItemManager.");
+                MMLog.WriteDebug($"[ContentInjector] Injected {RuntimeDefinitions.Count} items into ItemManager.");
             }
         }
 
         private static void InjectRecipes()
         {
             var cm = CraftingManager.Instance;
-            MMLog.Write($"[ContentInjector] InjectRecipes: Processing {ContentRegistry.Recipes.Count} recipe definitions");
+            MMLog.WriteDebug($"[ContentInjector] InjectRecipes: Processing {ContentRegistry.Recipes.Count} recipe definitions");
 
             int added = 0;
             int failed = 0;
@@ -312,7 +312,7 @@ namespace ModAPI.Content
                 if (cm.AddRecipe(recipe))
                 {
                     added++;
-                    MMLog.Write($"[ContentInjector] Added recipe '{def.Id}' producing {resultType} @ {recipe.location} Lv{recipe.level} (Unique: {def.Unique}, Locked: {def.Locked})");
+                    MMLog.WriteDebug($"[ContentInjector] Added recipe '{def.Id}' producing {resultType} @ {recipe.location} Lv{recipe.level} (Unique: {def.Unique}, Locked: {def.Locked})");
                     
                     if (Safe.TryGetField(cm, "m_RecipesInspector", out List<CraftingManager.Recipe> inspector))
                     {
@@ -325,7 +325,7 @@ namespace ModAPI.Content
                 }
             }
 
-            MMLog.Write($"[ContentInjector] Recipe injection complete: {added} added, {failed} failed");
+            MMLog.WriteDebug($"[ContentInjector] Recipe injection complete: {added} added, {failed} failed");
             
             ApplyRecipePatches();
         }
@@ -335,7 +335,7 @@ namespace ModAPI.Content
             var cm = CraftingManager.Instance;
             if (ContentRegistry.RecipePatches.Count == 0) return;
 
-            MMLog.Write($"[ContentInjector] Applying {ContentRegistry.RecipePatches.Count} recipe patches...");
+            MMLog.WriteDebug($"[ContentInjector] Applying {ContentRegistry.RecipePatches.Count} recipe patches...");
             
             foreach (var patch in ContentRegistry.RecipePatches)
             {
@@ -398,7 +398,7 @@ namespace ModAPI.Content
                 if (patch.SetUnique.HasValue) recipe.unique = patch.SetUnique.Value;
                 if (patch.SetLocked.HasValue) recipe.locked = patch.SetLocked.Value;
                 
-                MMLog.Write($"[ContentInjector] Patched recipe '{patch.TargetRecipeId}' successfully.");
+                MMLog.WriteDebug($"[ContentInjector] Patched recipe '{patch.TargetRecipeId}' successfully.");
             }
         }
 
@@ -461,7 +461,7 @@ namespace ModAPI.Content
             {
                 if (ContentRegistry.LootEntries.Count == 0) return;
                 
-                MMLog.Write($"[LootInjection] Injecting {ContentRegistry.LootEntries.Count} loot entries into MapRegion prefabs...");
+                MMLog.WriteDebug($"[LootInjection] Injecting {ContentRegistry.LootEntries.Count} loot entries into MapRegion prefabs...");
                 
                 var prefabs = (Dictionary<string, UnityEngine.Object>)AccessTools.Field(typeof(ExpeditionMap), "m_regionPrefabs").GetValue(__instance);
                 if (prefabs == null) return;
@@ -476,7 +476,7 @@ namespace ModAPI.Content
                         if (commonItems != null)
                         {
                             commonItems.Add(new ItemBias { itemType = itemType, bias = (int)entry.Weight });
-                            MMLog.Write($"[LootInjection] Added {entry.ItemId} to Common loot pool (Weight: {entry.Weight})");
+                            MMLog.WriteDebug($"[LootInjection] Added {entry.ItemId} to Common loot pool (Weight: {entry.Weight})");
                         }
                         continue;
                     }
@@ -498,7 +498,7 @@ namespace ModAPI.Content
                             if (locItems != null)
                             {
                                 locItems.Add(new ItemBias { itemType = itemType, bias = (int)entry.Weight });
-                                MMLog.Write($"[LootInjection] Added {entry.ItemId} to {prefabKvp.Key} prefab (Topography: {region.topography})");
+                                MMLog.WriteDebug($"[LootInjection] Added {entry.ItemId} to {prefabKvp.Key} prefab (Topography: {region.topography})");
                             }
                         }
                     }
@@ -511,7 +511,7 @@ namespace ModAPI.Content
             foreach (var kvp in RuntimeDefinitions)
             {
                 bool found = ItemManager.Instance.HasBeenDefined(kvp.Key);
-                MMLog.Write($"[ContentInjector] VERIFY: {kvp.Key} ({(int)kvp.Key}) exists: {found}");
+                MMLog.WriteDebug($"[ContentInjector] VERIFY: {kvp.Key} ({(int)kvp.Key}) exists: {found}");
             }
         }
 
@@ -553,7 +553,7 @@ namespace ModAPI.Content
                             t.localRotation = Quaternion.identity;
                             t.localScale = Vector3.one;
                             go.layer = __instance.gameObject.layer;
-                            MMLog.Write($"[Patch_Icon] Created CustomModIcon for custom item {__instance.m_type}");
+                            MMLog.WriteDebug($"[Patch_Icon] Created CustomModIcon for custom item {__instance.m_type}");
                         }
                         
                         ui2d = t.GetComponent<UI2DSprite>() ?? t.gameObject.AddComponent<UI2DSprite>();
@@ -648,7 +648,7 @@ namespace ModAPI.Content
                 if (ResolveItemType(recipe.RawItemId, out var rawType))
                 {
                     _cookingRecipes[rawType] = recipe;
-                    MMLog.Write($"[ContentInjector] Injected cooking recipe: {rawType} -> {recipe.CookedItemId ?? "self"} (x{recipe.HungerMultiplier})");
+                    MMLog.WriteDebug($"[ContentInjector] Injected cooking recipe: {rawType} -> {recipe.CookedItemId ?? "self"} (x{recipe.HungerMultiplier})");
                 }
                 else
                 {
