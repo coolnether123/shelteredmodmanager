@@ -1,5 +1,5 @@
 # ModAPI Developer Guide
-## Sheltered Mod Loader v1.0
+## Sheltered Mod Loader v1.0.1
 
 A practical guide covering how to use the ModAPI to create mods for Sheltered.
 
@@ -8,8 +8,9 @@ A practical guide covering how to use the ModAPI to create mods for Sheltered.
 > **Currently Implemented:**
 > - Item and food injection (ContentInjector)
 > - Custom crafting recipes
-> - Event subscriptions (OnNewDay, OnBeforeSave, OnAfterLoad, UI panel events)
-> - Logging and Settings (located in `SMM/mod_manager.log`)
+> - Event subscriptions (OnNewDay, OnBeforeSave, OnAfterLoad, OnNewGame (v1.0.1), OnSessionStarted (v1.0.1), UI panel events)
+> - Spine Mod Settings API (High-level attributes, automated UI, validation)
+> - Logging (located in `SMM/mod_manager.log`)
 > - Inter-mod communication (ModEventBus, ModRegistry)
 > - Runtime Inspector (F9)
 >
@@ -37,7 +38,8 @@ A practical guide covering how to use the ModAPI to create mods for Sheltered.
 10. [Persistent Data](#persistent-data)
 11. [Logging](#logging)
 12. [Asset Loading](#asset-loading)
-13. [Inter-Mod Features](#inter-mod-features)
+13. [Mod Settings (Spine)](#mod-settings-spine)
+14. [Inter-Mod Features](#inter-mod-features)
 
 ---
 
@@ -101,7 +103,7 @@ namespace MyMod
 }
 ```
 
-**The `context` parameter:** This is your mod's connection to the ModAPI. Use `context.Log` for logging and `context.Mod` for your mod's metadata (ID, name, version, folder path).
+**The `context` parameter:** This is your mod's connection to the ModAPI. Use `context.Log` for logging and `context.Mod` for your mod's metadata (ID, name, version, folder path). Version v1.0.1 introduced `context.Game`, a high-level helper for game state.
 
 ---
 
@@ -297,6 +299,20 @@ bool hasMetal = InventoryHelper.HasItem(ItemType.Metal);
 bool hasEnough = InventoryHelper.HasItems(ItemType.Metal, 5);
 ```
 
+### Unified Game State (v1.0.1)
+**Namespace:** `using ModAPI.Core;`
+
+Accessed via `context.Game`, this interface provides high-level helpers for game state that usually requires polling multiple internal managers.
+
+```csharp
+// Get total count of items across ALL managers (Inventory, Food, Water, Entertainment)
+int totalWood = context.Game.GetTotalOwned("wood");
+int totalRations = context.Game.GetTotalOwned("rations");
+
+// Find a person in the family by ID
+var member = context.Game.FindMember("char_father");
+```
+
 ---
 
 ## Party & Characters
@@ -395,6 +411,31 @@ GameEvents.OnPartyReturned += (ExplorationParty party) =>
 {
     MMLog.Info("Expedition returned with loot!");
 };
+
+// Session Lifecycle (v1.0.1)
+GameEvents.OnSessionStarted += () => {
+    MMLog.Info("A new play session (load or new game) has started.");
+};
+
+GameEvents.OnNewGame += () => {
+    MMLog.Info("A brand new game is being initialized!");
+};
+```
+
+### Lifecycle Interface (v1.0.1)
+Alternatively, plugins can implement `IModSessionEvents` for cleaner state management:
+
+```csharp
+public class MyMod : IModPlugin, IModSessionEvents
+{
+    public void OnSessionStarted() {
+        // Safe to re-initialize manager state here
+    }
+    
+    public void OnNewGame() {
+        // Reset persistent variables for a fresh save
+    }
+}
 ```
 
 ### Best Practices
@@ -826,3 +867,23 @@ if (ModAPIRegistry.TryGetAPI<IMyAPI>("OtherMod.API", out var api))
 ---
 
 *Sheltered Mod Loader v1.0*
+---
+
+## Mod Settings (Spine)
+
+Spine is the recommended way to handle mod configuration. It uses C# attributes to automatically generate a professional UI for your mod.
+
+For full details, see the dedicated guide: [Spine Settings API Guide](Spine_Settings_Guide.md)
+
+### Quick Example
+
+```csharp
+public class MySettings {
+    [ModSetting("Flashlight Power", MinValue = 1f, MaxValue = 10f)]
+    public float FlashPower = 1.0f;
+}
+
+public class MyMod : IModPlugin, ISettingsProvider {
+    // Implement ISettingsProvider to enable Spine
+}
+```

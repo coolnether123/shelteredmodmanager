@@ -244,25 +244,35 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
             // Add an AssemblyResolve handler to find assemblies
             System.AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
             {
-                // Check already-loaded assemblies first
-                var loaded = System.AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.FullName == args.Name);
+                var requestedName = new System.Reflection.AssemblyName(args.Name);
+                
+                // Check already-loaded assemblies first (Lenient match for ModAPI)
+                var loaded = System.AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => 
+                {
+                    var aName = a.GetName();
+                    // If names match, strict version check unless it's ModAPI/0Harmony where we allow any version
+                    if (aName.Name == requestedName.Name)
+                    {
+                         if (requestedName.Name == "ModAPI" || requestedName.Name == "0Harmony") return true; 
+                         return aName.Version == requestedName.Version;
+                    }
+                    return false;
+                });
                 if (loaded != null) return loaded;
 
-                string assemblyName = new System.Reflection.AssemblyName(args.Name).Name;
+                string assemblyName = requestedName.Name;
                 string assemblyPath = System.IO.Path.Combine(smmBinPath, assemblyName + ".dll");
 
                 if (System.IO.File.Exists(assemblyPath))
                 {
-                    byte[] assemblyBytes = System.IO.File.ReadAllBytes(assemblyPath);
-                    return System.Reflection.Assembly.Load(assemblyBytes);
+                    return System.Reflection.Assembly.LoadFrom(assemblyPath);
                 }
 
                 // Also check SMM root
                 assemblyPath = System.IO.Path.Combine(smmPath, assemblyName + ".dll");
                 if (System.IO.File.Exists(assemblyPath))
                 {
-                    byte[] assemblyBytes = System.IO.File.ReadAllBytes(assemblyPath);
-                    return System.Reflection.Assembly.Load(assemblyBytes);
+                     return System.Reflection.Assembly.LoadFrom(assemblyPath);
                 }
 
                 return null;
@@ -277,8 +287,9 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
             }
 
             // Load ModAPI and hand off to PluginManager
-            byte[] modApiBytes = System.IO.File.ReadAllBytes(modApiPath);
-            var modApiAsm = System.Reflection.Assembly.Load(modApiBytes);
+            // Use LoadFrom to preserve Location context
+            var modApiAsm = System.Reflection.Assembly.LoadFrom(modApiPath);
+            
             var pmType = modApiAsm.GetType("ModAPI.Core.PluginManager");
             var getInstance = pmType.GetMethod("getInstance", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
             var pm = getInstance.Invoke(null, null);

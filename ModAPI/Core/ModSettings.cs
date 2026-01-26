@@ -49,7 +49,26 @@ namespace ModAPI.Core
             _rootPath = rootPath;
             _configDir = Path.Combine(_rootPath ?? string.Empty, "Config");
             _defaultPath = Path.Combine(_configDir, "default.json");
-            _userPath = Path.Combine(_configDir, "user.json");
+            
+            // Centralized User Configuration Storage
+            // If a valid Mod ID is present, user settings are stored in 'mods/ModAPI/User/<ModID>/user.json'.
+            // This ensures user data remains isolated from mod updates and persists correctly across versions.
+            if (!string.IsNullOrEmpty(_modId))
+            {
+                // Construct path relative to game root: <GameRoot>/mods/ModAPI/User/<ModID>
+                string gameRoot = Directory.GetParent(Application.dataPath).FullName;
+                string modApiUser = Path.Combine(Path.Combine(Path.Combine(gameRoot, "mods"), "ModAPI"), Path.Combine("User", _modId));
+                
+                // Ensure the directory structure exists before attempting IO operations
+                if (!Directory.Exists(modApiUser)) Directory.CreateDirectory(modApiUser);
+                _userPath = Path.Combine(modApiUser, "user.json");
+            }
+            else
+            {
+                // Legacy Fallback: Store locally in the mod's Config directory
+                _userPath = Path.Combine(_configDir, "user.json");
+            }
+
             Reload();
         }
 
@@ -241,10 +260,14 @@ namespace ModAPI.Core
         {
             try
             {
-                Directory.CreateDirectory(_configDir);
+                // Ensure directory for _userPath exists (it might be different from _configDir now)
+                string userDir = Path.GetDirectoryName(_userPath);
+                if (!string.IsNullOrEmpty(userDir) && !Directory.Exists(userDir)) Directory.CreateDirectory(userDir);
+
                 var file = new ModConfigFile { entries = MapToArray(_user) };
                 var json = JsonUtility.ToJson(file, true);
                 File.WriteAllText(_userPath, json);
+                MMLog.Write($"[ModSettings] Successfully saved user config to: {_userPath}");
 
                 // Also write an INI mirror for external tools (optional consumer)
                 try
@@ -271,6 +294,23 @@ namespace ModAPI.Core
             {
                 MMLog.Write("Settings save error ('" + _userPath + "'): " + ex.Message);
             }
+        }
+
+        public void LoadSettings()
+        {
+            // For now, ModSettings handles its own loading via constructor/singleton pattern
+            // but we can expose a reload if needed.
+            // _user is equivalent to loading user.json
+        }
+
+        public void ResetToDefaults()
+        {
+            ResetUser();
+        }
+
+        public void SaveSettings()
+        {
+             SaveUser();
         }
 
         // Clears user overrides (removes all entries) but does not touch defaults. (Coolnether123)

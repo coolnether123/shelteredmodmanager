@@ -1,10 +1,10 @@
 ![Mod Manager GUI](documentation/screenshots/mod_manager_gui.png)
-# Sheltered Mod Manager v1.0
+# Sheltered Mod Manager v1.1
 
 **A modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Unicube & Team17**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.0.0-blue)]()
+[![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.1.0-blue)]()
 
 > **Credit:** Originally created by benjaminfoo (2019)  
 > **Maintained by:** Coolnether123 (2025-Present)
@@ -30,12 +30,24 @@ Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs n
 **Key Features:**
 - Plugin loader with dependency resolution and load order management
 - Unlimited custom save slots with mod tracking and verification
+- **Spine Settings API**: Automatic in-game UI generation for mods (v1.1)
 - Developer API for items, recipes, events, and Harmony patching
 - Desktop and in-game mod managers
 - Runtime inspector (F9) for debugging
 
 ![Desktop Manager](documentation/screenshots/mod_manager_gui_mods.png)
 *The Mod Manager mods tab allows you to customize your load order, resolve dependencies, and view detailed mod information.*
+
+### New in ModAPI v1.1: Spine Settings Framework (Beta)
+Introducing **Spine**, a powerful settings API that allows modders to create interactive configuration menus with almost zero UI code. Simply mark your fields with `[ModSetting]` attributes, and Spine will automatically generate the UI and handle persistence.
+
+*   **Zero UI Boilerplate**: Automatic widget generation from C# fields.
+*   **In-Game Integration**: Mod settings are injected directly into the "Mods" menu.
+*   **Presets & Snapshots**: Built-in support for global preset cycles (e.g. Difficulty).
+*   **Real-time Logic**: Validation hooks, dynamic choice lists, and dependencies.
+
+> [!TIP]
+> **Feedback Wanted!** Spine is in active development. I'm looking for mod authors to test the API and provide feedback. Check out the [Spine Settings Guide](documentation/Spine_Settings_Guide.md) to get started!
 
 The API is under active development - see the documentation for current capabilities.
 
@@ -221,8 +233,8 @@ Planned for future updates:
 | Guide | Description |
 |-------|-------------|
 | [How to Develop a Plugin](documentation/how%20to%20develop%20a%20plugin.md) | Getting started with mod development |
+| [Spine Settings Guide](documentation/Spine_Settings_Guide.md) | Attribute-based settings API |
 | [ModAPI Developer Guide](documentation/ModAPI_Developer_Guide.md) | Comprehensive API usage guide |
 | [Events Guide](documentation/Events_Guide.md) | Game and UI event subscriptions |
 | [Harmony Patches](documentation/how%20to%20develop%20a%20patch%20with%20harmony.md) | Runtime code patching |
-| [Settings Format](documentation/SETTINGS.md) | Mod configuration files |
 | [API Reference](documentation/ModAPI_Documentation.md) | Technical API reference |

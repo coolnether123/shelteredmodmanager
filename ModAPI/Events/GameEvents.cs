@@ -15,6 +15,8 @@ namespace ModAPI.Events
         public static event Action<int> OnNewDay;
         public static event Action<SaveData> OnBeforeSave;
         public static event Action<SaveData> OnAfterLoad;
+        public static event Action OnNewGame;
+        public static event Action OnSessionStarted;
         public static event Action<EncounterCharacter, EncounterCharacter> OnCombatStarted;
         public static event Action<ExplorationParty> OnPartyReturned;
 
@@ -143,6 +145,16 @@ namespace ModAPI.Events
             catch (Exception ex) { MMLog.WarnOnce("GameEvents.Invoke." + name, name + " handler threw: " + ex.Message); }
         }
 
+        internal static void TryRaiseNewGame()
+        {
+            SafeInvoke(() => OnNewGame?.Invoke(), "OnNewGame");
+        }
+
+        internal static void TryRaiseSessionStarted()
+        {
+            SafeInvoke(() => OnSessionStarted?.Invoke(), "OnSessionStarted");
+        }
+
         // Harmony patches ---------------------------------------------------
         [HarmonyPatch(typeof(GameTime), "Awake")]
         private static class GameTime_Awake_Patch
@@ -150,6 +162,18 @@ namespace ModAPI.Events
             private static void Postfix()
             {
                 GameEvents.HookDayEvents();
+                GameEvents.TryRaiseSessionStarted();
+
+                // Check for new game specifically
+                try
+                {
+                    var sm = SaveManager.instance;
+                    if (sm != null && !sm.isLoading)
+                    {
+                        GameEvents.TryRaiseNewGame();
+                    }
+                }
+                catch { }
             }
         }
 

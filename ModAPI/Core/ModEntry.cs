@@ -1,4 +1,5 @@
 using System;
+using ModAPI.Spine;
 
 namespace ModAPI.Core
 {
@@ -16,5 +17,10 @@ namespace ModAPI.Core
         public string AboutPath;     // path to About/About.json
         public string AssembliesPath;// path to Assemblies folder
         public ModAbout About;       // parsed about
+        
+        /// <summary>
+        /// Reference to the mod's settings provider if it supports the Spine configuration framework.
+        /// </summary>
+        public ISettingsProvider SettingsProvider;
     }
 }

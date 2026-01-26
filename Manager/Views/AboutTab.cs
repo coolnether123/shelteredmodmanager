@@ -99,7 +99,10 @@ namespace Manager.Views
             _descriptionBox.Location = new Point(20, yPos);
             _descriptionBox.Size = new Size(rightColumnX - 60, this.Height - yPos - 20); // Maintain gap to right column
             _descriptionBox.ReadOnly = true;
+            _descriptionBox.Multiline = true;
+            _descriptionBox.WordWrap = true;
             _descriptionBox.BorderStyle = BorderStyle.None;
+            _descriptionBox.ScrollBars = RichTextBoxScrollBars.Vertical;
             _descriptionBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom;
 
             // Links section
@@ -147,7 +150,10 @@ namespace Manager.Views
             _creditsBox.Location = new Point(rightColumnX, rightColumnY);
             _creditsBox.Size = new Size(this.Width - rightColumnX - 40, this.Height - rightColumnY - 20); // Dynamic width and height
             _creditsBox.ReadOnly = true;
+            _creditsBox.Multiline = true;
+            _creditsBox.WordWrap = true;
             _creditsBox.BorderStyle = BorderStyle.None;
+            _creditsBox.ScrollBars = RichTextBoxScrollBars.Vertical;
             _creditsBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right;
 
             // Add controls

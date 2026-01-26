@@ -354,7 +354,7 @@ namespace ModAPI.Saves
                 }
                 else
                 {
-                    MMLog.Write($"[SaveRegistryCore] UpdateSlotManifest: Gathering {loaded.Count} active mods.");
+                    MMLog.WriteDebug($"[SaveRegistryCore] UpdateSlotManifest: Gathering {loaded.Count} active mods.");
                     foreach (var mod in loaded)
                     {
                         if (mod == null) { MMLog.WriteError("[SaveRegistryCore] Found null mod entry in LoadedMods!"); continue; }

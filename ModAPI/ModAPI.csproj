@@ -12,8 +12,8 @@
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -69,18 +69,33 @@
     <Compile Include="Characters\PartyHelper.cs" />
     <Compile Include="Characters\PartyPatches.cs" />
     <Compile Include="Core\IPlugin.cs" />
+    <Compile Include="Core\ModRegistry.cs" />
     <Compile Include="Core\MMLog.cs" />
     <Compile Include="Core\LoggerExtensions.cs" />
     <Compile Include="Core\ContextExtensions.cs" />
     <Compile Include="UI\UIFlowGuard.cs" />
+    <Compile Include="UI\UIFontCache.cs" />
     <Compile Include="UI\UIUtil.cs" />
     <Compile Include="UI\UIHelper.cs" />
     <Compile Include="UI\UIFactory.cs" />
     <Compile Include="UI\ModManagerPanel.cs" />
+    <Compile Include="UI\ModSettingsPanel.cs" />
+    <Compile Include="UI\ModTooltip.cs" />
+    <Compile Include="UI\ModColorPickerPanel.cs" />
     <Compile Include="UI\NGUIScrollHelper.cs" />
     <Compile Include="UI\ContextUIExtensions.cs" />
     <Compile Include="UI\UIPatches.cs" />
     <Compile Include="UI\UIDebug.cs" />
+    <Compile Include="Spine\SettingType.cs" />
+    <Compile Include="Spine\SettingMode.cs" />
+    <Compile Include="Spine\SettingDefinition.cs" />
+    <Compile Include="Spine\SettingsHierarchy.cs" />
+    <Compile Include="Spine\ModSettingAttribute.cs" />
+    <Compile Include="Spine\ISettingsProvider.cs" />
+    <Compile Include="Spine\SettingsSerializer.cs" />
+    <Compile Include="Spine\ModSettingsDatabase.cs" />
+    <Compile Include="Spine\SpineSettingsHelper.cs" />
+    <Compile Include="Spine\UI\SpineWidgetFactory.cs" />
     <Compile Include="Harmony\HarmonyBootstrap.cs" />
     <Compile Include="Harmony\HarmonyUtil.cs" />
     <Compile Include="Harmony\HarmonyHelper.cs" />
@@ -88,7 +103,6 @@
     <Compile Include="Inspector\HierarchyUtil.cs" />
     <Compile Include="Inspector\BoundsHighlighter.cs" />
     <Compile Include="Inspector\RuntimeInspector.cs" />
-    <Compile Include="Core\ModRegistry.cs" />
     <Compile Include="Core\ModSettings.cs" />
     <Compile Include="Core\ModAbout.cs" />
     <Compile Include="Core\ModEntry.cs" />
@@ -96,6 +110,7 @@
     <Compile Include="Core\ModDiscovery.cs" />
     <Compile Include="Core\ModPrefs.cs" />
     <Compile Include="Core\RuntimeCompat.cs" />
+    <Compile Include="Core\GameHelperImpl.cs" />
     <Compile Include="Content\AssetLoader.cs" />
     <Compile Include="Util\SceneCompat.cs" />
     <Compile Include="Util\SceneUtil.cs" />
@@ -133,6 +148,7 @@
     <Compile Include="Custom Saves\saves\SaveRegistryCore.cs" />
     <Compile Include="Custom Saves\saves\ScenarioRegistry.cs" />
     <Compile Include="Custom Saves\saves\ScenarioSaves.cs" />
+    <Compile Include="Examples\SpineHarmonyShowcase.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

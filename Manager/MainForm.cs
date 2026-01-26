@@ -44,7 +44,7 @@ namespace Manager
         private Timer _restartPollTimer;
         private Panel headerPanel;
         private GameSetupTab _gameSetupTab;
-        private const string APP_VERSION = "1.0.1";
+        private const string APP_VERSION = "1.1.0";
 
         public MainForm()
         {

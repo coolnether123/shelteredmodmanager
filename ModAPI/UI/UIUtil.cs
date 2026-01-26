@@ -6,21 +6,51 @@ using ModAPI.Core;
 namespace ModAPI.UI
 {
     /// <summary>
-    /// NGUI helpers for cloning, labeling, spacing, click blocking, and creating
-    /// overlay/labels with sane defaults (panel, font, depth, anchors).
+    /// Anchor corner positions for UI elements.
     /// </summary>
+    public enum AnchorCorner
+    {
+        TopLeft,
+        TopRight,
+        BottomLeft,
+        BottomRight,
+        Center
+    }
+
+    /// <summary>
+    /// Options for creating labels with CreateLabel method.
+    /// </summary>
+    public class UILabelOptions
+    {
+        public string text = "";
+        public int fontSize = 16;
+        public Vector3 localPosition = Vector3.zero;
+        public AnchorCorner anchor = AnchorCorner.Center;
+        public NGUIText.Alignment alignment = NGUIText.Alignment.Left;
+        public Color color = Color.white;
+        public int depth = 10020;
+    }
+
     public static class UIUtil
     {
-        private static readonly Stack<GameObject> _clickBlockers =
-            new Stack<GameObject>();
+        private static readonly Stack<GameObject> _clickBlockers = new Stack<GameObject>();
+        private static Texture2D _cachedWhiteTex;
 
-        /// <summary>
-        /// Clones a UIButton template under the specified parent, strips UILocalize and UIButtonMessage,
-        /// clears UIButton.onClick, and sets all UILabels to the provided text.
-        /// Returns the new UIButton instance (or null on failure).
-        /// </summary>
-        public static UIButton CloneButton(UIButton template, Transform parent,
-            string text)
+        public static Texture2D WhiteTexture
+        {
+            get
+            {
+                if (_cachedWhiteTex == null)
+                {
+                    _cachedWhiteTex = new Texture2D(2, 2);
+                    for (int i = 0; i < 4; i++) _cachedWhiteTex.SetPixel(i % 2, i / 2, Color.white);
+                    _cachedWhiteTex.Apply();
+                }
+                return _cachedWhiteTex;
+            }
+        }
+
+        public static UIButton CloneButton(UIButton template, Transform parent, string text)
         {
             if (template == null || parent == null) return null;
 
@@ -35,274 +65,197 @@ namespace ModAPI.UI
             cloneGO.transform.localScale = templateGO.transform.localScale;
             cloneGO.layer = parent.gameObject.layer;
 
-            var locals = cloneGO.GetComponentsInChildren<UILocalize>(true);
-            for (int i = 0; i < locals.Length; i++)
-                if (locals[i] != null) UnityEngine.Object.Destroy(locals[i]);
-
-            var msgs = cloneGO.GetComponentsInChildren<UIButtonMessage>(true);
-            for (int i = 0; i < msgs.Length; i++)
-                if (msgs[i] != null) UnityEngine.Object.Destroy(msgs[i]);
+            // Cleanup
+            foreach (var loc in cloneGO.GetComponentsInChildren<UILocalize>(true)) UnityEngine.Object.Destroy(loc);
+            foreach (var msg in cloneGO.GetComponentsInChildren<UIButtonMessage>(true)) UnityEngine.Object.Destroy(msg);
+            foreach (var anchor in cloneGO.GetComponentsInChildren<UIAnchor>(true)) UnityEngine.Object.Destroy(anchor);
 
             var btn = cloneGO.GetComponent<UIButton>();
             if (btn != null && btn.onClick != null) btn.onClick.Clear();
+
+            // Fix NGUI Layer mismatch (Recursively set layer)
+            NGUITools.SetLayer(cloneGO, parent.gameObject.layer);
+
+            // Fix Invisible Widgets (Reset Alpha/Color from potentially hidden templates)
+            foreach (var w in cloneGO.GetComponentsInChildren<UIWidget>(true))
+            {
+                w.alpha = 1f;
+                // Don't override color blindly as it might destroy styling, but ensure alpha is up.
+                // w.color = Color.white; 
+                w.enabled = true; // Ensure component execution
+            }
 
             SetAllLabels(cloneGO, text);
             return btn;
         }
 
-        /// Measures the local Y delta from A to B. Useful for stacking clones vertically.
-        /// </summary>
-        public static float MeasureVerticalSpacing(UIButton a, UIButton b)
-        {
-            if (a == null || b == null) return 0f;
-            return b.transform.localPosition.y - a.transform.localPosition.y;
-        }
-
-        /// Sets all UILabels under the GameObject to the specified text.
-        /// </summary>
         public static void SetAllLabels(GameObject go, string text)
         {
             if (go == null) return;
             var labels = go.GetComponentsInChildren<UILabel>(true);
-            for (int i = 0; i < labels.Length; i++)
-                if (labels[i] != null) labels[i].text = text;
-        }
-
-        public static GameObject PushClickBlocker(Transform parent, int depth)
-        {
-            if (parent == null) return null;
-
-            var go = new GameObject("UIUtil_ClickBlocker");
-            go.transform.parent = parent;
-            go.transform.localPosition = Vector3.zero;
-            go.transform.localRotation = Quaternion.identity;
-            go.transform.localScale = Vector3.one;
-            go.layer = parent.gameObject.layer;
-
-            var panel = go.AddComponent<UIPanel>();
-            panel.depth = depth;
-            panel.alpha = 0f;
-
-            var col = go.AddComponent<BoxCollider>();
-            col.isTrigger = true;
-            col.center = Vector3.zero;
-            col.size = new Vector3(10000f, 10000f, 0.2f);
-
-            var lis = UIEventListener.Get(go);
-            lis.onClick += (_) => { };
-
-            _clickBlockers.Push(go);
-            return go;
-        }
-
-        /// Pops and destroys the most recent click blocker if present.
-        /// </summary>
-        public static void PopClickBlocker()
-        {
-            if (_clickBlockers.Count == 0) return;
-            var go = _clickBlockers.Pop();
-            if (go != null) UnityEngine.Object.Destroy(go);
-        }
-
-        public static GameObject CloneAndReposition(GameObject template,
-            Vector3 localOffset, Transform parent = null)
-        {
-            if (template == null) return null;
-
-            var clone = UnityEngine.Object.Instantiate(template) as GameObject;
-            if (clone == null) return null;
-
-            var targetParent = parent != null ? parent : template.transform.parent;
-            if (targetParent != null)
-            {
-                clone.transform.SetParent(targetParent, false);
-                clone.layer = targetParent.gameObject.layer;
-            }
-
-            clone.name = template.name + "_Clone";
-            clone.transform.localScale = template.transform.localScale;
-            clone.transform.localRotation = template.transform.localRotation;
-            clone.transform.localPosition =
-                template.transform.localPosition + localOffset;
-            return clone;
-        }
-
-        public static T CloneAndReposition<T>(T template, Vector3 localOffset,
-            Transform parent = null) where T : Component
-        {
-            if (template == null) return null;
-            var go = template.gameObject;
-            var cloneGo = CloneAndReposition(go, localOffset, parent);
-            return cloneGo != null ? cloneGo.GetComponent<T>() : null;
-        }
-
-        // --------------------------------------------------------------------------
-        // New broad helpers for labels/panels/fonts/anchoring
-        // --------------------------------------------------------------------------
-
-        public enum AnchorCorner
-        {
-            TopLeft,
-            TopRight,
-            BottomLeft,
-            BottomRight,
-            Center
+            foreach (var l in labels) if (l != null) l.text = text;
         }
 
         /// <summary>
-        /// Options for UIUtil.CreateLabel covering text/font/color/size/alignment, depth, and placement.
-        /// Anchor + pixelOffset control where the label appears in NGUI virtual coordinates (1 unit ~= 1 pixel).
-        /// Example: TopRight + offset(-10, -10) = 10px left/down from the top-right corner.
-        /// Field notes:
-        ///   - effect/effectColor configure outline/drop-shadow.
-        ///   - relativeDepth lifts above nearby UI; absoluteDepth overrides if set.
-        ///   - uiFontName searches existing UIFonts by substring; falls back to TTF via trueTypeFontName (Arial by default).
-        ///   - resizeFreely lets UILabel auto-size to content; disable for fixed-size labels.
-        /// This object can be reused; missing values get sensible defaults.
+        /// Quick helper to create a label. Defaults depth to 10020 to sit above standard backgrounds.
         /// </summary>
-        [Serializable]
-        public class UILabelOptions
+        public static UILabel CreateLabelQuick(GameObject parent, string text, int size, Vector3 pos)
         {
-            public string text = "Label";
-            public Color color = Color.white;
-            public int fontSize = 22;
-            public NGUIText.Alignment alignment = NGUIText.Alignment.Left;
-            public UILabel.Effect effect = UILabel.Effect.Outline;
-            public Color effectColor = new Color(0f, 0f, 0f, 0.9f);
+            var go = NGUITools.AddChild(parent);
+            go.transform.localPosition = pos;
+            if (parent != null) NGUITools.SetLayer(go, parent.layer);
 
-            // Layout
-            public AnchorCorner anchor = AnchorCorner.TopRight;
-            public Vector2 pixelOffset = new Vector2(-10, -10);
+            var lbl = go.AddComponent<UILabel>();
+            lbl.text = text;
+            lbl.fontSize = size;
+            lbl.overflowMethod = UILabel.Overflow.ResizeFreely;
+            lbl.depth = 10020; // Safe default above backgrounds (usually 10000-10010)
 
-            // Depth
-            public int relativeDepth = 10; // added on top of current max
-            public int? absoluteDepth = null; // exact depth if set
-
-            // Fonts (optional)
-            public string uiFontName = null; // name of UIFont to use if found
-            public string trueTypeFontName = null; // fallback TTF name (Arial by
-                                                   // default)
-
-            // Misc
-            public bool resizeFreely = true;
-        }
-
-        /// <summary>
-        /// Create an NGUI UILabel under 'parent' with sensible defaults:
-        /// - Ensures it's under a UIPanel (creates one if necessary)
-        /// - Chooses a font (copy nearby UILabel, else UIFont by name, else TTF)
-        /// - Sets depth above existing widgets
-        /// - Positions using UIRoot's virtual coordinates by anchor + pixelOffset
-        /// Returns the created UILabel (or null on failure).
-        /// </summary>
-        public static UILabel CreateLabel(GameObject parent, UILabelOptions opts,
-            out UIPanel usedPanel)
-        {
-            usedPanel = null;
-            if (parent == null) return null;
-            if (opts == null) opts = new UILabelOptions();
-
-            // Ensure we are under a UIPanel
-            var panel = NGUITools.FindInParents<UIPanel>(parent);
-            if (panel == null)
+            // Font Fallback
+            var anyLabel = UnityEngine.Object.FindObjectOfType<UILabel>();
+            if (anyLabel != null && anyLabel.bitmapFont != null)
             {
-                panel = parent.GetComponent<UIPanel>();
-                if (panel == null) panel = parent.AddComponent<UIPanel>();
-            }
-            usedPanel = panel;
-
-            var uiRoot = NGUITools.FindInParents<UIRoot>(panel != null
-                ? panel.gameObject
-                : parent) ?? UnityEngine.Object.FindObjectOfType<UIRoot>();
-
-            // Create child for the label
-            var go = new GameObject("UIUtil_Label");
-            go.transform.SetParent(parent.transform, false);
-            go.layer = parent.layer;
-
-            var label = go.AddComponent<UILabel>();
-            label.color = opts.color;
-            label.fontSize = opts.fontSize;
-            label.alignment = opts.alignment;
-            label.effectStyle = opts.effect;
-            label.effectColor = opts.effectColor;
-            label.alpha = 1f;
-            label.text = opts.text ?? string.Empty;
-
-            if (opts.resizeFreely)
-                label.overflowMethod = UILabel.Overflow.ResizeFreely;
-
-            // Font choice: 1) by name 2) copy nearby UILabel 3) any UILabel 4) TTF
-            UILabel sample = NGUITools.FindInParents<UILabel>(parent);
-            if (sample == null)
-            {
-                var all = UnityEngine.Object.FindObjectsOfType<UILabel>();
-                if (all != null && all.Length > 0) sample = all[0];
-            }
-
-            UIFont chosenUIFont = null;
-            Font chosenTTF = null;
-
-            if (!string.IsNullOrEmpty(opts.uiFontName))
-                chosenUIFont = FindUIFont(opts.uiFontName);
-
-            if (chosenUIFont == null && sample != null) chosenUIFont = sample.bitmapFont;
-            if (chosenUIFont == null && sample != null) chosenTTF = sample.trueTypeFont;
-
-            if (chosenUIFont != null)
-            {
-                label.bitmapFont = chosenUIFont;
-                label.trueTypeFont = null;
+                lbl.bitmapFont = anyLabel.bitmapFont;
             }
             else
             {
-                if (chosenTTF == null)
-                    chosenTTF = Resources.GetBuiltinResource<Font>("Arial.ttf");
-                label.trueTypeFont = chosenTTF;
-                label.bitmapFont = null;
+                var arial = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                if (arial != null) lbl.trueTypeFont = arial;
             }
 
-            // Depth above others
-            int targetDepth = opts.absoluteDepth.HasValue
-                ? opts.absoluteDepth.Value
-                : ComputeSafeDepth(panel, opts.relativeDepth);
-            label.depth = targetDepth;
+            return lbl;
+        }
 
-            // Position by anchor using UIRoot coords
-            var widget = label.GetComponent<UIWidget>();
-            if (widget != null) widget.pivot = PivotFor(opts.anchor);
+        public static UIButton CreateButton(GameObject parent, GameObject templateGO, string text, int width, int height, Vector3 localPos, Action onClick)
+        {
+            if (templateGO == null || parent == null) return null;
 
-            var pos = ComputeAnchorPosition(uiRoot, opts.anchor, opts.pixelOffset);
-            go.transform.localPosition = pos;
-            go.transform.localScale = Vector3.one;
+            // Ensure template has a button component
+            var templateBtn = templateGO.GetComponent<UIButton>();
+            if (templateBtn == null) return null;
 
-            Debug.Log("[UIUtil] CreateLabel -> parent=" + parent.name +
-                      " panel=" + (panel != null ? panel.name : "<none>") +
-                      " depth=" + targetDepth +
-                      " anchor=" + opts.anchor +
-                      " pos=" + pos.ToString("F1") +
-                      " font=" + (label.bitmapFont != null
-                                     ? "UIFont:" + label.bitmapFont.name
-                                     : ("TTF:" + (label.trueTypeFont != null
-                                                       ? label.trueTypeFont.name
-                                                       : "<null>"))));
+            var btn = CloneButton(templateBtn, parent.transform, text);
+            if (btn != null)
+            {
+                btn.transform.localPosition = localPos;
 
+                // Adjust Size
+                var sprite = btn.GetComponentInChildren<UISprite>();
+                if (sprite != null) { sprite.width = width; sprite.height = height; }
+                var tex = btn.GetComponentInChildren<UITexture>();
+                if (tex != null) { tex.width = width; tex.height = height; }
+
+                var box = btn.GetComponent<BoxCollider>();
+                if (box != null) box.size = new Vector3(width, height, 1);
+
+                UIEventListener.Get(btn.gameObject).onClick = (_) => onClick?.Invoke();
+            }
+            return btn;
+        }
+
+        /// <summary>
+        /// Create a button using an automatically found template.
+        /// </summary>
+        public static UIButton CreateButton(GameObject parent, string text, int width, int height, Vector3 localPos, Action onClick)
+        {
+            var template = FindAnyButtonTemplate();
+            if (template == null) return null;
+            return CreateButton(parent, template.gameObject, text, width, height, localPos, onClick);
+        }
+
+        public static GameObject CreatePanelBackground(GameObject parent, int width, int height)
+        {
+            var go = new GameObject("Background");
+            go.transform.parent = parent.transform;
+            go.transform.localPosition = Vector3.zero;
+            go.layer = parent.layer;
+
+            var tex = go.AddComponent<UITexture>();
+            tex.mainTexture = WhiteTexture;
+            var shader = Shader.Find("Unlit/Transparent Colored");
+            if (shader != null) tex.shader = shader;
+
+            tex.width = width;
+            tex.height = height;
+            tex.depth = 10005; // Standard Background Depth
+            tex.color = new Color(0.1f, 0.1f, 0.15f, 0.95f);
+
+            // Add Input Blocker
+            var collider = go.AddComponent<BoxCollider>();
+            collider.size = new Vector3(width, height, 1f);
+            collider.center = Vector3.zero;
+            collider.isTrigger = true; // Trigger allows UI events but blocks raycasts in NGUI (usually) - wait, NGUI needs non-trigger for Raycast? 
+            // NGUI uses Physics.Raycast. It hits colliders. 
+            // To block input, we just need a collider. 
+            // Let's make sure it's on the right layer in the calling code.
+            collider.isTrigger = true; // Use trigger to avoid physics interactions if any
+
+            return go;
+        }
+
+        public static UIButton FindAnyButtonTemplate()
+        {
+            var all = UnityEngine.Object.FindObjectsOfType<UIButton>();
+            foreach (var b in all) if (b != null && b.gameObject.activeInHierarchy) return b;
+            return all.Length > 0 ? all[0] : null;
+        }
+
+        /// <summary>
+        /// Computes a safe depth value for UI elements based on parent panel depth.
+        /// </summary>
+        public static int ComputeSafeDepth(UIPanel parentPanel, int offset = 0)
+        {
+            if (parentPanel == null) return 10000 + offset;
+            return parentPanel.depth + offset;
+        }
+
+        /// <summary>
+        /// Comprehensive label creation with anchor positioning.
+        /// </summary>
+        public static UILabel CreateLabel(GameObject parent, string text, int fontSize, Vector3 localPos, AnchorCorner anchor = AnchorCorner.Center)
+        {
+            var label = CreateLabelQuick(parent, text, fontSize, localPos);
+            if (label != null)
+            {
+                label.pivot = PivotFor(anchor);
+                label.alignment = NGUIText.Alignment.Left;
+            }
             return label;
         }
 
         /// <summary>
-        /// Ensure a very-high-depth overlay UIPanel under UIRoot suitable for
-        /// temporary mod overlays. Reuses existing if present.
+        /// Create a label using UILabelOptions configuration object.
         /// </summary>
-        public static UIPanel EnsureOverlayPanel(string name = "ModAPI_OverlayPanel",
-            int depth = 50000)
+        public static UILabel CreateLabel(GameObject parent, UILabelOptions opts, out UIPanel usedPanel)
+        {
+            usedPanel = null;
+            if (opts == null || parent == null) return null;
+
+            var label = CreateLabelQuick(parent, opts.text, opts.fontSize, opts.localPosition);
+            if (label != null)
+            {
+                label.pivot = PivotFor(opts.anchor);
+                label.alignment = opts.alignment;
+                label.color = opts.color;
+                label.depth = opts.depth;
+            }
+
+            return label;
+        }
+
+        private static UIWidget.Pivot PivotFor(AnchorCorner corner)
+        {
+            if (corner == AnchorCorner.TopLeft) return UIWidget.Pivot.TopLeft;
+            if (corner == AnchorCorner.TopRight) return UIWidget.Pivot.TopRight;
+            if (corner == AnchorCorner.BottomLeft) return UIWidget.Pivot.BottomLeft;
+            if (corner == AnchorCorner.BottomRight) return UIWidget.Pivot.BottomRight;
+            return UIWidget.Pivot.Center;
+        }
+
+        public static UIPanel EnsureOverlayPanel(string name = "ModAPI_OverlayPanel", int depth = 50000)
         {
             var root = UnityEngine.Object.FindObjectOfType<UIRoot>();
-            if (root == null)
-            {
-                Debug.LogWarning("[UIUtil] EnsureOverlayPanel: no UIRoot in scene.");
-                return null;
-            }
+            if (root == null) return null;
 
             var tf = root.transform.Find(name);
             GameObject go = tf != null ? tf.gameObject : null;
@@ -322,98 +275,20 @@ namespace ModAPI.UI
             return panel;
         }
 
-        /// <summary>
-        /// Compute a safe depth on a panel: max widget depth + relativeAdd.
-        /// </summary>
-        public static int ComputeSafeDepth(UIPanel panel, int relativeAdd)
+        public static UITexture CreateFlatTexture(GameObject parent, int width, int height, Color color)
         {
-            int max = 0;
-            if (panel != null)
-            {
-                var widgets = panel.GetComponentsInChildren<UIWidget>(true);
-                for (int i = 0; i < widgets.Length; i++)
-                    if (widgets[i] != null && widgets[i].depth > max)
-                        max = widgets[i].depth;
-            }
-            return max + Math.Max(0, relativeAdd);
-        }
-
-        public static UIFont FindUIFont(string nameContains)
-        {
-            if (string.IsNullOrEmpty(nameContains)) return null;
-            try
-            {
-                var fonts = Resources.FindObjectsOfTypeAll(typeof(UIFont)) as UIFont[];
-                if (fonts != null)
-                {
-                    for (int i = 0; i < fonts.Length; i++)
-                    {
-                        var f = fonts[i];
-                        if (f != null && f.name.IndexOf(nameContains,
-                                StringComparison.OrdinalIgnoreCase) >= 0)
-                            return f;
-                    }
-                }
-            }
-            catch (Exception ex) { MMLog.WarnOnce("UIUtil.FindUIFont", "Error finding UI font: " + ex.Message); }
-            return null;
-        }
-
-        // --- internals -----------------------------------------------------------
-
-        public static UIButton FindAnyButtonTemplate()
-        {
-            var all = UnityEngine.Object.FindObjectsOfType<UIButton>();
-            if (all != null && all.Length > 0)
-            {
-                foreach (var b in all)
-                {
-                    if (b != null && b.gameObject.activeInHierarchy) return b;
-                }
-                return all[0];
-            }
-            return null;
-        }
-
-        private static UIWidget.Pivot PivotFor(AnchorCorner a)
-        {
-            switch (a)
-            {
-                case AnchorCorner.TopLeft: return UIWidget.Pivot.TopLeft;
-                case AnchorCorner.TopRight: return UIWidget.Pivot.TopRight;
-                case AnchorCorner.BottomLeft: return UIWidget.Pivot.BottomLeft;
-                case AnchorCorner.BottomRight: return UIWidget.Pivot.BottomRight;
-                default: return UIWidget.Pivot.Center;
-            }
-        }
-
-        private static Vector3 ComputeAnchorPosition(UIRoot root, AnchorCorner a,
-            Vector2 inset)
-        {
-            float halfH, halfW;
-            if (root != null)
-            {
-                int ah = root.activeHeight;
-                halfH = ah * 0.5f;
-                float aspect = (float)Screen.width / Math.Max(1, Screen.height);
-                halfW = halfH * aspect;
-            }
-            else
-            {
-                halfH = Screen.height * 0.5f;
-                halfW = Screen.width * 0.5f;
-            }
-
-            float x = 0f, y = 0f;
-            switch (a)
-            {
-                case AnchorCorner.TopLeft: x = -halfW; y = halfH; break;
-                case AnchorCorner.TopRight: x = halfW; y = halfH; break;
-                case AnchorCorner.BottomLeft: x = -halfW; y = -halfH; break;
-                case AnchorCorner.BottomRight: x = halfW; y = -halfH; break;
-                default: x = 0f; y = 0f; break;
-            }
-            return new Vector3(x + inset.x, y + inset.y, 0f);
+            var go = NGUITools.AddChild(parent);
+            var tex = go.AddComponent<UITexture>();
+            tex.width = width;
+            tex.height = height;
+            tex.color = color;
+            
+            tex.mainTexture = WhiteTexture;
+            
+            var shader = Shader.Find("Unlit/Transparent Colored");
+            if (shader != null) tex.shader = shader;
+            
+            return tex;
         }
     }
 }

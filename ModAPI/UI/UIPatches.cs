@@ -175,19 +175,18 @@ namespace ModAPI.UI
         }
         
         /// <summary>
-        /// Hook UIPanelManager.PopPanel to fire OnPanelClosed event.
-        /// Note: PopPanel is private, but Harmony can still patch it.
-        /// We use Postfix to get the returned panel.
+        /// Hook UIPanelManager.PopPanel(BasePanel) to fire OnPanelClosed event.
+        /// This is the public overload that takes a panel parameter.
         /// </summary>
-        [HarmonyPatch(typeof(UIPanelManager), "PopPanel")]
+        [HarmonyPatch(typeof(UIPanelManager), "PopPanel", new Type[] { typeof(BasePanel) })]
         [HarmonyPostfix]
-        static void Postfix_UIPanelManager_PopPanel(BasePanel __result)
+        static void Postfix_UIPanelManager_PopPanel(BasePanel panel)
         {
             try
             {
-                if (__result != null)
+                if (panel != null)
                 {
-                    UIEvents.RaisePanelClosed(__result);
+                    UIEvents.RaisePanelClosed(panel);
                 }
             }
             catch (Exception ex)
@@ -214,6 +213,7 @@ namespace ModAPI.UI
             }
         }
         
+        /* 
         /// <summary>
         /// Hook BasePanel.OnPause to fire OnPanelPaused event.
         /// This fires when another panel is pushed above this one.
@@ -231,5 +231,6 @@ namespace ModAPI.UI
                 MMLog.Write($"[UIPatches] ERROR in BasePanel.OnPause postfix: {ex}");
             }
         }
+        */
     }
 }
