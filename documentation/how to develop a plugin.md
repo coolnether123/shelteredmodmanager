@@ -1,4 +1,4 @@
-# How to Develop a Plugin | Sheltered Mod Manager v1.0.1
+# How to Develop a Plugin | Sheltered Mod Manager v1.2.0
 
 ## Prerequisites
 - Visual Studio 2017+ or JetBrains Rider
@@ -15,50 +15,43 @@
 - `Assembly-CSharp.dll` from `<Sheltered>/Sheltered_Data/Managed` (Steam) or `Windows64_EOS_Data/Managed` (Epic)
 - `UnityEngine.dll` from the same folder (if needed)
 
-### 3. Write your plugin code
+### 3. Write your plugin code (Modern - v1.2.0)
 
-**Important:** Your plugin class must implement `IModPlugin` which requires **both** `Initialize()` and `Start()` methods.
+**Recommended:** Inherit from `ModManagerBase` for a zero-boilerplate experience. This automatically handles initialization, settings binding, and gives you standard Unity lifecycle hooks (Update, FixedUpdate).
 
 ```csharp
 using ModAPI.Core;
 using UnityEngine;
 
-/// <summary>
-/// Minimal plugin example showing the required lifecycle methods.
-/// 
-/// IModPlugin requires:
-///  - Initialize(ctx) - Called first, before Unity is fully ready. Use for reading settings.
-///  - Start(ctx)      - Called after Initialize when Unity context is ready. Safe to use Harmony here.
-/// </summary>
-public class MyPlugin : IModPlugin
+public class MyMod : ModManagerBase
 {
-    private IModLogger _log;
 
-    /// <summary>
-    /// Called very early, before Unity scene is running.
-    /// Use this to read settings/config values and store references.
-    /// </summary>
-    public void Initialize(IPluginContext ctx)
+    // Attributes automatically create UI and save/load settings
+    [ModToggle("Enable Boost", "Enable/Disable speed boost")]
+    public bool BoostActive = true;
+
+    [ModSlider("Speed", 1f, 10f)]
+    public float SpeedValue = 5.0f;
+
+    public override void Initialize(IPluginContext ctx)
     {
-        _log = ctx.Log;
-        _log.Info("MyPlugin initializing...");
-        
-        // Read settings if you have a Config/default.json
-        // var maxCount = ctx.Settings.GetInt("maxCount", 5);
+        base.Initialize(ctx); // REQUIRED to bind attributes
+        Log.Info("Modern mod initialized!");
     }
 
-    /// <summary>
-    /// Called once Unity is ready and safe to run coroutines/patches.
-    /// Use this for Harmony patches and subscribing to events.
-    /// </summary>
-    public void Start(IPluginContext ctx)
+    private void Update()
     {
-        _log.Info("MyPlugin starting...");
-        
-        // Your mod logic here
+        if (BoostActive && Input.GetKeyDown(KeyCode.Space))
+        {
+            Log.Info("Boosting with speed " + SpeedValue);
+        }
     }
 }
 ```
+
+### 3b. Write your plugin code (Manual)
+
+If you prefer manual control, implement `IModPlugin`. requires **both** `Initialize()` and `Start()` methods.
 
 ### 4. Example: Adding UI to the Main Menu with Harmony
 
@@ -240,7 +233,8 @@ The `IPluginContext` gives you access to:
 | Property/Method | Description |
 |-----------------|-------------|
 | `Log` | Logger that prefixes with your mod ID |
-| `Settings` | Read/write mod settings |
+| `Settings` | Read/write mod settings (and AutoBind v1.2.0) |
+| `SaveSystem` | Per-mod save data persistence (v1.2.0) |
 | `PluginRoot` | Per-plugin GameObject for your components |
 | `LoaderRoot` | Global loader GameObject |
 | `Mod` | Your mod's metadata (About.json) |

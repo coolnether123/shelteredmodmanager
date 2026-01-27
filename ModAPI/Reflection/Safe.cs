@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using UnityEngine;
 using ModAPI.Core;
 
 namespace ModAPI.Reflection
@@ -40,13 +41,23 @@ namespace ModAPI.Reflection
                 {
                     var n = candidateNames[i];
                     if (string.IsNullOrEmpty(n)) continue;
-                    var f = type.GetField(n, flags);
+                    
+                    FieldInfo f = type.GetField(n, flags);
+                    
+                    // Auto-detection for backing fields if direct match fails
+                    if (f == null) f = type.GetField("m_" + n, flags);
+                    if (f == null) f = type.GetField("_" + n, flags);
+                    
                     if (f == null)
                         continue;
                     object raw = f.GetValue(instance);
                     if (TryCast(raw, out value))
                         return true;
                 }
+
+                // Detailed failure reporting (one-time)
+                var key = BuildOnceKey(type, "field-failure", candidateNames[0]);
+                MMLog.LogOnce(key, () => LogDetailedFailure(type, "Field", candidateNames, flags));
             }
             catch (Exception ex)
             {
@@ -68,9 +79,6 @@ namespace ModAPI.Reflection
             T v;
             if (TryGetField<T>(obj, name, out v))
                 return v;
-
-            var key = BuildOnceKey(obj, "field", name);
-            MMLog.WarnOnce(key, "Field '" + name + "' not found or incompatible on " + SafeTypeName(obj));
             return defaultValue;
         }
 
@@ -81,12 +89,29 @@ namespace ModAPI.Reflection
             {
                 Type type; object instance; BindingFlags flags;
                 ResolveTarget(obj, out type, out instance, out flags);
+                
                 var f = type.GetField(name, flags);
+                if (f == null) f = type.GetField("m_" + name, flags);
+                if (f == null) f = type.GetField("_" + name, flags);
+
                 if (f != null)
                 {
-                    f.SetValue(instance, value);
+                    object valToSet = value;
+                    // Sloppy cast for field setting: if types don't match, attempt conversion
+                    if (value != null && !f.FieldType.IsAssignableFrom(value.GetType()))
+                    {
+                        if (!TryCastManual(value, f.FieldType, out valToSet))
+                        {
+                            try { valToSet = Convert.ChangeType(value, f.FieldType); } catch { }
+                        }
+                    }
+                    
+                    f.SetValue(instance, valToSet);
                     return true;
                 }
+
+                var key = BuildOnceKey(type, "setfield-failure", name);
+                MMLog.LogOnce(key, () => LogDetailedFailure(type, "Field", new[] { name }, flags));
             }
             catch (Exception ex)
             {
@@ -114,6 +139,9 @@ namespace ModAPI.Reflection
                     if (TryCast(raw, out value))
                         return true;
                 }
+
+                var key = BuildOnceKey(type, "property-failure", name);
+                MMLog.LogOnce(key, () => LogDetailedFailure(type, "Property", new[] { name }, flags));
             }
             catch (Exception ex)
             {
@@ -140,9 +168,20 @@ namespace ModAPI.Reflection
                 var p = type.GetProperty(name, flags);
                 if (p != null && p.CanWrite)
                 {
-                    p.SetValue(instance, value, null);
+                    object valToSet = value;
+                    if (value != null && !p.PropertyType.IsAssignableFrom(value.GetType()))
+                    {
+                        if (!TryCastManual(value, p.PropertyType, out valToSet))
+                        {
+                            try { valToSet = Convert.ChangeType(value, p.PropertyType); } catch { }
+                        }
+                    }
+                    p.SetValue(instance, valToSet, null);
                     return true;
                 }
+
+                var key = BuildOnceKey(type, "setproperty-failure", name);
+                MMLog.LogOnce(key, () => LogDetailedFailure(type, "Property", new[] { name }, flags));
             }
             catch (Exception ex)
             {
@@ -208,6 +247,9 @@ namespace ModAPI.Reflection
                         return true;
                     }
                 }
+
+                var failureKey = BuildOnceKey(type, "call-failure", candidateNames[0]);
+                MMLog.LogOnce(failureKey, delegate { LogDetailedFailure(type, "Method", candidateNames, flags); });
             }
             catch (Exception ex)
             {
@@ -247,6 +289,13 @@ namespace ModAPI.Reflection
 
         private static bool TryCast<T>(object raw, out T value)
         {
+            object output;
+            if (TryCastManual(raw, typeof(T), out output))
+            {
+                value = (T)output;
+                return true;
+            }
+
             try
             {
                 if (raw is T)
@@ -269,6 +318,32 @@ namespace ModAPI.Reflection
                 return true;
             }
             catch { value = default(T); return false; }
+        }
+
+        private static bool TryCastManual(object raw, Type targetType, out object result)
+        {
+            result = null;
+            if (raw == null) return !targetType.IsValueType || Nullable.GetUnderlyingType(targetType) != null;
+
+            Type sourceType = raw.GetType();
+            if (targetType.IsAssignableFrom(sourceType))
+            {
+                result = raw; return true;
+            }
+
+            // Vector2 <-> Vector3 conversions
+            if (sourceType == typeof(Vector2) && targetType == typeof(Vector3))
+            {
+                Vector2 v2 = (Vector2)raw;
+                result = new Vector3(v2.x, v2.y, 0f); return true;
+            }
+            if (sourceType == typeof(Vector3) && targetType == typeof(Vector2))
+            {
+                Vector3 v3 = (Vector3)raw;
+                result = new Vector2(v3.x, v3.y); return true;
+            }
+
+            return false;
         }
 
         private static string[] SplitCandidates(string input)
@@ -321,6 +396,38 @@ namespace ModAPI.Reflection
         {
             var typeName = SafeTypeName(obj);
             return "Safe:" + typeName + ":" + kind + ":" + (name ?? "");
+        }
+
+        private static void LogDetailedFailure(Type type, string memberKind, string[] candidates, BindingFlags flags)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(string.Format("[Safe] {0} lookup failed for '{1}' on {2}", memberKind, string.Join("|", candidates), type.FullName));
+            sb.AppendLine(string.Format("Flags: {0}", flags));
+            
+            if (memberKind == "Field")
+            {
+                sb.AppendLine("Available Fields:");
+                foreach (var f in type.GetFields(flags)) sb.AppendLine(string.Format("  - {0} {1}", f.FieldType.Name, f.Name));
+            }
+            else if (memberKind == "Property")
+            {
+                sb.AppendLine("Available Properties:");
+                foreach (var p in type.GetProperties(flags)) sb.AppendLine(string.Format("  - {0} {1} (R:{2} W:{3})", p.PropertyType.Name, p.Name, (p.CanRead ? "Y" : "N"), (p.CanWrite ? "Y" : "N")));
+            }
+            else if (memberKind == "Method")
+            {
+                sb.AppendLine("Available Methods:");
+                foreach (var m in type.GetMethods(flags))
+                {
+                    var @params = m.GetParameters();
+                    var pTypes = new string[@params.Length];
+                    for (int i = 0; i < @params.Length; i++) pTypes[i] = @params[i].ParameterType.Name;
+                    var pstr = string.Join(", ", pTypes);
+                    sb.AppendLine(string.Format("  - {0} {1}({2})", m.ReturnType.Name, m.Name, pstr));
+                }
+            }
+            
+            MMLog.WriteDebug(sb.ToString());
         }
     }
 }

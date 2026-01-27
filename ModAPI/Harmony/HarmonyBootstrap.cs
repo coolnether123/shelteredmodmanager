@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Reflection;
 using UnityEngine;
 using ModAPI.Core;
@@ -7,46 +6,47 @@ using HarmonyLib;
 
 namespace ModAPI.Harmony
 {
-    internal static class HarmonyBootstrap
+    /// <summary>
+    /// Responsible for initializing Harmony and applying patches.
+    /// Redirects 0Harmony log to MMLog.
+    /// </summary>
+    public static class HarmonyBootstrap
     {
-        static HarmonyBootstrap()
-        {
-            MMLog.WriteDebug("[HarmonyBootstrap] Static constructor called. ModAPI.dll is loading.");
-        }
-
-        private static bool _installed;
+        private static bool _installed = false;
         private static GameObject _runnerGo;
 
+        static HarmonyBootstrap()
+        {
+            // Redirect Harmony's internal trace logs if needed
+        }
+
+        /// <summary>
+        /// Entry point for mod loader to start patching.
+        /// If Harmony DLL is not yet loaded by BepInEx or Doorstop,
+        /// starts a runner to periodically retry.
+        /// </summary>
         public static void EnsurePatched()
         {
             if (_installed) return;
-            if (!IsHarmonyAvailable())
-            {
-                MMLog.WriteDebug("HarmonyBootstrap: 0Harmony not available yet; scheduling retry");
-                StartRetryRunner();
-                return;
-            }
-            TryPatch();
-        }
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void OnUnityLoad()
-        {
-            MMLog.WriteDebug("HarmonyBootstrap: RuntimeInitializeOnLoadMethod fired");
-            EnsurePatched();
-        }
-
-        private static bool IsHarmonyAvailable()
-        {
             try
             {
-                var loaded = AppDomain.CurrentDomain.GetAssemblies();
-                if (loaded.Any(a => string.Equals(a.GetName().Name, "0Harmony", StringComparison.OrdinalIgnoreCase)))
-                    return true;
-                var t = Type.GetType("HarmonyLib.Harmony, 0Harmony", throwOnError: false);
-                return t != null;
+                // Verify Harmony is available in current domain
+                var type = typeof(HarmonyLib.Harmony);
+                if (type == null)
+                {
+                    MMLog.Write("HarmonyLib not found. Starting retry runner...");
+                    StartRetryRunner();
+                    return;
+                }
+
+                TryPatch();
             }
-            catch (Exception ex) { MMLog.WarnOnce("HarmonyBootstrap.IsHarmonyAvailable", "Error checking for Harmony: " + ex.Message); return false; }
+            catch (Exception ex)
+            {
+                MMLog.Write("HarmonyBootstrap: Initial patch check failed: " + ex.Message);
+                StartRetryRunner();
+            }
         }
 
         private static void TryPatch()
@@ -55,51 +55,33 @@ namespace ModAPI.Harmony
             try
             {
                 var asm = Assembly.GetExecutingAssembly();
-                 var harmony = new HarmonyLib.Harmony("ShelteredModManager.ModAPI");
+                var harmony = new HarmonyLib.Harmony("ShelteredModManager.ModAPI");
 
                 var opts = new ModAPI.Harmony.HarmonyUtil.PatchOptions
                 {
                     AllowDebugPatches = ReadManagerBool("EnableDebugPatches", false),
                     AllowDangerousPatches = ReadManagerBool("AllowDangerousPatches", false),
                     AllowStructReturns = ReadManagerBool("AllowStructReturns", false),
-                    OnResult = (mb, reason) =>
+                    OnResult = (obj, reason) =>
                     {
-                        try
+                        if (reason != null)
                         {
-                            // DynamicMethod can have null DeclaringType; guard to avoid noisy warnings.
-                            var method = mb as MethodBase;
-                            var declaring = method != null ? (method.DeclaringType != null ? method.DeclaringType.FullName : "<dynamic>") : null;
-                            var who = method != null ? declaring + "." + method.Name : (mb != null ? mb.ToString() : "<null>");
-                            MMLog.WriteDebug("[HarmonyBootstrap] " + who + " -> " + reason);
-                        }
-                        catch (Exception ex)
-                        {
-                            // Swallow logging errors to avoid WarnOnce spam; only log concise debug info.
-                            MMLog.WriteDebug("[HarmonyBootstrap] OnResult logging skipped: " + ex.Message);
+                            var mb = obj as MemberInfo;
+                            var name = mb != null ? (mb.DeclaringType != null ? mb.DeclaringType.Name + "." + mb.Name : mb.Name) : (obj?.ToString() ?? "<null>");
+                            MMLog.WriteDebug($"[Patch] {name} -> {reason}");
                         }
                     }
                 };
 
                 ModAPI.Harmony.HarmonyUtil.PatchAll(harmony, asm, opts);
-                
+
                 // Explicitly verify UIPatches was discovered and patched
-                try
+                var uiPatches = asm.GetType("ModAPI.UI.UIPatches");
+                if (uiPatches != null)
                 {
-                    var uiPatchesType = asm.GetType("ModAPI.UI.UIPatches");
-                    if (uiPatchesType != null)
-                    {
-                        MMLog.WriteDebug($"[HarmonyBootstrap] UIPatches type found: {uiPatchesType.FullName}");
-                    }
-                    else
-                    {
-                        MMLog.Write("[HarmonyBootstrap] WARNING: UIPatches type NOT found in assembly!");
-                    }
+                    MMLog.WriteDebug("HarmonyBootstrap: Discovered UIPatches for verification.");
                 }
-                catch (Exception ex)
-                {
-                    MMLog.Write($"[HarmonyBootstrap] Error checking for UIPatches: {ex.Message}");
-                }
-                
+
                 _installed = true;
 
                 MMLog.WriteDebug("HarmonyBootstrap: ModAPI hooks patched");
@@ -111,7 +93,22 @@ namespace ModAPI.Harmony
             }
         }
 
-        private static bool ReadManagerBool(string key, bool fallback)
+        public static bool ReadManagerBool(string key, bool fallback)
+        {
+            string s = ReadManagerString(key, null);
+            if (s == null) return fallback;
+            
+            bool b;
+            if (bool.TryParse(s, out b)) return b;
+            
+            var lower = s.ToLowerInvariant();
+            if (lower == "1" || lower == "yes" || lower == "y" || lower == "on" || lower == "true") return true;
+            if (lower == "0" || lower == "no" || lower == "n" || lower == "off" || lower == "false") return false;
+            
+            return fallback;
+        }
+
+        public static string ReadManagerString(string key, string fallback)
         {
             try
             {
@@ -128,15 +125,17 @@ namespace ModAPI.Harmony
                     var idx = line.IndexOf('='); if (idx <= 0) continue;
                     var k = line.Substring(0, idx).Trim();
                     var v = line.Substring(idx + 1).Trim();
-                    if (!k.Equals(key, StringComparison.OrdinalIgnoreCase)) continue;
-                    bool b;
-                    if (bool.TryParse(v, out b)) return b;
-                    var s = v.ToLowerInvariant();
-                    if (s == "1" || s == "yes" || s == "y" || s == "on") return true;
-                    if (s == "0" || s == "no" || s == "n" || s == "off") return false;
+                    if (k.Equals(key, StringComparison.OrdinalIgnoreCase)) return v;
                 }
             }
-            catch (Exception ex) { MMLog.WarnOnce("HarmonyBootstrap.ReadManagerBool", "Error reading mod_manager.ini: " + ex.Message); }
+            catch { }
+            return fallback;
+        }
+
+        public static int ReadManagerInt(string key, int fallback)
+        {
+            string s = ReadManagerString(key, null);
+            if (s != null && int.TryParse(s, out int val)) return val;
             return fallback;
         }
 

@@ -159,6 +159,26 @@ namespace ModAPI.Core
         }
 
         // Getters (typed) (Coolnether123)
+
+        /// <summary>
+        /// Automatically binds public fields of a config object to the settings.
+        /// Values are loaded from settings into the object. 
+        /// If a setting is missing, the object's current field value is used as the default.
+        /// </summary>
+        public void AutoBind<T>(T config) where T : class
+        {
+            if (config == null) return;
+            var type = typeof(T);
+            foreach (var f in type.GetFields(BindingFlags.Instance | BindingFlags.Public))
+            {
+                var key = f.Name;
+                if (f.FieldType == typeof(string)) f.SetValue(config, GetString(key, (string)f.GetValue(config)));
+                else if (f.FieldType == typeof(int)) f.SetValue(config, GetInt(key, (int)f.GetValue(config)));
+                else if (f.FieldType == typeof(float)) f.SetValue(config, GetFloat(key, (float)f.GetValue(config)));
+                else if (f.FieldType == typeof(bool)) f.SetValue(config, GetBool(key, (bool)f.GetValue(config)));
+            }
+        }
+
         public string GetString(string key, string fallback)
         {
             ModConfigEntry e; if (!_effective.TryGetValue(key, out e)) return fallback;

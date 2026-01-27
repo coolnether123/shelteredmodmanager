@@ -12,7 +12,7 @@ namespace ModAPI.Core
 {
     // Class to hold mod data to be saved/loaded with the game save
     [Serializable]
-    public class ModSaveData
+    public class ModManifestData
     {
         public ModInfo[] mods;
 
@@ -23,9 +23,9 @@ namespace ModAPI.Core
             public string version;
         }
 
-        public static ModSaveData FromCurrentMods()
+        public static ModManifestData FromCurrentMods()
         {
-            var data = new ModSaveData();
+            var data = new ModManifestData();
             var list = new List<ModInfo>();
             foreach (var modEntry in PluginManager.LoadedMods)
             {
@@ -97,14 +97,14 @@ namespace ModAPI.Core
                     SaveData data = AccessTools.Field(typeof(SaveManager), "m_data").GetValue(__instance) as SaveData;
                     if (data == null) return;
 
-                    MMLog.WriteDebug($"SaveGamePatch: Injecting mod data for slot {type} into save.");
-                    ModSaveData modData = ModSaveData.FromCurrentMods();
+                    MMLog.WriteDebug(string.Format("SaveGamePatch: Injecting mod data for slot {0} into save.", type));
+                    ModManifestData modData = ModManifestData.FromCurrentMods();
                     string json = JsonUtility.ToJson(modData);
                     
                     // Use SaveData's SaveLoad method to store our JSON string
                     string modDataKey = "ModAPI_ModData";
                     data.SaveLoad(modDataKey, ref json);
-                    MMLog.WriteDebug($"SaveGamePatch: Injected mod data: {json}");
+                    MMLog.WriteDebug(string.Format("SaveGamePatch: Injected mod data: {0}", json));
 
                     // NEW: Update the external manifest.json so the Manager and Restart diagnostics are accurate
                     try
@@ -115,7 +115,7 @@ namespace ModAPI.Core
                         if (ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave != null || 
                             ModAPI.Hooks.PlatformSaveProxy.NextSave.ContainsKey(type))
                         {
-                            MMLog.WriteDebug($"[SaveGamePatch] Skipping manifest update for {type} (handled by Proxy)");
+                            MMLog.WriteDebug(string.Format("[SaveGamePatch] Skipping manifest update for {0} (handled by Proxy)", type));
                             return;
                         }
 
@@ -126,7 +126,7 @@ namespace ModAPI.Core
                             saveTime = data.info != null ? data.info.m_saveTime : DateTime.Now.ToString()
                         };
                         
-                        MMLog.WriteDebug($"[SaveGamePatch] Updating manifest for vanilla slot {type}");
+                        MMLog.WriteDebug(string.Format("[SaveGamePatch] Updating manifest for vanilla slot {0}", (int)type));
                         ModAPI.Saves.ExpandedVanillaSaves.UpdateManifest((int)type, info);
                     }
                     catch (Exception ex)
@@ -176,18 +176,18 @@ namespace ModAPI.Core
                 {
                     MMLog.WriteDebug($"[LoadGamePatch] Checking mod data for slot {type}.");
 
-                    List<ModSaveData.ModInfo> savedMods = null;
+                    List<ModManifestData.ModInfo> savedMods = null;
 
                     // 1. Try reading from SaveData (internal save file)
                     string modDataJson = null;
                     string modDataKey = "ModAPI_ModData";
                     if (data.SaveLoad(modDataKey, ref modDataJson) && !string.IsNullOrEmpty(modDataJson))
                     {
-                        var parsed = JsonUtility.FromJson<ModSaveData>(modDataJson);
+                        var parsed = JsonUtility.FromJson<ModManifestData>(modDataJson);
                         if (parsed != null && parsed.mods != null)
                         {
-                            savedMods = new List<ModSaveData.ModInfo>(parsed.mods);
-                            MMLog.WriteDebug($"[LoadGamePatch] Found embedded mod data. Count: {savedMods.Count}");
+                            savedMods = new List<ModManifestData.ModInfo>(parsed.mods);
+                            MMLog.WriteDebug(string.Format("[LoadGamePatch] Found embedded mod data. Count: {0}", savedMods.Count));
                         }
                     }
 
@@ -197,7 +197,7 @@ namespace ModAPI.Core
                         try
                         {
                             // Use the actual custom slot if active, or if a load is pending redirect, otherwise fallback to vanilla type
-                            int absoluteSlot = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave?.absoluteSlot ?? (int)type;
+                            int absoluteSlot = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave != null ? ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave.absoluteSlot : (int)type;
                             
                             // Check for pending redirects
                             if (ModAPI.Hooks.PlatformSaveProxy.NextLoad.TryGetValue(type, out var pending))
@@ -209,17 +209,20 @@ namespace ModAPI.Core
                                 if (pendingEntry != null)
                                 {
                                     absoluteSlot = pendingEntry.absoluteSlot;
-                                    MMLog.WriteDebug($"[LoadGamePatch] Pending load redirect found for {type} -> custom slot {absoluteSlot}");
+                                    MMLog.WriteDebug(string.Format("[LoadGamePatch] Pending load redirect found for {0} -> custom slot {1}", type, absoluteSlot));
                                 }
                             }
 
-                            MMLog.WriteDebug($"[LoadGamePatch] Checking manifest for slot {absoluteSlot} (vanilla type={type})");
+                            MMLog.WriteDebug(string.Format("[LoadGamePatch] Checking manifest for slot {0} (vanilla type={1})", absoluteSlot, type));
 
                             var manifest = ModAPI.Saves.SaveRegistryCore.ReadSlotManifest("Standard", absoluteSlot);
                             if (manifest != null && manifest.lastLoadedMods != null)
                             {
-                                savedMods = manifest.lastLoadedMods.Select(m => new ModSaveData.ModInfo { id = m.modId, version = m.version }).ToList();
-                                MMLog.WriteDebug($"[LoadGamePatch] Found external manifest data for slot {absoluteSlot}. Count: {savedMods.Count}");
+                                savedMods = new List<ModManifestData.ModInfo>();
+                                foreach (var m in manifest.lastLoadedMods)
+                                    savedMods.Add(new ModManifestData.ModInfo { id = m.modId, version = m.version });
+
+                                MMLog.WriteDebug(string.Format("[LoadGamePatch] Found external manifest data for slot {0}. Count: {1}", absoluteSlot, savedMods.Count));
                             }
                         }
                         catch (Exception ex)
@@ -236,16 +239,17 @@ namespace ModAPI.Core
                     }
 
                     // 3. Compare with active mods
-                    var manifestForUI = new ModAPI.Saves.SlotManifest 
-                    { 
-                        lastLoadedMods = savedMods.Select(m => new ModAPI.Saves.LoadedModInfo { modId = m.id, version = m.version }).ToArray() 
-                    };
+                    var manifestForUI = new ModAPI.Saves.SlotManifest();
+                    var loadedModsList = new List<ModAPI.Saves.LoadedModInfo>();
+                    foreach (var m in savedMods)
+                        loadedModsList.Add(new ModAPI.Saves.LoadedModInfo { modId = m.id, version = m.version });
+                    manifestForUI.lastLoadedMods = loadedModsList.ToArray();
 
                     var currentState = SaveVerification.Verify(manifestForUI);
 
                     if (currentState != SaveVerification.VerificationState.Match)
                     {
-                        MMLog.WriteWarning($"[LoadGamePatch] Mismatch detected ({currentState}) for slot {type}. Pausing load to show UI.");
+                        MMLog.WriteWarning(string.Format("[LoadGamePatch] Mismatch detected ({0}) for slot {1}. Pausing load to show UI.", currentState, type));
                         
                         _isWaitingForUser = true;
                         _loadingScreenAlreadyManaged = true; // We're taking control of the loading screen

@@ -31,14 +31,40 @@ namespace ModAPI.Spine
             {
                 try
                 {
+                    // 1. Try standard [ModSetting]
                     var attr = (ModSettingAttribute)Attribute.GetCustomAttribute(field, typeof(ModSettingAttribute));
                     if (attr != null)
                     {
                         var def = CreateDefinition(attr, field.Name, field.FieldType, type);
-                        // Scan for presets
-                        var presets = (ModSettingPresetAttribute[])Attribute.GetCustomAttributes(field, typeof(ModSettingPresetAttribute));
-                        foreach (var p in presets) def.Presets[p.PresetName] = p.Value;
+                        ProcessPresets(field, def);
                         definitions.Add(def);
+                        continue;
+                    }
+
+                    // 2. Try [ModToggle]
+                    var toggle = (ModToggleAttribute)Attribute.GetCustomAttribute(field, typeof(ModToggleAttribute));
+                    if (toggle != null)
+                    {
+                        var def = new SettingDefinition 
+                        { 
+                            Id = field.Name, FieldName = field.Name, Label = toggle.Label, Tooltip = toggle.Description, Type = SettingType.Bool 
+                        };
+                        definitions.Add(def);
+                        continue;
+                    }
+
+                    // 3. Try [ModSlider]
+                    var slider = (ModSliderAttribute)Attribute.GetCustomAttribute(field, typeof(ModSliderAttribute));
+                    if (slider != null)
+                    {
+                        var def = new SettingDefinition 
+                        { 
+                            Id = field.Name, FieldName = field.Name, Label = slider.Label, 
+                            MinValue = slider.MinView, MaxValue = slider.MaxView,
+                            Type = field.FieldType == typeof(int) ? SettingType.Int : SettingType.Float 
+                        };
+                        definitions.Add(def);
+                        continue;
                     }
                 }
                 catch (Exception ex)
@@ -57,8 +83,7 @@ namespace ModAPI.Spine
                     if (attr != null)
                     {
                         var def = CreateDefinition(attr, prop.Name, prop.PropertyType, type);
-                        var presets = (ModSettingPresetAttribute[])Attribute.GetCustomAttributes(prop, typeof(ModSettingPresetAttribute));
-                        foreach (var p in presets) def.Presets[p.PresetName] = p.Value;
+                        ProcessPresets(prop, def);
                         definitions.Add(def);
                     }
                 }
@@ -85,6 +110,12 @@ namespace ModAPI.Spine
             // Sort by order
             definitions.Sort((a, b) => a.SortOrder.CompareTo(b.SortOrder));
             return definitions;
+        }
+
+        private static void ProcessPresets(MemberInfo member, SettingDefinition def)
+        {
+            var presets = (ModSettingPresetAttribute[])Attribute.GetCustomAttributes(member, typeof(ModSettingPresetAttribute));
+            foreach (var p in presets) def.Presets[p.PresetName] = p.Value;
         }
 
         private static SettingDefinition CreateDefinition(ModSettingAttribute attr, string memberName, Type memberType, Type settingsType)

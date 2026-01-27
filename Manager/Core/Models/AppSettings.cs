@@ -102,6 +102,13 @@ namespace Manager.Core.Models
             get { return _autoCondenseSaves; } 
             set { _autoCondenseSaves = value; } 
         }
+
+        private int _autoLoadSaveSlot = 0;
+        public int AutoLoadSaveSlot
+        {
+            get { return _autoLoadSaveSlot; }
+            set { _autoLoadSaveSlot = value; }
+        }
         
         /// <summary>
         /// All available log categories

@@ -5,6 +5,7 @@ using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.UI;
 using ModAPI.Saves;
+using ModAPI.Hooks;
 using ModAPI.Hooks.Paging;
 using UnityEngine;
 
@@ -13,10 +14,18 @@ namespace ModAPI.Harmony
     [HarmonyPatch(typeof(MainMenu), "OnShow")]
     public static class MainMenu_OnShow_Patch
     {
+        private static bool _autoLoadChecked = false;
+
         public static void Postfix(MainMenu __instance)
         {
             try
             {
+                if (!_autoLoadChecked)
+                {
+                    _autoLoadChecked = true;
+                    HandleAutoLoad(__instance);
+                }
+
                 MMLog.Write("[MainMenuPatch] Postfix triggered.");
                 // One-time startup check for save slot gaps
                 SaveCondenseManager.CheckOnStartup();
@@ -92,6 +101,61 @@ namespace ModAPI.Harmony
             MMLog.Write("[MainMenuPatch] Mods button clicked - initiating transition.");
             MainMenu_OnTweenFinished_Patch.TransitioningToMods = true;
             menu.OnPlayButtonPressed(); // This triggers the fade-out
+        }
+
+        private static void HandleAutoLoad(MainMenu __instance)
+        {
+            try
+            {
+                int slot = HarmonyBootstrap.ReadManagerInt("AutoLoadSaveSlot", 0);
+                if (slot <= 0) return;
+
+                MMLog.Write($"[AutoLoad] Auto-loading save slot {slot} requested via config.");
+
+                if (slot <= 3)
+                {
+                    // Vanilla Load
+                    var info = SaveRegistryCore.ReadVanillaSaveInfo(slot);
+                    if (info == null)
+                    {
+                        MMLog.Write("[AutoLoad] Vanilla slot empty or unreadable. Ignoring.");
+                        return;
+                    }
+
+                    DifficultyManager.StoreMenuDifficultySettings(
+                        info.rainDiff, info.resourceDiff, info.breachDiff, info.factionDiff, 
+                        info.moodDiff, info.mapSize, info.fog);
+
+                    SaveManager.instance.SetSlotToLoad(slot);
+                    MMLog.Write($"[AutoLoad] Initiated vanilla load for slot {slot}");
+                }
+                else
+                {
+                    // Custom Load
+                    var entry = ExpandedVanillaSaves.GetBySlot(slot);
+                    if (entry == null || !System.IO.File.Exists(DirectoryProvider.EntryPath("Standard", slot)))
+                    {
+                        MMLog.Write($"[AutoLoad] Custom slot {slot} empty or missing. Ignoring.");
+                        return;
+                    }
+
+                    // For auto-load, we use Slot 1 as the proxy carrier
+                    var virtualSaveType = SaveManager.SaveType.Slot1;
+                    PlatformSaveProxy.SetNextLoad(virtualSaveType, "Standard", entry.id);
+
+                    DifficultyManager.StoreMenuDifficultySettings(
+                        entry.saveInfo.rainDiff, entry.saveInfo.resourceDiff, entry.saveInfo.breachDiff, 
+                        entry.saveInfo.factionDiff, entry.saveInfo.moodDiff, entry.saveInfo.mapSize, 
+                        entry.saveInfo.fog);
+
+                    SaveManager.instance.SetSlotToLoad(1);
+                    MMLog.Write($"[AutoLoad] Initiated custom load for slot {slot} via virtual slot 1");
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[AutoLoad] Failed: " + ex.Message);
+            }
         }
     }
 

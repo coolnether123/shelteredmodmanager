@@ -13,7 +13,8 @@
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
     <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -40,7 +41,7 @@
       <Private>False</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Manager">
@@ -51,11 +52,11 @@
     <Reference Include="System" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="UnityEngine">
-      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.UI.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
@@ -111,15 +112,22 @@
     <Compile Include="Core\ModPrefs.cs" />
     <Compile Include="Core\RuntimeCompat.cs" />
     <Compile Include="Core\GameHelperImpl.cs" />
+    <Compile Include="Core\SaveSystemImpl.cs" />
+    <Compile Include="Core\ModPersistenceData.cs" />
+    <Compile Include="Core\ModAttributes.cs" />
+    <Compile Include="Core\ModManagerBase.cs" />
     <Compile Include="Content\AssetLoader.cs" />
     <Compile Include="Util\SceneCompat.cs" />
     <Compile Include="Util\SceneUtil.cs" />
     <Compile Include="Util\PersistentDataAPI.cs" />
+    <Compile Include="Util\SaveLoadDictionary.cs" />
     <Compile Include="Core\PluginManager.cs" />
     <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Reflection\Safe.cs" />
     <Compile Include="Util\GameUtil.cs" />
+    <Compile Include="Hooks\WorldHooks.cs" />
+    <Compile Include="Hooks\UIHooks.cs" />
     <Compile Include="Events\GameEvents.cs" />
     <Compile Include="Events\ModEventBus.cs" />
     <Compile Include="Events\UIEvents.cs" />

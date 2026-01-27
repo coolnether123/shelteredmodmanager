@@ -50,6 +50,11 @@ namespace Manager.Views
         private Button _clearLogButton;
         private Button _loadGameLogButton;
 
+        // Auto-load selection
+        private Label _autoLoadLabel;
+        private ComboBox _autoLoadComboBox;
+        private Button _refreshSavesButton;
+
         // State
         private AppSettings _settings;
         private bool _isDarkMode = false;
@@ -268,6 +273,37 @@ namespace Manager.Views
             this.Controls.Add(_loadGameLogButton);
             this.Controls.Add(_logContainer);
 
+            // Auto-load UI (positioned near launch buttons)
+            _autoLoadLabel = new Label();
+            _autoLoadLabel.Text = "Auto-Load Save on Start:";
+            _autoLoadLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            _autoLoadLabel.AutoSize = true;
+            _autoLoadLabel.Location = new Point(20, 260);
+
+            _autoLoadComboBox = new ComboBox();
+            _autoLoadComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            _autoLoadComboBox.Font = new Font("Segoe UI", 9f);
+            _autoLoadComboBox.Location = new Point(20, 280);
+            _autoLoadComboBox.Width = 350;
+
+            _refreshSavesButton = new Button();
+            _refreshSavesButton.Text = "Refresh";
+            _refreshSavesButton.Font = new Font("Segoe UI", 8f);
+            _refreshSavesButton.Location = new Point(375, 279);
+            _refreshSavesButton.Width = 70;
+            _refreshSavesButton.Height = 24;
+            _refreshSavesButton.FlatStyle = FlatStyle.Flat;
+
+            this.Controls.Add(_autoLoadLabel);
+            this.Controls.Add(_autoLoadComboBox);
+            this.Controls.Add(_refreshSavesButton);
+
+            // Shift Log UI down to make room
+            _logLabel.Location = new Point(20, 320);
+            _clearLogButton.Location = new Point(440, 318);
+            _loadGameLogButton.Location = new Point(540, 318);
+            _logContainer.Location = new Point(20, 345);
+
             this.ResumeLayout();
         }
 
@@ -282,7 +318,68 @@ namespace Manager.Views
             _gamePathTextBox.TextChanged += GamePathTextBox_TextChanged;
             _clearLogButton.Click += ClearLogButton_Click;
             _loadGameLogButton.Click += LoadGameLogButton_Click;
+            _autoLoadComboBox.SelectedIndexChanged += AutoLoadComboBox_SelectedIndexChanged;
+            _refreshSavesButton.Click += (s, e) => RefreshSavesList();
             this.Load += GameSetupTab_Load;
+        }
+
+        private void AutoLoadComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (_isUpdating || _settings == null) return;
+            
+            var selected = _autoLoadComboBox.SelectedItem as SaveSlotItem;
+            if (selected != null)
+            {
+                _settings.AutoLoadSaveSlot = selected.Slot;
+                Log("Auto-load slot set to: " + selected.ToString());
+            }
+        }
+
+        private class SaveSlotItem
+        {
+            public int Slot { get; set; }
+            public string Description { get; set; }
+            public override string ToString() => Description;
+        }
+
+        public void RefreshSavesList()
+        {
+            if (_settings == null || !_settings.IsGamePathValid)
+            {
+                _autoLoadComboBox.Items.Clear();
+                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = 0, Description = "(None - Boot to Menu)" });
+                _autoLoadComboBox.SelectedIndex = 0;
+                return;
+            }
+
+            _isUpdating = true;
+            try
+            {
+                int currentSelection = _settings.AutoLoadSaveSlot;
+                _autoLoadComboBox.Items.Clear();
+                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = 0, Description = "(None - Boot to Menu)" });
+
+                var discovery = new Manager.Core.Services.SaveDiscoveryService();
+                var saves = discovery.DiscoverSaves(_settings.GamePath);
+
+                int selectIndex = 0;
+                foreach (var save in saves)
+                {
+                    var item = new SaveSlotItem { Slot = save.AbsoluteSlot, Description = save.ToString() };
+                    int idx = _autoLoadComboBox.Items.Add(item);
+                    if (save.AbsoluteSlot == currentSelection) selectIndex = idx;
+                }
+
+                _autoLoadComboBox.SelectedIndex = selectIndex;
+            }
+            catch (Exception ex)
+            {
+                Log("Error discovering saves: " + ex.Message);
+            }
+            finally
+            {
+                _isUpdating = false;
+            }
         }
 
         private void GameSetupTab_Load(object sender, EventArgs e)
@@ -291,6 +388,8 @@ namespace Manager.Views
             // This establishes the correct relative distance for the Bottom anchor.
             _logContainer.Width = this.ClientSize.Width - 40; // 20px on each side
             _logContainer.Height = this.ClientSize.Height - _logContainer.Top - 20; // 20px margin from bottom
+
+            RefreshSavesList();
         }
 
         private void LoadGameLogButton_Click(object sender, EventArgs e)
@@ -409,6 +508,7 @@ namespace Manager.Views
                 }
                 
                 UpdateStatus(true);
+                RefreshSavesList();
                 if (GamePathChanged != null)
                     GamePathChanged(path);
             }
@@ -586,6 +686,12 @@ namespace Manager.Views
                 ApplyDarkThemeToButton(_openGameFolderButton);
                 ApplyDarkThemeToButton(_clearLogButton);
                 ApplyDarkThemeToButton(_loadGameLogButton);
+                ApplyDarkThemeToButton(_refreshSavesButton);
+
+                _autoLoadLabel.ForeColor = Color.White;
+                _autoLoadComboBox.BackColor = Color.FromArgb(60, 60, 60);
+                _autoLoadComboBox.ForeColor = Color.White;
+                _autoLoadComboBox.FlatStyle = FlatStyle.Flat;
             }
             else
             {
@@ -610,6 +716,12 @@ namespace Manager.Views
                 ApplyLightThemeToButton(_openGameFolderButton);
                 ApplyLightThemeToButton(_clearLogButton);
                 ApplyLightThemeToButton(_loadGameLogButton);
+                ApplyLightThemeToButton(_refreshSavesButton);
+
+                _autoLoadLabel.ForeColor = SystemColors.ControlText;
+                _autoLoadComboBox.BackColor = SystemColors.Window;
+                _autoLoadComboBox.ForeColor = SystemColors.WindowText;
+                _autoLoadComboBox.FlatStyle = FlatStyle.Standard;
             }
 
             _launchButton.ApplyTheme(isDark);

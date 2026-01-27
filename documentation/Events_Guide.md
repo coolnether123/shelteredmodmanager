@@ -71,6 +71,10 @@ public static event Action<SaveData> OnAfterLoad;
 // Combat events
 public static event Action<EncounterCharacter, EncounterCharacter> OnCombatStarted;
 
+// Session events (v1.0.1)
+public static event Action OnSessionStarted;
+public static event Action OnNewGame;
+
 // Expedition events
 public static event Action<ExplorationParty> OnPartyReturned;
 ```
@@ -149,9 +153,26 @@ GameEvents.OnAfterLoad += (saveData) =>
     // Access save data
     if (saveData != null)
     {
-        MMLog.Info($"Loaded save version: {saveData.GetVersion()}");
+        MMLog.Info(string.Format("Loaded save version: {0}", saveData.GetVersion()));
     }
 };
+```
+
+### Lifecycle Interface (v1.0.1)
+
+Alternatively, plugins can implement `IModSessionEvents` for cleaner state management of session transitions:
+
+```csharp
+public class MyMod : IModPlugin, IModSessionEvents
+{
+    public void OnSessionStarted() {
+        // Safe to re-initialize manager state here
+    }
+    
+    public void OnNewGame() {
+        // Reset persistent variables for a fresh save
+    }
+}
 ```
 
 ---

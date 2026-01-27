@@ -75,7 +75,7 @@ namespace ModAPI.Events
                 return;
 
             _beforeSaveRaised = true;
-            SafeInvoke(() => OnBeforeSave?.Invoke(data), "OnBeforeSave");
+            if (OnBeforeSave != null) SafeInvoke(delegate { OnBeforeSave(data); }, "OnBeforeSave");
         }
 
         internal static void TryRaiseAfterLoad(SaveManager mgr)
@@ -92,7 +92,7 @@ namespace ModAPI.Events
                 return;
 
             _afterLoadRaised = true;
-            SafeInvoke(() => OnAfterLoad?.Invoke(data), "OnAfterLoad");
+            if (OnAfterLoad != null) SafeInvoke(delegate { OnAfterLoad(data); }, "OnAfterLoad");
         }
 
         internal static void RaiseCombat(EncounterManager mgr)
@@ -109,7 +109,7 @@ namespace ModAPI.Events
 
             var player = players[0];
             var enemy = npcs[0];
-            SafeInvoke(() => OnCombatStarted?.Invoke(player, enemy), "OnCombatStarted");
+            if (OnCombatStarted != null) SafeInvoke(delegate { OnCombatStarted(player, enemy); }, "OnCombatStarted");
         }
 
         private static void HandleNewDay()
@@ -117,7 +117,7 @@ namespace ModAPI.Events
             try
             {
                 var day = GameTime.Day;
-                SafeInvoke(() => OnNewDay?.Invoke(day), "OnNewDay");
+                if (OnNewDay != null) SafeInvoke(delegate { OnNewDay(day); }, "OnNewDay");
             }
             catch (Exception ex)
             {
@@ -131,7 +131,7 @@ namespace ModAPI.Events
             {
                 var mgr = ExplorationManager.Instance;
                 var party = mgr != null ? mgr.GetParty(partyId) : null;
-                SafeInvoke(() => OnPartyReturned?.Invoke(party), "OnPartyReturned");
+                if (OnPartyReturned != null) SafeInvoke(delegate { OnPartyReturned(party); }, "OnPartyReturned");
             }
             catch (Exception ex)
             {
@@ -141,18 +141,18 @@ namespace ModAPI.Events
 
         private static void SafeInvoke(Action action, string name)
         {
-            try { action?.Invoke(); }
+            try { if (action != null) action(); }
             catch (Exception ex) { MMLog.WarnOnce("GameEvents.Invoke." + name, name + " handler threw: " + ex.Message); }
         }
 
         internal static void TryRaiseNewGame()
         {
-            SafeInvoke(() => OnNewGame?.Invoke(), "OnNewGame");
+            if (OnNewGame != null) SafeInvoke(delegate { OnNewGame(); }, "OnNewGame");
         }
 
         internal static void TryRaiseSessionStarted()
         {
-            SafeInvoke(() => OnSessionStarted?.Invoke(), "OnSessionStarted");
+            if (OnSessionStarted != null) SafeInvoke(delegate { OnSessionStarted(); }, "OnSessionStarted");
         }
 
         // Harmony patches ---------------------------------------------------
