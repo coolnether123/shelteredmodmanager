@@ -25,9 +25,11 @@ namespace ModAPI.Core
         {
             private readonly IModLogger _inner; private readonly string _scope;
             public ScopedLogger(IModLogger inner, string scope) { _inner = inner; _scope = string.IsNullOrEmpty(scope) ? null : scope; }
-            public void Info(string message) { _inner?.Info(Format(message)); }
-            public void Warn(string message) { _inner?.Warn(Format(message)); }
-            public void Error(string message) { _inner?.Error(Format(message)); }
+            public bool IsDebugEnabled { get { return _inner != null && _inner.IsDebugEnabled; } }
+            public void Debug(string message) { if (IsDebugEnabled && _inner != null) _inner.Debug(Format(message)); }
+            public void Info(string message) { if (_inner != null) _inner.Info(Format(message)); }
+            public void Warn(string message) { if (_inner != null) _inner.Warn(Format(message)); }
+            public void Error(string message) { if (_inner != null) _inner.Error(Format(message)); }
             private string Format(string msg)
             {
                 if (string.IsNullOrEmpty(_scope)) return msg;

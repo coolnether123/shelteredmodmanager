@@ -442,6 +442,10 @@ namespace ModAPI.Core
 
             string modId = entry != null && !string.IsNullOrEmpty(entry.Id) ? entry.Id : (type.Namespace ?? type.Name);
             var log = new PrefixedLogger(modId);
+            if (entry != null && entry.About != null)
+            {
+                log.IsDebugEnabled = entry.About.debugLogging;
+            }
             ModSettings settings = null;
             try { settings = ModSettings.ForAssembly(type.Assembly); } catch (Exception ex) { MMLog.WarnOnce("PluginManager.BuildContextFor", "Error creating settings: " + ex.Message); settings = null; }
 
@@ -453,6 +457,7 @@ namespace ModAPI.Core
                 Settings = settings,
                 Log = log,
                 Game = new GameHelperImpl(),
+                SaveSystem = new SaveSystemImpl(modId),
                 GameRoot = _gameRoot,
                 ModsRoot = _modsRoot,
                 Scheduler = (Action a) => EnqueueNextFrame(a)
@@ -721,11 +726,18 @@ namespace ModAPI.Core
     internal class PrefixedLogger : IModLogger
     {
         private readonly string _prefix;
-        public PrefixedLogger(string modId) { _prefix = string.IsNullOrEmpty(modId) ? "mod" : modId; }
+        public bool IsDebugEnabled { get; set; }
 
-        public void Info(string message) { MMLog.Write($"[{_prefix}] {message}"); }
-        public void Warn(string message) { MMLog.Write($"[{_prefix}] WARN: {message}"); }
-        public void Error(string message) { MMLog.Write($"[{_prefix}] ERROR: {message}"); }
+        public PrefixedLogger(string modId) 
+        { 
+            _prefix = string.IsNullOrEmpty(modId) ? "mod" : modId; 
+            IsDebugEnabled = true; 
+        }
+
+        public void Debug(string message) { if (IsDebugEnabled) MMLog.WriteDebug(string.Format("[{0}] DEBUG: {1}", _prefix, message)); }
+        public void Info(string message) { MMLog.Write(string.Format("[{0}] {1}", _prefix, message)); }
+        public void Warn(string message) { MMLog.Write(string.Format("[{0}] WARN: {1}", _prefix, message)); }
+        public void Error(string message) { MMLog.Write(string.Format("[{0}] ERROR: {1}", _prefix, message)); }
     }
 
     internal class PluginContextImpl : IPluginContext
@@ -736,13 +748,22 @@ namespace ModAPI.Core
         public ModSettings Settings { get; set; }
         public IModLogger Log { get; set; }
         public IGameHelper Game { get; set; }
+        public ISaveSystem SaveSystem { get; set; }
         public string GameRoot { get; set; }
         public string ModsRoot { get; set; }
         public bool IsModernUnity { get { return PluginRunner.IsModernUnity; } }
 
         public Action<Action> Scheduler;
 
-        public void RunNextFrame(Action action) { Scheduler?.Invoke(action); }
+        public FamilyMember FindMember(string characterId)
+        {
+            return Game != null ? Game.FindMember(characterId) : null;
+        }
+
+        public void RunNextFrame(Action action)
+        {
+            if (Scheduler != null) Scheduler(action);
+        }
         public Coroutine StartCoroutine(IEnumerator routine)
         {
             return LoaderRoot != null ? LoaderRoot.GetComponent<PluginRunner>().StartCoroutine(routine) : null;
@@ -759,7 +780,7 @@ namespace ModAPI.Core
             var go = FindPanel(nameOrPath);
             if (go == null)
             {
-                Log?.Warn("FindPanel failed for '" + nameOrPath + "'");
+                if (Log != null) Log.Warn("FindPanel failed for '" + nameOrPath + "'");
                 return null;
             }
             var existing = go.GetComponent<T>();
@@ -767,7 +788,7 @@ namespace ModAPI.Core
             try { return go.AddComponent<T>(); }
             catch (Exception ex)
             {
-                Log?.Error("AddComponentToPanel<" + typeof(T).Name + "> failed: " + ex.Message);
+                if (Log != null) Log.Error("AddComponentToPanel<" + typeof(T).Name + "> failed: " + ex.Message);
                 return null;
             }
         }

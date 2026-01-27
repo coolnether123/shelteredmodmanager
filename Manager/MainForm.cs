@@ -536,6 +536,7 @@ namespace Manager
                     //     catList.Add(cat);
                     // lines.Add("LogCategories=" + string.Join(",", catList.ToArray()));
                     lines.Add("IgnoreOrderChecks=" + (_settings.IgnoreOrderChecks ? "True" : "False"));
+                    lines.Add("AutoLoadSaveSlot=" + _settings.AutoLoadSaveSlot);
                     File.WriteAllLines(iniPath, lines.ToArray());
                 }
                 catch { }

@@ -4,7 +4,7 @@
 **A modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Unicube & Team17**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.1.0-blue)]()
+[![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.2.0-blue)]()
 
 > **Credit:** Originally created by benjaminfoo (2019)  
 > **Maintained by:** Coolnether123 (2025-Present)
@@ -28,9 +28,12 @@ In 2025, I (Coolnether123) discovered Sheltered and went looking for mods. The o
 Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs non-destructively alongside the game.
 
 **Key Features:**
+- **Zero-Boilerplate Mods**: New `ModManagerBase` for lightning-fast development (v1.2)
+- **Mod Attributes**: Simple `[ModToggle]` and `[ModSlider]` for in-game settings (v1.2.0)
+- **Spine Settings API**: Rich, interactive configuration menus (v1.2)
+- **Enhanced Save System**: Per-mod isolated data and dictionary persistence (v1.2.0)
 - Plugin loader with dependency resolution and load order management
 - Unlimited custom save slots with mod tracking and verification
-- **Spine Settings API**: Automatic in-game UI generation for mods (v1.1)
 - Developer API for items, recipes, events, and Harmony patching
 - Desktop and in-game mod managers
 - Runtime inspector (F9) for debugging
@@ -38,13 +41,13 @@ Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs n
 ![Desktop Manager](documentation/screenshots/mod_manager_gui_mods.png)
 *The Mod Manager mods tab allows you to customize your load order, resolve dependencies, and view detailed mod information.*
 
-### New in ModAPI v1.1: Spine Settings Framework (Beta)
-Introducing **Spine**, a powerful settings API that allows modders to create interactive configuration menus with almost zero UI code. Simply mark your fields with `[ModSetting]` attributes, and Spine will automatically generate the UI and handle persistence.
+### New in ModAPI v1.2: Modern Developer Experience
+Introducing **Zero-Boilerplate Modding** and **Spine Settings**, designed to let you focus on gameplay instead of infrastructure.
 
-*   **Zero UI Boilerplate**: Automatic widget generation from C# fields.
-*   **In-Game Integration**: Mod settings are injected directly into the "Mods" menu.
-*   **Presets & Snapshots**: Built-in support for global preset cycles (e.g. Difficulty).
-*   **Real-time Logic**: Validation hooks, dynamic choice lists, and dependencies.
+*   **ModManagerBase**: A high-level base class that handles initialization, settings, and Unity lifecycle for you.
+*   **Mod Attributes**: Simple `[ModToggle]` and `[ModSlider]` widgets for rapid UI prototyping.
+*   **Spine Settings API**: Professional-grade settings UI with validation, presets, and dynamic lists.
+*   **Isolated Mod Persistence**: Register data objects and have them automatically saved/loaded per-slot in `mod_<id>_data.json`.
 
 > [!TIP]
 > **Feedback Wanted!** Spine is in active development. I'm looking for mod authors to test the API and provide feedback. Check out the [Spine Settings Guide](documentation/Spine_Settings_Guide.md) to get started!

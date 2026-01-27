@@ -68,7 +68,30 @@ namespace ModAPI.Spine.UI
         private static void SetTooltip(GameObject go, string text)
         {
             if (string.IsNullOrEmpty(text)) return;
-            if (go.GetComponent<Collider>() == null) NGUITools.AddWidgetCollider(go);
+            
+            // Ensure we have a collider
+            var box = go.GetComponent<BoxCollider>();
+            if (box == null) 
+            {
+                NGUITools.AddWidgetCollider(go);
+                box = go.GetComponent<BoxCollider>();
+            }
+
+            // Fix for zero-size colliders on newly created labels
+            if (box != null)
+            {
+                var widget = go.GetComponent<UIWidget>();
+                if (widget != null)
+                {
+                    // If widget hasn't updated size yet, give it a reasonable default for a setting label
+                    if (box.size.x < 1f || box.size.y < 1f)
+                    {
+                        // Standard setting label area
+                        box.size = new Vector3(Mathf.Max(widget.width, 200), Mathf.Max(widget.height, 24), 1);
+                        box.center = new Vector3(box.size.x / 2, 0, 0); // Offset because Pivot.Left usually means 0 is left edge
+                    }
+                }
+            }
 
             UIEventListener.Get(go).onHover += (obj, isOver) => {
                 if (isOver) ModTooltip.Show(text);

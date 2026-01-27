@@ -169,6 +169,13 @@ namespace Manager.Core.Services
             if (raw.TryGetValue("InstalledModApiVersion", out apiVersion))
                 settings.InstalledModApiVersion = apiVersion;
 
+            string autoLoadSlot;
+            if (raw.TryGetValue("AutoLoadSaveSlot", out autoLoadSlot))
+            {
+                if (int.TryParse(autoLoadSlot, out int slot))
+                    settings.AutoLoadSaveSlot = slot;
+            }
+
             return settings;
         }
 
@@ -196,6 +203,7 @@ namespace Manager.Core.Services
             data["GameBitness"] = settings.GameBitness ?? string.Empty;
             data["AutoCondenseSaves"] = settings.AutoCondenseSaves ?? "ask";
             data["InstalledModApiVersion"] = settings.InstalledModApiVersion ?? string.Empty;
+            data["AutoLoadSaveSlot"] = settings.AutoLoadSaveSlot.ToString();
 
             WriteIniFile(data);
             

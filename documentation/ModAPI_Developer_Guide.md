@@ -1,5 +1,5 @@
 # ModAPI Developer Guide
-## Sheltered Mod Loader v1.0.1
+## Sheltered Mod Loader v1.2.0
 
 A practical guide covering how to use the ModAPI to create mods for Sheltered.
 
@@ -9,8 +9,10 @@ A practical guide covering how to use the ModAPI to create mods for Sheltered.
 > - Item and food injection (ContentInjector)
 > - Custom crafting recipes
 > - Event subscriptions (OnNewDay, OnBeforeSave, OnAfterLoad, OnNewGame (v1.0.1), OnSessionStarted (v1.0.1), UI panel events)
-> - Spine Mod Settings API (High-level attributes, automated UI, validation)
-> - Logging (located in `SMM/mod_manager.log`)
+> - In-Game Mod Settings (ModAttributes, ModManagerBase) (v1.2.0)
+> - Improved Save System (ModPersistenceData, RegisterModData) (v1.2.0)
+> - Dictionary Persistence (SaveLoadDictionary) (v1.2.0)
+> - Logging (scoped logging v1.1.0)
 > - Inter-mod communication (ModEventBus, ModRegistry)
 > - Runtime Inspector (F9)
 >
@@ -38,8 +40,10 @@ A practical guide covering how to use the ModAPI to create mods for Sheltered.
 10. [Persistent Data](#persistent-data)
 11. [Logging](#logging)
 12. [Asset Loading](#asset-loading)
-13. [Mod Settings (Spine)](#mod-settings-spine)
-14. [Inter-Mod Features](#inter-mod-features)
+13. [Zero-Boilerplate Mods (v1.1.0)](#zero-boilerplate-mods)
+14. [Mod Settings (Attributes)](#mod-settings-attributes)
+15. [Mod Settings (Spine)](#mod-settings-spine)
+16. [Inter-Mod Features](#inter-mod-features)
 
 ---
 
@@ -71,33 +75,62 @@ using ModAPI.UI;         // UI element creation
 using ModAPI.Util;       // Utilities, persistent data
 ```
 
-### Basic Mod Structure
+### Basic Mod Structure (Modern - v1.2.0)
+
+Using `ModManagerBase` handles much of the boilerplate for you:
 
 ```csharp
 using ModAPI.Core;
-using ModAPI.Content;
+using UnityEngine;
+
+namespace MyMod
+{
+    // Inherit from ModManagerBase for automatic lifecycle and system access
+    public class MyModManager : ModManagerBase
+    {
+        // Use attributes to auto-create settings UI (v1.2.0)
+        [ModToggle("Enable Boost", "Increases movement speed")]
+        public bool SpeedBoost = true;
+
+        [ModSlider("Multiplier", 1f, 5f)]
+        public float Multiplier = 1.5f;
+
+        public override void Initialize(IPluginContext context)
+        {
+            base.Initialize(context); // REQUIRED: Auto-binds settings/config
+            Log.Info("My mod is starting up!");
+        }
+
+        private void Update()
+        {
+            if (SpeedBoost && Input.GetKeyDown(KeyCode.B))
+            {
+                // Access game systems via Context.Game
+                var player = Context.Game.FindMember("char_father");
+                if (player != null) Log.Info("Father found!");
+            }
+        }
+    }
+}
+```
+
+### Basic Mod Structure (Manual)
+
+```csharp
+using ModAPI.Core;
 
 namespace MyMod
 {
     public class MyModPlugin : IModPlugin
     {
+        public void Initialize(IPluginContext context)
+        {
+            // Called once when mod is loaded
+        }
+
         public void Start(IPluginContext context)
         {
-            context.Log.Info("My mod loaded!");
-            
-            // Register your content here
-            RegisterItems();
-            RegisterRecipes();
-        }
-        
-        private void RegisterItems()
-        {
-            // Your item registration
-        }
-        
-        private void RegisterRecipes()
-        {
-            // Your recipe registration
+            context.Log.Info("My mod started!");
         }
     }
 }
@@ -571,8 +604,7 @@ var element = UIFactory.CreateInteractiveElement(new UIElementOptions
     Parent = parentTransform,
     Sprite = mySprite,
     Label = "Click Me",
-    OnClick = DoSomething,
-    Tooltip = "This button does something"
+    OnClick = DoSomething
 });
 ```
 
@@ -609,6 +641,8 @@ If your mod needs to persist data per-save (not global settings), hook into thes
 
 ### Save Events
 
+**Note:** For simple data persistence, use the new `RegisterModData` method detailed in the "Improved Save System" section below. This manual method is for advanced use cases only.
+
 ```csharp
 public void Start(IPluginContext context)
 {
@@ -618,22 +652,25 @@ public void Start(IPluginContext context)
 
 private void OnBeforeSave(SaveEntry saveEntry)
 {
-    // Save your mod data alongside the game save
-    string path = Path.Combine(saveEntry.path, "mymod_data.json");
+    // Get the correct path for this slot
+    string folder = DirectoryProvider.SlotRoot(saveEntry.scenarioId, saveEntry.absoluteSlot);
+    string path = Path.Combine(folder, "mymod_data.json");
+    
     File.WriteAllText(path, JsonUtility.ToJson(_myData));
 }
 
 private void OnAfterLoad(SaveEntry saveEntry)
 {
-    // Load your mod data
-    string path = Path.Combine(saveEntry.path, "mymod_data.json");
+    string folder = DirectoryProvider.SlotRoot(saveEntry.scenarioId, saveEntry.absoluteSlot);
+    string path = Path.Combine(folder, "mymod_data.json");
+    
     if (File.Exists(path))
     {
         _myData = JsonUtility.FromJson<MyData>(File.ReadAllText(path));
     }
     else
     {
-        _myData = new MyData();  // Defaults for new save
+        _myData = new MyData();
     }
 }
 ```
@@ -887,3 +924,79 @@ public class MyMod : IModPlugin, ISettingsProvider {
     // Implement ISettingsProvider to enable Spine
 }
 ```
+
+---
+
+## Zero-Boilerplate Mods (v1.2.0)
+
+`ModManagerBase` is a new base class that inherits from `MonoBehaviour` and automatically handles common modding tasks. By inheriting from it, you get:
+
+- **Automatic Settings Binding**: Fields marked with `ModAttributes` are automatically linked to the UI and persisted to JSON.
+- **Convenience Accessors**: `Log`, `SaveSystem`, `Settings`, and `Context` are available as protected properties.
+- **Unity Lifecycle**: Standard `Update`, `FixedUpdate`, `OnDestroy` etc. work like any other script.
+- **Automatic Registration**: The loader automatically finds and attaches your manager to a root object.
+
+### Example
+
+```csharp
+public class MyMod : ModManagerBase {
+    [ModToggle("Toggle Me")]
+    public bool MyValue;
+
+    public override void Initialize(IPluginContext ctx) {
+        base.Initialize(ctx); // Binds MyValue to the UI
+    }
+}
+```
+
+---
+
+## Mod Settings (Attributes)
+
+As of v1.2.0, you can use built-in attributes for simpler settings management without implementing `ISettingsProvider`.
+
+| Attribute | Usage |
+|-----------|-------|
+| `[ModToggle("Label")]` | Creates a boolean switch. |
+| `[ModSlider("Label", min, max)]` | Creates a numeric slider. |
+
+These work with `ModManagerBase.Initialize()` or by calling `context.Settings.AutoBind(this)`.
+
+---
+
+## Improved Save System (v1.2.0)
+
+The save system has been upgraded to support per-mod isolated data files and easy dictionary persistence.
+
+### Registering Mod Data
+Instead of handling file IO manually in `OnBeforeSave`, you can register a data object:
+
+```csharp
+public class MyData { public string Name; public int Level; }
+// ...
+var data = new MyData();
+context.SaveSystem.RegisterModData("my_stats", data);
+```
+
+The ModAPI will automatically:
+1. Save `data` to `mod_<id>_data.json` in the active save slot folder.
+2. Load and overwrite the object fields when the save is loaded.
+
+### Dictionary Persistence
+For modders needing to save dynamic key-value pairs (like world markers or quest progress), use `SaveLoadDictionary<TKey, TValue>`.
+
+```csharp
+using ModAPI.Util;
+
+public class MyMod : ModManagerBase {
+    private SaveLoadDictionary<string, int> _reputation = new SaveLoadDictionary<string, int>();
+
+    public override void Initialize(IPluginContext ctx) {
+        base.Initialize(ctx);
+        // Register it so it's auto-saved/loaded
+        RegisterPersistentData("reputation", _reputation);
+    }
+}
+```
+
+This dictionary is JSON-serializable and maintains its state across restarts when using `RegisterModData` or `RegisterPersistentData`.

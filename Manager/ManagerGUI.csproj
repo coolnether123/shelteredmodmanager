@@ -57,6 +57,7 @@
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="UnityEngine">
       <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.dll</HintPath>
@@ -96,10 +97,12 @@
     <!-- Core Models -->
     <Compile Include="Core\Models\ModItem.cs" />
     <Compile Include="Core\Models\AppSettings.cs" />
+    <Compile Include="Core\Models\SaveSlotInfo.cs" />
     <!-- Core Services -->
     <Compile Include="Core\Services\SettingsService.cs" />
     <Compile Include="Core\Services\ModDiscoveryService.cs" />
     <Compile Include="Core\Services\LoadOrderService.cs" />
+    <Compile Include="Core\Services\SaveDiscoveryService.cs" />
     <!-- Custom Controls -->
     <Compile Include="Controls\SearchBox.cs">
       <SubType>UserControl</SubType>

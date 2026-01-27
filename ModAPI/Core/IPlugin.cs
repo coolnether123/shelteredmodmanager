@@ -76,6 +76,7 @@ namespace ModAPI.Core
         string GameRoot { get; }               // e.g., <Sheltered install dir>
         string ModsRoot { get; }               // e.g., <GameRoot>/mods
         bool IsModernUnity { get; }           // true if running on Unity 5.4+ (e.g., EGS version)
+        ISaveSystem SaveSystem { get; }        // per-mod save data persistence
 
         void RunNextFrame(Action action);      // queues an action for next frame
         Coroutine StartCoroutine(IEnumerator routine);
@@ -114,9 +115,35 @@ namespace ModAPI.Core
         FamilyMember FindMember(string characterId);
     }
 
+    /// <summary>
+    /// Per-mod save data persistence (v1.1.0).
+    /// </summary>
+    public interface ISaveSystem
+    {
+        /// <summary>
+        /// Gets the absolute path to the active save folder (e.g., .../Saves/Standard/Slot_8).
+        /// Returns null if no save is currently loaded.
+        /// </summary>
+        string GetCurrentSlotPath();
+
+        /// <summary>
+        /// Gets the human-readable slot index (e.g., 8). Returns -1 if no save is loaded.
+        /// </summary>
+        int ActiveSlotIndex { get; }
+
+        /// <summary>
+        /// Registers a data object to be automatically saved/loaded in the active slot's folder.
+        /// The data is saved as JSON in 'mods_data.json' within the slot folder.
+        /// Call this during Initialize().
+        /// </summary>
+        void RegisterModData<T>(string key, T data) where T : class;
+    }
+
     // Simple logger abstraction so plugins don't depend directly on MMLog static
     public interface IModLogger
     {
+        bool IsDebugEnabled { get; }
+        void Debug(string message);
         void Info(string message);
         void Warn(string message);
         void Error(string message);

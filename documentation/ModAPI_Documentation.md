@@ -252,6 +252,21 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 **Secondary Role:** Provides a standardized way to present mod information to users and to the mod manager for display and management purposes.
 **Interconnections:** Used by `ModDiscovery.cs` to parse mod information and by `ModRegistry.cs` to store details about registered mods. It's often populated from a mod's manifest file.
 
+### `ModAttributes.cs`
+**Primary Role:** Defines attributes (`[ModToggle]`, `[ModSlider]`) for decorative, zero-boilerplate mod settings.
+**Secondary Role:** Facilitates automatic UI generation for simple mod configurations without requiring the full Spine framework.
+**Interconnections:** Used by `ModManagerBase.cs` during initialization.
+
+### `ModManagerBase.cs`
+**Primary Role:** A high-level base class for mods that provides automatic lifecycle management and attribute-based settings binding.
+**Secondary Role:** Simplifies mod creation by providing easy access to logging, save systems, and game state.
+**Interconnections:** Inherits from `MonoBehaviour`. Uses `ModAttributes.cs` for settings discovery.
+
+### `ModPersistenceData.cs`
+**Primary Role:** Internal DTO (Data Transfer Object) for mod data persistence.
+**Secondary Role:** Stores mod-specific key-value JSON blobs within a save slot's mod data file.
+**Interconnections:** Used by `SaveSystemImpl.cs` for serializing mod state.
+
 ### `ModAPI.csproj`
 **Primary Role:** The project file for the ModAPI itself. It defines the project's structure, references to other assemblies, build configurations (e.g., Debug, Release), and compilation settings.
 **Secondary Role:** Essential for the development environment (e.g., Visual Studio) to understand how to build and compile the ModAPI library.
@@ -470,6 +485,11 @@ ModAPI.Saves.Events.OnPageChanged  // Save slot page navigation
 - `DeleteData(string key)` - Remove saved data
 **Interconnections:** Used by mods for configuration and state persistence.
 
+### `Util/SaveLoadDictionary.cs`
+**Primary Role:** A serializable dictionary wrapper that makes persisting dynamic collections of mod data easy.
+**Secondary Role:** Implements `ISerializationCallbackReceiver` to handle dictionary persistence via JSON.
+**Interconnections:** Designed to be used with `ISaveSystem.RegisterModData`.
+
 ---
 
 ## UI System
@@ -528,6 +548,9 @@ shelteredmodmanager/
     │   ├───ModRegistry.cs
     │   ├───ModAPIRegistry.cs
     │   ├───ModSettings.cs
+    │   ├───ModAttributes.cs
+    │   ├───ModManagerBase.cs
+    │   ├───ModPersistenceData.cs
     │   ├───PluginManager.cs
     │   ├───RuntimeCompat.cs
     │   └───SaveProtection.cs
@@ -587,6 +610,7 @@ shelteredmodmanager/
     ├───Util/
     │   ├───GameUtil.cs
     │   ├───PersistentDataAPI.cs
+    │   ├───SaveLoadDictionary.cs
     │   ├───SceneCompat.cs
     │   └───SceneUtil.cs
     ├───Harmony/

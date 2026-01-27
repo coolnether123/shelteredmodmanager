@@ -225,6 +225,17 @@ namespace ModAPI.Core
             WriteInternal(LogLevel.Warning, LogCategory.General, "WarnOnce", message);
         }
 
+        public static void LogOnce(string key, Action logAction)
+        {
+            if (string.IsNullOrEmpty(key) || logAction == null) return;
+            lock (_lock)
+            {
+                if (_warnOnceKeys.Contains(key)) return;
+                _warnOnceKeys.Add(key);
+            }
+            try { logAction(); } catch { }
+        }
+
         public static void WriteException(Exception ex, string context = "", LogCategory category = LogCategory.General)
         {
             if (ex == null) return;
