@@ -71,8 +71,32 @@ namespace ModAPI.Core
         public static int GetLoadedModCount()
             => GetAllMods().Count();
 
-        public static bool HasLoadedMods()
-            => GetLoadedModCount() > 0;
+
+        // --- Service Locator (APIs) -----------------------------------------
+
+        /// <summary>
+        /// Register an API object that other mods can consume.
+        /// </summary>
+        public static void RegisterAPI(string apiId, object implementation)
+        {
+            ModAPIRegistry.RegisterAPI(apiId, implementation);
+        }
+
+        /// <summary>
+        /// Try to get a registered API of type T.
+        /// </summary>
+        public static bool TryGetAPI<T>(string apiId, out T api) where T : class
+        {
+            return ModAPIRegistry.TryGetAPI<T>(apiId, out api);
+        }
+
+        /// <summary>
+        /// Get a registered API of type T. Returns null if not found.
+        /// </summary>
+        public static T GetAPI<T>(string apiId) where T : class
+        {
+            return ModAPIRegistry.GetAPI<T>(apiId);
+        }
 
 
         public static void Clear()

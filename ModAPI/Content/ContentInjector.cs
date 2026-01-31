@@ -70,13 +70,13 @@ namespace ModAPI.Content
 
         private static void TryBootstrap()
         {
-            MMLog.WriteDebug($"[ContentInjector] TryBootstrap called. Bootstrapped={_bootstrapped}, ItemManager={(ItemManager.Instance != null)}, CraftingManager={(CraftingManager.Instance != null)}");
+            MMLog.WriteDebug($"TryBootstrap called. Bootstrapped={_bootstrapped}, ItemManager={(ItemManager.Instance != null)}, CraftingManager={(CraftingManager.Instance != null)}");
             if (_bootstrapped || ItemManager.Instance == null || CraftingManager.Instance == null) return;
 
             lock (Sync)
             {
                 if (_bootstrapped) return;
-                MMLog.Write("[ContentInjector] Starting injection...");
+                MMLog.Write("Starting injection...");
 
                 // 1. Setup Maps
                 BuildItemMap();
@@ -91,7 +91,7 @@ namespace ModAPI.Content
                 InjectCookingRecipes();
 
                 _bootstrapped = true;
-                MMLog.Write("[ContentInjector] Injection complete.");
+                MMLog.Write("Injection complete.");
 
                 // Final Check
                 PluginManager.getInstance().EnqueueNextFrame(VerifyExistence);
@@ -103,13 +103,13 @@ namespace ModAPI.Content
             var im = ItemManager.Instance;
             if (ContentRegistry.ItemPatches.Count == 0) return;
 
-            MMLog.WriteDebug($"[ContentInjector] Applying {ContentRegistry.ItemPatches.Count} item patches...");
+            MMLog.WriteDebug($"Applying {ContentRegistry.ItemPatches.Count} item patches...");
 
             foreach (var patch in ContentRegistry.ItemPatches)
             {
                 if (!ResolveItemType(patch.TargetItemId, out var type))
                 {
-                    MMLog.Write($"[ContentInjector] Item patch failed: Target item '{patch.TargetItemId}' not found.");
+                    MMLog.Write($"Item patch failed: Target item '{patch.TargetItemId}' not found.");
                     continue;
                 }
 
@@ -129,7 +129,7 @@ namespace ModAPI.Content
                 if (patch.NewRecyclingIngredients != null) SetRecyclingIngredients(def, patch.NewRecyclingIngredients);
                 if (patch.NewCategory.HasValue) SetField(def, "m_Category", (ItemManager.ItemCategory)patch.NewCategory.Value);
 
-                MMLog.WriteDebug($"[ContentInjector] Patched item '{patch.TargetItemId}' successfully.");
+                MMLog.WriteDebug($"Patched item '{patch.TargetItemId}' successfully.");
             }
         }
 
@@ -151,16 +151,16 @@ namespace ModAPI.Content
             ItemKeyToType.Clear();
             ResolvedByType.Clear();
             var items = ContentResolver.ResolveItems();
-            MMLog.WriteDebug($"[ContentInjector] BuildItemMap: ContentResolver returned {items.Count} items");
+            MMLog.WriteDebug($"BuildItemMap: ContentResolver returned {items.Count} items");
             foreach (var item in items)
             {
                 if (item?.Definition == null) continue;
                 var typeId = (ItemManager.ItemType)ContentRegistry.EnsureCustomTypeId(item.Definition);
                 ItemKeyToType[item.Definition.Id] = typeId;
                 ResolvedByType[typeId] = item;
-                MMLog.WriteDebug($"[ContentInjector] Mapped item: {item.Definition.Id} -> {typeId} ({(int)typeId})");
+                MMLog.WriteDebug($"Mapped item: {item.Definition.Id} -> {typeId} ({(int)typeId})");
             }
-            MMLog.WriteDebug($"[ContentInjector] BuildItemMap complete: {ResolvedByType.Count} items mapped");
+            MMLog.WriteDebug($"BuildItemMap complete: {ResolvedByType.Count} items mapped");
         }
 
         private static void BuildRuntimeDefinitions()
@@ -204,7 +204,7 @@ namespace ModAPI.Content
                 if (definition.ObjectType != ObjectManager.ObjectType.Undefined && 
                     definition.Category != ItemCategory.Object)
                 {
-                    MMLog.Write($"[ContentInjector] WARNING: Item '{definition.Id}' has ObjectType " +
+                    MMLog.Write($"WARNING: Item '{definition.Id}' has ObjectType " +
                                 $"but Category is {definition.Category}, not Object. " +
                                 $"Item may not spawn correctly.");
                 }
@@ -223,7 +223,7 @@ namespace ModAPI.Content
                 if (definition.IsRawFood) _rawFoodTypes.Add(itemType);
 
                 RuntimeDefinitions[itemType] = def;
-                MMLog.WriteDebug($"[ContentInjector] Built definition for {definition.Id} (Category: {category}, Stack: {definition.StackSize})");
+                MMLog.WriteDebug($"Built definition for {definition.Id} (Category: {category}, Stack: {definition.StackSize})");
             }
         }
 
@@ -234,14 +234,14 @@ namespace ModAPI.Content
             if (Safe.TryGetField(im, "m_ItemDefinitions", out Dictionary<ItemManager.ItemType, GameItemDefinition> dict))
             {
                 foreach (var kvp in RuntimeDefinitions) dict[kvp.Key] = kvp.Value;
-                MMLog.WriteDebug($"[ContentInjector] Injected {RuntimeDefinitions.Count} items into ItemManager.");
+                MMLog.WriteDebug($"Injected {RuntimeDefinitions.Count} items into ItemManager.");
             }
         }
 
         private static void InjectRecipes()
         {
             var cm = CraftingManager.Instance;
-            MMLog.WriteDebug($"[ContentInjector] InjectRecipes: Processing {ContentRegistry.Recipes.Count} recipe definitions");
+            MMLog.WriteDebug($"InjectRecipes: Processing {ContentRegistry.Recipes.Count} recipe definitions");
 
             int added = 0;
             int failed = 0;
@@ -253,7 +253,7 @@ namespace ModAPI.Content
                     // Maybe it's a vanilla item ID?
                     if (!TryParseEnum<ItemManager.ItemType>(def.ResultItemId, out resultType))
                     {
-                        MMLog.Write($"[ContentInjector] Recipe '{def.Id}' skipped - result item '{def.ResultItemId}' not found");
+                        MMLog.Write($"Recipe '{def.Id}' skipped - result item '{def.ResultItemId}' not found");
                         failed++;
                         continue;
                     }
@@ -269,13 +269,13 @@ namespace ModAPI.Content
                     }
                     else
                     {
-                        MMLog.Write($"[ContentInjector] Warning: Recipe '{def.Id}' ingredient '{ingDef.ItemId}' could not be resolved. Skipping.");
+                        MMLog.Write($"Warning: Recipe '{def.Id}' ingredient '{ingDef.ItemId}' could not be resolved. Skipping.");
                     }
                 }
 
                 if (ingredients.Count == 0)
                 {
-                    MMLog.Write($"[ContentInjector] Recipe '{def.Id}' has no valid ingredients. Skipping.");
+                    MMLog.Write($"Recipe '{def.Id}' has no valid ingredients. Skipping.");
                     failed++;
                     continue;
                 }
@@ -304,7 +304,7 @@ namespace ModAPI.Content
                 // Validate the mapped station
                 if (!IsValidCraftLocation(recipe.location))
                 {
-                    MMLog.Write($"[ContentInjector] ERROR: Recipe '{def.Id}' has invalid station '{def.Station}'. Valid stations: Workbench, Laboratory, AmmoPress");
+                    MMLog.Write($"ERROR: Recipe '{def.Id}' has invalid station '{def.Station}'. Valid stations: Workbench, Laboratory, AmmoPress");
                     failed++;
                     continue;
                 }
@@ -312,7 +312,7 @@ namespace ModAPI.Content
                 if (cm.AddRecipe(recipe))
                 {
                     added++;
-                    MMLog.WriteDebug($"[ContentInjector] Added recipe '{def.Id}' producing {resultType} @ {recipe.location} Lv{recipe.level} (Unique: {def.Unique}, Locked: {def.Locked})");
+                    MMLog.WriteDebug($"Added recipe '{def.Id}' producing {resultType} @ {recipe.location} Lv{recipe.level} (Unique: {def.Unique}, Locked: {def.Locked})");
                     
                     if (Safe.TryGetField(cm, "m_RecipesInspector", out List<CraftingManager.Recipe> inspector))
                     {
@@ -325,7 +325,7 @@ namespace ModAPI.Content
                 }
             }
 
-            MMLog.WriteDebug($"[ContentInjector] Recipe injection complete: {added} added, {failed} failed");
+            MMLog.WriteDebug($"Recipe injection complete: {added} added, {failed} failed");
             
             ApplyRecipePatches();
         }
@@ -335,14 +335,14 @@ namespace ModAPI.Content
             var cm = CraftingManager.Instance;
             if (ContentRegistry.RecipePatches.Count == 0) return;
 
-            MMLog.WriteDebug($"[ContentInjector] Applying {ContentRegistry.RecipePatches.Count} recipe patches...");
+            MMLog.WriteDebug($"Applying {ContentRegistry.RecipePatches.Count} recipe patches...");
             
             foreach (var patch in ContentRegistry.RecipePatches)
             {
                 var recipe = cm.GetRecipeByID(patch.TargetRecipeId);
                 if (recipe == null)
                 {
-                    MMLog.Write($"[ContentInjector] Recipe patch failed: Target recipe '{patch.TargetRecipeId}' not found.");
+                    MMLog.Write($"Recipe patch failed: Target recipe '{patch.TargetRecipeId}' not found.");
                     continue;
                 }
 
@@ -359,7 +359,7 @@ namespace ModAPI.Content
                         }
                     }
                     recipe.Input = current.ToArray();
-                    if (removed > 0) MMLog.Write($"[ContentInjector] Removed {removed} ingredients from recipe '{patch.TargetRecipeId}'");
+                    if (removed > 0) MMLog.Write($"Removed {removed} ingredients from recipe '{patch.TargetRecipeId}'");
                 }
 
                 // Handle Additions
@@ -398,7 +398,7 @@ namespace ModAPI.Content
                 if (patch.SetUnique.HasValue) recipe.unique = patch.SetUnique.Value;
                 if (patch.SetLocked.HasValue) recipe.locked = patch.SetLocked.Value;
                 
-                MMLog.WriteDebug($"[ContentInjector] Patched recipe '{patch.TargetRecipeId}' successfully.");
+                MMLog.WriteDebug($"Patched recipe '{patch.TargetRecipeId}' successfully.");
             }
         }
 
@@ -461,7 +461,7 @@ namespace ModAPI.Content
             {
                 if (ContentRegistry.LootEntries.Count == 0) return;
                 
-                MMLog.WriteDebug($"[LootInjection] Injecting {ContentRegistry.LootEntries.Count} loot entries into MapRegion prefabs...");
+                MMLog.WriteDebug($"Injecting {ContentRegistry.LootEntries.Count} loot entries into MapRegion prefabs...");
                 
                 var prefabs = (Dictionary<string, UnityEngine.Object>)AccessTools.Field(typeof(ExpeditionMap), "m_regionPrefabs").GetValue(__instance);
                 if (prefabs == null) return;
@@ -476,7 +476,7 @@ namespace ModAPI.Content
                         if (commonItems != null)
                         {
                             commonItems.Add(new ItemBias { itemType = itemType, bias = (int)entry.Weight });
-                            MMLog.WriteDebug($"[LootInjection] Added {entry.ItemId} to Common loot pool (Weight: {entry.Weight})");
+                            MMLog.WriteDebug($"Added {entry.ItemId} to Common loot pool (Weight: {entry.Weight})");
                         }
                         continue;
                     }
@@ -498,7 +498,7 @@ namespace ModAPI.Content
                             if (locItems != null)
                             {
                                 locItems.Add(new ItemBias { itemType = itemType, bias = (int)entry.Weight });
-                                MMLog.WriteDebug($"[LootInjection] Added {entry.ItemId} to {prefabKvp.Key} prefab (Topography: {region.topography})");
+                                MMLog.WriteDebug($"Added {entry.ItemId} to {prefabKvp.Key} prefab (Topography: {region.topography})");
                             }
                         }
                     }
@@ -511,7 +511,7 @@ namespace ModAPI.Content
             foreach (var kvp in RuntimeDefinitions)
             {
                 bool found = ItemManager.Instance.HasBeenDefined(kvp.Key);
-                MMLog.WriteDebug($"[ContentInjector] VERIFY: {kvp.Key} ({(int)kvp.Key}) exists: {found}");
+                MMLog.WriteDebug($"VERIFY: {kvp.Key} ({(int)kvp.Key}) exists: {found}");
             }
         }
 
@@ -534,7 +534,7 @@ namespace ModAPI.Content
                     {
                         if (res.Icon == null)
                         {
-                            MMLog.Write($"[Patch_Icon] WARNING: Custom item {__instance.m_type} has no icon. " +
+                            MMLog.Write($"WARNING: Custom item {__instance.m_type} has no icon. " +
                                 $"Define IconPath (relative to Assets/) in ItemDefinition to fix this.");
                             return;
                         }
@@ -553,7 +553,7 @@ namespace ModAPI.Content
                             t.localRotation = Quaternion.identity;
                             t.localScale = Vector3.one;
                             go.layer = __instance.gameObject.layer;
-                            MMLog.WriteDebug($"[Patch_Icon] Created CustomModIcon for custom item {__instance.m_type}");
+                            MMLog.WriteDebug($"Created CustomModIcon for custom item {__instance.m_type}");
                         }
                         
                         ui2d = t.GetComponent<UI2DSprite>() ?? t.gameObject.AddComponent<UI2DSprite>();
@@ -648,11 +648,11 @@ namespace ModAPI.Content
                 if (ResolveItemType(recipe.RawItemId, out var rawType))
                 {
                     _cookingRecipes[rawType] = recipe;
-                    MMLog.WriteDebug($"[ContentInjector] Injected cooking recipe: {rawType} -> {recipe.CookedItemId ?? "self"} (x{recipe.HungerMultiplier})");
+                    MMLog.WriteDebug($"Injected cooking recipe: {rawType} -> {recipe.CookedItemId ?? "self"} (x{recipe.HungerMultiplier})");
                 }
                 else
                 {
-                    MMLog.Write($"[ContentInjector] WARNING: Cooking recipe raw item '{recipe.RawItemId}' could not be resolved.");
+                    MMLog.Write($"WARNING: Cooking recipe raw item '{recipe.RawItemId}' could not be resolved.");
                 }
             }
         }

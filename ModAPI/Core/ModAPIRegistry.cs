@@ -41,13 +41,13 @@ namespace ModAPI.Core
         {
             if (string.IsNullOrEmpty(apiName))
             {
-                MMLog.WriteWarning("[ModAPIRegistry] Cannot register API with null/empty name");
+                MMLog.WriteWarning("Cannot register API with null/empty name");
                 return false;
             }
             
             if (implementation == null)
             {
-                MMLog.WriteWarning($"[ModAPIRegistry] Cannot register null implementation for API: {apiName}");
+                MMLog.WriteWarning($"Cannot register null implementation for API: {apiName}");
                 return false;
             }
             
@@ -55,7 +55,7 @@ namespace ModAPI.Core
             {
                 if (_apis.ContainsKey(apiName))
                 {
-                    MMLog.WriteWarning($"[ModAPIRegistry] API already registered: {apiName}. " +
+                    MMLog.WriteWarning($"API already registered: {apiName}. " +
                               $"Provider: {_apiProviders.GetValueOrDefault(apiName, "unknown")}");
                     return false;
                 }
@@ -63,7 +63,7 @@ namespace ModAPI.Core
                 _apis[apiName] = implementation;
                 _apiProviders[apiName] = providerModId ?? "unknown";
                 
-                MMLog.WriteInfo($"[ModAPIRegistry] Registered API: {apiName} (Provider: {_apiProviders[apiName]}, Type: {typeof(T).Name})");
+                MMLog.WriteInfo($"Registered API: {apiName} (Provider: {_apiProviders[apiName]}, Type: {typeof(T).Name})");
                 return true;
             }
         }
@@ -84,7 +84,7 @@ namespace ModAPI.Core
             {
                 if (!_apis.TryGetValue(apiName, out api) || api == null)
                 {
-                    MMLog.WriteDebug($"[ModAPIRegistry] API not found: {apiName}");
+                    MMLog.WriteDebug($"API not found: {apiName}");
                     return null;
                 }
             }
@@ -92,12 +92,12 @@ namespace ModAPI.Core
             T typedApi = api as T;
             if (typedApi == null)
             {
-                MMLog.WriteWarning($"[ModAPIRegistry] Type mismatch for API {apiName}. " +
+                MMLog.WriteWarning($"Type mismatch for API {apiName}. " +
                           $"Expected {typeof(T).Name}, got {api.GetType().Name}");
             }
             else
             {
-                MMLog.WriteDebug($"[ModAPIRegistry] Retrieved API: {apiName} as {typeof(T).Name}");
+                MMLog.WriteDebug($"Retrieved API: {apiName} as {typeof(T).Name}");
             }
             
             return typedApi;
@@ -154,7 +154,7 @@ namespace ModAPI.Core
                     string registeredProvider = _apiProviders.GetValueOrDefault(apiName, null);
                     if (registeredProvider != providerModId)
                     {
-                        MMLog.WriteWarning($"[ModAPIRegistry] Cannot unregister API {apiName}. " +
+                        MMLog.WriteWarning($"Cannot unregister API {apiName}. " +
                                   $"Provider mismatch: requested={providerModId}, registered={registeredProvider}");
                         return false;
                     }
@@ -163,7 +163,7 @@ namespace ModAPI.Core
                 _apis.Remove(apiName);
                 _apiProviders.Remove(apiName);
                 
-                MMLog.WriteInfo($"[ModAPIRegistry] Unregistered API: {apiName}");
+                MMLog.WriteInfo($"Unregistered API: {apiName}");
                 return true;
             }
         }
@@ -227,7 +227,7 @@ namespace ModAPI.Core
                 int count = _apis.Count;
                 _apis.Clear();
                 _apiProviders.Clear();
-                MMLog.WriteDebug($"[ModAPIRegistry] Cleared all {count} registered APIs");
+                MMLog.WriteDebug($"Cleared all {count} registered APIs");
             }
         }
     }

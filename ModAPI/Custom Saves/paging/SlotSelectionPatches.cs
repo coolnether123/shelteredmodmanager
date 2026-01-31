@@ -43,6 +43,9 @@ namespace ModAPI.Hooks
                     }
                 }
                 
+                // On page 0, we just ensure vanilla slots 3 & 4 are active, hide verification icons, and let vanilla run.
+                // Cleanup is done in the Postfix below.
+
                 // Hide verification icons when on vanilla page
                 SaveVerification.UpdateIcons(__instance);
                 
@@ -140,6 +143,64 @@ namespace ModAPI.Hooks
 
             return false;
         }
+
+        /// <summary>
+        /// Postfix runs after vanilla RefreshSaveSlotInfo on Page 0 to clean ghost data and refresh labels.
+        /// </summary>
+        static void Postfix(SlotSelectionPanel __instance)
+        {
+            int page = PagingManager.GetPage(__instance);
+            if (page != 0) return;
+
+            try
+            {
+                var t = Traverse.Create(__instance);
+                var slotInfos = t.Field("m_slotInfo").GetValue<System.Collections.IList>();
+
+                // Clear ghost data from empty slots
+                if (slotInfos != null)
+                {
+                    for (int i = 0; i < 3 && i < slotInfos.Count; i++)
+                    {
+                        var info = slotInfos[i];
+                        if (info == null) continue;
+
+                        var tSlot = Traverse.Create(info);
+                        var state = tSlot.Field("m_state").GetValue<SlotSelectionPanel.SlotState>();
+
+                        if (state == SlotSelectionPanel.SlotState.Empty)
+                        {
+                            tSlot.Field("m_familyName").SetValue("");
+                            tSlot.Field("m_daysSurvived").SetValue(0);
+                            if (tSlot.Field("m_dateSaved").FieldExists()) tSlot.Field("m_dateSaved").SetValue("");
+                            if (tSlot.Field("m_saveTime").FieldExists()) tSlot.Field("m_saveTime").SetValue("");
+                        }
+                    }
+                }
+
+                // Let vanilla format the labels correctly
+                t.Method("RefreshSlotLabels").GetValue();
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"[RefreshSaveSlotInfo Postfix] Error during Page 0 cleanup: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Helper to replace the first digit sequence in a string (e.g., "Slot 4" -> "Slot 1")
+        /// </summary>
+        private static string ReplaceSlotNumber(string text, int newNumber)
+        {
+            int start = -1, len = 0;
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (char.IsDigit(text[i])) { start = i; break; }
+            }
+            if (start < 0) return text;
+            for (int i = start; i < text.Length && char.IsDigit(text[i]); i++) len++;
+            return text.Substring(0, start) + newNumber.ToString() + text.Substring(start + len);
+        }
     }
 
     [HarmonyPatch(typeof(SlotSelectionPanel), "RefreshSlotLabels")]
@@ -194,6 +255,7 @@ namespace ModAPI.Hooks
                 int page = PagingManager.GetPage(__instance);
                 
                 // For vanilla saves (page 0), check for mod mismatches BEFORE allowing vanilla load
+                    // For vanilla saves (page 0), check for mod mismatches BEFORE allowing vanilla load
                 if (page == 0)
                 {
                     try
@@ -204,8 +266,19 @@ namespace ModAPI.Hooks
                         // Only check slots 1-3 (indices 0-2)
                         if (chosenSlotIndex >= 0 && chosenSlotIndex < 3)
                         {
+                            var vanillaSaveInfo = ModAPI.Saves.SaveRegistryCore.ReadVanillaSaveInfo(chosenSlotIndex + 1);
                             var slotRoot = DirectoryProvider.SlotRoot("Standard", chosenSlotIndex + 1, false);
                             var manPath = System.IO.Path.Combine(slotRoot, "manifest.json");
+
+                            // AUTO-FIX: If vanilla save is missing (vanillaSaveInfo == null) but manifest exists,
+                            // it means we have an orphaned manifest from a previous deletion. Clean it up!
+                            if (vanillaSaveInfo == null && System.IO.File.Exists(manPath))
+                            {
+                                MMLog.Write($"[OnSlotChosen] Found orphaned manifest for empty vanilla slot {chosenSlotIndex + 1}. Auto-cleaning.");
+                                try { ExpandedVanillaSaves.DeleteBySlot(chosenSlotIndex + 1); } catch {}
+                                return true; // Treat as empty slot -> New Game
+                            }
+
                             SlotManifest manifest = null;
                             
                             if (System.IO.File.Exists(manPath))
@@ -223,7 +296,6 @@ namespace ModAPI.Hooks
                                     if (state != SaveVerification.VerificationState.Match)
                                     {
                                         // Mismatch detected - show dialog WITHOUT starting vanilla load
-                                        var vanillaSaveInfo = ModAPI.Saves.SaveRegistryCore.ReadVanillaSaveInfo(chosenSlotIndex + 1);
                                         var entry = new ModAPI.Saves.SaveEntry
                                         {
                                             id = $"vanilla_slot_{chosenSlotIndex + 1}",
@@ -368,7 +440,33 @@ namespace ModAPI.Hooks
             static bool Prefix(SlotSelectionPanel __instance, int response)
             {
                 int page = PagingManager.GetPage(__instance);
-                if (page == 0) return true;
+                
+                // If on vanilla page (0), we still need to intercept confirmed deletes (response == 1)
+                // to clean up the 'Slot_X' directory which holds Mod Manifests.
+                // If we don't do this, the vanilla save is deleted but the Folder+Manifest remains,
+                // causing 'Save Corrupted' warnings on empty slots.
+                if (page == 0)
+                {
+                    if (response == 1)
+                    {
+                        try
+                        {
+                            var t = Traverse.Create(__instance);
+                            int selectedSlotIndex = t.Field("m_selectedSlot").GetValue<int>(); // 0-2 (Vanilla slots)
+                            int absoluteSlot = selectedSlotIndex + 1;
+                            
+                            MMLog.Write($"[OnDeleteMessageBox] Detected vanilla save deletion for Slot {absoluteSlot}. Cleaning up metadata...");
+                            
+                            // Delete the Slot_X folder managed by ModAPI
+                            ExpandedVanillaSaves.DeleteBySlot(absoluteSlot);
+                        }
+                        catch (Exception ex)
+                        {
+                            MMLog.WriteError($"[OnDeleteMessageBox] Error cleaning up vanilla slot metadata: {ex}");
+                        }
+                    }
+                    return true; // ALWAYS return true to let Vanilla logic proceed (deleting actual save file)
+                }
 
                 if (response != 1) return false;
 
@@ -396,7 +494,7 @@ namespace ModAPI.Hooks
                 catch (Exception ex)
                 {
                     MMLog.WriteError("OnDeleteMessageBox Prefix patch error: " + ex);
-                    return true;
+                    return true; // Fallback to vanilla if something catastrophic happens
                 }
             }
         }

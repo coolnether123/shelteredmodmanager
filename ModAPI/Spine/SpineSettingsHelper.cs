@@ -24,7 +24,7 @@ namespace ModAPI.Spine
             var type = settingsObject.GetType();
             var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
             
-            MMLog.WriteDebug($"[Spine] Scanning {type.Name} for settings...");
+            MMLog.WriteDebug($"Scanning {type.Name} for settings...");
 
             // Scan Fields
             foreach (var field in type.GetFields(flags))
@@ -69,7 +69,7 @@ namespace ModAPI.Spine
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError($"[Spine] Error scanning field '{field.Name}' in '{type.Name}': {ex}");
+                    MMLog.WriteError($"Error scanning field '{field.Name}' in '{type.Name}': {ex}");
                 }
             }
             
@@ -89,7 +89,7 @@ namespace ModAPI.Spine
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError($"[Spine] Error scanning property '{prop.Name}' in '{type.Name}': {ex}");
+                    MMLog.WriteError($"Error scanning property '{prop.Name}' in '{type.Name}': {ex}");
                 }
             }
 
@@ -106,7 +106,7 @@ namespace ModAPI.Spine
                 }
             }
 
-            MMLog.Write($"[Spine] Scan complete for {type.Name}. Found {definitions.Count} definitions.");
+            MMLog.Write($"Scan complete for {type.Name}. Found {definitions.Count} definitions.");
             // Sort by order
             definitions.Sort((a, b) => a.SortOrder.CompareTo(b.SortOrder));
             return definitions;
@@ -148,10 +148,10 @@ namespace ModAPI.Spine
                         if (m != null) return (bool)m.Invoke(obj, null);
                         var p = settingsType.GetProperty(attr.VisibilityMethod, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                         if (p != null) return (bool)p.GetValue(obj, null);
-                        MMLog.WriteError($"[Spine] VisibilityMethod '{attr.VisibilityMethod}' not found on {settingsType.Name}");
+                        MMLog.WriteError($"VisibilityMethod '{attr.VisibilityMethod}' not found on {settingsType.Name}");
                         return true;
                     } catch (Exception ex) {
-                        MMLog.WriteError($"[Spine] Error executing VisibilityMethod '{attr.VisibilityMethod}': {ex}");
+                        MMLog.WriteError($"Error executing VisibilityMethod '{attr.VisibilityMethod}': {ex}");
                         return true;
                     }
                 };
@@ -166,10 +166,10 @@ namespace ModAPI.Spine
                         if (m != null) return (IEnumerable<string>)m.Invoke(obj, null);
                         var p = settingsType.GetProperty(attr.OptionsSource, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                         if (p != null) return (IEnumerable<string>)p.GetValue(obj, null);
-                        MMLog.WriteError($"[Spine] OptionsSource '{attr.OptionsSource}' not found on {settingsType.Name}");
+                        MMLog.WriteError($"OptionsSource '{attr.OptionsSource}' not found on {settingsType.Name}");
                         return Enumerable.Empty<string>();
                     } catch (Exception ex) {
-                        MMLog.WriteError($"[Spine] Error executing OptionsSource '{attr.OptionsSource}': {ex}");
+                        MMLog.WriteError($"Error executing OptionsSource '{attr.OptionsSource}': {ex}");
                         return Enumerable.Empty<string>();
                     }
                 };
@@ -182,10 +182,10 @@ namespace ModAPI.Spine
                     try {
                         var m = settingsType.GetMethod(attr.ValidateMethod, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                         if (m != null) return (bool)m.Invoke(obj, new[] { newVal });
-                        MMLog.WriteError($"[Spine] ValidateMethod '{attr.ValidateMethod}' not found on {settingsType.Name}");
+                        MMLog.WriteError($"ValidateMethod '{attr.ValidateMethod}' not found on {settingsType.Name}");
                         return true;
                     } catch (Exception ex) {
-                        MMLog.WriteError($"[Spine] Error executing ValidateMethod '{attr.ValidateMethod}': {ex}");
+                        MMLog.WriteError($"Error executing ValidateMethod '{attr.ValidateMethod}': {ex}");
                         return true;
                     }
                 };

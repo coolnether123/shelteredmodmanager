@@ -70,6 +70,7 @@
     <Compile Include="Characters\PartyPatches.cs" />
     <Compile Include="Core\IPlugin.cs" />
     <Compile Include="Core\ModRegistry.cs" />
+    <Compile Include="Core\ModLog.cs" />
     <Compile Include="Core\MMLog.cs" />
     <Compile Include="Core\LoggerExtensions.cs" />
     <Compile Include="Core\ContextExtensions.cs" />
@@ -86,6 +87,9 @@
     <Compile Include="UI\ContextUIExtensions.cs" />
     <Compile Include="UI\UIPatches.cs" />
     <Compile Include="UI\UIDebug.cs" />
+    <Compile Include="UI\ContextMenuHelper.cs" />
+    <Compile Include="UI\NGUIHelper.cs" />
+    <Compile Include="UI\ModUIHooks.cs" />
     <Compile Include="Spine\SettingType.cs" />
     <Compile Include="Spine\SettingMode.cs" />
     <Compile Include="Spine\SettingDefinition.cs" />
@@ -100,6 +104,11 @@
     <Compile Include="Harmony\HarmonyUtil.cs" />
     <Compile Include="Harmony\HarmonyHelper.cs" />
     <Compile Include="Harmony\MainMenuPatches.cs" />
+    <Compile Include="Harmony\FluentTranspiler.cs" />
+    <Compile Include="Harmony\TranspilerDebugger.cs" />
+    <Compile Include="Harmony\UnityPatterns.cs" />
+    <Compile Include="Harmony\FluentTranspilerPatterns.cs" />
+    <Compile Include="Debugging\SmartWatcher.cs" />
     <Compile Include="Inspector\HierarchyUtil.cs" />
     <Compile Include="Inspector\BoundsHighlighter.cs" />
     <Compile Include="Inspector\RuntimeInspector.cs" />
@@ -113,6 +122,9 @@
     <Compile Include="Core\GameHelperImpl.cs" />
     <Compile Include="Core\SaveSystemImpl.cs" />
     <Compile Include="Core\ModPersistenceData.cs" />
+    <Compile Include="Persistence\ModPersistence.cs" />
+    <Compile Include="Persistence\ModList.cs" />
+    <Compile Include="Persistence\ModDictionary.cs" />
     <Compile Include="Core\ModAttributes.cs" />
     <Compile Include="Core\ModManagerBase.cs" />
     <Compile Include="Content\AssetLoader.cs" />
@@ -124,12 +136,15 @@
     <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Reflection\Safe.cs" />
+    <Compile Include="Reflection\SafeExtensions.cs" />
     <Compile Include="Util\GameUtil.cs" />
     <Compile Include="Hooks\WorldHooks.cs" />
     <Compile Include="Hooks\UIHooks.cs" />
     <Compile Include="Events\GameEvents.cs" />
+    <Compile Include="Events\FactionEvents.cs" />
     <Compile Include="Events\ModEventBus.cs" />
     <Compile Include="Events\UIEvents.cs" />
+    <Compile Include="Interactions\InteractionRegistry.cs" />
     <Compile Include="Core\ModAPIRegistry.cs" />
     <Compile Include="Custom Saves\PlatformSaveProxy.cs" />
     <Compile Include="Custom Saves\SaveExitPanelOnCancelPatch.cs" />

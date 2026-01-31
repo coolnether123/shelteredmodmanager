@@ -96,7 +96,7 @@ namespace ModAPI.Saves
         /// </summary>
         public bool DeleteBySlot(int absoluteSlot)
         {
-            MMLog.Write($"[SaveRegistryCore] DeleteBySlot called for slot {absoluteSlot}");
+            MMLog.Write($"DeleteBySlot called for slot {absoluteSlot}");
             
             var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, absoluteSlot, false);
             
@@ -104,21 +104,21 @@ namespace ModAPI.Saves
             { 
                 if (Directory.Exists(slotRoot))
                 {
-                    MMLog.Write($"[SaveRegistryCore] DeleteBySlot: Deleting directory '{slotRoot}'");
+                    MMLog.Write($"DeleteBySlot: Deleting directory '{slotRoot}'");
                     Directory.Delete(slotRoot, true);
                     InvalidateCache();
-                    MMLog.Write($"[SaveRegistryCore] DeleteBySlot: Successfully deleted slot {absoluteSlot}");
+                    MMLog.Write($"DeleteBySlot: Successfully deleted slot {absoluteSlot}");
                     return true;
                 }
                 else
                 {
-                    MMLog.WriteError($"[SaveRegistryCore] DeleteBySlot: Directory does not exist: '{slotRoot}'");
+                    MMLog.WriteError($"DeleteBySlot: Directory does not exist: '{slotRoot}'");
                     return false;
                 }
             } 
             catch (Exception ex)
             { 
-                MMLog.WriteError($"[SaveRegistryCore] DeleteBySlot failed: {ex.Message}");
+                MMLog.WriteError($"DeleteBySlot failed: {ex.Message}");
                 return false;
             }
         }
@@ -172,12 +172,12 @@ namespace ModAPI.Saves
                         }
                         catch (Exception ex)
                         {
-                            MMLog.WriteError($"[SaveRegistryCore] Error reading slot {absoluteSlot}: {ex.Message}");
+                            MMLog.WriteError($"Error reading slot {absoluteSlot}: {ex.Message}");
                         }
                     }
                 }
 
-                MMLog.WriteDebug($"[SaveRegistryCore] Discovered {_entryCache.Count} saves for scenario '{_scenarioId}'");
+                MMLog.WriteDebug($"Discovered {_entryCache.Count} saves for scenario '{_scenarioId}'");
                 _cacheValid = true;
                 return _entryCache;
             }
@@ -216,7 +216,7 @@ namespace ModAPI.Saves
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError($"[SaveRegistryCore] Error parsing {savePath}: {ex.Message}");
+                    MMLog.WriteError($"Error parsing {savePath}: {ex.Message}");
                 }
             }
             else
@@ -296,37 +296,37 @@ namespace ModAPI.Saves
 
         public bool DeleteSave(string saveId)
         {
-            MMLog.Write($"[SaveRegistryCore] DeleteSave called with ID: '{saveId}'");
+            MMLog.Write($"DeleteSave called with ID: '{saveId}'");
             
             var entry = GetSave(saveId);
             if (entry == null)
             {
-                MMLog.WriteError($"[SaveRegistryCore] DeleteSave: Entry not found for ID '{saveId}'");
+                MMLog.WriteError($"DeleteSave: Entry not found for ID '{saveId}'");
                 return false;
             }
 
-            MMLog.Write($"[SaveRegistryCore] DeleteSave: Found entry - Slot={entry.absoluteSlot}, Name='{entry.name}'");
+            MMLog.Write($"DeleteSave: Found entry - Slot={entry.absoluteSlot}, Name='{entry.name}'");
 
             var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, entry.absoluteSlot, false);
-            MMLog.Write($"[SaveRegistryCore] DeleteSave: Slot directory = '{slotRoot}'");
+            MMLog.Write($"DeleteSave: Slot directory = '{slotRoot}'");
             
             // Delete the entire slot directory
             try 
             { 
                 if (Directory.Exists(slotRoot))
                 {
-                    MMLog.Write($"[SaveRegistryCore] DeleteSave: Deleting directory '{slotRoot}'");
+                    MMLog.Write($"DeleteSave: Deleting directory '{slotRoot}'");
                     Directory.Delete(slotRoot, true);
-                    MMLog.Write($"[SaveRegistryCore] DeleteSave: Directory deleted successfully");
+                    MMLog.Write($"DeleteSave: Directory deleted successfully");
                 }
                 else
                 {
-                    MMLog.WriteError($"[SaveRegistryCore] DeleteSave: Directory does not exist: '{slotRoot}'");
+                    MMLog.WriteError($"DeleteSave: Directory does not exist: '{slotRoot}'");
                 }
             } 
             catch (Exception ex)
             { 
-                MMLog.WriteError($"[SaveRegistryCore] Failed to delete slot directory: {ex.Message}");
+                MMLog.WriteError($"Failed to delete slot directory: {ex.Message}");
                 return false;
             }
             
@@ -334,7 +334,7 @@ namespace ModAPI.Saves
             try { File.Delete(DirectoryProvider.PreviewPath(_scenarioId, saveId)); } catch { }
 
             InvalidateCache();
-            MMLog.Write($"[SaveRegistryCore] DeleteSave: Completed for slot {entry.absoluteSlot}");
+            MMLog.Write($"DeleteSave: Completed for slot {entry.absoluteSlot}");
             return true;
         }
 
@@ -350,14 +350,14 @@ namespace ModAPI.Saves
                 
                 if (loaded == null)
                 {
-                    MMLog.WriteError("[SaveRegistryCore] PluginManager.LoadedMods is NULL!");
+                    MMLog.WriteError("PluginManager.LoadedMods is NULL!");
                 }
                 else
                 {
-                    MMLog.WriteDebug($"[SaveRegistryCore] UpdateSlotManifest: Gathering {loaded.Count} active mods.");
+                    MMLog.WriteDebug($"UpdateSlotManifest: Gathering {loaded.Count} active mods.");
                     foreach (var mod in loaded)
                     {
-                        if (mod == null) { MMLog.WriteError("[SaveRegistryCore] Found null mod entry in LoadedMods!"); continue; }
+                        if (mod == null) { MMLog.WriteError("Found null mod entry in LoadedMods!"); continue; }
                         
                         string warning = mod.About?.missingModWarning;
                         currentMods.Add(new LoadedModInfo 
@@ -366,7 +366,7 @@ namespace ModAPI.Saves
                             version = mod.Version, 
                             warnings = string.IsNullOrEmpty(warning) ? new string[0] : new string[] { warning }
                         });
-                        MMLog.WriteDebug($"[SaveRegistryCore]   - Active: {mod.Id} v{mod.Version}");
+                        MMLog.WriteDebug($"  - Active: {mod.Id} v{mod.Version}");
                     }
                 }
 
@@ -379,12 +379,12 @@ namespace ModAPI.Saves
                 };
 
                 string slotJson = SerializeSlotManifest(newManifest);
-                MMLog.WriteDebug($"[SaveRegistryCore] Updating manifest for Slot {absoluteSlot}. Mods: {currentMods.Count}. JSON:\n{slotJson}");
+                MMLog.WriteDebug($"Updating manifest for Slot {absoluteSlot}. Mods: {currentMods.Count}. JSON:\n{slotJson}");
                 File.WriteAllText(path, slotJson);
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"[SaveRegistryCore] Failed to update slot manifest for slot {absoluteSlot}: {ex}");
+                MMLog.WriteError($"Failed to update slot manifest for slot {absoluteSlot}: {ex}");
             }
         }
 
@@ -431,20 +431,20 @@ namespace ModAPI.Saves
                             }
                             else
                             {
-                                MMLog.WriteError($"[CondenseSlots] Cannot move {entry.absoluteSlot} to {expectedSlot} - target not empty.");
+                                MMLog.WriteError($"Cannot move {entry.absoluteSlot} to {expectedSlot} - target not empty.");
                                 expectedSlot++; 
                                 continue; 
                             }
                         }
 
                         Directory.Move(oldDir, newDir);
-                        MMLog.Write($"[CondenseSlots] Moved save from Slot {entry.absoluteSlot} to Slot {expectedSlot}");
+                        MMLog.Write($"Moved save from Slot {entry.absoluteSlot} to Slot {expectedSlot}");
                         success = true;
                         changed = true;
                     }
                     catch (Exception ex)
                     {
-                        MMLog.WriteError($"[CondenseSlots] Failed to move slot {entry.absoluteSlot} to {expectedSlot}: {ex.Message}");
+                        MMLog.WriteError($"Failed to move slot {entry.absoluteSlot} to {expectedSlot}: {ex.Message}");
                     }
                     
                     if (success) expectedSlot++;
@@ -756,7 +756,7 @@ namespace ModAPI.Saves
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"[DeserializeSlotManifest] Parse error: {ex.Message}");
+                MMLog.WriteError($"DeserializeSlotManifest: Parse error: {ex.Message}");
             }
             
             return result;
@@ -863,7 +863,7 @@ namespace ModAPI.Saves
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"[SaveRegistryCore] Failed to read SaveInfo from XML: {ex.Message}");
+                MMLog.WriteError($"Failed to read SaveInfo from XML: {ex.Message}");
             }
 
             return info;
@@ -906,7 +906,7 @@ namespace ModAPI.Saves
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"[SaveRegistryCore] Failed to read vanilla save info for slot {slotNumber}: {ex.Message}");
+                MMLog.WriteError($"Failed to read vanilla save info for slot {slotNumber}: {ex.Message}");
                 return null;  // Return null on error
             }
         }
@@ -927,7 +927,7 @@ namespace ModAPI.Saves
             }
             catch (Exception ex)
             {
-                MMLog.WriteDebug($"[SaveRegistryCore] Failed to read slot manifest for {scenarioId}/{absoluteSlot}: {ex.Message}");
+                MMLog.WriteDebug($"Failed to read slot manifest for {scenarioId}/{absoluteSlot}: {ex.Message}");
             }
             return null;
         }
@@ -975,23 +975,23 @@ namespace ModAPI.Saves
             }
             if (slots.Count == 0) 
             {
-                MMLog.WriteDebug("[SaveCondenseManager] HasGaps: No custom saves in manifest.");
+                MMLog.WriteDebug("HasGaps: No custom saves in manifest.");
                 return false;
             }
 
             slots.Sort();
-            MMLog.WriteDebug($"[SaveCondenseManager] HasGaps: checking {slots.Count} saves. Scenario: {_scenarioId}");
+            MMLog.WriteDebug($"HasGaps: checking {slots.Count} saves. Scenario: {_scenarioId}");
             int expected = startSlot;
             foreach (var slot in slots)
             {
                 if (slot != expected) 
                 {
-                    MMLog.WriteDebug($"[SaveCondenseManager] HasGaps: GAP FOUND! Expected {expected}, found {slot}");
+                    MMLog.WriteDebug($"HasGaps: GAP FOUND! Expected {expected}, found {slot}");
                     return true;
                 }
                 expected++;
             }
-            MMLog.WriteDebug("[SaveCondenseManager] HasGaps: No gaps found.");
+            MMLog.WriteDebug("HasGaps: No gaps found.");
             return false;
         }
 
@@ -1023,7 +1023,7 @@ namespace ModAPI.Saves
 
             try
             {
-                MMLog.WriteDebug("[SaveCondenseManager] Starting startup gap check...");
+                MMLog.WriteDebug("Starting startup gap check...");
                 var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
                 
                 if (!registry.HasGaps())
@@ -1032,26 +1032,26 @@ namespace ModAPI.Saves
                 }
 
                 var pref = ReadCondensePreference();
-                MMLog.Write($"[SaveCondenseManager] Gaps detected. User preference from INI: '{pref}'");
+                MMLog.Write($"Gaps detected. User preference from INI: '{pref}'");
 
                 if (pref == "yes" || pref == "true")
                 {
-                    MMLog.Write("[SaveCondenseManager] Auto-condensing saves (user preference: yes).");
+                    MMLog.Write("Auto-condensing saves (user preference: yes).");
                     registry.RunCondense();
                 }
                 else if (pref == "no" || pref == "false")
                 {
-                    MMLog.Write("[SaveCondenseManager] Skipping condense (user preference: no).");
+                    MMLog.Write("Skipping condense (user preference: no).");
                 }
                 else
                 {
-                    MMLog.Write("[SaveCondenseManager] Preference is 'ask'. Flagging for prompt on Main Menu.");
+                    MMLog.Write("Preference is 'ask'. Flagging for prompt on Main Menu.");
                     _pendingPrompt = true;
                 }
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"[SaveCondenseManager] Error during startup check: {ex}");
+                MMLog.WriteError($"Error during startup check: {ex}");
             }
         }
 
@@ -1078,11 +1078,11 @@ namespace ModAPI.Saves
                 {
                     var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
                     registry.RunCondense();
-                    MMLog.Write("[SaveCondenseManager] Condensed saves per user request.");
+                    MMLog.Write("Condensed saves per user request.");
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError($"[SaveCondenseManager] Error condensing: {ex}");
+                    MMLog.WriteError($"Error condensing: {ex}");
                 }
             }
         }
@@ -1105,17 +1105,17 @@ namespace ModAPI.Saves
                     var v = line.Substring(idx + 1).Trim().ToLowerInvariant();
                     if (k.Equals("AutoCondenseSaves", StringComparison.OrdinalIgnoreCase))
                     {
-                        MMLog.Write($"[SaveCondenseManager] Read preference: '{v}'");
+                        MMLog.Write($"Read preference: '{v}'");
                         return v;
                     }
                 }
             }
             catch (Exception ex)
             {
-                MMLog.WriteDebug($"[SaveCondenseManager] Error reading preference: {ex.Message}");
+                MMLog.WriteDebug($"Error reading preference: {ex.Message}");
             }
             
-            MMLog.Write($"[SaveCondenseManager] Read preference: 'ask' (default)");
+            MMLog.Write($"Read preference: 'ask' (default)");
             return "ask";
         }
 
@@ -1153,11 +1153,11 @@ namespace ModAPI.Saves
                     lines.Add($"AutoCondenseSaves={value}");
 
                 File.WriteAllLines(ini, lines.ToArray());
-                MMLog.WriteDebug($"[SaveCondenseManager] Saved preference: AutoCondenseSaves={value}");
+                MMLog.WriteDebug($"Saved preference: AutoCondenseSaves={value}");
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"[SaveCondenseManager] Error writing preference: {ex}");
+                MMLog.WriteError($"Error writing preference: {ex}");
             }
         }
     }

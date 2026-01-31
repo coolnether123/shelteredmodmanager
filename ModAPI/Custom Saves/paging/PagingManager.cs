@@ -102,26 +102,50 @@ namespace ModAPI.Hooks.Paging
         /// </summary>
         public static void ChangePage(SlotSelectionPanel panel, int delta)
         {
-            int p = GetPage(panel);
-
-            if (delta < 0 && p <= 0) return; // Cannot go back from page 1
-
-            int newPage = Math.Max(0, p + delta);
-            if (newPage == p) return;
-
-            SetPage(panel, newPage);
-            ModAPI.Saves.Events.RaisePageChanged(newPage); // Triggers RefreshSaveSlotInfo patch which updates UI
-
-            // Tutorial Check
-            if (newPage == 1 && ModPrefs.GetInt("ModAPI_HasSeenCustomSavesHelp", 0) == 0)
+            try
             {
-                ModPrefs.SetInt("ModAPI_HasSeenCustomSavesHelp", 1);
-                ModPrefs.Save();
-                MessageBox.Show(MessageBoxButtons.Okay_Button, "Welcome to Custom Saves!\n\nPage 2+ contains unlimited custom saves.\nUse arrows or keyboard to navigate pages.\n\nSaves stay in their slots permanently.\nIf gaps occur (from deleting saves), you'll be\nasked at game startup if you want to reorganize.\n\nSlots 1-3 are vanilla saves.");
-            }
+                int p = GetPage(panel);
 
-            panel.RefreshSaveSlotInfo(); // This will trigger our Postfix patch to update the UI
-            Update(panel);
+                if (delta < 0 && p <= 0) 
+                {
+                    MMLog.WriteDebug("[PagingManager] Ignored ChangePage - already at page 0.");
+                    return; 
+                }
+
+                int newPage = Math.Max(0, p + delta);
+                if (newPage == p) return;
+
+                MMLog.Write($"[PagingManager] Changing page from {p} to {newPage}");
+                SetPage(panel, newPage);
+                
+                try
+                {
+                    ModAPI.Saves.Events.RaisePageChanged(newPage); 
+                }
+                catch (Exception ex)
+                {
+                     MMLog.WriteError($"[PagingManager] Error raising PageChanged event: {ex}");
+                }
+
+                // Tutorial Check
+                if (newPage == 1 && ModPrefs.GetInt("ModAPI_HasSeenCustomSavesHelp", 0) == 0)
+                {
+                    ModPrefs.SetInt("ModAPI_HasSeenCustomSavesHelp", 1);
+                    ModPrefs.Save();
+                    MessageBox.Show(MessageBoxButtons.Okay_Button, "Welcome to Custom Saves!\n\nPage 2+ contains unlimited custom saves.\nUse arrows or keyboard to navigate pages.\n\nSaves stay in their slots permanently.\nIf gaps occur (from deleting saves), you'll be\nasked at game startup if you want to reorganize.\n\nSlots 1-3 are vanilla saves.");
+                }
+
+                panel.RefreshSaveSlotInfo(); 
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"[PagingManager] Critical error in ChangePage: {ex}");
+            }
+            finally
+            {
+                // ALWAYS update UI buttons state
+                Update(panel);
+            }
         }
     }
 }

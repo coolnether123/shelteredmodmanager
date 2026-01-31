@@ -49,14 +49,14 @@ namespace ModAPI.Hooks
 
         public override bool PlatformSave(SaveManager.SaveType type, byte[] data)
         {
-            MMLog.WriteDebug($"[PlatformSaveProxy] PlatformSave called for {type}");
+            MMLog.WriteDebug($"PlatformSave called for {type}");
 
             // 1. CHECK FOR NEW GAME OR SLOT SWAP
             lock (_nextSaveLock)
             {
                 if (NextSave.TryGetValue(type, out var target))
                 {
-                    MMLog.WriteDebug($"[Proxy] Intercepting Vanilla Save ({type}) -> Redirecting to Custom ID: {target.saveId}");
+                    MMLog.WriteDebug($"Intercepting Vanilla Save ({type}) -> Redirecting to Custom ID: {target.saveId}");
                     
                     // This writes the file to ModAPI/Saves/Standard/... AND parses metadata
                     var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, null, data);
@@ -68,7 +68,7 @@ namespace ModAPI.Hooks
                     NextSave.Remove(type); 
                     
                     if (entry != null)
-                        MMLog.Write($"[Proxy] Saved custom slot: {entry.id}");
+                        MMLog.WriteDebug($"Saved custom slot: {entry.id}");
 
                     return true; // We handled it
                 }
@@ -77,13 +77,13 @@ namespace ModAPI.Hooks
             // 2. CHECK FOR EXISTING LOADED CUSTOM GAME
             if (ActiveCustomSave != null)
             {
-                MMLog.WriteDebug($"[Proxy] Saving Active Custom Game: {ActiveCustomSave.id}");
+                MMLog.WriteDebug($"Saving Active Custom Game: {ActiveCustomSave.id}");
                 
                 // Update the file and metadata
                 ActiveCustomSave = ExpandedVanillaSaves.Instance.Overwrite(ActiveCustomSave.id, null, data);
                 
                 if (ActiveCustomSave != null)
-                    MMLog.Write($"[Proxy] Saved custom slot: {ActiveCustomSave.id}");
+                    MMLog.WriteDebug($"Saved custom slot: {ActiveCustomSave.id}");
 
                 return true; // We handled it
             }
@@ -95,7 +95,7 @@ namespace ModAPI.Hooks
 
         public override bool PlatformLoad(SaveManager.SaveType type)
         {
-            MMLog.WriteDebug($"[PlatformSaveProxy] Intercepted PlatformLoad call for SaveType: {type}.");
+            MMLog.WriteDebug($"Intercepted PlatformLoad call for SaveType: {type}.");
 
             lock (_nextLoadLock)
             {
@@ -118,13 +118,13 @@ namespace ModAPI.Hooks
 
                         _customLoadedXml = File.ReadAllText(path);
                         ActiveCustomSave = entry;
-                        MMLog.WriteDebug($"[PlatformSaveProxy] Set active custom save to ID: {entry?.id} after loading.");
+                        MMLog.WriteDebug($"Set active custom save to ID: {entry?.id} after loading.");
                         NextLoad.Remove(type);
                         return true;
                     }
                     catch (Exception ex)
                     {
-                        MMLog.WriteError("PlatformSaveProxy custom load error: " + ex);
+                        MMLog.WriteError("custom load error: " + ex);
                         _customLoadedXml = null;
                         ActiveCustomSave = null;
                         return false;
@@ -132,7 +132,7 @@ namespace ModAPI.Hooks
                 }
             }
 
-            MMLog.WriteDebug($"[PlatformSaveProxy] No custom load target. Passing load for slot={type} to vanilla handler.");
+            MMLog.WriteDebug($"No custom load target. Passing load for slot={type} to vanilla handler.");
             ActiveCustomSave = null;
             return _inner.PlatformLoad(type);
         }
@@ -150,7 +150,7 @@ namespace ModAPI.Hooks
 
         public static void SetNextLoad(SaveManager.SaveType type, string scenarioId, string saveId)
         {
-            MMLog.WriteDebug($"[PlatformSaveProxy] SetNextLoad: type={type}, scenarioId={scenarioId}, saveId={saveId}");
+            MMLog.WriteDebug($"SetNextLoad: type={type}, scenarioId={scenarioId}, saveId={saveId}");
             
             // Safety: Ensure proxy is injected before we register a pending load
             try { SaveManager_Injection_Patch.Inject(SaveManager.instance); } catch { }
@@ -163,7 +163,7 @@ namespace ModAPI.Hooks
 
         public static void SetNextSave(SaveManager.SaveType type, string scenarioId, string saveId)
         {
-            MMLog.WriteDebug($"[PlatformSaveProxy] SetNextSave: type={type}, scenarioId={scenarioId}, saveId={saveId}");
+            MMLog.WriteDebug($"SetNextSave: type={type}, scenarioId={scenarioId}, saveId={saveId}");
             lock (_nextSaveLock)
             {
                 NextSave[type] = new Target { scenarioId = scenarioId, saveId = saveId };

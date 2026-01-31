@@ -17,7 +17,7 @@ namespace ModAPI.UI
     {
         static UIPatches()
         {
-            MMLog.Write("[UIPatches] Static constructor called - class is being initialized");
+            MMLog.Write("Static constructor called - class is being initialized");
         }
 
         [HarmonyPatch(typeof(StoragePanel), "OnShow")]
@@ -26,11 +26,11 @@ namespace ModAPI.UI
         {
             try
             {
-                MMLog.Write("[UIPatches] StoragePanel.OnShow postfix called!");
+                MMLog.Write("StoragePanel.OnShow postfix called!");
                 
                 if (InventoryManager.Instance == null)
                 {
-                    MMLog.Write("[UIPatches] InventoryManager.Instance is null, skipping");
+                    MMLog.Write("InventoryManager.Instance is null, skipping");
                     return;
                 }
 
@@ -46,11 +46,11 @@ namespace ModAPI.UI
                 }
                 
                 if (itemsAdded > 0)
-                    MMLog.Write($"[UIPatches] StoragePanel.OnShow: Added {itemsAdded} custom item types from player inventory.");
+                    MMLog.Write($"StoragePanel.OnShow: Added {itemsAdded} custom item types from player inventory.");
             }
             catch (Exception ex)
             {
-                MMLog.Write($"[UIPatches] ERROR in StoragePanel.OnShow: {ex}");
+                MMLog.Write($"ERROR in StoragePanel.OnShow: {ex}");
             }
         }
 
@@ -60,11 +60,11 @@ namespace ModAPI.UI
         {
             try
             {
-                MMLog.Write("[UIPatches] RecyclingPanel.OnShow postfix called!");
+                MMLog.Write("RecyclingPanel.OnShow postfix called!");
                 
                 if (ItemManager.Instance == null || InventoryManager.Instance == null)
                 {
-                    MMLog.Write("[UIPatches] ItemManager or InventoryManager is null, skipping");
+                    MMLog.Write("ItemManager or InventoryManager is null, skipping");
                     return;
                 }
 
@@ -77,14 +77,14 @@ namespace ModAPI.UI
                         if (count > 0)
                         {
                             __instance.m_items.AddItem(type, count);
-                            MMLog.Write($"[UIPatches] Added custom item {type} to RecyclingPanel (count: {count})");
+                            MMLog.Write($"Added custom item {type} to RecyclingPanel (count: {count})");
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                MMLog.Write($"[UIPatches] ERROR in RecyclingPanel.OnShow: {ex}");
+                MMLog.Write($"ERROR in RecyclingPanel.OnShow: {ex}");
             }
         }
 
@@ -113,7 +113,7 @@ namespace ModAPI.UI
                     }
                 }
             }
-            catch (Exception ex) { MMLog.Write($"[UIPatches] ERROR in ItemFabricationPanel.OnShow: {ex}"); }
+            catch (Exception ex) { MMLog.Write($"ERROR in ItemFabricationPanel.OnShow: {ex}"); }
         }
 
         [HarmonyPatch(typeof(TradingPanel), "OnShow")]
@@ -133,7 +133,7 @@ namespace ModAPI.UI
                     // which is handled by our Loot Injection patches.
                 }
             }
-            catch (Exception ex) { MMLog.Write($"[UIPatches] ERROR in TradingPanel.OnShow: {ex}"); }
+            catch (Exception ex) { MMLog.Write($"ERROR in TradingPanel.OnShow: {ex}"); }
         }
 
         [HarmonyPatch(typeof(ItemTransferPanel), "OnShow")]
@@ -149,7 +149,7 @@ namespace ModAPI.UI
                 // Upon review of decompiled code, it uses GetLeftSideItems callback.
                 // If the callback returns our items, ItemGrid.UpdateItems -> AddItem_Stacked will handle it.
             }
-            catch (Exception ex) { MMLog.Write($"[UIPatches] ERROR in ItemTransferPanel.OnShow: {ex}"); }
+            catch (Exception ex) { MMLog.Write($"ERROR in ItemTransferPanel.OnShow: {ex}"); }
         }
         
         // ============================================================================
@@ -170,7 +170,7 @@ namespace ModAPI.UI
             }
             catch (Exception ex)
             {
-                MMLog.Write($"[UIPatches] ERROR in UIPanelManager.PushPanel postfix: {ex}");
+                MMLog.Write($"ERROR in UIPanelManager.PushPanel postfix: {ex}");
             }
         }
         
@@ -191,7 +191,7 @@ namespace ModAPI.UI
             }
             catch (Exception ex)
             {
-                MMLog.Write($"[UIPatches] ERROR in UIPanelManager.PopPanel postfix: {ex}");
+                MMLog.Write($"ERROR in UIPanelManager.PopPanel postfix: {ex}");
             }
         }
         
@@ -209,7 +209,7 @@ namespace ModAPI.UI
             }
             catch (Exception ex)
             {
-                MMLog.Write($"[UIPatches] ERROR in BasePanel.OnResume postfix: {ex}");
+                MMLog.Write($"ERROR in BasePanel.OnResume postfix: {ex}");
             }
         }
         

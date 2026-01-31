@@ -44,7 +44,7 @@ namespace ModAPI.Harmony
             }
             catch (Exception ex)
             {
-                MMLog.Write("HarmonyBootstrap: Initial patch check failed: " + ex.Message);
+                MMLog.Write("Initial patch check failed: " + ex.Message);
                 StartRetryRunner();
             }
         }
@@ -68,7 +68,7 @@ namespace ModAPI.Harmony
                         {
                             var mb = obj as MemberInfo;
                             var name = mb != null ? (mb.DeclaringType != null ? mb.DeclaringType.Name + "." + mb.Name : mb.Name) : (obj?.ToString() ?? "<null>");
-                            MMLog.WriteDebug($"[Patch] {name} -> {reason}");
+                            MMLog.WriteDebug($"{name} -> {reason}");
                         }
                     }
                 };
@@ -79,17 +79,17 @@ namespace ModAPI.Harmony
                 var uiPatches = asm.GetType("ModAPI.UI.UIPatches");
                 if (uiPatches != null)
                 {
-                    MMLog.WriteDebug("HarmonyBootstrap: Discovered UIPatches for verification.");
+                    MMLog.WriteDebug("Discovered UIPatches for verification.");
                 }
 
                 _installed = true;
 
-                MMLog.WriteDebug("HarmonyBootstrap: ModAPI hooks patched");
+                MMLog.WriteDebug("ModAPI hooks patched");
                 if (_runnerGo != null) UnityEngine.Object.Destroy(_runnerGo);
             }
             catch (Exception ex)
             {
-                MMLog.Write("HarmonyBootstrap patch attempt failed: " + ex.Message);
+                MMLog.Write("patch attempt failed: " + ex.Message);
             }
         }
 
@@ -160,11 +160,11 @@ namespace ModAPI.Harmony
             if (_timer < 0.5f) return;
             _timer = 0f;
             _attempts++;
-            MMLog.WriteDebug($"HarmonyRetryRunner: attempt {_attempts}");
+            MMLog.WriteDebug($"attempt {_attempts}");
             HarmonyBootstrap.EnsurePatched();
             if (_attempts >= MaxAttempts)
             {
-                MMLog.Write("HarmonyRetryRunner: giving up waiting for 0Harmony");
+                MMLog.Write("giving up waiting for 0Harmony");
                 Destroy(this.gameObject);
             }
         }

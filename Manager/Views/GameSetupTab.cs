@@ -618,6 +618,8 @@ namespace Manager.Views
                 Log("Loaded configuration - game found");
                 _lastLoggedPath = _settings.GamePath;
             }
+
+            RefreshSavesList();
         }
 
         /// <summary>

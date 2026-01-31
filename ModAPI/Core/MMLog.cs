@@ -59,6 +59,9 @@ namespace ModAPI.Core
 
         private static readonly HashSet<string> _warnOnceKeys = new HashSet<string>(StringComparer.Ordinal);
         private static readonly Dictionary<string, string> _iniSettings = new Dictionary<string, string>();
+        
+        private static readonly Dictionary<Assembly, string> _sourceCache = new Dictionary<Assembly, string>();
+        private static readonly object _cacheLock = new object();
 
         static MMLog()
         {
@@ -189,6 +192,11 @@ namespace ModAPI.Core
             WriteInternal(LogLevel.Info, LogCategory.General, GetCallerInfo(), message);
         }
 
+        public static void Write(string source, string message)
+        {
+            WriteInternal(LogLevel.Info, LogCategory.General, source, message);
+        }
+
         public static void WriteDebug(string message, LogCategory category = LogCategory.General)
         {
             WriteInternal(LogLevel.Debug, category, GetCallerInfo(), message);
@@ -212,6 +220,11 @@ namespace ModAPI.Core
         public static void WriteFatal(string message, LogCategory category = LogCategory.General)
         {
             WriteInternal(LogLevel.Fatal, category, GetCallerInfo(), message);
+        }
+
+        public static void WriteWithSource(LogLevel level, LogCategory category, string source, string message)
+        {
+            WriteInternal(level, category, source, message);
         }
 
         public static void WarnOnce(string key, string message)
@@ -507,11 +520,57 @@ namespace ModAPI.Core
         {
             try
             {
-                var frame = new StackFrame(2, false);
-                var method = frame.GetMethod();
-                if (method != null && method.DeclaringType != null)
+                StackTrace st = new StackTrace(false);
+                Assembly modAPIAssembly = typeof(MMLog).Assembly;
+
+                for (int i = 2; i < st.FrameCount; i++)
                 {
-                    return method.DeclaringType.Name;
+                    var frame = st.GetFrame(i);
+                    var method = frame.GetMethod();
+                    if (method == null) continue;
+
+                    var declaringType = method.DeclaringType;
+                    if (declaringType == null) continue;
+
+                    // Skip internal logging wrappers to find the real caller
+                    if (declaringType == typeof(MMLog) || 
+                        declaringType.Name == "ModLog" || 
+                        declaringType.Name == "PrefixedLogger")
+                    {
+                        continue;
+                    }
+
+                    Assembly callingAssembly = declaringType.Assembly;
+                    
+                    // If we found an assembly that isn't ModAPI, it's a mod!
+                    if (callingAssembly != modAPIAssembly)
+                    {
+                        lock (_cacheLock)
+                        {
+                            if (_sourceCache.TryGetValue(callingAssembly, out var cached))
+                                return cached;
+                        }
+
+                        string name = "Unknown";
+                        ModEntry entry;
+                        if (ModRegistry.TryGetModByAssembly(callingAssembly, out entry) && entry != null)
+                        {
+                            name = entry.Id;
+                        }
+                        else
+                        {
+                            name = callingAssembly.GetName().Name;
+                        }
+
+                        lock (_cacheLock)
+                        {
+                            _sourceCache[callingAssembly] = name;
+                        }
+                        return name;
+                    }
+                    
+                    // If we are still in ModAPI, use the first non-wrapper class name we hit
+                    return declaringType.Name;
                 }
             }
             catch { }

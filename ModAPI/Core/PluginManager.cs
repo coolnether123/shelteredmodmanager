@@ -72,11 +72,11 @@ namespace ModAPI.Core
             AttachInspectorTools();
             LoadAndInitializePlugins(LoadedMods);
 
-            MMLog.Write($"[loader] Loaded {_plugins.Count} plugin(s). Updates={_updates.Count}, Shutdown={_shutdown.Count}, SceneEvents={_sceneEvents.Count}");
+            MMLog.Write($"Loaded {_plugins.Count} plugin(s). Updates={_updates.Count}, Shutdown={_shutdown.Count}, SceneEvents={_sceneEvents.Count}");
 
             stopwatch.Stop();
             var ms = stopwatch.ElapsedMilliseconds;
-            MMLog.Write($"[Loader] Startup complete in {ms}ms. Loaded {_plugins.Count} plugin(s), {_loadErrors} error(s).");
+            MMLog.Write($"Startup complete in {ms}ms. Loaded {_plugins.Count} plugin(s), {_loadErrors} error(s).");
         }
 
         /// <summary>
@@ -126,25 +126,25 @@ namespace ModAPI.Core
 
         private void LogAssemblyResolution()
         {
-            MMLog.WriteDebug("[Assembly Resolution]");
+            MMLog.WriteDebug("Assembly Resolution");
             int failures = 0;
 
             failures += LogAssembly("ModAPI", Assembly.GetExecutingAssembly());
             failures += LogAssembly("0Harmony", ResolveAssemblyByType("HarmonyLib.Harmony, 0Harmony"));
 
-            MMLog.WriteDebug($"[Assembly Resolution] Failed Assemblies: {failures}");
+            MMLog.WriteDebug($"Assembly Resolution: Failed Assemblies: {failures}");
         }
 
         private int LogAssembly(string name, Assembly asm)
         {
             if (asm == null)
             {
-                MMLog.Write($"[Assembly Resolution] {name}.dll: <missing> ✗");
+                MMLog.Write($"{name}.dll: <missing> ✗");
                 return 1;
             }
 
             var path = SafeAssemblyPath(asm);
-            MMLog.WriteDebug($"[Assembly Resolution] {name}.dll: {path} ✓");
+            MMLog.WriteDebug($"{name}.dll: {path} ✓");
             return 0;
         }
 
@@ -167,7 +167,7 @@ namespace ModAPI.Core
         {
             var modernAvailable = RuntimeCompat.IsModernSceneApi;
             var usingModern = PluginRunner.IsModernUnity;
-            MMLog.WriteDebug($"[Loader] Scene API Detection: ModernAvailable={modernAvailable}, UsingModern={usingModern}");
+            MMLog.WriteDebug($"Scene API Detection: ModernAvailable={modernAvailable}, UsingModern={usingModern}");
         }
 
         private List<string> ReadLoadOrderFromFile(string modsRoot)
@@ -207,48 +207,48 @@ namespace ModAPI.Core
         private void DiscoverAndOrderMods(List<string> orderedModIds)
         {
             var discovered = ModDiscovery.DiscoverAllMods();
-            MMLog.WriteDebug($"[PluginManager] DiscoverAndOrderMods: {discovered.Count} mods found on disk.");
-            foreach (var m in discovered) MMLog.WriteDebug($"[PluginManager]   - On Disk: '{m.Id}' at '{m.RootPath}'");
+            MMLog.WriteDebug($"DiscoverAndOrderMods: {discovered.Count} mods found on disk.");
+            foreach (var m in discovered) MMLog.WriteDebug($"  - On Disk: '{m.Id}' at '{m.RootPath}'");
 
             if (orderedModIds == null)
             {
-                MMLog.WriteDebug("[PluginManager] No load order provided (loadorder.json missing). Enabling ALL discovered mods.");
+                MMLog.WriteDebug("No load order provided (loadorder.json missing). Enabling ALL discovered mods.");
                 LoadedMods = discovered;
                 return;
             }
 
             if (orderedModIds.Count == 0)
             {
-                MMLog.Write("[PluginManager] Explicit empty load order found. Enabling NO mods.");
+                MMLog.Write("Explicit empty load order found. Enabling NO mods.");
                 LoadedMods = new List<ModEntry>();
                 return;
             }
 
-            MMLog.WriteDebug($"[PluginManager] Applying load order (contains {orderedModIds.Count} IDs).");
+            MMLog.WriteDebug($"Applying load order (contains {orderedModIds.Count} IDs).");
             var ordered = new List<ModEntry>();
             var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var id in orderedModIds)
             {
-                MMLog.WriteDebug($"[PluginManager]   Looking for ordered ID: '{id}'");
+                MMLog.WriteDebug($"  Looking for ordered ID: '{id}'");
                 var mod = discovered.FirstOrDefault(m => string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase));
                 if (mod != null)
                 {
                     if (seenIds.Add(mod.Id))
                     {
                         ordered.Add(mod);
-                        MMLog.WriteDebug($"[PluginManager]     FOUND and enabled: {mod.Id}");
+                        MMLog.WriteDebug($"    FOUND and enabled: {mod.Id}");
                     }
                 }
                 else
                 {
-                    MMLog.WriteDebug($"[PluginManager]     NOT FOUND on disk: {id}");
+                    MMLog.WriteDebug($"    NOT FOUND on disk: {id}");
                 }
             }
 
             // Ensure LoadedMods only contains the successfully discovered and enabled mods.
             LoadedMods = ordered;
-            MMLog.WriteDebug($"[PluginManager] Final LoadedMods count: {LoadedMods.Count}");
+            MMLog.WriteDebug($"Final LoadedMods count: {LoadedMods.Count}");
         }
 
         private void AttachInspectorTools()
@@ -265,22 +265,22 @@ namespace ModAPI.Core
 
         private void LoadAndInitializePlugins(List<ModEntry> orderedMods)
         {
-            MMLog.Write($"[loader] LoadAndInitializePlugins: Starting with {orderedMods.Count} mods");
+            MMLog.Write($"LoadAndInitializePlugins: Starting with {orderedMods.Count} mods");
 
             foreach (var entry in orderedMods)
             {
-                MMLog.WriteDebug($"[loader] Processing mod: {entry.Id}");
+                MMLog.WriteDebug($"Processing mod: {entry.Id}");
 
                 List<Assembly> modAssemblies = null;
                 try
                 {
-                    MMLog.WriteDebug($"[loader] Loading assemblies for {entry.Id} from {entry.AssembliesPath}");
+                    MMLog.WriteDebug($"Loading assemblies for {entry.Id} from {entry.AssembliesPath}");
                     modAssemblies = ModDiscovery.LoadAssemblies(entry);
-                    MMLog.WriteDebug($"[loader] Loaded {modAssemblies.Count} assemblies for {entry.Id}");
+                    MMLog.WriteDebug($"Loaded {modAssemblies.Count} assemblies for {entry.Id}");
                 }
                 catch (Exception ex)
                 {
-                    MMLog.Write($"[loader] failed to load assemblies for '{entry.Id}': {ex.Message}");
+                    MMLog.Write($"failed to load assemblies for '{entry.Id}': {ex.Message}");
                     _loadErrors++;
                     continue;
                 }
@@ -295,14 +295,14 @@ namespace ModAPI.Core
                     try { types = asm.GetTypes(); }
                     catch (ReflectionTypeLoadException rtle) { types = rtle.Types.Where(x => x != null).ToArray(); }
 
-                    MMLog.WriteDebug($"[loader] Found {types.Length} types in assembly {asm.FullName}");
+                    MMLog.WriteDebug($"Found {types.Length} types in assembly {asm.FullName}");
 
                     foreach (var type in types)
                     {
                         if (type == null || type.IsAbstract || !type.IsClass) continue;
                         if (!typeof(IModPlugin).IsAssignableFrom(type)) continue;
 
-                        MMLog.WriteDebug($"[loader] Found IModPlugin: {type.FullName}");
+                        MMLog.WriteDebug($"Found IModPlugin: {type.FullName}");
 
                         try
                         {
@@ -319,7 +319,7 @@ namespace ModAPI.Core
                             var ss = plugin as IModSessionEvents; if (ss != null) _sessionEvents.Add(ss);
                             
                             // Register the settings provider if the plugin implements it
-                            MMLog.WriteDebug($"[loader] Initializing plugin: {type.FullName}");
+                            MMLog.WriteDebug($"Initializing plugin: {type.FullName}");
                             plugin.Initialize(ctx);
                             
                             // Initialize Settings AFTER plugin has had a chance to create its config object
@@ -336,28 +336,28 @@ namespace ModAPI.Core
                                         var defs = sp.GetSettings();
                                         ModAPI.Spine.SettingsSerializer.Load(entry.Id, settingsObj, defs);
                                         sp.OnSettingsLoaded(); // Notify plugin
-                                        MMLog.Write($"[loader] Spine settings loaded for {entry.Id}");
+                                        MMLog.Write($"Spine settings loaded for {entry.Id}");
                                     }
                                 }
                                 catch (Exception ex)
                                 {
-                                    MMLog.WriteError($"[loader] Error auto-loading settings for {entry.Id}: {ex.Message}");
+                                    MMLog.WriteError($"Error auto-loading settings for {entry.Id}: {ex.Message}");
                                 }
                             }
-                            MMLog.WriteDebug($"[loader] Starting plugin: {type.FullName}");
+                            MMLog.WriteDebug($"Starting plugin: {type.FullName}");
                             plugin.Start(ctx);
                             ctx.Log.Info("Started.");
                         }
                         catch (Exception ex)
                         {
-                            MMLog.WriteError($"[loader] error starting plugin '{type.FullName}': {ex.Message}");
+                            MMLog.WriteError($"error starting plugin '{type.FullName}': {ex.Message}");
                             _loadErrors++;
                         }
                     }
                 }
             }
 
-            MMLog.Write($"[loader] LoadAndInitializePlugins complete. Total plugins loaded: {_plugins.Count}");
+            MMLog.Write($"LoadAndInitializePlugins complete. Total plugins loaded: {_plugins.Count}");
         }
 
         internal void EnqueueNextFrame(Action a)
@@ -375,7 +375,7 @@ namespace ModAPI.Core
             for (int i = 0; i < _updates.Count; i++)
             {
                 try { _updates[i].Update(); }
-                catch (Exception ex) { MMLog.Write($"[loader] Update() failed: {ex.Message}"); }
+                catch (Exception ex) { MMLog.Write($"Update() failed: {ex.Message}"); }
             }
         }
 
@@ -384,7 +384,7 @@ namespace ModAPI.Core
             for (int i = 0; i < _sceneEvents.Count; i++)
             {
                 try { _sceneEvents[i].OnSceneLoaded(name); }
-                catch (Exception ex) { MMLog.Write($"[loader] OnSceneLoaded failed: {ex.Message}"); }
+                catch (Exception ex) { MMLog.Write($"OnSceneLoaded failed: {ex.Message}"); }
             }
         }
 
@@ -393,7 +393,7 @@ namespace ModAPI.Core
             for (int i = 0; i < _sceneEvents.Count; i++)
             {
                 try { _sceneEvents[i].OnSceneUnloaded(name); }
-                catch (Exception ex) { MMLog.Write($"[loader] OnSceneUnloaded failed: {ex.Message}"); }
+                catch (Exception ex) { MMLog.Write($"OnSceneUnloaded failed: {ex.Message}"); }
             }
         }
 
@@ -402,7 +402,7 @@ namespace ModAPI.Core
             for (int i = 0; i < _sessionEvents.Count; i++)
             {
                 try { _sessionEvents[i].OnSessionStarted(); }
-                catch (Exception ex) { MMLog.Write($"[loader] OnSessionStarted failed: {ex.Message}"); }
+                catch (Exception ex) { MMLog.Write($"OnSessionStarted failed: {ex.Message}"); }
             }
         }
 
@@ -411,7 +411,7 @@ namespace ModAPI.Core
             for (int i = 0; i < _sessionEvents.Count; i++)
             {
                 try { _sessionEvents[i].OnNewGame(); }
-                catch (Exception ex) { MMLog.Write($"[loader] OnNewGame failed: {ex.Message}"); }
+                catch (Exception ex) { MMLog.Write($"OnNewGame failed: {ex.Message}"); }
             }
         }
 
@@ -420,7 +420,7 @@ namespace ModAPI.Core
             for (int i = _shutdown.Count - 1; i >= 0; i--)
             {
                 try { _shutdown[i].Shutdown(); }
-                catch (Exception ex) { MMLog.Write($"[loader] Shutdown() failed: {ex.Message}"); }
+                catch (Exception ex) { MMLog.Write($"Shutdown() failed: {ex.Message}"); }
             }
         }
 
@@ -628,7 +628,7 @@ namespace ModAPI.Core
                 while (_nextFrame.Count > 0)
                 {
                     var a = _nextFrame.Dequeue();
-                    try { a(); } catch (Exception ex) { MMLog.Write($"[loader] next-frame action failed: {ex.Message}"); }
+                    try { a(); } catch (Exception ex) { MMLog.Write($"next-frame action failed: {ex.Message}"); }
                 }
             }
             if (Manager != null) Manager.OnUnityUpdate();
@@ -640,21 +640,21 @@ namespace ModAPI.Core
             {
                 if (!RuntimeCompat.IsModernSceneApi)
                 {
-                    MMLog.WriteDebug("[PluginRunner] SceneManager modern API not detected (Unity 5.3?).");
+                    MMLog.WriteDebug("SceneManager modern API not detected (Unity 5.3?).");
                     return false;
                 }
 
                 var sceneManagerType = Type.GetType("UnityEngine.SceneManagement.SceneManager, UnityEngine");
                 if (sceneManagerType == null)
                 {
-                    MMLog.WriteDebug("[PluginRunner] SceneManager type not found.");
+                    MMLog.WriteDebug("SceneManager type not found.");
                     return false;
                 }
 
                 var sceneLoadedEvent = sceneManagerType.GetEvent("sceneLoaded");
                 if (sceneLoadedEvent == null)
                 {
-                    MMLog.WriteError("[PluginRunner] SceneManager.sceneLoaded event not found.");
+                    MMLog.WriteError("SceneManager.sceneLoaded event not found.");
                     return false;
                 }
 
@@ -663,12 +663,12 @@ namespace ModAPI.Core
                 var onUnloadedMethod = GetType().GetMethod("OnSceneUnloadedModern", BindingFlags.NonPublic | BindingFlags.Instance);
                 if (onLoadedMethod == null)
                 {
-                    MMLog.WriteError("[PluginRunner] OnSceneLoadedModern method missing.");
+                    MMLog.WriteError("OnSceneLoadedModern method missing.");
                     return false;
                 }
                 if (onUnloadedMethod == null)
                 {
-                    MMLog.WriteError("[PluginRunner] OnSceneUnloadedModern method missing.");
+                    MMLog.WriteError("OnSceneUnloadedModern method missing.");
                     return false;
                 }
 
@@ -682,7 +682,7 @@ namespace ModAPI.Core
                 }
 
                 IsModernUnity = true;
-                MMLog.WriteDebug("[PluginRunner] Modern scene events hooked successfully.");
+                MMLog.WriteDebug("Modern scene events hooked successfully.");
 
                 try
                 {
@@ -703,7 +703,7 @@ namespace ModAPI.Core
             }
             catch (Exception ex)
             {
-                MMLog.WriteError("[PluginRunner] Failed to hook modern scene events: " + ex.Message);
+                MMLog.WriteError("Failed to hook modern scene events: " + ex.Message);
                 return false;
             }
         }
@@ -712,7 +712,7 @@ namespace ModAPI.Core
         {
             if (_useModernApi) return;
             IsModernUnity = false;
-            MMLog.Write("[PluginRunner] Modern SceneManager not found. Using legacy OnLevelWasLoaded (Unity 5.3).");
+            MMLog.Write("Modern SceneManager not found. Using legacy OnLevelWasLoaded (Unity 5.3).");
 
             _currentSceneName = Application.loadedLevelName;
             if (Manager != null && !string.IsNullOrEmpty(_currentSceneName))
@@ -734,10 +734,10 @@ namespace ModAPI.Core
             IsDebugEnabled = true; 
         }
 
-        public void Debug(string message) { if (IsDebugEnabled) MMLog.WriteDebug(string.Format("[{0}] DEBUG: {1}", _prefix, message)); }
-        public void Info(string message) { MMLog.Write(string.Format("[{0}] {1}", _prefix, message)); }
-        public void Warn(string message) { MMLog.Write(string.Format("[{0}] WARN: {1}", _prefix, message)); }
-        public void Error(string message) { MMLog.Write(string.Format("[{0}] ERROR: {1}", _prefix, message)); }
+        public void Debug(string message) { if (IsDebugEnabled) MMLog.WriteWithSource(MMLog.LogLevel.Debug, MMLog.LogCategory.Plugin, _prefix, message); }
+        public void Info(string message) { MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Plugin, _prefix, message); }
+        public void Warn(string message) { MMLog.WriteWithSource(MMLog.LogLevel.Warning, MMLog.LogCategory.Plugin, _prefix, message); }
+        public void Error(string message) { MMLog.WriteWithSource(MMLog.LogLevel.Error, MMLog.LogCategory.Plugin, _prefix, message); }
     }
 
     internal class PluginContextImpl : IPluginContext
