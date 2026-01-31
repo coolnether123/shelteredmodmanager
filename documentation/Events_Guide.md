@@ -1,7 +1,7 @@
 # ModAPI Events Guide
-## Sheltered Mod Loader v1.0
+## Sheltered Mod Loader v1.2.0
 
-**Last Updated:** 2026-01-15  
+**Last Updated:** 2026-01-27  
 **For:** Mod developers using the Sheltered ModAPI
 
 ---

@@ -27,9 +27,9 @@ namespace ModAPI.Hooks
                 // Only inject if it's NOT ALREADY a proxy
                 if (currentScript != null && !(currentScript is PlatformSaveProxy))
                 {
-                    MMLog.Write("[Injection] --------------------------------------------------");
-                    MMLog.Write("[Injection] Swapping vanilla PlatformSave_PC with PlatformSaveProxy.");
-                    MMLog.Write("[Injection] --------------------------------------------------");
+                    MMLog.Write("--------------------------------------------------");
+                    MMLog.Write("Swapping vanilla PlatformSave_PC with PlatformSaveProxy.");
+                    MMLog.Write("--------------------------------------------------");
 
                     var proxy = new PlatformSaveProxy(currentScript);
                     
@@ -39,7 +39,7 @@ namespace ModAPI.Hooks
             }
             catch (Exception ex)
             {
-                MMLog.WriteError("[Injection] FATAL ERROR during proxy injection: " + ex);
+                MMLog.WriteError("FATAL ERROR during proxy injection: " + ex);
             }
         }
     }

@@ -20,7 +20,7 @@ namespace ModAPI.Content
         /// </summary>
         static void Postfix(InventoryManager __instance)
         {
-            MMLog.Write("[InventoryIntegration] Postfix patch called!");
+            MMLog.Write("Postfix patch called!");
             
             // Ensure ContentInjector has run before we try to add slots
             // The RuntimeInitializeOnLoadMethod trigger sometimes doesn't fire in time,
@@ -31,7 +31,7 @@ namespace ModAPI.Content
             }
             catch (Exception ex)
             {
-                MMLog.Write($"[InventoryIntegration] Failed to trigger ContentInjector: {ex.Message}");
+                MMLog.Write($"Failed to trigger ContentInjector: {ex.Message}");
             }
             
             try
@@ -43,14 +43,14 @@ namespace ModAPI.Content
                 
                 if (inventoryField == null)
                 {
-                    MMLog.Write("[InventoryIntegration] Failed to find m_Inventory field");
+                    MMLog.Write("Failed to find m_Inventory field");
                     return;
                 }
 
                 var inventoryObj = inventoryField.GetValue(__instance);
                 if (inventoryObj == null)
                 {
-                    MMLog.Write("[InventoryIntegration] m_Inventory is null");
+                    MMLog.Write("m_Inventory is null");
                     return;
                 }
 
@@ -58,7 +58,7 @@ namespace ModAPI.Content
                 var inventory = inventoryObj as System.Collections.IDictionary;
                 if (inventory == null)
                 {
-                    MMLog.Write("[InventoryIntegration] m_Inventory is not an IDictionary");
+                    MMLog.Write("m_Inventory is not an IDictionary");
                     return;
                 }
 
@@ -66,7 +66,7 @@ namespace ModAPI.Content
                 var allItems = ItemManager.Instance?.GetAllDefinedItems();
                 if (allItems == null || allItems.Count == 0)
                 {
-                    MMLog.Write("[InventoryIntegration] No items found in ItemManager");
+                    MMLog.Write("No items found in ItemManager");
                     return;
                 }
 
@@ -76,7 +76,7 @@ namespace ModAPI.Content
                 
                 if (itemsType == null)
                 {
-                    MMLog.Write("[InventoryIntegration] Failed to find InventoryManager.Items type");
+                    MMLog.Write("Failed to find InventoryManager.Items type");
                     return;
                 }
 
@@ -95,7 +95,7 @@ namespace ModAPI.Content
                         // Log custom items (ID >= 10000)
                         if ((int)itemType >= 10000)
                         {
-                            MMLog.Write($"[InventoryIntegration] Added slot for custom item: {itemType} (ID: {(int)itemType})");
+                            MMLog.Write($"Added slot for custom item: {itemType} (ID: {(int)itemType})");
                         }
                     }
                     else
@@ -106,13 +106,13 @@ namespace ModAPI.Content
 
                 if (added > 0)
                 {
-                    MMLog.Write($"[InventoryIntegration] Added {added} new item slots (total items: {allItems.Count}, already existed: {skipped})");
+                    MMLog.Write($"Added {added} new item slots (total items: {allItems.Count}, already existed: {skipped})");
                 }
             }
             catch (Exception ex)
             {
-                MMLog.Write($"[InventoryIntegration] Error patching InventoryManager: {ex.GetType().Name}: {ex.Message}");
-                MMLog.Write($"[InventoryIntegration] Stack trace: {ex.StackTrace}");
+                MMLog.Write($"Error patching InventoryManager: {ex.GetType().Name}: {ex.Message}");
+                MMLog.Write($"Stack trace: {ex.StackTrace}");
             }
         }
     }
@@ -129,7 +129,7 @@ namespace ModAPI.Content
         {
             if ((int)item >= 10000)
             {
-                MMLog.Write($"[InventoryDebug] AddNewItem called for custom item: {item} ({(int)item})");
+                MMLog.Write($"AddNewItem called for custom item: {item} ({(int)item})");
                 VerifyItemInInventory(item);
             }
         }
@@ -140,7 +140,7 @@ namespace ModAPI.Content
         {
             if (item != null && (int)item.Type >= 10000)
             {
-                MMLog.Write($"[InventoryDebug] AddExistingItem called for custom item: {item.Type} ({(int)item.Type})");
+                MMLog.Write($"AddExistingItem called for custom item: {item.Type} ({(int)item.Type})");
                 VerifyItemInInventory(item.Type);
             }
         }
@@ -151,7 +151,7 @@ namespace ModAPI.Content
             {
                 int current = InventoryManager.Instance.GetItemCountInStorage(type, true);
                 int total = InventoryManager.Instance.GetNumItemsOfType(type);
-                MMLog.Write($"[InventoryDebug] Verification for {type}: Storage={current}, Total={total}");
+                MMLog.Write($"Verification for {type}: Storage={current}, Total={total}");
             }
         }
     }

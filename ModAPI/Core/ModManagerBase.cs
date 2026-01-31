@@ -14,7 +14,7 @@ namespace ModAPI.Core
     public abstract class ModManagerBase : MonoBehaviour
     {
         protected IPluginContext Context { get; private set; }
-        protected IModLogger Log { get { return Context != null ? Context.Log : null; } }
+        public IModLogger Log { get { return Context != null ? Context.Log : null; } }
         protected ISaveSystem SaveSystem { get { return Context != null ? Context.SaveSystem : null; } }
         protected ModSettings Settings { get { return Context != null ? Context.Settings : null; } }
 
@@ -49,7 +49,7 @@ namespace ModAPI.Core
         /// <summary>
         /// Hook for when settings are loaded or changed.
         /// </summary>
-        protected virtual void OnSettingsLoaded() { }
+        public virtual void OnSettingsLoaded() { }
 
         /// <summary>
         /// Convenience method to register data for persistence.

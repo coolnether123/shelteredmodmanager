@@ -26,7 +26,7 @@ namespace ModAPI.Harmony
                     HandleAutoLoad(__instance);
                 }
 
-                MMLog.Write("[MainMenuPatch] Postfix triggered.");
+                MMLog.Write("Postfix triggered.");
                 // One-time startup check for save slot gaps
                 SaveCondenseManager.CheckOnStartup();
                 if (SaveCondenseManager.NeedsPrompt())
@@ -43,7 +43,7 @@ namespace ModAPI.Harmony
                 {
                     if (child.name == "Button_Mods")
                     {
-                        MMLog.WriteDebug("[MainMenuPatch] Mods button already exists in table.");
+                        MMLog.WriteDebug("Mods button already exists in table.");
                         return;
                     }
                 }
@@ -89,16 +89,16 @@ namespace ModAPI.Harmony
                     var updateMethod = typeof(MainMenu).GetMethod("UpdateButtonTable", BindingFlags.NonPublic | BindingFlags.Instance);
                     updateMethod?.Invoke(__instance, null);
 
-                    MMLog.Write("[MainMenuPatch] Injected Mods button with transition handling.");
+                    MMLog.Write("Injected Mods button with transition handling.");
                 }
             }
-            catch (Exception ex) { MMLog.Write("[MainMenuPatch] Exception: " + ex.Message); }
+            catch (Exception ex) { MMLog.Write("Exception: " + ex.Message); }
         }
 
         private static void HandleModsClick(MainMenu menu)
         {
             if (ModManagerPanel.IsShowingInstance) return;
-            MMLog.Write("[MainMenuPatch] Mods button clicked - initiating transition.");
+            MMLog.Write("Mods button clicked - initiating transition.");
             MainMenu_OnTweenFinished_Patch.TransitioningToMods = true;
             menu.OnPlayButtonPressed(); // This triggers the fade-out
         }
@@ -110,7 +110,7 @@ namespace ModAPI.Harmony
                 int slot = HarmonyBootstrap.ReadManagerInt("AutoLoadSaveSlot", 0);
                 if (slot <= 0) return;
 
-                MMLog.Write($"[AutoLoad] Auto-loading save slot {slot} requested via config.");
+                MMLog.Write($"Auto-loading save slot {slot} requested via config.");
 
                 if (slot <= 3)
                 {
@@ -118,7 +118,7 @@ namespace ModAPI.Harmony
                     var info = SaveRegistryCore.ReadVanillaSaveInfo(slot);
                     if (info == null)
                     {
-                        MMLog.Write("[AutoLoad] Vanilla slot empty or unreadable. Ignoring.");
+                        MMLog.Write("Vanilla slot empty or unreadable. Ignoring.");
                         return;
                     }
 
@@ -127,7 +127,7 @@ namespace ModAPI.Harmony
                         info.moodDiff, info.mapSize, info.fog);
 
                     SaveManager.instance.SetSlotToLoad(slot);
-                    MMLog.Write($"[AutoLoad] Initiated vanilla load for slot {slot}");
+                    MMLog.Write($"Initiated vanilla load for slot {slot}");
                 }
                 else
                 {
@@ -135,7 +135,7 @@ namespace ModAPI.Harmony
                     var entry = ExpandedVanillaSaves.GetBySlot(slot);
                     if (entry == null || !System.IO.File.Exists(DirectoryProvider.EntryPath("Standard", slot)))
                     {
-                        MMLog.Write($"[AutoLoad] Custom slot {slot} empty or missing. Ignoring.");
+                        MMLog.Write($"Custom slot {slot} empty or missing. Ignoring.");
                         return;
                     }
 
@@ -149,12 +149,12 @@ namespace ModAPI.Harmony
                         entry.saveInfo.fog);
 
                     SaveManager.instance.SetSlotToLoad(1);
-                    MMLog.Write($"[AutoLoad] Initiated custom load for slot {slot} via virtual slot 1");
+                    MMLog.Write($"Initiated custom load for slot {slot} via virtual slot 1");
                 }
             }
             catch (Exception ex)
             {
-                MMLog.WriteError("[AutoLoad] Failed: " + ex.Message);
+                MMLog.WriteError("Failed: " + ex.Message);
             }
         }
     }

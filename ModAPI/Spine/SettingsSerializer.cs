@@ -44,7 +44,7 @@ namespace ModAPI.Spine
                 var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
                 var defArray = definitions.ToArray();
-                MMLog.WriteDebug($"[Spine] Serializing {defArray.Length} settings for {modId}...");
+                MMLog.WriteDebug($"Serializing {defArray.Length} settings for {modId}...");
 
                 // Manual JSON Construction to bypass JsonUtility quirkiness on Arrays
                 System.Text.StringBuilder json = new System.Text.StringBuilder();
@@ -75,9 +75,9 @@ namespace ModAPI.Spine
                 json.AppendLine("}");
 
                 File.WriteAllText(path, json.ToString());
-                MMLog.WriteDebug($"[Spine] Settings saved successfully to: {path} ({count} entries)");
+                MMLog.WriteDebug($"Settings saved successfully to: {path} ({count} entries)");
             }
-            catch (Exception ex) { MMLog.WriteError($"[Spine] Save failed for {modId} at {path}: {ex.Message}"); }
+            catch (Exception ex) { MMLog.WriteError($"Save failed for {modId} at {path}: {ex.Message}"); }
         }
 
         public static void Load(string modId, object settingsObject, IEnumerable<SettingDefinition> definitions)
@@ -142,9 +142,9 @@ namespace ModAPI.Spine
                         }
                     }
                 }
-                MMLog.Write($"[Spine] Settings loaded successfully from: {path} ({loadedCount}/{data.Count} values applied)");
+                MMLog.Write($"Settings loaded successfully from: {path} ({loadedCount}/{data.Count} values applied)");
             }
-            catch (Exception ex) { MMLog.WriteError($"[Spine] Load failed for {modId} from {path}: {ex.Message}"); }
+            catch (Exception ex) { MMLog.WriteError($"Load failed for {modId} from {path}: {ex.Message}"); }
         }
 
         private static object ConvertValue(string raw, Type type)

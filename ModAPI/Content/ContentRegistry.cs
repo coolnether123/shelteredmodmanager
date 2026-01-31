@@ -422,6 +422,14 @@ namespace ModAPI.Content
         public ItemDefinition WithIcon(string path) { IconPath = AssetPath.FromAssets(path); return this; }
         public ItemDefinition WithPrefab(string path) { PrefabPath = AssetPath.FromAssets(path); return this; }
         public ItemDefinition WithCategory(ItemCategory cat) { Category = cat; return this; }
+
+        /// <summary>Backward compatibility overload for vanilla ItemManager.ItemCategory.</summary>
+        public ItemDefinition WithCategory(ItemManager.ItemCategory cat)
+        {
+            Category = (ItemCategory)(int)cat;
+            return this;
+        }
+
         public ItemDefinition WithStackSize(int size) { StackSize = size; return this; }
         public ItemDefinition WithTradeValue(int val) { TradeValue = val; return this; }
         public ItemDefinition WithBurnValue(float val) { BurnValue = val; return this; }

@@ -368,5 +368,43 @@ namespace ModAPI.Core
                 arr[i++] = Clone(kv.Value);
             return arr;
         }
+
+        /// <summary>Enable transpiler IL dumping (Volatile for thread safety)</summary>
+        public static bool DebugTranspilers 
+        { 
+            get => _debugTranspilers;
+            set => _debugTranspilers = value;
+        }
+        private static volatile bool _debugTranspilers = false;
+
+        /// <summary>SmartWatcher polling interval in frames.</summary>
+        public static int SmartWatcherPollInterval 
+        { 
+            get => _smartWatcherPoll;
+            set => _smartWatcherPoll = Mathf.Max(1, value);
+        }
+        private static int _smartWatcherPoll = 5;
+
+        // Load from config file:
+        public static void LoadDebugSettings(string configPath)
+        {
+            if (File.Exists(configPath))
+            {
+                var json = File.ReadAllText(configPath);
+                var config = JsonUtility.FromJson<DebugConfig>(json);
+                if (config != null)
+                {
+                    _debugTranspilers = config.debugTranspilers;
+                    _smartWatcherPoll = config.smartWatcherPollInterval;
+                }
+            }
+        }
+
+        [System.Serializable]
+        private class DebugConfig
+        {
+            public bool debugTranspilers = false;
+            public int smartWatcherPollInterval = 5;
+        }
     }
 }

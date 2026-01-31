@@ -98,7 +98,14 @@ namespace MyMod
         public override void Initialize(IPluginContext context)
         {
             base.Initialize(context); // REQUIRED: Auto-binds settings/config
-            Log.Info("My mod is starting up!");
+            Log.Info("My mod is starting up!"); // Automatically prefixed with [MyMod]
+        }
+        
+        // This is now public virtual, satisfying ISettingsProvider
+        public override void OnSettingsLoaded()
+        {
+            // Settings have been loaded from disk
+            Log.Info($"New speed setting: {SpeedValue}");
         }
 
         private void Update()
@@ -130,6 +137,7 @@ namespace MyMod
 
         public void Start(IPluginContext context)
         {
+            // context.Log automatically prefixes with your Mod ID
             context.Log.Info("My mod started!");
         }
     }
@@ -720,41 +728,33 @@ PersistentDataAPI.DeleteData("MyMod.Settings");
 
 **Namespace:** `using ModAPI.Core;`
 
-### Using Context Logger
+### Smart Source Attribution (v1.2.0)
 
-The context logger automatically includes your mod name in log entries:
+The logging system now uses **Automatic Source Detection**. You should no longer manually prefix your messages with `[MyMod]` or `[Class]`. 
+
+- **Mod Logs**: `context.Log.Info("Hello")` → `[INFO ] [MyMod.Id] Hello`
+- **Internal Logs**: `MMLog.Write("System starting")` → `[INFO ] [InternalClassName] System starting`
+
+This ensures logs are clean, consistent, and easy to filter.
+
+### Performance Timing & Static Logger
 
 ```csharp
-public void Start(IPluginContext context)
+// Get a static logger instance (useful for static classes)
+private static readonly IModLogger _staticLog = ModLog.GetLogger();
+
+public static void MyStaticHelper()
 {
-    context.Log.Info("Mod started");     // [MyMod] Mod started
-    context.Log.Warn("Warning message");
-    context.Log.Error("Error occurred");
+    _staticLog.Info("This logs with the correct mod prefix automatically");
 }
-```
 
-### Using Static Logger
-
-For logging from anywhere (not just Start):
-
-```csharp
-MMLog.Write("General message");
-MMLog.WriteDebug("Debug info");       // Only shows if debug enabled
-MMLog.WriteInfo("Information");
-MMLog.WriteWarning("Warning");
-MMLog.WriteError("Error");
-
-// One-time warnings (won't spam logs with repeated messages)
-MMLog.WarnOnce("MyMod.SomeIssue", "This warning only appears once");
-```
-
-### Performance Timing
-
-```csharp
+// Measure performance
 MMLog.StartTimer("HeavyOperation");
 // ... do expensive work ...
-MMLog.StopTimer("HeavyOperation");  // Logs elapsed time
+MMLog.StopTimer("HeavyOperation");
 ```
+
+
 
 ---
 

@@ -24,7 +24,7 @@ namespace ModAPI.Core
 
                 if (!Directory.Exists(modsRoot))
                 {
-                    MMLog.Write("[Discovery] No 'mods' directory found. Skipping discovery.");
+                    MMLog.Write("No 'mods' directory found. Skipping discovery.");
                     return results;
                 }
 
@@ -36,7 +36,7 @@ namespace ModAPI.Core
                     if (string.Equals(name, "disabled", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(name, "ModAPI", StringComparison.OrdinalIgnoreCase))
                     {
-                        MMLog.WriteDebug($"[Discovery]   Skipped (reserved folder: {name})");
+                        MMLog.WriteDebug($"   Skipped (reserved folder: {name})");
                         continue;
                     }
 
@@ -46,10 +46,10 @@ namespace ModAPI.Core
             }
             catch (Exception ex)
             {
-                MMLog.Write($"[Discovery] Discovery error: {ex.Message}");
+                MMLog.Write($"Discovery error: {ex.Message}");
             }
 
-            MMLog.Write($"[Discovery] Total mods discovered: {results.Count}");
+            MMLog.Write($"Total mods discovered: {results.Count}");
             return results;
         }
 
@@ -83,7 +83,7 @@ namespace ModAPI.Core
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError($"[Trace] LoadAssemblies: FAILED to load assembly '{dllPath}' for mod '{entry.Id}': {ex.ToString()}");
+                    MMLog.WriteError($"LoadAssemblies: FAILED to load assembly '{dllPath}' for mod '{entry.Id}': {ex.ToString()}");
                 }
             }
             return assemblies;

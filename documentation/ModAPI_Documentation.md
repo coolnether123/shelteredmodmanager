@@ -243,9 +243,15 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 **Interconnections:** Extends the logging capabilities provided by `MMLog.cs`.
 
 ### `MMLog.cs`
-**Primary Role:** Implements the core logging functionality for the Mod Manager. It handles the routing, formatting, and output of log messages originating from the ModAPI itself and from individual mods.
-**Secondary Role:** Centralizes error reporting and debugging information, making it easier to diagnose issues in a modded environment.
-**Interconnections:** `LoggerExtensions.cs` builds upon this class. All components of the ModAPI and individual mods use `MMLog` for their logging needs.
+**Primary Role:** Core logging engine for ModAPI and mods. Now features high-performance automatic source attribution.
+**Secondary Role:** Centralizes error reporting and provides developer-facing diagnostic tools (timers, once-warnings).
+**Key Features (v1.2.0):**
+- **Automatic Source Detection**: Uses optimized stack-trace analysis to identify the calling class or mod ID.
+- **Assembly Caching**: Caches the result of assembly-to-mod lookups to minimize `StackTrace` overhead on subsequent logs.
+- **Explicit Source Injection**: `WriteWithSource` allows performance-critical components to bypass stack walks entirely.
+- **Redundant Prefix Filtering**: Automatically handles source tagging so developers don't need to manually add `[Prefix]`.
+
+**Interconnections:** All ModAPI components and individual mods use `MMLog`. It is optimized to perform well even with frequent log calls during game loops.
 
 ### `ModAbout.cs`
 **Primary Role:** Defines a data structure or class to hold essential metadata about a mod. This includes information such as the mod's name, author, version, description, and potentially dependencies.

@@ -20,11 +20,11 @@ namespace ModAPI.Hooks
             
             if (PlatformSaveProxy.NextSave.ContainsKey(slot))
             {
-                 MMLog.Write($"[SaveToCurrentSlot] Pending NEW GAME detected for {slot}. Proxy is injected and waiting.");
+                MMLog.WriteDebug($"Pending NEW GAME detected for {slot}. Proxy is injected and waiting.");
             }
             else if (PlatformSaveProxy.ActiveCustomSave != null)
             {
-                 MMLog.Write($"[SaveToCurrentSlot] Active CUSTOM SESSION detected for {slot}. Proxy is injected and waiting.");
+                MMLog.WriteDebug($"Active CUSTOM SESSION detected for {slot}. Proxy is injected and waiting.");
             }
 
             // 3. Return true to let vanilla logic run (which calls our Proxy)
