@@ -620,10 +620,16 @@ shelteredmodmanager/
     │   ├───SceneCompat.cs
     │   └───SceneUtil.cs
     ├───Harmony/
+    │   ├───AdvancedExtensions.cs
+    │   ├───FluentTranspiler.cs
+    │   ├───FluentTranspilerPatterns.cs
     │   ├───HarmonyBootstrap.cs
     │   ├───HarmonyHelper.cs
     │   ├───HarmonyUtil.cs
-    │   └───MainMenuPatches.cs
+    │   ├───MainMenuPatches.cs
+    │   ├───ShelteredPatterns.cs
+    │   ├───TranspilerDebugger.cs
+    │   └───UnityPatterns.cs
     ├───Inspector/
     │   ├───BoundsHighlighter.cs
     │   ├───HierarchyUtil.cs

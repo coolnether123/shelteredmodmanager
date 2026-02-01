@@ -1,19 +1,19 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
+using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
     /// <summary>
-    /// Extension methods for FluentTranspiler to support advanced pattern matching.
-    /// Addresses feedback from transpiler users regarding safer bulk operations.
+    /// Extension methods for FluentTranspiler to support general IL pattern matching.
+    /// These are game-agnostic and focus on raw instruction manipulation.
     /// </summary>
     public static class FluentTranspilerPatterns
     {
-        #region Instruction Type Checking
+        #region Instruction Predicates
 
         /// <summary>Check if current instruction loads a constant float.</summary>
         public static bool IsLdcR4(this FluentTranspiler t, float value)
@@ -46,18 +46,6 @@ namespace ModAPI.Harmony
             return instr != null && instr.opcode == OpCodes.Newobj && instr.operand is ConstructorInfo ci && ci.DeclaringType == type;
         }
 
-        /// <summary>Check if current instruction is a newobj for Vector2.</summary>
-        public static bool IsNewobjVector2(this FluentTranspiler t)
-        {
-            return t.IsNewobj(typeof(UnityEngine.Vector2));
-        }
-
-        /// <summary>Check if current instruction is a newobj for Vector3.</summary>
-        public static bool IsNewobjVector3(this FluentTranspiler t)
-        {
-            return t.IsNewobj(typeof(UnityEngine.Vector3));
-        }
-
         /// <summary>Check if current instruction calls a specific method.</summary>
         public static bool IsCall(this FluentTranspiler t, Type type, string methodName)
         {
@@ -75,7 +63,6 @@ namespace ModAPI.Harmony
 
         /// <summary>
         /// Check if a pattern exists backward from current position.
-        /// Usage: t.MatchCall(...).CheckBackward(3, i => i.IsLdcR4(0), i => i.IsLdcR4(0), i => i.IsNewobjVector2())
         /// </summary>
         public static bool CheckBackward(this FluentTranspiler t, int steps, params Func<CodeInstruction, bool>[] predicates)
         {
@@ -83,15 +70,8 @@ namespace ModAPI.Harmony
             if (predicates.Length != steps) 
                 throw new ArgumentException($"CheckBackward: predicates count ({predicates.Length}) must equal steps ({steps})");
             
-            int currentIdx = t.CurrentIndex;
-            
-            // We need access to the instruction list - work around this limitation
-            // by checking position validity
-            if (currentIdx - steps < 0) return false;
-            
-            // Since we can't easily access the instruction list from FluentTranspiler,
-            // we'll use a workaround: move back, check, then restore position
-            int originalPos = currentIdx;
+            int originalPos = t.CurrentIndex;
+            if (originalPos - steps < 0) return false;
             
             try
             {
@@ -105,7 +85,7 @@ namespace ModAPI.Harmony
             }
             finally
             {
-                // Restore position by moving forward
+                // Restore position
                 while (t.CurrentIndex < originalPos && t.HasMatch)
                 {
                     t.Next();
@@ -119,32 +99,27 @@ namespace ModAPI.Harmony
 
         /// <summary>
         /// Remove the current instruction plus N previous instructions.
-        /// Example: t.MatchCall().RemoveWithPrevious(3) removes the call and 3 instructions before it.
         /// </summary>
         public static FluentTranspiler RemoveWithPrevious(this FluentTranspiler t, int previousCount)
         {
             if (!t.HasMatch) return t;
             
-            // Move back to start of removal range
             for (int i = 0; i < previousCount; i++)
             {
                 t.Previous();
                 if (!t.HasMatch) return t;
             }
             
-            // Remove all instructions (current + previousCount)
             for (int i = 0; i <= previousCount; i++)
             {
                 if (t.HasMatch)
                     t.Remove();
             }
-            
             return t;
         }
 
         /// <summary>
-        /// Conditional execution - only run action if condition is true.
-        /// Example: t.MatchCall().If(() => t.CheckBackward(3, ...), t => t.RemoveWithPrevious(3))
+        /// Conditional execution based on a predicate.
         /// </summary>
         public static FluentTranspiler If(this FluentTranspiler t, Func<bool> condition, Action<FluentTranspiler> thenAction)
         {
@@ -155,34 +130,37 @@ namespace ModAPI.Harmony
 
         #endregion
 
-        #region Pattern Sequence Helpers
+        #region Pattern Replacement Helpers
 
         /// <summary>
-        /// Helper to create a pattern that matches: ldc.r4 0, ldc.r4 0, newobj Vector2
-        /// Common pattern in Unity code for Vector2.zero before it was optimized.
+        /// Replace all occurrences of a pattern with a static method call.
         /// </summary>
-        public static Func<CodeInstruction, bool>[] PatternVector2Zero()
+        public static FluentTranspiler ReplacePatternWithCall(
+            this FluentTranspiler t, 
+            Func<CodeInstruction, bool>[] pattern, 
+            Type type, 
+            string method,
+            bool preserveInstructionCount = true)
         {
-            return new Func<CodeInstruction, bool>[]
+            var callMethod = type.GetMethod(method, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (callMethod == null) 
             {
-                instr => instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f1 && Math.Abs(f1) < 0.0001f,
-                instr => instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f2 && Math.Abs(f2) < 0.0001f,
-                instr => instr.opcode == OpCodes.Newobj && instr.operand is ConstructorInfo ci && ci.DeclaringType == typeof(UnityEngine.Vector2)
-            };
+                throw new ArgumentException($"Method {type.Name}.{method} not found or not static");
+            }
+            
+            return t.ReplaceAllPatterns(pattern, new[] { new CodeInstruction(OpCodes.Call, callMethod) }, preserveInstructionCount);
         }
 
         /// <summary>
-        /// Helper to create a pattern that matches: ldc.r4 0, ldc.r4 0, ldc.r4 0, newobj Vector3
+        /// Alias for ReplacePatternWithCall with preserveInstructionCount = false.
         /// </summary>
-        public static Func<CodeInstruction, bool>[] PatternVector3Zero()
+        public static FluentTranspiler ReplaceSequenceWithCall(
+            this FluentTranspiler t,
+            Func<CodeInstruction, bool>[] sequencePattern,
+            Type replacementType,
+            string replacementMethod)
         {
-            return new Func<CodeInstruction, bool>[]
-            {
-                instr => instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f1 && Math.Abs(f1) < 0.0001f,
-                instr => instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f2 && Math.Abs(f2) < 0.0001f,
-                instr => instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f3 && Math.Abs(f3) < 0.0001f,
-                instr => instr.opcode == OpCodes.Newobj && instr.operand is ConstructorInfo ci && ci.DeclaringType == typeof(UnityEngine.Vector3)
-            };
+            return t.ReplacePatternWithCall(sequencePattern, replacementType, replacementMethod, preserveInstructionCount: false);
         }
 
         #endregion

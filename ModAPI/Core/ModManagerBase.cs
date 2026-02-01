@@ -54,9 +54,9 @@ namespace ModAPI.Core
         /// <summary>
         /// Convenience method to register data for persistence.
         /// </summary>
-        protected void RegisterPersistentData<T>(string key, T data) where T : class
+        protected void RegisterPersistentData<T>(string key, T data, Action<T> migrationCallback = null) where T : class
         {
-            if (SaveSystem != null) SaveSystem.RegisterModData(key, data);
+            if (SaveSystem != null) SaveSystem.RegisterModData(key, data, migrationCallback);
         }
 
         /// <summary>

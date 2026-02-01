@@ -7,6 +7,10 @@ using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
+    /// <summary>
+    /// Common Unity-specific IL patterns and replacements.
+    /// Focuses on universal Unity engine types (Vector2, Time, GameObject, etc.).
+    /// </summary>
     public static class UnityPatterns
     {
         #region Unity Version Compatibility
@@ -34,38 +38,28 @@ namespace ModAPI.Harmony
         
         #endregion
         
-        #region Vector Replacements
+        #region Vector Field/Property Replacements (Universal)
         
         /// <summary>
-        /// Replace Vector2.zero or Vector3.zero property access.
-        /// Includes matching - do NOT pre-match.
+        /// Replace Vector2.zero or Vector3.zero property access with field access.
         /// </summary>
         public static FluentTranspiler ReplaceVectorZero(this FluentTranspiler t, Type vectorType)
         {
             if (vectorType != typeof(Vector2) && vectorType != typeof(Vector3))
                 throw new ArgumentException($"Expected Vector2 or Vector3, got {vectorType.Name}");
-            // Unity version compatibility: Vector2.zero is a property in some versions and a field in others. 
-            // Checking both ensures the transpiler works across different Unity engine builds.
+
             var prop = vectorType.GetProperty("zero", BindingFlags.Public | BindingFlags.Static);
             if (prop != null)
             {
-                // Is a property (older Unity or specific build)
                 var field = vectorType.GetField("zero", BindingFlags.Public | BindingFlags.Static);
-                
-                // Ensures that if 'zero' is a property, the expected backing field 
-                // is also present, catching potential engine implementation changes early.
                 if (field == null)
                 {
-                    throw new InvalidOperationException(
-                        $"{vectorType.Name}.zero is a property but no static 'zero' field found. " +
-                        "This Unity version may use internal calls or intrinsics.");
+                    throw new InvalidOperationException($"{vectorType.Name}.zero is a property but no static 'zero' field found.");
                 }
                 
                 return t.MatchCall(vectorType, "get_zero")
                         .ReplaceWith(OpCodes.Ldsfld, field);
             }
-            
-            // Is already a field or not found - nothing to "replace" via call matching
             return t;
         }
 
@@ -89,14 +83,27 @@ namespace ModAPI.Harmony
         
         #endregion
 
+        #region Vector Pattern Replacements (Legacy Sequence)
+
+        /// <summary>
+        /// Replace the legacy 'new Vector2(0,0)' IL sequence with a custom static call.
+        /// </summary>
+        public static FluentTranspiler ReplaceVectorZeroWithCall(
+            this FluentTranspiler t, 
+            Type type, 
+            string method,
+            bool preserveInstructionCount = true)
+        {
+            return t.ReplaceAllPatterns(PatternVector2Zero(), new[] { new CodeInstruction(OpCodes.Call, type.GetMethod(method, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)) }, preserveInstructionCount);
+        }
+
+        #endregion
+
         #region Time Replacements
         
         /// <summary>
         /// Replace Time.deltaTime getter with custom implementation.
-        /// Includes matching - do NOT pre-match.
         /// </summary>
-        /// <param name="overrideType">Type containing the replacement method (must be static).</param>
-        /// <param name="overrideMethod">Name of the static method returning float.</param>
         public static FluentTranspiler ReplaceTimeDeltaTime(
             this FluentTranspiler t, 
             Type overrideType, 
@@ -126,46 +133,10 @@ namespace ModAPI.Harmony
         
         #endregion
 
-        #region DontDestroyOnLoad
-        
-        /// <summary>
-        /// Remove a call to DontDestroyOnLoad.
-        /// Includes matching - do NOT pre-match.
-        /// ⚠️ WARNING: If DontDestroyOnLoad(new GameObject()) is used, 
-        /// the GameObject is created but not preserved! This can 
-        /// lead to memory leaks or unexpected object destruction.
-        /// NOTE: Stack management: DontDestroyOnLoad consumes one argument. 
-        /// Replacing it with a Pop ensures the stack remains balanced after the call is removed.
-        /// </summary>
-        public static FluentTranspiler NukeDontDestroyOnLoad(this FluentTranspiler t)
-        {
-            return t
-                .MatchCall(typeof(UnityEngine.Object), "DontDestroyOnLoad")
-                .ReplaceWith(OpCodes.Pop);
-        }
-
-        /// <summary>
-        /// Remove ALL calls to DontDestroyOnLoad in the method.
-        /// </summary>
-        public static FluentTranspiler NukeAllDontDestroyOnLoad(this FluentTranspiler t)
-        {
-            t.Reset();
-            while (true)
-            {
-                t.MatchCallNext(typeof(UnityEngine.Object), "DontDestroyOnLoad");
-                if (!t.HasMatch) break;
-                t.ReplaceWith(OpCodes.Pop);
-            }
-            return t;
-        }
-        
-        #endregion
-
         #region GetComponent Replacement
         
         /// <summary>
         /// Replace GetComponent(Type) calls with custom factory.
-        /// Includes matching - do NOT pre-match.
         /// </summary>
         public static FluentTranspiler ReplaceGetComponent(
             this FluentTranspiler t,
@@ -181,7 +152,6 @@ namespace ModAPI.Harmony
 
         /// <summary>
         /// Replace generic GetComponent<T> calls with custom factory.
-        /// Includes matching - do NOT pre-match.
         /// </summary>
         public static FluentTranspiler ReplaceGetComponentGeneric<T>(
             this FluentTranspiler t,
@@ -201,13 +171,12 @@ namespace ModAPI.Harmony
         
         /// <summary>
         /// Insert a debug log before the CURRENT match.
-        /// Requires pre-match - use after MatchCall/MatchOpCode.
         /// </summary>
         public static FluentTranspiler InsertDebugLogBefore(
             this FluentTranspiler t,
             string message)
         {
-            if (!t.HasMatch) return t;  // Silent skip if no match
+            if (!t.HasMatch) return t;
             
             return t
                 .InsertBefore(OpCodes.Ldstr, message)
@@ -217,7 +186,6 @@ namespace ModAPI.Harmony
         
         /// <summary>
         /// Insert a debug log after the CURRENT match.
-        /// Requires pre-match - use after MatchCall/MatchOpCode.
         /// </summary>
         public static FluentTranspiler InsertDebugLogAfter(
             this FluentTranspiler t,
@@ -233,12 +201,59 @@ namespace ModAPI.Harmony
         
         #endregion
 
+        #region Vector Object Predicates (Helper)
+
+        /// <summary>Check if current instruction is a newobj for Vector2.</summary>
+        public static bool IsNewobjVector2(this FluentTranspiler t)
+        {
+            return t.IsNewobj(typeof(UnityEngine.Vector2));
+        }
+
+        /// <summary>Check if current instruction is a newobj for Vector3.</summary>
+        public static bool IsNewobjVector3(this FluentTranspiler t)
+        {
+            return t.IsNewobj(typeof(UnityEngine.Vector3));
+        }
+
+        #endregion
+
+        #region Pattern Sequence Helpers
+
+        /// <summary>
+        /// Helper to create a pattern that matches: ldc.r4 0, ldc.r4 0, newobj Vector2
+        /// </summary>
+        public static Func<CodeInstruction, bool>[] PatternVector2Zero()
+        {
+            return new Func<CodeInstruction, bool>[]
+            {
+                instr => instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f1 && Math.Abs(f1) < 0.0001f,
+                instr => instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f2 && Math.Abs(f2) < 0.0001f,
+                instr => instr.opcode == OpCodes.Newobj && instr.operand is ConstructorInfo ci && ci.DeclaringType == typeof(UnityEngine.Vector2)
+            };
+        }
+
+        /// <summary>
+        /// Helper to create a pattern that matches: ldc.r4 0, ldc.r4 0, ldc.r4 0, newobj Vector3
+        /// </summary>
+        public static Func<CodeInstruction, bool>[] PatternVector3Zero()
+        {
+            return new Func<CodeInstruction, bool>[]
+            {
+                instr => instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f1 && Math.Abs(f1) < 0.0001f,
+                instr => instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f2 && Math.Abs(f2) < 0.0001f,
+                instr => instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f3 && Math.Abs(f3) < 0.0001f,
+                instr => instr.opcode == OpCodes.Newobj && instr.operand is ConstructorInfo ci && ci.DeclaringType == typeof(UnityEngine.Vector3)
+            };
+        }
+
+        #endregion
+
         #region Validation Helpers
         
         /// <summary>
         /// Validate that a static method exists with the expected return type.
         /// </summary>
-        private static void ValidateStaticMethod(Type type, string methodName, Type expectedReturnType)
+        public static void ValidateStaticMethod(Type type, string methodName, Type expectedReturnType)
         {
             var method = type.GetMethod(methodName, 
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
