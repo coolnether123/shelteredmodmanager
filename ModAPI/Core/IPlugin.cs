@@ -136,7 +136,8 @@ namespace ModAPI.Core
         /// The data is saved as JSON in 'mods_data.json' within the slot folder.
         /// Call this during Initialize().
         /// </summary>
-        void RegisterModData<T>(string key, T data) where T : class;
+        /// <param name="migrationCallback">Optional callback invoked if no data is found for this key (e.g., to load from legacy path).</param>
+        void RegisterModData<T>(string key, T data, Action<T> migrationCallback = null) where T : class;
     }
 
     // Simple logger abstraction so plugins don't depend directly on MMLog static

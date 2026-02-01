@@ -14,6 +14,7 @@ namespace ModAPI.Core
     internal class SaveSystemImpl : ISaveSystem
     {
         private readonly Dictionary<string, object> _registeredData = new Dictionary<string, object>();
+        private readonly Dictionary<string, Delegate> _migrationCallbacks = new Dictionary<string, Delegate>();
         private readonly string _modId;
 
         public SaveSystemImpl(string modId)
@@ -43,10 +44,11 @@ namespace ModAPI.Core
             }
         }
 
-        public void RegisterModData<T>(string key, T data) where T : class
+        public void RegisterModData<T>(string key, T data, Action<T> migrationCallback = null) where T : class
         {
             if (string.IsNullOrEmpty(key)) return;
             _registeredData[key] = data;
+            if (migrationCallback != null) _migrationCallbacks[key] = migrationCallback;
         }
 
         private void HandleBeforeSave(SaveData gameData)
@@ -59,19 +61,8 @@ namespace ModAPI.Core
                 // Ensure directory exists for safety
                 if (!Directory.Exists(path)) Directory.CreateDirectory(path);
 
-                var filePath = Path.Combine(path, "mods_data.json");
-                ModPersistenceData container;
-
-                // Load existing data if it exists so we don't overwrite other mods' data
-                // Wait, if it's per-mod system, should it be a shared file or per-mod file?
-                // The feedback suggested "a mods_data.json file", implying shared.
-                // But SaveSystemImpl is instantiated per-mod. 
-                // Let's use a shared file but managed by the API orchestration.
-                
                 // REVISION: This implementation is per-mod instance. 
                 // To avoid conflicts, we'll store per-mod files: 'mod_<id>_data.json'
-                // This is safer and prevents one mod's crash from ruining everyone's data.
-                
                 var modFileName = string.Format("mod_{0}_data.json", _modId.Replace('.', '_'));
                 var modFilePath = Path.Combine(path, modFileName);
 
@@ -98,26 +89,54 @@ namespace ModAPI.Core
             var modFileName = $"mod_{_modId.Replace('.', '_')}_data.json";
             var modFilePath = Path.Combine(path, modFileName);
 
-            if (!File.Exists(modFilePath)) return;
+            var loadedKeys = new HashSet<string>();
 
-            try
+            if (File.Exists(modFilePath))
             {
-                var json = File.ReadAllText(modFilePath);
-                var container = JsonUtility.FromJson<ModPersistenceData>(json);
-                if (container == null || container.entries == null) return;
-
-                foreach (var entry in container.entries)
+                try
                 {
-                    if (_registeredData.TryGetValue(entry.key, out var dataObj))
+                    var json = File.ReadAllText(modFilePath);
+                    var container = JsonUtility.FromJson<ModPersistenceData>(json);
+                    if (container != null && container.entries != null)
                     {
-                        JsonUtility.FromJsonOverwrite(entry.json, dataObj);
+                        foreach (var entry in container.entries)
+                        {
+                            if (_registeredData.TryGetValue(entry.key, out var dataObj))
+                            {
+                                JsonUtility.FromJsonOverwrite(entry.json, dataObj);
+                                loadedKeys.Add(entry.key);
+                            }
+                        }
+                        MMLog.WriteDebug(string.Format("[SaveSystem] Loaded mod data for {0} from {1}", _modId, modFileName));
                     }
                 }
-                MMLog.WriteDebug(string.Format("[SaveSystem] Loaded mod data for {0} from {1}", _modId, modFileName));
+                catch (Exception ex)
+                {
+                    MMLog.WriteError(string.Format("[SaveSystem] Failed to load mod data for {0}: {1}", _modId, ex.Message));
+                }
             }
-            catch (Exception ex)
+
+            // Migration check: If key registered but not loaded, try migration
+            foreach (var kv in _registeredData)
             {
-                MMLog.WriteError(string.Format("[SaveSystem] Failed to load mod data for {0}: {1}", _modId, ex.Message));
+                if (!loadedKeys.Contains(kv.Key) && _migrationCallbacks.TryGetValue(kv.Key, out var callback))
+                {
+                    try
+                    {
+                        // Invoke using dynamic invoke or reflection
+                        // Action<T> where T is unknown here? No, T was known at Register.
+                        // But here we have object and Delegate.
+                        // Delegate is Action<T>. Invoke(object) should work if covariant/contravariant? 
+                        // Actually explicit Invoke via helper/dynamic might be needed.
+                        // We can just use DynamicInvoke.
+                        callback.DynamicInvoke(kv.Value);
+                        MMLog.WriteInfo($"[SaveSystem] Migrated data for {kv.Key} in {_modId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        MMLog.WriteWarning($"[SaveSystem] Migration failed for {kv.Key}: {ex.Message}");
+                    }
+                }
             }
         }
     }

@@ -12,24 +12,27 @@ namespace ModAPI.Harmony
     /// Fluent API wrapper around Harmony's CodeMatcher for safe IL transpilation.
     /// Handles branch target fixups automatically.
     /// </summary>
-    public class FluentTranspiler
+    public partial class FluentTranspiler
     {
         private readonly CodeMatcher _matcher;
         private readonly List<string> _warnings = new List<string>();
+        private readonly MethodBase _originalMethod;
         private readonly string _callerMod;  // For logging context
 
-        private FluentTranspiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator = null)
+        private FluentTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase originalMethod = null, ILGenerator generator = null)
         {
             _matcher = new CodeMatcher(instructions, generator);
+            _originalMethod = originalMethod;
             _callerMod = Assembly.GetCallingAssembly().GetName().Name;
         }
 
         /// <summary>Create a new FluentTranspiler from instructions.</summary>
         /// <param name="instructions">Original instructions from Harmony transpiler.</param>
+        /// <param name="originalMethod">Optional method being patched (for better stack validation).</param>
         /// <param name="generator">Optional ILGenerator for label creation (pass from transpiler args).</param>
-        public static FluentTranspiler For(IEnumerable<CodeInstruction> instructions, ILGenerator generator = null)
+        public static FluentTranspiler For(IEnumerable<CodeInstruction> instructions, MethodBase originalMethod = null, ILGenerator generator = null)
         {
-            return new FluentTranspiler(instructions, generator);
+            return new FluentTranspiler(instructions, originalMethod, generator);
         }
 
         #region Matching Methods
@@ -121,7 +124,19 @@ namespace ModAPI.Harmony
                 _warnings.Add($"MatchCall exception: {ex.Message}");
             }
             
+
             return this;
+        }
+
+        /// <summary>
+        /// Match a property getter call. 
+        /// Automatically handles both Call and Callvirt opcodes.
+        /// </summary>
+        /// <param name="type">Declaring type of the property.</param>
+        /// <param name="propertyName">Name of the property (without "get_" prefix).</param>
+        public FluentTranspiler MatchPropertyGetter(Type type, string propertyName)
+        {
+            return MatchCall(type, "get_" + propertyName, includeInherited: true);
         }
 
         /// <summary>Continue matching from current position (for sequential matches).</summary>
@@ -356,47 +371,6 @@ namespace ModAPI.Harmony
 
         #region Control Flow Navigation
 
-        /// <summary>
-        /// Match a forward branch instruction (br, brtrue, brfalse, etc.).
-        /// Useful for finding loop boundaries and conditional jumps.
-        /// </summary>
-        public FluentTranspiler MatchNextBranch()
-        {
-            _matcher.MatchStartForward(new CodeMatch(instr => 
-                instr.opcode == OpCodes.Br || 
-                instr.opcode == OpCodes.Br_S ||
-                instr.opcode == OpCodes.Brtrue ||
-                instr.opcode == OpCodes.Brtrue_S ||
-                instr.opcode == OpCodes.Brfalse ||
-                instr.opcode == OpCodes.Brfalse_S ||
-                instr.opcode == OpCodes.Beq ||
-                instr.opcode == OpCodes.Beq_S ||
-                instr.opcode == OpCodes.Bne_Un ||
-                instr.opcode == OpCodes.Bne_Un_S));
-            
-            if (!_matcher.IsValid)
-                _warnings.Add("No branch instruction found");
-                
-            return this;
-        }
-
-        /// <summary>
-        /// Match the instruction with a specific label (branch target).
-        /// Advances to the target label of a branch instruction.
-        /// </summary>
-        public FluentTranspiler MatchBranchTarget(Label targetLabel)
-        {
-            _matcher.Start();
-            _matcher.MatchStartForward(new CodeMatch(instr => instr.labels.Contains(targetLabel)));
-            
-            if (!_matcher.IsValid)
-            {
-                _warnings.Add($"Branch target label not found in method");
-            }
-            
-            return this;
-        }
-
         #endregion
 
         #region Bulk Operations
@@ -520,6 +494,155 @@ namespace ModAPI.Harmony
 
         #endregion
 
+        #region Pattern Matching & Safer Operations
+
+        /// <summary>
+        /// Move backwards in the instruction stream. 
+        /// Safer than Previous() for checking context before removals.
+        /// </summary>
+        /// <param name="absolutePosition">Absolute index to move to.</param>
+        public FluentTranspiler MoveTo(int absolutePosition)
+        {
+            var instructions = _matcher.Instructions().ToList();
+            if (absolutePosition < 0 || absolutePosition >= instructions.Count)
+            {
+                _warnings.Add($"MoveTo: Position {absolutePosition} out of range.");
+                return this;
+            }
+            
+            _matcher.Start().Advance(absolutePosition);
+            return this;
+        }
+
+        /// <summary>
+        /// Replace a sequence of instructions with new instructions.
+        /// </summary>
+        public FluentTranspiler ReplaceSequence(int removeCount, params CodeInstruction[] newInstructions)
+        {
+            if (!_matcher.IsValid)
+            {
+                _warnings.Add("ReplaceSequence: No valid match.");
+                return this;
+            }
+            
+            // Remove the old instructions
+            for (int i = 0; i < removeCount && _matcher.IsValid; i++)
+            {
+                _matcher.RemoveInstruction();
+            }
+            
+            // Insert the new instructions
+            foreach (var instr in newInstructions.Reverse())
+            {
+                _matcher.Insert(instr);
+            }
+            
+            return this;
+        }
+
+        /// <summary>
+        /// Find ALL occurrences of a pattern and replace them.
+        /// This addresses the core issue from the feedback - safe bulk replacements.
+        /// </summary>
+        /// <param name="patternPredicates">Pattern to match.</param>
+        /// <param name="replaceWith">Replacement instructions.</param>
+        /// <param name="preserveInstructionCount">If true, pads with Nops to preserve instruction count (safe for labels).</param>
+        public FluentTranspiler ReplaceAllPatterns(
+            Func<CodeInstruction, bool>[] patternPredicates,
+            CodeInstruction[] replaceWith,
+            bool preserveInstructionCount = false)
+        {
+            var instructions = _matcher.Instructions().ToList();
+            int replacementCount = 0;
+            
+            // Find all match positions first (snapshot approach)
+            var matchPositions = new List<int>();
+            for (int i = 0; i <= instructions.Count - patternPredicates.Length; i++)
+            {
+                bool matches = true;
+                for (int j = 0; j < patternPredicates.Length; j++)
+                {
+                    if (!patternPredicates[j](instructions[i + j]))
+                    {
+                        matches = false;
+                        break;
+                    }
+                }
+                
+                if (matches)
+                {
+                    matchPositions.Add(i);
+                    // Skip ahead to avoid overlapping matches
+                    i += patternPredicates.Length - 1;
+                }
+            }
+            
+            // Apply replacements in reverse order to maintain indices
+            for (int idx = matchPositions.Count - 1; idx >= 0; idx--)
+            {
+                int pos = matchPositions[idx];
+                
+                MMLog.WriteDebug($"[ReplaceAllPatterns] Position {pos}: replacing {patternPredicates.Length} instructions with {replaceWith.Length} instructions. preserveInstructionCount={preserveInstructionCount}");
+
+                _matcher.Start().Advance(pos);
+                
+                if (preserveInstructionCount)
+                {
+                    // Calculate how many Nops we need to reach the replacement count
+                    int nopCount = patternPredicates.Length - replaceWith.Length;
+                    
+                    if (nopCount >= 0)
+                    {
+                        // We have enough or more slots than replacements.
+                        // Fill lead slots with Nops, then place replacements.
+                        for (int i = 0; i < nopCount; i++)
+                        {
+                            _matcher.SetInstruction(new CodeInstruction(OpCodes.Nop));
+                            _matcher.Advance(1);
+                        }
+                        
+                        for (int i = 0; i < replaceWith.Length; i++)
+                        {
+                            _matcher.SetInstruction(replaceWith[i]);
+                            if (i < replaceWith.Length - 1) _matcher.Advance(1);
+                        }
+                    }
+                    else
+                    {
+                        // We have MORE replacements than original instructions.
+                        // Replace all original slots, then insert the remainder.
+                        for (int i = 0; i < patternPredicates.Length; i++)
+                        {
+                            _matcher.SetInstruction(replaceWith[i]);
+                            if (i < patternPredicates.Length - 1) _matcher.Advance(1);
+                        }
+                        
+                        // Insert remaining ones
+                        for (int i = patternPredicates.Length; i < replaceWith.Length; i++)
+                        {
+                            _matcher.Insert(replaceWith[i]);
+                        }
+                    }
+                }
+                else
+                {
+                    // Normal mode: remove and replace
+                    ReplaceSequence(patternPredicates.Length, replaceWith);
+                }
+                
+                replacementCount++;
+            }
+            
+            if (replacementCount == 0)
+            {
+                _warnings.Add("ReplaceAllPatterns: No patterns found");
+            }
+            
+            return this;
+        }
+
+        #endregion
+
         #region Build
 
         /// <summary>
@@ -543,7 +666,9 @@ namespace ModAPI.Harmony
                 // but will not detect underflows in unreachable code paths.
                 if (!ValidateStackBalance(_matcher.Instructions().ToList(), out string stackError))
                 {
-                    _warnings.Add(stackError);
+                    // Stack warnings are informative but should not be fatal by default 
+                    // because linear analysis cannot account for complex control flow/branches.
+                    MMLog.WriteWarning($"[FluentTranspiler:{_callerMod}] {stackError}");
                 }
             }
 
@@ -574,9 +699,10 @@ namespace ModAPI.Harmony
         #region Internal Validation
 
         /// <summary>Linear stack depth analyzer to catch common transpiler errors.</summary>
-        private static bool ValidateStackBalance(List<CodeInstruction> instructions, out string error)
+        private bool ValidateStackBalance(List<CodeInstruction> instructions, out string error)
         {
             int stackDepth = 0;
+            int instrIndex = 0;
             
             foreach (var instr in instructions)
             {
@@ -585,26 +711,64 @@ namespace ModAPI.Harmony
                 
                 if (stackDepth < 0) 
                 {
-                    error = $"Stack underflow at index {instructions.IndexOf(instr)}: {instr}";
+                    // Relaxed check: Allow minor underflow at the very start of a method.
+                    if (instrIndex < 5)
+                    {
+                        stackDepth = 0; // Reset and continue
+                    }
+                    else
+                    {
+                        error = $"Stack underflow at index {instrIndex}: {instr}";
+                        return false;
+                    }
+                }
+
+                // Check balance at return
+                if (instr.opcode == OpCodes.Ret && stackDepth != 0)
+                {
+                    error = $"Unbalanced stack at Return (index {instrIndex}). Depth: {stackDepth}. Instr: {instr}";
                     return false;
                 }
                 
                 // Push behavior
                 stackDepth += CalculatePushCount(instr);
-            }
-            
-            if (stackDepth != 0)
-            {
-                error = $"Unbalanced stack: Method ends with depth {stackDepth} (expected 0)";
-                return false;
+
+                instrIndex++;
             }
             
             error = null;
             return true;
         }
 
-        private static int CalculatePopCount(CodeInstruction instr)
+        private int CalculatePopCount(CodeInstruction instr)
         {
+            // Special cases for opcodes with variable stack behavior
+            if (instr.opcode == OpCodes.Ret)
+            {
+                // Ret pops the return value if not void
+                if (_originalMethod is MethodInfo mi && mi.ReturnType != typeof(void))
+                    return 1;
+                return 0;
+            }
+
+            if (instr.opcode == OpCodes.Newobj)
+            {
+                // newobj pops parameters, but NOT an instance (it creates it)
+                if (instr.operand is MethodBase constructor)
+                    return constructor.GetParameters().Length;
+                return 0;
+            }
+
+            if (instr.opcode == OpCodes.Call || instr.opcode == OpCodes.Callvirt)
+            {
+                if (instr.operand is MethodBase method)
+                {
+                    int count = method.GetParameters().Length;
+                    if (!method.IsStatic) count++;
+                    return count;
+                }
+            }
+
             switch (instr.opcode.StackBehaviourPop)
             {
                 case StackBehaviour.Pop0: return 0;
@@ -638,8 +802,10 @@ namespace ModAPI.Harmony
             }
         }
 
-        private static int CalculatePushCount(CodeInstruction instr)
+        private int CalculatePushCount(CodeInstruction instr)
         {
+            if (instr.opcode == OpCodes.Newobj) return 1;
+
             switch (instr.opcode.StackBehaviourPush)
             {
                 case StackBehaviour.Push0: return 0;

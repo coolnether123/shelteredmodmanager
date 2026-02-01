@@ -108,6 +108,8 @@
     <Compile Include="Harmony\TranspilerDebugger.cs" />
     <Compile Include="Harmony\UnityPatterns.cs" />
     <Compile Include="Harmony\FluentTranspilerPatterns.cs" />
+    <Compile Include="Harmony\AdvancedExtensions.cs" />
+    <Compile Include="Harmony\ShelteredPatterns.cs" />
     <Compile Include="Debugging\SmartWatcher.cs" />
     <Compile Include="Inspector\HierarchyUtil.cs" />
     <Compile Include="Inspector\BoundsHighlighter.cs" />

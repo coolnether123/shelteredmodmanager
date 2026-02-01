@@ -29,21 +29,23 @@ A practical guide covering how to use the ModAPI to create mods for Sheltered.
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Adding Custom Items](#adding-custom-items)
-3. [Adding Crafting Recipes](#adding-crafting-recipes)
-4. [Inventory Management](#inventory-management)
-5. [Party & Characters](#party--characters)
-6. [Game Events](#game-events)
-7. [UI Events](#ui-events)
-8. [Creating UI Elements](#creating-ui-elements)
-9. [Save System Integration](#save-system-integration)
-10. [Persistent Data](#persistent-data)
-11. [Logging](#logging)
-12. [Asset Loading](#asset-loading)
-13. [Zero-Boilerplate Mods (v1.1.0)](#zero-boilerplate-mods)
-14. [Mod Settings (Attributes)](#mod-settings-attributes)
-15. [Mod Settings (Spine)](#mod-settings-spine)
-16. [Inter-Mod Features](#inter-mod-features)
+2. [Lifecycle & State Diagrams](#lifecycle--state-diagrams)
+3. [Adding Custom Items](#adding-custom-items)
+4. [Adding Crafting Recipes](#adding-crafting-recipes)
+5. [Inventory Management](#inventory-management)
+6. [Party & Characters](#party--characters)
+7. [Game Events](#game-events)
+8. [UI Events](#ui-events)
+9. [Creating UI Elements](#creating-ui-elements)
+10. [Mod-to-Mod Compatibility](#mod-to-mod-compatibility-guide)
+11. [Save System Integration](#save-system-integration)
+12. [Persistent Data](#persistent-data)
+13. [Logging](#logging)
+14. [Performance Pitfalls](#the-performance-pitfalls-section)
+15. [Asset Loading](#asset-loading)
+16. [Zero-Boilerplate Mods](#zero-boilerplate-mods)
+17. [Mod Settings (Attributes)](#mod-settings-attributes)
+18. [Mod Settings (Spine)](#mod-settings-spine)
 
 ---
 
@@ -145,6 +147,45 @@ namespace MyMod
 ```
 
 **The `context` parameter:** This is your mod's connection to the ModAPI. Use `context.Log` for logging and `context.Mod` for your mod's metadata (ID, name, version, folder path). Version v1.0.1 introduced `context.Game`, a high-level helper for game state.
+
+---
+
+## Lifecycle & State Diagrams
+
+Understanding when things happen is crucial for preventing "Null Reference" errors during startup or data loss during saves.
+
+### 1. Initialization Lifecycle
+
+| Phase | Method | What's safe to do? |
+|---|---|---|
+| **Registration** | `Initialize(context)` | Basic setup. Harmony patching. `RegisterAPI`. |
+| **Activation** | `Start(context)` | Cross-mod communication via `ModRegistry` or `ModAPIRegistry`. |
+| **Session Start** | `OnSessionStarted` | Accessing `GameModeManager` or `FamilyManager`. (User is in-game). |
+| **New Game** | `OnNewGame` | Resetting mod data specifically for a fresh world. |
+
+```mermaid
+sequenceDiagram
+    participant Game as Sheltered
+    participant API as ModAPI
+    participant Mod as Your Mod
+    Game->>API: Load All Assemblies
+    API->>Mod: Initialize(context)
+    Note over Mod: Safe to apply Patches
+    API->>Mod: Start(context)
+    Note over Mod: Safe to find other Mods
+    Game->>API: Save Slot Loaded
+    API->>Mod: OnSessionStarted()
+    Note over Mod: Safe to access Items/Family
+```
+
+### 2. Save/Load Lifecycle
+
+| Action | Method | Purpose |
+|---|---|---|
+| **Saving** | `OnBeforeSave(entry)` | Move runtime state into serializable objects. |
+| **Saving** | `Mod Persistence` | ModAPI writes `mod_data.json` to the slot folder. |
+| **Loading** | `Mod Persistence` | ModAPI reads `mod_data.json` and populates objects. |
+| **Loading** | `OnAfterLoad(entry)` | Re-initialize cache or runtime logic based on loaded data. |
 
 ---
 
@@ -791,7 +832,7 @@ mods/
 
 ---
 
-## Inter-Mod Features
+## Redundant Inter-Mod section
 
 For advanced mods that need to interact with other mods.
 
@@ -881,7 +922,70 @@ if (ModAPIRegistry.TryGetAPI<IMyAPI>("OtherMod.API", out var api))
 }
 ```
 
----
+### Mod-to-Mod Compatibility Guide
+ 
+ ModAPI provides three ways to interact with other mods, ranked from "Loose" to "Tight" coupling.
+ 
+ #### 1. Discovery (Loose)
+ Check if a mod exists before enabling optional features. No hard reference to their DLL is needed.
+ 
+ ```csharp
+ if (ModRegistry.Find("Author.SomeExpansion")) {
+    EnableCompatibilityLayer();
+ }
+ ```
+ 
+ #### 2. Event Bus (Medium)
+ Broadcast data that any mod can listen to. High performance and zero coupling (you don't need their interface).
+ 
+ ```csharp
+ // Publisher
+ ModEventBus.Publish("MyMod.TradeCompleted", new TradeData { Amount = 50 });
+ 
+ // Subscriber
+ ModEventBus.Subscribe<TradeData>("MyMod.TradeCompleted", data => ...);
+ ```
+ 
+ #### 3. API Registry (Tight)
+ Expose a full C# interface for other mods to call.
+ 
+ ```csharp
+ // 1. Put your interface in a 'Shared' namespace or separate DLL
+ public interface IMarketplaceAPI {
+    void RegisterVendor(GameObject npc);
+ }
+ 
+ // 2. Register it
+ ModAPIRegistry.RegisterAPI<IMarketplaceAPI>("com.author.Market", myImplementation);
+ 
+ // 3. Mod B calls it
+ if (ModAPIRegistry.TryGetAPI<IMarketplaceAPI>("com.author.Market", out var api)) {
+    api.RegisterVendor(myNPC);
+ }
+ ```
+ 
+ ---
+ 
+ ## "The Performance Pitfalls" Section
+ 
+ Sheltered runs on a version of Unity 5.x that is highly sensitive to main-thread processing time.
+ 
+ ### 1. Avoid `GameObject.Find` in `Update()`
+ `GameObject.Find` and `GetComponent` are expensive. 
+ *   **Wrong**: Searching for the player every frame in `Update`.
+ *   **Right**: Cache the reference during `OnSessionStarted` or use `context.Game.FindMember()`.
+ 
+ ### 2. Logging Optimization
+ `MMLog` is highly optimized, but a stack-walk (to find the source name) still takes time.
+ *   **Wrong**: Logging "Still processing..." inside a loop that runs 500 times.
+ *   **Right**: Use `MMLog.WriteWithSource("Message", "MySource")` in hot loops to bypass the expensive source detection.
+ 
+ ### 3. Tick Management
+ Not everything needs to happen in `Update()` (60-120 times per second).
+ *   **Pro Tip**: Use `GameEvents.OnNewDay` for systems that only update once a day (inventory decay, reputation changes).
+ *   **Pro Tip**: If you need a "slower" update, check `Time.frameCount % 60 == 0` to run logic only once per second.
+ 
+ ---
 
 ## Quick Reference
 
