@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Reflection;
+using ModAPI.Saves;
+using ModAPI.Hooks;
 using UnityEngine;
 
 namespace ModAPI.Events
@@ -76,6 +78,20 @@ namespace ModAPI.Events
 
             _beforeSaveRaised = true;
             if (OnBeforeSave != null) SafeInvoke(delegate { OnBeforeSave(data); }, "OnBeforeSave");
+
+            // ALSO RAISE THE V1.2 CUSTOM SAVE EVENT
+            try
+            {
+                var customEntry = PlatformSaveProxy.ActiveCustomSave;
+                if (customEntry != null)
+                {
+                    ModAPI.Saves.Events.RaiseBeforeSave(customEntry);
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[GameEvents] Error raising Custom BeforeSave: " + ex);
+            }
         }
 
         internal static void TryRaiseAfterLoad(SaveManager mgr)
@@ -93,6 +109,20 @@ namespace ModAPI.Events
 
             _afterLoadRaised = true;
             if (OnAfterLoad != null) SafeInvoke(delegate { OnAfterLoad(data); }, "OnAfterLoad");
+
+            // ALSO RAISE THE V1.2 CUSTOM SAVE EVENT
+            try
+            {
+                var customEntry = PlatformSaveProxy.ActiveCustomSave;
+                if (customEntry != null)
+                {
+                    ModAPI.Saves.Events.RaiseAfterLoad(customEntry);
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[GameEvents] Error raising Custom AfterLoad: " + ex);
+            }
         }
 
         internal static void RaiseCombat(EncounterManager mgr)

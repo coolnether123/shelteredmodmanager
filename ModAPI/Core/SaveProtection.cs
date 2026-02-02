@@ -91,6 +91,9 @@ namespace ModAPI.Core
                 // Only inject for actual game slots, not GlobalData or Invalid
                 if (type == SaveManager.SaveType.GlobalData || type == SaveManager.SaveType.Invalid) return;
 
+                // SAFETY: Do not attempt to inject mod data during application quit.
+                if (PluginRunner.IsQuitting) return;
+
                 try
                 {
                     // Access the private m_data field from the SaveManager instance
@@ -155,6 +158,9 @@ namespace ModAPI.Core
             {
                 // If we are waiting for user input, pause the load
                 if (_isWaitingForUser) return false;
+
+                // SAFETY: Do not attempt to read mod data during application quit.
+                if (PluginRunner.IsQuitting) return false;
 
                 // If user confirmed load, proceed without checks and reset flag
                 if (_forceLoad)

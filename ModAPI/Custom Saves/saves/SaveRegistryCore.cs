@@ -197,26 +197,40 @@ namespace ModAPI.Saves
                 saveInfo = new SaveInfo()
             };
 
+            // SAFE GUARD: If application is in the middle of quitting,
+            // we must NOT try to parse the XML, as it may reference destroyed Unity objects.
+            bool isQuitting = PluginRunner.IsQuitting; // Access via PluginRunner
+
             if (File.Exists(savePath))
             {
                 try
                 {
+                    // Read basic file info (safe OS operation)
                     var bytes = File.ReadAllBytes(savePath);
                     entry.createdAt = File.GetCreationTimeUtc(savePath).ToString("o");
                     entry.updatedAt = File.GetLastWriteTimeUtc(savePath).ToString("o");
                     entry.fileSize = bytes.Length;
                     entry.crc32 = CRC32.Compute(bytes);
 
-                    // Parse metadata from XML
-                    TryUpdateEntryInfo(entry, bytes);
-
-                    // Use family name as display name if available
-                    if (!string.IsNullOrEmpty(entry.saveInfo?.familyName))
-                        entry.name = entry.saveInfo.familyName;
+                    if (!isQuitting)
+                    {
+                        // Parse metadata from XML (Unsafe if objects are destroyed)
+                        TryUpdateEntryInfo(entry, bytes);
+                        
+                        // Use family name as display name if available
+                        if (!string.IsNullOrEmpty(entry.saveInfo?.familyName))
+                            entry.name = entry.saveInfo.familyName;
+                    }
+                    else
+                    {
+                        // Fast Exit Mode: Use placeholders
+                        entry.name = "Unknown (Fast Exit)";
+                        entry.saveInfo.familyName = "Unknown";
+                    }
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError($"Error parsing {savePath}: {ex.Message}");
+                    MMLog.WriteError($"[SaveRegistryCore] Error parsing {savePath}: {ex.Message}");
                 }
             }
             else
@@ -270,7 +284,31 @@ namespace ModAPI.Saves
 
         public SaveEntry OverwriteSave(string saveId, SaveOverwriteOptions opts, byte[] xmlBytes)
         {
-            // Find entry by ID
+            // FAST SAVE OPTIMIZATION:
+            // If we are fast-saving (quitting), we want to avoid triggering a full directory scan (GetSave -> GetAllEntries).
+            // We only need the slot number to write the files.
+            bool fastSave = opts != null && opts.fastSave;
+            
+            if (fastSave)
+            {
+                // Try to extract slot from ID manually to bypass discovery
+                int underscore = saveId.LastIndexOf('_');
+                if (underscore > 0 && int.TryParse(saveId.Substring(underscore + 1), out int slot))
+                {
+                    MMLog.WriteDebug($"[OverwriteSave] ULTRA FAST SAVE - Bypassing discovery for Slot {slot}");
+                    
+                    if (xmlBytes != null)
+                    {
+                        WriteEntryFile(slot, xmlBytes, out long size, out uint crc);
+                        FastSaveManifest(_scenarioId, slot);
+                    }
+                    
+                    // We don't need to return a valid entry or invalidate cache because the app is closing.
+                    return null;
+                }
+            }
+
+            // Normal Flow: Find entry by ID (triggers discovery)
             var entry = GetSave(saveId);
             if (entry == null) return null;
 
@@ -283,6 +321,7 @@ namespace ModAPI.Saves
                 WriteEntryFile(entry.absoluteSlot, xmlBytes, out long size, out uint crc);
                 entry.fileSize = size;
                 entry.crc32 = crc;
+
                 TryUpdateEntryInfo(entry, xmlBytes);
                 
                 // Update per-slot manifest (Mod List only)
@@ -666,6 +705,48 @@ namespace ModAPI.Saves
             
             sb.Append("}");
             return sb.ToString();
+        }
+
+        public void FastSaveManifest(string scenariosId, int absoluteSlot)
+        {
+             var slotRoot = DirectoryProvider.SlotRoot(scenariosId, absoluteSlot);
+             var path = Path.Combine(slotRoot, "manifest.json");
+
+             // Build JSON manually using currently loaded mods
+             // We access PluginManager.LoadedMods directly here to avoid object creation overhead/race
+             var sb = new StringBuilder();
+             sb.AppendLine("{");
+             sb.AppendLine($"    \"manifestVersion\": 1,");
+             sb.AppendLine($"    \"lastModified\": \"{DateTime.UtcNow.ToString("o")}\",");
+             sb.Append($"    \"family_name\": \"Unknown\""); // We don't parse XML so family is unknown, will be fixed on load
+
+             var loaded = PluginManager.LoadedMods;
+             if (loaded != null && loaded.Count > 0)
+             {
+                 sb.AppendLine(",");
+                 sb.AppendLine("    \"lastLoadedMods\": [");
+                 for (int i = 0; i < loaded.Count; i++)
+                 {
+                     var mod = loaded[i];
+                     if (mod == null) continue;
+                     
+                     sb.Append("        { ");
+                     sb.Append($"\"modId\": \"{mod.Id}\", ");
+                     sb.Append($"\"version\": \"{mod.Version}\", ");
+                     sb.Append("\"warnings\": [] }"); // Skip detailed warnings for fast save
+                     
+                     if (i < loaded.Count - 1) sb.AppendLine(",");
+                     else sb.AppendLine();
+                 }
+                 sb.AppendLine("    ]");
+             }
+             else
+             {
+                 sb.AppendLine();
+             }
+             
+             sb.Append("}");
+             File.WriteAllText(path, sb.ToString());
         }
 
 

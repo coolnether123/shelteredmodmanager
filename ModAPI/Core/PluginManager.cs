@@ -531,6 +531,7 @@ namespace ModAPI.Core
     public class PluginRunner : MonoBehaviour
     {
         public static bool IsModernUnity { get; private set; }
+        public static bool IsQuitting { get; set; }
         private readonly Queue<Action> _nextFrame = new Queue<Action>();
         public PluginManager Manager;
         private bool _useModernApi = false;
@@ -558,6 +559,12 @@ namespace ModAPI.Core
             {
                 ThrowLegacyFallback();
             }
+        }
+
+        private void OnApplicationQuit()
+        {
+            IsQuitting = true;
+            MMLog.WriteDebug("[PluginRunner] Application is quitting detected.");
         }
 
         private void OnDestroy()

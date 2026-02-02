@@ -71,3 +71,11 @@ public class MyPlugin : IModPlugin
   - Use UIUtil & context helpers to simply add UI elements
   
 - Read https://harmony.pardeike.net/ for more information
+ 
+ ---
+ 
+ ## Advanced: Transpilers (v1.2.0)
+ 
+ If you need to manipulate the game's IL code directly for performance or surgical precision, use the **FluentTranspiler** engine introduced in V1.2.
+ 
+ See the dedicated guide: [ModAPI Transpiler & Debugging Guide](Transpiler_and_Debugging_Guide.md)

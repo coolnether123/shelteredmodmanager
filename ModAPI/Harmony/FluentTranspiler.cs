@@ -17,12 +17,14 @@ namespace ModAPI.Harmony
         private readonly CodeMatcher _matcher;
         private readonly List<string> _warnings = new List<string>();
         private readonly MethodBase _originalMethod;
+        private readonly ILGenerator _generator;
         private readonly string _callerMod;  // For logging context
 
         private FluentTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase originalMethod = null, ILGenerator generator = null)
         {
             _matcher = new CodeMatcher(instructions, generator);
             _originalMethod = originalMethod;
+            _generator = generator;
             _callerMod = Assembly.GetCallingAssembly().GetName().Name;
         }
 
@@ -364,6 +366,47 @@ namespace ModAPI.Harmony
             }
             
             _matcher.RemoveInstruction();
+            return this;
+        }
+
+        #endregion
+
+        #region ILGenerator Wrappers
+
+        /// <summary>
+        /// Declare a new local variable for use in the transpiler.
+        /// Throws if ILGenerator was not provided during construction.
+        /// </summary>
+        public FluentTranspiler DeclareLocal<T>(out LocalBuilder local)
+        {
+            if (_generator == null)
+            {
+                throw new InvalidOperationException(
+                    "[FluentTranspiler] ILGenerator was not provided. " +
+                    "Pass it to For(instructions, originalMethod, generator). " +
+                    "Transpiler delegate signature: " +
+                    "IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instr, ILGenerator gen)");
+            }
+
+            local = _generator.DeclareLocal(typeof(T));
+            _warnings.Add($"DeclareLocal<{typeof(T).FullName}>() -> LocalIndex {local.LocalIndex}");
+            return this;
+        }
+
+        /// <summary>
+        /// Define a new label for branching.
+        /// Throws if ILGenerator was not provided during construction.
+        /// </summary>
+        public FluentTranspiler DefineLabel(out Label label)
+        {
+            if (_generator == null)
+            {
+                throw new InvalidOperationException(
+                    "[FluentTranspiler] ILGenerator was not provided. " +
+                    "Pass it to For(instructions, originalMethod, generator).");
+            }
+
+            label = _generator.DefineLabel();
             return this;
         }
 

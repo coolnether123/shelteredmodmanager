@@ -13,6 +13,9 @@ namespace ModAPI.Core
     /// </summary>
     internal class SaveSystemImpl : ISaveSystem
     {
+        private static readonly List<SaveSystemImpl> _instances = new List<SaveSystemImpl>();
+        private string _shutdownCache = null;
+
         private readonly Dictionary<string, object> _registeredData = new Dictionary<string, object>();
         private readonly Dictionary<string, Delegate> _migrationCallbacks = new Dictionary<string, Delegate>();
         private readonly string _modId;
@@ -23,6 +26,7 @@ namespace ModAPI.Core
             // Subscribe to global life-cycle events
             GameEvents.OnBeforeSave += HandleBeforeSave;
             GameEvents.OnAfterLoad += HandleAfterLoad;
+            _instances.Add(this);
         }
 
         public string GetCurrentSlotPath()
@@ -51,33 +55,74 @@ namespace ModAPI.Core
             if (migrationCallback != null) _migrationCallbacks[key] = migrationCallback;
         }
 
-        private void HandleBeforeSave(SaveData gameData)
+        public static void PrecalculateShutdownData()
         {
-            var path = GetCurrentSlotPath();
-            if (string.IsNullOrEmpty(path)) return;
+            MMLog.WriteDebug("[SaveSystem] Pre-calculating mod data for safe shutdown...");
+            foreach (var sys in _instances)
+            {
+                sys.Precalculate();
+            }
+        }
 
+        private void Precalculate()
+        {
             try
             {
-                // Ensure directory exists for safety
-                if (!Directory.Exists(path)) Directory.CreateDirectory(path);
-
-                // REVISION: This implementation is per-mod instance. 
-                // To avoid conflicts, we'll store per-mod files: 'mod_<id>_data.json'
-                var modFileName = string.Format("mod_{0}_data.json", _modId.Replace('.', '_'));
-                var modFilePath = Path.Combine(path, modFileName);
-
                 var containerObj = new ModPersistenceData();
                 foreach (var kv in _registeredData)
                 {
+                    // Safe to serialize here as we are not yet quitting
                     containerObj.entries.Add(new ModDataEntry { key = kv.Key, json = JsonUtility.ToJson(kv.Value) });
                 }
+                _shutdownCache = JsonUtility.ToJson(containerObj, true);
+                MMLog.WriteDebug($"[SaveSystem] Buffered data for {_modId}");
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"[SaveSystem] Failed to buffer data for {_modId}: {ex.Message}");
+            }
+        }
 
-                File.WriteAllText(modFilePath, JsonUtility.ToJson(containerObj, true));
+        private void HandleBeforeSave(SaveData gameData)
+        {
+            try
+            {
+                MMLog.WriteDebug($"[SaveSystem] HandleBeforeSave for {_modId}. IsQuitting={PluginRunner.IsQuitting}. Proceeding...");
+
+                var path = GetCurrentSlotPath();
+                if (string.IsNullOrEmpty(path)) return;
+
+                // Ensure directory exists for safety
+                if (!Directory.Exists(path)) Directory.CreateDirectory(path);
+
+                var modFileName = string.Format("mod_{0}_data.json", _modId.Replace('.', '_'));
+                var modFilePath = Path.Combine(path, modFileName);
+                string jsonToWrite;
+
+                // CHECK FOR PRE-CALCULATED CACHE (Safety for Shutdown)
+                if (!string.IsNullOrEmpty(_shutdownCache) && PluginRunner.IsQuitting)
+                {
+                    MMLog.WriteDebug($"[SaveSystem] Writing buffered shutdown data for {_modId}");
+                    jsonToWrite = _shutdownCache;
+                    // Dont clear it, in case multiple saves happen? No, likely just one.
+                }
+                else
+                {
+                    // Standard Logic: Serialize now
+                    var containerObj = new ModPersistenceData();
+                    foreach (var kv in _registeredData)
+                    {
+                        containerObj.entries.Add(new ModDataEntry { key = kv.Key, json = JsonUtility.ToJson(kv.Value) });
+                    }
+                    jsonToWrite = JsonUtility.ToJson(containerObj, true);
+                }
+
+                File.WriteAllText(modFilePath, jsonToWrite);
                 MMLog.WriteDebug(string.Format("[SaveSystem] Saved mod data for {0} to {1}", _modId, modFileName));
             }
             catch (Exception ex)
             {
-                MMLog.WriteError(string.Format("[SaveSystem] Failed to save mod data for {0}: {1}", _modId, ex.Message));
+                MMLog.WriteError($"[SaveSystem] Critical error saving mod data for {_modId}: {ex.Message}");
             }
         }
 
