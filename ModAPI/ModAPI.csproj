@@ -151,6 +151,7 @@
     <Compile Include="Custom Saves\PlatformSaveProxy.cs" />
     <Compile Include="Custom Saves\SaveExitPanelOnCancelPatch.cs" />
     <Compile Include="Custom Saves\SaveManager_Injection_Patch.cs" />
+    <Compile Include="Custom Saves\MainMenuPanel_Quit_Patch.cs" />
     <Compile Include="Custom Saves\SaveManager_SaveToCurrentSlot_Patch.cs" />
     <Compile Include="Custom Saves\paging\PagingManager.cs" />
     <Compile Include="Custom Saves\paging\SlotSelectionPatches.cs" />

@@ -1,5 +1,5 @@
-# ModAPI Developer Guide
-## Sheltered Mod Loader v1.2.0
+# ModAPI V1.2: Developer Guide
+## First Edition (V1)
 
 A practical guide covering how to use the ModAPI to create mods for Sheltered.
 
@@ -29,29 +29,32 @@ A practical guide covering how to use the ModAPI to create mods for Sheltered.
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Lifecycle & State Diagrams](#lifecycle--state-diagrams)
-3. [Adding Custom Items](#adding-custom-items)
-4. [Adding Crafting Recipes](#adding-crafting-recipes)
-5. [Inventory Management](#inventory-management)
-6. [Party & Characters](#party--characters)
-7. [Game Events](#game-events)
-8. [UI Events](#ui-events)
-9. [Creating UI Elements](#creating-ui-elements)
-10. [Mod-to-Mod Compatibility](#mod-to-mod-compatibility-guide)
-11. [Save System Integration](#save-system-integration)
-12. [Persistent Data](#persistent-data)
-13. [Logging](#logging)
-14. [Performance Pitfalls](#the-performance-pitfalls-section)
-15. [Asset Loading](#asset-loading)
-16. [Zero-Boilerplate Mods](#zero-boilerplate-mods)
-17. [Mod Settings (Attributes)](#mod-settings-attributes)
-18. [Mod Settings (Spine)](#mod-settings-spine)
+2. [ModAPI Architecture & Managers](ModAPI_Architecture_guide.md)
+3. [Lifecycle & State Diagrams](#lifecycle--state-diagrams)
+4. [Adding Custom Items](#adding-custom-items)
+5. [Adding Crafting Recipes](#adding-crafting-recipes)
+6. [Inventory Management](#inventory-management)
+7. [Party & Characters](#party--characters)
+8. [Game Events](#game-events)
+9. [UI Events](#ui-events)
+10. [Creating UI Elements](#creating-ui-elements)
+11. [Mod-to-Mod Compatibility](#mod-to-mod-compatibility-guide)
+12. [Save System Integration](#save-system-integration)
+13. [Persistent Data](#persistent-data)
+14. [Logging](#logging)
+15. [Performance Pitfalls](#the-performance-pitfalls-section)
+16. [Asset Loading](#asset-loading)
+17. [Zero-Boilerplate Mods](#zero-boilerplate-mods)
+18. [Mod Settings (Attributes)](#mod-settings-attributes)
+19. [Mod Settings (Spine)](#mod-settings-spine)
 
 ---
 
 ## Getting Started
 
 ### Understanding Sheltered's Architecture
+
+For a deep dive into how the ModAPI itself is structured (PluginManager, ModManagerBase, etc.), see the [ModAPI Architecture & Managers Guide](ModAPI_Architecture_guide.md).
 
 Sheltered uses a **manager-based singleton pattern**. The game has centralized managers for each system:
 

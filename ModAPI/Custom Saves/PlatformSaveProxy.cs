@@ -59,8 +59,18 @@ namespace ModAPI.Hooks
                     MMLog.WriteDebug($"Intercepting Vanilla Save ({type}) -> Redirecting to Custom ID: {target.saveId}");
                     
                     // This writes the file to ModAPI/Saves/Standard/... AND parses metadata
-                    var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, null, data);
+                    // FAST SAVE: During quit/exit, we skip metadata parsing/manifest updates to prevent race conditions.
+                    bool isQuitting = PluginRunner.IsQuitting;
+                    var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, new SaveOverwriteOptions { fastSave = isQuitting }, data);
                     
+                    // Create Manifest immediately for new saves
+                    if (entry != null)
+                    {
+                        MMLog.WriteDebug($"[PlatformSaveProxy] Initializing manifest for new save: {entry.id}");
+                        var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
+                        registry.UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
+                    }
+
                     // Set this as the active save for the rest of the session
                     ActiveCustomSave = entry;
                     
@@ -80,7 +90,8 @@ namespace ModAPI.Hooks
                 MMLog.WriteDebug($"Saving Active Custom Game: {ActiveCustomSave.id}");
                 
                 // Update the file and metadata
-                ActiveCustomSave = ExpandedVanillaSaves.Instance.Overwrite(ActiveCustomSave.id, null, data);
+                // FAST SAVE: During quit/exit, we skip metadata parsing/manifest updates to prevent race conditions.
+                ActiveCustomSave = ExpandedVanillaSaves.Instance.Overwrite(ActiveCustomSave.id, new SaveOverwriteOptions { fastSave = PluginRunner.IsQuitting }, data);
                 
                 if (ActiveCustomSave != null)
                     MMLog.WriteDebug($"Saved custom slot: {ActiveCustomSave.id}");

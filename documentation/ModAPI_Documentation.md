@@ -320,6 +320,16 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 **Secondary Role:** Simplifies the process of creating and applying Harmony patches, making it easier for mod developers to inject their code into game methods.
 **Interconnections:** Used by `Hooks/HarmonyBootstrap.cs` to initialize Harmony and by `Hooks/MainMenuPatches.cs` (and other potential patch files) to define and apply specific patches.
 
+### `Harmony/FluentTranspiler.cs`
+**Primary Role:** A fluent, chainable API for creating readable and robust IL transpilers (`IEnumerable<CodeInstruction>`).
+**Secondary Role:** Provides built-in safety checks, label management, and local variable support for complex code injection.
+**Interconnections:** Used by mods in their `Transpiler` patches to manipulate method IL.
+
+### `Harmony/TranspilerDebugger.cs`
+**Primary Role:** Diagnostic utility that dumps IL instructions to the log or disk before/after modification.
+**Secondary Role:** Helps modders troubleshoot why a transpiler isn't matching or is producing invalid IL.
+**Interconnections:** Used during development to inspect Harmony outputs.
+
 ### `Hooks/HarmonyBootstrap.cs`
 **Primary Role:** Responsible for initializing and configuring the Harmony patching library when the mod manager starts up. This prepares the environment for mods to apply their code patches.
 **Secondary Role:** Ensures that the Harmony library is correctly set up and ready to be used by any mod that requires code injection.

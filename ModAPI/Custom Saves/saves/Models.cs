@@ -92,6 +92,7 @@ namespace ModAPI.Saves
     {
         public string name;
         public string extraJson;
+        public bool fastSave; // If true, skip metadata parsing and manifest updates
     }
 
     public class LoadOptions
