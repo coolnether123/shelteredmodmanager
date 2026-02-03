@@ -44,6 +44,61 @@ namespace ModAPI.Core
             }
 
             if (Log != null) Log.Info(string.Format("{0} initialized.", GetType().Name));
+            
+            ScanForPersistence();
+        }
+
+        protected virtual void ScanForPersistence()
+        {
+            if (Context == null || SaveSystem == null) return;
+            
+            try
+            {
+                var assembly = GetType().Assembly;
+                // Only scan types in the same assembly as the plugin
+                var types = assembly.GetTypes();
+                foreach (var type in types)
+                {
+                    if (type.IsAbstract || type.IsInterface) continue;
+                    
+                    var attr = Attribute.GetCustomAttribute(type, typeof(Attributes.ModPersistentDataAttribute)) as Attributes.ModPersistentDataAttribute;
+                    if (attr != null)
+                    {
+                        try
+                        {
+                            // 1. Instantiate
+                            var instance = Activator.CreateInstance(type);
+
+                            // 2. Register
+                            SaveSystem.RegisterModData(attr.Key, instance);
+                            if (Log != null) Log.Debug($"[Persistence] Registered auto-persistent type {type.Name} with key '{attr.Key}'");
+
+                            // 3. Inject into Plugin
+                            // Find a field in 'this' (the ModManagerBase plugin) that matches the type
+                            var bindFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                            var fields = GetType().GetFields(bindFlags);
+                            
+                            foreach (var field in fields)
+                            {
+                                if (field.FieldType == type)
+                                {
+                                    field.SetValue(this, instance);
+                                    if (Log != null) Log.Info($"[Persistence] Injected {type.Name} into {GetType().Name}.{field.Name}");
+                                    break; // Only inject into the first matching field
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            if (Log != null) Log.Error($"[Persistence] Failed to process {type.Name}: {ex.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Log != null) Log.Error($"[Persistence] Scanner failed: {ex.Message}");
+            }
         }
 
         /// <summary>

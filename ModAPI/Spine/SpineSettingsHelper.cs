@@ -136,8 +136,28 @@ namespace ModAPI.Spine
                 DependsOnId = attr.DependsOnId,
                 ControlsChildVisibility = attr.ControlsChildVisibility,
                 RequiresRestart = attr.RequiresRestart,
-                HeaderColor = string.IsNullOrEmpty(attr.HeaderColor) ? (Color?)null : ParseColor(attr.HeaderColor)
+                HeaderColor = string.IsNullOrEmpty(attr.HeaderColor) ? (Color?)null : ParseColor(attr.HeaderColor),
+                SyncMode = attr.SyncMode
             };
+
+            // Wire up OnChanged from attribute (String method name)
+            if (!string.IsNullOrEmpty(attr.OnChanged))
+            {
+                var m = settingsType.GetMethod(attr.OnChanged, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (m != null)
+                {
+                    // Basic Invoke optimization (Cached MethodInfo in closure)
+                    // Note: Full Delegate.CreateDelegate optimization requires generic knowledge of T which is erased here.
+                    def.OnChanged = (obj) => {
+                        try { m.Invoke(obj, null); }
+                        catch (Exception ex) { MMLog.WriteError($"Error invoking OnChanged '{attr.OnChanged}': {ex}"); }
+                    };
+                }
+                else
+                {
+                    MMLog.WriteError($"OnChanged method '{attr.OnChanged}' not found on type {settingsType.Name}");
+                }
+            }
 
             // Wire up VisibleWhen logic from attribute
             if (!string.IsNullOrEmpty(attr.VisibilityMethod))

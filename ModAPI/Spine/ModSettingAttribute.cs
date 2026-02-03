@@ -59,6 +59,18 @@ namespace ModAPI.Spine
         /// <summary>Name of a method (object defined -> bool) used to validate input before applying.</summary>
         public string ValidateMethod;
 
+        /// <summary>Minimum value for numeric sliders. Proxy for MinValue.</summary>
+        public float Min { get { return MinValue; } set { MinValue = value; } }
+
+        /// <summary>Maximum value for numeric sliders. Proxy for MaxValue.</summary>
+        public float Max { get { return MaxValue; } set { MaxValue = value; } }
+
+        /// <summary>Name of the method to call when the value changes.</summary>
+        public string OnChanged;
+
+        /// <summary>Multiplayer synchronization mode.</summary>
+        public Core.SyncMode SyncMode = Core.SyncMode.LocalOnly;
+
         /// <summary>
         /// Marks a field, property, or method as a configurable setting in the Spine UI.
         /// </summary>

@@ -49,21 +49,22 @@ By inheriting from `ModManagerBase`, you get immediate (protected) access to:
 *   **`Settings`**: For accessing and binding configuration.
 *   **`Context`**: Your full link to the API.
 
-### Automatic Settings Binding
-If you define fields with `ModAttributes` (like `[ModToggle]`), `ModManagerBase` automatically:
-1.  Scans your class.
-2.  Links those fields to the UI.
-3.  Loads their values from disk *before* you need them.
+### Automatic Settings & Persistence (v1.2)
+If you define fields with `ModAttributes` or `[ModPersistentData]`, `ModManagerBase` automatically works its magic.
+
+1.  **Settings (`[ModConfiguration]`)**: Scans for your configuration class, instantiates it, and links it to `this.Config`.
+2.  **Persistence (`[ModPersistentData]`)**: Scans for data classes, registers them with `SaveSystem`, and injects instances into your plugin.
+3.  **UI Generation**: Automatically creates the Spine UI menu.
 
 ```csharp
-public class MyCoolMod : ModManagerBase 
+public class MyCoolMod : ModManagerBase<MyConfig> 
 {
-    [ModToggle("Infinite Energy")]
-    public bool InfiniteEnergy;
-
+    // Auto-Injected
+    public MySaveData Data;
+    
     public override void Initialize(IPluginContext ctx) 
     {
-        base.Initialize(ctx); // Settings are now bound!
+        base.Initialize(ctx); // Settings & Data are now bound!
     }
 }
 ```

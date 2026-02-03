@@ -21,6 +21,7 @@ namespace ModAPI.Spine
 
         // Architectural Flags
         public bool AllowExternalWrite = false;
+        public Core.SyncMode SyncMode;
         public string DependsOnId; // ID of a Bool setting that enables this one
 
         // Runtime Visibility & Hierarchy

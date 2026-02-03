@@ -4,17 +4,19 @@
 
 ---
 
-## 1. Basic Setup
+## 1. Basic Setup (v1.2 "Zero-Boilerplate")
 
-To use Spine, you define a dedicated class to hold your settings data and mark its fields with the `[ModSetting]` attribute.
+To use Spine, define a **single** class to hold your settings data, mark it with `[ModConfiguration]`, and have your main plugin inherit from `ModManagerBase<T>`.
 
 ### The Settings Class
-This class should be a plain C# class (POCO) that holds your configuration.
+This class holds your configuration.
 
 ```csharp
-using ModAPI.Spine;
+using ModAPI.Attributes;
+using ModAPI.Core;
 using UnityEngine;
 
+[ModConfiguration]
 public class MyModSettings
 {
     [ModSetting("Enable Super Speed", Tooltip = "Makes your characters move 2x faster.")]
@@ -23,8 +25,24 @@ public class MyModSettings
     [ModSetting("Atmosphere Color")]
     public Color SkyColor = Color.cyan;
 
-    [ModSetting("Spawn Rate", MinValue = 0.1f, MaxValue = 5.0f, StepSize = 0.1f)]
+    // v1.2: Use 'Min' and 'Max' shorthand properties
+    [ModSetting("Spawn Rate", Min = 0.1f, Max = 5.0f)]
     public float SpawnMultiplier = 1.0f;
+}
+```
+
+### The Plugin Class
+Your plugin automatically handles saving, loading, and UI generation.
+
+```csharp
+public class MyMod : ModManagerBase<MyModSettings>
+{
+    public override void Initialize(IPluginContext ctx)
+    {
+        base.Initialize(ctx); // Settings are auto-loaded!
+        
+        Log.Info($"Spawn Rate is: {Config.SpawnMultiplier}");
+    }
 }
 ```
 
@@ -37,6 +55,7 @@ Spine automatically maps C# types to UI widgets:
 - `Color` -> Color Swatch (currently display only)
 - `Enum` -> Cycle Button
 
+
 ### Slider Precision & Inputs
 By default, sliders check the range to determine step size. You can override this with the `StepSize` property:
 ```csharp
@@ -47,54 +66,51 @@ By default, sliders check the range to determine step size. You can override thi
 
 ## 2. Integrating with Your Plugin
 
-Your main plugin class must implement the `ISettingsProvider` interface. The Mod Loader handles the rest (auto-loading, auto-saving).
+### The Recommended Way (ModManagerBase&lt;T&gt;)
+
+As shown above, inheriting from `ModManagerBase<T>` automates everything.
+*   **Initialization:** `base.Initialize(ctx)` creates the instance, loads JSON, and binds it.
+*   **Access:** Use `this.Config` to access settings.
+*   **Validation:** It automatically calls `Validate()` (Phase 1) after load and `ValidateRuntime()` (Phase 2) on session start.
+
+### The Manual Way (Legacy)
+
+If you cannot inherit from `ModManagerBase`, you must verify:
+1. Your class implements `ISettingsProvider`.
+2. You instantiate your settings object.
+3. You scan and return definitions.
 
 ```csharp
-using ModAPI.Core;
-using ModAPI.Spine;
-
 public class MyPlugin : IModPlugin, ISettingsProvider
 {
-    public static MyModSettings Settings; // Static for easy access
-    private IPluginContext _context;
+    public static MyModSettings Settings;
+    private IPluginContext _ctx;
 
     public void Initialize(IPluginContext context)
     {
-        _context = context;
-        // REQUIRED: Create the default instance here
+        _ctx = context;
         Settings = new MyModSettings();
+        
+        // Manual loading
+        new AutoSettingsProvider(typeof(MyModSettings), Settings, context).LoadInto(Settings);
     }
-
-    // --- ISettingsProvider Implementation ---
 
     public IEnumerable<SettingDefinition> GetSettings() 
     {
-        // Automatically scan the Settings object for attributes
         return SpineSettingsHelper.Scan(Settings);
     }
 
     public object GetSettingsObject() => Settings;
     
-    // Optional Hook: Called immediately after the Loader hydrates your object from JSON
-    public void OnSettingsLoaded()
-    {
-        _context.Log.Info($"Settings loaded! SuperSpeed is {Settings.SuperSpeed}");
-    }
+    public void OnSettingsLoaded() { }
     
-    // Reset Logic: CRITICAL: Use JsonUtility to overwrite existing values.
-    // Do NOT replace the object instance (e.g. Settings = new MyModSettings()), 
-    // as other systems in your mod likely hold a reference to the original object.
     public void ResetToDefaults() 
-    { 
-        var defaults = new MyModSettings();
-        string json = JsonUtility.ToJson(defaults);
-        JsonUtility.FromJsonOverwrite(json, Settings);
+    {
+         var defaults = new MyModSettings();
+         // Deep copy logic...
     }
 
-    public void Start(IPluginContext context) 
-    { 
-        // Settings are guaranteed to be loaded before Start() runs
-    }
+    public void Start(IPluginContext context) { }
 }
 ```
 
@@ -206,7 +222,47 @@ public int ParticleCount = 50;
 
 ---
 
-## 6. Persistence
+## 6. Dual-Phase Validation (v1.2)
+
+To solve "Game Start vs Mod Load" timing issues, settings can implement `IModSettingsValidator`.
+
+```csharp
+public class MySettings : IModSettingsValidator 
+{
+    // Phase 1: Immediate (Safe for math/null checks)
+    public void Validate() 
+    {
+        Speed = Mathf.Clamp(Speed, 0, 100);
+    }
+
+    // Phase 2: Runtime (Safe for Game Managers)
+    public void ValidateRuntime() 
+    {
+        if (GameModeManager.Instance.IsHardcore) Speed = 10;
+    }
+}
+```
+
+---
+
+## 7. Multiplayer Sync Contracts (v1.2)
+
+The `SyncMode` property defines how settings behave in future multiplayer scenarios.
+
+> **Note:** These hooks are currently for **future planning/architecture only** and are not fully tested for any multiplayer environment. They are provided now to prepare settings contracts in advance.
+
+- **LocalOnly** (Default): Client preference (e.g. Volume). Never synced.
+- **HostAuthoritative**: Host dictates value. Clients see the value but UI is locked.
+- **ClientOptional**: Host default is sent, but Client can override.
+
+```csharp
+[ModSetting("Friendly Fire", SyncMode = SyncMode.HostAuthoritative)]
+public bool FriendlyFire = false;
+```
+
+---
+
+## 8. Persistence
 Spine automatically handles JSON serialization. Settings are stored in:
 `YourModFolder/Config/spine_settings.json`
 
@@ -214,7 +270,7 @@ Data is loaded automatically before `Start()` runs, and saved automatically when
 
 ---
 
-## 7. Inter-Mod Communication
+## 9. Inter-Mod Communication
 
 Mods can read (and if permitted, write) settings from other mods using the `ModSettingsDatabase`.
 
@@ -229,7 +285,7 @@ if (npgSettings != null)
 
 ---
 
-## 8. Presets
+## 10. Presets
 Spine supports a global preset bar (currently visible only in the experimental Simple View). The cleanest way to define these is using the `[ModSettingPreset]` attribute. When multiple settings share the same preset names (e.g., "Easy", "Hard"), they will all be adjusted simultaneously when the user cycles the preset in the UI.
 
 ```csharp
