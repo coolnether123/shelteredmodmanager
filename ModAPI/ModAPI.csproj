@@ -127,7 +127,15 @@
     <Compile Include="Persistence\ModPersistence.cs" />
     <Compile Include="Persistence\ModList.cs" />
     <Compile Include="Persistence\ModDictionary.cs" />
+    <Compile Include="Persistence\IModPersistenceLogic.cs" />
     <Compile Include="Core\ModAttributes.cs" />
+    <Compile Include="Attributes\ModConfigurationAttribute.cs" />
+    <Compile Include="Attributes\ModPersistentDataAttribute.cs" />
+    <Compile Include="Core\SyncMode.cs" />
+    <Compile Include="Core\IModSettingsValidator.cs" />
+    <Compile Include="Core\ModThreads.cs" />
+    <Compile Include="Core\AutoSettingsProvider.cs" />
+    <Compile Include="Core\ModManagerBaseT.cs" />
     <Compile Include="Core\ModManagerBase.cs" />
     <Compile Include="Content\AssetLoader.cs" />
     <Compile Include="Util\SceneCompat.cs" />

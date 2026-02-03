@@ -109,9 +109,20 @@ namespace ModAPI.Core
                 else
                 {
                     // Standard Logic: Serialize now
+                    
+                    // Support V1.3 IModPersistenceLogic hooks
+                    var saveEntry = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave;
+                    
                     var containerObj = new ModPersistenceData();
                     foreach (var kv in _registeredData)
                     {
+                        // Check for persistence logic
+                        if (kv.Value is ModAPI.Persistence.IModPersistenceLogic) 
+                        {
+                            try { (kv.Value as ModAPI.Persistence.IModPersistenceLogic).OnSaving(saveEntry); }
+                            catch (Exception logicEx) { MMLog.WriteError($"[SaveSystem] {kv.Key}.OnSaving failed: {logicEx.Message}"); }
+                        }
+                        
                         containerObj.entries.Add(new ModDataEntry { key = kv.Key, json = JsonUtility.ToJson(kv.Value) });
                     }
                     jsonToWrite = JsonUtility.ToJson(containerObj, true);
@@ -150,6 +161,17 @@ namespace ModAPI.Core
                             {
                                 JsonUtility.FromJsonOverwrite(entry.json, dataObj);
                                 loadedKeys.Add(entry.key);
+                                
+                                // Support V1.3 IModPersistenceLogic hooks
+                                if (dataObj is ModAPI.Persistence.IModPersistenceLogic)
+                                {
+                                    try 
+                                    { 
+                                        var saveEntry = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave;
+                                        (dataObj as ModAPI.Persistence.IModPersistenceLogic).OnLoaded(saveEntry); 
+                                    }
+                                    catch (Exception logicEx) { MMLog.WriteError($"[SaveSystem] {entry.key}.OnLoaded failed: {logicEx.Message}"); }
+                                }
                             }
                         }
                         MMLog.WriteDebug(string.Format("[SaveSystem] Loaded mod data for {0} from {1}", _modId, modFileName));
