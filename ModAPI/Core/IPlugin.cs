@@ -1,6 +1,7 @@
 using UnityEngine;
 using System;
 using System.Collections;
+using ModAPI.Spine;
 
 namespace ModAPI.Core
 {
@@ -70,7 +71,7 @@ namespace ModAPI.Core
         GameObject LoaderRoot { get; }         // global host object
         GameObject PluginRoot { get; }         // per-plugin parent object (safe cleanup)
         ModEntry Mod { get; }                  // discovered mod entry (About, paths, id)
-        ModSettings Settings { get; }          // settings accessor bound to this mod
+        ISettingsProvider Settings { get; }    // settings accessor bound to this mod
         IModLogger Log { get; }                // mod-prefixed logger
         IGameHelper Game { get; }              // unified game state helper
         string GameRoot { get; }               // e.g., <Sheltered install dir>

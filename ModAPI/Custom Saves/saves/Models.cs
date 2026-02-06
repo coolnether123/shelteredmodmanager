@@ -17,7 +17,7 @@ namespace ModAPI.Saves
         public int factionDiff = 1;
         public int moodDiff = 1;
         public string familyName = string.Empty;
-        public string saveTime = string.Empty; // human-readable (for labels)
+        public string saveTime = string.Empty; 
     }
 
     [Serializable]
@@ -92,7 +92,6 @@ namespace ModAPI.Saves
     {
         public string name;
         public string extraJson;
-        public bool fastSave; // If true, skip metadata parsing and manifest updates
     }
 
     public class LoadOptions

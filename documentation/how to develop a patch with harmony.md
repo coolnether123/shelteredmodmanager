@@ -1,4 +1,4 @@
-# How to Develop a Harmony Patch | Sheltered Mod Manager v1.0
+# How to Develop a Harmony Patch | Sheltered Mod Manager v1.2.0
 
 ## Harmony Reference
 - This project references Lib.Harmony 2.4.1
@@ -66,7 +66,7 @@ public class MyPlugin : IModPlugin
 - Use unique Harmony IDs (e.g. "Author.ModName") to avoid conflicts
 - Use `Traverse` in Harmony for private field/property access when needed
 - Keep patches focused; log with `ctx.Log.Info("...")` during development
-- Harmony is powerful, but in v1.0 you don't always need it:
+- Harmony is powerful, but in v1.2.0 you don't always need it:
   - Use Harmony patches when you want to change game logic
   - Use UIUtil & context helpers to simply add UI elements
   

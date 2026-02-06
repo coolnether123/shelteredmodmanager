@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using ModAPI.Core;
 
 namespace ModAPI.Spine
 {
@@ -17,11 +18,11 @@ namespace ModAPI.Spine
         public int SortOrder;
 
         public SettingType Type;
-        public SettingMode Mode = SettingMode.Both;
+        public SettingMode Mode = SettingMode.Advanced;
 
         // Architectural Flags
         public bool AllowExternalWrite = false;
-        public Core.SyncMode SyncMode;
+        public SyncMode SyncMode;
         public string DependsOnId; // ID of a Bool setting that enables this one
 
         // Runtime Visibility & Hierarchy
@@ -36,6 +37,15 @@ namespace ModAPI.Spine
         public float? MaxValue;
         public float? StepSize;
         public Type EnumType;
+
+        // Cached Delegates for Performance
+        public Action<object, object> Setter;
+        public Func<object, object> Getter;
+
+        // Scope & Persistence
+        public SettingsScope Scope = SettingsScope.Global;
+        public bool CarryOverToNewGamePlus = false;
+        public MergeStrategy NewGamePlusMerge = MergeStrategy.Replace;
 
         // Presets (Simple Mode)
         public Dictionary<string, object> Presets = new Dictionary<string, object>();

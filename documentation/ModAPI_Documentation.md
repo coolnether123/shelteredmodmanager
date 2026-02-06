@@ -1,4 +1,4 @@
-# ModAPI Project File Roles
+# ModAPI Project File Roles (v1.2.0)
 
 This document outlines the role and purpose of each file within the `ModAPI` project, detailing their primary and secondary functions, and how they interconnect.
 
@@ -258,15 +258,32 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 **Secondary Role:** Provides a standardized way to present mod information to users and to the mod manager for display and management purposes.
 **Interconnections:** Used by `ModDiscovery.cs` to parse mod information and by `ModRegistry.cs` to store details about registered mods. It's often populated from a mod's manifest file.
 
+### `ModRandom.cs`
+**Primary Role:** High-performance, deterministic random number generator (XorShift64*).
+**Secondary Role:** Provides mod-isolated random streams to prevent "RNG stealing" between mods.
+**Key Features:**
+- Guaranteed identical results across all platforms/runtimes.
+- Supports Gaussian (bell curve), Weighted, and Choose distributions.
+- Randomized by default on every save load for fresh gameplay.
+- Optional `IsDeterministic` mode for consistent session-to-session logic.
+
+### `ModRandomState.cs`
+**Primary Role:** Manages the persistence of RNG state in `seed.json` within save slot folders.
+**Secondary Role:** Handles the "fast-forwarding" of the RNG on load and restoration of deterministic seeds.
+
 ### `ModAttributes.cs`
-**Primary Role:** Defines attributes (`[ModToggle]`, `[ModSlider]`) for decorative, zero-boilerplate mod settings.
-**Secondary Role:** Facilitates automatic UI generation for simple mod configurations without requiring the full Spine framework.
-**Interconnections:** Used by `ModManagerBase.cs` during initialization.
+**Primary Role:** Defines attributes for the **Spine** settings framework (`[ModConfiguration]`, `[ModSetting]`, `[ModSettingPreset]`).
+**Secondary Role:** Enables zero-boilerplate UI generation and reflective settings discovery.
+**Interconnections:** Used by `SpineSettingsHelper.cs` and `ModManagerBase.cs`.
 
 ### `ModManagerBase.cs`
-**Primary Role:** A high-level base class for mods that provides automatic lifecycle management and attribute-based settings binding.
-**Secondary Role:** Simplifies mod creation by providing easy access to logging, save systems, and game state.
-**Interconnections:** Inherits from `MonoBehaviour`. Uses `ModAttributes.cs` for settings discovery.
+**Primary Role:** A high-level base class for mods that provides automatic lifecycle management, singleton access, and **Spine** settings binding.
+**Secondary Role:** Handles dependency injection for logging and persistence automatically.
+**Key Features:**
+- `Config` property for type-safe settings access.
+- `Log` property for prefixed logging.
+- `Instance` singleton for easy access.
+**Interconnections:** Inherits from `MonoBehaviour`. orchestrates `Spine` settings load/save.
 
 ### `ModPersistenceData.cs`
 **Primary Role:** Internal DTO (Data Transfer Object) for mod data persistence.
@@ -289,9 +306,9 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 **Interconnections:** Populated by `ModDiscovery.cs`. `LoadOrderResolver.cs` queries it for mod dependencies. `PluginManager.cs` uses it to access mod instances.
 
 ### `ModSettings.cs`
-**Primary Role:** Provides a framework for mods to define, load, and save their own configuration settings. This allows users to customize mod behavior through a standardized mechanism.
-**Secondary Role:** Ensures persistence of mod configurations across game sessions and offers a consistent user experience for managing mod options.
-**Interconnections:** Mods implementing `IPlugin.cs` would typically use this to manage their settings.
+**Primary Role:** Legacy settings manager for key-value pairs (v1.0).
+**Secondary Role:** Points to [SETTINGS.md](SETTINGS.md) for usage.
+**Interconnections:** Used by `PluginManager.cs` to populate `IPluginContext.Settings`.
 
 ### `PluginManager.cs`
 **Primary Role:** The central orchestrator of the modding system. It is responsible for loading, initializing, and managing the lifecycle of all plugins (mods) within the game.
@@ -565,6 +582,8 @@ shelteredmodmanager/
     │   ├───ModAPIRegistry.cs
     │   ├───ModSettings.cs
     │   ├───ModAttributes.cs
+    │   ├───ModRandom.cs
+    │   ├───ModRandomState.cs
     │   ├───ModManagerBase.cs
     │   ├───ModPersistenceData.cs
     │   ├───PluginManager.cs

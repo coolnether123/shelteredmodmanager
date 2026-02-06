@@ -1,59 +1,49 @@
 using System;
-using System.Linq;
-using ModAPI.Attributes;
-using ModAPI.Events;
+using ModAPI.Core;
 
 namespace ModAPI.Core
 {
+    /// <summary>
+    /// Generic base class for mods using the Spine settings framework.
+    /// Provides a strongly-typed Config property and automatic initialization.
+    /// </summary>
+    /// <typeparam name="T">The class containing your [ModSetting] fields.</typeparam>
     public abstract class ModManagerBase<T> : ModManagerBase where T : class, new()
     {
-        public T Config { get; private set; }
+        /// <summary>
+        /// The active settings configuration instance.
+        /// </summary>
+        public new T Config 
+        { 
+            get 
+            { 
+                 return base.Config as T; 
+            } 
+        }
 
-        public override void Initialize(IPluginContext ctx)
+        public override void Initialize(IPluginContext context)
         {
-            // 1. Legacy setup FIRST
-            // (This handles Context setup, Logging, and ScanForPersistence)
-            base.Initialize(ctx);
+            base.Initialize(context);
 
-            // 2. Scanner Logic
-            var assembly = GetType().Assembly;
-            var duplicateConfigs = assembly.GetTypes()
-                .Where(t => t.IsDefined(typeof(ModConfigurationAttribute), false))
-                .ToList();
-
-            if (duplicateConfigs.Count > 1)
+            // If base.Initialize found inline settings on 'this' but strict T is requested:
+            if (base.Config != null && !(base.Config is T))
             {
-                // Fatal error as per spec
-                throw new Exception("FatalInitializationException: Multiple [ModConfiguration] classes found in assembly " + assembly.FullName);
+                 // Check if T IS the mod class (e.g. ModManagerBase<MyMod>)
+                 if (typeof(T).IsAssignableFrom(GetType()))
+                 {
+                     // This is fine, Config is 'this', and 'this' is 'T'.
+                 }
+                 else
+                 {
+                     // User mixed patterns. We force T.
+                     // Note: This effectively disables the inline settings found on 'this'.
+                     base.Config = null;
+                 }
             }
 
-            // 3. Instantiation
-            Config = new T();
-
-            // 4. Binding & Loading
-            var provider = new AutoSettingsProvider(typeof(T), Config, ctx);
-            provider.LoadInto(Config);
-
-            // Link to ModEntry for Spine UI
-            if (ctx.Mod != null)
+            if (base.Config == null)
             {
-                ctx.Mod.SettingsProvider = provider;
-            }
-
-            // 5. Structural Validation
-            (Config as IModSettingsValidator)?.Validate();
-
-            // 6. Runtime Validation
-            if (typeof(IModSettingsValidator).IsAssignableFrom(typeof(T)))
-            {
-                GameEvents.OnSessionStarted += () => 
-                {
-                    try {
-                        (Config as IModSettingsValidator).ValidateRuntime();
-                    } catch (Exception ex) {
-                        if (Log != null) Log.Error("[ModConfiguration] Runtime validation failed: " + ex);
-                    }
-                };
+                CreateSettings<T>();
             }
         }
     }

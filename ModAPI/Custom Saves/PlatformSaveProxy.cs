@@ -20,6 +20,7 @@ namespace ModAPI.Hooks
         public static readonly Dictionary<SaveManager.SaveType, Target> NextLoad = new Dictionary<SaveManager.SaveType, Target>();
         public static readonly Dictionary<SaveManager.SaveType, Target> NextSave = new Dictionary<SaveManager.SaveType, Target>();
         public static SaveEntry ActiveCustomSave;
+        private static bool _quitSaveCompleted = false; // Tracks if we've already saved during quit sequence
 
         private readonly PlatformSave_Base _inner;
         private string _customLoadedXml;
@@ -51,6 +52,15 @@ namespace ModAPI.Hooks
         {
             MMLog.WriteDebug($"PlatformSave called for {type}");
 
+            // CRASH FIX: During quit, the save system can be triggered multiple times.
+            // If we've already completed a save during this quit sequence, skip redundant saves
+            // to avoid accessing destroyed objects in the vanilla code that runs after.
+            if (PluginRunner.IsQuitting && _quitSaveCompleted)
+            {
+                MMLog.WriteDebug($"PlatformSave: Skipping redundant save during quit (already saved).");
+                return true; // Tell vanilla "save succeeded" without doing anything
+            }
+
             // 1. CHECK FOR NEW GAME OR SLOT SWAP
             lock (_nextSaveLock)
             {
@@ -58,15 +68,13 @@ namespace ModAPI.Hooks
                 {
                     MMLog.WriteDebug($"Intercepting Vanilla Save ({type}) -> Redirecting to Custom ID: {target.saveId}");
                     
-                    // This writes the file to ModAPI/Saves/Standard/... AND parses metadata
-                    // FAST SAVE: During quit/exit, we skip metadata parsing/manifest updates to prevent race conditions.
-                    bool isQuitting = PluginRunner.IsQuitting;
-                    var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, new SaveOverwriteOptions { fastSave = isQuitting }, data);
+                    MMLog.WriteDebug($"Redirect Execution. Target={target.saveId}");
+                    var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, new SaveOverwriteOptions(), data);
                     
                     // Create Manifest immediately for new saves
                     if (entry != null)
                     {
-                        MMLog.WriteDebug($"[PlatformSaveProxy] Initializing manifest for new save: {entry.id}");
+                        MMLog.WriteDebug($"Initializing manifest for new save: {entry.id}");
                         var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
                         registry.UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
                     }
@@ -80,6 +88,7 @@ namespace ModAPI.Hooks
                     if (entry != null)
                         MMLog.WriteDebug($"Saved custom slot: {entry.id}");
 
+                    if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
                     return true; // We handled it
                 }
             }
@@ -90,12 +99,16 @@ namespace ModAPI.Hooks
                 MMLog.WriteDebug($"Saving Active Custom Game: {ActiveCustomSave.id}");
                 
                 // Update the file and metadata
-                // FAST SAVE: During quit/exit, we skip metadata parsing/manifest updates to prevent race conditions.
-                ActiveCustomSave = ExpandedVanillaSaves.Instance.Overwrite(ActiveCustomSave.id, new SaveOverwriteOptions { fastSave = PluginRunner.IsQuitting }, data);
+                var result = ExpandedVanillaSaves.Instance.Overwrite(ActiveCustomSave.id, new SaveOverwriteOptions(), data);
                 
-                if (ActiveCustomSave != null)
+                if (result != null)
+                {
+                    ActiveCustomSave = result;
                     MMLog.WriteDebug($"Saved custom slot: {ActiveCustomSave.id}");
+                }
 
+                MMLog.WriteDebug($"PlatformSaveProxy: Returning TRUE for custom save {ActiveCustomSave.id}. Handing control back to vanilla.");
+                if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
                 return true; // We handled it
             }
 

@@ -201,18 +201,30 @@ namespace ModAPI.Harmony
         
         #endregion
 
-        #region Vector Object Predicates (Helper)
+        #region Vector Object Predicates (CodeInstruction Extensions)
+
+        /// <summary>Check if instruction is a newobj for Vector2.</summary>
+        public static bool IsNewobjVector2(this CodeInstruction instr)
+            => instr.IsNewobj(typeof(UnityEngine.Vector2));
+
+        /// <summary>Check if instruction is a newobj for Vector3.</summary>
+        public static bool IsNewobjVector3(this CodeInstruction instr)
+            => instr.IsNewobj(typeof(UnityEngine.Vector3));
+
+        #endregion
+
+        #region Vector Object Predicates (FluentTranspiler Extensions)
 
         /// <summary>Check if current instruction is a newobj for Vector2.</summary>
         public static bool IsNewobjVector2(this FluentTranspiler t)
         {
-            return t.IsNewobj(typeof(UnityEngine.Vector2));
+            return t.HasMatch && t.Current.IsNewobjVector2();
         }
 
         /// <summary>Check if current instruction is a newobj for Vector3.</summary>
         public static bool IsNewobjVector3(this FluentTranspiler t)
         {
-            return t.IsNewobj(typeof(UnityEngine.Vector3));
+            return t.HasMatch && t.Current.IsNewobjVector3();
         }
 
         #endregion

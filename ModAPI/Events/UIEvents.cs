@@ -92,7 +92,7 @@ namespace ModAPI.Events
         
         private static void SafeInvoke(Action action, string eventName, object context = null)
         {
-            if (action == null)
+            if (action == null || PluginRunner.IsQuitting)
                 return;
             
             try

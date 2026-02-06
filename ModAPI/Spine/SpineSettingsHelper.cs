@@ -41,31 +41,7 @@ namespace ModAPI.Spine
                         continue;
                     }
 
-                    // 2. Try [ModToggle]
-                    var toggle = (ModToggleAttribute)Attribute.GetCustomAttribute(field, typeof(ModToggleAttribute));
-                    if (toggle != null)
-                    {
-                        var def = new SettingDefinition 
-                        { 
-                            Id = field.Name, FieldName = field.Name, Label = toggle.Label, Tooltip = toggle.Description, Type = SettingType.Bool 
-                        };
-                        definitions.Add(def);
-                        continue;
-                    }
 
-                    // 3. Try [ModSlider]
-                    var slider = (ModSliderAttribute)Attribute.GetCustomAttribute(field, typeof(ModSliderAttribute));
-                    if (slider != null)
-                    {
-                        var def = new SettingDefinition 
-                        { 
-                            Id = field.Name, FieldName = field.Name, Label = slider.Label, 
-                            MinValue = slider.MinView, MaxValue = slider.MaxView,
-                            Type = field.FieldType == typeof(int) ? SettingType.Int : SettingType.Float 
-                        };
-                        definitions.Add(def);
-                        continue;
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -139,6 +115,27 @@ namespace ModAPI.Spine
                 HeaderColor = string.IsNullOrEmpty(attr.HeaderColor) ? (Color?)null : ParseColor(attr.HeaderColor),
                 SyncMode = attr.SyncMode
             };
+
+            // Mapping SettingMode to visibility flags
+            if (def.Mode == SettingMode.Advanced)
+            {
+                def.ShowInSimpleView = false;
+                def.ShowInAdvancedView = true;
+            }
+            else if (def.Mode == SettingMode.Simple)
+            {
+                def.ShowInSimpleView = true;
+                def.ShowInAdvancedView = false; // Simple-only? Usually Simple shows in Advanced too, but maybe user wants strict separation.
+                // Re-evaluating: Usually "Simple" is for basic users, "Advanced" is for power users.
+                // If it's Simple, it should probably show in Advanced too unless we want "Simple Mode" to be a subset.
+                // The user's showcase has some as Simple and some as Advanced.
+                def.ShowInAdvancedView = true; 
+            }
+            else if (def.Mode == SettingMode.Both)
+            {
+                def.ShowInSimpleView = true;
+                def.ShowInAdvancedView = true;
+            }
 
             // Wire up OnChanged from attribute (String method name)
             if (!string.IsNullOrEmpty(attr.OnChanged))

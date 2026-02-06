@@ -1010,7 +1010,7 @@ if (ModAPIRegistry.TryGetAPI<IMyAPI>("OtherMod.API", out var api))
 
 ---
 
-*Sheltered Mod Loader v1.0*
+*Sheltered Mod Loader v1.2.0*
 ---
 
 ## Mod Settings (Spine)
@@ -1107,3 +1107,88 @@ public class MyMod : ModManagerBase {
 ```
 
 This dictionary is JSON-serializable and maintains its state across restarts when using `RegisterModData` or `RegisterPersistentData`.
+
+---
+
+## Deterministic Randomness (ModRandom) (v1.2.0)
+
+ModAPI includes a high-performance, deterministic random number generator base on the **XorShift64*** algorithm. This ensures that random results are identical across different platforms (Steam vs Epic) and .NET runtimes, which is essential for synchronized gameplay and preventing "save-scumming."
+
+### Mod-Isolated Random Streams
+When using `ModManagerBase`, each mod gets its own `Random` stream. This prevents "RNG stealing"—where one mod's random calls would otherwise advance the master seed and change the results for other mods.
+
+```csharp
+public class MyMod : ModManagerBase {
+    public void SpawnLoot() {
+        // Scoped specifically to this mod
+        int roll = this.Random.Range(1, 100);
+        
+        bool success = this.Random.Bool(0.15f); // 15% chance
+        
+        float variance = this.Random.Gaussian(10f, 2f); // Bell curve
+        
+        string quest = this.Random.Choose("Find Water", "Fix Generator", "Scout Radio");
+    }
+}
+```
+
+### Static ModRandom API
+For code outside of a ModManager, use the global static API:
+
+```csharp
+using ModAPI.Core;
+
+// Basic ranges
+int age = ModRandom.Range(18, 65);
+float health = ModRandom.Range(0.0f, 1.0f);
+
+// Weighted selection
+var items = new[] { "Common", "Rare", "Legendary" };
+var weights = new[] { 0.80f, 0.15f, 0.05f };
+string result = ModRandom.Weighted(items, weights);
+
+// Shuffling
+List<string> characters = GetAllCharacters();
+ModRandom.Shuffle(characters);
+
+// High-precision ranges
+int largeVal = ModRandom.RangeUnbiased(0, int.MaxValue); // Eliminates modulo bias
+```
+
+### Best Practices: ModRandom vs Unity Random
+You should **always prefer `ModRandom` over `UnityEngine.Random` or `System.Random`** for gameplay logic.
+
+| Feature | ModRandom | UnityEngine.Random | System.Random |
+| :--- | :--- | :--- | :--- |
+| **Deterministic** | ✅ Yes (Fixed Seed) | ❌ No | ❌ No |
+| **Cross-Platform** | ✅ Identical results | ❌ Varies by OS/Version | ❌ Varies by Runtime |
+| **Thread Safe** | ✅ Yes | ❌ No (Main Thread Only) | ❌ No |
+| **Distribution** | ✅ Uniform / Gaussian | ⚠️ Uniform Only | ⚠️ Poor Quality |
+
+Use `ModRandom.RangeUnbiased(min, max)` when generating from very large ranges (e.g. `0` to `int.MaxValue`) to avoid the slight modulo bias present in standard RNGs.
+
+### Save Persistence & Determinism
+By default, **ModAPI generates a brand new master seed every time you load into a save.** This ensures that gameplay feels fresh and unscripted on every session.
+
+However, if your mod requires absolute session-to-session determinism (e.g. for multiplayer sync or specific puzzle logic), you can disable this behavior:
+
+```csharp
+// Inside your mod's Start() or Initialize()
+ModRandom.IsDeterministic = true;
+```
+
+When `IsDeterministic` is set to `true`, the RNG will:
+1.  Restore the exact `MasterSeed` that was used when the save was created/last saved.
+2.  Restore the exact `StepCount`, fast-forwarding the RNG to its previous position.
+3.  Store this setting in the save slot's `seed.json` so it persists for that specific game.
+
+**Example `seed.json` (inside slot folder):**
+```json
+{
+    "masterSeed": 123456789,
+    "stepCount": 420,
+    "isDeterministic": true
+}
+```
+
+Once a mod sets `ModRandom.IsDeterministic = true` and the game is saved, that save slot is essentially "frozen" to use its seed. This setting is sticky; it will remain deterministic for all future sessions until a mod explicitly sets it back to `false` or the JSON file is modified manually.

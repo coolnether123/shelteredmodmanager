@@ -81,6 +81,8 @@ namespace ModAPI.Debugging
         private List<WatchEntry> _pendingAdds = new List<WatchEntry>();
         private List<WatchEntry> _pendingRemoves = new List<WatchEntry>();
         
+        private ModRandomStream _random;
+        
         #endregion
 
         #region Configuration
@@ -105,7 +107,7 @@ namespace ModAPI.Debugging
 
         /// <summary>
         /// Watch a field or property on an object.
-        /// ⚠️ WARNING: Property getters must NOT call Watch/UnWatch on this watcher or modify the watch list.
+        /// WARNING: Property getters must NOT call Watch/UnWatch on this watcher or modify the watch list.
         /// </summary>
         /// <param name="target">Object instance to watch.</param>
         /// <param name="memberName">Name of field or property.</param>
@@ -143,7 +145,7 @@ namespace ModAPI.Debugging
 
         /// <summary>
         /// Watch with type checking and optional callback.
-        /// ⚠️ WARNING: Callbacks must NOT call Watch/UnWatch on this watcher or modify the watch list.
+        /// WARNING: Callbacks must NOT call Watch/UnWatch on this watcher or modify the watch list.
         /// </summary>
         /// <typeparam name="T">Expected type of the member.</typeparam>
         /// <param name="target">Object instance to watch.</param>
@@ -306,7 +308,8 @@ namespace ModAPI.Debugging
             // synchronize over time.
             if (Time.frameCount % 100 == 0)
             {
-                _pollJitter = UnityEngine.Random.Range(0, _basePollInterval);
+                if (_random == null) _random = new ModRandomStream(Environment.TickCount);
+                _pollJitter = _random.Range(0, _basePollInterval);
             }
             
             if ((Time.frameCount + _pollJitter) % _basePollInterval != 0) return;

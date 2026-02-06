@@ -139,7 +139,7 @@ namespace ModAPI.UI
                 if (scenarioPanel == null) return false;
 
                 // We clone the book visuals from the ScenarioSelectionPanel to maintain game's aesthetic.
-                ModAPI.Core.MMLog.WriteDebug("[ModAPI] Loading Mod Manager UI...");
+                ModAPI.Core.MMLog.WriteDebug("Loading Mod Manager UI...");
                 
                 foreach (Transform child in scenarioPanel.transform)
                 {

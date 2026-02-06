@@ -216,6 +216,12 @@ namespace ModAPI.Harmony
             return this;
         }
 
+        /// <summary>Match the return instruction (OpCodes.Ret).</summary>
+        public FluentTranspiler MatchReturn()
+        {
+            return MatchOpCode(OpCodes.Ret);
+        }
+
         /// <summary>Match a sequence of opcodes (pattern matching).</summary>
         public FluentTranspiler MatchSequence(params OpCode[] opcodes)
         {
@@ -382,7 +388,7 @@ namespace ModAPI.Harmony
             if (_generator == null)
             {
                 throw new InvalidOperationException(
-                    "[FluentTranspiler] ILGenerator was not provided. " +
+                    "ILGenerator was not provided. " +
                     "Pass it to For(instructions, originalMethod, generator). " +
                     "Transpiler delegate signature: " +
                     "IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instr, ILGenerator gen)");
@@ -402,7 +408,7 @@ namespace ModAPI.Harmony
             if (_generator == null)
             {
                 throw new InvalidOperationException(
-                    "[FluentTranspiler] ILGenerator was not provided. " +
+                    "ILGenerator was not provided. " +
                     "Pass it to For(instructions, originalMethod, generator).");
             }
 
@@ -625,7 +631,8 @@ namespace ModAPI.Harmony
             {
                 int pos = matchPositions[idx];
                 
-                MMLog.WriteDebug($"[ReplaceAllPatterns] Position {pos}: replacing {patternPredicates.Length} instructions with {replaceWith.Length} instructions. preserveInstructionCount={preserveInstructionCount}");
+                string methodContext = _originalMethod != null ? $"{_originalMethod.DeclaringType?.Name}.{_originalMethod.Name}" : "UnknownMethod";
+                MMLog.WriteDebug($"[ReplaceAllPatterns] [{methodContext}] Position {pos}: replacing {patternPredicates.Length} instructions with {replaceWith.Length} instructions");
 
                 _matcher.Start().Advance(pos);
                 
@@ -711,7 +718,8 @@ namespace ModAPI.Harmony
                 {
                     // Stack warnings are informative but should not be fatal by default 
                     // because linear analysis cannot account for complex control flow/branches.
-                    MMLog.WriteWarning($"[FluentTranspiler:{_callerMod}] {stackError}");
+                    string methodContext = _originalMethod != null ? $"{_originalMethod.DeclaringType?.Name}.{_originalMethod.Name}" : "UnknownMethod";
+                    MMLog.WriteWarning($"[FluentTranspiler:{_callerMod}] [{methodContext}] {stackError}");
                 }
             }
 
@@ -761,7 +769,8 @@ namespace ModAPI.Harmony
                     }
                     else
                     {
-                        error = $"Stack underflow at index {instrIndex}: {instr}";
+                        string methodName = _originalMethod != null ? $"{_originalMethod.DeclaringType?.Name}.{_originalMethod.Name}" : "UnknownMethod";
+                        error = $"Stack underflow at index {instrIndex}. Method: {methodName}. Instr: {instr}";
                         return false;
                     }
                 }
@@ -769,7 +778,8 @@ namespace ModAPI.Harmony
                 // Check balance at return
                 if (instr.opcode == OpCodes.Ret && stackDepth != 0)
                 {
-                    error = $"Unbalanced stack at Return (index {instrIndex}). Depth: {stackDepth}. Instr: {instr}";
+                    string methodName = _originalMethod != null ? $"{_originalMethod.DeclaringType?.Name}.{_originalMethod.Name}" : "UnknownMethod";
+                    error = $"Unbalanced stack at Return (index {instrIndex}). Depth: {stackDepth}. Method: {methodName}. Instr: {instr}";
                     return false;
                 }
                 

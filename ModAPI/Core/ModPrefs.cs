@@ -14,6 +14,14 @@ namespace ModAPI.Core
         private static Dictionary<string, string> _values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private static bool _loaded = false;
         private static string SettingsPath => Path.Combine(DirectoryProvider.UserRoot, "settings.json");
+        public static string UserRoot => DirectoryProvider.UserRoot;
+
+        public static bool DebugTranspilers
+        {
+            get => GetBool("DebugTranspilers", false);
+            set => SetBool("DebugTranspilers", value);
+        }
+
 
         private static void EnsureLoaded()
         {
@@ -55,6 +63,21 @@ namespace ModAPI.Core
             EnsureLoaded();
             _values[key] = value.ToString();
         }
+
+        public static bool GetBool(string key, bool defaultValue = false)
+        {
+            EnsureLoaded();
+            if (_values.TryGetValue(key, out string val) && bool.TryParse(val, out bool result))
+                return result;
+            return defaultValue;
+        }
+
+        public static void SetBool(string key, bool value)
+        {
+            EnsureLoaded();
+            _values[key] = value.ToString().ToLower();
+        }
+
 
         public static string GetString(string key, string defaultValue = "")
         {

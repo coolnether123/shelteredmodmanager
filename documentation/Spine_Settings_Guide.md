@@ -1,16 +1,14 @@
-# Spine Settings API Guide
+# Spine Settings Framework Guide (v1.2.0)
 
-**Spine** is the high-level mod settings framework for Sheltered. It allows modders to create rich, interactive, and persistent configuration menus with almost zero UI code. It utilizes C# Attributes to automatically generate a professional-grade UI in the game's Mod Manager panel.
+**Spine** is the high-level mod settings framework for Sheltered ModAPI. It allows modders to create rich, interactive, and persistent configuration menus with almost zero UI code. It utilizes C# Attributes to automatically generate a professional-grade UI in the game's Mod Manager panel.
 
 ---
 
-## 1. Basic Setup (v1.2 "Zero-Boilerplate")
+## 1. Quick Start: Zero-Boilerplate
 
-To use Spine, define a **single** class to hold your settings data, mark it with `[ModConfiguration]`, and have your main plugin inherit from `ModManagerBase<T>`.
+To use Spine, define a class to hold your settings data, mark it with `[ModConfiguration]`, and have your main plugin inherit from `ModManagerBase<T>`.
 
-### The Settings Class
-This class holds your configuration.
-
+### 1.1 The Settings Class
 ```csharp
 using ModAPI.Attributes;
 using ModAPI.Core;
@@ -25,309 +23,150 @@ public class MyModSettings
     [ModSetting("Atmosphere Color")]
     public Color SkyColor = Color.cyan;
 
-    // v1.2: Use 'Min' and 'Max' shorthand properties
-    [ModSetting("Spawn Rate", Min = 0.1f, Max = 5.0f)]
+    [ModSetting("Spawn Rate", Min = 0.1f, Max = 5.0f, StepSize = 0.1f)]
     public float SpawnMultiplier = 1.0f;
+    
+    [ModSetting("Difficulty Mode")]
+    public MyEnum Difficulty = MyEnum.Normal;
 }
 ```
 
-### The Plugin Class
-Your plugin automatically handles saving, loading, and UI generation.
-
+### 1.2 The Plugin Class
 ```csharp
 public class MyMod : ModManagerBase<MyModSettings>
 {
     public override void Initialize(IPluginContext ctx)
     {
-        base.Initialize(ctx); // Settings are auto-loaded!
+        base.Initialize(ctx); // Settings are auto-loaded here!
         
-        Log.Info($"Spawn Rate is: {Config.SpawnMultiplier}");
+        Log.Info($"Spawn Rate initialized as: {Config.SpawnMultiplier}");
     }
 }
 ```
 
-### Type Mapping
-Spine automatically maps C# types to UI widgets:
-- `bool` -> Toggle Switch
-- `int` -> Number Slider (snaps to whole numbers)
-- `float` -> Decimal Slider
-- `string` -> Text Input Field (includes an 'OK' button for mouse confirmation)
-- `Color` -> Color Swatch (currently display only)
-- `Enum` -> Cycle Button
-
-
-### Slider Precision & Inputs
-By default, sliders check the range to determine step size. You can override this with the `StepSize` property:
-```csharp
-[ModSetting("Precise Value", MinValue=0, MaxValue=100, StepSize=5)] // Snaps to 0, 5, 10...
-```
-
 ---
 
-## 2. Integrating with Your Plugin
+## 2. UI Features & Configuration
 
-### The Recommended Way (ModManagerBase&lt;T&gt;)
-
-As shown above, inheriting from `ModManagerBase<T>` automates everything.
-*   **Initialization:** `base.Initialize(ctx)` creates the instance, loads JSON, and binds it.
-*   **Access:** Use `this.Config` to access settings.
-*   **Validation:** It automatically calls `Validate()` (Phase 1) after load and `ValidateRuntime()` (Phase 2) on session start.
-
-### The Manual Way (Legacy)
-
-If you cannot inherit from `ModManagerBase`, you must verify:
-1. Your class implements `ISettingsProvider`.
-2. You instantiate your settings object.
-3. You scan and return definitions.
+### 2.1 View Modes (Simple vs. Advanced)
+Spine features a dual-mode UI to avoid overwhelming users.
+- **Advanced Mode** (Default): Shows all settings.
+- **Simple Mode**: Only shows settings explicitly marked for it.
 
 ```csharp
-public class MyPlugin : IModPlugin, ISettingsProvider
+[ModSetting("Simple Switch", Mode = SettingMode.Simple)]
+public bool BasicOption = true;
+
+[ModSetting("Elite Tweak", Mode = SettingMode.Advanced)]
+public float InternalMultiplier = 0.045f;
+```
+
+### 2.2 Layout & Categories
+The UI automatically organizes settings into a **2-column grid**. Use categories to group related items under headers.
+
+```csharp
+[ModSetting("Shadow Quality", Category = "Graphics")]
+public int Shadows = 2;
+
+[ModSetting("Music Volume", Category = "Audio")]
+public float Volume = 0.5f;
+
+[ModSetting("Master Header", Type = SettingType.Header)]
+public string MyHeader; // Value is ignored for headers
+```
+
+### 2.3 Action Buttons (Methods)
+You can create "Execute" buttons by marking a method with `[ModSetting]`.
+
+```csharp
+[ModSetting("Reset Shelter", Tooltip = "Immediately cleans house.")]
+public void DoReset()
 {
-    public static MyModSettings Settings;
-    private IPluginContext _ctx;
-
-    public void Initialize(IPluginContext context)
-    {
-        _ctx = context;
-        Settings = new MyModSettings();
-        
-        // Manual loading
-        new AutoSettingsProvider(typeof(MyModSettings), Settings, context).LoadInto(Settings);
-    }
-
-    public IEnumerable<SettingDefinition> GetSettings() 
-    {
-        return SpineSettingsHelper.Scan(Settings);
-    }
-
-    public object GetSettingsObject() => Settings;
-    
-    public void OnSettingsLoaded() { }
-    
-    public void ResetToDefaults() 
-    {
-         var defaults = new MyModSettings();
-         // Deep copy logic...
-    }
-
-    public void Start(IPluginContext context) { }
+    MMLog.Info("Reset executed!");
 }
 ```
 
-**Lifecycle Order:**
-1. `Initialize()` called -> You create default `Settings` object.
-2. ModLoader checks for `json` file -> Overwrites values in your object.
-3. `OnSettingsLoaded()` called (optional).
-4. `Start()` called.
-
 ---
 
-## 3. UI Organization
+## 3. Custom Logic & Validation
 
-### Categories
-Grouping settings is essential for large mods. Use the `Category` property:
-
-```csharp
-[ModSetting("Resolution", Category = "Graphics")]
-public int Resolution = 1080;
-
-[ModSetting("Volume", Category = "Audio")]
-public float Volume = 0.8f;
-```
-
-### Ordering
-Control the vertical position of settings using `SortOrder` (lower numbers appear first):
+### 3.1 Live Validation
+Use `ValidateMethod` to reject user input dynamically.
 
 ```csharp
-[ModSetting("Master Switch", SortOrder = -100)]
-public bool GlobalEnable = true;
-```
-
-### Simple vs Advanced View (Planned)
-Spine includes infrastructure for two view modes to prevent overwhelming users with advanced "under-the-hood" tweaks. **Note: While the attributes exist, the UI implementation is currently unpolished and should be considered experimental.**
-
-- By default, all settings are **Advanced**.
-- Mark a setting with `Mode = SettingMode.Simple` (or `SettingMode.Both`) to prepare it for the simplified view.
-
-```csharp
-[ModSetting("Life Span", Mode = SettingMode.Simple)]
-public int AgeLimit = 100;
-```
-
-### Search & Filtering
-The Spine UI includes a built-in search bar. It filters settings by their `Label` or `Id` in real-time. Categories are automatically hidden if no settings within them match the search query.
-
----
-
-## 4. Advanced Logic & Hooks
-
-Spine supports dynamic behavior through reflection-based hooks. You provide the name of a method in your settings class to handle the logic.
-
-### Validation (`ValidateMethod`)
-Reject invalid user input. If validation fails, the UI reverts the change.
-
-```csharp
-[ModSetting("Username", ValidateMethod = "CheckName")]
-public string Username = "Survivor";
+[ModSetting("Survivor Name", ValidateMethod = "CheckName")]
+public string Name = "Stan";
 
 public bool CheckName(object newVal) 
 {
-    string s = newVal as string;
-    return !string.IsNullOrEmpty(s) && s.Length >= 3;
+    return (newVal as string).Length > 2;
 }
 ```
 
-### Dynamic Choice Lists (`OptionsSource`)
-Create dropdowns where the options are generated at runtime.
+### 3.2 Dynamic Choices
+Create dropdown cycles from dynamic data.
 
 ```csharp
-[ModSetting("Teleport Location", Type = SettingType.Choice, OptionsSource = "GetLocations")]
-public string TargetLoc = "Shelter";
+[ModSetting("Spawn Location", Type = SettingType.Choice, OptionsSource = "GetLocs")]
+public string Loc = "Shelter";
 
-public IEnumerable<string> GetLocations() 
-{
-    // You could pull these from game data!
-    return new List<string> { "Shelter", "Hidden Bunker", "Radio Tower" };
-}
-```
-
-### Action Buttons
-You can mark **Methods** with `[ModSetting]` to create clickable buttons in the UI.
-
-```csharp
-[ModSetting("Clean House", Tooltip = "Immediately removes all dirt from the shelter.")]
-public void ClearDirt() 
-{
-    // Logic to clear dirt...
-    MMLog.WriteInfo("House cleaned via Settings!");
-}
+public IEnumerable<string> GetLocs() => new [] { "Shelter", "Bunker", "House" };
 ```
 
 ---
 
-## 5. Dependencies (Parent/Child)
+## 4. Setting Presets & Difficuty
 
-You can make settings appear or become enabled only when another switch is on.
+Spine supports a global **Preset Bar**. If the user clicks "EASY", all settings with an "Easy" preset defined will update instantly. Any manual change by the user switches the UI state to **"CUSTOM"**.
+
+```csharp
+[ModSetting("Enemy Health")]
+[ModSettingPreset("Easy", 50)]
+[ModSettingPreset("Normal", 100)]
+[ModSettingPreset("Hard", 250)]
+public int HP = 100;
+```
+
+---
+
+## 5. Persistence & Safety
+
+### 5.1 Storage
+Settings are stored in `YourMod/Config/spine_settings.json`. 
+- **Auto-Load**: Occurs during `base.Initialize(ctx)`.
+- **Auto-Save**: Occurs when clicking "SAVE & CLOSE" in the UI.
+
+### 5.2 Performance & Threading
+- **Main Thread Only**: UI code runs on the Unity main thread.
+- **Reflective Access**: Spine uses optimized reflection to read/write your settings object.
+- **Fast Exit Protection**: ModAPI intercepts game shutdown to ensure your JSON is written to disk before the app terminates.
+
+---
+
+## 6. Type Mapping Table
+
+| C# Type | Spine Widget | Notes |
+|---------|--------------|-------|
+| `bool` | Toggle Switch | ON/OFF state |
+| `int` | Int Slider | Snaps to integers |
+| `float` | Float Slider | Precision based on `StepSize` |
+| `string` | Text Box | Validated on 'OK' or Enter |
+| `Enum` | Cycle Button | Cycles all enum values |
+| `Color` | Label | (Currently Read-Only) |
+| `void Method()` | Button | Triggered on click |
+
+---
+
+## 7. Advanced: Responsive Parent/Child
+Settings can react to the state of other settings.
 
 - `DependsOnId`: Grays out the setting if the parent is False.
-- `ControlsChildVisibility`: Completely hides children in the UI if False.
+- `ControlsChildVisibility`: Completely hides children if parent is False.
 
 ```csharp
-[ModSetting("Enable Visual Effects", ControlsChildVisibility = true)]
-public bool UseFX = true;
+[ModSetting("Use Weather", ControlsChildVisibility = true)]
+public bool WeatherEnabled = true;
 
-[ModSetting("Particles Amount", DependsOnId = "UseFX")]
-public int ParticleCount = 50;
+[ModSetting("Rain Intensity", DependsOnId = "WeatherEnabled")]
+public float Rain = 0.5f;
 ```
-
----
-
-## 6. Dual-Phase Validation (v1.2)
-
-To solve "Game Start vs Mod Load" timing issues, settings can implement `IModSettingsValidator`.
-
-```csharp
-public class MySettings : IModSettingsValidator 
-{
-    // Phase 1: Immediate (Safe for math/null checks)
-    public void Validate() 
-    {
-        Speed = Mathf.Clamp(Speed, 0, 100);
-    }
-
-    // Phase 2: Runtime (Safe for Game Managers)
-    public void ValidateRuntime() 
-    {
-        if (GameModeManager.Instance.IsHardcore) Speed = 10;
-    }
-}
-```
-
----
-
-## 7. Multiplayer Sync Contracts (v1.2)
-
-The `SyncMode` property defines how settings behave in future multiplayer scenarios.
-
-> **Note:** These hooks are currently for **future planning/architecture only** and are not fully tested for any multiplayer environment. They are provided now to prepare settings contracts in advance.
-
-- **LocalOnly** (Default): Client preference (e.g. Volume). Never synced.
-- **HostAuthoritative**: Host dictates value. Clients see the value but UI is locked.
-- **ClientOptional**: Host default is sent, but Client can override.
-
-```csharp
-[ModSetting("Friendly Fire", SyncMode = SyncMode.HostAuthoritative)]
-public bool FriendlyFire = false;
-```
-
----
-
-## 8. Persistence
-Spine automatically handles JSON serialization. Settings are stored in:
-`YourModFolder/Config/spine_settings.json`
-
-Data is loaded automatically before `Start()` runs, and saved automatically when the user clicks **SAVE & CLOSE** in the settings panel. You **do not** need to manually call Save/Load methods.
-
----
-
-## 9. Inter-Mod Communication
-
-Mods can read (and if permitted, write) settings from other mods using the `ModSettingsDatabase`.
-
-```csharp
-// Check if another mod has a specific feature enabled
-var npgSettings = ModSettingsDatabase.GetSettingsObject("new_game_plus");
-if (npgSettings != null) 
-{
-    bool isHardcore = (bool)npgSettings.GetType().GetField("HardcoreMode").GetValue(npgSettings);
-}
-```
-
----
-
-## 10. Presets
-Spine supports a global preset bar (currently visible only in the experimental Simple View). The cleanest way to define these is using the `[ModSettingPreset]` attribute. When multiple settings share the same preset names (e.g., "Easy", "Hard"), they will all be adjusted simultaneously when the user cycles the preset in the UI.
-
-```csharp
-[ModSetting("Elderly Age", Category = "Difficulty")]
-[ModSettingPreset("Easy", 75)]
-[ModSettingPreset("Medium", 60)]
-[ModSettingPreset("Hard", 50)]
-public int elderAgeYears = 60;
-
-[ModSetting("Illness Chance", Category = "Difficulty")]
-[ModSettingPreset("Easy", 0.05f)]
-[ModSettingPreset("Medium", 0.1f)]
-[ModSettingPreset("Hard", 0.2f)]
-public float elderIllnessBaseChance = 0.1f;
-```
-
-If you need dynamic control, you can still manually populate the `Presets` dictionary on the `SettingDefinition` objects returned by `SpineSettingsHelper.Scan()`, but the attribute approach is recommended for most cases.
-
-### 8.1 Preset Strategy (Difficulty vs. Static)
-When implementing presets, consider that **only settings with that preset name defined will change**. If a setting like "General UI Scale" doesn't have an `[ModSettingPreset("Easy", 1.0)]` attribute, it will remain at its current value even if the user selects "Easy" difficulty.
-
-**Best Practice:**
-1.  **Group by Category:** Use the `Category` attribute to separate settings that are part of the difficulty balance from those that are general preferences.
-2.  **Explicit Defaults:** Ensure every setting you want to be "difficulty-aware" has a value defined for every preset (Easy, Medium, Hard).
-3.  **Advanced Sections:** Keep technical or non-balance settings in a separate category (e.g., `Category = "Advanced"`) so users know they won't be affected by the preset bar.
-
-```csharp
-// Part of the "Easy/Hard" cycle
-[ModSetting("Enemy HP", Category = "Difficulty")]
-[ModSettingPreset("Easy", 50)]
-[ModSettingPreset("Hard", 200)]
-public int hp = 100;
-
-// Remains static regardless of preset choice
-[ModSetting("Menu Color", Category = "General")]
-public Color uiColor = Color.white;
-```
-
----
-
-## Premium UI Tips
-- **Tooltips**: Always provide a `Tooltip` for complex settings.
-- **Header Colors**: Use `HeaderColor = "#FF0000"` on a Header-type setting to separate sections visually. 
-- **Grouping**: Fields sharing the same `Category` are automatically grouped under a blue header in the UI.
-- **Restart Required**: Set `RequiresRestart = true` for settings that can't be applied live; the framework will notify the user with a subtle red warning.

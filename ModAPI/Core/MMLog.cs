@@ -518,6 +518,7 @@ namespace ModAPI.Core
 
         private static string GetCallerInfo()
         {
+            if (PluginRunner.IsQuitting) return "Quitting";
             try
             {
                 StackTrace st = new StackTrace(false);
