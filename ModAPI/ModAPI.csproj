@@ -90,13 +90,12 @@
     <Compile Include="UI\ContextMenuHelper.cs" />
     <Compile Include="UI\NGUIHelper.cs" />
     <Compile Include="UI\ModUIHooks.cs" />
-    <Compile Include="Spine\SettingType.cs" />
-    <Compile Include="Spine\SettingMode.cs" />
+    <Compile Include="Spine\SettingsEnums.cs" />
     <Compile Include="Spine\SettingDefinition.cs" />
     <Compile Include="Spine\SettingsHierarchy.cs" />
     <Compile Include="Spine\ModSettingAttribute.cs" />
     <Compile Include="Spine\ISettingsProvider.cs" />
-    <Compile Include="Spine\SettingsSerializer.cs" />
+    <Compile Include="Spine\SettingsController.cs" />
     <Compile Include="Spine\ModSettingsDatabase.cs" />
     <Compile Include="Spine\SpineSettingsHelper.cs" />
     <Compile Include="Spine\UI\SpineWidgetFactory.cs" />
@@ -114,7 +113,6 @@
     <Compile Include="Inspector\HierarchyUtil.cs" />
     <Compile Include="Inspector\BoundsHighlighter.cs" />
     <Compile Include="Inspector\RuntimeInspector.cs" />
-    <Compile Include="Core\ModSettings.cs" />
     <Compile Include="Core\ModAbout.cs" />
     <Compile Include="Core\ModEntry.cs" />
     <Compile Include="Core\ModAboutReader.cs" />
@@ -129,20 +127,19 @@
     <Compile Include="Persistence\ModDictionary.cs" />
     <Compile Include="Persistence\IModPersistenceLogic.cs" />
     <Compile Include="Core\ModAttributes.cs" />
-    <Compile Include="Attributes\ModConfigurationAttribute.cs" />
-    <Compile Include="Attributes\ModPersistentDataAttribute.cs" />
     <Compile Include="Core\SyncMode.cs" />
     <Compile Include="Core\IModSettingsValidator.cs" />
     <Compile Include="Core\ModThreads.cs" />
-    <Compile Include="Core\AutoSettingsProvider.cs" />
-    <Compile Include="Core\ModManagerBaseT.cs" />
     <Compile Include="Core\ModManagerBase.cs" />
+    <Compile Include="Core\ModManagerBaseT.cs" />
     <Compile Include="Content\AssetLoader.cs" />
     <Compile Include="Util\SceneCompat.cs" />
     <Compile Include="Util\SceneUtil.cs" />
     <Compile Include="Util\PersistentDataAPI.cs" />
     <Compile Include="Util\SaveLoadDictionary.cs" />
     <Compile Include="Core\PluginManager.cs" />
+    <Compile Include="Core\ModRandom.cs" />
+    <Compile Include="Core\ModRandomState.cs" />
     <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Reflection\Safe.cs" />
@@ -181,7 +178,9 @@
     <Compile Include="Custom Saves\saves\SaveRegistryCore.cs" />
     <Compile Include="Custom Saves\saves\ScenarioRegistry.cs" />
     <Compile Include="Custom Saves\saves\ScenarioSaves.cs" />
-    <Compile Include="Examples\SpineHarmonyShowcase.cs" />
+    <!-- <Compile Include="Examples\SpineHarmonyShowcase.cs" /> -->
+    <!-- Commented out: This is a reference example and shouldn't be compiled into ModAPI.dll -->
+    <!-- as it causes unwanted Harmony patches to activate when mods call PatchAll() -->
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

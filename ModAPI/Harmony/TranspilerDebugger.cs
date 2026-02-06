@@ -29,7 +29,8 @@ namespace ModAPI.Harmony
             string modId = null,
             bool force = false)
         {
-            if (!ModSettings.DebugTranspilers && !force) return after;
+            if (!ModPrefs.DebugTranspilers && !force) return after;
+
 
             var listBefore = before.ToList();
             var listAfter = after.ToList();

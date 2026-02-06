@@ -1,38 +1,19 @@
 using System;
 
-namespace ModAPI.Core
+namespace ModAPI.Attributes
 {
     /// <summary>
-    /// Attribute to define a toggle (checkbox) in the mod settings UI.
+    /// Mark a class as a container for mod settings.
+    /// Used by the Spine framework to identify and auto-load configuration classes.
     /// </summary>
-    [AttributeUsage(AttributeTargets.Field)]
-    public class ModToggleAttribute : Attribute
+    [AttributeUsage(AttributeTargets.Class)]
+    public class ModConfigurationAttribute : Attribute
     {
-        public string Label { get; private set; }
-        public string Description { get; private set; }
+        public string Title { get; set; }
 
-        public ModToggleAttribute(string label, string description = "")
+        public ModConfigurationAttribute(string title = null)
         {
-            Label = label;
-            Description = description;
-        }
-    }
-
-    /// <summary>
-    /// Attribute to define a slider in the mod settings UI.
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Field)]
-    public class ModSliderAttribute : Attribute
-    {
-        public string Label { get; private set; }
-        public float MinView { get; private set; }
-        public float MaxView { get; private set; }
-
-        public ModSliderAttribute(string label, float min, float max)
-        {
-            Label = label;
-            MinView = min;
-            MaxView = max;
+            Title = title;
         }
     }
 }

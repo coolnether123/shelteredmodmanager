@@ -102,18 +102,18 @@ The Manager system expects a specific layout to function correctly:
 
 ---
 
-## 6. Save System V1.2: Robust Discovery & Fast Exit
+## 6. Save System V1.2: Robust Discovery & Safe Shutdown
 
-The ModAPI V1.2 significantly upgrades the existing Custom Slot system capabilities.
+The ModAPI V1.2 significantly upgrades the existing Custom Slot system capabilities, focusing on reliability and stability during the critical "Save & Exit" phase.
 
 ### Robust Discovery ("Drag and Drop")
-Unlike V1.1, which relied on a central manifest file, V1.2 uses **directory-based discovery**. You can now drag and drop save folders (e.g., `Slot_5`) directly into the saves directory, and the game will automatically detect and parse them. This requires the system to inspect save files more deeply to read metadata (Days, Family Name).
+Unlike V1.1, which relied on a central manifest file, V1.2 uses **directory-based discovery**. You can now drag and drop save folders (e.g., `Slot_5`) directly into the saves directory, and the game will automatically detect and parse them. This requires the system to inspect save files directly to read metadata (Days, Family Name).
 
-### Fast Save (Crash Prevention)
-Because V1.2 saves now require parsing to verify metadata, performing this action during the unstable **"Save & Exit"** sequence causes crashes (Unity objects being destroyed while the parser tries to read them).
+### Safe Shutdown (Regex Parsing)
+Performing XML parsing via Unity's internal serialization during the **"Save & Exit"** sequence is dangerous because Unity objects are being destroyed simultaneously, leading to `Access Violation` crashes.
 
-To fix this while keeping the new robustness, we implemented **Fast Save**:
-1.  **Bypass Overhead**: During shutdown, the system skips the sensitive metadata parsing step.
-2.  **Manual Manifest Generation**: A valid `manifest.json` is generated using a crash-safe `StringBuilder` approach that reads directly from memory.
-    *   **Result**: The file system remains valid, preventing the "0 Mods" bug, and the game exits instantly without crashing.
-    *   **Self-Healing**: On the next load, the robust discovery system safely re-scans the file to fill in the missing details.
+To solve this while maintaining full metadata accuracy, we use **Safe Regex Parsing**:
+1.  **Unity Independence**: Instead of using `new SaveData(bytes)`, which triggers Unity's serialization engine, we use high-performance **Regular Expressions** to extract tags directly from the XML string.
+2.  **Shutdown Safety**: Because Regex is an atomic string operation, it can be called safely even when Unity's internal managers are offline.
+3.  **Always Up-to-Date**: Unlike the experimental "Fast Save" (v1.2.0-beta), which skipped metadata during exit, the final V1.2 system performs a full, high-quality save every time. 
+    *   **Result**: Your `manifest.json` and in-game UI always show the correct Family Name and Days Survived immediately, with zero risk of crashing on exit.

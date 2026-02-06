@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using ModAPI.Core;
 
@@ -197,9 +198,6 @@ namespace ModAPI.Saves
                 saveInfo = new SaveInfo()
             };
 
-            // SAFE GUARD: If application is in the middle of quitting,
-            // we must NOT try to parse the XML, as it may reference destroyed Unity objects.
-            bool isQuitting = PluginRunner.IsQuitting; // Access via PluginRunner
 
             if (File.Exists(savePath))
             {
@@ -212,25 +210,17 @@ namespace ModAPI.Saves
                     entry.fileSize = bytes.Length;
                     entry.crc32 = CRC32.Compute(bytes);
 
-                    if (!isQuitting)
-                    {
-                        // Parse metadata from XML (Unsafe if objects are destroyed)
-                        TryUpdateEntryInfo(entry, bytes);
-                        
-                        // Use family name as display name if available
-                        if (!string.IsNullOrEmpty(entry.saveInfo?.familyName))
-                            entry.name = entry.saveInfo.familyName;
-                    }
-                    else
-                    {
-                        // Fast Exit Mode: Use placeholders
-                        entry.name = "Unknown (Fast Exit)";
-                        entry.saveInfo.familyName = "Unknown";
-                    }
+                    // SAFE: We now use manual regex parsing which doesn't rely on Unity objects.
+                    // This is safe to run even during shutdown.
+                    TryUpdateEntryInfo(entry, bytes);
+                    
+                    // Use family name as display name if available
+                    if (!string.IsNullOrEmpty(entry.saveInfo?.familyName))
+                        entry.name = entry.saveInfo.familyName;
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError($"[SaveRegistryCore] Error parsing {savePath}: {ex.Message}");
+                    MMLog.WriteError($"Error parsing {savePath}: {ex.Message}");
                 }
             }
             else
@@ -284,33 +274,11 @@ namespace ModAPI.Saves
 
         public SaveEntry OverwriteSave(string saveId, SaveOverwriteOptions opts, byte[] xmlBytes)
         {
-            // FAST SAVE OPTIMIZATION:
-            // If we are fast-saving (quitting), we want to avoid triggering a full directory scan (GetSave -> GetAllEntries).
-            // We only need the slot number to write the files.
-            bool fastSave = opts != null && opts.fastSave;
             
-            if (fastSave)
-            {
-                // Try to extract slot from ID manually to bypass discovery
-                int underscore = saveId.LastIndexOf('_');
-                if (underscore > 0 && int.TryParse(saveId.Substring(underscore + 1), out int slot))
-                {
-                    MMLog.WriteDebug($"[OverwriteSave] ULTRA FAST SAVE - Bypassing discovery for Slot {slot}");
-                    
-                    if (xmlBytes != null)
-                    {
-                        WriteEntryFile(slot, xmlBytes, out long size, out uint crc);
-                        FastSaveManifest(_scenarioId, slot);
-                    }
-                    
-                    // We don't need to return a valid entry or invalidate cache because the app is closing.
-                    return null;
-                }
-            }
-
             // Normal Flow: Find entry by ID (triggers discovery)
             var entry = GetSave(saveId);
             if (entry == null) return null;
+
 
             if (opts != null && !string.IsNullOrEmpty(opts.name)) 
                 entry.name = NameSanitizer.SanitizeName(opts.name);
@@ -385,18 +353,13 @@ namespace ModAPI.Saves
                 var path = Path.Combine(slotRoot, "manifest.json");
 
                 var currentMods = new List<LoadedModInfo>();
-                var loaded = PluginManager.LoadedMods;
                 
-                if (loaded == null)
+                // SNAPSHOT: Use a lock to safely capture current mods, avoiding collection modified errors.
+                lock (PluginManager.LoadedMods)
                 {
-                    MMLog.WriteError("PluginManager.LoadedMods is NULL!");
-                }
-                else
-                {
-                    MMLog.WriteDebug($"UpdateSlotManifest: Gathering {loaded.Count} active mods.");
-                    foreach (var mod in loaded)
+                    foreach (var mod in PluginManager.LoadedMods)
                     {
-                        if (mod == null) { MMLog.WriteError("Found null mod entry in LoadedMods!"); continue; }
+                        if (mod == null) continue;
                         
                         string warning = mod.About?.missingModWarning;
                         currentMods.Add(new LoadedModInfo 
@@ -405,11 +368,9 @@ namespace ModAPI.Saves
                             version = mod.Version, 
                             warnings = string.IsNullOrEmpty(warning) ? new string[0] : new string[] { warning }
                         });
-                        MMLog.WriteDebug($"  - Active: {mod.Id} v{mod.Version}");
                     }
                 }
 
-                // Always update the manifest to ensure metadata (family, days, timestamp) and mod list are current.
                 var newManifest = new SlotManifest
                 {
                     lastModified = DateTime.UtcNow.ToString("o"),
@@ -418,12 +379,11 @@ namespace ModAPI.Saves
                 };
 
                 string slotJson = SerializeSlotManifest(newManifest);
-                MMLog.WriteDebug($"Updating manifest for Slot {absoluteSlot}. Mods: {currentMods.Count}. JSON:\n{slotJson}");
                 File.WriteAllText(path, slotJson);
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"Failed to update slot manifest for slot {absoluteSlot}: {ex}");
+                MMLog.WriteError($"FAILED to update slot manifest for Slot {absoluteSlot}: {ex}");
             }
         }
 
@@ -604,6 +564,7 @@ namespace ModAPI.Saves
             var path = DirectoryProvider.EntryPath(_scenarioId, absoluteSlot);
             var tmp = path + ".tmp";
             fileSize = 0; crc = 0;
+            MMLog.WriteDebug($"Target file path: {path}");
             try
             {
                 File.WriteAllBytes(tmp, xmlBytes);
@@ -611,42 +572,77 @@ namespace ModAPI.Saves
                 crc = CRC32.Compute(xmlBytes);
                 try { File.Replace(tmp, path, null); }
                 catch { File.Copy(tmp, path, true); File.Delete(tmp); }
+                MMLog.WriteDebug($"Done writing entry file. Size: {fileSize}, CRC: {crc:X}");
             }
             catch (Exception ex)
             {
-                MMLog.Write($"WriteEntryFile error for Slot_{absoluteSlot}': " + ex.Message);
+                MMLog.WriteError($"FAILED writing entry file for Slot_{absoluteSlot}: {ex.Message}");
             }
         }
+
 
         private static void TryUpdateEntryInfo(SaveEntry entry, byte[] xmlBytes)
         {
             try
             {
-                var sd = new SaveData(xmlBytes);
-                var info = sd.info;
-                MMLog.WriteDebug($"[TryUpdateEntryInfo] Extracted Info: Family='{info.m_familyName}', Days={info.m_daysSurvived}, Difficulty={info.m_diffSetting}, Time='{info.m_saveTime}'");
-                entry.saveInfo.daysSurvived = info.m_daysSurvived;
-                entry.saveInfo.difficulty = info.m_diffSetting;
-                entry.saveInfo.familyName = info.m_familyName;
-                entry.saveInfo.saveTime = info.m_saveTime;
+                // SAFETY FIX: Avoid using 'new SaveData(bytes)' which relies on Unity serialization.
+                // During shutdown, referencing Unity objects can cause Access Violations.
+                // Instead, we parse the XML string directly using Regex.
                 
+                string xml = Encoding.UTF8.GetString(xmlBytes);
+
+                entry.saveInfo.familyName = ExtractXmlValue(xml, "familyName", "Unknown");
+                entry.saveInfo.daysSurvived = ExtractXmlInt(xml, "daysSurvived", 0);
+                entry.saveInfo.difficulty = ExtractXmlInt(xml, "difficultySetting", 1);
+                entry.saveInfo.saveTime = ExtractXmlValue(xml, "timestamp", "");
+
+                MMLog.WriteDebug($"Extracted Info: Family='{entry.saveInfo.familyName}', Days={entry.saveInfo.daysSurvived}, Difficulty={entry.saveInfo.difficulty}, Time='{entry.saveInfo.saveTime}'");
+
                 // Extract all difficulty settings for proper game loading
-                entry.saveInfo.rainDiff = info.m_rainDiff;
-                entry.saveInfo.resourceDiff = info.m_resourceDiff;
-                entry.saveInfo.breachDiff = info.m_breachDiff;
-                entry.saveInfo.factionDiff = info.m_factionDiff;
-                entry.saveInfo.moodDiff = info.m_moodDiff;
-                entry.saveInfo.mapSize = info.m_mapSize;
-                entry.saveInfo.fog = info.m_fog;
+                entry.saveInfo.rainDiff = ExtractXmlInt(xml, "rainDifficulty", 0);
+                entry.saveInfo.resourceDiff = ExtractXmlInt(xml, "resourcesDifficulty", 0);
+                entry.saveInfo.breachDiff = ExtractXmlInt(xml, "breachDifficulty", 0);
+                entry.saveInfo.factionDiff = ExtractXmlInt(xml, "factionDifficulty", 0);
+                entry.saveInfo.moodDiff = ExtractXmlInt(xml, "moodDifficulty", 0);
+                entry.saveInfo.mapSize = ExtractXmlInt(xml, "mapSize", 0);
+                entry.saveInfo.fog = ExtractXmlBool(xml, "fogSetting", true);
                 
-                sd.Finished();
-                MMLog.WriteDebug($"[TryUpdateEntryInfo] Successfully refreshed metadata for SaveEntry '{entry.id}'.");
+                MMLog.WriteDebug($"Successfully refreshed metadata for SaveEntry '{entry.id}'.");
             }
             catch (Exception ex)
             {
-                MMLog.Write("[TryUpdateEntryInfo] CRITICAL parse error: " + ex);
+                MMLog.Write("CRITICAL parse error in metadata: " + ex);
             }
         }
+
+        private static string ExtractXmlValue(string xml, string tag, string defaultValue)
+        {
+            // Case-insensitive match, handling potential attributes inside the opening tag
+            var match = Regex.Match(xml, $"<{tag}[^>]*>(.*?)</{tag}>", RegexOptions.Singleline);
+            return match.Success ? match.Groups[1].Value : defaultValue;
+        }
+
+        private static int ExtractXmlInt(string xml, string tag, int defaultValue)
+        {
+            var val = ExtractXmlValue(xml, tag, null);
+            if (val != null && int.TryParse(val, out int result)) return result;
+            return defaultValue;
+        }
+
+        private static float ExtractXmlFloat(string xml, string tag, float defaultValue)
+        {
+            var val = ExtractXmlValue(xml, tag, null);
+            if (val != null && float.TryParse(val, out float result)) return result;
+            return defaultValue;
+        }
+
+        private static bool ExtractXmlBool(string xml, string tag, bool defaultValue)
+        {
+            var val = ExtractXmlValue(xml, tag, null);
+            if (val != null && bool.TryParse(val, out bool result)) return result;
+            return defaultValue;
+        }
+
 
 
         // REMOVED: UniqueName() - no longer needed, names come from XML
@@ -707,47 +703,6 @@ namespace ModAPI.Saves
             return sb.ToString();
         }
 
-        public void FastSaveManifest(string scenariosId, int absoluteSlot)
-        {
-             var slotRoot = DirectoryProvider.SlotRoot(scenariosId, absoluteSlot);
-             var path = Path.Combine(slotRoot, "manifest.json");
-
-             // Build JSON manually using currently loaded mods
-             // We access PluginManager.LoadedMods directly here to avoid object creation overhead/race
-             var sb = new StringBuilder();
-             sb.AppendLine("{");
-             sb.AppendLine($"    \"manifestVersion\": 1,");
-             sb.AppendLine($"    \"lastModified\": \"{DateTime.UtcNow.ToString("o")}\",");
-             sb.Append($"    \"family_name\": \"Unknown\""); // We don't parse XML so family is unknown, will be fixed on load
-
-             var loaded = PluginManager.LoadedMods;
-             if (loaded != null && loaded.Count > 0)
-             {
-                 sb.AppendLine(",");
-                 sb.AppendLine("    \"lastLoadedMods\": [");
-                 for (int i = 0; i < loaded.Count; i++)
-                 {
-                     var mod = loaded[i];
-                     if (mod == null) continue;
-                     
-                     sb.Append("        { ");
-                     sb.Append($"\"modId\": \"{mod.Id}\", ");
-                     sb.Append($"\"version\": \"{mod.Version}\", ");
-                     sb.Append("\"warnings\": [] }"); // Skip detailed warnings for fast save
-                     
-                     if (i < loaded.Count - 1) sb.AppendLine(",");
-                     else sb.AppendLine();
-                 }
-                 sb.AppendLine("    ]");
-             }
-             else
-             {
-                 sb.AppendLine();
-             }
-             
-             sb.Append("}");
-             File.WriteAllText(path, sb.ToString());
-        }
 
 
         /// <summary>

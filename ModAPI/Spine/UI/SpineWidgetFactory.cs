@@ -18,7 +18,7 @@ namespace ModAPI.Spine.UI
 
         public static GameObject CreateWidget(SettingDefinition def, Transform parent, object settingsObject, ModSettingsPanel panel = null)
         {
-            MMLog.WriteDebug($"[SpineWidgetFactory] CreateWidget() - Id={def.Id}, Type={def.Type}, Label='{def.Label}'");
+            MMLog.WriteDebug($"CreateWidget() - Id={def.Id}, Type={def.Type}, Label='{def.Label}'");
 
             try
             {
@@ -48,14 +48,14 @@ namespace ModAPI.Spine.UI
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"[SpineWidgetFactory] Error creating {def.Id}: {ex.Message}\n{ex.StackTrace}");
+                MMLog.WriteError($"Error creating {def.Id}: {ex.Message}\n{ex.StackTrace}");
                 return UIUtil.CreateLabelQuick(parent.gameObject, $"Error: {def.Id}", 14, Vector3.zero).gameObject;
             }
         }
 
         private static void NotifyChange(SettingDefinition def, object settingsObject, ModSettingsPanel panel)
         {
-            MMLog.WriteDebug($"[Spine] NotifyChange for {def.Id}. Signal to panel: {panel != null}");
+            MMLog.WriteDebug($"NotifyChange for {def.Id}. Signal to panel: {panel != null}");
             def.OnChanged?.Invoke(settingsObject);
             if (def.RequiresRestart) MMLog.WriteInfo($"[Settings] {def.Label} requires restart.");
             if (panel != null) 
@@ -109,10 +109,11 @@ namespace ModAPI.Spine.UI
             label.pivot = UIWidget.Pivot.Left;
             SetTooltip(label.gameObject, def.Tooltip);
 
-            var valLabel = UIUtil.CreateLabelQuick(container, "", 16, new Vector3(200, 0, 0));
+            var valLabel = UIUtil.CreateLabelQuick(container, "", 16, new Vector3(210, 0, 0));
             valLabel.alignment = NGUIText.Alignment.Center;
+            valLabel.width = 100;
 
-            UIUtil.CreateButton(container, ButtonTemplate, "TOGGLE", 100, 40, new Vector3(300, 0, 0), () => {
+            UIUtil.CreateButton(container, ButtonTemplate, "TOGGLE", 100, 40, new Vector3(330, 0, 0), () => {
                 bool v = !GetValue<bool>(def, settingsObject);
                 if (TryApplyValue(def, settingsObject, v)) {
                     NotifyChange(def, settingsObject, panel);
@@ -400,16 +401,27 @@ namespace ModAPI.Spine.UI
             label.pivot = UIWidget.Pivot.Left;
             SetTooltip(label.gameObject, def.Tooltip);
 
-            var valLabel = UIUtil.CreateLabelQuick(container, "", 16, new Vector3(200, 0, 0));
+            var valLabel = UIUtil.CreateLabelQuick(container, "", 16, new Vector3(210, 0, 0));
             valLabel.alignment = NGUIText.Alignment.Center;
+            valLabel.width = 100;
 
             void Refresh() => valLabel.text = GetValue<object>(def, settingsObject)?.ToString();
             Refresh();
-
-            UIUtil.CreateButton(container, ButtonTemplate, "CYCLE", 100, 40, new Vector3(300, 0, 0), () => {
+            UIUtil.CreateButton(container, ButtonTemplate, "CYCLE", 100, 40, new Vector3(330, 0, 0), () => {
                 var vals = Enum.GetValues(def.EnumType);
-                int idx = Array.IndexOf(vals, GetValue<object>(def, settingsObject));
+                object currentVal = GetValue<object>(def, settingsObject);
+                
+                int idx = Array.IndexOf(vals, currentVal);
+                if (idx == -1) {
+                    string currentStr = currentVal?.ToString();
+                    for(int i=0; i<vals.Length; i++) {
+                        if (vals.GetValue(i).ToString() == currentStr) { idx = i; break; }
+                    }
+                }
+
+                if (idx == -1) idx = 0; 
                 idx = (idx + 1) % vals.Length;
+                
                 var next = vals.GetValue(idx);
                 if (TryApplyValue(def, settingsObject, next)) {
                     Refresh();
@@ -429,18 +441,23 @@ namespace ModAPI.Spine.UI
             label.pivot = UIWidget.Pivot.Left;
             SetTooltip(label.gameObject, def.Tooltip);
 
-            var valLabel = UIUtil.CreateLabelQuick(container, "", 16, new Vector3(200, 0, 0));
+            var valLabel = UIUtil.CreateLabelQuick(container, "", 16, new Vector3(210, 0, 0));
             valLabel.alignment = NGUIText.Alignment.Center;
+            valLabel.width = 100;
 
             void Refresh() => valLabel.text = GetValue<string>(def, settingsObject) ?? "None";
             Refresh();
 
-            UIUtil.CreateButton(container, ButtonTemplate, "CYCLE", 100, 40, new Vector3(300, 0, 0), () => {
+            UIUtil.CreateButton(container, ButtonTemplate, "CYCLE", 100, 40, new Vector3(330, 0, 0), () => {
                 var options = def.GetOptions?.Invoke(settingsObject)?.ToList() ?? new List<string>();
                 if (options.Count == 0) return;
+                
                 string current = GetValue<string>(def, settingsObject);
-                int idx = options.IndexOf(current);
+                int idx = options.FindIndex(o => o.Equals(current, StringComparison.OrdinalIgnoreCase));
+
+                if (idx == -1) idx = 0;
                 idx = (idx + 1) % options.Count;
+                
                 string next = options[idx];
                 if (TryApplyValue(def, settingsObject, next)) {
                     Refresh();
@@ -455,7 +472,21 @@ namespace ModAPI.Spine.UI
         {
             var container = NGUITools.AddChild(parent.gameObject);
             NGUITools.SetLayer(container, parent.gameObject.layer);
-            UIUtil.CreateButton(container, ButtonTemplate, def.Label, 300, 45, Vector3.zero, () => def.OnChanged?.Invoke(settingsObject));
+            
+            // Heuristic for "Heading Buttons" (like === Title ===)
+            bool isFullWidth = def.Label.StartsWith("=") || def.Label.Length > 25;
+            
+            if (isFullWidth)
+            {
+                UIUtil.CreateButton(container, ButtonTemplate, def.Label, 380, 45, new Vector3(190, 0, 0), () => def.OnChanged?.Invoke(settingsObject));
+            }
+            else
+            {
+                var label = UIUtil.CreateLabelQuick(container, def.Label, 16, Vector3.zero);
+                label.pivot = UIWidget.Pivot.Left;
+                UIUtil.CreateButton(container, ButtonTemplate, "EXECUTE", 100, 40, new Vector3(330, 0, 0), () => def.OnChanged?.Invoke(settingsObject));
+            }
+            
             SetTooltip(container, def.Tooltip);
             return container;
         }
@@ -472,10 +503,9 @@ namespace ModAPI.Spine.UI
 
         private static T GetValue<T>(SettingDefinition def, object obj)
         {
-            var field = obj.GetType().GetField(def.FieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (field != null) 
+            if (def.Getter != null)
             {
-                object val = field.GetValue(obj);
+                object val = def.Getter(obj);
                 if (val is T typed) return typed;
                 try { return (T)Convert.ChangeType(val, typeof(T)); } catch { }
             }
@@ -491,14 +521,31 @@ namespace ModAPI.Spine.UI
 
         private static void SetValue(SettingDefinition def, object obj, object val)
         {
-            var field = obj.GetType().GetField(def.FieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (field == null) return;
-            try 
+            if (def.Setter != null)
             {
-                var converted = Convert.ChangeType(val, field.FieldType);
-                field.SetValue(obj, converted);
+                try 
+                {
+                    Type targetType = def.EnumType ?? def.DefaultValue?.GetType() ?? typeof(object);
+                    
+                    // Special case for Enum conversion from strings/ints
+                    object converted = val;
+                    if (val != null && targetType.IsEnum && !(val.GetType() == targetType))
+                    {
+                        if (val is string s) converted = Enum.Parse(targetType, s);
+                        else converted = Enum.ToObject(targetType, val);
+                    }
+                    else if (val != null && !targetType.IsAssignableFrom(val.GetType()))
+                    {
+                        converted = Convert.ChangeType(val, targetType);
+                    }
+
+                    def.Setter(obj, converted);
+                }
+                catch (Exception ex) 
+                { 
+                    MMLog.WriteError($"Setter failed for {def.Id}: {ex.Message}"); 
+                }
             }
-            catch { field.SetValue(obj, val); }
         }
     }
 }

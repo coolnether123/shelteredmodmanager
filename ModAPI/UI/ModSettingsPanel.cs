@@ -42,6 +42,7 @@ namespace ModAPI.UI
         private string _searchFilter = "";
         private string _presetOverride = null;
         private string _customSnapshotJson = null;
+        private bool _isRebuilding = false;
 
         // Colors
         private static readonly Color COLOR_HEADER = new Color(0.9f, 0.85f, 0.7f);
@@ -59,7 +60,7 @@ namespace ModAPI.UI
         
         public static void Show(ModEntry mod)
         {
-            MMLog.Write($"[ModSettingsPanel] Show() requested for mod: {mod?.Id ?? "NULL"}");
+            MMLog.Write($"Show() requested for mod: {mod?.Id ?? "NULL"}");
             if (mod == null || mod.SettingsProvider == null) return;
 
             if (_instance != null) Destroy(_instance);
@@ -89,15 +90,14 @@ namespace ModAPI.UI
             script._currentMod = mod;
 
             // Initial snapshot of settings as "Custom" state
-            var settings = mod.SettingsProvider?.GetSettingsObject();
-            if (settings != null) script._customSnapshotJson = JsonUtility.ToJson(settings);
+            if (mod.SettingsProvider is ISettingsProvider2 sp2) script._customSnapshotJson = sp2.SerializeToJson();
 
             script.InitialiseAndBuild(root.transform, uiFont, ttfFont);
         }
 
         private void InitialiseAndBuild(Transform root, UIFont uiFont, Font ttfFont)
         {
-            MMLog.WriteDebug("[ModSettingsPanel] InitialiseAndBuild() started");
+            MMLog.WriteDebug("InitialiseAndBuild() started");
             CaptureTemplates(uiFont, ttfFont);
 
             // Backgrounds - Lowered opacity for transparency
@@ -112,12 +112,12 @@ namespace ModAPI.UI
 
             // 1. Title (Top Left)
             // Name Label
-            _modNameLabel = CreateLabel(root, "Title", "MOD NAME", new Vector3(leftX + 80, topY + 10, 0), 28, COLOR_HEADER, uiFont, ttfFont, 600);
+            _modNameLabel = CreateLabel(root, "Title", "MOD NAME", new Vector3(leftX + 40, topY + 10, 0), 28, COLOR_HEADER, uiFont, ttfFont, 600);
             _modNameLabel.alignment = NGUIText.Alignment.Left;
             _modNameLabel.pivot = UIWidget.Pivot.Left;
 
             // Version Label (Created separately to position under name)
-            var versionLabel = CreateLabel(root, "Version", "v1.1.0", new Vector3(leftX + 80, topY - 20, 0), 18, COLOR_SUBTEXT, uiFont, ttfFont, 600);
+            var versionLabel = CreateLabel(root, "Version", "v1.1.0", new Vector3(leftX + 40, topY - 20, 0), 18, COLOR_SUBTEXT, uiFont, ttfFont, 600);
             versionLabel.alignment = NGUIText.Alignment.Left;
             versionLabel.pivot = UIWidget.Pivot.Left;
             // Store ref if needed, or just find it by name later if dynamic updates required (mostly static per open)
@@ -163,9 +163,9 @@ namespace ModAPI.UI
             // 4. Save & Close (Bottom Right)
             CreateButton(root, "BtnSaveAndClose", "SAVE & CLOSE", new Vector3(rightX - 100, bottomY, 0), 18, Color.white, uiFont, ttfFont, 200, 40, () => OnClose());
 
-            MMLog.WriteDebug("[ModSettingsPanel] UI Initial Construction Complete. Building Menu Content...");
+            MMLog.WriteDebug("UI Initial Construction Complete. Building Menu Content...");
             BuildMenu(uiFont, ttfFont);
-            MMLog.Write($"[ModSettingsPanel] UI Built for {_currentMod.Id}. Total settings: {_pages.Sum(p => p.Count)}");
+            MMLog.WriteDebug($"UI Built for {_currentMod.Id}. Total settings: {_pages.Sum(p => p.Count)}");
         }
 
         private void Update()
@@ -187,19 +187,16 @@ namespace ModAPI.UI
             _presetOverride = null;
 
             // Auto-save after reset
-            var defs = _currentMod.SettingsProvider.GetSettings();
-            SettingsSerializer.Save(_currentMod.Id, settings, defs);
+            if (_currentMod.SettingsProvider is ISettingsProvider2 sp3) sp3.Save();
 
             BuildMenu(_modNameLabel.bitmapFont, _modNameLabel.trueTypeFont);
         }
 
         private void OnClose()
         {
-            if (_currentMod != null && _currentMod.SettingsProvider != null && _currentMod.SettingsProvider.GetSettingsObject() != null)
+            if (_currentMod != null && _currentMod.SettingsProvider is ISettingsProvider2 sp2)
             {
-                 var settings = _currentMod.SettingsProvider.GetSettingsObject();
-                 var defs = _currentMod.SettingsProvider.GetSettings();
-                 SettingsSerializer.Save(_currentMod.Id, settings, defs);
+                 sp2.Save();
             }
             Destroy(_instance);
             _instance = null;
@@ -222,6 +219,7 @@ namespace ModAPI.UI
             var lbl = inputGO.AddComponent<UILabel>();
             lbl.fontSize = 16;
             lbl.width = 310;
+            lbl.depth = 105;
             lbl.overflowMethod = UILabel.Overflow.ResizeFreely;
             if (uiFont != null) lbl.bitmapFont = uiFont;
             else if (ttfFont != null) lbl.trueTypeFont = ttfFont;
@@ -239,9 +237,12 @@ namespace ModAPI.UI
             col.center = Vector3.zero;
 
             EventDelegate.Add(_searchInput.onChange, () => {
-                _searchFilter = _searchInput.value;
-                if (!string.IsNullOrEmpty(_searchFilter)) _searchInput.defaultText = "";
-                BuildMenu(uiFont, ttfFont);
+                string newVal = _searchInput.value;
+                if (_searchFilter != newVal) 
+                {
+                    _searchFilter = newVal;
+                    BuildMenu(uiFont, ttfFont, true); 
+                }
             });
         }
         
@@ -282,8 +283,13 @@ namespace ModAPI.UI
 
         private void BuildMenu(UIFont uiFont, Font ttfFont, bool keepPage = false)
         {
-            foreach (var page in _pages) foreach (var go in page) Destroy(go);
-            _pages.Clear();
+            if (_isRebuilding) return;
+            _isRebuilding = true;
+
+            try
+            {
+                foreach (var page in _pages) foreach (var go in page) Destroy(go);
+                _pages.Clear();
             
             foreach(Transform child in _presetBarRoot.transform) Destroy(child.gameObject);
 
@@ -299,7 +305,7 @@ namespace ModAPI.UI
             }
             catch (Exception ex)
             {
-                MMLog.WriteError($"[ModSettingsPanel] Failed to retrieve settings for {_currentMod.Id}: {ex}");
+                MMLog.WriteError($"Failed to retrieve settings for {_currentMod.Id}: {ex}");
                 allDefs = new List<SettingDefinition>(); // Fallback
             }
 
@@ -332,6 +338,10 @@ namespace ModAPI.UI
             // 2. Setting Filtering
             var hierarchy = new SettingsHierarchy(allDefs);
             SettingsViewMode viewMode = (_currentViewMode == SettingMode.Simple) ? SettingsViewMode.Simple : SettingsViewMode.Advanced;
+            
+            // Pass the search filter directly to get flattening if you want hierarchy-aware search,
+            // OR apply it post-flattening like you are doing.
+            // Current Issue: Search happens AFTER simple/advanced filtering.
             
             var visible = hierarchy.GetFlattenedForView(viewMode, settings).ToList();
             
@@ -384,6 +394,11 @@ namespace ModAPI.UI
             else _currentPageIndex = Mathf.Clamp(_currentPageIndex, 0, Mathf.Max(0, _pages.Count - 1));
 
             UpdatePageVisibility();
+            }
+            finally
+            {
+                _isRebuilding = false;
+            }
         }
 
         private void BuildPresetCycleWidget(UIFont uiFont, Font ttfFont, object settings, List<SettingDefinition> allDefs)
@@ -439,7 +454,7 @@ namespace ModAPI.UI
             if (nextIndex < 0) nextIndex = cycleList.Count - 1;
 
             string targetPreset = cycleList[nextIndex];
-            MMLog.WriteDebug($"[ModSettingsPanel] Cycling Preset to: {targetPreset}");
+            MMLog.WriteDebug($"Cycling Preset to: {targetPreset}");
 
             if (targetPreset == "Custom")
             {
@@ -449,7 +464,7 @@ namespace ModAPI.UI
                     var settingsObj = _currentMod.SettingsProvider.GetSettingsObject();
                     if (settingsObj != null)
                     {
-                        MMLog.WriteDebug("[ModSettingsPanel] Restoring Custom Snapshot...");
+                        MMLog.WriteDebug("Restoring Custom Snapshot...");
                         JsonUtility.FromJsonOverwrite(_customSnapshotJson, settingsObj);
                         
                         // Notify mod of change
@@ -508,7 +523,7 @@ namespace ModAPI.UI
 
         private void ApplyPreset(string presetName, List<SettingDefinition> allDefs, object settings)
         {
-            MMLog.WriteDebug($"[ModSettingsPanel] Applying Preset: {presetName}");
+            MMLog.WriteDebug($"Applying Preset: {presetName}");
             int appliedCount = 0;
             foreach(var def in allDefs)
             {
@@ -525,8 +540,8 @@ namespace ModAPI.UI
                 _currentMod.SettingsProvider.OnSettingsLoaded();
             }
 
-            SettingsSerializer.Save(_currentMod.Id, settings, allDefs);
-            MMLog.WriteDebug($"[ModSettingsPanel] Preset '{presetName}' applied ({appliedCount} fields updated)");
+            if (_currentMod.SettingsProvider is ISettingsProvider2 sp2) sp2.Save();
+            MMLog.WriteDebug($"Preset '{presetName}' applied ({appliedCount} fields updated)");
         }
 
         private void CreatePaginatedGrid(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs, object data, int itemsPerPage = 18)
@@ -548,7 +563,7 @@ namespace ModAPI.UI
                     var def = segment[j];
                     int col = j % cols;
                     int row = j / cols;
-                    float x = (col == 0) ? -400f : 100f;
+                    float x = (col == 0) ? -420f : 80f;
                     float y = startY - (row * rowHeight);
 
                     var widget = SpineWidgetFactory.CreateWidget(def, _contentRoot.transform, data, this);
@@ -593,7 +608,7 @@ namespace ModAPI.UI
             
             // Update the snapshot so this manual change becomes the stored "Custom" state
             var settings = _currentMod.SettingsProvider.GetSettingsObject();
-            if (settings != null) _customSnapshotJson = JsonUtility.ToJson(settings);
+            if (_currentMod.SettingsProvider is ISettingsProvider2 sp2) _customSnapshotJson = sp2.SerializeToJson();
 
             var provider = _currentMod.SettingsProvider;
             var allDefs = provider.GetSettings().ToList();
@@ -617,11 +632,23 @@ namespace ModAPI.UI
                 bool active = (i == _currentPageIndex);
                 foreach (var go in _pages[i]) go.SetActive(active);
             }
-            _pagingLabel.text = $"{_currentPageIndex + 1}/{_pages.Count}";
-            _prevBtn.GetComponent<UIButton>().isEnabled = _currentPageIndex > 0;
-            _nextBtn.GetComponent<UIButton>().isEnabled = _currentPageIndex < _pages.Count - 1;
-            UpdateButtonState(_prevBtn, _currentPageIndex > 0, true);
-            UpdateButtonState(_nextBtn, _currentPageIndex < _pages.Count - 1, true);
+
+            bool showPaging = _pages.Count > 1;
+            
+            if (_pagingLabel != null) {
+                _pagingLabel.gameObject.SetActive(showPaging);
+                _pagingLabel.text = $"{_currentPageIndex + 1}/{_pages.Count}";
+            }
+            if (_prevBtn != null) _prevBtn.SetActive(showPaging);
+            if (_nextBtn != null) _nextBtn.SetActive(showPaging);
+
+            if (showPaging)
+            {
+                _prevBtn.GetComponent<UIButton>().isEnabled = _currentPageIndex > 0;
+                _nextBtn.GetComponent<UIButton>().isEnabled = _currentPageIndex < _pages.Count - 1;
+                UpdateButtonState(_prevBtn, _currentPageIndex > 0, true);
+                UpdateButtonState(_nextBtn, _currentPageIndex < _pages.Count - 1, true);
+            }
         }
 
 

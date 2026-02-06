@@ -8,6 +8,7 @@ using System.Diagnostics;
 using HarmonyLib;
 using ModAPI.Harmony;
 using ModAPI.Hooks;
+using ModAPI.Spine;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -114,6 +115,10 @@ namespace ModAPI.Core
                 var harmony = new HarmonyLib.Harmony("ShelteredModManager.PluginManager");
                 SaveProtectionPatches.ApplyPatches(harmony);
                 
+                // Initialize Core Systems
+                ModAPI.Saves.Events.OnAfterLoad += ModRandomState.Load;
+                ModAPI.Saves.Events.OnBeforeSave += ModRandomState.Save;
+
                 // Track lifecycle events for plugins
                 ModAPI.Events.GameEvents.OnSessionStarted += OnSessionStarted;
                 ModAPI.Events.GameEvents.OnNewGame += OnNewGame;
@@ -291,16 +296,22 @@ namespace ModAPI.Core
                 {
                     ModRegistry.RegisterAssemblyForMod(asm, entry);
 
-                    Type[] types = new Type[0];
+                    Type[] types = null;
                     try { types = asm.GetTypes(); }
-                    catch (ReflectionTypeLoadException rtle) { types = rtle.Types.Where(x => x != null).ToArray(); }
+                    catch (ReflectionTypeLoadException rtle) { types = rtle.Types; }
 
-                    MMLog.WriteDebug($"Found {types.Length} types in assembly {asm.FullName}");
+                    if (types == null) continue;
 
                     foreach (var type in types)
                     {
-                        if (type == null || type.IsAbstract || !type.IsClass) continue;
-                        if (!typeof(IModPlugin).IsAssignableFrom(type)) continue;
+                        if (type == null) continue;
+                        if (!type.IsClass || type.IsAbstract) continue;
+                        
+                        try
+                        {
+                            if (!typeof(IModPlugin).IsAssignableFrom(type)) continue;
+                        }
+                        catch { continue; } // Handle cases where IsAssignableFrom might throw due to missing deps
 
                         MMLog.WriteDebug($"Found IModPlugin: {type.FullName}");
 
@@ -321,29 +332,14 @@ namespace ModAPI.Core
                             // Register the settings provider if the plugin implements it
                             MMLog.WriteDebug($"Initializing plugin: {type.FullName}");
                             plugin.Initialize(ctx);
-                            
-                            // Initialize Settings AFTER plugin has had a chance to create its config object
-                            var sp = plugin as ModAPI.Spine.ISettingsProvider;
-                            if (sp != null && entry != null)
+
+                            // If the plugin didn't set a provider during Initialize, check if it implements it directly
+                            ModAPI.Spine.ISettingsProvider sp = plugin as ModAPI.Spine.ISettingsProvider;
+                            if (entry != null && entry.SettingsProvider == null && sp != null)
                             {
                                 entry.SettingsProvider = sp;
-                                try 
-                                {
-                                    // Auto-Load
-                                    object settingsObj = sp.GetSettingsObject();
-                                    if (settingsObj != null) 
-                                    {
-                                        var defs = sp.GetSettings();
-                                        ModAPI.Spine.SettingsSerializer.Load(entry.Id, settingsObj, defs);
-                                        sp.OnSettingsLoaded(); // Notify plugin
-                                        MMLog.Write($"Spine settings loaded for {entry.Id}");
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    MMLog.WriteError($"Error auto-loading settings for {entry.Id}: {ex.Message}");
-                                }
                             }
+
                             MMLog.WriteDebug($"Starting plugin: {type.FullName}");
                             plugin.Start(ctx);
                             ctx.Log.Info("Started.");
@@ -408,6 +404,10 @@ namespace ModAPI.Core
 
         internal void OnNewGame()
         {
+            // Initialize ModRandom for the new world
+            ModRandom.Initialize(Environment.TickCount ^ Guid.NewGuid().GetHashCode());
+            ModRandom.NotifySeedChanged();
+
             for (int i = 0; i < _sessionEvents.Count; i++)
             {
                 try { _sessionEvents[i].OnNewGame(); }
@@ -417,11 +417,18 @@ namespace ModAPI.Core
 
         public void ShutdownAll()
         {
+            MMLog.WriteInfo($"ShutdownAll started for {_plugins.Count} plugins.");
             for (int i = _shutdown.Count - 1; i >= 0; i--)
             {
-                try { _shutdown[i].Shutdown(); }
-                catch (Exception ex) { MMLog.Write($"Shutdown() failed: {ex.Message}"); }
+                var s = _shutdown[i];
+                try 
+                { 
+                    MMLog.WriteDebug($"Shutting down: {s.GetType().FullName}");
+                    s.Shutdown(); 
+                }
+                catch (Exception ex) { MMLog.Write($"Shutdown() failed for {s.GetType().FullName}: {ex.Message}"); }
             }
+            MMLog.WriteInfo("ShutdownAll complete.");
         }
 
         private string SafeModIdFor(Type type)
@@ -446,8 +453,8 @@ namespace ModAPI.Core
             {
                 log.IsDebugEnabled = entry.About.debugLogging;
             }
-            ModSettings settings = null;
-            try { settings = ModSettings.ForAssembly(type.Assembly); } catch (Exception ex) { MMLog.WarnOnce("PluginManager.BuildContextFor", "Error creating settings: " + ex.Message); settings = null; }
+            ISettingsProvider settings = null;
+            // Legacy AutoSettings support? Replaced by newer auto-scan in ModManagerBase
 
             return new PluginContextImpl
             {
@@ -564,7 +571,9 @@ namespace ModAPI.Core
         private void OnApplicationQuit()
         {
             IsQuitting = true;
-            MMLog.WriteDebug("[PluginRunner] Application is quitting detected.");
+            MMLog.WriteInfo("Application is quitting detected. Shutting down plugins...");
+            if (Manager != null) Manager.ShutdownAll();
+            MMLog.Flush();
         }
 
         private void OnDestroy()
@@ -752,7 +761,7 @@ namespace ModAPI.Core
         public GameObject LoaderRoot { get; set; }
         public GameObject PluginRoot { get; set; }
         public ModEntry Mod { get; set; }
-        public ModSettings Settings { get; set; }
+        public ModAPI.Spine.ISettingsProvider Settings { get; set; }
         public IModLogger Log { get; set; }
         public IGameHelper Game { get; set; }
         public ISaveSystem SaveSystem { get; set; }

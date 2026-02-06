@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using ModAPI.Core;
 
 namespace ModAPI.Spine
 {
@@ -8,9 +9,15 @@ namespace ModAPI.Spine
     {
         /// <summary>The display name shown in the UI.</summary>
         public string Label;
+
+        /// <summary>Localization key from TextDatabase. If provided, Label is used as fallback.</summary>
+        public string LabelKey;
         
         /// <summary>Text shown when hovering over the setting name/widget.</summary>
         public string Tooltip;
+
+        /// <summary>Where this setting is stored (Global vs PerSave).</summary>
+        public SettingsScope Scope = SettingsScope.Global;
         
         /// <summary>Whether this setting appears in Simple or Advanced view (default: Advanced).</summary>
         public SettingMode Mode = SettingMode.Advanced;
@@ -41,6 +48,12 @@ namespace ModAPI.Spine
         
         /// <summary>If true, shows a "Restart Required" warning when changed.</summary>
         public bool RequiresRestart = false;
+
+        /// <summary>If true, this PerSave setting carries over to New Game+.</summary>
+        public bool CarryOverToNewGamePlus = false;
+
+        /// <summary>How to merge this setting during New Game+ carry-over.</summary>
+        public MergeStrategy NewGamePlusMerge = MergeStrategy.Replace;
         
         // Advanced Hooks (Method names)
         
@@ -69,7 +82,7 @@ namespace ModAPI.Spine
         public string OnChanged;
 
         /// <summary>Multiplayer synchronization mode.</summary>
-        public Core.SyncMode SyncMode = Core.SyncMode.LocalOnly;
+        public SyncMode SyncMode = SyncMode.LocalOnly;
 
         /// <summary>
         /// Marks a field, property, or method as a configurable setting in the Spine UI.
@@ -79,6 +92,8 @@ namespace ModAPI.Spine
         {
             Label = label;
         }
+
+        public ModSettingAttribute() { }
     }
     
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
@@ -112,3 +127,4 @@ namespace ModAPI.Spine
         void DrawSettings(GameObject parent, float width, float height);
     }
 }
+

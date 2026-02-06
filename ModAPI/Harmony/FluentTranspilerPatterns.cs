@@ -13,23 +13,15 @@ namespace ModAPI.Harmony
     /// </summary>
     public static class FluentTranspilerPatterns
     {
-        #region Instruction Predicates
+        #region Instruction Predicates (CodeInstruction Extensions)
 
-        /// <summary>Check if current instruction loads a constant float.</summary>
-        public static bool IsLdcR4(this FluentTranspiler t, float value)
-        {
-            if (!t.HasMatch) return false;
-            var instr = t.Current;
-            return instr != null && instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f && Math.Abs(f - value) < 0.0001f;
-        }
+        /// <summary>Check if instruction loads a constant float.</summary>
+        public static bool IsLdcR4(this CodeInstruction instr, float value)
+            => instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f && Math.Abs(f - value) < 0.0001f;
 
-        /// <summary>Check if current instruction loads a constant int.</summary>
-        public static bool IsLdcI4(this FluentTranspiler t, int value)
+        /// <summary>Check if instruction loads a constant int (handles all short forms).</summary>
+        public static bool IsLdcI4(this CodeInstruction instr, int value)
         {
-            if (!t.HasMatch) return false;
-            var instr = t.Current;
-            if (instr == null) return false;
-            
             if (instr.opcode == OpCodes.Ldc_I4) return (int)instr.operand == value;
             if (instr.opcode == OpCodes.Ldc_I4_0) return value == 0;
             if (instr.opcode == OpCodes.Ldc_I4_1) return value == 1;
@@ -38,24 +30,36 @@ namespace ModAPI.Harmony
             return false;
         }
 
+        /// <summary>Check if instruction is a newobj for a specific type.</summary>
+        public static bool IsNewobj(this CodeInstruction instr, Type type)
+            => instr.opcode == OpCodes.Newobj && instr.operand is ConstructorInfo ci && ci.DeclaringType == type;
+
+        /// <summary>Check if instruction calls a specific method (handles Call and Callvirt).</summary>
+        public static bool IsCall(this CodeInstruction instr, Type type, string methodName)
+        {
+            if (instr.opcode != OpCodes.Call && instr.opcode != OpCodes.Callvirt) return false;
+            return instr.operand is MethodInfo method && method.DeclaringType == type && method.Name == methodName;
+        }
+
+        #endregion
+
+        #region FluentTranspiler Wrappers for Predicates
+
+        /// <summary>Check if current instruction loads a constant float.</summary>
+        public static bool IsLdcR4(this FluentTranspiler t, float value)
+            => t.HasMatch && t.Current.IsLdcR4(value);
+
+        /// <summary>Check if current instruction loads a constant int.</summary>
+        public static bool IsLdcI4(this FluentTranspiler t, int value)
+            => t.HasMatch && t.Current.IsLdcI4(value);
+
         /// <summary>Check if current instruction is a newobj for a specific type.</summary>
         public static bool IsNewobj(this FluentTranspiler t, Type type)
-        {
-            if (!t.HasMatch) return false;
-            var instr = t.Current;
-            return instr != null && instr.opcode == OpCodes.Newobj && instr.operand is ConstructorInfo ci && ci.DeclaringType == type;
-        }
+            => t.HasMatch && t.Current.IsNewobj(type);
 
         /// <summary>Check if current instruction calls a specific method.</summary>
         public static bool IsCall(this FluentTranspiler t, Type type, string methodName)
-        {
-            if (!t.HasMatch) return false;
-            var instr = t.Current;
-            if (instr == null) return false;
-            if (instr.opcode != OpCodes.Call && instr.opcode != OpCodes.Callvirt) return false;
-            if (!(instr.operand is MethodInfo method)) return false;
-            return method.DeclaringType == type && method.Name == methodName;
-        }
+            => t.HasMatch && t.Current.IsCall(type, methodName);
 
         #endregion
 

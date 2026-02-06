@@ -401,7 +401,7 @@ namespace ModAPI.Reflection
         private static void LogDetailedFailure(Type type, string memberKind, string[] candidates, BindingFlags flags)
         {
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine(string.Format("[Safe] {0} lookup failed for '{1}' on {2}", memberKind, string.Join("|", candidates), type.FullName));
+            sb.AppendLine(string.Format("{0} lookup failed for '{1}' on {2}", memberKind, string.Join("|", candidates), type.FullName));
             sb.AppendLine(string.Format("Flags: {0}", flags));
             
             if (memberKind == "Field")

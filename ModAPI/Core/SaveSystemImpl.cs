@@ -87,10 +87,14 @@ namespace ModAPI.Core
         {
             try
             {
-                MMLog.WriteDebug($"[SaveSystem] HandleBeforeSave for {_modId}. IsQuitting={PluginRunner.IsQuitting}. Proceeding...");
+                MMLog.WriteDebug($"[SaveSystem] HandleBeforeSave for {_modId}. IsQuitting={PluginRunner.IsQuitting}.");
 
                 var path = GetCurrentSlotPath();
-                if (string.IsNullOrEmpty(path)) return;
+                if (string.IsNullOrEmpty(path)) 
+                {
+                    MMLog.WriteDebug($"[SaveSystem] No active slot for {_modId}, skipping save.");
+                    return;
+                }
 
                 // Ensure directory exists for safety
                 if (!Directory.Exists(path)) Directory.CreateDirectory(path);
@@ -102,24 +106,24 @@ namespace ModAPI.Core
                 // CHECK FOR PRE-CALCULATED CACHE (Safety for Shutdown)
                 if (!string.IsNullOrEmpty(_shutdownCache) && PluginRunner.IsQuitting)
                 {
-                    MMLog.WriteDebug($"[SaveSystem] Writing buffered shutdown data for {_modId}");
+                    MMLog.WriteDebug($"[SaveSystem] Writing buffered shutdown data for {_modId} to {modFileName}");
                     jsonToWrite = _shutdownCache;
-                    // Dont clear it, in case multiple saves happen? No, likely just one.
                 }
                 else
                 {
-                    // Standard Logic: Serialize now
+                    MMLog.WriteDebug($"[SaveSystem] Serializing live mod data for {_modId} to {modFileName}");
                     
-                    // Support V1.3 IModPersistenceLogic hooks
                     var saveEntry = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave;
-                    
                     var containerObj = new ModPersistenceData();
                     foreach (var kv in _registeredData)
                     {
-                        // Check for persistence logic
                         if (kv.Value is ModAPI.Persistence.IModPersistenceLogic) 
                         {
-                            try { (kv.Value as ModAPI.Persistence.IModPersistenceLogic).OnSaving(saveEntry); }
+                            try 
+                            { 
+                                MMLog.WriteDebug($"[SaveSystem] Invoking OnSaving hook for {kv.Key} in {_modId}");
+                                (kv.Value as ModAPI.Persistence.IModPersistenceLogic).OnSaving(saveEntry); 
+                            }
                             catch (Exception logicEx) { MMLog.WriteError($"[SaveSystem] {kv.Key}.OnSaving failed: {logicEx.Message}"); }
                         }
                         
@@ -128,8 +132,9 @@ namespace ModAPI.Core
                     jsonToWrite = JsonUtility.ToJson(containerObj, true);
                 }
 
+                MMLog.WriteDebug($"[SaveSystem] Writing {jsonToWrite.Length} bytes to {modFilePath}");
                 File.WriteAllText(modFilePath, jsonToWrite);
-                MMLog.WriteDebug(string.Format("[SaveSystem] Saved mod data for {0} to {1}", _modId, modFileName));
+                MMLog.WriteDebug($"[SaveSystem] Successfully saved mod data for {_modId}");
             }
             catch (Exception ex)
             {
@@ -162,7 +167,7 @@ namespace ModAPI.Core
                                 JsonUtility.FromJsonOverwrite(entry.json, dataObj);
                                 loadedKeys.Add(entry.key);
                                 
-                                // Support V1.3 IModPersistenceLogic hooks
+                                // Support V1.2.0 IModPersistenceLogic hooks
                                 if (dataObj is ModAPI.Persistence.IModPersistenceLogic)
                                 {
                                     try 

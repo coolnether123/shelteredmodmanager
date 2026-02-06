@@ -5,6 +5,7 @@ using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
 using ModAPI.Core;
+using ModAPI.Spine;
 
 namespace ModAPI.Harmony
 {

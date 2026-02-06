@@ -46,9 +46,9 @@ namespace ModAPI.UI
         /// Returns immediately; work is done asynchronously.
         /// </summary>
         public static void AddLabelToPanelWhenVisible(this IPluginContext ctx,
-            string nameOrPath, string text, UILabelOptions opts = null)
+            string nameOrPath, string text, UIUtil.UILabelOptions opts = null)
         {
-            if (opts == null) opts = new UILabelOptions();
+            if (opts == null) opts = new UIUtil.UILabelOptions();
             opts.text = text;
 
             ctx.RunWhenPanelVisible(nameOrPath, go =>

@@ -18,6 +18,7 @@ namespace ModAPI.Hooks
         public static void Inject(SaveManager instance)
         {
             if (instance == null) return;
+            // MMLog.WriteDebug("[SaveManager_Injection_Patch] Injecting PlatformSaveProxy...");
 
             try
             {
