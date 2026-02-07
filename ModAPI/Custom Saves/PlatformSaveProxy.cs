@@ -50,14 +50,11 @@ namespace ModAPI.Hooks
 
         public override bool PlatformSave(SaveManager.SaveType type, byte[] data)
         {
-            MMLog.WriteDebug($"PlatformSave called for {type}");
-
             // CRASH FIX: During quit, the save system can be triggered multiple times.
             // If we've already completed a save during this quit sequence, skip redundant saves
             // to avoid accessing destroyed objects in the vanilla code that runs after.
             if (PluginRunner.IsQuitting && _quitSaveCompleted)
             {
-                MMLog.WriteDebug($"PlatformSave: Skipping redundant save during quit (already saved).");
                 return true; // Tell vanilla "save succeeded" without doing anything
             }
 
@@ -68,13 +65,13 @@ namespace ModAPI.Hooks
                 {
                     MMLog.WriteDebug($"Intercepting Vanilla Save ({type}) -> Redirecting to Custom ID: {target.saveId}");
                     
-                    MMLog.WriteDebug($"Redirect Execution. Target={target.saveId}");
+                    // FORCE SYNC: ExpandedVanillaSaves.Instance.Overwrite uses File.WriteAllBytes (blocking).
+                    // This ensures the file is flushed to disk before we return.
                     var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, new SaveOverwriteOptions(), data);
                     
                     // Create Manifest immediately for new saves
                     if (entry != null)
                     {
-                        MMLog.WriteDebug($"Initializing manifest for new save: {entry.id}");
                         var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
                         registry.UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
                     }
@@ -96,9 +93,8 @@ namespace ModAPI.Hooks
             // 2. CHECK FOR EXISTING LOADED CUSTOM GAME
             if (ActiveCustomSave != null)
             {
-                MMLog.WriteDebug($"Saving Active Custom Game: {ActiveCustomSave.id}");
-                
                 // Update the file and metadata
+                // FORCE SYNC: Uses File.WriteAllBytes
                 var result = ExpandedVanillaSaves.Instance.Overwrite(ActiveCustomSave.id, new SaveOverwriteOptions(), data);
                 
                 if (result != null)
@@ -107,7 +103,6 @@ namespace ModAPI.Hooks
                     MMLog.WriteDebug($"Saved custom slot: {ActiveCustomSave.id}");
                 }
 
-                MMLog.WriteDebug($"PlatformSaveProxy: Returning TRUE for custom save {ActiveCustomSave.id}. Handing control back to vanilla.");
                 if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
                 return true; // We handled it
             }
@@ -119,8 +114,6 @@ namespace ModAPI.Hooks
 
         public override bool PlatformLoad(SaveManager.SaveType type)
         {
-            MMLog.WriteDebug($"Intercepted PlatformLoad call for SaveType: {type}.");
-
             lock (_nextLoadLock)
             {
                 if (NextLoad.TryGetValue(type, out var nextLoadTarget))
@@ -142,7 +135,6 @@ namespace ModAPI.Hooks
 
                         _customLoadedXml = File.ReadAllText(path);
                         ActiveCustomSave = entry;
-                        MMLog.WriteDebug($"Set active custom save to ID: {entry?.id} after loading.");
                         NextLoad.Remove(type);
                         return true;
                     }
@@ -174,7 +166,6 @@ namespace ModAPI.Hooks
 
         public static void SetNextLoad(SaveManager.SaveType type, string scenarioId, string saveId)
         {
-            MMLog.WriteDebug($"SetNextLoad: type={type}, scenarioId={scenarioId}, saveId={saveId}");
             
             // Safety: Ensure proxy is injected before we register a pending load
             try { SaveManager_Injection_Patch.Inject(SaveManager.instance); } catch { }
@@ -187,11 +178,14 @@ namespace ModAPI.Hooks
 
         public static void SetNextSave(SaveManager.SaveType type, string scenarioId, string saveId)
         {
-            MMLog.WriteDebug($"SetNextSave: type={type}, scenarioId={scenarioId}, saveId={saveId}");
             lock (_nextSaveLock)
             {
                 NextSave[type] = new Target { scenarioId = scenarioId, saveId = saveId };
             }
+        }
+        public static void ResetStatus()
+        {
+            _quitSaveCompleted = false;
         }
     }
 }

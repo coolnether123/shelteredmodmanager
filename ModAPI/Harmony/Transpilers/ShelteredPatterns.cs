@@ -72,9 +72,13 @@ namespace ModAPI.Harmony
                 if (consumingMethod != null && !consumingMethod.IsStatic)
                     isInstance = true;
             }
-            catch 
+            catch (Exception ex)
             {
-                // Fallback: assume static if lookup failed
+                MMLog.WriteWarning(
+                    $"[ShelteredPatterns] Could not resolve " +
+                    $"{consumingMethodType.Name}.{consumingMethodName}" +
+                    $" for instance check: {ex.Message}. " +
+                    $"Assuming static.");
             }
 
             var replacements = new List<CodeInstruction>();
@@ -87,6 +91,36 @@ namespace ModAPI.Harmony
             // Replace entire 4-instruction sequence with result. 
             // We set preserveInstructionCount to true to keep the Harmony validator happy by maintaining instruction indices.
             return t.ReplaceAllPatterns(pattern, replacements.ToArray(), preserveInstructionCount: true);
+        }
+
+
+
+        /// <summary>
+        /// Safely replaces 'this.m_field = value' with a call to a static replacement method.
+        /// The replacement method must have signature: void Replacement(InstanceType instance, FieldType value).
+        /// </summary>
+        public static FluentTranspiler ReplaceFieldAssignment(this FluentTranspiler t, 
+            Type instanceType, 
+            string fieldName, 
+            Type replacementType,
+            string replacementMethodName)
+        {
+            // Pattern:
+            // ldarg.0
+            // ... load value ...
+            // stfld field
+            
+            // We want to match the stfld and capture the preceding load if possible, 
+            // OR just replace `stfld field` with `call Replacement`.
+            // Since `stfld` takes (instance, value) on stack, and `Replacement` takes (instance, value),
+            // we can just replace the opcode!
+            
+            // BUT: stfld pops 2. Call pops 2.
+            // So yes, we can just replace stfld with call.
+            
+            return t
+                .MatchFieldStore(instanceType, fieldName)
+                .ReplaceWithCall(replacementType, replacementMethodName);
         }
     }
 }

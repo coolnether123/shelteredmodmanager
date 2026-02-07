@@ -22,12 +22,14 @@ namespace ModAPI.Harmony
         /// <param name="after">Modified instructions.</param>
         /// <param name="modId">Optional mod ID override (defaults to calling assembly name).</param>
         /// <param name="force">Force dump even if DebugTranspilers is disabled.</param>
+        /// <param name="originalMethod">Optional method being patched (enables stack analysis).</param>
         public static IEnumerable<CodeInstruction> DumpWithDiff(
             string label, 
             IEnumerable<CodeInstruction> before, 
             IEnumerable<CodeInstruction> after,
             string modId = null,
-            bool force = false)
+            bool force = false,
+            MethodBase originalMethod = null)
         {
             if (!ModPrefs.DebugTranspilers && !force) return after;
 
@@ -77,12 +79,31 @@ namespace ModAPI.Harmony
             // requested within the same millisecond.
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
             string uniqueId = $"{timestamp}_{System.Threading.Interlocked.Increment(ref _dumpCounter):D3}";
+
             // Perform dump synchronously for .NET 3.5 compatibility.
             try
             {
                 if (!Directory.Exists(dumpDir)) Directory.CreateDirectory(dumpDir);
-                WriteToFile(Path.Combine(dumpDir, uniqueId + "_Before.txt"), listBefore);
-                WriteToFile(Path.Combine(dumpDir, uniqueId + "_After.txt"), listAfter);
+                
+                // Attempt stack analysis (best effort)
+                Dictionary<int, List<Type>> stacksBefore = null;
+                Dictionary<int, List<Type>> stacksAfter = null;
+                HashSet<int> targetsBefore = null;
+                HashSet<int> targetsAfter = null;
+                
+                try
+                {
+                    string err;
+                    stacksBefore = StackSentinel.Analyze(listBefore, originalMethod, out err);
+                    stacksAfter = StackSentinel.Analyze(listAfter, originalMethod, out err);
+                    // Simple heuristic for branch targets: Any instruction with labels
+                    targetsBefore = new HashSet<int>(listBefore.Select((instr, i) => instr.labels.Count > 0 ? i : -1).Where(i => i >= 0));
+                    targetsAfter = new HashSet<int>(listAfter.Select((instr, i) => instr.labels.Count > 0 ? i : -1).Where(i => i >= 0));
+                }
+                catch { /* Ignore analysis errors during dump */ }
+
+                WriteToFile(Path.Combine(dumpDir, uniqueId + "_Before.txt"), listBefore, stacksBefore, targetsBefore);
+                WriteToFile(Path.Combine(dumpDir, uniqueId + "_After.txt"), listAfter, stacksAfter, targetsAfter);
                 WriteDiff(Path.Combine(dumpDir, uniqueId + "_Diff.txt"), listBefore, listAfter);
                 
                 MMLog.WriteInfo("[TranspilerDebugger] Dumped " + label + " to " + dumpDir);
@@ -95,7 +116,36 @@ namespace ModAPI.Harmony
             return listAfter;
         }
 
-        /// <summary>Get the name of the mod that called this debugger.</summary>
+
+
+        private static void WriteToFile(string path, List<CodeInstruction> instructions, 
+            Dictionary<int, List<Type>> stacks = null, HashSet<int> branchTargets = null)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"// Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            sb.AppendLine($"// Total Instructions: {instructions.Count}");
+            sb.AppendLine();
+            
+            for (int i = 0; i < instructions.Count; i++)
+            {
+                var instr = instructions[i];
+                // Include labels for branch target debugging
+                string labels = instr.labels.Count > 0 
+                    ? $"[{string.Join(",", instr.labels.Select(l => $"L_{l.GetHashCode():X4}").ToArray())}] " 
+                    : "";
+                
+                string branchMarker = (branchTargets != null && branchTargets.Contains(i)) ? "[TARGET] " : "";
+                string stackMarker = "";
+                if (stacks != null && stacks.TryGetValue(i, out var stack))
+                {
+                    string stackTypes = string.Join(", ", stack.Select(t => t.Name).ToArray());
+                    stackMarker = $"[Stack:{stack.Count} ({stackTypes})] ";
+                }
+                
+                sb.AppendLine($"{i:D4}: {branchMarker}{stackMarker}{labels}{instr}");
+            }
+            File.WriteAllText(path, sb.ToString());
+        }
         private static string GetCallingModName()
         {
             // Walk up the stack to find the actual mod assembly (Robust walking).
@@ -205,24 +255,7 @@ namespace ModAPI.Harmony
             return sb.ToString();
         }
 
-        private static void WriteToFile(string path, List<CodeInstruction> instructions)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine($"// Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-            sb.AppendLine($"// Total Instructions: {instructions.Count}");
-            sb.AppendLine();
-            
-            for (int i = 0; i < instructions.Count; i++)
-            {
-                var instr = instructions[i];
-                // Include labels for branch target debugging
-                string labels = instr.labels.Count > 0 
-                    ? $"[{string.Join(",", instr.labels.Select(l => $"L_{l.GetHashCode():X4}").ToArray())}] " 
-                    : "";
-                sb.AppendLine($"{i:D4}: {labels}{instr}");
-            }
-            File.WriteAllText(path, sb.ToString());
-        }
+
 
         private static void WriteDiff(string path, List<CodeInstruction> before, List<CodeInstruction> after)
         {
@@ -249,16 +282,28 @@ namespace ModAPI.Harmony
                 string a = instrAfter?.ToString() ?? "";
                 
                 string marker;
-                if (instrBefore == null)
-                    marker = "[+] ";
-                else if (instrAfter == null)
-                    marker = "[-] ";
-                else if (!InstructionEqual(instrBefore, instrAfter))
-                    marker = ">>> ";
+                if (instrBefore == null) marker = "[+] ";
+                else if (instrAfter == null) marker = "[-] ";
+                else if (!InstructionEqual(instrBefore, instrAfter)) marker = ">>> ";
+                else marker = "    ";
+
+                if (marker == ">>> ")
+                {
+                    sb.AppendLine($"{i:D3} - {b}");
+                    sb.AppendLine($"{i:D3} + {a}");
+                }
+                else if (marker == "[+] ")
+                {
+                    sb.AppendLine($"{i:D3} + {a}");
+                }
+                else if (marker == "[-] ")
+                {
+                    sb.AppendLine($"{i:D3} - {b}");
+                }
                 else
-                    marker = "    ";
-                
-                sb.AppendLine($"{i:D3} {marker} {b,-50} │ {a}");
+                {
+                    sb.AppendLine($"{i:D3}   {b}"); 
+                }
             }
             
             File.WriteAllText(path, sb.ToString());

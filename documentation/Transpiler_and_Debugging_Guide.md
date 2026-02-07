@@ -1,212 +1,274 @@
-# ModAPI V1.2: Transpiler & Debugging Guide
+# ModAPI Transpilation System (V1.2) - Complete Guide
 
-The **FluentTranspiler** and **TranspilerDebugger** systems are designed to make IL manipulation safer, more readable, and significantly easier to troubleshoot in the Unity 5.x environment used by Sheltered.
+The ModAPI Transpilation System (located in `ModAPI.Harmony.Transpilers` namespace) provides a comprehensive suite of tools for safe, effective, and maintainable IL manipulation in Sheltered.
 
-## 1. FluentTranspiler Engine
+This system replaces raw Harmony `CodeInstruction` manipulation with a fluent, type-safe, and self-validating pipeline.
 
-The `FluentTranspiler` class has been significantly enhanced in V1.2 ModAPI to support complex pattern matching and "safe" modifications that don't corrupt the underlying Harmony `CodeMatcher` state.
+---
 
-### Getting Started
+## 📚 Core Components Overview
 
+| Component | Responsibility | Usage Pattern |
+|---|---|---|
+| **FluentTranspiler** | The primary engine. Wraps `CodeMatcher` with safe navigation, specific matching, and bulk operations. | `FluentTranspiler.For(instructions).Find...().Build()` |
+| **IntentAPI** | **High-Level Operations**. Express intent (Redirect, Change Constant, Inject) without touching IL opcodes directly. | `t.RedirectCall(...)`, `t.ChangeConstant(...)` |
+| **StackSentinel** | **Safety Monitor**. Tracks stack depth across branches (Control Flow Graph analysis) to prevent invalid programs. | Automatically run by `FluentTranspiler.Build()`. |
+| **CooperativePatcher** | **Conflict Resolution**. Allows multiple mods to patch the same method safely by sequencing them in a pipeline. | `CooperativePatcher.RegisterTranspiler(...)` |
+| **Cartographer** | **Pattern Discovery**. Analyzes methods to find "safe anchors" (unique instruction patterns). | `FluentTranspiler.For(...).MapAnchors()` |
+| **ShelteredPatterns** | **Game-Specific Helpers**. Shortcuts for common Sheltered tasks (fixing `Vector2(0,0)`, manager usage). | Extension methods for `FluentTranspiler`. |
+| **TranspilerDebugger** | **Diagnostics**. Dumps IL before/after patching and generates diff reports. | `t.DumpWithDiff("MyPatchLabel", ...)` |
+| **TestHarness** | **Unit Testing**. Allows testing transpiler logic in isolation without a running game instance. | `TranspilerTestHarness.FromInstructions(...)` |
+| **RuntimeILInspector** | **Live Inspection**. In-game tool (F10) to view current method IL and active patches. | Automatic (Press F10 in-game). |
+
+---
+
+## 1. FluentTranspiler: The Engine
+
+This is your primary tool. It wrappers standard Harmony operations with safety checks and fluent syntax.
+
+### Key Features
+*   **Intelligent Matching**: Supports type-safe matching of method calls, field access, and properties.
+*   **Branch-Safe Insertions**: Automatically handles label transfers when inserting/replacing (mostly).
+*   **Stack Validation**: Integrated `StackSentinel` checks every build.
+
+### Basic Usage
 ```csharp
-using ModAPI.Harmony;
-
-// Standard boilerplate - passing 'original' enables context-aware stack validation
-return FluentTranspiler.For(instructions, original)
-    .MatchCall(typeof(SomeClass), "SomeMethod")
-    .ReplaceWithCall(typeof(MyPatch), "MyReplacement")
-    .Build();
+[HarmonyPatch(typeof(SomeClass), "SomeMethod")]
+[HarmonyTranspiler]
+public static IEnumerable<CodeInstruction> MyTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
+{
+    return FluentTranspiler.For(instructions, original)
+        .FindCall(typeof(SomeClass), "OldMethod", SearchMode.Start)
+        .ReplaceWithCall(typeof(MyMod), "NewMethod")
+        .Build();
+}
 ```
 
-### New Inspection Predicates
+### Search Modes
+The Find* methods (FindCall, FindOpCode, FindString, etc.) use a `SearchMode` to control where the search begins:
 
-Instead of raw access to `opcode` and `operand`, use these safe helper methods:
+| Mode | Behavior | Use Case |
+|---|---|---|
+| **`SearchMode.Start`** | Resets the matcher to instruction 0 before searching. | Finding the first occurrence or resetting context. |
+| **`SearchMode.Current`** | Searches forward from the current position (inclusive). | Looking for a pattern that follows a previous match. |
+| **`SearchMode.Next`** | Advances 1 instruction then searches forward. | Sequential matching (e.g., matching the next call after this one). |
 
-- `IsLdcR4(float val)`: Checks for float constants.
-- `IsLdcI4(int val)`: Checks for int constants (handles all short forms like `ldc.i4.0`).
-- `IsCall(Type, Method)`: Checks for method calls (handles both `Call` and `Callvirt`).
-- `IsNewobj(Type)`: Checks for object creation.
-- `IsNewobjVector2()` / `IsNewobjVector3()`: Specialized Unity helpers.
-
-### Context Inspection (Safe Backtracking)
-
-V1.2 ModAPI introduces safe backtracking. You can look behind the current code position **without moving the cursor** or risking state corruption.
-
-```csharp
-// Example: Check if the previous 3 instructions form a Vector3(0,0,0) pattern
-.MatchCall(typeof(ExpeditionMap), "WorldPosToGridRef")
-.If(() => t.CheckBackward(3, 
-    i => i.opcode == OpCodes.Ldc_R4 && (float)i.operand == 0f,
-    i => i.opcode == OpCodes.Ldc_R4 && (float)i.operand == 0f,
-    i => i.IsNewobjVector2()), 
-    t => {
-       // Only runs if the condition is met
-       t.ReplaceWithCall(typeof(MyHelper), "GetShelterPos");
-    })
-```
+> **Note**: Legacy `MatchCall(...)` and `MatchCallNext(...)` methods are still supported as aliases for `FindCall` with `Start` and `Next` modes respectively.
 
 ### Safe Modification Methods
+These methods are designed to be "label-safe," meaning they preserve jump targets (labels) from original code.
 
-Traditional `Remove()` calls shift array indices and can break subsequent matches. FluentTranspiler in V1.2 ModAPI provides safe alternatives:
+| Method | Purpose | Label Strategy |
+|---|---|---|
+| **`ReplaceWith(OpCode, operand)`** | Replaces a single instruction. | Transfers labels from the old instruction to the new one. |
+| **`ReplaceWithCall(Type, name)`** | Replaces a call (or any instruction) with a static call. | Transfers labels from the old instruction to the new one. |
+| **`ReplaceSequence(count, code)`** | Replaces a block of N instructions with new code. | Captures labels from the **first** removed instruction and anchors them to the **first** replacement instruction. |
+| **`ReplaceAll(code)`** | Completely overwrites the method body. | Preserves labels on the method entry point (index 0). |
+| **`ReplaceAllCalls(...)`** | Finds every instance of a call and replaces it. | Uses resilient type matching (by Name/FullName) and preserves labels on every replacement. |
 
-*   **`RemoveWithPrevious(n)`**: Removes the current instruction and `n` previous ones in a single atomic operation.
-*   **`ReplaceSequence(removeCount, newInstructions)`**: Replaces a block of code with a new sequence without invalidating the matcher.
-*   **`ReplaceAllPatterns(...)`**: Finds **ALL** occurrences of a pattern and replaces them, handling index shifts automatically.
-
----
-
-## 2. The "Sheltered Patterns" Encyclopedia
-
-V1.2 ModAPI includes specialized logic for common game-specific IL patterns found in `Assembly-CSharp.dll`.
-
-### Pattern: Singleton Managers
-Sheltered relies on the `instance` property for almost all systems.
-*   **IL**: `call static T T::get_instance()`
-*   **Match**: `.MatchManager(typeof(GameModeManager))`
-
-### Pattern: Vector Fallbacks (World to Grid)
-The game often creates a `new Vector2(0,0)` only to immediately pass it to a coordinate conversion method.
-*   **IL**: `ldc.r4 0, ldc.r4 0, newobj Vector2, call WorldPosToGridRef`
-*   **Match**: `.ReplaceVectorZeroThenMethodCall(...)`
-
-### Pattern: DontDestroyOnLoad
-Game managers are often protected from scene unloads. ModAPI provides helpers to correctly target these.
-*   **Helper**: `.NukeDontDestroyOnLoad()`
-
----
-
-## 3. High-Level Instruction Patterns
-
-The `UnityPatterns` and `ShelteredPatterns` classes provide high-level helpers for common tasks.
-
-### Replacing Complex Property Access
-Property access like `Vector2.zero` can be a property call or a field access depending on the Unity version. V1.2 ModAPI handles this automatically.
+### Advanced Usage: Bulk Replacement
+Replace **ALL** occurrences of a pattern safely.
 
 ```csharp
-// Replaces ANY version of Vector2.zero access with an optimized static call
-t.ReplaceVectorZeroWithCall(typeof(BunkerHelper), "GetStartPos");
+// Scenario: Replace all "x = new Vector2(0,0)" with "x = MyHelper.GetPos()"
+t.ReplaceAllPatterns(
+    patternPredicates: new Func<CodeInstruction, bool>[] {
+        i => i.opcode == OpCodes.Ldc_R4 && (float)i.operand == 0f,
+        i => i.opcode == OpCodes.Ldc_R4 && (float)i.operand == 0f,
+        i => i.IsNewobjVector2()
+    },
+    replaceWith: new[] {
+        new CodeInstruction(OpCodes.Call, myHelperMethod)
+    },
+    preserveInstructionCount: true // Use NOPs to keep labels intact
+);
 ```
 
-**Important: `preserveInstructionCount` Parameter**
+> **💡 Pro Tip**: Always prefer `preserveInstructionCount: true` for `ReplaceAllPatterns`. This fills deleted slots with `Nop` instructions, ensuring that any branch jumping into the middle of your pattern still has a "safe" (landing spot. The system automatically transfers labels to these NOPs to maintain control flow integrity.
 
-When replacing patterns, you have two modes:
-
-1.  **`preserveInstructionCount: true` (Production Default)**:
-    *   Replaces the first N-1 instructions with `Nop`.
-    *   Replaces the last instruction with your new code.
-    *   **Use when**: The code might have labels pointing to it. This keeps the Harmony validator happy and prevents branch target corruption.
-
-2.  **`preserveInstructionCount: false` (Compact Mode)**:
-    *   Removes all pattern instructions and inserts the new code.
-    *   **Use when**: You are sure the code is standalone and no other logic jumps into the middle of it.
 
 ---
 
-## 4. Debugging & Inspection Tools
+## 2. IntentAPI: High-Level Logic
 
-### Automatic IL Dumping
-If a transpiler fails or produces invalid code, V1.2 ModAPI allows you to dump the state to the logs.
+For many patches, you don't need to reason about IL opcodes. The `IntentAPI` provides methods that express "what" you want to do.
 
-1.  **Enable Debugging**: Set `debugTranspilers: true` in your mod settings.
-2.  **Explicit Dumps**: Use these commands inside your transpiler:
+### RedirectCall
+Redirects a call from an original method to your hook. It automatically validates parameter types and return types, and handles instance-to-static conversion (passing `this` as the first argument).
 
 ```csharp
-t.Log("Applying patch...");
-t.DumpAll("Before Modification"); // Dumps full IL to log
-// ... apply logic ...
-t.DumpAll("After Modification");
+t.RedirectCall(
+    typeof(GameModeManager), "OnDayPassed",
+    typeof(MyHooks), "MyOnDayPassed",
+    allOccurrences: true
+);
 ```
 
-### SmartWatcher (State Monitoring)
-Reverse engineer game logic by monitoring fields or properties for changes at runtime.
+### ChangeConstant
+Updates a constant value (e.g., a magic number used for speed, fuel, or timers).
 
 ```csharp
-// Monitor the 'currentState' field on the GameManager
-SmartWatcher.Watch<GameManager, State>("GameState", 
-    instance => instance.currentState, 
-    (oldVal, newVal) => MMLog.WriteInfo($"State changed: {oldVal} -> {newVal}"));
+t.ChangeConstant(oldValue: 1.0f, newValue: 1.5f, allOccurrences: true);
+```
+
+### RemoveCall
+Removes a call and its arguments from the stack. If the method returns a value, it pushes a `default` value (like `0` or `null`) to keep the stack balanced.
+
+```csharp
+t.RemoveCall(typeof(Analytics), "TrackEvent");
+```
+
+### InjectBeforeCall
+Calls your hook immediately before a target method is called. The hook receives the arguments of the **enclosing** method.
+
+```csharp
+t.InjectBeforeCall(typeof(Bunker), "Open", typeof(MyLogging), "LogBunkerOpening");
+```
+
+## 2. StackSentinel: The Safety Net
+
+A graph-based (CFG) analyzer that validates stack height at every instruction, following branches and loops.
+
+### Capabilities
+*   **Branch Awareness**: Tracks stack height across `br`, `beq`, `bne`, etc.
+*   **Error Reporting**: "Stack height mismatch at branch target Block_12: expected 2, got 1".
+*   **Integration**: Runs automatically in `FluentTranspiler.Build()`.
+
+### When to use directly
+You generally don't call this directly unless writing a custom debugger or tool.
+```csharp
+// Manual check
+if (!StackSentinel.Validate(myInstructions, myMethod, out string error))
+{
+    MMLog.WriteError("FATAL: " + error);
+}
 ```
 
 ---
- 
- ## 5. Advanced V1.2 Features
- 
- V1.2 includes powerful tools for managing local variables and patching overloads.
- 
- ### Local Variables & Labels
- You can now define method-local variables and labels directly within the transpiler chain (requires passing `ILGenerator`).
- 
- ### Example: Loop Counter with Local Variables
- 
- ```csharp
- [HarmonyTranspiler]
- public static IEnumerable<CodeInstruction> MyTranspiler(
-     IEnumerable<CodeInstruction> instructions,
-     ILGenerator il) // <--- REQUIRED: Add this argument!
- {
-     LocalBuilder counter;
-     return FluentTranspiler.For(instructions, generator: il)
-         .DeclareLocal<int>(out counter)
-         .MatchCall(typeof(UnityEngine.Random), "Range")
-         .InsertBefore(OpCodes.Ldc_I4_0)
-         .InsertBefore(OpCodes.Stloc, counter)    // Store 0 in counter
-         .InsertAfter(OpCodes.Ldloc, counter)     // Load counter
-         .InsertAfter(OpCodes.Ldc_I4_1)
-         .InsertAfter(OpCodes.Add)                // Add 1
-         .Build();
- }
- ```
- 
- > **CRITICAL**: Requires `ILGenerator`!
- > If you forget to pass the generator, you will get an `InvalidOperationException`:
- > *"ILGenerator was not provided. Pass it to For(instructions, originalMethod, generator)."*
- 
- ### Multi-Overload Patching
- Easily patch all overloads of a method (e.g., `Foo()`, `Foo(int)`) in one go.
- 
- ```csharp
- // Scenario: Manager.SetState() has 3 overloads
- // public void SetState(int newState) { }
- // public void SetState(State state) { }
- // public void SetState(string stateName) { }
- 
- // Patch ALL overloads
- HarmonyHelper.PatchAllOverloads(
-     harmony, 
-     typeof(Manager), 
-     "SetState", 
-     prefix: new HarmonyMethod(typeof(MyPatches), "SetStatePrefix"));
- 
- // Patch ONLY the int overload
- HarmonyHelper.PatchAllOverloads(
-     harmony, 
-     typeof(Manager), 
-     "SetState", 
-     parameterTypes: new[] { typeof(int) },
-     prefix: new HarmonyMethod(typeof(MyPatches), "SetStatePrefix"));
- 
- // Patch ONLY non-generic overloads
- HarmonyHelper.PatchAllOverloads(
-     harmony,
-     typeof(Manager),
-     "SetState",
-     ignoreGenerics: true,
-     prefix: new HarmonyMethod(...)
- );
- ```
- 
- ---
- 
- ## 6. Transpiler "Troubleshooting Matrix"
- 
- | Symptom | Likely Cause | V1.2 ModAPI Solution |
- |---|---|---|
- | **`InvalidProgramException`** | Unbalanced stack (Push vs Pop mismatch). | Check your logic or use `Build(validateStack: true)` for details. |
- | **"Underflow at index X"** | False positive in instance methods. | Pass the `original` method to `For(codes, original)`. |
- | **Crash on Scene Load** | Nuked a critical `DontDestroyOnLoad` manager. | Use `.NukeDontDestroyOnLoad()` only on targeted objects. |
- | **Patch "Doesn't Apply"** | Game version used `callvirt` instead of `call`. | Use `MatchCall()` which matches both automatically. |
- | **Broken Branch Targets** | Instruction removal changed indices. | Use `preserveInstructionCount: true` to use `Nops`. |
- | **"ILGenerator was not provided"** | Used `DeclareLocal` without passing generator. | Update your patch to accept `ILGenerator` and pass it to `.For()`. |
- 
- ---
- **Released with ModAPI V1.2.0**
+
+## 3. CooperativePatcher: Multi-Mod Harmony
+
+Solves the "incompatible usage" problem where two mods try to transpile the same method and break each other's assumptions.
+
+### Concept
+Instead of applying a Harmony patch directly, you **register** a patch. The `CooperativePatcher` applies them in order of priority, validating the stack state between each one.
+
+### Usage
+```csharp
+public class MyMod : IModPlugin
+{
+    public void Initialize(IPluginContext context)
+    {
+        CooperativePatcher.RegisterTranspiler(
+            target: typeof(GameManager).GetMethod("Update"),
+            anchorId: "MyMod_FixUpdateLogic",
+            priority: PatchPriority.High,
+            patchLogic: (t) => t
+                .FindCall(typeof(GameManager), "OldLogic")
+                .ReplaceWithCall(typeof(MyHooks), "NewLogic"),
+            dependsOn: new[] { "OtherMod_PreFix" }, // Optional
+            conflictsWith: new[] { "IncompatibleMod_Hack" } // Optional
+        );
+    }
+}
+```
+
+### Dependency Management
+*   **DependsOn**: The patch will only apply if the listed `anchorId` patches have already been applied successfully.
+*   **ConflictsWith**: The patch will skip applying if any of the listed `anchorIds` are already in the pipeline.
+*   **Dynamic Removal**: You can use `CooperativePatcher.UnregisterTranspiler("MyAnchorId")` to remove a patch at runtime.
+
+---
+
+## 4. StackSentinel: The Safety Net
+
+A graph-based (CFG) analyzer that validates stack height at every instruction.
+
+### Enhancements in V1.2
+*   **Exception Safety**: Automatically skips validation for methods with `try/catch/finally` blocks (which current basic block analysis doesn't fully support) to avoid false positives.
+*   **Instance Support**: Improved tracking for `this` parameter pops in instance calls.
+*   **OpCode Coverage**: Added missing push/pop counts for `Newobj`, `Dup`, and various 3-pop opcodes.
+
+---
+
+## 5. IL Cartographer: The Map Maker
+
+Analyzes methods to find "safe anchors" (unique instruction patterns).
+
+### Usage
+```csharp
+// Quick log of all safe anchors during development:
+FluentTranspiler.For(instructions).ExportAnchors();
+
+// Or manual analysis:
+var analysis = FluentTranspiler.For(instructions).MapAnchors(threshold: 1.2f);
+MMLog.WriteInfo(analysis.ToSummary());
+```
+*   **Frequency Analysis**: Unique strings and method calls are scored higher than repeated ones.
+*   **Context Scoring**: Sequences of unique instructions receive a bonus.
+
+---
+
+## 6. ShelteredPatterns: Game-Specific Logic
+
+Specialized helpers for Sheltered's common patterns.
+
+| Helper | Purpose |
+|---|---|
+| `MatchManager(Type)` | Matches the `Manager.instance` singleton pattern. |
+| `ReplaceVectorZeroThenMethodCall` | Replaces `new Vector2(0,0)` + `Method(vec)` with a custom getter. |
+| `ReplaceFieldAssignment` | Replaces `this.field = val` with `MyMethod(instance, val)`. |
+
+> **Note**: Dead API surface (`ReplaceFieldAssignment<T>`) has been removed in V1.2 to reduce confusion.
+
+---
+
+## 7. TranspilerDebugger: The Diff Tool
+
+### New Output Format
+The `_Diff.txt` file now uses a line-based format which is much easier to read for long IL instructions:
+
+```text
+003 - callvirt System.String System.Object::ToString()
+003 + call static System.String MyMod.Hooks::CustomToString(object)
+```
+
+---
+
+## 8. Unit Testing: TranspilerTestHarness
+
+You can now test your transpiler logic in isolation without running the game or setting up a full Harmony patch.
+
+```csharp
+[Test]
+public void TestMyLogic()
+{
+    var original = new[] {
+        new CodeInstruction(OpCodes.Ldstr, "hello"),
+        new CodeInstruction(OpCodes.Call, m_Print)
+    };
+
+    var result = TranspilerTestHarness.FromInstructions(original)
+        .FindCall(typeof(Console), "Print")
+        .ReplaceWith(OpCodes.Pop)
+        .Build();
+
+    TranspilerTestHarness.AssertInstruction(result, 1, OpCodes.Pop);
+}
+```
+
+---
+
+## 9. RuntimeILInspector: The Live View
+(F10 in-game)
+- See live IL, owners of patches, and instruction counts.
+
+---
+
+## Best Practices Checklist
+
+1.  **Use SearchMode**: Be explicit about whether you are starting from the beginning (`Start`) or continuing (`Next`).
+2.  **Use IntentAPI**: Favor `RedirectCall` and `ChangeConstant` over manual opcode manipulation for better readability.
+3.  **Validate with TestHarness**: Write unit tests for complex transpiler logic.
+4.  **Check Diff Reports**: Review the dumped diff files to verify your patch applied as expected.
+5.  **Use Dependencies**: Declare `DependsOn` if your patch relies on another mod's changes.

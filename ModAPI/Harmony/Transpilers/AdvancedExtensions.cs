@@ -19,19 +19,14 @@ namespace ModAPI.Harmony
         /// Match a forward branch instruction (br, brtrue, brfalse, etc.).
         /// Useful for finding loop boundaries and conditional jumps.
         /// </summary>
-        public FluentTranspiler MatchNextBranch()
+        public FluentTranspiler FindNextBranch(SearchMode mode = SearchMode.Next)
         {
+            if (mode == SearchMode.Start) _matcher.Start();
+            else if (mode == SearchMode.Next) _matcher.Advance(1);
+
             _matcher.MatchStartForward(new CodeMatch(instr => 
-                instr.opcode == OpCodes.Br || 
-                instr.opcode == OpCodes.Br_S ||
-                instr.opcode == OpCodes.Brtrue ||
-                instr.opcode == OpCodes.Brtrue_S ||
-                instr.opcode == OpCodes.Brfalse ||
-                instr.opcode == OpCodes.Brfalse_S ||
-                instr.opcode == OpCodes.Beq ||
-                instr.opcode == OpCodes.Beq_S ||
-                instr.opcode == OpCodes.Bne_Un ||
-                instr.opcode == OpCodes.Bne_Un_S));
+                instr.opcode.FlowControl == FlowControl.Branch || 
+                instr.opcode.FlowControl == FlowControl.Cond_Branch));
             
             if (!_matcher.IsValid)
                 _warnings.Add("No branch instruction found");
@@ -39,13 +34,21 @@ namespace ModAPI.Harmony
             return this;
         }
 
+        /// <summary>Match a forward branch instruction (alias for FindNextBranch).</summary>
+        public FluentTranspiler MatchNextBranch()
+        {
+            return FindNextBranch(SearchMode.Next);
+        }
+
         /// <summary>
         /// Match the instruction with a specific label (branch target).
         /// Advances to the target label of a branch instruction.
         /// </summary>
-        public FluentTranspiler MatchBranchTarget(Label targetLabel)
+        public FluentTranspiler FindBranchTarget(Label targetLabel, SearchMode mode = SearchMode.Start)
         {
-            _matcher.Start();
+            if (mode == SearchMode.Start) _matcher.Start();
+            else if (mode == SearchMode.Next) _matcher.Advance(1);
+
             _matcher.MatchStartForward(new CodeMatch(instr => instr.labels.Contains(targetLabel)));
             
             if (!_matcher.IsValid)
@@ -54,6 +57,12 @@ namespace ModAPI.Harmony
             }
             
             return this;
+        }
+
+        /// <summary>Match the instruction with a specific label (branch target).</summary>
+        public FluentTranspiler MatchBranchTarget(Label targetLabel)
+        {
+            return FindBranchTarget(targetLabel, SearchMode.Start);
         }
 
         #endregion
@@ -70,10 +79,10 @@ namespace ModAPI.Harmony
         /// Remove a call to DontDestroyOnLoad.
         /// Includes matching - do NOT pre-match.
         /// </summary>
-        public static FluentTranspiler NukeDontDestroyOnLoad(this FluentTranspiler t)
+        public static FluentTranspiler NukeDontDestroyOnLoad(this FluentTranspiler t, SearchMode mode = SearchMode.Start)
         {
             return t
-                .MatchCall(typeof(UnityEngine.Object), "DontDestroyOnLoad")
+                .FindCall(typeof(UnityEngine.Object), "DontDestroyOnLoad", mode)
                 .ReplaceWith(OpCodes.Pop);
         }
 
@@ -82,14 +91,12 @@ namespace ModAPI.Harmony
         /// </summary>
         public static FluentTranspiler NukeAllDontDestroyOnLoad(this FluentTranspiler t)
         {
-            t.Reset();
-            while (true)
-            {
-                t.MatchCallNext(typeof(UnityEngine.Object), "DontDestroyOnLoad");
-                if (!t.HasMatch) break;
-                t.ReplaceWith(OpCodes.Pop);
-            }
-            return t;
+            return t.ReplaceAllPatterns(
+                new Func<CodeInstruction, bool>[] { instr => 
+                    (instr.opcode == OpCodes.Call || instr.opcode == OpCodes.Callvirt) &&
+                    instr.operand is MethodBase mb && mb.DeclaringType == typeof(UnityEngine.Object) && mb.Name == "DontDestroyOnLoad" },
+                new[] { new CodeInstruction(OpCodes.Pop) },
+                preserveInstructionCount: true);
         }
         
         #endregion

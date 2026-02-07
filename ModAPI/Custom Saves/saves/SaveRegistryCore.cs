@@ -70,7 +70,6 @@ namespace ModAPI.Saves
             int count = Math.Min(pageSize, all.Length - start);
             var result = new SaveEntry[count];
             Array.Copy(all, start, result, 0, count);
-            MMLog.WriteDebug($"ListSaves scenario={_scenarioId} page={page} size={pageSize} returned={result.Length}");
             return result;
         }
 
@@ -136,6 +135,12 @@ namespace ModAPI.Saves
             return valid[valid.Count - 1].absoluteSlot;
         }
 
+        // NEW: Shutdown Coordination Flag
+        public static bool DiscoveryPaused = false;
+
+        public static void PauseDiscovery() => DiscoveryPaused = true;
+        public static void ResumeDiscovery() => DiscoveryPaused = false;
+
         /// <summary>
         /// Discovers all save slots by scanning directories.
         /// Reads metadata from XML files on demand.
@@ -144,6 +149,13 @@ namespace ModAPI.Saves
         {
             lock (_lock)
             {
+                // CRITICAL FIX: If discovery is paused (during shutdown), do NOT touch the disk.
+                // Return whatever we have in cache, or an empty list if nothing.
+                if (DiscoveryPaused)
+                {
+                    return _entryCache ?? new Dictionary<int, SaveEntry>();
+                }
+
                 if (_cacheValid && _entryCache != null)
                     return _entryCache;
 
@@ -177,8 +189,7 @@ namespace ModAPI.Saves
                         }
                     }
                 }
-
-                MMLog.WriteDebug($"Discovered {_entryCache.Count} saves for scenario '{_scenarioId}'");
+                
                 _cacheValid = true;
                 return _entryCache;
             }
@@ -268,7 +279,6 @@ namespace ModAPI.Saves
             DirectoryProvider.SlotRoot(_scenarioId, opts.absoluteSlot, true);
             
             InvalidateCache();
-            MMLog.WriteDebug($"CreateSave scenario={_scenarioId} name='{entry.name}' slot={entry.absoluteSlot}");
             return entry;
         }
 
@@ -297,7 +307,6 @@ namespace ModAPI.Saves
             }
             
             InvalidateCache();
-            MMLog.WriteDebug($"OverwriteSave scenario={_scenarioId} id={saveId} slot={entry.absoluteSlot} size={entry.fileSize}");
             return entry;
         }
 
@@ -564,7 +573,6 @@ namespace ModAPI.Saves
             var path = DirectoryProvider.EntryPath(_scenarioId, absoluteSlot);
             var tmp = path + ".tmp";
             fileSize = 0; crc = 0;
-            MMLog.WriteDebug($"Target file path: {path}");
             try
             {
                 File.WriteAllBytes(tmp, xmlBytes);
@@ -572,7 +580,6 @@ namespace ModAPI.Saves
                 crc = CRC32.Compute(xmlBytes);
                 try { File.Replace(tmp, path, null); }
                 catch { File.Copy(tmp, path, true); File.Delete(tmp); }
-                MMLog.WriteDebug($"Done writing entry file. Size: {fileSize}, CRC: {crc:X}");
             }
             catch (Exception ex)
             {
@@ -596,18 +603,8 @@ namespace ModAPI.Saves
                 entry.saveInfo.difficulty = ExtractXmlInt(xml, "difficultySetting", 1);
                 entry.saveInfo.saveTime = ExtractXmlValue(xml, "timestamp", "");
 
-                MMLog.WriteDebug($"Extracted Info: Family='{entry.saveInfo.familyName}', Days={entry.saveInfo.daysSurvived}, Difficulty={entry.saveInfo.difficulty}, Time='{entry.saveInfo.saveTime}'");
-
-                // Extract all difficulty settings for proper game loading
-                entry.saveInfo.rainDiff = ExtractXmlInt(xml, "rainDifficulty", 0);
-                entry.saveInfo.resourceDiff = ExtractXmlInt(xml, "resourcesDifficulty", 0);
-                entry.saveInfo.breachDiff = ExtractXmlInt(xml, "breachDifficulty", 0);
-                entry.saveInfo.factionDiff = ExtractXmlInt(xml, "factionDifficulty", 0);
-                entry.saveInfo.moodDiff = ExtractXmlInt(xml, "moodDifficulty", 0);
                 entry.saveInfo.mapSize = ExtractXmlInt(xml, "mapSize", 0);
                 entry.saveInfo.fog = ExtractXmlBool(xml, "fogSetting", true);
-                
-                MMLog.WriteDebug($"Successfully refreshed metadata for SaveEntry '{entry.id}'.");
             }
             catch (Exception ex)
             {

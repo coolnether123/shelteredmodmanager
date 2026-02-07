@@ -28,11 +28,14 @@ namespace ModAPI.Harmony
 
                 // If we returned to the Main Menu (e.g. from "Save & Exit" that didn't actually quit app),
                 // we must reset the quitting flag so that SaveRegistryCore can parse metadata again.
+                // USER DIRECTIVE: STOP OVER-ENGINEERING. DO NOT RESET IsQuitting.
+                /* 
                 if (PluginRunner.IsQuitting)
                 {
                     PluginRunner.IsQuitting = false;
                     MMLog.WriteDebug("[MainMenu_OnShow] Resetting IsQuitting flag to FALSE.");
                 }
+                */
 
                 MMLog.Write("Postfix triggered.");
                 // One-time startup check for save slot gaps
