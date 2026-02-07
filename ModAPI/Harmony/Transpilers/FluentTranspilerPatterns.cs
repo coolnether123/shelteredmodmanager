@@ -22,11 +22,20 @@ namespace ModAPI.Harmony
         /// <summary>Check if instruction loads a constant int (handles all short forms).</summary>
         public static bool IsLdcI4(this CodeInstruction instr, int value)
         {
-            if (instr.opcode == OpCodes.Ldc_I4) return (int)instr.operand == value;
+            if (instr.opcode == OpCodes.Ldc_I4) 
+                return (int)instr.operand == value;
+            if (instr.opcode == OpCodes.Ldc_I4_S) 
+                return (sbyte)instr.operand == value;
+            if (instr.opcode == OpCodes.Ldc_I4_M1) return value == -1;
             if (instr.opcode == OpCodes.Ldc_I4_0) return value == 0;
             if (instr.opcode == OpCodes.Ldc_I4_1) return value == 1;
-            if (instr.opcode == OpCodes.Ldc_I4_M1) return value == -1;
-            if (instr.opcode == OpCodes.Ldc_I4_S) return (sbyte)instr.operand == value;
+            if (instr.opcode == OpCodes.Ldc_I4_2) return value == 2;
+            if (instr.opcode == OpCodes.Ldc_I4_3) return value == 3;
+            if (instr.opcode == OpCodes.Ldc_I4_4) return value == 4;
+            if (instr.opcode == OpCodes.Ldc_I4_5) return value == 5;
+            if (instr.opcode == OpCodes.Ldc_I4_6) return value == 6;
+            if (instr.opcode == OpCodes.Ldc_I4_7) return value == 7;
+            if (instr.opcode == OpCodes.Ldc_I4_8) return value == 8;
             return false;
         }
 
@@ -89,11 +98,8 @@ namespace ModAPI.Harmony
             }
             finally
             {
-                // Restore position
-                while (t.CurrentIndex < originalPos && t.HasMatch)
-                {
-                    t.Next();
-                }
+                // Restore position reliable way
+                t.MoveTo(originalPos);
             }
         }
 
@@ -104,21 +110,42 @@ namespace ModAPI.Harmony
         /// <summary>
         /// Remove the current instruction plus N previous instructions.
         /// </summary>
+        /// <summary>
+        /// Remove the current instruction plus N previous instructions.
+        /// Preserves labels by moving them to the next instruction after the gap.
+        /// </summary>
         public static FluentTranspiler RemoveWithPrevious(this FluentTranspiler t, int previousCount)
         {
             if (!t.HasMatch) return t;
-            
-            for (int i = 0; i < previousCount; i++)
-            {
-                t.Previous();
-                if (!t.HasMatch) return t;
-            }
-            
+
+            int startIndex = t.CurrentIndex - previousCount;
+            if (startIndex < 0) return t;
+
+            t.MoveTo(startIndex);
+
+            // Collect all labels from instructions being removed
+            var preservedLabels = new List<Label>();
+            int savedPos = t.CurrentIndex;
             for (int i = 0; i <= previousCount; i++)
             {
-                if (t.HasMatch)
-                    t.Remove();
+                if (t.HasMatch && t.Current.labels.Count > 0)
+                    preservedLabels.AddRange(t.Current.labels);
+                if (i < previousCount) t.Next();
             }
+            t.MoveTo(savedPos);
+
+            // Remove instructions
+            for (int i = 0; i <= previousCount; i++)
+            {
+                if (t.HasMatch) t.Remove();
+            }
+
+            // Attach labels to the instruction that now occupies this position
+            if (preservedLabels.Count > 0 && t.HasMatch)
+            {
+                t.Current.labels.AddRange(preservedLabels);
+            }
+
             return t;
         }
 

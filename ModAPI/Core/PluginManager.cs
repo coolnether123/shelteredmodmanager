@@ -264,6 +264,8 @@ namespace ModAPI.Core
                     _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeInspector>();
                 if (_loaderRoot.GetComponent<ModAPI.Inspector.BoundsHighlighter>() == null)
                     _loaderRoot.AddComponent<ModAPI.Inspector.BoundsHighlighter>();
+                if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeILInspector>() == null)
+                    _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeILInspector>();
             }
             catch (Exception ex) { MMLog.WarnOnce("PluginManager.AttachInspectorTools", "Error attaching inspector: " + ex.Message); }
         }
@@ -539,6 +541,8 @@ namespace ModAPI.Core
     {
         public static bool IsModernUnity { get; private set; }
         public static bool IsQuitting { get; set; }
+        public static PluginRunner Instance { get; private set; }
+
         private readonly Queue<Action> _nextFrame = new Queue<Action>();
         public PluginManager Manager;
         private bool _useModernApi = false;
@@ -560,6 +564,9 @@ namespace ModAPI.Core
 
         private void Awake()
         {
+            if (Instance == null) Instance = this;
+            IsQuitting = false; 
+            ModAPI.Hooks.PlatformSaveProxy.ResetStatus();
             _useModernApi = TryHookModernSceneEvents();
             IsModernUnity = _useModernApi;
             if (!_useModernApi)
@@ -737,6 +744,8 @@ namespace ModAPI.Core
                 SceneLoaded?.Invoke(_currentSceneName);
             }
         }
+
+
     }
 
     internal class PrefixedLogger : IModLogger

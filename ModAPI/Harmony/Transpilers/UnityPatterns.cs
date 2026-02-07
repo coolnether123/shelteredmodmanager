@@ -13,30 +13,7 @@ namespace ModAPI.Harmony
     /// </summary>
     public static class UnityPatterns
     {
-        #region Unity Version Compatibility
-        
-        private static readonly bool _vector2ZeroIsField;
-        private static readonly bool _vector3ZeroIsField;
-        private static readonly FieldInfo _vector2ZeroField;
-        private static readonly FieldInfo _vector3ZeroField;
 
-        // Static constructor checks Unity version compatibility at startup
-        static UnityPatterns()
-        {
-            _vector2ZeroField = typeof(Vector2).GetField("zero", BindingFlags.Public | BindingFlags.Static);
-            _vector2ZeroIsField = _vector2ZeroField != null;
-            
-            _vector3ZeroField = typeof(Vector3).GetField("zero", BindingFlags.Public | BindingFlags.Static);
-            _vector3ZeroIsField = _vector3ZeroField != null;
-            
-            if (!_vector2ZeroIsField)
-                MMLog.WriteWarning($"[UnityPatterns] Vector2.zero is not a field in this Unity version. ReplaceVectorZero will skip.");
-            
-            if (!_vector3ZeroIsField)
-                MMLog.WriteWarning($"[UnityPatterns] Vector3.zero is not a field in this Unity version. ReplaceVectorZero will skip.");
-        }
-        
-        #endregion
         
         #region Vector Field/Property Replacements (Universal)
         
@@ -48,15 +25,14 @@ namespace ModAPI.Harmony
             if (vectorType != typeof(Vector2) && vectorType != typeof(Vector3))
                 throw new ArgumentException($"Expected Vector2 or Vector3, got {vectorType.Name}");
 
-            var prop = vectorType.GetProperty("zero", BindingFlags.Public | BindingFlags.Static);
-            if (prop != null)
+            // Note: In modern Unity, Vector2.zero is a property.
+            // This method attempts to replace the property getter call with a direct field access 
+            // IF a static field 'zero' exists (rare/specific builds).
+            // If the field doesn't exist, we do nothing to avoid breaking valid code.
+            
+            var field = vectorType.GetField("zero", BindingFlags.Public | BindingFlags.Static);
+            if (field != null)
             {
-                var field = vectorType.GetField("zero", BindingFlags.Public | BindingFlags.Static);
-                if (field == null)
-                {
-                    throw new InvalidOperationException($"{vectorType.Name}.zero is a property but no static 'zero' field found.");
-                }
-                
                 return t.MatchCall(vectorType, "get_zero")
                         .ReplaceWith(OpCodes.Ldsfld, field);
             }
@@ -72,11 +48,11 @@ namespace ModAPI.Harmony
                 throw new ArgumentException($"Expected Vector2 or Vector3, got {vectorType.Name}");
 
             t.Reset();
-            while (true)
+            t.MatchCall(vectorType, "get_zero");
+            while (t.HasMatch)
             {
-                t.MatchCallNext(vectorType, "get_zero");
-                if (!t.HasMatch) break;
                 t.ReplaceWith(OpCodes.Ldsfld, vectorType.GetField("zero"));
+                t.MatchCallNext(vectorType, "get_zero");
             }
             return t;
         }
@@ -178,10 +154,10 @@ namespace ModAPI.Harmony
         {
             if (!t.HasMatch) return t;
             
-            return t
-                .InsertBefore(OpCodes.Ldstr, message)
-                .InsertBefore(OpCodes.Call, typeof(Debug).GetMethod("Log", 
-                    new[] { typeof(object) }));
+            return t.InsertBefore(
+                new CodeInstruction(OpCodes.Ldstr, message),
+                new CodeInstruction(OpCodes.Call, typeof(Debug).GetMethod("Log", new[] { typeof(object) }))
+            );
         }
         
         /// <summary>
@@ -193,10 +169,10 @@ namespace ModAPI.Harmony
         {
             if (!t.HasMatch) return t;
             
-            return t
-                .InsertAfter(OpCodes.Ldstr, message)
-                .InsertAfter(OpCodes.Call, typeof(Debug).GetMethod("Log", 
-                    new[] { typeof(object) }));
+            return t.InsertAfter(
+                new CodeInstruction(OpCodes.Ldstr, message),
+                new CodeInstruction(OpCodes.Call, typeof(Debug).GetMethod("Log", new[] { typeof(object) }))
+            );
         }
         
         #endregion
