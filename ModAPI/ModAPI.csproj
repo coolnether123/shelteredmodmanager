@@ -161,6 +161,9 @@
     <Compile Include="Util\PersistentDataAPI.cs" />
     <Compile Include="Util\SaveLoadDictionary.cs" />
     <Compile Include="Core\PluginManager.cs" />
+    <Compile Include="Core\PluginRunner.cs" />
+    <Compile Include="Core\PluginContextImpl.cs" />
+    <Compile Include="Core\PrefixedLogger.cs" />
     <Compile Include="Core\ModRandom.cs" />
     <Compile Include="Core\ModRandomState.cs" />
     <Compile Include="Core\SaveProtection.cs" />
