@@ -159,8 +159,14 @@ namespace ModAPI.Core
                 // If we are waiting for user input, pause the load
                 if (_isWaitingForUser) return false;
 
-                // SAFETY: Do not attempt to read mod data during application quit.
-                if (PluginRunner.IsQuitting) return false;
+                // SAFETY: If quitting is still flagged here, fail-open to avoid hard-locking
+                // SaveManager in a perpetual loading state when returning to menu after
+                // a managed "Save & Exit" flow that did not fully terminate the process.
+                if (PluginRunner.IsQuitting)
+                {
+                    MMLog.WriteWarning("[LoadGamePatch] IsQuitting was true during load verification. Bypassing verification for this load tick.");
+                    return true;
+                }
 
                 // If user confirmed load, proceed without checks and reset flag
                 if (_forceLoad)

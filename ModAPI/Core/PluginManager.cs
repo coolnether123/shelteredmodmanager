@@ -266,6 +266,13 @@ namespace ModAPI.Core
                     _loaderRoot.AddComponent<ModAPI.Inspector.BoundsHighlighter>();
                 if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeILInspector>() == null)
                     _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeILInspector>();
+                if (_loaderRoot.GetComponent<ModAPI.Inspector.ExecutionTracer>() == null)
+                    _loaderRoot.AddComponent<ModAPI.Inspector.ExecutionTracer>();
+                if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeDebuggerUI>() == null)
+                    _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeDebuggerUI>();
+
+                if (_loaderRoot.GetComponent<ModAPI.UI.UIDebugInspector>() == null)
+                    _loaderRoot.AddComponent<ModAPI.UI.UIDebugInspector>();
             }
             catch (Exception ex) { MMLog.WarnOnce("PluginManager.AttachInspectorTools", "Error attaching inspector: " + ex.Message); }
         }
@@ -553,6 +560,8 @@ namespace ModAPI.Core
 
         private object _sceneLoadedDelegate;
         private object _sceneUnloadedDelegate;
+        private bool _unityLogBridgeHooked;
+        private float _nextQuitHeartbeatAt;
 
         public void Enqueue(Action action)
         {
@@ -567,6 +576,7 @@ namespace ModAPI.Core
             if (Instance == null) Instance = this;
             IsQuitting = false; 
             ModAPI.Hooks.PlatformSaveProxy.ResetStatus();
+            HookUnityLogBridge();
             _useModernApi = TryHookModernSceneEvents();
             IsModernUnity = _useModernApi;
             if (!_useModernApi)
@@ -578,6 +588,7 @@ namespace ModAPI.Core
         private void OnApplicationQuit()
         {
             IsQuitting = true;
+            CrashCorridorTracer.Mark("OnApplicationQuit", "Unity is quitting");
             MMLog.WriteInfo("Application is quitting detected. Shutting down plugins...");
             if (Manager != null) Manager.ShutdownAll();
             MMLog.Flush();
@@ -585,6 +596,7 @@ namespace ModAPI.Core
 
         private void OnDestroy()
         {
+            UnhookUnityLogBridge();
             if (_useModernApi && _sceneLoadedDelegate != null)
             {
                 try
@@ -603,25 +615,161 @@ namespace ModAPI.Core
             }
         }
 
+        private void HookUnityLogBridge()
+        {
+            if (_unityLogBridgeHooked) return;
+            try
+            {
+                Application.logMessageReceivedThreaded += OnUnityLogMessageReceived;
+                AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+                _unityLogBridgeHooked = true;
+                MMLog.WriteDebug("Unity log bridge hooked (Player.log mirrored to SMM log).");
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("PluginRunner.HookUnityLogBridge", "Failed to hook Unity log bridge: " + ex.Message);
+            }
+        }
+
+        private void UnhookUnityLogBridge()
+        {
+            if (!_unityLogBridgeHooked) return;
+            try
+            {
+                Application.logMessageReceivedThreaded -= OnUnityLogMessageReceived;
+                AppDomain.CurrentDomain.UnhandledException -= OnUnhandledException;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("PluginRunner.UnhookUnityLogBridge", "Failed to unhook Unity log bridge: " + ex.Message);
+            }
+            finally
+            {
+                _unityLogBridgeHooked = false;
+            }
+        }
+
+        private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            try
+            {
+                var ex = e != null ? e.ExceptionObject as Exception : null;
+                if (ex != null)
+                {
+                    MMLog.WriteWithSource(
+                        MMLog.LogLevel.Fatal,
+                        MMLog.LogCategory.General,
+                        "UnityUnhandled",
+                        ex.ToString());
+                }
+                else
+                {
+                    MMLog.WriteWithSource(
+                        MMLog.LogLevel.Fatal,
+                        MMLog.LogCategory.General,
+                        "UnityUnhandled",
+                        "Unhandled exception (non-Exception object).");
+                }
+            }
+            catch { }
+        }
+
+        private static void OnUnityLogMessageReceived(string condition, string stackTrace, LogType type)
+        {
+            try
+            {
+                var msg = condition ?? string.Empty;
+                if (type == LogType.Exception && !string.IsNullOrEmpty(stackTrace))
+                {
+                    msg = msg + "\n" + stackTrace;
+                }
+
+                if (type == LogType.Error || type == LogType.Assert || type == LogType.Exception)
+                {
+                    MMLog.WriteWithSource(MMLog.LogLevel.Error, MMLog.LogCategory.General, "UnityLog", msg);
+                }
+                else if (type == LogType.Warning)
+                {
+                    MMLog.WriteWithSource(MMLog.LogLevel.Warning, MMLog.LogCategory.General, "UnityLog", msg);
+                }
+            }
+            catch { }
+        }
+
         private void OnSceneLoadedModern(object scene, object mode)
         {
-            if (Manager != null)
+            try
             {
-                var nameProp = scene.GetType().GetProperty("name");
-                string sceneName = (string)nameProp.GetValue(scene, null);
+                if (Manager == null) return;
+
+                var sceneName = TryGetSceneName(scene);
+                if (string.IsNullOrEmpty(sceneName))
+                {
+                    MMLog.WarnOnce("PluginRunner.OnSceneLoadedModern.SceneName", "Received loaded-scene callback with unresolved scene name.");
+                    return;
+                }
+
                 Manager.OnSceneLoaded(sceneName);
                 SceneLoaded?.Invoke(sceneName);
+                if (IsQuitting)
+                {
+                    CrashCorridorTracer.Mark("OnSceneLoadedModern", sceneName);
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("PluginRunner.OnSceneLoadedModern.Error", "OnSceneLoadedModern failed: " + ex.Message);
+                if (IsQuitting)
+                {
+                    CrashCorridorTracer.Mark("OnSceneLoadedModern.Exception", ex.GetType().Name + ": " + ex.Message);
+                }
             }
         }
 
         private void OnSceneUnloadedModern(object scene)
         {
-            if (Manager != null)
+            try
             {
-                var nameProp = scene.GetType().GetProperty("name");
-                string sceneName = (string)nameProp.GetValue(scene, null);
+                if (Manager == null) return;
+
+                var sceneName = TryGetSceneName(scene);
+                if (string.IsNullOrEmpty(sceneName))
+                {
+                    MMLog.WarnOnce("PluginRunner.OnSceneUnloadedModern.SceneName", "Received unloaded-scene callback with unresolved scene name.");
+                    return;
+                }
+
                 Manager.OnSceneUnloaded(sceneName);
                 SceneUnloaded?.Invoke(sceneName);
+                if (IsQuitting)
+                {
+                    CrashCorridorTracer.Mark("OnSceneUnloadedModern", sceneName);
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("PluginRunner.OnSceneUnloadedModern.Error", "OnSceneUnloadedModern failed: " + ex.Message);
+                if (IsQuitting)
+                {
+                    CrashCorridorTracer.Mark("OnSceneUnloadedModern.Exception", ex.GetType().Name + ": " + ex.Message);
+                }
+            }
+        }
+
+        private static string TryGetSceneName(object scene)
+        {
+            if (scene == null) return string.Empty;
+            try
+            {
+                var t = scene.GetType();
+                var nameProp = t.GetProperty("name", BindingFlags.Public | BindingFlags.Instance);
+                if (nameProp == null) return string.Empty;
+                var value = nameProp.GetValue(scene, null);
+                return value as string ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
             }
         }
 
@@ -646,6 +794,29 @@ namespace ModAPI.Core
 
         private void Update()
         {
+            if (IsQuitting && Time.realtimeSinceStartup >= _nextQuitHeartbeatAt)
+            {
+                _nextQuitHeartbeatAt = Time.realtimeSinceStartup + 0.5f;
+                string detail = string.Empty;
+                try
+                {
+                    var sm = SaveManager.instance;
+                    if (sm != null)
+                    {
+                        detail = "isSaving=" + sm.isSaving + ", isLoading=" + sm.isLoading;
+                    }
+                    else
+                    {
+                        detail = "SaveManager.instance=null";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    detail = "SaveManager read failed: " + ex.Message;
+                }
+                CrashCorridorTracer.Mark("QuittingHeartbeat", detail);
+            }
+
             lock (_nextFrame)
             {
                 while (_nextFrame.Count > 0)

@@ -40,6 +40,15 @@ namespace ModAPI.Core
             IO
         }
 
+        public sealed class LogEntry
+        {
+            public DateTime Timestamp;
+            public LogLevel Level;
+            public LogCategory Category;
+            public string Source;
+            public string Message;
+        }
+
         private static readonly object _lock = new object();
         private static string _logPath;
         private static LogLevel _minLevel = LogLevel.Info;
@@ -62,6 +71,8 @@ namespace ModAPI.Core
         
         private static readonly Dictionary<Assembly, string> _sourceCache = new Dictionary<Assembly, string>();
         private static readonly object _cacheLock = new object();
+        private static readonly Queue<LogEntry> _recentEntries = new Queue<LogEntry>();
+        private static readonly int _maxRecentEntries = 500;
 
         static MMLog()
         {
@@ -382,6 +393,28 @@ namespace ModAPI.Core
             WriteInternal(LogLevel.Info, LogCategory.General, "Logger", $"Log level changed to: {level}");
         }
 
+        public static List<LogEntry> GetRecentEntries(LogLevel minLevel, int maxCount)
+        {
+            if (maxCount <= 0) return new List<LogEntry>();
+            lock (_lock)
+            {
+                return _recentEntries
+                    .Where(e => e != null && e.Level >= minLevel)
+                    .Reverse()
+                    .Take(maxCount)
+                    .Reverse()
+                    .Select(e => new LogEntry
+                    {
+                        Timestamp = e.Timestamp,
+                        Level = e.Level,
+                        Category = e.Category,
+                        Source = e.Source,
+                        Message = e.Message
+                    })
+                    .ToList();
+            }
+        }
+
         private static void WriteInternal(LogLevel level, LogCategory category, string source, string message)
         {
             if (level < _minLevel) return;
@@ -417,6 +450,7 @@ namespace ModAPI.Core
 
                 var formattedMessage = FormatLogMessage(level, category, source, message, now);
                 WriteToFile(formattedMessage);
+                PushRecentEntry_NoLock(now, level, category, source, message);
 
                 TrackModLogCount(source);
 
@@ -461,8 +495,26 @@ namespace ModAPI.Core
                 ($"(Previous message repeated {_repeatCount} times from {startTime} to {endTime})"), nowUtc, true);
 
             WriteToFile(summary);
+            PushRecentEntry_NoLock(nowUtc, LogLevel.Info, LogCategory.General, "Logger",
+                $"(Previous message repeated {_repeatCount} times from {startTime} to {endTime})");
             _repeatCount = 0;
             _lastWriteUtc = nowUtc;
+        }
+
+        private static void PushRecentEntry_NoLock(DateTime timestamp, LogLevel level, LogCategory category, string source, string message)
+        {
+            _recentEntries.Enqueue(new LogEntry
+            {
+                Timestamp = timestamp,
+                Level = level,
+                Category = category,
+                Source = source ?? "Unknown",
+                Message = message ?? string.Empty
+            });
+            while (_recentEntries.Count > _maxRecentEntries)
+            {
+                _recentEntries.Dequeue();
+            }
         }
 
         private static void CheckLogRotation()

@@ -68,10 +68,16 @@ namespace ModAPI.Inspector
             // Left: Method List
             GUILayout.BeginVertical(GUILayout.Width(300));
             _scrollMethods = GUILayout.BeginScrollView(_scrollMethods, GUI.skin.box);
+            
+            GUIStyle leftAlign = new GUIStyle(GUI.skin.button);
+            leftAlign.alignment = TextAnchor.MiddleLeft;
+            leftAlign.wordWrap = true;
+            leftAlign.padding = new RectOffset(5, 5, 5, 5);
+            
             for (int i = 0; i < _foundMethods.Count; i++) 
             {
                 var m = _foundMethods[i];
-                if (GUILayout.Button($"{m.DeclaringType.Name}.{m.Name}")) 
+                if (GUILayout.Button($"{m.DeclaringType.Name}.{m.Name}", leftAlign, GUILayout.Width(260))) 
                 {
                     SelectMethod(m);
                 }

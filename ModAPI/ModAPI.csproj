@@ -24,6 +24,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <PlatformTarget>AnyCPU</PlatformTarget>
+    <DocumentationFile>..\Dist\SMM\ModAPI.xml</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -33,11 +34,11 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <PlatformTarget>AnyCPU</PlatformTarget>
+    <DocumentationFile>..\Dist\SMM\ModAPI.xml</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>..\mods\0Harmony\Assemblies\0Harmony.dll</HintPath>
-      <Private>False</Private>
+      <HintPath>..\Dist\SMM\bin\0Harmony.dll</HintPath>
     </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
@@ -72,6 +73,7 @@
     <Compile Include="Core\ModRegistry.cs" />
     <Compile Include="Core\ModLog.cs" />
     <Compile Include="Core\MMLog.cs" />
+    <Compile Include="Core\CrashCorridorTracer.cs" />
     <Compile Include="Core\LoggerExtensions.cs" />
     <Compile Include="Core\ContextExtensions.cs" />
     <Compile Include="UI\UIFlowGuard.cs" />
@@ -87,6 +89,7 @@
     <Compile Include="UI\ContextUIExtensions.cs" />
     <Compile Include="UI\UIPatches.cs" />
     <Compile Include="UI\UIDebug.cs" />
+    <Compile Include="UI\UIDebugInspector.cs" />
     <Compile Include="UI\ContextMenuHelper.cs" />
     <Compile Include="UI\NGUIHelper.cs" />
     <Compile Include="UI\ModUIHooks.cs" />
@@ -97,6 +100,16 @@
     <Compile Include="Spine\ISettingsProvider.cs" />
     <Compile Include="Spine\SettingsController.cs" />
     <Compile Include="Spine\ModSettingsDatabase.cs" />
+    <Compile Include="Core\ModPrivacyAttribute.cs" />
+    <Compile Include="Inspector\ExternalProcessManager.cs" />
+    <Compile Include="Inspector\SourceCacheManager.cs" />
+    <Compile Include="Inspector\MemoryGovernor.cs" />
+    <Compile Include="Inspector\StreamingSnapshotWriter.cs" />
+    <Compile Include="Inspector\RuntimeVariableEditor.cs" />
+    <Compile Include="Inspector\ExecutionTracer.cs" />
+    <Compile Include="Inspector\VariableInspector.cs" />
+    <Compile Include="Harmony\VisualTranspilerBuilder.cs" />
+    <Compile Include="Inspector\RuntimeDebuggerUI.cs" />
     <Compile Include="Spine\SpineSettingsHelper.cs" />
     <Compile Include="Spine\UI\SpineWidgetFactory.cs" />
     <Compile Include="Harmony\HarmonyBootstrap.cs" />
@@ -104,16 +117,20 @@
     <Compile Include="Harmony\HarmonyHelper.cs" />
     <Compile Include="Harmony\MainMenuPatches.cs" />
     <Compile Include="Harmony\Transpilers\FluentTranspiler.cs" />
+    <Compile Include="Harmony\Transpilers\FluentTranspiler_Features.cs" />
     <Compile Include="Harmony\Transpilers\TranspilerDebugger.cs" />
     <Compile Include="Harmony\Transpilers\UnityPatterns.cs" />
     <Compile Include="Harmony\Transpilers\FluentTranspilerPatterns.cs" />
     <Compile Include="Harmony\Transpilers\AdvancedExtensions.cs" />
+    <Compile Include="Harmony\Transpilers\ControlFlowExtensions.cs" />
     <Compile Include="Harmony\Transpilers\ShelteredPatterns.cs" />
     <Compile Include="Harmony\Transpilers\CartographerExtensions.cs" />
     <Compile Include="Harmony\Transpilers\StackSentinel.cs" />
     <Compile Include="Harmony\Transpilers\CooperativePatcher.cs" />
     <Compile Include="Harmony\Transpilers\IntentAPI.cs" />
     <Compile Include="Harmony\Transpilers\TranspilerTestHarness.cs" />
+    <Compile Include="Debugging\LiveDebugger.cs" />
+    <Compile Include="Debugging\CrashCorridorMapDiagnostics.cs" />
     <Compile Include="Debugging\SmartWatcher.cs" />
     <Compile Include="Inspector\HierarchyUtil.cs" />
     <Compile Include="Inspector\BoundsHighlighter.cs" />
@@ -150,6 +167,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Reflection\Safe.cs" />
     <Compile Include="Reflection\SafeExtensions.cs" />
+    <Compile Include="Reflection\StaticInspector.cs" />
     <Compile Include="Util\GameUtil.cs" />
     <Compile Include="Hooks\WorldHooks.cs" />
     <Compile Include="Hooks\UIHooks.cs" />
@@ -190,7 +208,25 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>
-    </PostBuildEvent>
+    <PostBuildEvent>SET BASE=$(SolutionDir)
+SET BIN_DIR=%25BASE%25Dist\SMM\bin
+
+:: Ensure directories exist
+if not exist "%25BIN_DIR%25" mkdir "%25BIN_DIR%25"
+if not exist "%25BIN_DIR%25\decompiler" mkdir "%25BIN_DIR%25\decompiler"
+
+:: Decompiler Tool (Isolated .NET 8 environment)
+for %%C in (Debug Release) do (
+    if exist "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.exe" (
+        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.dll" "%25BIN_DIR%25\decompiler\"
+        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.exe" "%25BIN_DIR%25\decompiler\"
+        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.runtimeconfig.json" "%25BIN_DIR%25\decompiler\"
+        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.deps.json" "%25BIN_DIR%25\decompiler\"
+        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\ICSharpCode.Decompiler.dll" "%25BIN_DIR%25\decompiler\"
+        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\System.CommandLine.dll" "%25BIN_DIR%25\decompiler\"
+    )
+)
+exit /b 0
+</PostBuildEvent>
   </PropertyGroup>
 </Project>

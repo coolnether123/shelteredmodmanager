@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -154,6 +154,7 @@
 SET CONFIG=$(Configuration)
 SET SMM_DIR=%25BASE%25Dist\SMM
 SET BIN_DIR=%25SMM_DIR%25\bin
+SET DECOMPILER_DIR=%25BIN_DIR%25\decompiler
 SET MODS_DIR=%25BASE%25Dist\mods
 SET DOORSTOP_DLL=%25BASE%25Doorstop\bin\%25CONFIG%25\Doorstop.dll
 SET MODAPI_DLL=%25BASE%25Dist\SMM\ModAPI.dll
@@ -161,6 +162,7 @@ SET MANAGER_EXE=%25TargetPath%25
 
 mkdir "%25SMM_DIR%25" 2&gt;nul
 mkdir "%25BIN_DIR%25" 2&gt;nul
+mkdir "%25DECOMPILER_DIR%25" 2&gt;nul
 mkdir "%25MODS_DIR%25" 2&gt;nul
 
 if exist "%25MANAGER_EXE%25" copy /y "%25MANAGER_EXE%25" "%25SMM_DIR%25\"
@@ -177,6 +179,14 @@ if exist "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" co
 
 if exist "%25BASE%25PluginHarmony\bin\%25CONFIG%25\0Harmony.dll" copy /y "%25BASE%25PluginHarmony\bin\%25CONFIG%25\0Harmony.dll" "%25BIN_DIR%25\"
 if exist "%25BASE%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" copy /y "%25BASE%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" "%25BIN_DIR%25\"
+
+:: Decompiler Tool &amp; Dependencies
+if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.dll" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.dll" "%25DECOMPILER_DIR%25\"
+if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.exe" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.exe" "%25DECOMPILER_DIR%25\"
+if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.runtimeconfig.json" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.runtimeconfig.json" "%25DECOMPILER_DIR%25\"
+if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.deps.json" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.deps.json" "%25DECOMPILER_DIR%25\"
+if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\ICSharpCode.Decompiler.dll" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\ICSharpCode.Decompiler.dll" "%25DECOMPILER_DIR%25\"
+if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\System.CommandLine.dll" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\System.CommandLine.dll" "%25DECOMPILER_DIR%25\"
 </PostBuildEvent>
   </PropertyGroup>
 </Project>

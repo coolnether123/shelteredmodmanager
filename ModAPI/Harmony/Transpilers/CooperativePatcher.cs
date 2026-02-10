@@ -146,15 +146,19 @@ namespace ModAPI.Harmony
                 try
                 {
                     MMLog.WriteDebug($"[CooperativePatcher] Applying {patch.OwnerMod} : {patch.AnchorId}");
-                    
-                    // Create transpiler wrapper
+
+                    var beforeInstructions = currentInstructions.ToList();
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+
+                    // Create transpiler wrapper on the CURRENT instructions
+                    // We use valid COPY of the instructions to ensure isolation
                     var t = FluentTranspiler.For(currentInstructions, original);
                     
                     // Run logic
                     t = patch.PatchLogic(t);
                     
                     // Validate stack between patches, but don't fail on informational warnings
-                    var newInstructions = t.Build(strict: false, validateStack: true);
+                    var nextInstructions = t.Build(strict: false, validateStack: true);
 
                     if (t.Warnings.Any(w => !w.StartsWith("DeclareLocal"))) // Filter informational
                     {
@@ -164,13 +168,30 @@ namespace ModAPI.Harmony
                     }
                     
                     // If successful, update current instructions and mark anchored
-                    currentInstructions = newInstructions.ToList();
+                    // This atomic swap prevents partial corruption if PatchLogic throws or Build fails
+                    currentInstructions = nextInstructions.ToList();
                     appliedAnchors.Add(patch.AnchorId);
+
+                    sw.Stop();
+                    var origin = "CooperativePatcher|" + patch.OwnerMod + "|" + patch.AnchorId + "|Priority:" + patch.Priority;
+                    var stepName = original != null && original.DeclaringType != null
+                        ? original.DeclaringType.FullName + "." + original.Name
+                        : (original != null ? original.Name : "UnknownMethod");
+                    TranspilerDebugger.RecordSnapshot(
+                        patch.OwnerMod,
+                        stepName,
+                        beforeInstructions,
+                        currentInstructions,
+                        sw.Elapsed.TotalMilliseconds,
+                        t.Warnings != null ? t.Warnings.Count : 0,
+                        original,
+                        origin);
+                    MMLog.WriteDebug("[CooperativePatcher] Snapshot recorded for patch origin: " + origin);
                 }
                 catch (Exception ex)
                 {
                     MMLog.WriteError($"[CooperativePatcher] Patch {patch.OwnerMod}:{patch.AnchorId} FAILED and was skipped. Error: {ex.Message}");
-                    // Continue with previous valid instructions
+                    // Continue with previous valid instructions - 'currentInstructions' remains untouched by this iteration
                 }
             }
 

@@ -17,11 +17,17 @@ namespace ModAPI.Harmony
         /// <summary>
         /// A helper that matches the common pattern of accessing a Manager Instance in Sheltered.
         /// Common usage: GameModeManager.instance, InventoryManager.instance, etc.
+        /// Handles both static properties (get_instance) and static fields (instance).
         /// </summary>
         /// <param name="managerType">The manager class type.</param>
         public static FluentTranspiler MatchManager(this FluentTranspiler t, Type managerType)
         {
-            return t.MatchCall(managerType, "get_instance");
+            // Search for get_instance property first, then fall back to static field
+            t.MatchCall(managerType, "get_instance");
+            if (!t.HasMatch)
+                t.MatchFieldLoad(managerType, "instance");
+            
+            return t;
         }
 
         /// <summary>
@@ -95,6 +101,30 @@ namespace ModAPI.Harmony
 
 
 
+        /// <summary>Matches Manager.instance static field access.</summary>
+        public static FluentTranspiler MatchManagerSingleton(this FluentTranspiler t, Type managerType)
+        {
+            return t.MatchFieldLoad(managerType, "instance");
+        }
+
+        /// <summary>Matches Localization.Get(key).</summary>
+        public static FluentTranspiler MatchUILocalization(this FluentTranspiler t, string key = null)
+        {
+             return t.MatchCall(typeof(Localization), "Get");
+        }
+
+        /// <summary>Matches StartCoroutine call.</summary>
+        public static FluentTranspiler MatchCoroutineStart(this FluentTranspiler t)
+        {
+            return t.MatchCall(typeof(MonoBehaviour), "StartCoroutine");
+        }
+
+        /// <summary>Matches generic null check pattern (ldnull).</summary>
+        public static FluentTranspiler MatchNullCheck(this FluentTranspiler t)
+        {
+            return t.MatchOpCode(OpCodes.Ldnull);
+        }
+
         /// <summary>
         /// Safely replaces 'this.m_field = value' with a call to a static replacement method.
         /// The replacement method must have signature: void Replacement(InstanceType instance, FieldType value).
@@ -121,6 +151,22 @@ namespace ModAPI.Harmony
             return t
                 .MatchFieldStore(instanceType, fieldName)
                 .ReplaceWithCall(replacementType, replacementMethodName);
+        }
+
+        /// <summary>Matches a call to any MMLog writing method.</summary>
+        public static FluentTranspiler MatchLog(this FluentTranspiler t)
+        {
+             return t.MatchCall(typeof(MMLog), "WriteInfo")
+                .MatchCall(typeof(MMLog), "WriteDebug")
+                .MatchCall(typeof(MMLog), "WriteWarning")
+                .MatchCall(typeof(MMLog), "WriteError");
+        }
+
+        /// <summary>Matches the GameModeManager.instance.m_bunkerPos access.</summary>
+        public static FluentTranspiler MatchBunkerLocation(this FluentTranspiler t)
+        {
+            return t.MatchManager(typeof(GameModeManager))
+                    .MatchFieldLoad(typeof(GameModeManager), "m_bunkerPos");
         }
     }
 }
