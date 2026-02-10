@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text;
 using HarmonyLib;
 using ModAPI.Core;
 
@@ -39,6 +40,7 @@ namespace ModAPI.Harmony
                     var body = originalMethod.GetMethodBody();
                     if (body?.ExceptionHandlingClauses?.Count > 0)
                     {
+                        MMLog.WriteWarning($"[StackSentinel] Skipping validation for {originalMethod.DeclaringType?.Name}.{originalMethod.Name}: Method contains exception handling clauses which are not yet supported by Basic Block analysis.");
                         error = null; // Skip validation, don't report error
                         return true;
                     }
@@ -48,6 +50,28 @@ namespace ModAPI.Harmony
 
             var depths = Analyze(instructions, originalMethod, out error);
             return depths != null;
+        }
+
+        /// <summary>Consolidates stack depth and type names for UI display.</summary>
+        public static void GetVisualStack(List<CodeInstruction> instructions, MethodBase method, out List<int> depths, out List<List<string>> types)
+        {
+            depths = new List<int>();
+            types = new List<List<string>>();
+            var stackStates = Analyze(instructions, method, out _);
+            
+            for (int i = 0; i < instructions.Count; i++)
+            {
+                if (stackStates != null && stackStates.TryGetValue(i, out var list))
+                {
+                    depths.Add(list.Count);
+                    types.Add(list.Select(t => t != null ? t.Name : "object").ToList());
+                }
+                else
+                {
+                    depths.Add(-1);
+                    types.Add(new List<string>());
+                }
+            }
         }
 
         /// <summary>
@@ -94,18 +118,20 @@ namespace ModAPI.Harmony
 
                         // 1. POP
                         int popCount = CalculatePopCount(instr, originalMethod);
+                        var popped = new List<Type>();
                         for (int p = 0; p < popCount; p++)
                         {
                             if (currentStack.Count == 0)
                             {
-                                error = $"Stack underflow at {instr} (Index {absIndex})";
+                                error = $"Stack underflow at {instr.opcode} {instr.operand} (Index {absIndex})";
                                 return null;
                             }
+                            popped.Insert(0, currentStack[currentStack.Count - 1]);
                             currentStack.RemoveAt(currentStack.Count - 1);
                         }
 
                         // 2. PUSH
-                        var pushedTypes = GetPushedTypes(instr, originalMethod);
+                        var pushedTypes = GetPushedTypes(instr, originalMethod, popped);
                         foreach (var type in pushedTypes)
                         {
                             currentStack.Add(type);
@@ -125,12 +151,17 @@ namespace ModAPI.Harmony
                             // Verify stack depth and types match at merge points
                             if (successor.EntryStack.Count != currentStack.Count)
                             {
-                                error = $"Stack height mismatch at {successor}: expected {successor.EntryStack.Count}, got {currentStack.Count} from Block_{block.StartIndex:X4}";
+                                var sb = new StringBuilder();
+                                sb.AppendLine($"Stack height mismatch at instruction {successor.StartIndex:D4} (Block start)");
+                                sb.AppendLine($"  - Target expects depth {successor.EntryStack.Count}: [{string.Join(", ", successor.EntryStack.Select(t => t?.Name ?? "obj").ToArray())}]");
+                                sb.AppendLine($"  - Source (Block_{block.StartIndex:X4}) provides depth {currentStack.Count}: [{string.Join(", ", currentStack.Select(t => t?.Name ?? "obj").ToArray())}]");
+                                sb.AppendLine("  - Last instructions in source block:");
+                                for (int k = Math.Max(0, block.Instructions.Count - 3); k < block.Instructions.Count; k++)
+                                    sb.AppendLine($"    {block.StartIndex + k:D4}: {block.Instructions[k]}");
+                                
+                                error = sb.ToString().Trim();
                                 return null;
                             }
-                            
-                            // Optional: Verify types match (allowing for inheritance/casting if needed)
-                            // For now, we only warn if types are drastically different and not just 'object' fallbacks
                         }
                     }
                 }
@@ -140,17 +171,33 @@ namespace ModAPI.Harmony
             }
             catch (Exception ex)
             {
-                error = $"Sentinel Exception: {ex.Message}";
+                error = $"Sentinel Exception: {ex.Message}\n{ex.StackTrace}";
                 return null;
             }
         }
 
-        private static List<Type> GetPushedTypes(CodeInstruction instr, MethodBase method)
+        private static List<Type> GetPushedTypes(CodeInstruction instr, MethodBase method, List<Type> popped)
         {
             var result = new List<Type>();
             var opcode = instr.opcode;
 
             if (opcode.StackBehaviourPush == StackBehaviour.Push0) return result;
+
+            // Dup handling: pops 1, pushes 2 of that same type
+            if (opcode == OpCodes.Dup)
+            {
+                 if (popped.Count > 0)
+                 {
+                     result.Add(popped[0]);
+                     result.Add(popped[0]);
+                 }
+                 else
+                 {
+                     result.Add(UnknownType);
+                     result.Add(UnknownType);
+                 }
+                 return result;
+            }
 
             // Simple types
             if (opcode == OpCodes.Ldc_I4 || opcode == OpCodes.Ldc_I4_S || opcode.Name.StartsWith("ldc.i4."))
@@ -208,29 +255,56 @@ namespace ModAPI.Harmony
                 return result;
             }
 
+            // Array and Special Ops
+            if (opcode == OpCodes.Ldelem || opcode == OpCodes.Ldelem_Ref || opcode.Name.StartsWith("ldelem."))
+            {
+                // We could try to resolve the array type from popped[0], but for now object is safe
+                result.Add(UnknownType);
+                return result;
+            }
+
             // Calls/Newobj
             if (opcode == OpCodes.Call || opcode == OpCodes.Callvirt)
             {
-                if (instr.operand is MethodInfo mi && mi.ReturnType != typeof(void))
-                    result.Add(mi.ReturnType);
+                if (instr.operand is MethodInfo mi)
+                {
+                    if (mi.ReturnType != typeof(void)) result.Add(mi.ReturnType);
+                }
+                else if (instr.operand is MethodBase mb)
+                {
+                    // For non-MethodInfo MethodBase, we try our best. 
+                    // Constructors (newobj) are handled separately below.
+                    // But Call to a constructor is possible!
+                    if (mb is MethodInfo mi2 && mi2.ReturnType != typeof(void)) result.Add(mi2.ReturnType);
+                    else if (mb.IsConstructor) result.Add(typeof(void)); // Call to ctor has no return
+                }
+                else result.Add(UnknownType);
                 return result;
             }
             if (opcode == OpCodes.Newobj)
             {
                 if (instr.operand is ConstructorInfo ci) result.Add(ci.DeclaringType);
-                else if (instr.operand is MethodInfo mi) result.Add(mi.DeclaringType);
+                else if (instr.operand is MethodBase mb && mb.IsConstructor) result.Add(mb.DeclaringType);
                 else result.Add(UnknownType);
                 return result;
             }
 
             // Generic fallbacks based on StackBehaviour
             int count = 0;
-            if (opcode.StackBehaviourPush == StackBehaviour.Push1 || opcode.StackBehaviourPush == StackBehaviour.Pushi || 
-                opcode.StackBehaviourPush == StackBehaviour.Pushi8 || opcode.StackBehaviourPush == StackBehaviour.Pushr4 || 
-                opcode.StackBehaviourPush == StackBehaviour.Pushr8 || opcode.StackBehaviourPush == StackBehaviour.Pushref)
-                count = 1;
-            else if (opcode.StackBehaviourPush == StackBehaviour.Push1_push1)
-                count = 2;
+            switch (opcode.StackBehaviourPush)
+            {
+                case StackBehaviour.Push1:
+                case StackBehaviour.Pushi:
+                case StackBehaviour.Pushi8:
+                case StackBehaviour.Pushr4:
+                case StackBehaviour.Pushr8:
+                case StackBehaviour.Pushref:
+                    count = 1;
+                    break;
+                case StackBehaviour.Push1_push1:
+                    count = 2;
+                    break;
+            }
 
             for (int i = 0; i < count; i++) result.Add(UnknownType);
             return result;
@@ -238,29 +312,32 @@ namespace ModAPI.Harmony
 
         private static int CalculatePopCount(CodeInstruction instr, MethodBase method)
         {
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Pop0) return 0;
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Pop1) return 1;
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Popi) return 1;
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Popref) return 1;
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Pop1_pop1) return 2;
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Popi_pop1) return 2;
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Popi_popi) return 2;
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Popi_popi8) return 2;
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Popi_popr4) return 2;
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Popi_popr8) return 2;
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Popref_pop1) return 2;
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Popref_popi) return 2;
+            var behavior = instr.opcode.StackBehaviourPop;
+            if (behavior == StackBehaviour.Pop0) return 0;
             
-            if (instr.opcode.StackBehaviourPop == StackBehaviour.Varpop)
+            // Standard pops
+            if (behavior == StackBehaviour.Pop1 || behavior == StackBehaviour.Popi || behavior == StackBehaviour.Popref) return 1;
+            
+            if (behavior == StackBehaviour.Pop1_pop1 || behavior == StackBehaviour.Popi_pop1 || behavior == StackBehaviour.Popi_popi ||
+                behavior == StackBehaviour.Popi_popi8 || behavior == StackBehaviour.Popi_popr4 || behavior == StackBehaviour.Popi_popr8 ||
+                behavior == StackBehaviour.Popref_pop1 || behavior == StackBehaviour.Popref_popi) return 2;
+                
+            if (behavior == StackBehaviour.Popi_popi_popi || behavior == StackBehaviour.Popref_popi_pop1 || behavior == StackBehaviour.Popref_popi_popi ||
+                behavior == StackBehaviour.Popref_popi_popi8 || behavior == StackBehaviour.Popref_popi_popr4 || behavior == StackBehaviour.Popref_popi_popr8 ||
+                behavior == StackBehaviour.Popref_popi_popref) return 3;
+
+            // Variable pops
+            if (behavior == StackBehaviour.Varpop)
             {
-                 if (instr.opcode == OpCodes.Call || instr.opcode == OpCodes.Callvirt)
+                if (instr.opcode == OpCodes.Call || instr.opcode == OpCodes.Callvirt)
                 {
-                    if (instr.operand is MethodInfo mi)
+                    if (instr.operand is MethodBase mb)
                     {
-                        int count = mi.GetParameters().Length;
-                        if (!mi.IsStatic) count++; 
+                        int count = mb.GetParameters().Length;
+                        if (!mb.IsStatic) count++; 
                         return count;
                     }
+                    return 0; // Unknown call
                 }
                 if (instr.opcode == OpCodes.Ret)
                 {
@@ -269,22 +346,13 @@ namespace ModAPI.Harmony
                 }
                 if (instr.opcode == OpCodes.Newobj)
                 {
-                    if (instr.operand is ConstructorInfo ci) return ci.GetParameters().Length;
-                    if (instr.operand is MethodInfo mi) return mi.GetParameters().Length;
+                    if (instr.operand is MethodBase mb) return mb.GetParameters().Length;
                 }
             }
             
-            switch (instr.opcode.StackBehaviourPop)
-            {
-                case StackBehaviour.Popi_popi_popi:
-                case StackBehaviour.Popref_popi_pop1:
-                case StackBehaviour.Popref_popi_popi:
-                case StackBehaviour.Popref_popi_popi8:
-                case StackBehaviour.Popref_popi_popr4:
-                case StackBehaviour.Popref_popi_popr8:
-                case StackBehaviour.Popref_popi_popref:
-                    return 3;
-            }
+            // Fallbacks for specific opcodes that might have non-standard behavior
+            if (instr.opcode == OpCodes.Stfld) return 2;
+            if (instr.opcode == OpCodes.Stelem || instr.opcode == OpCodes.Stelem_Ref || instr.opcode.Name.StartsWith("stelem.")) return 3;
             
              return 0;
         }

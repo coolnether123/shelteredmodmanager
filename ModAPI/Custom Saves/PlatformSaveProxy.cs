@@ -50,66 +50,103 @@ namespace ModAPI.Hooks
 
         public override bool PlatformSave(SaveManager.SaveType type, byte[] data)
         {
-            // CRASH FIX: During quit, the save system can be triggered multiple times.
-            // If we've already completed a save during this quit sequence, skip redundant saves
-            // to avoid accessing destroyed objects in the vanilla code that runs after.
-            if (PluginRunner.IsQuitting && _quitSaveCompleted)
+            if (PluginRunner.IsQuitting)
             {
-                return true; // Tell vanilla "save succeeded" without doing anything
+                CrashCorridorTracer.Mark("PlatformSave.Enter", "type=" + type + ", bytes=" + (data != null ? data.Length.ToString() : "null"));
             }
-
-            // 1. CHECK FOR NEW GAME OR SLOT SWAP
-            lock (_nextSaveLock)
+            try
             {
-                if (NextSave.TryGetValue(type, out var target))
+                // CRASH FIX: During quit, the save system can be triggered multiple times.
+                // If we've already completed a save during this quit sequence, skip redundant saves
+                // to avoid accessing destroyed objects in the vanilla code that runs after.
+                if (PluginRunner.IsQuitting && _quitSaveCompleted)
                 {
-                    MMLog.WriteDebug($"Intercepting Vanilla Save ({type}) -> Redirecting to Custom ID: {target.saveId}");
-                    
-                    // FORCE SYNC: ExpandedVanillaSaves.Instance.Overwrite uses File.WriteAllBytes (blocking).
-                    // This ensures the file is flushed to disk before we return.
-                    var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, new SaveOverwriteOptions(), data);
-                    
-                    // Create Manifest immediately for new saves
-                    if (entry != null)
+                    if (PluginRunner.IsQuitting)
                     {
-                        var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
-                        registry.UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
+                        CrashCorridorTracer.Mark("PlatformSave.Skip", "quit save already completed");
                     }
+                    return true; // Tell vanilla "save succeeded" without doing anything
+                }
 
-                    // Set this as the active save for the rest of the session
-                    ActiveCustomSave = entry;
+                // 1. CHECK FOR NEW GAME OR SLOT SWAP
+                lock (_nextSaveLock)
+                {
+                    if (NextSave.TryGetValue(type, out var target))
+                    {
+                        MMLog.WriteDebug($"Intercepting Vanilla Save ({type}) -> Redirecting to Custom ID: {target.saveId}");
+                        if (PluginRunner.IsQuitting)
+                        {
+                            CrashCorridorTracer.Mark("PlatformSave.Redirect", "saveId=" + target.saveId);
+                        }
+                        
+                        // FORCE SYNC: ExpandedVanillaSaves.Instance.Overwrite uses File.WriteAllBytes (blocking).
+                        // This ensures the file is flushed to disk before we return.
+                        var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, new SaveOverwriteOptions(), data);
+                        
+                        // Create Manifest immediately for new saves
+                        if (entry != null)
+                        {
+                            var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
+                            registry.UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
+                        }
+
+                        // Set this as the active save for the rest of the session
+                        ActiveCustomSave = entry;
+                        
+                        // Clear the "Next" target so we don't get stuck
+                        NextSave.Remove(type); 
+                        
+                        if (entry != null)
+                            MMLog.WriteDebug($"Saved custom slot: {entry.id}");
+                        if (PluginRunner.IsQuitting)
+                        {
+                            CrashCorridorTracer.Mark("PlatformSave.Redirect.Done", entry != null ? ("entry=" + entry.id) : "entry=null");
+                        }
+
+                        if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
+                        return true; // We handled it
+                    }
+                }
+
+                // 2. CHECK FOR EXISTING LOADED CUSTOM GAME
+                if (ActiveCustomSave != null)
+                {
+                    // Update the file and metadata
+                    // FORCE SYNC: Uses File.WriteAllBytes
+                    var result = ExpandedVanillaSaves.Instance.Overwrite(ActiveCustomSave.id, new SaveOverwriteOptions(), data);
                     
-                    // Clear the "Next" target so we don't get stuck
-                    NextSave.Remove(type); 
-                    
-                    if (entry != null)
-                        MMLog.WriteDebug($"Saved custom slot: {entry.id}");
+                    if (result != null)
+                    {
+                        ActiveCustomSave = result;
+                        MMLog.WriteDebug($"Saved custom slot: {ActiveCustomSave.id}");
+                    }
+                    if (PluginRunner.IsQuitting)
+                    {
+                        CrashCorridorTracer.Mark("PlatformSave.ActiveCustom.Done", result != null ? ("entry=" + result.id) : "result=null");
+                    }
 
                     if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
                     return true; // We handled it
                 }
-            }
 
-            // 2. CHECK FOR EXISTING LOADED CUSTOM GAME
-            if (ActiveCustomSave != null)
-            {
-                // Update the file and metadata
-                // FORCE SYNC: Uses File.WriteAllBytes
-                var result = ExpandedVanillaSaves.Instance.Overwrite(ActiveCustomSave.id, new SaveOverwriteOptions(), data);
-                
-                if (result != null)
+                // 3. FALLBACK TO VANILLA
+                // This happens if the user selected Slot 1/2/3 normally
+                if (PluginRunner.IsQuitting)
                 {
-                    ActiveCustomSave = result;
-                    MMLog.WriteDebug($"Saved custom slot: {ActiveCustomSave.id}");
+                    CrashCorridorTracer.Mark("PlatformSave.FallbackVanilla", "type=" + type);
                 }
-
-                if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
-                return true; // We handled it
+                return _inner.PlatformSave(type, data);
             }
-
-            // 3. FALLBACK TO VANILLA
-            // This happens if the user selected Slot 1/2/3 normally
-            return _inner.PlatformSave(type, data);
+            catch (Exception ex)
+            {
+                MMLog.WriteException(ex, "PlatformSaveProxy.PlatformSave");
+                if (PluginRunner.IsQuitting)
+                {
+                    CrashCorridorTracer.Mark("PlatformSave.Exception", ex.GetType().Name + ": " + ex.Message);
+                }
+                MMLog.Flush();
+                throw;
+            }
         }
 
         public override bool PlatformLoad(SaveManager.SaveType type)
@@ -149,6 +186,10 @@ namespace ModAPI.Hooks
             }
 
             MMLog.WriteDebug($"No custom load target. Passing load for slot={type} to vanilla handler.");
+            if (PluginRunner.IsQuitting)
+            {
+                CrashCorridorTracer.Mark("PlatformLoad.FallbackVanilla", "type=" + type);
+            }
             ActiveCustomSave = null;
             return _inner.PlatformLoad(type);
         }
