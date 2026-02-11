@@ -82,7 +82,7 @@ You can create "Execute" buttons by marking a method with `[ModSetting]`.
 [ModSetting("Reset Shelter", Tooltip = "Immediately cleans house.")]
 public void DoReset()
 {
-    MMLog.Info("Reset executed!");
+    MMLog.WriteInfo("Reset executed!");
 }
 ```
 

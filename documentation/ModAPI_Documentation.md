@@ -2,6 +2,8 @@
 
 This document outlines the role and purpose of each file within the `ModAPI` project, detailing their primary and secondary functions, and how they interconnect.
 
+For exact callable signatures, use `documentation/API_Signatures_Reference.md`.
+
 ## Event System
 
 ### `ModEventBus.cs`
@@ -38,7 +40,7 @@ ModEventBus.Publish("Author.Quests.QuestCompleted", new QuestData { QuestId = "f
 
 // Mod B subscribes to it
 ModEventBus.Subscribe<QuestData>("Author.Quests.QuestCompleted", data => {
-    MMLog.Info($"Quest {data.QuestId} complete! Reward: {data.Reward}");
+    MMLog.WriteInfo($"Quest {data.QuestId} complete! Reward: {data.Reward}");
 });
 ```
 
@@ -119,7 +121,7 @@ event Action<GameObject, string> OnButtonClicked;  // Any button clicked (option
 UIEvents.OnPanelOpened += panel => {
     if (panel.GetType().Name == "CraftingPanel")
     {
-        MMLog.Info("Crafting panel opened - showing helper UI");
+        MMLog.WriteInfo("Crafting panel opened - showing helper UI");
         ShowCraftingGuide();
     }
 };
@@ -187,7 +189,7 @@ if (mod != null)
 // List all loaded mods (debug)
 foreach (string modId in ModRegistry.GetLoadedModIds())
 {
-    MMLog.Info($"Loaded: {modId}");
+    MMLog.WriteInfo($"Loaded: {modId}");
 }
 ```
 
@@ -213,14 +215,14 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 ## Core Files
 
 ### `ContextExtensions.cs`
-**Primary Role:** Provides extension methods for `ModContext` objects. These extensions simplify common operations and offer a more fluent API for mod developers when interacting with the modding environment.
-**Secondary Role:** Enhances the usability of `ModContext` by abstracting complex interactions into simpler method calls, promoting cleaner mod code.
-**Interconnections:** Directly extends `ModContext` (which is likely managed by `PluginManager.cs`). It might utilize functionalities from `GameUtil.cs` or `UIUtil.cs` for its extended methods.
+**Primary Role:** Provides extension methods for `IPluginContext` objects.
+**Secondary Role:** Enhances usability of context-driven calls by abstracting scheduling and scene-ready behavior.
+**Interconnections:** Extends `IPluginContext` used by `PluginManager.cs` and `PluginRunner`.
 
 ### `ContextUIExtensions.cs`
-**Primary Role:** Extends `ModContext` specifically with UI-related functionalities. This allows mods to integrate their elements seamlessly into the game's user interface.
+**Primary Role:** Extends `IPluginContext` with UI-related helpers so mods can integrate into game UI safely.
 **Secondary Role:** Facilitates the creation of in-game UI components by mods, ensuring they adhere to the game's UI framework.
-**Interconnections:** Similar to `ContextExtensions.cs`, it extends `ModContext`. It heavily relies on `UIUtil.cs` for underlying UI operations and potentially `UIFlowGuard.cs` to manage UI interactions.
+**Interconnections:** Similar to `ContextExtensions.cs`, it extends `IPluginContext`. It relies on UI utility helpers and runtime panel lookup.
 
 ### `GameUtil.cs`
 **Primary Role:** Contains a collection of static utility functions and helpers that abstract game-specific operations. This provides a consistent and safe way for mods to interact with various game mechanics without directly touching game internals.
@@ -406,10 +408,10 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 **Primary Role:** Injects custom items, recipes, and cooking data into the game's managers.
 **Secondary Role:** Manages the injection lifecycle and provides accessors for registered content.
 **Key Methods:**
-- `RegisterCustomItem()` - Register custom items with the game
-- `RegisterCustomRecipe()` - Add custom crafting recipes
-- `GetCookingRecipes()` - Access cooking recipe data
-- `GetRawFoodTypes()` - Access raw food type information
+- `ContentRegistry.RegisterItem(...)` / `RegisterItemWithFixedId(...)` - Register custom items
+- `ContentRegistry.RegisterRecipe(...)` - Add crafting recipes
+- `ContentInjector.GetCookingRecipes()` - Access cooking recipe data
+- `ContentInjector.GetRawFoodTypes()` - Access raw food item types
 **Interconnections:** Patches `ItemManager`, `CraftingManager`, and `FoodManager` to add custom content.
 
 ###`Content/InventoryIntegration.cs`
@@ -513,9 +515,8 @@ ModAPI.Saves.Events.OnPageChanged  // Save slot page navigation
 **Primary Role:** Simple API for mods to save/load persistent data across game sessions.
 **Secondary Role:** Handles JSON serialization and file management for mod data.
 **Key Methods:**
-- `SaveData<T>(string key, T data)` - Save mod data
-- `LoadData<T>(string key)` - Load mod data
-- `DeleteData(string key)` - Remove saved data
+- `ctx.SaveData<T>(string key, T data)` - Save mod data (extension on `IPluginContext`)
+- `ctx.LoadData<T>(string key, out T value)` - Load mod data
 **Interconnections:** Used by mods for configuration and state persistence.
 
 ### `Util/SaveLoadDictionary.cs`

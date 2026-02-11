@@ -2,6 +2,8 @@
 
 This guide covers practical Harmony usage with ModAPI.
 
+Exact API signatures: `documentation/API_Signatures_Reference.md`.
+
 ## 1. Reference Setup
 
 Add `0Harmony.dll` from your SMM install (`SMM/bin/0Harmony.dll`).
@@ -85,6 +87,15 @@ public static class SomeGameType_MethodName_Transpiler
             .Build();
     }
 }
+```
+
+Current key signatures used above:
+
+```csharp
+public static FluentTranspiler For(IEnumerable<CodeInstruction> instructions, MethodBase originalMethod = null, ILGenerator generator = null);
+public FluentTranspiler FindCall(Type type, string methodName, SearchMode mode = SearchMode.Start, Type[] parameterTypes = null, Type[] genericArguments = null, bool includeInherited = true);
+public FluentTranspiler ReplaceWithCall(Type type, string methodName, Type[] parameterTypes = null);
+public IEnumerable<CodeInstruction> Build(bool strict = true, bool validateStack = true);
 ```
 
 ## 5. Patch Design Rules

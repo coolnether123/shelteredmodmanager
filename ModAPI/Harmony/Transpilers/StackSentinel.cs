@@ -28,7 +28,8 @@ namespace ModAPI.Harmony
     /// </summary>
     public static class StackSentinel
     {
-        private static readonly Type UnknownType = typeof(object);
+        private sealed class UnknownStackTypeMarker { }
+        private static readonly Type UnknownType = typeof(UnknownStackTypeMarker);
 
         public static bool Validate(List<CodeInstruction> instructions, MethodBase originalMethod, out string error)
         {
@@ -40,12 +41,23 @@ namespace ModAPI.Harmony
                     var body = originalMethod.GetMethodBody();
                     if (body?.ExceptionHandlingClauses?.Count > 0)
                     {
-                        MMLog.WriteWarning($"[StackSentinel] Skipping validation for {originalMethod.DeclaringType?.Name}.{originalMethod.Name}: Method contains exception handling clauses which are not yet supported by Basic Block analysis.");
-                        error = null; // Skip validation, don't report error
-                        return true;
+                        error = $"StackSentinel does not support exception-handler analysis for {originalMethod.DeclaringType?.Name}.{originalMethod.Name}. Method has {body.ExceptionHandlingClauses.Count} exception clause(s).";
+                        MMLog.WriteWarning("[StackSentinel] " + error);
+                        return false;
                     }
                 }
-                catch { /* Reflection might fail, proceed anyway */ }
+                catch (Exception ex)
+                {
+                    error = "StackSentinel failed to inspect exception clauses: " + ex.Message;
+                    return false;
+                }
+            }
+
+            if (instructions.Any(i => i != null && i.opcode == OpCodes.Endfilter))
+            {
+                error = "StackSentinel does not support filter exception regions (Endfilter opcode).";
+                MMLog.WriteWarning("[StackSentinel] " + error);
+                return false;
             }
 
             var depths = Analyze(instructions, originalMethod, out error);
@@ -64,7 +76,7 @@ namespace ModAPI.Harmony
                 if (stackStates != null && stackStates.TryGetValue(i, out var list))
                 {
                     depths.Add(list.Count);
-                    types.Add(list.Select(t => t != null ? t.Name : "object").ToList());
+                    types.Add(list.Select(FormatStackType).ToList());
                 }
                 else
                 {
@@ -113,8 +125,7 @@ namespace ModAPI.Harmony
                         int absIndex = block.StartIndex + i;
                         
                         // Store stack state BEFORE execution of instruction
-                        if (!instructionStacks.ContainsKey(absIndex))
-                            instructionStacks[absIndex] = new List<Type>(currentStack);
+                        instructionStacks[absIndex] = new List<Type>(currentStack);
 
                         // 1. POP
                         int popCount = CalculatePopCount(instr, originalMethod);
@@ -148,19 +159,34 @@ namespace ModAPI.Harmony
                         }
                         else
                         {
-                            // Verify stack depth and types match at merge points
                             if (successor.EntryStack.Count != currentStack.Count)
                             {
                                 var sb = new StringBuilder();
                                 sb.AppendLine($"Stack height mismatch at instruction {successor.StartIndex:D4} (Block start)");
-                                sb.AppendLine($"  - Target expects depth {successor.EntryStack.Count}: [{string.Join(", ", successor.EntryStack.Select(t => t?.Name ?? "obj").ToArray())}]");
-                                sb.AppendLine($"  - Source (Block_{block.StartIndex:X4}) provides depth {currentStack.Count}: [{string.Join(", ", currentStack.Select(t => t?.Name ?? "obj").ToArray())}]");
+                                sb.AppendLine($"  - Target expects depth {successor.EntryStack.Count}: [{string.Join(", ", successor.EntryStack.Select(FormatStackType).ToArray())}]");
+                                sb.AppendLine($"  - Source (Block_{block.StartIndex:X4}) provides depth {currentStack.Count}: [{string.Join(", ", currentStack.Select(FormatStackType).ToArray())}]");
                                 sb.AppendLine("  - Last instructions in source block:");
                                 for (int k = Math.Max(0, block.Instructions.Count - 3); k < block.Instructions.Count; k++)
                                     sb.AppendLine($"    {block.StartIndex + k:D4}: {block.Instructions[k]}");
                                 
                                 error = sb.ToString().Trim();
                                 return null;
+                            }
+
+                            bool changed = false;
+                            for (int stackIndex = 0; stackIndex < successor.EntryStack.Count; stackIndex++)
+                            {
+                                var merged = MergeStackType(successor.EntryStack[stackIndex], currentStack[stackIndex]);
+                                if (!ReferenceEquals(merged, successor.EntryStack[stackIndex]))
+                                {
+                                    successor.EntryStack[stackIndex] = merged;
+                                    changed = true;
+                                }
+                            }
+
+                            if (changed)
+                            {
+                                workQueue.Enqueue(successor);
                             }
                         }
                     }
@@ -209,18 +235,23 @@ namespace ModAPI.Harmony
             if (opcode == OpCodes.Ldc_R4) { result.Add(typeof(float)); return result; }
             if (opcode == OpCodes.Ldc_R8) { result.Add(typeof(double)); return result; }
             if (opcode == OpCodes.Ldstr) { result.Add(typeof(string)); return result; }
-            if (opcode == OpCodes.Ldnull) { result.Add(typeof(object)); return result; }
+            if (opcode == OpCodes.Ldnull) { result.Add(UnknownType); return result; }
 
             // Argument/Local/Field/Static
-            if (opcode == OpCodes.Ldarg || opcode == OpCodes.Ldarg_0 || opcode == OpCodes.Ldarg_1 || opcode == OpCodes.Ldarg_2 || opcode == OpCodes.Ldarg_3 || opcode == OpCodes.Ldarg_S)
+            if (opcode == OpCodes.Ldarg || opcode == OpCodes.Ldarg_0 || opcode == OpCodes.Ldarg_1 || opcode == OpCodes.Ldarg_2 || opcode == OpCodes.Ldarg_3 || opcode == OpCodes.Ldarg_S || opcode == OpCodes.Ldarga || opcode == OpCodes.Ldarga_S)
             {
                 int argIndex = -1;
-                if (opcode == OpCodes.Ldarg_0) argIndex = 0;
-                else if (opcode == OpCodes.Ldarg_1) argIndex = 1;
-                else if (opcode == OpCodes.Ldarg_2) argIndex = 2;
-                else if (opcode == OpCodes.Ldarg_3) argIndex = 3;
-                else if (instr.operand is int idx) argIndex = idx;
-                else if (instr.operand is sbyte sb) argIndex = sb;
+                try { argIndex = instr.ArgumentIndex(); }
+                catch
+                {
+                    if (opcode == OpCodes.Ldarg_0) argIndex = 0;
+                    else if (opcode == OpCodes.Ldarg_1) argIndex = 1;
+                    else if (opcode == OpCodes.Ldarg_2) argIndex = 2;
+                    else if (opcode == OpCodes.Ldarg_3) argIndex = 3;
+                    else if (instr.operand is int idx) argIndex = idx;
+                    else if (instr.operand is sbyte sb) argIndex = sb;
+                    else if (instr.operand is byte b) argIndex = b;
+                }
 
                 if (argIndex != -1 && method != null)
                 {
@@ -229,28 +260,72 @@ namespace ModAPI.Harmony
                     
                     if (!isStatic)
                     {
-                        if (argIndex == 0) { result.Add(method.DeclaringType); return result; }
+                        if (argIndex == 0)
+                        {
+                            result.Add(ResolveStackType(method.DeclaringType, method));
+                            return result;
+                        }
                         argIndex--; // Shift for 'this'
                     }
 
                     if (argIndex >= 0 && argIndex < parameters.Length)
                     {
-                        result.Add(parameters[argIndex].ParameterType);
+                        var resolved = ResolveStackType(parameters[argIndex].ParameterType, method);
+                        if (opcode == OpCodes.Ldarga || opcode == OpCodes.Ldarga_S)
+                        {
+                            try { resolved = resolved.MakeByRefType(); }
+                            catch { resolved = UnknownType; }
+                        }
+                        result.Add(resolved);
                         return result;
                     }
                 }
                 result.Add(UnknownType);
                 return result;
             }
-            if (opcode == OpCodes.Ldloc || opcode == OpCodes.Ldloc_0 || opcode == OpCodes.Ldloc_1 || opcode == OpCodes.Ldloc_2 || opcode == OpCodes.Ldloc_3 || opcode == OpCodes.Ldloc_S)
+            if (opcode == OpCodes.Ldloc || opcode == OpCodes.Ldloc_0 || opcode == OpCodes.Ldloc_1 || opcode == OpCodes.Ldloc_2 || opcode == OpCodes.Ldloc_3 || opcode == OpCodes.Ldloc_S || opcode == OpCodes.Ldloca || opcode == OpCodes.Ldloca_S)
             {
-                if (instr.operand is LocalBuilder lb) result.Add(lb.LocalType);
+                if (instr.operand is LocalBuilder lb)
+                {
+                    var localResolved = ResolveStackType(lb.LocalType, method);
+                    if (opcode == OpCodes.Ldloca || opcode == OpCodes.Ldloca_S)
+                    {
+                        try { localResolved = localResolved.MakeByRefType(); }
+                        catch { localResolved = UnknownType; }
+                    }
+                    result.Add(localResolved);
+                }
+                else if (TryResolveLocalType(instr, method, out Type localType))
+                {
+                    if (opcode == OpCodes.Ldloca || opcode == OpCodes.Ldloca_S)
+                    {
+                        try { localType = localType.MakeByRefType(); }
+                        catch { localType = UnknownType; }
+                    }
+                    result.Add(localType);
+                }
                 else result.Add(UnknownType);
                 return result;
             }
             if (opcode == OpCodes.Ldfld || opcode == OpCodes.Ldsfld)
             {
-                if (instr.operand is FieldInfo fi) result.Add(fi.FieldType);
+                if (instr.operand is FieldInfo fi) result.Add(ResolveStackType(fi.FieldType, method));
+                else result.Add(UnknownType);
+                return result;
+            }
+            if (opcode == OpCodes.Ldflda || opcode == OpCodes.Ldsflda)
+            {
+                if (instr.operand is FieldInfo fi)
+                {
+                    try
+                    {
+                        result.Add(ResolveStackType(fi.FieldType, method).MakeByRefType());
+                    }
+                    catch
+                    {
+                        result.Add(UnknownType);
+                    }
+                }
                 else result.Add(UnknownType);
                 return result;
             }
@@ -258,8 +333,46 @@ namespace ModAPI.Harmony
             // Array and Special Ops
             if (opcode == OpCodes.Ldelem || opcode == OpCodes.Ldelem_Ref || opcode.Name.StartsWith("ldelem."))
             {
-                // We could try to resolve the array type from popped[0], but for now object is safe
-                result.Add(UnknownType);
+                if (popped != null && popped.Count > 0 && TryGetArrayElementType(popped[0], out Type elementType))
+                    result.Add(elementType);
+                else
+                    result.Add(UnknownType);
+                return result;
+            }
+            if (opcode == OpCodes.Ldtoken)
+            {
+                if (instr.operand is Type) result.Add(typeof(RuntimeTypeHandle));
+                else if (instr.operand is MethodBase) result.Add(typeof(RuntimeMethodHandle));
+                else if (instr.operand is FieldInfo) result.Add(typeof(RuntimeFieldHandle));
+                else result.Add(UnknownType);
+                return result;
+            }
+            if (opcode == OpCodes.Ldftn || opcode == OpCodes.Ldvirtftn)
+            {
+                result.Add(typeof(IntPtr));
+                return result;
+            }
+            if (opcode == OpCodes.Castclass || opcode == OpCodes.Isinst)
+            {
+                if (instr.operand is Type castType) result.Add(ResolveStackType(castType, method));
+                else result.Add(UnknownType);
+                return result;
+            }
+            if (opcode == OpCodes.Unbox_Any)
+            {
+                if (instr.operand is Type unboxType) result.Add(ResolveStackType(unboxType, method));
+                else result.Add(UnknownType);
+                return result;
+            }
+            if (opcode == OpCodes.Box)
+            {
+                if (instr.operand is Type boxedType) result.Add(ResolveStackType(boxedType, method));
+                else result.Add(UnknownType);
+                return result;
+            }
+            if (opcode == OpCodes.Sizeof || opcode == OpCodes.Ldlen)
+            {
+                result.Add(typeof(int));
                 return result;
             }
 
@@ -268,14 +381,14 @@ namespace ModAPI.Harmony
             {
                 if (instr.operand is MethodInfo mi)
                 {
-                    if (mi.ReturnType != typeof(void)) result.Add(mi.ReturnType);
+                    if (mi.ReturnType != typeof(void)) result.Add(ResolveStackType(mi.ReturnType, method));
                 }
                 else if (instr.operand is MethodBase mb)
                 {
                     // For non-MethodInfo MethodBase, we try our best. 
                     // Constructors (newobj) are handled separately below.
                     // But Call to a constructor is possible!
-                    if (mb is MethodInfo mi2 && mi2.ReturnType != typeof(void)) result.Add(mi2.ReturnType);
+                    if (mb is MethodInfo mi2 && mi2.ReturnType != typeof(void)) result.Add(ResolveStackType(mi2.ReturnType, method));
                     else if (mb.IsConstructor) { /* Void return, push nothing */ }
                 }
                 else result.Add(UnknownType);
@@ -283,8 +396,8 @@ namespace ModAPI.Harmony
             }
             if (opcode == OpCodes.Newobj)
             {
-                if (instr.operand is ConstructorInfo ci) result.Add(ci.DeclaringType);
-                else if (instr.operand is MethodBase mb && mb.IsConstructor) result.Add(mb.DeclaringType);
+                if (instr.operand is ConstructorInfo ci) result.Add(ResolveStackType(ci.DeclaringType, method));
+                else if (instr.operand is MethodBase mb && mb.IsConstructor) result.Add(ResolveStackType(mb.DeclaringType, method));
                 else result.Add(UnknownType);
                 return result;
             }
@@ -308,6 +421,163 @@ namespace ModAPI.Harmony
 
             for (int i = 0; i < count; i++) result.Add(UnknownType);
             return result;
+        }
+
+        private static Type MergeStackType(Type existing, Type incoming)
+        {
+            existing = existing ?? UnknownType;
+            incoming = incoming ?? UnknownType;
+
+            if (existing == incoming) return existing;
+            if (existing == UnknownType || incoming == UnknownType) return UnknownType;
+            if (existing.IsByRef || incoming.IsByRef) return existing == incoming ? existing : UnknownType;
+
+            if (existing.IsAssignableFrom(incoming)) return existing;
+            if (incoming.IsAssignableFrom(existing)) return incoming;
+
+            return UnknownType;
+        }
+
+        private static string FormatStackType(Type t)
+        {
+            if (t == null || t == UnknownType) return "unknown";
+            return t.Name;
+        }
+
+        private static bool TryResolveLocalType(CodeInstruction instr, MethodBase method, out Type localType)
+        {
+            localType = null;
+            if (method == null) return false;
+
+            MethodBody body;
+            try { body = method.GetMethodBody(); }
+            catch { return false; }
+
+            if (body == null || body.LocalVariables == null || body.LocalVariables.Count == 0) return false;
+
+            int localIndex = -1;
+            try { localIndex = instr.LocalIndex(); }
+            catch
+            {
+                if (instr.opcode == OpCodes.Ldloc_0) localIndex = 0;
+                else if (instr.opcode == OpCodes.Ldloc_1) localIndex = 1;
+                else if (instr.opcode == OpCodes.Ldloc_2) localIndex = 2;
+                else if (instr.opcode == OpCodes.Ldloc_3) localIndex = 3;
+                else if (instr.operand is int i) localIndex = i;
+                else if (instr.operand is byte b) localIndex = b;
+                else if (instr.operand is sbyte sb) localIndex = sb;
+            }
+
+            if (localIndex < 0 || localIndex >= body.LocalVariables.Count) return false;
+            localType = ResolveStackType(body.LocalVariables[localIndex].LocalType, method);
+            return true;
+        }
+
+        private static bool TryGetArrayElementType(Type arrayType, out Type elementType)
+        {
+            elementType = null;
+            if (arrayType == null || arrayType == UnknownType) return false;
+
+            try
+            {
+                if (arrayType.IsArray)
+                {
+                    elementType = arrayType.GetElementType() ?? UnknownType;
+                    return true;
+                }
+                if (arrayType.IsByRef && arrayType.GetElementType() != null && arrayType.GetElementType().IsArray)
+                {
+                    elementType = arrayType.GetElementType().GetElementType() ?? UnknownType;
+                    return true;
+                }
+            }
+            catch { }
+
+            return false;
+        }
+
+        private static Type ResolveStackType(Type type, MethodBase contextMethod)
+        {
+            if (type == null) return UnknownType;
+            if (type == UnknownType) return UnknownType;
+
+            if (type.IsGenericParameter)
+            {
+                return ResolveGenericParameterType(type, contextMethod);
+            }
+
+            if (type.HasElementType)
+            {
+                var elementType = ResolveStackType(type.GetElementType(), contextMethod);
+                try
+                {
+                    if (type.IsByRef) return elementType.MakeByRefType();
+                    if (type.IsPointer) return elementType.MakePointerType();
+                    if (type.IsArray)
+                    {
+                        int rank = type.GetArrayRank();
+                        return rank == 1 ? elementType.MakeArrayType() : elementType.MakeArrayType(rank);
+                    }
+                }
+                catch
+                {
+                    return UnknownType;
+                }
+            }
+
+            if (type.IsGenericType)
+            {
+                var genericArgs = type.GetGenericArguments();
+                var resolvedArgs = new Type[genericArgs.Length];
+                for (int i = 0; i < genericArgs.Length; i++)
+                {
+                    resolvedArgs[i] = ResolveStackType(genericArgs[i], contextMethod);
+                }
+
+                try
+                {
+                    return type.GetGenericTypeDefinition().MakeGenericType(resolvedArgs);
+                }
+                catch
+                {
+                    return type;
+                }
+            }
+
+            return type;
+        }
+
+        private static Type ResolveGenericParameterType(Type genericParam, MethodBase contextMethod)
+        {
+            if (genericParam == null || !genericParam.IsGenericParameter) return genericParam ?? UnknownType;
+            if (contextMethod == null) return UnknownType;
+
+            try
+            {
+                if (genericParam.DeclaringMethod != null && contextMethod is MethodInfo methodInfo && methodInfo.IsGenericMethod)
+                {
+                    var methodArgs = methodInfo.GetGenericArguments();
+                    int position = genericParam.GenericParameterPosition;
+                    if (position >= 0 && position < methodArgs.Length) return methodArgs[position];
+                }
+
+                var declaringType = contextMethod.DeclaringType;
+                if (declaringType != null && declaringType.IsGenericType)
+                {
+                    var typeArgs = declaringType.GetGenericArguments();
+                    int position = genericParam.GenericParameterPosition;
+                    if (position >= 0 && position < typeArgs.Length) return typeArgs[position];
+                }
+
+                var constraints = genericParam.GetGenericParameterConstraints();
+                if (constraints != null && constraints.Length > 0)
+                {
+                    return ResolveStackType(constraints[0], contextMethod);
+                }
+            }
+            catch { }
+
+            return UnknownType;
         }
 
         private static int CalculatePopCount(CodeInstruction instr, MethodBase method)

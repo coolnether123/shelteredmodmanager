@@ -2,6 +2,8 @@
 
 This document describes how the loader actually behaves at runtime based on the current `ModAPI/Core` implementation.
 
+For exact interface/method signatures referenced by this architecture doc, use `documentation/API_Signatures_Reference.md`.
+
 ## 1. Startup Pipeline
 
 Entry path:
