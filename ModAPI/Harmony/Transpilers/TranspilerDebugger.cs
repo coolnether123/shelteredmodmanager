@@ -125,6 +125,7 @@ namespace ModAPI.Harmony
             catch (Exception ex)
             {
                 MMLog.WriteError("[TranspilerDebugger] Failed to write dump: " + ex.Message);
+                MMLog.WriteError(ex.ToString());
             }
             
             return listAfter;
@@ -419,7 +420,22 @@ namespace ModAPI.Harmony
         }
 
 
-        public static List<Snapshot> History = new List<Snapshot>();
+        private static readonly object _historyLock = new object();
+        private static readonly List<Snapshot> _history = new List<Snapshot>();
+
+        /// <summary>
+        /// Thread-safe snapshot copy for debug UIs. Do not mutate the returned list.
+        /// </summary>
+        public static List<Snapshot> History
+        {
+            get
+            {
+                lock (_historyLock)
+                {
+                    return new List<Snapshot>(_history);
+                }
+            }
+        }
         
         // Helper for UI tooltips
         public static string ExplainOpCode(string opCodeName)
@@ -473,7 +489,7 @@ namespace ModAPI.Harmony
             string diffText = delta > 0 ? $"+{delta}" : delta < 0 ? $"{delta}" : "0";
             
 
-            History.Add(new Snapshot 
+            var snapshot = new Snapshot
             {
                 ModId = modId ?? "Unknown",
                 StepName = snapshotStepName,
@@ -508,10 +524,13 @@ namespace ModAPI.Harmony
                         Confidence = e.Confidence ?? string.Empty
                     }).ToList()
                     : new List<PatchEdit>()
-            });
+            };
 
-            
-            if (History.Count > 100) History.RemoveAt(0);
+            lock (_historyLock)
+            {
+                _history.Add(snapshot);
+                if (_history.Count > 100) _history.RemoveAt(0);
+            }
         }
 
         private static string BuildMethodIdentifier(MethodBase method, string stepName)

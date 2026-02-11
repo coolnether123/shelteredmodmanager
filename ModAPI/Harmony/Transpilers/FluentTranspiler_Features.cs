@@ -193,10 +193,15 @@ namespace ModAPI.Harmony
             int maxGap = 10)
         {
             if (!_matcher.IsValid) return this;
+            int entryPos = _matcher.Pos;
 
             // Match start
             startPattern(this);
-            if (!_matcher.IsValid) return this;
+            if (!_matcher.IsValid)
+            {
+                _matcher.Start().Advance(entryPos);
+                return this;
+            }
             
             int afterStart = _matcher.Pos;
             
@@ -226,6 +231,7 @@ namespace ModAPI.Harmony
             }
             
             _warnings.Add($"MatchWithGap: End pattern not found within {maxGap} instructions of start.");
+            _matcher.Start().Advance(entryPos);
             return this;
         }
 
@@ -318,6 +324,12 @@ namespace ModAPI.Harmony
         private void Lint(List<CodeInstruction> instructions)
         {
             if (_originalMethod == null) return;
+            var labelAnchors = BuildLabelAnchorMap(instructions);
+            var targetedLabels = new HashSet<Label>();
+            MethodBody body = null;
+            try { body = _originalMethod.GetMethodBody(); } catch { }
+            int localCount = body != null && body.LocalVariables != null ? body.LocalVariables.Count : -1;
+            int argumentCount = _originalMethod.GetParameters().Length + (_originalMethod.IsStatic ? 0 : 1);
 
             // Check for Callvirt vs Call correctness
             for (int i = 0; i < instructions.Count; i++)
@@ -330,7 +342,7 @@ namespace ModAPI.Harmony
                      instr.opcode.OperandType == OperandType.InlineField || 
                      instr.opcode.OperandType == OperandType.InlineType))
                 {
-                    _warnings.Add($"Lint: {instr.opcode} at index {i} has NULL operand (Expected {instr.opcode.OperandType})");
+                    _warnings.Add($"[CRITICAL LINT] {instr.opcode} at index {i} has NULL operand (Expected {instr.opcode.OperandType})");
                 }
 
                 // Check for Callvirt vs Call correctness
@@ -352,18 +364,23 @@ namespace ModAPI.Harmony
                 // Check if branch target is valid index
                 if (instr.operand is Label label)
                 {
-                    bool found = false;
-                    for (int j = 0; j < instructions.Count; j++)
-                    {
-                        if (instructions[j].labels != null && instructions[j].labels.Contains(label))
-                        {
-                            found = true;
-                            break;
-                        }
-                    }
+                    bool found = labelAnchors.ContainsKey(label);
+                    targetedLabels.Add(label);
                     if (!found)
                     {
-                        _warnings.Add($"Lint: {instr.opcode} at index {i} refers to label that is not attached to any instruction in this method body.");
+                        _warnings.Add($"[CRITICAL LINT] {instr.opcode} at index {i} refers to label that is not attached to any instruction in this method body.");
+                    }
+                }
+                else if (instr.operand is Label[] labels)
+                {
+                    for (int l = 0; l < labels.Length; l++)
+                    {
+                        targetedLabels.Add(labels[l]);
+                        if (!labelAnchors.ContainsKey(labels[l]))
+                        {
+                            _warnings.Add($"[CRITICAL LINT] {instr.opcode} at index {i} contains switch/branch label not attached to any instruction.");
+                            break;
+                        }
                     }
                 }
                 else if (instr.opcode.FlowControl == FlowControl.Branch || instr.opcode.FlowControl == FlowControl.Cond_Branch)
@@ -371,8 +388,35 @@ namespace ModAPI.Harmony
                     // Catch common mistake: using integer instead of Label for branch operand
                     if (instr.operand != null && !(instr.operand is Label) && !(instr.operand is Label[]))
                     {
-                        _warnings.Add($"Lint: {instr.opcode} at index {i} has invalid operand type '{instr.operand.GetType().Name}'. Branch instructions MUST use a 'Label' as their operand. Using an integer (e.g. 2) is a common error that causes native crashes.");
+                        _warnings.Add($"[CRITICAL LINT] {instr.opcode} at index {i} has invalid operand type '{instr.operand.GetType().Name}'. Branch instructions MUST use a 'Label' as their operand. Using an integer (e.g. 2) is a common error that causes native crashes.");
                     }
+                }
+
+                int localIndex;
+                if (TryGetLocalIndex(instr, out localIndex) && localCount >= 0 && (localIndex < 0 || localIndex >= localCount))
+                {
+                    _warnings.Add($"[CRITICAL LINT] {instr.opcode} at index {i} targets local {localIndex}, but method declares {localCount} locals.");
+                }
+
+                int argumentIndex;
+                if (TryGetArgumentIndex(instr, out argumentIndex) && (argumentIndex < 0 || argumentIndex >= argumentCount))
+                {
+                    _warnings.Add($"[CRITICAL LINT] {instr.opcode} at index {i} targets argument {argumentIndex}, but method argument range is 0..{argumentCount - 1}.");
+                }
+
+                if (instr.opcode == OpCodes.Castclass && !(instr.operand is Type))
+                {
+                    _warnings.Add($"[CRITICAL LINT] castclass at index {i} has invalid operand type '{(instr.operand != null ? instr.operand.GetType().Name : "null")}'.");
+                }
+            }
+
+            foreach (var kv in labelAnchors)
+            {
+                // Entry label at index 0 is often valid without explicit branch target.
+                if (kv.Value == 0) continue;
+                if (!targetedLabels.Contains(kv.Key))
+                {
+                    _warnings.Add($"Lint: label at instruction index {kv.Value} is never targeted by any branch instruction.");
                 }
             }
 
@@ -384,16 +428,68 @@ namespace ModAPI.Harmony
             // Since this is advanced, we'll placeholder it with a basic check:
             try
             {
-                var body = _originalMethod.GetMethodBody();
-                if (body != null && body.ExceptionHandlingClauses.Count > 0)
+                var methodBody = _originalMethod.GetMethodBody();
+                if (methodBody != null && methodBody.ExceptionHandlingClauses.Count > 0)
                 {
-                    // Check if instructions count changed significantly inside a try block?
-                    // Too complex for generic lint without deep analysis. 
-                    // We just warn that EH blocks exist.
-                    // _warnings.Add("Lint: Method contains exception blocks. Verify patch endpoints.");
+                    _warnings.Add("Lint: Method contains exception handlers; use exact index-aligned replacements and avoid structural IL edits.");
                 }
             }
             catch {}
+        }
+
+        private static Dictionary<Label, int> BuildLabelAnchorMap(List<CodeInstruction> instructions)
+        {
+            var map = new Dictionary<Label, int>();
+            if (instructions == null) return map;
+
+            for (int i = 0; i < instructions.Count; i++)
+            {
+                var instr = instructions[i];
+                if (instr == null || instr.labels == null) continue;
+                for (int j = 0; j < instr.labels.Count; j++)
+                {
+                    var label = instr.labels[j];
+                    if (!map.ContainsKey(label)) map[label] = i;
+                }
+            }
+            return map;
+        }
+
+        private static bool TryGetLocalIndex(CodeInstruction instr, out int localIndex)
+        {
+            localIndex = -1;
+            if (instr == null) return false;
+
+            try
+            {
+                // Harmony helper handles ldloc/stloc/ldloca short and long forms.
+                localIndex = instr.LocalIndex();
+                return true;
+            }
+            catch { }
+
+            return false;
+        }
+
+        private static bool TryGetArgumentIndex(CodeInstruction instr, out int argumentIndex)
+        {
+            argumentIndex = -1;
+            if (instr == null) return false;
+
+            try
+            {
+                // Harmony helper handles ldarg/starg/ldarga short and long forms.
+                argumentIndex = instr.ArgumentIndex();
+                return true;
+            }
+            catch { }
+
+            if (instr.opcode == OpCodes.Ldarg_0) { argumentIndex = 0; return true; }
+            if (instr.opcode == OpCodes.Ldarg_1) { argumentIndex = 1; return true; }
+            if (instr.opcode == OpCodes.Ldarg_2) { argumentIndex = 2; return true; }
+            if (instr.opcode == OpCodes.Ldarg_3) { argumentIndex = 3; return true; }
+
+            return false;
         }
 
         #endregion

@@ -1,70 +1,77 @@
-# Mod Settings Guide (Legacy & Low-Level)
+# Settings and Persistence (Current v1.2)
 
-> **Recommendation:** Most mods should use the **Spine Settings Framework** (see [Spine_Settings_Guide.md](Spine_Settings_Guide.md)) which provides automatic UI generation and object-based persistence.
+Use `Spine` for mod configuration UI and `ISaveSystem`/`PersistentDataAPI` for data persistence.
 
----
+Canonical signatures: `documentation/API_Signatures_Reference.md`.
 
-## 1. Low-Level Key-Value API
-The original ModAPI settings system is a simple key-value collection. Use this if you need a very lightweight setup or are porting a v0.x mod.
+## 1. Recommended Settings Flow (Spine + ModManagerBase)
 
-### Location
-- `Config/default.json` - Default values bundled with your mod.
-- `Config/user.json` - User overrides (automatically created by `SaveUser()`).
-
-### JSON Format
-```json
+```csharp
+public class MyMod : ModManagerBase, IModPlugin
 {
-  "entries": [
-    { "key": "difficulty", "type": "string", "value": "Normal" },
-    { "key": "maxCount",   "type": "int",    "value": "10" },
-    { "key": "spawnRate",  "type": "float",  "value": "1.25" },
-    { "key": "enabled",    "type": "bool",   "value": "true" }
-  ]
+    [ModSetting("Enable Feature")]
+    public bool Enabled = true;
+
+    [ModSetting("Multiplier", Min = 0.5f, Max = 3.0f, StepSize = 0.1f)]
+    public float Multiplier = 1.0f;
+
+    public override void Initialize(IPluginContext ctx)
+    {
+        base.Initialize(ctx); // settings controller is discovered and loaded here
+    }
 }
 ```
 
-### Usage
+## 2. Runtime Toggles (Global ModAPI Flags)
+
+Use `ModPrefs` for loader/runtime flags:
+
 ```csharp
-public void Initialize(IPluginContext ctx)
+ModPrefs.DebugTranspilers = true;
+ModPrefs.TranspilerSafeMode = true;
+ModPrefs.Save();
+```
+
+## 3. Per-Save Typed Data (`ISaveSystem`)
+
+```csharp
+public class MySaveState
 {
-    var settings = ctx.Settings;
-    int count = settings.GetInt("maxCount", 5);
-    bool enabled = settings.GetBool("enabled", true);
+    public int Visits;
 }
 
-public void SaveChanges(IPluginContext ctx)
+public class MyMod : IModPlugin
 {
-    ctx.Settings.SetInt("maxCount", 20);
-    ctx.Settings.SaveUser(); // Writes to Config/user.json
+    private readonly MySaveState _state = new MySaveState();
+
+    public void Initialize(IPluginContext ctx)
+    {
+        ctx.SaveSystem.RegisterModData("state", _state);
+    }
+
+    public void Start(IPluginContext ctx) { }
 }
 ```
 
----
+## 4. SaveData/LoadData Extension Methods (`PersistentDataAPI`)
 
-## 2. Global Mod Persistence
-If you need to save arbitrary C# objects or per-save data, use `PersistentDataAPI`.
+These are extension methods on `IPluginContext`:
 
-### Global Data (Persistent across all saves)
 ```csharp
-public class MyModData { public int HighScore; }
-
 // Save
-PersistentDataAPI.SaveData("com.mymod.stats", new MyModData { HighScore = 100 });
+ctx.SaveData("custom_blob", myData);
 
 // Load
-var data = PersistentDataAPI.LoadData<MyModData>("com.mymod.stats");
+if (ctx.LoadData("custom_blob", out MyData loaded))
+{
+    myData = loaded;
+}
 ```
 
-### Per-Save Data
-To attach data to a specific save file, see the `ISaveSystem` documentation.
+## 5. What Not to Use
 
----
-
-## 3. Comparison
-| Feature | Low-Level (This Doc) | Spine (Recommended) |
-|---------|---------------------|----------------------|
-| **UI** | Manual | Automatic (Attributes) |
-| **Logic** | Key-Value Strings | Type-safe C# Objects |
-| **Persistence**| `user.json` | `spine_settings.json` |
-| **Complex UI** | N/A | Sliders, Toggles, Enums, Presets |
-| **Best For** | Legacy Mods | New Mods |
+Legacy calls below are no longer current API:
+- `ctx.Settings.GetInt(...)`
+- `ctx.Settings.SetInt(...)`
+- `ctx.Settings.SaveUser()`
+- `PersistentDataAPI.SaveData(...)` (static style without `ctx`)

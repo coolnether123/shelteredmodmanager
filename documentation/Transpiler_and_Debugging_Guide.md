@@ -2,6 +2,8 @@
 
 This guide focuses on the current transpiler stack under `ModAPI.Harmony.Transpilers`.
 
+Canonical signatures for the APIs referenced here: `documentation/API_Signatures_Reference.md`.
+
 ## 1. Recommended Workflow
 
 1. Start with `FluentTranspiler.For(...)`.
@@ -38,6 +40,16 @@ public static class TargetMethod_Patch
 - `CooperativePatcher`: multi-mod transpiler pipeline sequencing.
 - `TranspilerDebugger`: dump + diff files and runtime snapshots.
 - `TranspilerTestHarness`: unit-style testing without launching game.
+
+### Exact Signatures (Most Used)
+
+```csharp
+public static FluentTranspiler For(IEnumerable<CodeInstruction> instructions, MethodBase originalMethod = null, ILGenerator generator = null);
+public FluentTranspiler ReplaceAllPatterns(Func<CodeInstruction, bool>[] patternPredicates, CodeInstruction[] replaceWith, bool preserveInstructionCount = false);
+public FluentTranspiler ReplaceAll(IEnumerable<CodeInstruction> newInstructions);
+public FluentTranspiler WithTransaction(Action<FluentTranspiler> action);
+public IEnumerable<CodeInstruction> Build(bool strict = true, bool validateStack = true);
+```
 
 ## 3. Matching Correctly
 
@@ -113,7 +125,13 @@ t.InjectBeforeCall(typeof(Bunker), "Open", typeof(Hooks), "BeforeOpen");
 - `validateStack: true`: runs `StackSentinel` + lint pass.
 
 Important current behavior:
-- `StackSentinel` skips validation for methods with exception handling clauses (`try/catch/finally`) and treats that as non-fatal.
+- `StackSentinel` currently does **not** support full exception-handler analysis (`try/catch/finally/filter`) and fails validation for those methods.
+- If your target method uses exception handlers, avoid complex transpilers or isolate patch points to safer Prefix/Postfix paths.
+- Stack analysis now merges type state across control-flow joins and reports unresolved values as `unknown` instead of pretending they are `object`.
+- `ReplaceSequence`/`ReplaceAllPatterns` now preserve Harmony exception block markers (`CodeInstruction.blocks`) and require exact index-aligned replacement on EH methods.
+- `ReplaceAll` is blocked on EH methods to prevent exception-clause boundary corruption.
+- `ReplaceAll` now applies transactional rollback on failures (including internal list mismatches), uses matcher-first replacement, and emits critical diagnostics with method name, old/new counts, and opcode previews.
+- `FluentTranspiler` instances are not thread-safe; do not share a single instance across threads.
 
 If you are iterating quickly, use `strict: false` temporarily, then restore strict mode before shipping.
 
@@ -149,8 +167,11 @@ ModAPI now exposes global transpiler safety controls through `ModPrefs`:
 
 Practical effect:
 - Risky `ReplaceAllPatterns(... preserveInstructionCount: false)` calls are upgraded to preserve mode in safe mode.
+- Preserve mode now rejects unsafe NOP-padding cases when removed tail instructions are not stack-neutral.
 - Critical warnings (for example stack or branch-risk warnings) can hard-fail the patch.
+- Catastrophic lint findings are emitted as `[CRITICAL LINT]` (invalid branch operands, unresolved labels, bad local/arg indices, invalid castclass operands).
 - Cooperative pipelines can quarantine a failing owner to prevent repeated unsafe mutations.
+- Transpiler debugger history snapshots are now stored with locking and exposed as copy-on-read to avoid race conditions in debug UI.
 
 Detailed reference: `documentation/Transpiler_Safety_Settings.md`
 

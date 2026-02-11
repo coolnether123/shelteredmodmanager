@@ -28,6 +28,7 @@ namespace ModAPI.Harmony
     /// <item><b>Safety:</b> Automatically handles label preservation and branch target fixups.</item>
     /// <item><b>Diagnostics:</b> Provides intent-based logging so you know exactly WHERE a patch failed.</item>
     /// <item><b>Validation:</b> Includes a real-time Stack Sentinel that catches "Stack Mismatch" crashes during the build phase.</item>
+    /// <item><b>Threading:</b> FluentTranspiler instances are not thread-safe and should not be shared across threads.</item>
     /// </list>
     /// </remarks>
     public partial class FluentTranspiler
@@ -47,7 +48,8 @@ namespace ModAPI.Harmony
         private readonly System.Diagnostics.Stopwatch _stopwatch;
         private readonly List<CodeInstruction> _initialInstructions;
         private readonly List<TranspilerDebugger.PatchEdit> _patchEdits = new List<TranspilerDebugger.PatchEdit>();
-        private bool _suppressPatchEditCapture;
+        private readonly Dictionary<Label, int> _labelIndexCache = new Dictionary<Label, int>();
+        private bool _labelIndexCacheDirty = true;
 
         private FluentTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase originalMethod = null, ILGenerator generator = null)
         {
@@ -720,6 +722,7 @@ namespace ModAPI.Harmony
 
             var insertIndex = _matcher.Pos;
             _matcher.Insert(newInstr);
+            InvalidateLabelIndexCache();
             RecordPatchEdit("InsertBefore", insertIndex, null, insertIndex, new[] { newInstr }, "Insert before current", "exact");
             return this;
         }
@@ -740,21 +743,30 @@ namespace ModAPI.Harmony
                 _warnings.Add("InsertBefore: No valid match.");
                 return this;
             }
+            if (instructions == null)
+            {
+                _warnings.Add("InsertBefore: instruction array cannot be null.");
+                return this;
+            }
+
+            // Clone caller-provided instructions so labels/operands edits here do not leak back to caller state.
+            var toInsert = instructions.Select(i => new CodeInstruction(i)).ToArray();
 
             // Transfer labels to first new instruction
             var existingLabels = _matcher.Instruction.labels;
-            if (existingLabels.Count > 0 && instructions.Length > 0)
+            if (existingLabels.Count > 0 && toInsert.Length > 0)
             {
-                instructions[0].labels.AddRange(existingLabels);
+                toInsert[0].labels.AddRange(existingLabels);
                 existingLabels.Clear();
             }
 
             var insertIndex = _matcher.Pos;
-            for (int i = instructions.Length - 1; i >= 0; i--)
+            for (int i = toInsert.Length - 1; i >= 0; i--)
             {
-                _matcher.Insert(instructions[i]);
+                _matcher.Insert(toInsert[i]);
             }
-            RecordPatchEdit("InsertBefore", insertIndex, null, insertIndex, instructions, "Insert sequence before current", "exact");
+            InvalidateLabelIndexCache();
+            RecordPatchEdit("InsertBefore", insertIndex, null, insertIndex, toInsert, "Insert sequence before current", "exact");
             return this;
         }
 
@@ -774,6 +786,7 @@ namespace ModAPI.Harmony
             var newInstr = new CodeInstruction(opcode, operand);
             _matcher.Insert(newInstr);
             _matcher.Advance(-1); // Return to original position
+            InvalidateLabelIndexCache();
             RecordPatchEdit("InsertAfter", insertIndex, null, insertIndex, new[] { newInstr }, "Insert after current", "exact");
             return this;
         }
@@ -794,15 +807,24 @@ namespace ModAPI.Harmony
                 _warnings.Add("InsertAfter: No valid match.");
                 return this;
             }
+            if (instructions == null)
+            {
+                _warnings.Add("InsertAfter: instruction array cannot be null.");
+                return this;
+            }
+
+            // Clone caller-provided instructions so insertion does not alias mutable instruction objects.
+            var toInsert = instructions.Select(i => new CodeInstruction(i)).ToArray();
 
             var insertIndex = _matcher.Pos + 1;
             _matcher.Advance(1);
-            foreach (var instr in instructions)
+            foreach (var instr in toInsert)
             {
                 _matcher.InsertAndAdvance(instr);
             }
-            _matcher.Advance(-instructions.Length - 1); // Restore to original position
-            RecordPatchEdit("InsertAfter", insertIndex, null, insertIndex, instructions, "Insert sequence after current", "exact");
+            _matcher.Advance(-toInsert.Length - 1); // Restore to original position
+            InvalidateLabelIndexCache();
+            RecordPatchEdit("InsertAfter", insertIndex, null, insertIndex, toInsert, "Insert sequence after current", "exact");
             return this;
         }
 
@@ -818,6 +840,7 @@ namespace ModAPI.Harmony
             var beforeIndex = _matcher.Pos;
             var removed = _matcher.Instruction;
             _matcher.RemoveInstruction();
+            InvalidateLabelIndexCache();
             RecordPatchEdit("Remove", beforeIndex, new[] { removed }, beforeIndex, null, "Remove current instruction", "exact");
             return this;
         }
@@ -1107,19 +1130,51 @@ namespace ModAPI.Harmony
         /// <param name="newInstructions">The instructions to insert in their place.</param>
         public FluentTranspiler ReplaceSequence(int removeCount, params CodeInstruction[] newInstructions)
         {
+            return ReplaceSequence(removeCount, true, newInstructions);
+        }
+
+        /// <summary>
+        /// Internal variant of <see cref="ReplaceSequence(int, CodeInstruction[])"/> that allows
+        /// callers to skip automatic patch-edit recording when they capture higher-level edits.
+        /// </summary>
+        internal FluentTranspiler ReplaceSequence(int removeCount, bool recordPatchEdit, params CodeInstruction[] newInstructions)
+        {
             if (!_matcher.IsValid)
             {
                 _warnings.Add("ReplaceSequence: No valid match.");
                 return this;
             }
+            if (removeCount < 0)
+            {
+                _warnings.Add("ReplaceSequence: removeCount cannot be negative.");
+                return this;
+            }
+            if (newInstructions == null)
+            {
+                _warnings.Add("ReplaceSequence: replacement instructions cannot be null.");
+                return this;
+            }
 
             var beforeIndex = _matcher.Pos;
             var originalInstructions = _matcher.Instructions().ToList();
+            if (beforeIndex < 0 || beforeIndex + removeCount > originalInstructions.Count)
+            {
+                _warnings.Add($"[CRITICAL SAFETY] ReplaceSequence range out of bounds (start={beforeIndex}, removeCount={removeCount}, methodLength={originalInstructions.Count}). Aborting.");
+                return this;
+            }
             
             // 1. Analyze: Capture labels and check for hazardous jumps
             List<Label> capturedLabels;
             List<CodeInstruction> removedInstructions;
-            if (!CaptureLabelsAndAnalyzeSafety(beforeIndex, removeCount, originalInstructions, out capturedLabels, out removedInstructions))
+            List<List<ExceptionBlock>> capturedBlocksByOffset;
+            if (!CaptureLabelsAndAnalyzeSafety(
+                beforeIndex,
+                removeCount,
+                newInstructions,
+                originalInstructions,
+                out capturedLabels,
+                out removedInstructions,
+                out capturedBlocksByOffset))
             {
                 return this; // Aborted due to safety check
             }
@@ -1131,18 +1186,53 @@ namespace ModAPI.Harmony
             }
             
             // 3. Reconstruct: Insert new instructions and apply labels
-            ApplyReplacementInstructions(newInstructions, capturedLabels);
+            ApplyReplacementInstructions(newInstructions, capturedLabels, capturedBlocksByOffset);
+            if (newInstructions.Length == 0 && _matcher.IsValid)
+            {
+                // Preserve label/block anchors when removing without replacement.
+                for (int i = 0; i < capturedLabels.Count; i++)
+                {
+                    var label = capturedLabels[i];
+                    if (!_matcher.Instruction.labels.Contains(label))
+                    {
+                        _matcher.Instruction.labels.Add(label);
+                    }
+                }
+
+                for (int i = 0; i < capturedBlocksByOffset.Count; i++)
+                {
+                    var blocks = capturedBlocksByOffset[i];
+                    if (blocks == null) continue;
+                    for (int b = 0; b < blocks.Count; b++)
+                    {
+                        _matcher.Instruction.blocks.Add(blocks[b]);
+                    }
+                }
+            }
+            InvalidateLabelIndexCache();
             
             // 4. Record
-            RecordPatchEdit("ReplaceSequence", beforeIndex, removedInstructions, beforeIndex, newInstructions, $"remove:{removeCount} add:{newInstructions.Length}", "exact");
+            if (recordPatchEdit)
+            {
+                RecordPatchEdit("ReplaceSequence", beforeIndex, removedInstructions, beforeIndex, newInstructions, $"remove:{removeCount} add:{newInstructions.Length}", "exact");
+            }
             
             return this;
         }
 
-        private bool CaptureLabelsAndAnalyzeSafety(int startIndex, int removeCount, List<CodeInstruction> methodScope, out List<Label> capturedLabels, out List<CodeInstruction> removedInstructions)
+        private bool CaptureLabelsAndAnalyzeSafety(
+            int startIndex,
+            int removeCount,
+            CodeInstruction[] newInstructions,
+            List<CodeInstruction> methodScope,
+            out List<Label> capturedLabels,
+            out List<CodeInstruction> removedInstructions,
+            out List<List<ExceptionBlock>> capturedBlocksByOffset)
         {
             capturedLabels = new List<Label>();
             removedInstructions = new List<CodeInstruction>();
+            capturedBlocksByOffset = new List<List<ExceptionBlock>>();
+            var incomingBranchMap = BuildFirstTargetingInstructionMap(methodScope);
 
             for (var r = 0; r < removeCount; r++)
             {
@@ -1151,6 +1241,7 @@ namespace ModAPI.Harmony
 
                 var instr = methodScope[index];
                 removedInstructions.Add(instr);
+                capturedBlocksByOffset.Add(instr.blocks != null ? new List<ExceptionBlock>(instr.blocks) : new List<ExceptionBlock>());
 
                 if (instr.labels == null || instr.labels.Count == 0) continue;
 
@@ -1159,7 +1250,8 @@ namespace ModAPI.Harmony
                 {
                     foreach (var label in instr.labels)
                     {
-                        var jumper = FindInstructionTargetingLabel(label);
+                        CodeInstruction jumper = null;
+                        incomingBranchMap.TryGetValue(label, out jumper);
                         if (jumper != null)
                         {
                             _warnings.Add($"[CRITICAL SAFETY] Unsafe Jump Detected: Instruction @IL_{methodScope.IndexOf(jumper):X4} ({jumper.opcode}) targets the middle of your replacement block at offset {r} (Label: {label}). Aborting.");
@@ -1169,10 +1261,79 @@ namespace ModAPI.Harmony
                 }
                 capturedLabels.AddRange(instr.labels);
             }
+
+            if (MethodHasExceptionHandlingClauses())
+            {
+                if (newInstructions == null || newInstructions.Length != removeCount)
+                {
+                    _warnings.Add("[CRITICAL SAFETY] ReplaceSequence on EH methods requires exact index-aligned replacement (removeCount == insertCount). Aborting.");
+                    return false;
+                }
+
+                for (int r = 0; r < capturedBlocksByOffset.Count; r++)
+                {
+                    var blocks = capturedBlocksByOffset[r];
+                    if (blocks == null || blocks.Count == 0) continue;
+
+                    bool canMapByIndex = newInstructions != null && newInstructions.Length == removeCount;
+                    bool canMapToEntry = newInstructions != null && newInstructions.Length > 0 && r == 0;
+                    if (!canMapByIndex && !canMapToEntry)
+                    {
+                        _warnings.Add("[CRITICAL SAFETY] ReplaceSequence would relocate exception boundary markers without a safe mapping. Aborting.");
+                        return false;
+                    }
+                }
+            }
+
+            if (removeCount > 0 && newInstructions != null && newInstructions.Length > 0 && startIndex >= 0 && startIndex < methodScope.Count)
+            {
+                var originalEntry = methodScope[startIndex];
+                var replacementEntry = newInstructions[0];
+                if (originalEntry != null && originalEntry.labels != null && originalEntry.labels.Count > 0)
+                {
+                    for (int i = 0; i < originalEntry.labels.Count; i++)
+                    {
+                        if (!incomingBranchMap.ContainsKey(originalEntry.labels[i])) continue;
+                        if (!AreLabelEntryStackBehaviorsCompatible(originalEntry, replacementEntry))
+                        {
+                            _warnings.Add("[CRITICAL SAFETY] Label-targeted entry instruction replacement changed stack behavior. Aborting.");
+                            return false;
+                        }
+                    }
+                }
+            }
             return true;
         }
 
-        private void ApplyReplacementInstructions(CodeInstruction[] newInstructions, List<Label> capturedLabels)
+        private static Dictionary<Label, CodeInstruction> BuildFirstTargetingInstructionMap(List<CodeInstruction> methodScope)
+        {
+            var map = new Dictionary<Label, CodeInstruction>();
+            if (methodScope == null) return map;
+
+            for (int i = 0; i < methodScope.Count; i++)
+            {
+                var instr = methodScope[i];
+                if (instr == null) continue;
+
+                Label? branchLabel;
+                if (instr.Branches(out branchLabel) && branchLabel.HasValue)
+                {
+                    var single = branchLabel.Value;
+                    if (!map.ContainsKey(single)) map[single] = instr;
+                }
+                else if (instr.operand is Label[] many)
+                {
+                    for (int j = 0; j < many.Length; j++)
+                    {
+                        var label = many[j];
+                        if (!map.ContainsKey(label)) map[label] = instr;
+                    }
+                }
+            }
+            return map;
+        }
+
+        private void ApplyReplacementInstructions(CodeInstruction[] newInstructions, List<Label> capturedLabels, List<List<ExceptionBlock>> capturedBlocksByOffset)
         {
             for (int i = 0; i < newInstructions.Length; i++)
             {
@@ -1185,57 +1346,145 @@ namespace ModAPI.Harmony
                             instr.labels.Add(label);
                     }
                 }
+                if (capturedBlocksByOffset != null)
+                {
+                    if (i < capturedBlocksByOffset.Count)
+                    {
+                        var blocks = capturedBlocksByOffset[i];
+                        if (blocks != null)
+                        {
+                            for (int b = 0; b < blocks.Count; b++)
+                            {
+                                instr.blocks.Add(blocks[b]);
+                            }
+                        }
+                    }
+                    else if (i == 0 && capturedBlocksByOffset.Count > 0)
+                    {
+                        // Fallback: preserve any unmapped markers on entry instruction.
+                        for (int r = 1; r < capturedBlocksByOffset.Count; r++)
+                        {
+                            var blocks = capturedBlocksByOffset[r];
+                            if (blocks == null) continue;
+                            for (int b = 0; b < blocks.Count; b++)
+                            {
+                                instr.blocks.Add(blocks[b]);
+                            }
+                        }
+                    }
+                }
                 _matcher.InsertAndAdvance(instr);
             }
         }
 
-        private CodeInstruction FindInstructionTargetingLabel(Label targetLabel)
-        {
-            var allInstructions = _matcher.Instructions();
-            foreach (var instr in allInstructions)
-            {
-                if (instr.operand is Label l && l == targetLabel) return instr;
-                if (instr.operand is Label[] labels && labels.Contains(targetLabel)) return instr;
-            }
-            return null;
-        }
-
-
         /// <summary>Attaches a label to the current instruction.</summary>
         public FluentTranspiler AddLabel(Label label)
         {
-            if (_matcher.IsValid) _matcher.Instruction.labels.Add(label);
+            if (_matcher.IsValid)
+            {
+                _matcher.Instruction.labels.Add(label);
+                InvalidateLabelIndexCache();
+            }
             return this;
         }
 
         /// <summary>
         /// Completely replaces the entire method body with new instructions.
-        /// Direct manipulation of the instruction list avoids CodeMatcher invalidity issues on empty methods.
-        /// Preserves labels on the method entry point to ensure external jumps remain valid.
+        /// Uses CodeMatcher operations first and only falls back to direct list mutation when inserting into an empty body.
+        /// Applies transactional rollback on any failure and preserves entry labels/blocks when possible.
         /// </summary>
         public FluentTranspiler ReplaceAll(IEnumerable<CodeInstruction> newInstructions)
         {
-            var newCode = newInstructions.ToList();
+            if (MethodHasExceptionHandlingClauses())
+            {
+                _warnings.Add("[CRITICAL SAFETY] ReplaceAll is blocked for methods with exception handlers. Use exact index-aligned replacements instead.");
+                return this;
+            }
+            if (newInstructions == null)
+            {
+                _warnings.Add("[CRITICAL SAFETY] ReplaceAll received null replacement instruction sequence. Aborting.");
+                return this;
+            }
+
+            var newCode = newInstructions.Select(i => new CodeInstruction(i)).ToList();
             var oldList = _matcher.Instructions();
             var oldCopy = oldList.Select(i => new CodeInstruction(i)).ToList();
+            int oldCount = oldCopy.Count;
+            int newCount = newCode.Count;
+            string methodName = _originalMethod != null ? (_originalMethod.DeclaringType != null ? _originalMethod.DeclaringType.FullName + "." + _originalMethod.Name : _originalMethod.Name) : "<unknown-method>";
+            string oldPreview = BuildOpcodePreview(oldCopy);
+            string newPreview = BuildOpcodePreview(newCode);
 
             if (oldList.Count > 0 && newCode.Count > 0 
                 && oldList[0].labels?.Count > 0)
             {
                 newCode[0].labels.AddRange(oldList[0].labels);
             }
-
-            // WARNING: Directly mutates CodeMatcher's internal list.
-            // This is a known coupling to Harmony's implementation.
-            // If CodeMatcher changes to use defensive copies, this
-            // will silently fail.
-            oldList.Clear();
-            oldList.AddRange(newCode);
-
-            // Safety check: Verify the replacement took
-            if (_matcher.Instructions().Count != newCode.Count)
+            if (oldList.Count > 0 && newCode.Count > 0
+                && oldList[0].blocks?.Count > 0)
             {
-                _warnings.Add("ReplaceAll: Internal list mismatch detected. HarmonyLib implementation may have changed.");
+                newCode[0].blocks.AddRange(oldList[0].blocks);
+            }
+
+            var snapshot = oldCopy.Select(i => new CodeInstruction(i)).ToList();
+            int snapshotPos = _matcher.IsValid ? _matcher.Pos : 0;
+            try
+            {
+                bool replacedUsingMatcher = false;
+                if (oldCount > 0)
+                {
+                    _matcher.Start();
+                    if (newCount > 0)
+                    {
+                        // Matcher-first replacement without dropping into an empty/invalid insert state:
+                        // replace entry, trim old tail, then append remaining new tail.
+                        _matcher.SetInstruction(newCode[0]);
+                        if (oldCount > 1)
+                        {
+                            _matcher.Advance(1);
+                            _matcher.RemoveInstructions(oldCount - 1);
+                        }
+                        if (newCount > 1)
+                        {
+                            _matcher.Start();
+                            _matcher.InsertAfter(newCode.Skip(1));
+                        }
+                    }
+                    else
+                    {
+                        _matcher.RemoveInstructions(oldCount);
+                    }
+                    replacedUsingMatcher = true;
+                }
+                else if (newCount > 0)
+                {
+                    // No instructions exist; matcher-driven insertion is invalid in this state.
+                    oldList.Clear();
+                    oldList.AddRange(newCode);
+                    _warnings.Add($"[CRITICAL SAFETY] ReplaceAll used direct instruction-list fallback on {methodName} because CodeMatcher cannot insert into an empty body. oldCount={oldCount}, newCount={newCount}. oldOps={oldPreview}. newOps={newPreview}");
+                }
+
+                InvalidateLabelIndexCache();
+
+                // Safety check: Verify the replacement took
+                if (_matcher.Instructions().Count != newCount)
+                {
+                    _warnings.Add($"[CRITICAL SAFETY] ReplaceAll internal list mismatch on {methodName}. oldCount={oldCount}, newCount={newCount}, actualCount={_matcher.Instructions().Count}. oldOps={oldPreview}. newOps={newPreview}");
+                    RestoreInstructionSnapshot(snapshot, snapshotPos);
+                    _warnings.Add($"[CRITICAL SAFETY] ReplaceAll rolled back on {methodName} after internal list mismatch.");
+                    return this;
+                }
+
+                if (replacedUsingMatcher)
+                {
+                    _matcher.Start();
+                }
+            }
+            catch (Exception ex)
+            {
+                RestoreInstructionSnapshot(snapshot, snapshotPos);
+                _warnings.Add($"[CRITICAL SAFETY] ReplaceAll failed and rolled back on {methodName}. oldCount={oldCount}, newCount={newCount}. oldOps={oldPreview}. newOps={newPreview}. Error={ex.Message}");
+                return this;
             }
 
             RecordPatchEdit("ReplaceAll", 0, oldCopy, 0, newCode, "Replace entire method body", "exact");
@@ -1327,6 +1576,17 @@ namespace ModAPI.Harmony
                 _warnings.Add($"ReplaceAllPatterns: No valid matches found for pattern in method {methodName}. Verified opcodes: {string.Join(", ", patternPredicates.Select(p => "predicate").ToArray())}");
                 return this;
             }
+
+            if (!CanSafelyPatchWithExceptionBlocks(instructions, matchPositions, patternPredicates.Length, replaceWith.Length, methodName))
+            {
+                return this;
+            }
+
+            if (effectivePreserveInstructionCount && !CanSafelyPadWithNops(instructions, matchPositions, patternPredicates.Length, replaceWith.Length))
+            {
+                _warnings.Add($"[CRITICAL SAFETY] ReplaceAllPatterns cannot preserve instruction count safely in {methodName}. Removed tail instructions are not stack-neutral; aborting replacement.");
+                return this;
+            }
             
             MMLog.WriteDebug($"[FluentTranspiler] ReplaceAllPatterns: Found {matchPositions.Count} occurrences in {methodName}. Applying replacements...");
             
@@ -1359,9 +1619,7 @@ namespace ModAPI.Harmony
                 else
                 {
                     // Normal mode: remove and replace using the safer ReplaceSequence helper.
-                    _suppressPatchEditCapture = true;
-                    ReplaceSequence(patternPredicates.Length, replaceWith);
-                    _suppressPatchEditCapture = false;
+                    ReplaceSequence(patternPredicates.Length, false, replaceWith);
                 }
 
                 RecordPatchEdit(
@@ -1379,6 +1637,192 @@ namespace ModAPI.Harmony
             return this;
         }
 
+        /// <summary>
+        /// NOP-padding only preserves stack safety if every removed tail instruction
+        /// is stack-neutral. Otherwise branch targets that enter the padded span can observe
+        /// different stack states and destabilize runtime.
+        /// </summary>
+        private static bool CanSafelyPadWithNops(List<CodeInstruction> instructions, List<int> matchPositions, int patternLength, int replaceLength)
+        {
+            if (replaceLength > patternLength) return false;
+            if (replaceLength == patternLength) return true;
+
+            for (int m = 0; m < matchPositions.Count; m++)
+            {
+                int start = matchPositions[m];
+                for (int i = start + replaceLength; i < start + patternLength; i++)
+                {
+                    if (i < 0 || i >= instructions.Count) return false;
+                    var instr = instructions[i];
+                    if (!IsStackNeutralInstruction(instr)) return false;
+                }
+            }
+            return true;
+        }
+
+        private static bool IsStackNeutralInstruction(CodeInstruction instr)
+        {
+            if (instr == null) return false;
+            var op = instr.opcode;
+            return op.StackBehaviourPop == StackBehaviour.Pop0 && op.StackBehaviourPush == StackBehaviour.Push0;
+        }
+
+        private bool MethodHasExceptionHandlingClauses()
+        {
+            if (_originalMethod == null) return false;
+            try
+            {
+                var body = _originalMethod.GetMethodBody();
+                return body != null && body.ExceptionHandlingClauses != null && body.ExceptionHandlingClauses.Count > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private bool CanSafelyPatchWithExceptionBlocks(
+            List<CodeInstruction> instructions,
+            List<int> matchPositions,
+            int patternLength,
+            int replaceLength,
+            string methodName)
+        {
+            if (!MethodHasExceptionHandlingClauses()) return true;
+            if (instructions == null || matchPositions == null || patternLength <= 0) return true;
+
+            if (replaceLength != patternLength)
+            {
+                _warnings.Add($"[CRITICAL SAFETY] ReplaceAllPatterns on EH method {methodName} requires exact index-aligned replacement (patternLength == replaceLength). Aborting.");
+                return false;
+            }
+
+            for (int m = 0; m < matchPositions.Count; m++)
+            {
+                int start = matchPositions[m];
+                for (int i = 0; i < patternLength; i++)
+                {
+                    int idx = start + i;
+                    if (idx < 0 || idx >= instructions.Count) continue;
+                    var instr = instructions[idx];
+                    bool hasBlocks = instr != null && instr.blocks != null && instr.blocks.Count > 0;
+                    if (!hasBlocks) continue;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool AreLabelEntryStackBehaviorsCompatible(CodeInstruction originalEntry, CodeInstruction replacementEntry)
+        {
+            if (originalEntry == null || replacementEntry == null) return false;
+            int? originalPop = TryGetFixedStackPopCount(originalEntry.opcode);
+            int? replacementPop = TryGetFixedStackPopCount(replacementEntry.opcode);
+            int? originalPush = TryGetFixedStackPushCount(originalEntry.opcode);
+            int? replacementPush = TryGetFixedStackPushCount(replacementEntry.opcode);
+
+            if (originalPop.HasValue && replacementPop.HasValue && originalPush.HasValue && replacementPush.HasValue)
+            {
+                return originalPop.Value == replacementPop.Value && originalPush.Value == replacementPush.Value;
+            }
+
+            return originalEntry.opcode.StackBehaviourPop == replacementEntry.opcode.StackBehaviourPop
+                && originalEntry.opcode.StackBehaviourPush == replacementEntry.opcode.StackBehaviourPush;
+        }
+
+        private static int? TryGetFixedStackPopCount(OpCode opcode)
+        {
+            switch (opcode.StackBehaviourPop)
+            {
+                case StackBehaviour.Pop0: return 0;
+                case StackBehaviour.Pop1:
+                case StackBehaviour.Popi:
+                case StackBehaviour.Popref:
+                    return 1;
+                case StackBehaviour.Pop1_pop1:
+                case StackBehaviour.Popi_pop1:
+                case StackBehaviour.Popi_popi:
+                case StackBehaviour.Popi_popi8:
+                case StackBehaviour.Popi_popr4:
+                case StackBehaviour.Popi_popr8:
+                case StackBehaviour.Popref_pop1:
+                case StackBehaviour.Popref_popi:
+                    return 2;
+                case StackBehaviour.Popi_popi_popi:
+                case StackBehaviour.Popref_popi_pop1:
+                case StackBehaviour.Popref_popi_popi:
+                case StackBehaviour.Popref_popi_popi8:
+                case StackBehaviour.Popref_popi_popr4:
+                case StackBehaviour.Popref_popi_popr8:
+                case StackBehaviour.Popref_popi_popref:
+                    return 3;
+                default:
+                    return null;
+            }
+        }
+
+        private static int? TryGetFixedStackPushCount(OpCode opcode)
+        {
+            switch (opcode.StackBehaviourPush)
+            {
+                case StackBehaviour.Push0: return 0;
+                case StackBehaviour.Push1:
+                case StackBehaviour.Pushi:
+                case StackBehaviour.Pushi8:
+                case StackBehaviour.Pushr4:
+                case StackBehaviour.Pushr8:
+                case StackBehaviour.Pushref:
+                    return 1;
+                case StackBehaviour.Push1_push1:
+                    return 2;
+                default:
+                    return null;
+            }
+        }
+
+        private static string BuildOpcodePreview(IList<CodeInstruction> instructions)
+        {
+            if (instructions == null || instructions.Count == 0) return "<empty>";
+            var first = instructions.Take(3).Select(i => i != null ? i.opcode.Name : "null").ToArray();
+            var last = instructions.Skip(Math.Max(0, instructions.Count - 3)).Select(i => i != null ? i.opcode.Name : "null").ToArray();
+            return "first:[" + string.Join(",", first) + "] last:[" + string.Join(",", last) + "]";
+        }
+
+        /// <summary>
+        /// Executes a mutation block atomically. If the block throws, instruction state is restored.
+        /// This provides rollback support for complex multi-step patch chains.
+        /// </summary>
+        public FluentTranspiler WithTransaction(Action<FluentTranspiler> action)
+        {
+            var snapshot = _matcher.Instructions().Select(i => new CodeInstruction(i)).ToList();
+            int snapshotPos = _matcher.IsValid ? _matcher.Pos : 0;
+            try
+            {
+                action(this);
+                return this;
+            }
+            catch (Exception ex)
+            {
+                RestoreInstructionSnapshot(snapshot, snapshotPos);
+                _warnings.Add("Transaction rollback applied: " + ex.Message);
+                return this;
+            }
+        }
+
+        private void RestoreInstructionSnapshot(List<CodeInstruction> snapshot, int pos)
+        {
+            var current = _matcher.Instructions();
+            current.Clear();
+            current.AddRange(snapshot);
+            InvalidateLabelIndexCache();
+            _matcher.Start();
+            if (current.Count > 0)
+            {
+                int clamped = Math.Max(0, Math.Min(pos, current.Count - 1));
+                _matcher.Advance(clamped);
+            }
+        }
+
         #endregion
 
         #region Navigation Helpers (Public for Extensions)
@@ -1386,12 +1830,13 @@ namespace ModAPI.Harmony
         /// <summary>Resolves a label to its current instruction index.</summary>
         public int LabelToIndex(Label label)
         {
-            var instructions = _matcher.Instructions();
-            for (int i = 0; i < instructions.Count; i++)
+            if (_labelIndexCacheDirty)
             {
-                if (instructions[i].labels.Contains(label)) return i;
+                RebuildLabelIndexCache();
             }
-            return -1;
+
+            int index;
+            return _labelIndexCache.TryGetValue(label, out index) ? index : -1;
         }
 
         #endregion
@@ -1572,7 +2017,37 @@ namespace ModAPI.Harmony
             {
                 newInstr.labels.AddRange(oldInstr.labels);
             }
+            if (oldInstr.blocks != null && oldInstr.blocks.Count > 0)
+            {
+                newInstr.blocks.AddRange(oldInstr.blocks);
+            }
             _matcher.SetInstruction(newInstr);
+            InvalidateLabelIndexCache();
+        }
+
+        private void InvalidateLabelIndexCache()
+        {
+            _labelIndexCacheDirty = true;
+        }
+
+        private void RebuildLabelIndexCache()
+        {
+            _labelIndexCache.Clear();
+            var instructions = _matcher.Instructions();
+            for (int i = 0; i < instructions.Count; i++)
+            {
+                var labels = instructions[i].labels;
+                if (labels == null || labels.Count == 0) continue;
+                for (int j = 0; j < labels.Count; j++)
+                {
+                    var label = labels[j];
+                    if (!_labelIndexCache.ContainsKey(label))
+                    {
+                        _labelIndexCache[label] = i;
+                    }
+                }
+            }
+            _labelIndexCacheDirty = false;
         }
 
         private void RecordPatchEdit(
@@ -1584,8 +2059,6 @@ namespace ModAPI.Harmony
             string note,
             string confidence)
         {
-            if (_suppressPatchEditCapture) return;
-
             _patchEdits.Add(new TranspilerDebugger.PatchEdit
             {
                 Kind = kind ?? string.Empty,

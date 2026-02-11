@@ -121,32 +121,7 @@ namespace ModAPI.Harmony
             int startIndex = t.CurrentIndex - previousCount;
             if (startIndex < 0) return t;
 
-            t.MoveTo(startIndex);
-
-            // Collect all labels from instructions being removed
-            var preservedLabels = new List<Label>();
-            int savedPos = t.CurrentIndex;
-            for (int i = 0; i <= previousCount; i++)
-            {
-                if (t.HasMatch && t.Current.labels.Count > 0)
-                    preservedLabels.AddRange(t.Current.labels);
-                if (i < previousCount) t.Next();
-            }
-            t.MoveTo(savedPos);
-
-            // Remove instructions
-            for (int i = 0; i <= previousCount; i++)
-            {
-                if (t.HasMatch) t.Remove();
-            }
-
-            // Attach labels to the instruction that now occupies this position
-            if (preservedLabels.Count > 0 && t.HasMatch)
-            {
-                t.Current.labels.AddRange(preservedLabels);
-            }
-
-            return t;
+            return t.MoveTo(startIndex).ReplaceSequence(previousCount + 1, new CodeInstruction[0]);
         }
 
         /// <summary>

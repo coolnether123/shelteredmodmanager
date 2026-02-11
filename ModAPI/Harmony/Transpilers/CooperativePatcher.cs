@@ -37,6 +37,7 @@ namespace ModAPI.Harmony
         private static readonly Dictionary<MethodBase, List<PatcherRegistration>> _registrations = 
             new Dictionary<MethodBase, List<PatcherRegistration>>();
         private static readonly object _lock = new object();
+        private static readonly object _quarantineLock = new object();
         private static readonly HashSet<string> _quarantinedOwners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
@@ -88,15 +89,15 @@ namespace ModAPI.Harmony
 
         public static void UnregisterAll(string ownerMod = null)
         {
+            string mod = ownerMod ?? Assembly.GetCallingAssembly().GetName().Name;
             lock (_lock)
             {
-                string mod = ownerMod ?? Assembly.GetCallingAssembly().GetName().Name;
                 foreach (var list in _registrations.Values)
                 {
                     list.RemoveAll(r => r.OwnerMod == mod);
                 }
-                _quarantinedOwners.Remove(mod);
             }
+            lock (_quarantineLock) { _quarantinedOwners.Remove(mod); }
         }
 
         /// <summary>
@@ -211,7 +212,7 @@ namespace ModAPI.Harmony
         private static bool IsOwnerQuarantined(string ownerMod)
         {
             if (string.IsNullOrEmpty(ownerMod)) return false;
-            lock (_lock)
+            lock (_quarantineLock)
             {
                 return _quarantinedOwners.Contains(ownerMod);
             }
@@ -222,7 +223,7 @@ namespace ModAPI.Harmony
             if (!TranspilerSafetyPolicy.QuarantineOwnerOnFailure) return;
             if (string.IsNullOrEmpty(ownerMod)) return;
 
-            lock (_lock)
+            lock (_quarantineLock)
             {
                 _quarantinedOwners.Add(ownerMod);
             }

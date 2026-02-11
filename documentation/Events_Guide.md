@@ -4,6 +4,8 @@
 **Last Updated:** 2026-01-27  
 **For:** Mod developers using the Sheltered ModAPI
 
+Canonical signatures: `documentation/API_Signatures_Reference.md`.
+
 ---
 
 ## Table of Contents
@@ -106,7 +108,7 @@ public class MyMod : IModPlugin
     private void OnDayChanged(int dayNumber)
     {
         daysTracked++;
-        MMLog.Info($"Day {dayNumber} - tracked {daysTracked} days total");
+        MMLog.WriteInfo($"Day {dayNumber} - tracked {daysTracked} days total");
     }
 }
 ```
@@ -148,12 +150,12 @@ public class CombatSafetyMod : IModPlugin
 ```csharp
 GameEvents.OnAfterLoad += (saveData) =>
 {
-    MMLog.Info("Game loaded successfully!");
+    MMLog.WriteInfo("Game loaded successfully!");
     
     // Access save data
     if (saveData != null)
     {
-        MMLog.Info(string.Format("Loaded save version: {0}", saveData.GetVersion()));
+        MMLog.WriteInfo(string.Format("Loaded save version: {0}", saveData.GetVersion()));
     }
 };
 ```
@@ -268,7 +270,7 @@ UIEvents.OnPanelOpened += panel =>
 {
     if (panel.GetType().Name == "MainMenuPanel")
     {
-        MMLog.Info("Player returned to main menu");
+        MMLog.WriteInfo("Player returned to main menu");
         // Save state, clear caches, etc.
     }
 };
@@ -295,6 +297,7 @@ public static event ReservationChangedEvent OnReservationChanged;
 
 ```csharp
 using ModAPI.Saves;
+using ModAPI.Util;
 
 public class DataPersistenceMod : IModPlugin
 {
@@ -305,14 +308,17 @@ public class DataPersistenceMod : IModPlugin
         Events.OnBeforeSave += saveEntry =>
         {
             ctx.Log.Info($"Saving mod data for slot {saveEntry.id}");
-            // Use PersistentDataAPI to save your data
-            PersistentDataAPI.SaveData("MyMod.CustomData", modData);
+            // PersistentDataAPI is exposed as IPluginContext extensions
+            ctx.SaveData("MyMod.CustomData", modData);
         };
         
         Events.OnAfterLoad += saveEntry =>
         {
             ctx.Log.Info($"Loading mod data from slot {saveEntry.id}");
-            modData = PersistentDataAPI.LoadData<MyModData>("MyMod.CustomData");
+            if (ctx.LoadData("MyMod.CustomData", out MyModData loaded))
+            {
+                modData = loaded;
+            }
         };
     }
 }
@@ -385,7 +391,7 @@ public class RewardMod : IModPlugin
     
     private void OnQuestCompleted(QuestCompletedEventArgs args)
     {
-        MMLog.Info($"Quest {args.QuestId} completed! Reward: {args.Reward}");
+        MMLog.WriteInfo($"Quest {args.QuestId} completed! Reward: {args.Reward}");
         // Give bonus reward
         GiveBonusReward(args.Reward * 0.1f);
     }
@@ -552,7 +558,7 @@ GameEvents.OnNewDay += day =>
     }
     catch (Exception ex)
     {
-        MMLog.Warn($"Error in OnNewDay handler: {ex.Message}");
+        MMLog.WriteWarning($"Error in OnNewDay handler: {ex.Message}");
     }
 };
 ```
@@ -676,13 +682,13 @@ if (ModEventBus.HasSubscribers("com.mymod.RareEvent"))
 ```csharp
 // Check if event has subscribers
 int count = ModEventBus.GetSubscriberCount("com.mymod.Event");
-MMLog.Info($"Event has {count} subscribers");
+MMLog.WriteInfo($"Event has {count} subscribers");
 
 // Get diagnostics
 var diagnostics = ModEventBus.GetEventDiagnostics();
 foreach (var kvp in diagnostics)
 {
-    MMLog.Info($"Event: {kvp.Key}, Subscribers: {kvp.Value}");
+    MMLog.WriteInfo($"Event: {kvp.Key}, Subscribers: {kvp.Value}");
 }
 ```
 
@@ -724,15 +730,15 @@ if (ModAPIRegistry.IsAPIRegistered("com.other.API"))
 } 
 else
 {
-    MMLog.Warn("API not found - is the provider mod loaded?");
+    MMLog.WriteWarning("API not found - is the provider mod loaded?");
 }
 
 // Get all registered APIs
 var apis = ModAPIRegistry.GetRegisteredAPIs();
-MMLog.Info($"Found {apis.Count} registered APIs");
+MMLog.WriteInfo($"Found {apis.Count} registered APIs");
 foreach (var apiName in apis)
 {
-    MMLog.Info($"  - {apiName}");
+    MMLog.WriteInfo($"  - {apiName}");
 }
 ```
 

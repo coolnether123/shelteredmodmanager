@@ -15,6 +15,7 @@ Flags are read via `ModAPI.Core.ModPrefs` and stored in ModAPI user settings.
 - `TranspilerForcePreserveInstructionCount` (default `true`)
   - Forces `ReplaceAllPatterns` to keep instruction count stable.
   - Protects branch targets when replacing multi-instruction spans.
+  - Unsafe preserve cases (non stack-neutral tail padding) are rejected.
 
 - `TranspilerFailFastCritical` (default `true`)
   - Critical warnings become hard failures.
@@ -33,3 +34,10 @@ Flags are read via `ModAPI.Core.ModPrefs` and stored in ModAPI user settings.
 These defaults are intentionally conservative. They protect game stability when mods use brittle IL patterns or stale assumptions after updates.
 
 If you need temporary flexibility for debugging, you can disable individual flags, but production runs should keep safe defaults enabled.
+
+## StackSentinel Limitation
+
+`StackSentinel` currently fails validation for methods with exception handling clauses (`try/catch/finally/filter`) instead of silently accepting them.
+This is intentional fail-safe behavior until full exception-flow analysis is implemented.
+
+In addition, replacement helpers (`ReplaceSequence`, `ReplaceAllPatterns`) now preserve Harmony exception markers and enforce exact index-aligned replacements on EH methods.

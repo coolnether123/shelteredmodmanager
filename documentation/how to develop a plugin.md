@@ -2,6 +2,8 @@
 
 This guide is for writing a mod plugin that runs under the current `IModPlugin` lifecycle.
 
+Exact API signatures: `documentation/API_Signatures_Reference.md`.
+
 ## 1. Project Setup
 
 Create a C# Class Library targeting `.NET Framework 3.5`.
@@ -68,6 +70,25 @@ public interface IModPlugin
 }
 ```
 
+`IPluginContext` high-value members (exact shape):
+
+```csharp
+public interface IPluginContext
+{
+    ModEntry Mod { get; }
+    ISettingsProvider Settings { get; }
+    IModLogger Log { get; }
+    IGameHelper Game { get; }
+    ISaveSystem SaveSystem { get; }
+    string GameRoot { get; }
+    string ModsRoot { get; }
+    void RunNextFrame(Action action);
+    Coroutine StartCoroutine(IEnumerator routine);
+    GameObject FindPanel(string nameOrPath);
+    T AddComponentToPanel<T>(string nameOrPath) where T : Component;
+}
+```
+
 Runtime order is:
 1. `Initialize(ctx)`
 2. `Start(ctx)`
@@ -81,14 +102,15 @@ Use `ModManagerBase` if you want built-in settings and save helpers.
 
 ```csharp
 using ModAPI.Core;
+using ModAPI.Spine;
 using UnityEngine;
 
 public class MyMod : ModManagerBase, IModPlugin
 {
-    [ModToggle("Enable Boost", "Enable or disable speed boost")]
+    [ModSetting("Enable Boost", Tooltip = "Enable or disable speed boost")]
     public bool BoostActive = true;
 
-    [ModSlider("Speed", 1f, 10f)]
+    [ModSetting("Speed", Min = 1f, Max = 10f, StepSize = 0.1f)]
     public float SpeedValue = 5f;
 
     public override void Initialize(IPluginContext ctx)
