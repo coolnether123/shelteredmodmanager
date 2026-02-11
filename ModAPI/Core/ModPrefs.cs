@@ -22,6 +22,54 @@ namespace ModAPI.Core
             set => SetBool("DebugTranspilers", value);
         }
 
+        /// <summary>
+        /// Global safety toggle for ModAPI transpiler guardrails.
+        /// When enabled, risky patching paths are forced into safer behavior where possible.
+        /// </summary>
+        public static bool TranspilerSafeMode
+        {
+            get => GetBool("TranspilerSafeMode", true);
+            set => SetBool("TranspilerSafeMode", value);
+        }
+
+        /// <summary>
+        /// Forces <c>ReplaceAllPatterns</c> to preserve instruction count.
+        /// This is primarily a branch-safety guardrail for unstable mod transpilers.
+        /// </summary>
+        public static bool TranspilerForcePreserveInstructionCount
+        {
+            get => GetBool("TranspilerForcePreserveInstructionCount", true);
+            set => SetBool("TranspilerForcePreserveInstructionCount", value);
+        }
+
+        /// <summary>
+        /// Promotes critical transpiler safety warnings to hard failures even in permissive paths.
+        /// </summary>
+        public static bool TranspilerFailFastCritical
+        {
+            get => GetBool("TranspilerFailFastCritical", true);
+            set => SetBool("TranspilerFailFastCritical", value);
+        }
+
+        /// <summary>
+        /// Uses strict validation for cooperative transpiler builds.
+        /// If disabled, cooperative patching uses warning-only behavior.
+        /// </summary>
+        public static bool TranspilerCooperativeStrictBuild
+        {
+            get => GetBool("TranspilerCooperativeStrictBuild", true);
+            set => SetBool("TranspilerCooperativeStrictBuild", value);
+        }
+
+        /// <summary>
+        /// Quarantines a patch owner in cooperative mode after a critical patch failure.
+        /// </summary>
+        public static bool TranspilerQuarantineOnFailure
+        {
+            get => GetBool("TranspilerQuarantineOnFailure", true);
+            set => SetBool("TranspilerQuarantineOnFailure", value);
+        }
+
 
         private static void EnsureLoaded()
         {

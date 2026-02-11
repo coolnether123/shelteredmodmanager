@@ -2,6 +2,9 @@ using System;
 
 namespace ModAPI.Core
 {
+    /// <summary>
+    /// Lightweight logger adapter that injects a mod-scoped source prefix into MMLog.
+    /// </summary>
     internal class PrefixedLogger : IModLogger
     {
         private readonly string _prefix;

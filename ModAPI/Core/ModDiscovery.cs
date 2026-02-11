@@ -7,6 +7,9 @@ using UnityEngine;
 
 namespace ModAPI.Core
 {
+    /// <summary>
+    /// Scans the mods directory and loads mod assemblies from discovered entries.
+    /// </summary>
     public static class ModDiscovery
     {
         /// <summary>
@@ -53,6 +56,12 @@ namespace ModAPI.Core
             return results;
         }
 
+        /// <summary>
+        /// Loads all DLLs under a mod's Assemblies folder into the current AppDomain.
+        /// </summary>
+        /// <remarks>
+        /// Uses byte-loading to avoid file locks during iterative development.
+        /// </remarks>
         public static List<Assembly> LoadAssemblies(ModEntry entry)
         {
             var assemblies = new List<Assembly>();

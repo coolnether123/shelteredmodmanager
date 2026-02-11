@@ -1,5 +1,5 @@
 # ModAPI Events Guide
-## Sheltered Mod Loader v1.2.0
+## ModAPI v1.2.0
 
 **Last Updated:** 2026-01-27  
 **For:** Mod developers using the Sheltered ModAPI
@@ -28,15 +28,15 @@ The ModAPI provides **multiple event systems** to help mods react to game state 
 ### When to Use Events vs Harmony Patches
 
 **Use Events When:**
-- ✅ Reacting to common game actions (crafting, saves, UI changes)
-- ✅ Sharing data between your own mod components
-- ✅ Communicating with other mods
-- ✅ You want simpler, more maintainable code
+- Reacting to common game actions (crafting, saves, UI changes)
+- Sharing data between your own mod components
+- Communicating with other mods
+- You want simpler, more maintainable code
 
 **Use Harmony Patches When:**
-- ⚙️ Modifying game logic (changing return values, cancelling actions)
-- ⚙️ Accessing private game state
-- ⚙️ No suitable event exists yet
+- Modifying game logic (changing return values, cancelling actions)
+- Accessing private game state
+- No suitable event exists yet
 
 ---
 
@@ -747,10 +747,10 @@ foreach (var apiName in apis)
 - **Save Events**: Custom save system lifecycle
 
 **Remember:**
-- ✅ Events are **simpler** than Harmony patches
-- ✅ Use **reverse-domain naming** for custom events/APIs
-- ✅ Always **handle errors** in event handlers
-- ✅ **Unsubscribe** when your mod shuts down
-- ✅ Keep handlers **fast** (defer heavy work)
+- Events are **simpler** than Harmony patches
+- Use **reverse-domain naming** for custom events/APIs
+- Always **handle errors** in event handlers
+- **Unsubscribe** when your mod shuts down
+- Keep handlers **fast** (defer heavy work)
 
 Happy modding!

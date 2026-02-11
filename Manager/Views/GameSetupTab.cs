@@ -285,6 +285,9 @@ namespace Manager.Views
             _autoLoadComboBox.Font = new Font("Segoe UI", 9f);
             _autoLoadComboBox.Location = new Point(20, 280);
             _autoLoadComboBox.Width = 350;
+            // Keep 10 actual save slots visible before scroll starts.
+            // The list always includes "(None - Boot to Menu)" as an extra item.
+            _autoLoadComboBox.MaxDropDownItems = 10;
 
             _refreshSavesButton = new Button();
             _refreshSavesButton.Text = "Refresh";

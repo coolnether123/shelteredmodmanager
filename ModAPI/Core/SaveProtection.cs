@@ -10,7 +10,9 @@ using ModAPI.Hooks.Paging;
 
 namespace ModAPI.Core
 {
-    // Class to hold mod data to be saved/loaded with the game save
+    /// <summary>
+    /// Serialized mod manifest payload embedded into save data for load verification.
+    /// </summary>
     [Serializable]
     public class ModManifestData
     {
@@ -40,11 +42,16 @@ namespace ModAPI.Core
         }
     }
 
-    // Harmony patches for save/load operations
+    /// <summary>
+    /// Manual Harmony patch installer for save/load protection hooks.
+    /// </summary>
     internal static class SaveProtectionPatches
     {
         private static HarmonyLib.Harmony _harmony;
 
+        /// <summary>
+        /// Applies save/load protection patches to SaveManager methods.
+        /// </summary>
         public static void ApplyPatches(HarmonyLib.Harmony harmonyInstance)
         {
             _harmony = harmonyInstance;
@@ -81,11 +88,14 @@ namespace ModAPI.Core
             }
         }
 
-        // Patch for game saving
-        // Note: This class uses manual patching in ApplyPatches(), not Harmony attributes
+        /// <summary>
+        /// Save hook container. Registered manually by <see cref="ApplyPatches"/>.
+        /// </summary>
         internal static class SaveGamePatch
         {
-            // Postfix to inject mod data after game saves its own data
+            /// <summary>
+            /// Injects mod manifest data after vanilla save serialization completes.
+            /// </summary>
             public static void Postfix(object __instance, SaveManager.SaveType type) // __instance is SaveManager
             {
                 // Only inject for actual game slots, not GlobalData or Invalid
@@ -144,8 +154,9 @@ namespace ModAPI.Core
             }
         }
 
-        // Patch for game loading
-        // Note: This class uses manual patching in ApplyPatches(), not Harmony attributes
+        /// <summary>
+        /// Load verification hook container. Registered manually by <see cref="ApplyPatches"/>.
+        /// </summary>
         internal static class LoadGamePatch
         {
             // State tracking for the load interruption
@@ -153,7 +164,10 @@ namespace ModAPI.Core
             internal static bool _forceLoad = false; // Internal so OnSlotChosen can set it
             private static bool _loadingScreenAlreadyManaged = false; // Track if we've handled the loading screen
 
-            // Prefix to read mod data and potentially pause loading
+            /// <summary>
+            /// Validates loaded mod manifest before continuing load flow.
+            /// Returns false to pause load when user confirmation is required.
+            /// </summary>
             public static bool Prefix(object __instance) // __instance is SaveManager
             {
                 // If we are waiting for user input, pause the load

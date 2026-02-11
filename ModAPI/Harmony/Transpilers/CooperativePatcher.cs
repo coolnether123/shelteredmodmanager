@@ -37,6 +37,7 @@ namespace ModAPI.Harmony
         private static readonly Dictionary<MethodBase, List<PatcherRegistration>> _registrations = 
             new Dictionary<MethodBase, List<PatcherRegistration>>();
         private static readonly object _lock = new object();
+        private static readonly HashSet<string> _quarantinedOwners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Registers a cooperative transpiler. 
@@ -94,6 +95,7 @@ namespace ModAPI.Harmony
                 {
                     list.RemoveAll(r => r.OwnerMod == mod);
                 }
+                _quarantinedOwners.Remove(mod);
             }
         }
 
@@ -121,6 +123,12 @@ namespace ModAPI.Harmony
 
             foreach (var patch in sortedPatches)
             {
+                if (IsOwnerQuarantined(patch.OwnerMod))
+                {
+                    MMLog.WriteWarning($"[CooperativePatcher] Skipping {patch.OwnerMod}:{patch.AnchorId} - owner is quarantined due to prior critical patch failure.");
+                    continue;
+                }
+
                 // Dependency Check
                 if (patch.DependsOn.Length > 0)
                 {
@@ -157,8 +165,9 @@ namespace ModAPI.Harmony
                     // Run logic
                     t = patch.PatchLogic(t);
                     
-                    // Validate stack between patches, but don't fail on informational warnings
-                    var nextInstructions = t.Build(strict: false, validateStack: true);
+                    // Build strictness is policy-driven so safer defaults can be enforced globally.
+                    bool strictBuild = TranspilerSafetyPolicy.CooperativeStrictBuild;
+                    var nextInstructions = t.Build(strict: strictBuild, validateStack: true);
 
                     if (t.Warnings.Any(w => !w.StartsWith("DeclareLocal"))) // Filter informational
                     {
@@ -191,11 +200,33 @@ namespace ModAPI.Harmony
                 catch (Exception ex)
                 {
                     MMLog.WriteError($"[CooperativePatcher] Patch {patch.OwnerMod}:{patch.AnchorId} FAILED and was skipped. Error: {ex.Message}");
+                    QuarantineOwnerIfEnabled(patch.OwnerMod, patch.AnchorId);
                     // Continue with previous valid instructions - 'currentInstructions' remains untouched by this iteration
                 }
             }
 
             return currentInstructions;
+        }
+
+        private static bool IsOwnerQuarantined(string ownerMod)
+        {
+            if (string.IsNullOrEmpty(ownerMod)) return false;
+            lock (_lock)
+            {
+                return _quarantinedOwners.Contains(ownerMod);
+            }
+        }
+
+        private static void QuarantineOwnerIfEnabled(string ownerMod, string anchorId)
+        {
+            if (!TranspilerSafetyPolicy.QuarantineOwnerOnFailure) return;
+            if (string.IsNullOrEmpty(ownerMod)) return;
+
+            lock (_lock)
+            {
+                _quarantinedOwners.Add(ownerMod);
+            }
+            MMLog.WriteWarning($"[CooperativePatcher] Quarantined owner '{ownerMod}' after failure in anchor '{anchorId}'. Disable with ModPrefs.TranspilerQuarantineOnFailure=false if needed.");
         }
     }
 }

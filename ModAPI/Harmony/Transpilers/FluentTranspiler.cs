@@ -1294,7 +1294,9 @@ namespace ModAPI.Harmony
             CodeInstruction[] replaceWith,
             bool preserveInstructionCount = false)
         {
-            MMLog.WriteDebug($"[FluentTranspiler:{_callerMod}] ReplaceAllPatterns: Searching for pattern (length {patternPredicates.Length}) in {_originalMethod.Name}. Preserve count: {preserveInstructionCount}.");
+            string methodName = _originalMethod != null ? _originalMethod.Name : "<unknown-method>";
+            bool effectivePreserveInstructionCount = ResolvePatternPreserveMode(preserveInstructionCount, patternPredicates != null ? patternPredicates.Length : 0);
+            MMLog.WriteDebug($"[FluentTranspiler:{_callerMod}] ReplaceAllPatterns: Searching for pattern (length {patternPredicates.Length}) in {methodName}. Preserve count: requested={preserveInstructionCount}, effective={effectivePreserveInstructionCount}.");
 
             var instructions = _matcher.Instructions().ToList();
             
@@ -1322,11 +1324,11 @@ namespace ModAPI.Harmony
 
             if (matchPositions.Count == 0)
             {
-                _warnings.Add($"ReplaceAllPatterns: No valid matches found for pattern in method {_originalMethod.Name}. Verified opcodes: {string.Join(", ", patternPredicates.Select(p => "predicate").ToArray())}");
+                _warnings.Add($"ReplaceAllPatterns: No valid matches found for pattern in method {methodName}. Verified opcodes: {string.Join(", ", patternPredicates.Select(p => "predicate").ToArray())}");
                 return this;
             }
             
-            MMLog.WriteDebug($"[FluentTranspiler] ReplaceAllPatterns: Found {matchPositions.Count} occurrences in {_originalMethod.Name}. Applying replacements...");
+            MMLog.WriteDebug($"[FluentTranspiler] ReplaceAllPatterns: Found {matchPositions.Count} occurrences in {methodName}. Applying replacements...");
             
             // Apply replacements in reverse order to maintain indices
             for (int idx = matchPositions.Count - 1; idx >= 0; idx--)
@@ -1335,7 +1337,7 @@ namespace ModAPI.Harmony
                 _matcher.Start();
                 _matcher.Advance(pos);
 
-                if (preserveInstructionCount && replaceWith.Length <= patternPredicates.Length)
+                if (effectivePreserveInstructionCount && replaceWith.Length <= patternPredicates.Length)
                 {
                     // Safe replacement logic:
                     // 1. Fill leading slots with actual replacement instructions (preserving labels at each index)
@@ -1368,7 +1370,7 @@ namespace ModAPI.Harmony
                     instructions.Skip(pos).Take(patternPredicates.Length).ToList(),
                     pos,
                     replaceWith,
-                    "preserve=" + preserveInstructionCount,
+                    "preserveRequested=" + preserveInstructionCount + ",preserveEffective=" + effectivePreserveInstructionCount,
                     "exact");
             }
             
@@ -1479,8 +1481,12 @@ namespace ModAPI.Harmony
             if (_warnings.Count > 0)
             {
                 var message = $"[{_callerMod}] Transpiler failed validation:\n" + string.Join("\n", _warnings.Select(w => "  - " + w).ToArray());
-                if (strict) throw new InvalidOperationException(message);
-                else MMLog.WriteWarning(message);
+                bool hasCriticalWarning = _warnings.Any(TranspilerSafetyPolicy.IsCriticalWarning);
+                if (strict || (hasCriticalWarning && TranspilerSafetyPolicy.FailFastOnCritical))
+                {
+                    throw new InvalidOperationException(message);
+                }
+                MMLog.WriteWarning(message);
             }
 
             return _matcher.Instructions().ToList();
@@ -1528,6 +1534,26 @@ namespace ModAPI.Harmony
                 : (_originalMethod != null ? _originalMethod.Name : "UnknownMethod");
 
             return "FluentTranspiler|Owner:" + (_callerMod ?? "Unknown") + "|Method:" + methodId;
+        }
+
+        /// <summary>
+        /// Resolves preserve mode for pattern replacement.
+        /// In safe mode we can automatically force preserve=true to avoid branch targets
+        /// jumping into removed instruction spans.
+        /// </summary>
+        private bool ResolvePatternPreserveMode(bool requestedPreserveInstructionCount, int patternLength)
+        {
+            bool effective = TranspilerSafetyPolicy.ResolvePreserveInstructionCount(requestedPreserveInstructionCount);
+            if (TranspilerSafetyPolicy.IsPreserveEscalated(requestedPreserveInstructionCount, effective))
+            {
+                TranspilerSafetyPolicy.WarnPreserveEscalation(_callerMod, _originalMethod != null ? _originalMethod.Name : "UnknownMethod");
+            }
+
+            if (!effective && patternLength > 1)
+            {
+                _warnings.Add("[CRITICAL SAFETY] ReplaceAllPatterns requested preserveInstructionCount=false for a multi-instruction pattern. This can invalidate branch targets.");
+            }
+            return effective;
         }
 
         /// <summary>
