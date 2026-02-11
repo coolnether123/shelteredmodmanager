@@ -30,6 +30,9 @@ namespace ModAPI.Core
         private string _gameRoot;
         private string _modsRoot;
 
+        /// <summary>
+        /// Mods that were discovered and accepted by load-order filtering for this session.
+        /// </summary>
         public static List<ModEntry> LoadedMods { get; private set; }
 
 
@@ -43,6 +46,9 @@ namespace ModAPI.Core
             LoadedMods = new List<ModEntry>();
         }
 
+        /// <summary>
+        /// Returns the singleton loader coordinator used by Doorstop startup code.
+        /// </summary>
         public static PluginManager getInstance()
         {
             if (instance == null)
@@ -52,11 +58,20 @@ namespace ModAPI.Core
             return instance;
         }
 
+        /// <summary>
+        /// Exposes active plugin instances for diagnostics and debug UI.
+        /// </summary>
         public IEnumerable<IModPlugin> GetPlugins()
         {
             return _plugins;
         }
 
+        /// <summary>
+        /// Main startup entry point. Initializes loader infrastructure and bootstraps all mods.
+        /// </summary>
+        /// <param name="doorstepGameObject">
+        /// Optional pre-created root object. If null, a persistent root is created.
+        /// </param>
         public void loadAssemblies(GameObject doorstepGameObject)
         {
             var stopwatch = Stopwatch.StartNew();
@@ -128,6 +143,9 @@ namespace ModAPI.Core
             }
         }
 
+        /// <summary>
+        /// Emits a compact dependency-resolution snapshot to help diagnose bootstrap failures.
+        /// </summary>
         private void LogAssemblyResolution()
         {
             MMLog.WriteDebug("Assembly Resolution");
@@ -167,6 +185,9 @@ namespace ModAPI.Core
             try { return asm.Location; } catch { return "<location unavailable>"; }
         }
 
+        /// <summary>
+        /// Records whether the runtime is using modern SceneManager callbacks or legacy fallback.
+        /// </summary>
         private void LogSceneApiDetection()
         {
             var modernAvailable = RuntimeCompat.IsModernSceneApi;
@@ -174,6 +195,9 @@ namespace ModAPI.Core
             MMLog.WriteDebug($"Scene API Detection: ModernAvailable={modernAvailable}, UsingModern={usingModern}");
         }
 
+        /// <summary>
+        /// Reads and normalizes <c>loadorder.json</c> into a unique lowercase ID list.
+        /// </summary>
         private List<string> ReadLoadOrderFromFile(string modsRoot)
         {
             var orderedIds = new List<string>();
@@ -255,6 +279,9 @@ namespace ModAPI.Core
             MMLog.WriteDebug($"Final LoadedMods count: {LoadedMods.Count}");
         }
 
+        /// <summary>
+        /// Attaches always-on runtime inspection tooling to the loader root.
+        /// </summary>
         private void AttachInspectorTools()
         {
             try
@@ -276,6 +303,10 @@ namespace ModAPI.Core
             catch (Exception ex) { MMLog.WarnOnce("PluginManager.AttachInspectorTools", "Error attaching inspector: " + ex.Message); }
         }
 
+        /// <summary>
+        /// Loads mod assemblies, discovers <see cref="IModPlugin"/> implementations, and runs
+        /// Initialize/Start in load-order sequence.
+        /// </summary>
         private void LoadAndInitializePlugins(List<ModEntry> orderedMods)
         {
             MMLog.Write($"LoadAndInitializePlugins: Starting with {orderedMods.Count} mods");
@@ -364,6 +395,9 @@ namespace ModAPI.Core
             MMLog.Write($"LoadAndInitializePlugins complete. Total plugins loaded: {_plugins.Count}");
         }
 
+        /// <summary>
+        /// Schedules work onto the main Unity thread in the next update tick.
+        /// </summary>
         internal void EnqueueNextFrame(Action a)
         {
             var runner = _loaderRoot != null ? _loaderRoot.GetComponent<PluginRunner>() : null;
@@ -374,6 +408,9 @@ namespace ModAPI.Core
             }
         }
 
+        /// <summary>
+        /// Forwards Unity's update tick to plugins that opted into <see cref="IModUpdate"/>.
+        /// </summary>
         internal void OnUnityUpdate()
         {
             for (int i = 0; i < _updates.Count; i++)
@@ -383,6 +420,9 @@ namespace ModAPI.Core
             }
         }
 
+        /// <summary>
+        /// Broadcasts scene-loaded events to plugins that implement scene lifecycle hooks.
+        /// </summary>
         internal void OnSceneLoaded(string name)
         {
             for (int i = 0; i < _sceneEvents.Count; i++)
@@ -392,6 +432,9 @@ namespace ModAPI.Core
             }
         }
 
+        /// <summary>
+        /// Broadcasts scene-unloaded events to plugins that implement scene lifecycle hooks.
+        /// </summary>
         internal void OnSceneUnloaded(string name)
         {
             for (int i = 0; i < _sceneEvents.Count; i++)
@@ -401,6 +444,9 @@ namespace ModAPI.Core
             }
         }
 
+        /// <summary>
+        /// Broadcasts session-start events after game state is considered live.
+        /// </summary>
         internal void OnSessionStarted()
         {
             for (int i = 0; i < _sessionEvents.Count; i++)
@@ -410,6 +456,9 @@ namespace ModAPI.Core
             }
         }
 
+        /// <summary>
+        /// Handles New Game lifecycle fanout and reseeds session-scoped ModRandom state.
+        /// </summary>
         internal void OnNewGame()
         {
             // Initialize ModRandom for the new world
@@ -423,6 +472,9 @@ namespace ModAPI.Core
             }
         }
 
+        /// <summary>
+        /// Calls shutdown handlers in reverse registration order.
+        /// </summary>
         public void ShutdownAll()
         {
             MMLog.WriteInfo($"ShutdownAll started for {_plugins.Count} plugins.");
@@ -447,6 +499,9 @@ namespace ModAPI.Core
             return type.Namespace ?? type.Name;
         }
 
+        /// <summary>
+        /// Builds a per-plugin context object with logging, save access, and scheduler bindings.
+        /// </summary>
         private IPluginContext BuildContextFor(Type type, GameObject pluginRoot)
         {
             ModEntry entry = null;

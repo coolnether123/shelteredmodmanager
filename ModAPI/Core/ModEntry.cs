@@ -3,20 +3,25 @@ using ModAPI.Spine;
 
 namespace ModAPI.Core
 {
-    /**
-     * Author: coolnether123
-     * Descriptor for a single mod discovered on disk.
-     * Split into its own file to keep ModDiscovery focused on orchestration.
-     */
+    /// <summary>
+    /// Descriptor for a single discovered mod folder and its parsed metadata.
+    /// </summary>
     public class ModEntry
     {
-        public string Id;            // normalized id
-        public string Name;          // display name
-        public string Version;       // optional version string
-        public string RootPath;      // mod root folder
-        public string AboutPath;     // path to About/About.json
-        public string AssembliesPath;// path to Assemblies folder
-        public ModAbout About;       // parsed about
+        /// <summary>Normalized mod id used for lookups and load-order matching.</summary>
+        public string Id;
+        /// <summary>Human-facing display name.</summary>
+        public string Name;
+        /// <summary>Optional semantic version string from About.json.</summary>
+        public string Version;
+        /// <summary>Absolute path to the mod root folder.</summary>
+        public string RootPath;
+        /// <summary>Absolute path to About/About.json.</summary>
+        public string AboutPath;
+        /// <summary>Absolute path to the Assemblies folder.</summary>
+        public string AssembliesPath;
+        /// <summary>Parsed About.json payload.</summary>
+        public ModAbout About;
         
         /// <summary>
         /// Reference to the mod's settings provider if it supports the Spine configuration framework.

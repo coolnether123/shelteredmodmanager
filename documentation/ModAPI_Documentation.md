@@ -192,7 +192,7 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 ```
 
 **How It Works (Automatic):**
-1. Game starts → `ModDiscovery` scans `/mods/` folder
+1. Game starts -> `ModDiscovery` scans `/mods/` folder
 2. Reads each mod's `About.json`
 3. Automatically calls `ModRegistry.RegisterModById(entry)` (internal, hidden)
 4. Now `ModRegistry.Find("mod.id")` works!
@@ -567,107 +567,107 @@ ModAPI.Saves.Events.OnPageChanged  // Save slot page navigation
 
 ```
 shelteredmodmanager/
-└───ModAPI/
-    ├───Core/
-    │   ├───ContextExtensions.cs
-    │   ├───ContextUIExtensions.cs
-    │   ├───IPlugin.cs
-    │   ├───MMLog.cs
-    │   ├───LoggerExtensions.cs
-    │   ├───ModAbout.cs
-    │   ├───ModAboutReader.cs
-    │   ├───ModDiscovery.cs
-    │   ├───ModEntry.cs
-    │   ├───ModRegistry.cs
-    │   ├───ModAPIRegistry.cs
-    │   ├───ModSettings.cs
-    │   ├───ModAttributes.cs
-    │   ├───ModRandom.cs
-    │   ├───ModRandomState.cs
-    │   ├───ModManagerBase.cs
-    │   ├───ModPersistenceData.cs
-    │   ├───PluginManager.cs
-    │   ├───RuntimeCompat.cs
-    │   └───SaveProtection.cs
-    ├───Events/
-    │   ├───GameEvents.cs         (Core game lifecycle events)
-    │   ├───ModEventBus.cs       (Inter-mod communication)
-    │   └───UIEvents.cs          (UI panel lifecycle events)
-    ├───Content/
-    │   ├───AssetLoader.cs
-    │   ├───ContentInjector.cs
-    │   ├───ContentRegistry.cs
-    │   ├───ContentResolver.cs
-    │   └───InventoryIntegration.cs
-    ├───Characters/
-    │   ├───PartyHelper.cs
-    │   └───PartyPatches.cs
-    ├───Items/
-    │   └───InventoryHelper.cs
-    ├───Custom Saves/
-    │   ├───paging/
-    │   │   ├───PagingManager.cs
-    │   │   ├───SaveDetailsWindow.cs
-    │   │   ├───SaveVerification.cs
-    │   │   └───SlotSelectionPatches.cs
-    │   ├───saves/
-    │   │   ├───CRC32.cs
-    │   │   ├───DirectoryProvider.cs
-    │   │   ├───Events.cs
-    │   │   ├───ExpandedVanillaSaves.cs
-    │   │   ├───IdGenerator.cs
-    │   │   ├───ISaveApi.cs
-    │   │   ├───Models.cs
-    │   │   ├───NameSanitizer.cs
-    │   │   ├───PreviewAuto.cs
-    │   │   ├───PreviewCapture.cs
-    │   │   ├───SaveManagerInspector.cs
-    │   │   ├───SaveManager_SaveGlobalData_Patch.cs
-    │   │   ├───SaveRegistryCore.cs
-    │   │   ├───ScenarioRegistry.cs
-    │   │   └───ScenarioSaves.cs
-    │   ├───PlatformSaveProxy.cs
-    │   ├───SaveExitPanelOnCancelPatch.cs
-    │   ├───SaveManager_Injection_Patch.cs
-    │   └───SaveManager_SaveToCurrentSlot_Patch.cs
-    ├───GameState/
-    │   └───ManagerStateHelper.cs
-    ├───UI/
-    │   ├───ContextUIExtensions.cs
-    │   ├───ModManagerPanel.cs
-    │   ├───NGUIScrollHelper.cs
-    │   ├───UIDebug.cs
-    │   ├───UIFactory.cs
-    │   ├───UIFlowGuard.cs
-    │   ├───UIHelper.cs
-    │   ├───UIPatches.cs
-    │   └───UIUtil.cs
-    ├───Util/
-    │   ├───GameUtil.cs
-    │   ├───PersistentDataAPI.cs
-    │   ├───SaveLoadDictionary.cs
-    │   ├───SceneCompat.cs
-    │   └───SceneUtil.cs
-    ├───Harmony/
-    │   ├───AdvancedExtensions.cs
-    │   ├───FluentTranspiler.cs
-    │   ├───FluentTranspilerPatterns.cs
-    │   ├───HarmonyBootstrap.cs
-    │   ├───HarmonyHelper.cs
-    │   ├───HarmonyUtil.cs
-    │   ├───MainMenuPatches.cs
-    │   ├───ShelteredPatterns.cs
-    │   ├───TranspilerDebugger.cs
-    │   └───UnityPatterns.cs
-    ├───Inspector/
-    │   ├───BoundsHighlighter.cs
-    │   ├───HierarchyUtil.cs
-    │   └───RuntimeInspector.cs
-    ├───Reflection/
-    │   └───Safe.cs
-    ├───Properties/
-    │   └───AssemblyInfo.cs
-    └───ModAPI.csproj
+ModAPI/
+    Core/
+       ContextExtensions.cs
+       ContextUIExtensions.cs
+       IPlugin.cs
+       MMLog.cs
+       LoggerExtensions.cs
+       ModAbout.cs
+       ModAboutReader.cs
+       ModDiscovery.cs
+       ModEntry.cs
+       ModRegistry.cs
+       ModAPIRegistry.cs
+       ModSettings.cs
+       ModAttributes.cs
+       ModRandom.cs
+       ModRandomState.cs
+       ModManagerBase.cs
+       ModPersistenceData.cs
+       PluginManager.cs
+       RuntimeCompat.cs
+       SaveProtection.cs
+    Events/
+       GameEvents.cs         (Core game lifecycle events)
+       ModEventBus.cs       (Inter-mod communication)
+       UIEvents.cs          (UI panel lifecycle events)
+    Content/
+       AssetLoader.cs
+       ContentInjector.cs
+       ContentRegistry.cs
+       ContentResolver.cs
+       InventoryIntegration.cs
+    Characters/
+       PartyHelper.cs
+       PartyPatches.cs
+    Items/
+       InventoryHelper.cs
+    Custom Saves/
+       paging/
+          PagingManager.cs
+          SaveDetailsWindow.cs
+          SaveVerification.cs
+          SlotSelectionPatches.cs
+       saves/
+          CRC32.cs
+          DirectoryProvider.cs
+          Events.cs
+          ExpandedVanillaSaves.cs
+          IdGenerator.cs
+          ISaveApi.cs
+          Models.cs
+          NameSanitizer.cs
+          PreviewAuto.cs
+          PreviewCapture.cs
+          SaveManagerInspector.cs
+          SaveManager_SaveGlobalData_Patch.cs
+          SaveRegistryCore.cs
+          ScenarioRegistry.cs
+          ScenarioSaves.cs
+       PlatformSaveProxy.cs
+       SaveExitPanelOnCancelPatch.cs
+       SaveManager_Injection_Patch.cs
+       SaveManager_SaveToCurrentSlot_Patch.cs
+    GameState/
+       ManagerStateHelper.cs
+    UI/
+       ContextUIExtensions.cs
+       ModManagerPanel.cs
+       NGUIScrollHelper.cs
+       UIDebug.cs
+       UIFactory.cs
+       UIFlowGuard.cs
+       UIHelper.cs
+       UIPatches.cs
+       UIUtil.cs
+    Util/
+       GameUtil.cs
+       PersistentDataAPI.cs
+       SaveLoadDictionary.cs
+       SceneCompat.cs
+       SceneUtil.cs
+    Harmony/
+       AdvancedExtensions.cs
+       FluentTranspiler.cs
+       FluentTranspilerPatterns.cs
+       HarmonyBootstrap.cs
+       HarmonyHelper.cs
+       HarmonyUtil.cs
+       MainMenuPatches.cs
+       ShelteredPatterns.cs
+       TranspilerDebugger.cs
+       UnityPatterns.cs
+    Inspector/
+       BoundsHighlighter.cs
+       HierarchyUtil.cs
+       RuntimeInspector.cs
+    Reflection/
+       Safe.cs
+    Properties/
+       AssemblyInfo.cs
+    ModAPI.csproj
 ```
 
 ---

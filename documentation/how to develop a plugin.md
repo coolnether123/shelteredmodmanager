@@ -1,257 +1,154 @@
-# How to Develop a Plugin | Sheltered Mod Manager v1.2.0
+﻿# How to Develop a Plugin | Sheltered Mod Manager v1.2
 
-## Prerequisites
-- Visual Studio 2017+ or JetBrains Rider
-- .NET Framework 3.5 SDK
-- Sheltered Mod Manager installed (provides ModAPI.dll and 0Harmony.dll)
+This guide is for writing a mod plugin that runs under the current `IModPlugin` lifecycle.
 
-## Steps
+## 1. Project Setup
 
-### 1. Create a new C# Class Library project targeting .NET Framework 3.5
+Create a C# Class Library targeting `.NET Framework 3.5`.
 
-### 2. Add references to:
-- `ModAPI.dll` from your Sheltered installation's `SMM` folder
-- `0Harmony.dll` from `SMM/bin/` (if using Harmony patches)
-- `Assembly-CSharp.dll` from `<Sheltered>/Sheltered_Data/Managed` (Steam) or `Windows64_EOS_Data/Managed` (Epic)
-- `UnityEngine.dll` from the same folder (if needed)
+Add references:
+- `ModAPI.dll` (from SMM install)
+- `0Harmony.dll` (if patching)
+- `Assembly-CSharp.dll` (game managed folder)
+- `UnityEngine.dll` (game managed folder)
 
-### 3. Write your plugin code (Modern - v1.2.0)
+Game managed folder examples:
+- Steam: `<Sheltered>/Sheltered_Data/Managed`
+- Epic: `<Sheltered>/ShelteredWindows64_EOS_Data/Managed`
 
-**Recommended:** Inherit from `ModManagerBase` for a zero-boilerplate experience. This automatically handles initialization, settings binding, and gives you standard Unity lifecycle hooks (Update, FixedUpdate).
+## 2. Folder Layout Required by Loader
 
-```csharp
-using ModAPI.Core;
-using UnityEngine;
+Place your mod here:
 
-public class MyMod : ModManagerBase
+```text
+Sheltered/
+\- mods/
+   \- MyPlugin/
+      |- About/
+      |  \- About.json
+      |- Assemblies/
+      |  \- MyPlugin.dll
+      \- Config/             (optional)
+```
+
+Loader discovery requires `About/About.json`.
+
+## 3. `About.json` Requirements
+
+Required fields:
+- `id`
+- `name`
+- `version`
+- `description`
+- `authors` (non-empty array)
+
+Example:
+
+```json
 {
-
-    // Attributes automatically create UI and save/load settings
-    [ModToggle("Enable Boost", "Enable/Disable speed boost")]
-    public bool BoostActive = true;
-
-    [ModSlider("Speed", 1f, 10f)]
-    public float SpeedValue = 5.0f;
-
-    public override void Initialize(IPluginContext ctx)
-    {
-        base.Initialize(ctx); // REQUIRED to bind attributes
-        Log.Info("Modern mod initialized!");
-    }
-
-    private void Update()
-    {
-        if (BoostActive && Input.GetKeyDown(KeyCode.Space))
-        {
-            Log.Info("Boosting with speed " + SpeedValue);
-        }
-    }
+  "id": "yourname.myplugin",
+  "name": "My Plugin",
+  "version": "1.0.0",
+  "authors": ["Your Name"],
+  "description": "What this plugin does"
 }
 ```
 
-### 3b. Write your plugin code (Manual)
+Optional fields supported by `ModAbout` include `entryType`, `dependsOn`, `loadBefore`, `loadAfter`, `tags`, `website`, `missingModWarning`, `debugLogging`.
 
-If you prefer manual control, implement `IModPlugin`. requires **both** `Initialize()` and `Start()` methods.
+## 4. Lifecycle Contract
 
-### 4. Example: Adding UI to the Main Menu with Harmony
+Every plugin must implement `IModPlugin`:
+
+```csharp
+public interface IModPlugin
+{
+    void Initialize(IPluginContext ctx);
+    void Start(IPluginContext ctx);
+}
+```
+
+Runtime order is:
+1. `Initialize(ctx)`
+2. `Start(ctx)`
+
+`Initialize` should wire dependencies and cache context/log.
+`Start` is where you usually apply Harmony patches and begin runtime behavior.
+
+## 5. Recommended Base Class: `ModManagerBase`
+
+Use `ModManagerBase` if you want built-in settings and save helpers.
 
 ```csharp
 using ModAPI.Core;
-using HarmonyLib;
 using UnityEngine;
 
-/// <summary>
-/// Example plugin that adds a cyan label to the Main Menu.
-/// 
-/// Why use Harmony here?
-///   - Sheltered doesn't add menu panels until runtime
-///   - The menu GameObjects exist but are inactive during scene load
-///   - Harmony lets us "hook" the panel's OnShow() so we run code right when
-///     the game activates it, ensuring the label is visible.
-/// </summary>
-public class MyMenuPlugin : IModPlugin
+public class MyMod : ModManagerBase, IModPlugin
 {
-    private IModLogger _log;
+    [ModToggle("Enable Boost", "Enable or disable speed boost")]
+    public bool BoostActive = true;
 
-    public void Initialize(IPluginContext ctx)
+    [ModSlider("Speed", 1f, 10f)]
+    public float SpeedValue = 5f;
+
+    public override void Initialize(IPluginContext ctx)
     {
-        _log = ctx.Log;
-        _log.Info("MyMenuPlugin initializing...");
+        base.Initialize(ctx); // Important: wires settings + random stream + persistence scan
+        Log.Info("MyMod initialized");
     }
 
     public void Start(IPluginContext ctx)
     {
-        _log.Info("MyMenuPlugin starting...");
-        var h = new Harmony("com.plugin.mymenu"); // unique ID for this patch set
-        h.PatchAll(typeof(MyMenuPlugin).Assembly);
-        _log.Info("Harmony patches applied.");
+        Log.Info("MyMod started");
     }
 }
-
-/// <summary>
-/// Patch handler for when the MainMenu panel is shown.
-/// Note: Sheltered has two menu variants: MainMenu and MainMenuX.
-/// </summary>
-[HarmonyPatch(typeof(MainMenu), "OnShow")]
-public static class MainMenu_OnShow_Patch
-{
-    /// <summary>
-    /// Postfix is called after the real OnShow() runs.
-    /// At this point the panel is active and safe to add children to.
-    /// </summary>
-    static void Postfix(MainMenu __instance)
-    {
-        if (__instance == null || __instance.gameObject == null) return;
-
-        // Marker component prevents adding the label twice
-        if (__instance.GetComponent<MyMenuLabelMarker>() != null) return;
-        __instance.gameObject.AddComponent<MyMenuLabelMarker>();
-
-        // Create a label using UIUtil helper
-        UIPanel used;
-        var opts = new UIUtil.UILabelOptions
-        {
-            text = "MyMenuPlugin is active!",
-            color = Color.cyan,
-            fontSize = 22,
-            alignment = NGUIText.Alignment.Right,
-            effect = UILabel.Effect.Outline,
-            effectColor = new Color(0, 0, 0, 0.85f),
-            anchor = UIUtil.AnchorCorner.TopRight,
-            pixelOffset = new Vector2(-10, -10),
-            relativeDepth = 50
-        };
-
-        UIUtil.CreateLabel(__instance.gameObject, opts, out used);
-    }
-}
-
-/// <summary>
-/// Empty marker component to prevent injecting multiple times.
-/// </summary>
-public class MyMenuLabelMarker : MonoBehaviour { }
 ```
 
-### 5. Set up the mod folder structure
+## 6. Manual Style: `IModPlugin` Directly
 
-Place your mod in `Sheltered/mods/MyPlugin/`:
-
-```
-Sheltered/
-└─ mods/
-    └─ MyPlugin/                  ← Mod root folder
-         ├─ About/                 
-         │  ├─ About.json         ← Mod metadata (REQUIRED)
-         │  ├─ preview.png        ← Preview image for Manager
-         │  └─ icon.png           ← Optional icon
-         ├─ Assemblies/           ← Compiled mod code
-         │  └─ MyPlugin.dll
-         └─ Config/               ← Configuration files (optional)
-              └─ default.json     ← Default settings
-```
-
-### 6. Create About.json (required)
-
-```json
-{
-  "id": "YourName.MyPlugin",
-  "name": "My Plugin",
-  "version": "1.0.0",
-  "authors": ["Your Name"],
-  "description": "What this mod does",
-  "entryType": "MyPlugin"
-}
-```
-
-**Required Fields:** `id`, `name`, `version`, `authors`, `description`
-
-**Optional Fields:**
-- `entryType` - Class name implementing `IModPlugin` (if different from auto-detection)
-- `dependsOn` - Array of mod IDs with optional version constraints
-- `loadBefore` / `loadAfter` - Load order hints
-- `missingModWarning` - Custom message shown when loading a save that used this mod
-
-### 7. Enable your mod in the Manager GUI
-
-Run `SMM/Manager.exe`, enable your mod, and launch the game.
-![Mod Manager](screenshots/mod_manager_gui_mods.png)
-
----
-
-## Optional Interfaces
-
-Your plugin can implement additional interfaces for more functionality:
+Use this when you want full explicit control.
 
 ```csharp
-// Per-frame updates
-public interface IModUpdate
-{
-    void Update();  // Called every frame
-}
+using ModAPI.Core;
 
-// Cleanup on shutdown
-public interface IModShutdown
+public class MyPlugin : IModPlugin
 {
-    void Shutdown();  // Called when loader tears down
-}
+    private IPluginContext _ctx;
 
-// Scene change notifications
-public interface IModSceneEvents
-{
-    void OnSceneLoaded(string sceneName);
-    void OnSceneUnloaded(string sceneName);
-}
-
-// Session Lifecycle (v1.0.1)
-public interface IModSessionEvents
-{
-    void OnSessionStarted(); // Called when session starts (Load/New Game)
-    void OnNewGame();        // Called specifically for New Games
-}
-```
-
-Example:
-```csharp
-public class MyPlugin : IModPlugin, IModShutdown
-{
-    public void Initialize(IPluginContext ctx) { /* ... */ }
-    public void Start(IPluginContext ctx) { /* ... */ }
-    
-    public void Shutdown()
+    public void Initialize(IPluginContext ctx)
     {
-        // Clean up resources, unsubscribe events, etc.
+        _ctx = ctx;
+        _ctx.Log.Info("Initialize");
+    }
+
+    public void Start(IPluginContext ctx)
+    {
+        _ctx.Log.Info("Start");
     }
 }
 ```
 
----
+## 7. Optional Interfaces
 
-## Context API Reference
+Implement only what you need:
+- `IModUpdate`: per-frame `Update()` callback from loader
+- `IModShutdown`: cleanup during quit/teardown
+- `IModSceneEvents`: `OnSceneLoaded/OnSceneUnloaded`
+- `IModSessionEvents`: `OnSessionStarted/OnNewGame`
 
-The `IPluginContext` gives you access to:
+## 8. `IPluginContext` Quick Use
 
-| Property/Method | Description |
-|-----------------|-------------|
-| `Log` | Logger that prefixes with your mod ID |
-| `Settings` | Read/write mod settings (and AutoBind v1.2.0) |
-| `SaveSystem` | Per-mod save data persistence (v1.2.0) |
-| `PluginRoot` | Per-plugin GameObject for your components |
-| `LoaderRoot` | Global loader GameObject |
-| `Mod` | Your mod's metadata (About.json) |
-| `Game` | Unified game state helper (v1.0.1) |
-| `GameRoot` | Path to Sheltered install directory |
-| `ModsRoot` | Path to mods folder |
-| `IsModernUnity` | True if running Unity 5.4+ (Epic version) |
-| `RunNextFrame(action)` | Queue an action for next frame |
-| `StartCoroutine(routine)` | Start a coroutine |
-| `FindPanel(name)` | Find a UI panel by name or path |
-| `AddComponentToPanel<T>(name)` | Add component to a UI panel |
+High-value members:
+- `Log`: mod-prefixed logging
+- `SaveSystem`: per-save mod data
+- `RunNextFrame(Action)`: defer to next Unity frame
+- `StartCoroutine(...)`: run coroutine from loader host
+- `FindPanel(...)` and `AddComponentToPanel<T>(...)`: UI integration
+- `GameRoot` / `ModsRoot`: path roots
 
----
+## 9. Common Pitfalls
 
-## Tips
-
-- Avoid blocking the main thread during `Start`; use `ctx.RunNextFrame()` or `ctx.StartCoroutine()` for heavy work
-- Use `ctx.Log.Info("...")` for logging (automatically prefixed with your mod ID)
-- Store your `IModLogger` reference in `Initialize` for use throughout your plugin
-- Use the Runtime Inspector (F9) to explore the game's UI hierarchy
+- Forgetting `base.Initialize(ctx)` when using `ModManagerBase`.
+- Doing heavy work in constructors instead of lifecycle methods.
+- Assuming scene objects exist immediately; use `RunNextFrame` or scene callbacks.
+- Not implementing `IModShutdown` for event unsubscription.

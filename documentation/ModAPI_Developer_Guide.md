@@ -1,9 +1,9 @@
 # ModAPI V1.2: Developer Guide
-## First Edition (V1)
+## Current Edition
 
 A practical guide covering how to use the ModAPI to create mods for Sheltered.
 
-> **API Status Note:** The Developer API is in early development. This guide documents both implemented and planned features.
+> **Status:** This guide targets the current ModAPI v1.2 surface.
 >
 > **Currently Implemented:**
 > - Item and food injection (ContentInjector)
@@ -776,8 +776,8 @@ PersistentDataAPI.DeleteData("MyMod.Settings");
 
 The logging system now uses **Automatic Source Detection**. You should no longer manually prefix your messages with `[MyMod]` or `[Class]`. 
 
-- **Mod Logs**: `context.Log.Info("Hello")` → `[INFO ] [MyMod.Id] Hello`
-- **Internal Logs**: `MMLog.Write("System starting")` → `[INFO ] [InternalClassName] System starting`
+- **Mod Logs**: `context.Log.Info("Hello")`  `[INFO ] [MyMod.Id] Hello`
+- **Internal Logs**: `MMLog.Write("System starting")`  `[INFO ] [InternalClassName] System starting`
 
 This ensures logs are clean, consistent, and easy to filter.
 
@@ -822,15 +822,15 @@ Sprite sprite = AssetLoader.LoadSprite("icons/sword.png");
 
 ```
 mods/
-└── MyMod/
-    ├── About/
-    │   └── About.json      # Mod metadata (required)
-    ├── Assemblies/
-    │   └── MyMod.dll       # Your compiled mod
-    └── Assets/
-        ├── my_icon.png     # Custom sprites
-        └── icons/
-            └── sword.png
+ MyMod/
+     About/
+        About.json      # Mod metadata (required)
+     Assemblies/
+        MyMod.dll       # Your compiled mod
+     Assets/
+         my_icon.png     # Custom sprites
+         icons/
+             sword.png
 ```
 
 ---
@@ -1010,7 +1010,7 @@ if (ModAPIRegistry.TryGetAPI<IMyAPI>("OtherMod.API", out var api))
 
 ---
 
-*Sheltered Mod Loader v1.2.0*
+*Sheltered ModAPI v1.2.0*
 ---
 
 ## Mod Settings (Spine)
@@ -1115,7 +1115,7 @@ This dictionary is JSON-serializable and maintains its state across restarts whe
 ModAPI includes a high-performance, deterministic random number generator base on the **XorShift64*** algorithm. This ensures that random results are identical across different platforms (Steam vs Epic) and .NET runtimes, which is essential for synchronized gameplay and preventing "save-scumming."
 
 ### Mod-Isolated Random Streams
-When using `ModManagerBase`, each mod gets its own `Random` stream. This prevents "RNG stealing"—where one mod's random calls would otherwise advance the master seed and change the results for other mods.
+When using `ModManagerBase`, each mod gets its own `Random` stream. This prevents "RNG stealing" - where one mod's random calls would otherwise advance the master seed and change the results for other mods.
 
 ```csharp
 public class MyMod : ModManagerBase {
@@ -1160,10 +1160,10 @@ You should **always prefer `ModRandom` over `UnityEngine.Random` or `System.Rand
 
 | Feature | ModRandom | UnityEngine.Random | System.Random |
 | :--- | :--- | :--- | :--- |
-| **Deterministic** | ✅ Yes (Fixed Seed) | ❌ No | ❌ No |
-| **Cross-Platform** | ✅ Identical results | ❌ Varies by OS/Version | ❌ Varies by Runtime |
-| **Thread Safe** | ✅ Yes | ❌ No (Main Thread Only) | ❌ No |
-| **Distribution** | ✅ Uniform / Gaussian | ⚠️ Uniform Only | ⚠️ Poor Quality |
+| **Deterministic** | Yes (Fixed Seed) | No | No |
+| **Cross-Platform** | Identical results | Varies by OS/Version | Varies by Runtime |
+| **Thread Safe** | Yes | No (Main Thread Only) | No |
+| **Distribution** | Uniform / Gaussian | Uniform Only | Poor Quality |
 
 Use `ModRandom.RangeUnbiased(min, max)` when generating from very large ranges (e.g. `0` to `int.MaxValue`) to avoid the slight modulo bias present in standard RNGs.
 

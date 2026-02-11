@@ -126,6 +126,7 @@
     <Compile Include="Harmony\Transpilers\ShelteredPatterns.cs" />
     <Compile Include="Harmony\Transpilers\CartographerExtensions.cs" />
     <Compile Include="Harmony\Transpilers\StackSentinel.cs" />
+    <Compile Include="Harmony\Transpilers\TranspilerSafetyPolicy.cs" />
     <Compile Include="Harmony\Transpilers\CooperativePatcher.cs" />
     <Compile Include="Harmony\Transpilers\IntentAPI.cs" />
     <Compile Include="Harmony\Transpilers\TranspilerTestHarness.cs" />

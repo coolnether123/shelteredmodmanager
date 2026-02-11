@@ -4,6 +4,9 @@ using UnityEngine;
 
 namespace ModAPI.Core
 {
+    /// <summary>
+    /// Runtime implementation of <see cref="IPluginContext"/> passed to each loaded plugin.
+    /// </summary>
     internal class PluginContextImpl : IPluginContext
     {
         public GameObject LoaderRoot { get; set; }
@@ -17,6 +20,9 @@ namespace ModAPI.Core
         public string ModsRoot { get; set; }
         public bool IsModernUnity { get { return PluginRunner.IsModernUnity; } }
 
+        /// <summary>
+        /// Main-thread scheduler provided by <see cref="PluginManager"/>.
+        /// </summary>
         public Action<Action> Scheduler;
 
         public FamilyMember FindMember(string characterId)
@@ -24,22 +30,34 @@ namespace ModAPI.Core
             return Game != null ? Game.FindMember(characterId) : null;
         }
 
+        /// <summary>
+        /// Convenience wrapper for deferred main-thread execution.
+        /// </summary>
         public void RunNextFrame(Action action)
         {
             if (Scheduler != null) Scheduler(action);
         }
 
+        /// <summary>
+        /// Starts a coroutine on the persistent loader runner.
+        /// </summary>
         public Coroutine StartCoroutine(IEnumerator routine)
         {
             return LoaderRoot != null ? LoaderRoot.GetComponent<PluginRunner>().StartCoroutine(routine) : null;
         }
 
+        /// <summary>
+        /// Finds a scene UI object by name or hierarchy path.
+        /// </summary>
         public GameObject FindPanel(string nameOrPath)
         {
             try { return ModAPI.SceneUtil.Find(nameOrPath); }
             catch (Exception ex) { MMLog.WarnOnce("PluginContextImpl.FindPanel", "Error finding panel: " + ex.Message); return null; }
         }
 
+        /// <summary>
+        /// Gets or adds component <typeparamref name="T"/> to a target panel object.
+        /// </summary>
         public T AddComponentToPanel<T>(string nameOrPath) where T : Component
         {
             var go = FindPanel(nameOrPath);

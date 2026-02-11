@@ -1,119 +1,113 @@
-# ModAPI V1.2: Managers & Architecture Guide
+﻿# ModAPI v1.2 Architecture Guide
 
-This guide explains the "engine" behind **ModAPI V1.2**, detailing how mods are discovered, loaded, and managed at runtime. It covers both the internal systems (`PluginManager`, `PluginRunner`) and the high-level tools you use to build your mod (`ModManagerBase`).
+This document describes how the loader actually behaves at runtime based on the current `ModAPI/Core` implementation.
 
----
+## 1. Startup Pipeline
 
-## 1. Architectural Overview
+Entry path:
+- Doorstop/bootstrap calls `PluginManager.getInstance().loadAssemblies(...)`.
 
-The ModAPI follows a "Central Hub" architecture.
+Inside `loadAssemblies(...)`:
+1. `InitializeLoader(...)`
+2. `ReadLoadOrderFromFile(...)`
+3. `DiscoverAndOrderMods(...)`
+4. `AttachInspectorTools()`
+5. `LoadAndInitializePlugins(...)`
 
-1.  **The Hub (`PluginManager`)**: A static singleton that discovery mods and coordinates their lifecycle.
-2.  **The Heart (`PluginRunner`)**: A persistent `MonoBehaviour` on the `ModAPI.Loader` GameObject that provides Unity-specific ticks (`Update`) and scene event monitoring.
-3.  **The Mod Manager (`ModManagerBase`)**: Your mod's personalized "brain." It is a `MonoBehaviour` that is automatically created and attached by the Hub.
+## 2. Loader Initialization Details
 
----
+`InitializeLoader(...)` does the following:
+- Registers an `AssemblyResolve` bridge so plugins loaded from bytes can resolve `ModAPI` to the already-loaded assembly.
+- Resolves game/mod roots:
+  - `GameRoot = Directory.GetParent(Application.dataPath)`
+  - `ModsRoot = Path.Combine(GameRoot, "mods")`
+- Creates or reuses `ModAPI.Loader` and marks it `DontDestroyOnLoad`.
+- Ensures `PluginRunner` exists and attaches manager reference.
+- Applies Harmony bootstrap and save protection patches.
+- Wires session/save events:
+  - `ModAPI.Saves.Events.OnAfterLoad -> ModRandomState.Load`
+  - `ModAPI.Saves.Events.OnBeforeSave -> ModRandomState.Save`
+  - `GameEvents.OnSessionStarted -> PluginManager.OnSessionStarted`
+  - `GameEvents.OnNewGame -> PluginManager.OnNewGame`
 
-## 2. Mod Lifecycle
+## 3. Mod Discovery and Load Order
 
-Knowing the exact sequence of events is critical for stable modding.
+Discovery source: `ModDiscovery.DiscoverAllMods()`
+- Scans `<GameRoot>/mods/*`
+- Skips reserved folders: `disabled`, `ModAPI`
+- Requires `About/About.json`
+- Required About fields:
+  - `id`, `name`, `version`, `description`, `authors[]`
+- Normalizes `id` to lowercase for matching.
 
-### Step 1: Discovery & Assembly Load
-At game startup, `PluginManager` scans the `/mods/` folder.
-*   It reads `About.json` to verify the Mod ID and version.
-*   It loads all `.dll` files in the `/Assemblies/` folder.
-*   It resolves the **Load Order** (based on `loadorder.json` or discovery order).
+Load order source: `mods/loadorder.json`
+- Missing file: all discovered mods are enabled.
+- Present but empty `order`: no mods enabled.
+- Unknown IDs in `order`: ignored.
+- Duplicates: deduped case-insensitively.
 
-### Step 2: Plugin Instantiation
-The Hub iterates through all loaded classes. If a class implements `IModPlugin`, the Hub:
-1.  Creates a new `GameObject` named `Mod-[YourModID]`.
-2.  Creates a unique `IPluginContext` for that mod.
-3.  Instantiates your plugin class.
+## 4. Assembly Loading and Plugin Instantiation
 
-### Step 3: Initialization Sequence
-The Hub calls these methods in order:
-1.  **`Initialize(context)`**: This is where basic setup happens. If you use `ModManagerBase`, this automatically binds your settings.
-2.  **`Spine Auto-Load`**: If you use the Spine framework, your settings are loaded from disk now.
-3.  **`Start(context)`**: Your mod is now fully "Online." You can safely communicate with other mods here.
+For each ordered mod:
+- Loads all DLLs under `Assemblies/` with `Assembly.Load(byte[])` (avoids locking files during development).
+- Registers mod and assembly with `ModRegistry`.
+- Scans each assembly type and instantiates concrete classes implementing `IModPlugin`.
 
----
+For each plugin instance:
+- Creates `GameObject` named `Mod-[ModId]` under loader root.
+- Builds `IPluginContext` via `PluginContextImpl`.
+- Registers optional interfaces if implemented:
+  - `IModUpdate`
+  - `IModShutdown`
+  - `IModSceneEvents`
+  - `IModSessionEvents`
+- Calls lifecycle in order:
+  1. `Initialize(context)`
+  2. `Start(context)`
 
-## 3. ModManagerBase (The Recommended Way)
+## 5. Runtime Host (`PluginRunner`)
 
-Instead of implementing `IModPlugin` manually, V1.2 ModAPI recommends inheriting from `ModManagerBase`. This adds "batteries included" functionality to your mod.
+`PluginRunner` responsibilities:
+- Main-thread queue via `Enqueue(...)` + drain in `Update()`.
+- Per-frame update fanout: `PluginManager.OnUnityUpdate()`.
+- Scene event bridge:
+  - Modern path: reflection hook into `SceneManager.sceneLoaded/sceneUnloaded`
+  - Fallback path: `OnLevelWasLoaded(int)` for legacy runtime
+- Quit boundary handling:
+  - `IsQuitting = true`
+  - Calls `PluginManager.ShutdownAll()`
 
-### Automated Services
-By inheriting from `ModManagerBase`, you get immediate (protected) access to:
-*   **`Log`**: Automatically prefixed with your Mod ID.
-*   **`SaveSystem`**: For per-save data persistence.
-*   **`Settings`**: For accessing and binding configuration.
-*   **`Context`**: Your full link to the API.
+Runtime tool toggles:
+- `RuntimeInspector`: `F9`
+- `RuntimeILInspector`: `F10`
+- `UIDebugInspector`: `F11`
+- `RuntimeDebuggerUI`: `F12`
 
-### Automatic Settings & Persistence (v1.2)
-If you define fields with `ModAttributes` or `[ModPersistentData]`, `ModManagerBase` automatically works its magic.
+## 6. `IPluginContext` Services
 
-1.  **Settings (`[ModConfiguration]`)**: Scans for your configuration class, instantiates it, and links it to `this.Config`.
-2.  **Persistence (`[ModPersistentData]`)**: Scans for data classes, registers them with `SaveSystem`, and injects instances into your plugin.
-3.  **UI Generation**: Automatically creates the Spine UI menu.
+Per-plugin context exposes:
+- `Log`: mod-prefixed logger (`PrefixedLogger`)
+- `SaveSystem`: per-mod data persistence API
+- `Game`: helper access to game state wrappers
+- `RunNextFrame(Action)`: schedule onto next Unity frame
+- `StartCoroutine(IEnumerator)`: coroutine host on loader runner
+- `FindPanel(...)` and `AddComponentToPanel<T>(...)`
+- Paths: `GameRoot`, `ModsRoot`
+- Runtime mode: `IsModernUnity`
 
-```csharp
-public class MyCoolMod : ModManagerBase<MyConfig> 
-{
-    // Auto-Injected
-    public MySaveData Data;
-    
-    public override void Initialize(IPluginContext ctx) 
-    {
-        base.Initialize(ctx); // Settings & Data are now bound!
-    }
-}
-```
+## 7. `ModManagerBase` Behavior
 
----
+`ModManagerBase` is a convenience base class for plugin authors:
+- Stores `Context`, exposes `Log`, `SaveSystem`, deterministic `Random` stream.
+- If settings attributes exist on the plugin class, it auto-creates `SettingsController`, loads config, and wires session reload.
+- Supports manual settings creation through `CreateSettings<T>()`.
+- Supports persistence registration via `RegisterPersistentData<T>()`.
 
-## 4. PluginRunner (The Heartbeat)
+## 8. Practical Guidance for Mod Authors
 
-The `PluginRunner` is an internal component, but its role is vital.
-
-*   **Ticking**: It calls `IModUpdate.Update()` on all registered mods during the Unity `Update` loop.
-*   **Scene Events**: It monitors Unity's `SceneManager` and broadcasts `OnSceneLoaded` and `OnSceneUnloaded` events to compatible mods.
-*   **Coroutine Host**: Because the ModAPI needs to run coroutines even if your mod's script is disabled, `PluginRunner` acts as the global host for `StartCoroutine`.
-
----
-
-## 5. Directory Structure Reference
-
-The Manager system expects a specific layout to function correctly:
-
-```
-/mods/[YourModID]/
-  ├── About/
-  │    └── About.json         # Metadata (ID, Name, Version)
-  ├── Assemblies/
-  │    └── YourMod.dll        # Your compiled code
-  ├── Assets/
-  │    └── (Icon, Textures)   # Loaded via AssetLoader
-  └── Config/
-       └── (Auto-generated)   # Persistent settings files
-```
-
----
-**First Edition (V1) - Documentation for ModAPI V1.2.0**
-
----
-
-## 6. Save System V1.2: Robust Discovery & Safe Shutdown
-
-The ModAPI V1.2 significantly upgrades the existing Custom Slot system capabilities, focusing on reliability and stability during the critical "Save & Exit" phase.
-
-### Robust Discovery ("Drag and Drop")
-Unlike V1.1, which relied on a central manifest file, V1.2 uses **directory-based discovery**. You can now drag and drop save folders (e.g., `Slot_5`) directly into the saves directory, and the game will automatically detect and parse them. This requires the system to inspect save files directly to read metadata (Days, Family Name).
-
-### Safe Shutdown (Regex Parsing)
-Performing XML parsing via Unity's internal serialization during the **"Save & Exit"** sequence is dangerous because Unity objects are being destroyed simultaneously, leading to `Access Violation` crashes.
-
-To solve this while maintaining full metadata accuracy, we use **Safe Regex Parsing**:
-1.  **Unity Independence**: Instead of using `new SaveData(bytes)`, which triggers Unity's serialization engine, we use high-performance **Regular Expressions** to extract tags directly from the XML string.
-2.  **Shutdown Safety**: Because Regex is an atomic string operation, it can be called safely even when Unity's internal managers are offline.
-3.  **Always Up-to-Date**: Unlike the experimental "Fast Save" (v1.2.0-beta), which skipped metadata during exit, the final V1.2 system performs a full, high-quality save every time. 
-    *   **Result**: Your `manifest.json` and in-game UI always show the correct Family Name and Days Survived immediately, with zero risk of crashing on exit.
+- Put lightweight setup in `Initialize`; patch application is usually safe in `Start`.
+- If you subscribe to events, implement `IModShutdown` and unsubscribe in `Shutdown`.
+- Use `RunNextFrame(...)` when scene objects may not yet exist.
+- Do not assume all discovered mods load; load order filtering may exclude them.
+- Keep plugin constructors side-effect free; rely on context lifecycle.
+- If you use transpilers, expect safety policy defaults to favor runtime stability over permissive patching (`TranspilerSafeMode`, cooperative strict build, quarantine-on-failure).

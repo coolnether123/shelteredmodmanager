@@ -276,7 +276,7 @@ namespace ModAPI.Harmony
                     // Constructors (newobj) are handled separately below.
                     // But Call to a constructor is possible!
                     if (mb is MethodInfo mi2 && mi2.ReturnType != typeof(void)) result.Add(mi2.ReturnType);
-                    else if (mb.IsConstructor) result.Add(typeof(void)); // Call to ctor has no return
+                    else if (mb.IsConstructor) { /* Void return, push nothing */ }
                 }
                 else result.Add(UnknownType);
                 return result;

@@ -10,8 +10,17 @@ namespace ModAPI.Core
     /// </summary>
     public class PluginRunner : MonoBehaviour
     {
+        /// <summary>
+        /// True when modern SceneManager event APIs are active.
+        /// </summary>
         public static bool IsModernUnity { get; private set; }
+        /// <summary>
+        /// Set during quit flow so systems can avoid risky late-stage work.
+        /// </summary>
         public static bool IsQuitting { get; set; }
+        /// <summary>
+        /// Singleton runtime host attached to the persistent loader root.
+        /// </summary>
         public static PluginRunner Instance { get; private set; }
 
         private readonly Queue<Action> _nextFrame = new Queue<Action>();
@@ -19,7 +28,9 @@ namespace ModAPI.Core
         private bool _useModernApi = false;
         private string _currentSceneName;
 
+        /// <summary>Raised after a scene was reported loaded to the plugin manager.</summary>
         public event Action<string> SceneLoaded;
+        /// <summary>Raised after a scene was reported unloaded to the plugin manager.</summary>
         public event Action<string> SceneUnloaded;
 
         private object _sceneLoadedDelegate;
@@ -27,6 +38,9 @@ namespace ModAPI.Core
         private bool _unityLogBridgeHooked;
         private float _nextQuitHeartbeatAt;
 
+        /// <summary>
+        /// Queues main-thread work for execution in the next <see cref="Update"/> tick.
+        /// </summary>
         public void Enqueue(Action action)
         {
             lock (_nextFrame)
@@ -35,6 +49,9 @@ namespace ModAPI.Core
             }
         }
 
+        /// <summary>
+        /// Bootstraps runtime event hooks and determines scene API mode.
+        /// </summary>
         private void Awake()
         {
             if (Instance == null) Instance = this;
@@ -49,6 +66,9 @@ namespace ModAPI.Core
             }
         }
 
+        /// <summary>
+        /// Last managed quit boundary. Marks quitting and runs orderly plugin shutdown.
+        /// </summary>
         private void OnApplicationQuit()
         {
             IsQuitting = true;
@@ -58,6 +78,9 @@ namespace ModAPI.Core
             MMLog.Flush();
         }
 
+        /// <summary>
+        /// Cleans up event hooks to prevent duplicate handlers on domain reload/teardown.
+        /// </summary>
         private void OnDestroy()
         {
             UnhookUnityLogBridge();
@@ -256,6 +279,9 @@ namespace ModAPI.Core
             }
         }
 
+        /// <summary>
+        /// Drains next-frame queue, emits quit heartbeat diagnostics, and forwards update ticks.
+        /// </summary>
         private void Update()
         {
             if (IsQuitting && Time.realtimeSinceStartup >= _nextQuitHeartbeatAt)
@@ -292,6 +318,9 @@ namespace ModAPI.Core
             if (Manager != null) Manager.OnUnityUpdate();
         }
 
+        /// <summary>
+        /// Attempts to bind runtime scene events through reflection for 5.6+/modern API variants.
+        /// </summary>
         private bool TryHookModernSceneEvents()
         {
             try
@@ -366,6 +395,9 @@ namespace ModAPI.Core
             }
         }
 
+        /// <summary>
+        /// Switches to legacy level callbacks when modern scene APIs are unavailable.
+        /// </summary>
         private void ThrowLegacyFallback()
         {
             if (_useModernApi) return;

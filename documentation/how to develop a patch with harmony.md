@@ -1,81 +1,126 @@
-# How to Develop a Harmony Patch | Sheltered Mod Manager v1.2.0
+﻿# How to Develop a Harmony Patch | Sheltered Mod Manager v1.2
 
-## Harmony Reference
-- This project references Lib.Harmony 2.4.1
-- You can reference `0Harmony.dll` from your SMM installation at `SMM/bin/0Harmony.dll`
-- Alternatively, add Harmony via NuGet in your project
+This guide covers practical Harmony usage with ModAPI.
 
-## Quick Start
+## 1. Reference Setup
 
-### 1. Reference Harmony
-Reference `0Harmony.dll` from your Sheltered installation's `SMM/bin/` folder.
+Add `0Harmony.dll` from your SMM install (`SMM/bin/0Harmony.dll`).
 
-### 2. Create a patch class in your plugin assembly
+Also reference:
+- `ModAPI.dll`
+- `Assembly-CSharp.dll`
+- `UnityEngine.dll`
 
-```csharp
-using HarmonyLib;
+## 2. Apply Patches in Plugin `Start`
 
-[HarmonyPatch(typeof(SomeGameType), "MethodName")] 
-public static class SomeGameType_MethodName_Patch
-{
-    // Prefix runs BEFORE the original method
-    public static void Prefix(/* original args, ref bool __runOriginal, etc. */)
-    {
-        // run before original
-    }
-
-    // Postfix runs AFTER the original method
-    public static void Postfix(/* original args, return value, etc. */)
-    {
-        // run after original
-    }
-}
-```
-
-### 3. Apply patches in your plugin
-
-**Important:** Your plugin must implement both `Initialize()` and `Start()`. Apply Harmony patches in `Start()`:
+Patch in `Start(...)`, not constructor, so context/logging are ready.
 
 ```csharp
 using ModAPI.Core;
 using HarmonyLib;
+using System.Reflection;
 
 public class MyPlugin : IModPlugin
 {
     private IModLogger _log;
-    
+    private Harmony _harmony;
+
     public void Initialize(IPluginContext ctx)
     {
         _log = ctx.Log;
-        _log.Info("MyPlugin initializing...");
     }
-    
+
     public void Start(IPluginContext ctx)
     {
-        _log.Info("MyPlugin starting...");
-        
-        var harmony = new Harmony("YourName.MyPlugin");
-        harmony.PatchAll(System.Reflection.Assembly.GetExecutingAssembly());
-        
-        _log.Info("Harmony patches applied.");
+        _harmony = new Harmony("yourname.myplugin");
+        _harmony.PatchAll(Assembly.GetExecutingAssembly());
+        _log.Info("Harmony patches applied");
     }
 }
 ```
 
-## Tips
-- Use unique Harmony IDs (e.g. "Author.ModName") to avoid conflicts
-- Use `Traverse` in Harmony for private field/property access when needed
-- Keep patches focused; log with `ctx.Log.Info("...")` during development
-- Harmony is powerful, but in v1.2.0 you don't always need it:
-  - Use Harmony patches when you want to change game logic
-  - Use UIUtil & context helpers to simply add UI elements
-  
-- Read https://harmony.pardeike.net/ for more information
- 
- ---
- 
- ## Advanced: Transpilers (v1.2.0)
- 
- If you need to manipulate the game's IL code directly for performance or surgical precision, use the **FluentTranspiler** engine introduced in V1.2.
- 
- See the dedicated guide: [ModAPI Transpiler & Debugging Guide](Transpiler_and_Debugging_Guide.md)
+## 3. Prefix/Postfix Template
+
+```csharp
+using HarmonyLib;
+
+[HarmonyPatch(typeof(SomeGameType), "MethodName")]
+public static class SomeGameType_MethodName_Patch
+{
+    public static void Prefix()
+    {
+        // Runs before original method
+    }
+
+    public static void Postfix()
+    {
+        // Runs after original method
+    }
+}
+```
+
+## 4. Transpiler Template (Fluent)
+
+Use ModAPI's fluent transpiler instead of raw instruction surgery when possible.
+
+```csharp
+using HarmonyLib;
+using ModAPI.Harmony;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Reflection.Emit;
+
+[HarmonyPatch(typeof(SomeGameType), "MethodName")]
+public static class SomeGameType_MethodName_Transpiler
+{
+    [HarmonyTranspiler]
+    public static IEnumerable<CodeInstruction> Transpiler(
+        IEnumerable<CodeInstruction> instructions,
+        MethodBase original,
+        ILGenerator il)
+    {
+        return FluentTranspiler.For(instructions, original, il)
+            .FindCall(typeof(SomeGameType), "OldCall", SearchMode.Start)
+            .ReplaceWithCall(typeof(MyHooks), "NewCall")
+            .Build();
+    }
+}
+```
+
+## 5. Patch Design Rules
+
+- Use a unique Harmony ID (`author.modname`).
+- Prefer Prefix/Postfix over Transpiler when enough.
+- Keep each patch focused on one behavioral change.
+- Fail loudly in development (`Build(strict: true)`).
+- Add logging around risky branches and patch setup.
+
+## 6. Multi-Mod Compatibility
+
+If multiple mods touch the same target method heavily, use `CooperativePatcher` instead of standalone transpilers.
+
+Benefits:
+- explicit order (`PatchPriority`)
+- dependency checks (`dependsOn`)
+- conflict guards (`conflictsWith`)
+
+## 7. Debugging
+
+Use these tools:
+- `RuntimeILInspector` (`F10`) to inspect patched IL in-game.
+- `TranspilerDebugger.DumpWithDiff(...)` for before/after files.
+- `TranspilerTestHarness` for isolated transform tests.
+
+For detailed IL workflow, see:
+- `documentation/Transpiler_and_Debugging_Guide.md`
+
+## 8. Common Failure Modes
+
+- `No match for call ...`: game method changed or overload mismatch.
+- Stack validation warning/exception: replace logic unbalanced stack.
+- Patch silently ineffective: wrong target signature or patch class not loaded by `PatchAll`.
+
+When this happens:
+1. Confirm target method signature.
+2. Dump before/after IL.
+3. Replace brittle opcode chains with stronger anchors (`FindCall`, `ReplaceAllPatterns`).
