@@ -76,7 +76,7 @@ namespace ModAPI.Content
             lock (Sync)
             {
                 if (_bootstrapped) return;
-                MMLog.Write("Starting injection...");
+                MMLog.WriteDebug("Starting injection...");
 
                 // 1. Setup Maps
                 BuildItemMap();
@@ -91,7 +91,7 @@ namespace ModAPI.Content
                 InjectCookingRecipes();
 
                 _bootstrapped = true;
-                MMLog.Write("Injection complete.");
+                MMLog.Write("Item injection complete.");
 
                 // Final Check
                 PluginManager.getInstance().EnqueueNextFrame(VerifyExistence);

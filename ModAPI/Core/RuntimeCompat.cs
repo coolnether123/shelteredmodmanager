@@ -34,6 +34,23 @@ namespace ModAPI.Core
             }
         }
 
+        public static string ModApiVersion
+        {
+            get
+            {
+                var version = typeof(RuntimeCompat).Assembly.GetName().Version;
+                return string.Format("{0}.{1}.{2}", version.Major, version.Minor, version.Build);
+            }
+        }
+
+        public static string Architecture
+        {
+            get
+            {
+                return IntPtr.Size == 8 ? "x64" : "x86";
+            }
+        }
+
         /// <summary>
         /// True when modern SceneManager events exist (Unity 5.4+); false on 5.3.
         /// </summary>

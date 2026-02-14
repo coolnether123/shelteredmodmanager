@@ -72,7 +72,7 @@ namespace ModAPI.Core
         private void OnApplicationQuit()
         {
             IsQuitting = true;
-            CrashCorridorTracer.Mark("OnApplicationQuit", "Unity is quitting");
+            SaveExitTracker.Mark("OnApplicationQuit", "Unity is quitting");
             MMLog.WriteInfo("Application is quitting detected. Shutting down plugins...");
             if (Manager != null) Manager.ShutdownAll();
             MMLog.Flush();
@@ -166,6 +166,13 @@ namespace ModAPI.Core
             try
             {
                 var msg = condition ?? string.Empty;
+
+                // Filter out achievement spam - the game logs these as errors/warnings even if they are successful
+                if (msg.Contains("Achievement:") || msg.Contains("Already achieved:"))
+                {
+                    return;
+                }
+
                 if (type == LogType.Exception && !string.IsNullOrEmpty(stackTrace))
                 {
                     msg = msg + "\n" + stackTrace;
@@ -200,7 +207,7 @@ namespace ModAPI.Core
                 SceneLoaded?.Invoke(sceneName);
                 if (IsQuitting)
                 {
-                    CrashCorridorTracer.Mark("OnSceneLoadedModern", sceneName);
+                    SaveExitTracker.Mark("OnSceneLoadedModern", sceneName);
                 }
             }
             catch (Exception ex)
@@ -208,7 +215,7 @@ namespace ModAPI.Core
                 MMLog.WarnOnce("PluginRunner.OnSceneLoadedModern.Error", "OnSceneLoadedModern failed: " + ex.Message);
                 if (IsQuitting)
                 {
-                    CrashCorridorTracer.Mark("OnSceneLoadedModern.Exception", ex.GetType().Name + ": " + ex.Message);
+                    SaveExitTracker.Mark("OnSceneLoadedModern.Exception", ex.GetType().Name + ": " + ex.Message);
                 }
             }
         }
@@ -230,7 +237,7 @@ namespace ModAPI.Core
                 SceneUnloaded?.Invoke(sceneName);
                 if (IsQuitting)
                 {
-                    CrashCorridorTracer.Mark("OnSceneUnloadedModern", sceneName);
+                    SaveExitTracker.Mark("OnSceneUnloadedModern", sceneName);
                 }
             }
             catch (Exception ex)
@@ -238,7 +245,7 @@ namespace ModAPI.Core
                 MMLog.WarnOnce("PluginRunner.OnSceneUnloadedModern.Error", "OnSceneUnloadedModern failed: " + ex.Message);
                 if (IsQuitting)
                 {
-                    CrashCorridorTracer.Mark("OnSceneUnloadedModern.Exception", ex.GetType().Name + ": " + ex.Message);
+                    SaveExitTracker.Mark("OnSceneUnloadedModern.Exception", ex.GetType().Name + ": " + ex.Message);
                 }
             }
         }
@@ -304,7 +311,7 @@ namespace ModAPI.Core
                 {
                     detail = "SaveManager read failed: " + ex.Message;
                 }
-                CrashCorridorTracer.Mark("QuittingHeartbeat", detail);
+                SaveExitTracker.Mark("QuittingHeartbeat", detail);
             }
 
             lock (_nextFrame)

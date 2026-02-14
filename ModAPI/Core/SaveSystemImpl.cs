@@ -89,29 +89,29 @@ namespace ModAPI.Core
             {
                 MMLog.WriteDebug($"[SaveSystem] HandleBeforeSave for {_modId}. IsQuitting={PluginRunner.IsQuitting}.");
 
-                var path = GetCurrentSlotPath();
-                if (string.IsNullOrEmpty(path)) 
+                var rootPath = GetCurrentSlotPath();
+                if (string.IsNullOrEmpty(rootPath)) 
                 {
                     MMLog.WriteDebug($"[SaveSystem] No active slot for {_modId}, skipping save.");
                     return;
                 }
 
-                // Ensure directory exists for safety
-                if (!Directory.Exists(path)) Directory.CreateDirectory(path);
-
-                var modFileName = string.Format("mod_{0}_data.json", _modId.Replace('.', '_'));
-                var modFilePath = Path.Combine(path, modFileName);
+                // Path: {SlotRoot}/mods/{ModId}/data.json
+                var modDataFolder = Path.Combine(Path.Combine(rootPath, "mods"), _modId);
+                if (!Directory.Exists(modDataFolder)) Directory.CreateDirectory(modDataFolder);
+                
+                var modFilePath = Path.Combine(modDataFolder, "data.json");
                 string jsonToWrite;
 
                 // CHECK FOR PRE-CALCULATED CACHE (Safety for Shutdown)
                 if (!string.IsNullOrEmpty(_shutdownCache) && PluginRunner.IsQuitting)
                 {
-                    MMLog.WriteDebug($"[SaveSystem] Writing buffered shutdown data for {_modId} to {modFileName}");
+                    MMLog.WriteDebug($"[SaveSystem] Writing buffered shutdown data for {_modId} to {modFilePath}");
                     jsonToWrite = _shutdownCache;
                 }
                 else
                 {
-                    MMLog.WriteDebug($"[SaveSystem] Serializing live mod data for {_modId} to {modFileName}");
+                    MMLog.WriteDebug($"[SaveSystem] Serializing live mod data for {_modId} to {modFilePath}");
                     
                     var saveEntry = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave;
                     var containerObj = new ModPersistenceData();
@@ -134,6 +134,20 @@ namespace ModAPI.Core
 
                 MMLog.WriteDebug($"[SaveSystem] Writing {jsonToWrite.Length} bytes to {modFilePath}");
                 File.WriteAllText(modFilePath, jsonToWrite);
+
+                // Cleanup legacy file from root if it exists
+                var legacyFileName = string.Format("mod_{0}_data.json", _modId.Replace('.', '_'));
+                var legacyFilePath = Path.Combine(rootPath, legacyFileName);
+                if (File.Exists(legacyFilePath))
+                {
+                    try 
+                    { 
+                        File.Delete(legacyFilePath); 
+                        MMLog.WriteInfo($"[SaveSystem] Migration complete for {_modId}: Cleaned up legacy file {legacyFileName}");
+                    } 
+                    catch (Exception ex) { MMLog.WriteWarning(string.Format("[SaveSystem] Failed to clean up legacy file for {0}: {1}", _modId, ex.Message)); }
+                }
+
                 MMLog.WriteDebug($"[SaveSystem] Successfully saved mod data for {_modId}");
             }
             catch (Exception ex)
@@ -144,15 +158,25 @@ namespace ModAPI.Core
 
         private void HandleAfterLoad(SaveData gameData)
         {
-            var path = GetCurrentSlotPath();
-            if (string.IsNullOrEmpty(path)) return;
+            var rootPath = GetCurrentSlotPath();
+            if (string.IsNullOrEmpty(rootPath)) return;
 
-            var modFileName = $"mod_{_modId.Replace('.', '_')}_data.json";
-            var modFilePath = Path.Combine(path, modFileName);
+            // Priority: 1. mods/{ModId}/data.json, 2. mod_{ModId}_data.json (Legacy root)
+            var newFilePath = Path.Combine(Path.Combine(Path.Combine(rootPath, "mods"), _modId), "data.json");
+            var legacyFileName = $"mod_{_modId.Replace('.', '_')}_data.json";
+            var legacyFilePath = Path.Combine(rootPath, legacyFileName);
+
+            string modFilePath = null;
+            if (File.Exists(newFilePath)) modFilePath = newFilePath;
+            else if (File.Exists(legacyFilePath))
+            {
+                modFilePath = legacyFilePath;
+                MMLog.WriteInfo($"[SaveSystem] Found legacy mod data for {_modId} in root folder. It will be moved to the nested 'mods' directory on next save.");
+            }
 
             var loadedKeys = new HashSet<string>();
 
-            if (File.Exists(modFilePath))
+            if (modFilePath != null)
             {
                 try
                 {
@@ -179,7 +203,7 @@ namespace ModAPI.Core
                                 }
                             }
                         }
-                        MMLog.WriteDebug(string.Format("[SaveSystem] Loaded mod data for {0} from {1}", _modId, modFileName));
+                        MMLog.WriteDebug(string.Format("[SaveSystem] Loaded mod data for {0} from {1}", _modId, Path.GetFileName(modFilePath)));
                     }
                 }
                 catch (Exception ex)

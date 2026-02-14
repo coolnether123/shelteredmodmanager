@@ -14,8 +14,8 @@ namespace ModAPI.Hooks
     {
         public class Target { public string scenarioId; public string saveId; }
 
-        private static readonly object _nextLoadLock = new object();
-        private static readonly object _nextSaveLock = new object();
+        public static readonly object _nextLoadLock = new object();
+        public static readonly object _nextSaveLock = new object();
         
         public static readonly Dictionary<SaveManager.SaveType, Target> NextLoad = new Dictionary<SaveManager.SaveType, Target>();
         public static readonly Dictionary<SaveManager.SaveType, Target> NextSave = new Dictionary<SaveManager.SaveType, Target>();
@@ -50,9 +50,13 @@ namespace ModAPI.Hooks
 
         public override bool PlatformSave(SaveManager.SaveType type, byte[] data)
         {
+            // Regular log: High-level save notification
+            string slotName = type.ToString();
+            MMLog.WriteInfo($"Saving triggered! Saving to {slotName}");
+            
             if (PluginRunner.IsQuitting)
             {
-                CrashCorridorTracer.Mark("PlatformSave.Enter", "type=" + type + ", bytes=" + (data != null ? data.Length.ToString() : "null"));
+                SaveExitTracker.Mark("PlatformSave.Enter", "type=" + type + ", bytes=" + (data != null ? data.Length.ToString() : "null"));
             }
             try
             {
@@ -63,8 +67,9 @@ namespace ModAPI.Hooks
                 {
                     if (PluginRunner.IsQuitting)
                     {
-                        CrashCorridorTracer.Mark("PlatformSave.Skip", "quit save already completed");
+                        SaveExitTracker.Mark("PlatformSave.Skip", "quit save already completed");
                     }
+                    MMLog.WriteInfo($"Save finished {slotName} (skipped - already completed)");
                     return true; // Tell vanilla "save succeeded" without doing anything
                 }
 
@@ -73,10 +78,9 @@ namespace ModAPI.Hooks
                 {
                     if (NextSave.TryGetValue(type, out var target))
                     {
-                        MMLog.WriteDebug($"Intercepting Vanilla Save ({type}) -> Redirecting to Custom ID: {target.saveId}");
                         if (PluginRunner.IsQuitting)
                         {
-                            CrashCorridorTracer.Mark("PlatformSave.Redirect", "saveId=" + target.saveId);
+                            SaveExitTracker.Mark("PlatformSave.Redirect", "saveId=" + target.saveId);
                         }
                         
                         // FORCE SYNC: ExpandedVanillaSaves.Instance.Overwrite uses File.WriteAllBytes (blocking).
@@ -100,10 +104,13 @@ namespace ModAPI.Hooks
                             MMLog.WriteDebug($"Saved custom slot: {entry.id}");
                         if (PluginRunner.IsQuitting)
                         {
-                            CrashCorridorTracer.Mark("PlatformSave.Redirect.Done", entry != null ? ("entry=" + entry.id) : "entry=null");
+                            SaveExitTracker.Mark("PlatformSave.Redirect.Done", entry != null ? ("entry=" + entry.id) : "entry=null");
                         }
 
                         if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
+                        
+                        // Regular log: Save complete
+                        MMLog.WriteInfo($"Save finished {slotName} (custom slot: {entry?.id ?? "unknown"})");
                         return true; // We handled it
                     }
                 }
@@ -118,14 +125,16 @@ namespace ModAPI.Hooks
                     if (result != null)
                     {
                         ActiveCustomSave = result;
-                        MMLog.WriteDebug($"Saved custom slot: {ActiveCustomSave.id}");
                     }
                     if (PluginRunner.IsQuitting)
                     {
-                        CrashCorridorTracer.Mark("PlatformSave.ActiveCustom.Done", result != null ? ("entry=" + result.id) : "result=null");
+                        SaveExitTracker.Mark("PlatformSave.ActiveCustom.Done", result != null ? ("entry=" + result.id) : "result=null");
                     }
 
                     if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
+                    
+                    // Regular log: Save complete
+                    MMLog.WriteInfo($"Save finished {slotName} (custom slot: {ActiveCustomSave.id})");
                     return true; // We handled it
                 }
 
@@ -133,16 +142,21 @@ namespace ModAPI.Hooks
                 // This happens if the user selected Slot 1/2/3 normally
                 if (PluginRunner.IsQuitting)
                 {
-                    CrashCorridorTracer.Mark("PlatformSave.FallbackVanilla", "type=" + type);
+                    SaveExitTracker.Mark("PlatformSave.FallbackVanilla", "type=" + type);
                 }
-                return _inner.PlatformSave(type, data);
+                bool success = _inner.PlatformSave(type, data);
+                if (success)
+                {
+                    MMLog.WriteInfo($"Save finished {slotName} (vanilla)");
+                }
+                return success;
             }
             catch (Exception ex)
             {
                 MMLog.WriteException(ex, "PlatformSaveProxy.PlatformSave");
                 if (PluginRunner.IsQuitting)
                 {
-                    CrashCorridorTracer.Mark("PlatformSave.Exception", ex.GetType().Name + ": " + ex.Message);
+                    SaveExitTracker.Mark("PlatformSave.Exception", ex.GetType().Name + ": " + ex.Message);
                 }
                 MMLog.Flush();
                 throw;
@@ -188,7 +202,7 @@ namespace ModAPI.Hooks
             MMLog.WriteDebug($"No custom load target. Passing load for slot={type} to vanilla handler.");
             if (PluginRunner.IsQuitting)
             {
-                CrashCorridorTracer.Mark("PlatformLoad.FallbackVanilla", "type=" + type);
+                SaveExitTracker.Mark("PlatformLoad.FallbackVanilla", "type=" + type);
             }
             ActiveCustomSave = null;
             return _inner.PlatformLoad(type);

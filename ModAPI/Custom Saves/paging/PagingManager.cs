@@ -115,7 +115,7 @@ namespace ModAPI.Hooks.Paging
                 int newPage = Math.Max(0, p + delta);
                 if (newPage == p) return;
 
-                MMLog.Write($"[PagingManager] Changing page from {p} to {newPage}");
+                MMLog.WriteDebug(string.Format("[PagingManager] Changing page from {0} to {1}", p, newPage));
                 SetPage(panel, newPage);
                 
                 try

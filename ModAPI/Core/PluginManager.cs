@@ -87,11 +87,11 @@ namespace ModAPI.Core
             AttachInspectorTools();
             LoadAndInitializePlugins(LoadedMods);
 
-            MMLog.Write($"Loaded {_plugins.Count} plugin(s). Updates={_updates.Count}, Shutdown={_shutdown.Count}, SceneEvents={_sceneEvents.Count}");
+            MMLog.WriteDebug(string.Format("Loaded {0} plugin(s). Updates={1}, Shutdown={2}, SceneEvents={3}", _plugins.Count, _updates.Count, _shutdown.Count, _sceneEvents.Count));
 
             stopwatch.Stop();
             var ms = stopwatch.ElapsedMilliseconds;
-            MMLog.Write($"Startup complete in {ms}ms. Loaded {_plugins.Count} plugin(s), {_loadErrors} error(s).");
+            MMLog.Write(string.Format("Startup complete in {0}ms. Loaded {1} plugin(s), {2} error(s).", ms, _plugins.Count, _loadErrors));
         }
 
         /// <summary>
@@ -309,7 +309,7 @@ namespace ModAPI.Core
         /// </summary>
         private void LoadAndInitializePlugins(List<ModEntry> orderedMods)
         {
-            MMLog.Write($"LoadAndInitializePlugins: Starting with {orderedMods.Count} mods");
+            MMLog.WriteDebug(string.Format("LoadAndInitializePlugins: Starting with {0} mods", orderedMods.Count));
 
             foreach (var entry in orderedMods)
             {
@@ -392,7 +392,7 @@ namespace ModAPI.Core
                 }
             }
 
-            MMLog.Write($"LoadAndInitializePlugins complete. Total plugins loaded: {_plugins.Count}");
+            MMLog.Write(string.Format("LoadAndInitializePlugins complete. Total plugins loaded: {0}", _plugins.Count));
         }
 
         /// <summary>
@@ -403,7 +403,7 @@ namespace ModAPI.Core
             var runner = _loaderRoot != null ? _loaderRoot.GetComponent<PluginRunner>() : null;
             if (runner != null)
             {
-                MMLog.Write("Runner type: " + runner.GetType().FullName);
+                MMLog.WriteDebug("Runner type: " + runner.GetType().FullName);
                 runner.Enqueue(a);
             }
         }

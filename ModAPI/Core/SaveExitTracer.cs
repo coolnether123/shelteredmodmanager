@@ -3,7 +3,7 @@ using System.Threading;
 
 namespace ModAPI.Core
 {
-    internal static class CrashCorridorTracer
+    internal static class SaveExitTracker
     {
         private static int _stepCounter;
         private static string _lastStep = string.Empty;
@@ -13,7 +13,7 @@ namespace ModAPI.Core
         {
             get
             {
-                lock (typeof(CrashCorridorTracer))
+                lock (typeof(SaveExitTracker))
                 {
                     return _lastStep;
                 }
@@ -24,7 +24,7 @@ namespace ModAPI.Core
         {
             get
             {
-                lock (typeof(CrashCorridorTracer))
+                lock (typeof(SaveExitTracker))
                 {
                     return _lastStepAtUtc;
                 }
@@ -35,20 +35,19 @@ namespace ModAPI.Core
         {
             var index = Interlocked.Increment(ref _stepCounter);
             var now = DateTime.UtcNow;
-            var text = "[CorridorStep " + index + "] " + (step ?? "<null>");
+            var text = "[SaveExitCheckpoint " + index + "] " + (step ?? "<null>");
             if (!string.IsNullOrEmpty(detail))
             {
                 text += " | " + detail;
             }
 
-            lock (typeof(CrashCorridorTracer))
+            lock (typeof(SaveExitTracker))
             {
                 _lastStep = text;
                 _lastStepAtUtc = now;
             }
 
-            MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.General, "CrashCorridor", text);
-            MMLog.Flush();
+            MMLog.WriteWithSource(MMLog.LogLevel.Debug, MMLog.LogCategory.General, "SaveExitCheckpoint", text);
         }
     }
 }
