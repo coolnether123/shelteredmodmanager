@@ -274,7 +274,7 @@ namespace ModAPI.Hooks
                             // it means we have an orphaned manifest from a previous deletion. Clean it up!
                             if (vanillaSaveInfo == null && System.IO.File.Exists(manPath))
                             {
-                                MMLog.Write($"[OnSlotChosen] Found orphaned manifest for empty vanilla slot {chosenSlotIndex + 1}. Auto-cleaning.");
+                                 MMLog.WriteDebug($"[OnSlotChosen] Found orphaned manifest for empty vanilla slot {chosenSlotIndex + 1}. Auto-cleaning.");
                                 try { ExpandedVanillaSaves.DeleteBySlot(chosenSlotIndex + 1); } catch {}
                                 return true; // Treat as empty slot -> New Game
                             }
@@ -353,7 +353,7 @@ namespace ModAPI.Hooks
                     {
                         // page 1 -> slots 4, 5, 6
                         int absoluteSlot = (page - 1) * 3 + chosenSlotIndex + 4;
-                        MMLog.Write($"--- Player clicked slot {absoluteSlot} to start a new game ---");
+                        MMLog.WriteDebug($"--- Player clicked slot {absoluteSlot} to start a new game ---");
 
                         var created = ExpandedVanillaSaves.Create(new SaveCreateOptions { name = "New Game", absoluteSlot = absoluteSlot });
                         if (created != null)
@@ -455,7 +455,7 @@ namespace ModAPI.Hooks
                             int selectedSlotIndex = t.Field("m_selectedSlot").GetValue<int>(); // 0-2 (Vanilla slots)
                             int absoluteSlot = selectedSlotIndex + 1;
                             
-                            MMLog.Write($"[OnDeleteMessageBox] Detected vanilla save deletion for Slot {absoluteSlot}. Cleaning up metadata...");
+                            MMLog.WriteDebug($"[OnDeleteMessageBox] Detected vanilla save deletion for Slot {absoluteSlot}. Cleaning up metadata...");
                             
                             // Delete the Slot_X folder managed by ModAPI
                             ExpandedVanillaSaves.DeleteBySlot(absoluteSlot);
@@ -481,7 +481,7 @@ namespace ModAPI.Hooks
 
                     if (entry != null)
                     {
-                        MMLog.Write($"[OnDeleteMessageBox] Deleting custom slot {entry.absoluteSlot}...");
+                        MMLog.WriteDebug($"[OnDeleteMessageBox] Deleting custom slot {entry.absoluteSlot}...");
                         ExpandedVanillaSaves.DeleteBySlot(entry.absoluteSlot);
                         t.Field("m_infoNeedsRefresh").SetValue(true);
                     }

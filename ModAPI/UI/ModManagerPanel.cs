@@ -46,6 +46,12 @@ namespace ModAPI.UI
 
                 _instance = go.AddComponent<ModManagerPanel>();
                 _instance.Initialise();
+                
+                // CRITICAL: DontDestroyOnLoad only works for root objects.
+                if (go.transform.parent != null)
+                {
+                    go.transform.SetParent(null);
+                }
                 DontDestroyOnLoad(go);
             }
 

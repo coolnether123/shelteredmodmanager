@@ -17,7 +17,7 @@ namespace ModAPI.UI
     {
         static UIPatches()
         {
-            MMLog.Write("Static constructor called - class is being initialized");
+            MMLog.WriteDebug("Static constructor called - class is being initialized");
         }
 
         [HarmonyPatch(typeof(StoragePanel), "OnShow")]
@@ -26,7 +26,7 @@ namespace ModAPI.UI
         {
             try
             {
-                MMLog.Write("StoragePanel.OnShow postfix called!");
+                MMLog.WriteDebug("StoragePanel.OnShow postfix called!");
                 
                 if (InventoryManager.Instance == null)
                 {
@@ -60,7 +60,7 @@ namespace ModAPI.UI
         {
             try
             {
-                MMLog.Write("RecyclingPanel.OnShow postfix called!");
+                MMLog.WriteDebug("RecyclingPanel.OnShow postfix called!");
                 
                 if (ItemManager.Instance == null || InventoryManager.Instance == null)
                 {

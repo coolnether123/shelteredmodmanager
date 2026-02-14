@@ -228,7 +228,8 @@ namespace ModAPI.UI
             _searchInput = inputGO.AddComponent<UIInput>();
             _searchInput.label = lbl;
             _searchInput.defaultText = "Filter settings...";
-            _searchInput.activeTextColor = Color.white;
+            _searchInput.selectionColor = new Color(1f, 1f, 1f, 0.5f);
+            _searchInput.caretColor = Color.white;
             _searchInput.activeTextColor = Color.white;
 
             // CRITICAL: NGUI UIInput needs a Collider to be clickable

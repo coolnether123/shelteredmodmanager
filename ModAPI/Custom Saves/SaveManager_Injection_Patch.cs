@@ -18,7 +18,6 @@ namespace ModAPI.Hooks
         public static void Inject(SaveManager instance)
         {
             if (instance == null) return;
-            // MMLog.WriteDebug("[SaveManager_Injection_Patch] Injecting PlatformSaveProxy...");
 
             try
             {
@@ -28,9 +27,7 @@ namespace ModAPI.Hooks
                 // Only inject if it's NOT ALREADY a proxy
                 if (currentScript != null && !(currentScript is PlatformSaveProxy))
                 {
-                    MMLog.Write("--------------------------------------------------");
-                    MMLog.Write("Swapping vanilla PlatformSave_PC with PlatformSaveProxy.");
-                    MMLog.Write("--------------------------------------------------");
+                    MMLog.WriteDebug("[SaveManager_Injection_Patch] Swapping vanilla PlatformSave_PC with PlatformSaveProxy.");
 
                     var proxy = new PlatformSaveProxy(currentScript);
                     

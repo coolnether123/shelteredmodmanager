@@ -151,21 +151,22 @@ namespace ModAPI.Core
         {
             var unityVersion = RuntimeCompat.UnityVersion;
             var gameVersion = RuntimeCompat.GameVersion;
+            var modApiVersion = RuntimeCompat.ModApiVersion;
+            var arch = RuntimeCompat.Architecture;
+            var buildTarget = unityVersion.StartsWith("5.6") ? "Epic Games (x64)" : "Steam (x86)";
+
             var banner = new StringBuilder();
             banner.AppendLine("=================================================================================");
             banner.AppendLine("                    SHELTERED MOD LOADER - DEBUG LOG");
             banner.AppendLine("=================================================================================");
-            banner.AppendLine($"Session Started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-            banner.AppendLine($"Game Version: {gameVersion}");
-            banner.AppendLine($"Unity Version: {unityVersion}");
-            banner.AppendLine($"Platform: {Application.platform}");
-            banner.AppendLine($"Data Path: {Application.dataPath}");
-            banner.AppendLine($"Persistent Data: {Application.persistentDataPath}");
-            banner.AppendLine($"Log Level: {_minLevel}");
-            banner.AppendLine($"Active Categories: {string.Join(", ", _enabledCategories.Select(x => x.ToString()).ToArray())}");
-            banner.AppendLine($"Process ID: {Process.GetCurrentProcess().Id}");
-            banner.AppendLine($"Thread ID: {Thread.CurrentThread.ManagedThreadId}");
-
+            banner.AppendLine(string.Format("Session Started: {0:yyyy-MM-dd HH:mm:ss}", DateTime.Now));
+            banner.AppendLine(string.Format("ModAPI Version:  {0}", modApiVersion));
+            banner.AppendLine(string.Format("Architecture:    {0}", arch));
+            banner.AppendLine(string.Format("Build Target:    {0}", buildTarget));
+            banner.AppendLine(string.Format("Game Version:    {0}", gameVersion));
+            banner.AppendLine(string.Format("Unity Version:   {0}", unityVersion));
+            banner.AppendLine(string.Format("Data Path:       {0}", Application.dataPath));
+            banner.AppendLine(string.Format("Log Level:       {0}", _minLevel));
             banner.AppendLine("=================================================================================");
 
             try { File.AppendAllText(_logPath, banner.ToString(), Encoding.UTF8); } 

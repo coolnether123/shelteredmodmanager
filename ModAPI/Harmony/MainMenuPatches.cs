@@ -34,7 +34,7 @@ namespace ModAPI.Harmony
                     MMLog.WriteDebug("[MainMenu_OnShow] Resetting IsQuitting flag to FALSE.");
                 }
 
-                MMLog.Write("Postfix triggered.");
+                MMLog.WriteDebug("Postfix triggered.");
                 // One-time startup check for save slot gaps
                 SaveCondenseManager.CheckOnStartup();
                 if (SaveCondenseManager.NeedsPrompt())
@@ -97,7 +97,7 @@ namespace ModAPI.Harmony
                     var updateMethod = typeof(MainMenu).GetMethod("UpdateButtonTable", BindingFlags.NonPublic | BindingFlags.Instance);
                     updateMethod?.Invoke(__instance, null);
 
-                    MMLog.Write("Injected Mods button with transition handling.");
+                    MMLog.WriteDebug("Injected Mods button with transition handling.");
                 }
             }
             catch (Exception ex) { MMLog.Write("Exception: " + ex.Message); }
@@ -106,7 +106,7 @@ namespace ModAPI.Harmony
         private static void HandleModsClick(MainMenu menu)
         {
             if (ModManagerPanel.IsShowingInstance) return;
-            MMLog.Write("Mods button clicked - initiating transition.");
+            MMLog.WriteDebug("Mods button clicked - initiating transition.");
             MainMenu_OnTweenFinished_Patch.TransitioningToMods = true;
             menu.OnPlayButtonPressed(); // This triggers the fade-out
         }
