@@ -13,9 +13,15 @@ namespace ModAPI.Core
         [Serializable]
         private class SeedData
         {
+            public int version = 2;
             public int masterSeed;
+            public int mode;
+            public ulong masterState;
             public ulong stepCount;
             public bool isDeterministic;
+            public string[] streamNames;
+            public ulong[] streamStates;
+            public ulong[] streamSteps;
         }
 
         public static void Load(SaveEntry entry)
@@ -45,10 +51,17 @@ namespace ModAPI.Core
 
                 if (ModRandom.IsDeterministic)
                 {
-                    // Deterministic Mode: Restore seed and position exactly
-                    ModRandom.Initialize(data.masterSeed);
-                    ModRandom.FastForward(data.stepCount);
-                    MMLog.WriteInfo(string.Format("[ModRandom] Session Restored (Deterministic): Seed {0}, Step {1}", data.masterSeed, data.stepCount));
+                    // Deterministic Mode: restore exact RNG state and stream states.
+                    ModRandomStateSnapshot snapshot = new ModRandomStateSnapshot();
+                    snapshot.MasterSeed = data.masterSeed;
+                    snapshot.Mode = data.mode == (int)RandomnessMode.Legacy ? RandomnessMode.Legacy : RandomnessMode.XorShift;
+                    snapshot.MasterState = data.masterState;
+                    snapshot.StepCount = data.stepCount;
+                    snapshot.StreamNames = data.streamNames;
+                    snapshot.StreamStates = data.streamStates;
+                    snapshot.StreamSteps = data.streamSteps;
+                    ModRandom.RestoreSnapshot(snapshot);
+                    MMLog.WriteInfo(string.Format("[ModRandom] Session Restored (Deterministic): Seed {0}, Step {1}, Mode {2}", data.masterSeed, data.stepCount, snapshot.Mode));
                 }
                 else
                 {
@@ -77,12 +90,16 @@ namespace ModAPI.Core
             try
             {
                 string filePath = GetSeedFilePath(entry);
-                var data = new SeedData
-                {
-                    masterSeed = ModRandom.CurrentSeed,
-                    stepCount = ModRandom.CurrentStep,
-                    isDeterministic = ModRandom.IsDeterministic
-                };
+                ModRandomStateSnapshot snapshot = ModRandom.CreateSnapshot();
+                var data = new SeedData();
+                data.masterSeed = snapshot.MasterSeed;
+                data.mode = (int)snapshot.Mode;
+                data.masterState = snapshot.MasterState;
+                data.stepCount = snapshot.StepCount;
+                data.isDeterministic = ModRandom.IsDeterministic;
+                data.streamNames = snapshot.StreamNames;
+                data.streamStates = snapshot.StreamStates;
+                data.streamSteps = snapshot.StreamSteps;
 
                 string json = JsonUtility.ToJson(data, true);
                 File.WriteAllText(filePath, json);

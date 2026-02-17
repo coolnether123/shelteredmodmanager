@@ -33,6 +33,7 @@ namespace ModAPI.Core
         private static bool _initialized;
         private static RandomnessMode _mode = RandomnessMode.XorShift;
         private static Random _legacyRandom;
+        private static readonly Dictionary<string, ModRandomStream> _namedStreams = new Dictionary<string, ModRandomStream>(StringComparer.Ordinal);
         
         // Thread-local storage for coroutine safety
         private static readonly object _lock = new object();
@@ -68,10 +69,15 @@ namespace ModAPI.Core
                 _state = (ulong)(seed == 0 ? 1234567 : seed);
                 _stepCount = 0;
                 _initialized = true;
+                _namedStreams.Clear();
 
                 if (mode == RandomnessMode.Legacy)
                 {
                     _legacyRandom = new Random(seed);
+                }
+                else
+                {
+                    _legacyRandom = null;
                 }
                 
                 MMLog.WriteDebug(string.Format("[ModRandom] Initialized with seed {0} in mode {1}", seed, mode));
@@ -134,7 +140,7 @@ namespace ModAPI.Core
             if (maxExclusive <= minInclusive) return minInclusive;
             lock (_lock)
             {
-                return minInclusive + (int)(NextULong() % (ulong)(maxExclusive - minInclusive));
+                return minInclusive + (int)(NextULongInternal() % (ulong)(maxExclusive - minInclusive));
             }
         }
 
@@ -143,7 +149,8 @@ namespace ModAPI.Core
         /// </summary>
         public static float Range(float min, float max)
         {
-            return min + Value() * (max - min);
+            if (max <= min) return min;
+            return min + (float)(ValueDoubleInclusive() * (double)(max - min));
         }
 
         /// <summary>
@@ -171,16 +178,24 @@ namespace ModAPI.Core
         /// </summary>
         public static float Value()
         {
+            return (float)ValueDouble();
+        }
+
+        /// <summary>
+        /// Double between 0.0 and 1.0 (exclusive upper bound for XorShift mode).
+        /// </summary>
+        public static double ValueDouble()
+        {
             lock (_lock)
             {
                 if (_mode == RandomnessMode.Legacy)
                 {
                     _stepCount++;
-                    return (float)_legacyRandom.NextDouble();
+                    return _legacyRandom.NextDouble();
                 }
 
-                // 53-bit precision float from ulong
-                return (NextULongInternal() >> 11) * (1.0f / (1uL << 53));
+                // 53 bits of entropy mapped into [0,1) using double precision.
+                return (double)(NextULongInternal() >> 11) * (1.0 / 9007199254740992.0);
             }
         }
 
@@ -248,7 +263,7 @@ namespace ModAPI.Core
             float total = 0f;
             for (int i = 0; i < weights.Length; i++) total += weights[i];
             
-            float random = Value() * total;
+            float random = (float)(ValueDouble() * total);
             float current = 0f;
             
             for (int i = 0; i < weights.Length; i++)
@@ -257,6 +272,151 @@ namespace ModAPI.Core
                 if (random <= current) return items[i];
             }
             return items[items.Length - 1];
+        }
+
+        /// <summary>
+        /// Get a deterministic named stream isolated from the global stream.
+        /// </summary>
+        public static ModRandomStream GetStream(string streamName)
+        {
+            if (string.IsNullOrEmpty(streamName))
+            {
+                streamName = "default";
+            }
+
+            lock (_lock)
+            {
+                ModRandomStream stream;
+                if (_namedStreams.TryGetValue(streamName, out stream))
+                {
+                    return stream;
+                }
+
+                int streamSeed = DeriveStreamSeed(_seed, streamName);
+                stream = new ModRandomStream(streamSeed);
+                _namedStreams[streamName] = stream;
+                return stream;
+            }
+        }
+
+        internal static ModRandomStateSnapshot CreateSnapshot()
+        {
+            lock (_lock)
+            {
+                ModRandomStateSnapshot snapshot = new ModRandomStateSnapshot();
+                snapshot.MasterSeed = _seed;
+                snapshot.MasterState = _state;
+                snapshot.StepCount = _stepCount;
+                snapshot.Mode = _mode;
+
+                int count = _namedStreams.Count;
+                snapshot.StreamNames = new string[count];
+                snapshot.StreamStates = new ulong[count];
+                snapshot.StreamSteps = new ulong[count];
+
+                int i = 0;
+                foreach (KeyValuePair<string, ModRandomStream> kvp in _namedStreams)
+                {
+                    snapshot.StreamNames[i] = kvp.Key;
+                    snapshot.StreamStates[i] = kvp.Value.InternalState;
+                    snapshot.StreamSteps[i] = kvp.Value.CurrentStep;
+                    i++;
+                }
+
+                return snapshot;
+            }
+        }
+
+        internal static void RestoreSnapshot(ModRandomStateSnapshot snapshot)
+        {
+            if (snapshot == null)
+            {
+                Initialize(12345);
+                return;
+            }
+
+            lock (_lock)
+            {
+                _seed = snapshot.MasterSeed;
+                _mode = snapshot.Mode;
+                _stepCount = snapshot.StepCount;
+                _initialized = true;
+                _namedStreams.Clear();
+
+                if (_mode == RandomnessMode.Legacy)
+                {
+                    _legacyRandom = new Random(_seed);
+                    if (_stepCount > 0)
+                    {
+                        for (ulong i = 0; i < _stepCount; i++)
+                        {
+                            _legacyRandom.NextDouble();
+                        }
+                    }
+
+                    // Legacy has no direct internal-state restoration API.
+                    _state = (ulong)(_seed == 0 ? 1234567 : _seed);
+                }
+                else
+                {
+                    _legacyRandom = null;
+                    _state = snapshot.MasterState == 0 ? 1234567ul : snapshot.MasterState;
+                }
+
+                if (snapshot.StreamNames != null && snapshot.StreamStates != null && snapshot.StreamSteps != null)
+                {
+                    int count = snapshot.StreamNames.Length;
+                    if (snapshot.StreamStates.Length < count) count = snapshot.StreamStates.Length;
+                    if (snapshot.StreamSteps.Length < count) count = snapshot.StreamSteps.Length;
+
+                    for (int i = 0; i < count; i++)
+                    {
+                        string name = snapshot.StreamNames[i];
+                        if (string.IsNullOrEmpty(name))
+                        {
+                            continue;
+                        }
+
+                        ModRandomStream stream = new ModRandomStream(1);
+                        stream.SetInternalState(snapshot.StreamStates[i], snapshot.StreamSteps[i]);
+                        _namedStreams[name] = stream;
+                    }
+                }
+            }
+        }
+
+        private static int DeriveStreamSeed(int masterSeed, string streamName)
+        {
+            unchecked
+            {
+                uint hash = 2166136261u;
+                for (int i = 0; i < streamName.Length; i++)
+                {
+                    hash ^= streamName[i];
+                    hash *= 16777619u;
+                }
+
+                hash ^= (uint)masterSeed;
+                hash *= 16777619u;
+
+                int seed = (int)hash;
+                return seed == 0 ? 1 : seed;
+            }
+        }
+
+        private static double ValueDoubleInclusive()
+        {
+            lock (_lock)
+            {
+                if (_mode == RandomnessMode.Legacy)
+                {
+                    _stepCount++;
+                    return _legacyRandom.NextDouble();
+                }
+
+                // Inclusive 1.0 endpoint for Unity-like float range semantics.
+                return (double)NextULongInternal() / 18446744073709551615.0;
+            }
         }
 
         // --- Internal XorShift64* Algorithm ---
@@ -278,6 +438,17 @@ namespace ModAPI.Core
             _stepCount++;
             return _state * 2685821657736338717ul;
         }
+    }
+
+    internal class ModRandomStateSnapshot
+    {
+        public int MasterSeed;
+        public ulong MasterState;
+        public ulong StepCount;
+        public RandomnessMode Mode;
+        public string[] StreamNames;
+        public ulong[] StreamStates;
+        public ulong[] StreamSteps;
     }
 
     /// <summary>
@@ -308,7 +479,7 @@ namespace ModAPI.Core
 
         public float Value()
         {
-            return (NextULong() >> 11) * (1.0f / (1uL << 53));
+            return (float)((double)(NextULong() >> 11) * (1.0 / 9007199254740992.0));
         }
 
         public bool Bool(float probability = 0.5f)
@@ -345,5 +516,12 @@ namespace ModAPI.Core
         }
 
         public ulong CurrentStep { get { return _stepCount; } }
+        internal ulong InternalState { get { return _state; } }
+
+        internal void SetInternalState(ulong state, ulong stepCount)
+        {
+            _state = state == 0 ? 1ul : state;
+            _stepCount = stepCount;
+        }
     }
 }

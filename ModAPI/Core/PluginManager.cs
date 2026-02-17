@@ -286,19 +286,31 @@ namespace ModAPI.Core
         {
             try
             {
+                // Core inspection (Safe for production/diagnostic use)
                 if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeInspector>() == null)
                     _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeInspector>();
                 if (_loaderRoot.GetComponent<ModAPI.Inspector.BoundsHighlighter>() == null)
                     _loaderRoot.AddComponent<ModAPI.Inspector.BoundsHighlighter>();
-                if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeILInspector>() == null)
-                    _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeILInspector>();
-                if (_loaderRoot.GetComponent<ModAPI.Inspector.ExecutionTracer>() == null)
-                    _loaderRoot.AddComponent<ModAPI.Inspector.ExecutionTracer>();
-                if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeDebuggerUI>() == null)
-                    _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeDebuggerUI>();
-
                 if (_loaderRoot.GetComponent<ModAPI.UI.UIDebugInspector>() == null)
                     _loaderRoot.AddComponent<ModAPI.UI.UIDebugInspector>();
+
+                // Advanced developer tools (Disabled if decompiler is missing)
+                // This ensures F10 and F12 tools are not accessible in production builds.
+                if (File.Exists(ModAPI.Inspector.SourceCacheManager.ResolveDecompilerPath()))
+                {
+                    if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeILInspector>() == null)
+                        _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeILInspector>();
+                    if (_loaderRoot.GetComponent<ModAPI.Inspector.ExecutionTracer>() == null)
+                        _loaderRoot.AddComponent<ModAPI.Inspector.ExecutionTracer>();
+                    if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeDebuggerUI>() == null)
+                        _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeDebuggerUI>();
+                    
+                    MMLog.WriteDebug("Advanced developer tools (F10/F12) enabled.");
+                }
+                else
+                {
+                    MMLog.WriteDebug("Decompiler not found. Advanced developer tools (F10/F12) disabled for production.");
+                }
             }
             catch (Exception ex) { MMLog.WarnOnce("PluginManager.AttachInspectorTools", "Error attaching inspector: " + ex.Message); }
         }
