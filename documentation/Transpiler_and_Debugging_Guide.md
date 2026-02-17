@@ -177,16 +177,31 @@ Detailed reference: `documentation/Transpiler_Safety_Settings.md`
 
 ## 9. Debug and Inspection Tooling
 
-In-game:
-- `RuntimeILInspector` toggle: `F10`
-- `RuntimeInspector` toggle: `F9`
+In-game tools are available to help debug transpilers and inspect the runtime state.
 
-Dump files:
+**Key Bindings:**
+- `F9`: **Runtime Inspector** (Hierarchy & Properties) - *Always Available*
+- `F10`: **Runtime IL Inspector** (View live IL) - *Dev Only*
+- `F11`: **UI Debugger** (UI Raycast & Structure) - *Always Available*
+- `F12`: **Runtime Debugger** (Harmony/Transpiler Snapshots) - *Dev Only*
+
+### Production vs. Development
+The advanced debugging tools (**F10** and **F12**) depend on the **Decompiler** component to function. 
+- **Development Builds:** Include the `bin/decompiler/` directory. All tools function normally.
+- **Production/Release Builds:** Do not include the decompiler. **F10 and F12 are automatically disabled**.
+
+### Decompiler Requirements
+For F10 and F12 to work, the following must be present in your ModAPI installation:
+- Directory: `Sheltered_Data/Managed/bin/decompiler/`
+- Files: `Decompiler.exe` (plus dependencies)
+- **Privacy Check:** The decompiler performs a local privacy check on valid game ownership before running. If this check fails, the tools will remain disabled.
+
+### Dump Files
 - `TranspilerDebugger.DumpWithDiff(...)` writes before/after/diff output under:
   - `Mods/<ModName>/Logs/TranspilerDumps/<Label>/`
 
-Snapshot history:
-- `TranspilerDebugger.RecordSnapshot(...)` stores patch history used by runtime debug UI.
+### Snapshot History
+- `TranspilerDebugger.RecordSnapshot(...)` stores patch history used by the runtime debug UI (F12).
 
 ## 10. Test Harness Pattern
 

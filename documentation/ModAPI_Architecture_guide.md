@@ -80,10 +80,10 @@ For each plugin instance:
   - Calls `PluginManager.ShutdownAll()`
 
 Runtime tool toggles:
-- `RuntimeInspector`: `F9`
-- `RuntimeILInspector`: `F10`
-- `UIDebugInspector`: `F11`
-- `RuntimeDebuggerUI`: `F12`
+- `RuntimeInspector`: `F9` (Always available)
+- `RuntimeILInspector`: `F10` (Requires Decompiler)
+- `UIDebugInspector`: `F11` (Always available)
+- `RuntimeDebuggerUI`: `F12` (Requires Decompiler)
 
 ## 6. `IPluginContext` Services
 
