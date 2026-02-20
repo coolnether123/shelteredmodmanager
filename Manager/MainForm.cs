@@ -44,7 +44,16 @@ namespace Manager
         private Timer _restartPollTimer;
         private Panel headerPanel;
         private GameSetupTab _gameSetupTab;
-        private const string APP_VERSION = "1.1.0";
+        private bool _windowPlacementInitialized;
+        private int _suppressSettingsReloadLogCount;
+        private const string APP_VERSION = "1.2.1";
+        private static readonly System.Collections.Generic.Dictionary<string, string> KnownModIdMigrations =
+            new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                // Historical IDs seen in user loadorder files/logs.
+                { "com.coolnether123.pluginconsole", "coolnether123.pluginconsole" },
+                { "com.plugin.harmony.example", "coolnether123.harmonyexample" }
+            };
 
         public MainForm()
         {
@@ -283,7 +292,7 @@ namespace Manager
             // 
             // _aboutTab
             // 
-            this._aboutTab.AppVersion = "1.0.0";
+            this._aboutTab.AppVersion = "1.2.1";
             this._aboutTab.Author = "Coolnether123";
             this._aboutTab.Dock = System.Windows.Forms.DockStyle.Fill;
             this._aboutTab.Location = new System.Drawing.Point(0, 0);
@@ -329,6 +338,9 @@ namespace Manager
             // Form events
             this.Load += MainForm_Load;
             this.FormClosing += MainForm_FormClosing;
+            this.Move += MainForm_Move;
+            this.Resize += MainForm_Resize;
+            this.ResizeEnd += MainForm_ResizeEnd;
 
             // Game setup events
             _gameSetupTab.GamePathChanged += GameSetupTab_GamePathChanged;
@@ -341,6 +353,7 @@ namespace Manager
             // Settings events
             _settingsTab.SettingsChanged += SettingsTab_SettingsChanged;
             _settingsTab.DarkModeChanged += SettingsTab_DarkModeChanged;
+            _settingsTab.ResetWindowRequested += SettingsTab_ResetWindowRequested;
             _settingsService.SettingsChanged += SettingsService_SettingsChanged;
 
             // Tab change
@@ -383,6 +396,9 @@ namespace Manager
 
         private void MainForm_Load(object sender, EventArgs e)
         {
+            ApplySavedWindowPlacement();
+            _windowPlacementInitialized = true;
+
             // Initialize tabs with services and settings
             _gameSetupTab.Initialize(_settings);
             _modManagerTab.Initialize(_discoveryService, _orderService, _settings);
@@ -404,6 +420,8 @@ namespace Manager
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            CaptureWindowPlacement();
+
             // Save settings on close
             _settingsService.Save(_settings);
             
@@ -497,19 +515,15 @@ namespace Manager
 
         private void LaunchWithMods()
         {
-            try
+            if (CheckGameRunning())
             {
-                if (CheckGameRunning())
-                {
-                    MessageBox.Show("Sheltered is already running. Please close it before launching via Manager.", 
-                        "Game Running", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                SetupDoorstop();
+                MessageBox.Show("Sheltered is already running. Please close it before launching via Manager.", 
+                    "Game Running", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
-            catch { }
 
+            ReconcileLoadOrderForLaunch();
+            SetupDoorstop();
             if (!PreflightCheck()) return;
 
             try
@@ -595,6 +609,176 @@ namespace Manager
                 MessageBox.Show("Failed to launch: " + ex.Message, "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private static string NormalizeModId(string id)
+        {
+            return (id ?? string.Empty).Trim().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Reconciles load order before launch: migrates known renamed IDs and removes entries
+        /// that are no longer discoverable on disk.
+        /// </summary>
+        private void ReconcileLoadOrderForLaunch()
+        {
+            try
+            {
+                if (_settings == null || !_settings.IsModsPathValid) return;
+                string orderPath = Path.Combine(_settings.ModsPath, "loadorder.json");
+
+                var allMods = _discoveryService.DiscoverMods(_settings.ModsPath);
+                var discoveredById = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var mod in allMods)
+                {
+                    var id = NormalizeModId(mod.Id);
+                    if (!string.IsNullOrEmpty(id) && !discoveredById.ContainsKey(id))
+                        discoveredById[id] = mod.Id;
+                }
+
+                var existingOrder = _orderService.ReadOrder(_settings.ModsPath) ?? new string[0];
+                if (existingOrder.Length == 0)
+                {
+                    // Critical behavior: when launching via Manager, ensure an explicit loadorder file exists.
+                    // Missing file causes runtime fallback to "load all discovered mods".
+                    if (!File.Exists(orderPath))
+                    {
+                        _orderService.SaveOrder(_settings.ModsPath, existingOrder);
+                        _gameSetupTab.Log("Created explicit empty loadorder.json (0 enabled mods).");
+                    }
+                    _gameSetupTab.Log("Launch diagnostics: load order is empty (0 enabled mods).");
+                    return;
+                }
+
+                var reconciled = new System.Collections.Generic.List<string>();
+                var seen = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                int migrated = 0;
+                int removed = 0;
+
+                foreach (var raw in existingOrder)
+                {
+                    string originalNorm = NormalizeModId(raw);
+                    if (string.IsNullOrEmpty(originalNorm)) continue;
+
+                    string candidateNorm = originalNorm;
+                    string migratedTo;
+                    if (KnownModIdMigrations.TryGetValue(originalNorm, out migratedTo))
+                    {
+                        candidateNorm = NormalizeModId(migratedTo);
+                        if (!string.Equals(originalNorm, candidateNorm, StringComparison.OrdinalIgnoreCase))
+                        {
+                            migrated++;
+                            _gameSetupTab.Log("Migrated load order ID: " + originalNorm + " -> " + candidateNorm);
+                        }
+                    }
+
+                    string canonicalId;
+                    if (discoveredById.TryGetValue(candidateNorm, out canonicalId))
+                    {
+                        if (seen.Add(canonicalId))
+                            reconciled.Add(canonicalId);
+                    }
+                    else
+                    {
+                        removed++;
+                        _gameSetupTab.Log("Removed missing mod from load order: " + raw);
+                    }
+                }
+
+                bool changed = (migrated > 0) || (removed > 0) || (reconciled.Count != existingOrder.Length);
+                if (changed)
+                {
+                    _orderService.SaveOrder(_settings.ModsPath, reconciled);
+                    _gameSetupTab.Log(string.Format(
+                        "Reconciled load order: {0} -> {1} entries ({2} migrated, {3} removed).",
+                        existingOrder.Length, reconciled.Count, migrated, removed));
+                }
+
+                _gameSetupTab.Log("Launch diagnostics: enabled mods in load order = " + reconciled.Count);
+            }
+            catch (Exception ex)
+            {
+                _gameSetupTab.Log("Load order reconciliation failed: " + ex.Message);
+            }
+        }
+
+        private void MainForm_Move(object sender, EventArgs e)
+        {
+            CaptureWindowPlacement();
+        }
+
+        private void MainForm_Resize(object sender, EventArgs e)
+        {
+            CaptureWindowPlacement();
+        }
+
+        private void MainForm_ResizeEnd(object sender, EventArgs e)
+        {
+            CaptureWindowPlacement();
+        }
+
+        private void ApplySavedWindowPlacement()
+        {
+            try
+            {
+                if (_settings == null) return;
+                if (_settings.WindowWidth <= 0 || _settings.WindowHeight <= 0) return;
+                if (_settings.WindowX == int.MinValue || _settings.WindowY == int.MinValue) return;
+
+                int minWidth = Math.Max(this.MinimumSize.Width, 640);
+                int minHeight = Math.Max(this.MinimumSize.Height, 480);
+                int width = Math.Max(_settings.WindowWidth, minWidth);
+                int height = Math.Max(_settings.WindowHeight, minHeight);
+
+                var requested = new Rectangle(_settings.WindowX, _settings.WindowY, width, height);
+                if (!IsRectangleVisibleOnAnyScreen(requested))
+                {
+                    var working = Screen.PrimaryScreen != null
+                        ? Screen.PrimaryScreen.WorkingArea
+                        : Screen.FromPoint(new Point(0, 0)).WorkingArea;
+
+                    int clampedX = Math.Max(working.Left, Math.Min(requested.X, working.Right - requested.Width));
+                    int clampedY = Math.Max(working.Top, Math.Min(requested.Y, working.Bottom - requested.Height));
+                    requested = new Rectangle(clampedX, clampedY, requested.Width, requested.Height);
+                }
+
+                this.StartPosition = FormStartPosition.Manual;
+                this.Bounds = requested;
+
+                if (_settings.WindowMaximized)
+                {
+                    this.WindowState = FormWindowState.Maximized;
+                }
+            }
+            catch
+            {
+                // Keep default startup behavior if restoring fails.
+            }
+        }
+
+        private bool IsRectangleVisibleOnAnyScreen(Rectangle rect)
+        {
+            foreach (var screen in Screen.AllScreens)
+            {
+                if (screen.WorkingArea.IntersectsWith(rect))
+                    return true;
+            }
+            return false;
+        }
+
+        private void CaptureWindowPlacement()
+        {
+            if (_settings == null) return;
+            if (!_windowPlacementInitialized) return;
+
+            Rectangle bounds = this.WindowState == FormWindowState.Normal ? this.Bounds : this.RestoreBounds;
+            if (bounds.Width <= 0 || bounds.Height <= 0) return;
+
+            _settings.WindowX = bounds.X;
+            _settings.WindowY = bounds.Y;
+            _settings.WindowWidth = bounds.Width;
+            _settings.WindowHeight = bounds.Height;
+            _settings.WindowMaximized = this.WindowState == FormWindowState.Maximized;
         }
 
         private bool CheckGameRunning()
@@ -691,13 +875,30 @@ namespace Manager
 
                 string dllSearchPath = string.Join(";", relativePaths.ToArray());
 
+                string smmDir = Path.Combine(gameDir, "SMM");
+                string doorstopTargetRelative = @"SMM\bin\Doorstop.dll";
+                string doorstopBinPath = Path.Combine(Path.Combine(smmDir, "bin"), "Doorstop.dll");
+                string doorstopRootPath = Path.Combine(smmDir, "Doorstop.dll");
+
+                if (File.Exists(doorstopBinPath))
+                {
+                    doorstopTargetRelative = @"SMM\bin\Doorstop.dll";
+                }
+                else if (File.Exists(doorstopRootPath))
+                {
+                    doorstopTargetRelative = @"SMM\Doorstop.dll";
+                }
+                else
+                {
+                    _gameSetupTab.Log("Doorstop target assembly missing in both SMM/bin and SMM root. Launch may fail to load ModAPI.");
+                }
 
                 string iniPath = Path.Combine(gameDir, "doorstop_config.ini");
                 var ini = new System.Collections.Generic.List<string>();
                 ini.Add("# Auto-generated by Sheltered Mod Manager");
                 ini.Add("[General]");
                 ini.Add("enabled=true");
-                ini.Add("target_assembly=SMM\\bin\\Doorstop.dll");
+                ini.Add("target_assembly=" + doorstopTargetRelative);
                 ini.Add("redirect_output_log=true");
                 ini.Add("");
                 ini.Add("[UnityMono]");
@@ -706,6 +907,7 @@ namespace Manager
                 ini.Add("debug_address=127.0.0.1:10000");
                 ini.Add("debug_suspend=false");
                 File.WriteAllLines(iniPath, ini.ToArray());
+                _gameSetupTab.Log("Doorstop configured. target_assembly=" + doorstopTargetRelative);
 
                 bool is64Bit = DetectIsExe64Bit(_settings.GamePath);
                 CopyWinhttpForGame(gameDir, is64Bit);
@@ -801,8 +1003,11 @@ namespace Manager
 
         private void SettingsTab_SettingsChanged(AppSettings settings)
         {
+            var previous = _settings;
             _settings = settings;
-            _settingsService.Save(_settings);
+            SaveSettingsFromUi();
+
+            LogSettingsChanges(previous, _settings, "Settings updated");
             
             // Re-apply theme in case it changed
             ApplyTheme(_settings.DarkMode);
@@ -815,6 +1020,8 @@ namespace Manager
                 this.BeginInvoke(new Action(() => SettingsService_SettingsChanged(settings)));
                 return;
             }
+
+            var previous = _settings;
 
             // Preserve or re-detect mod API version as it's not always in the INI if it's edited externally
             string version = _settings?.InstalledModApiVersion;
@@ -842,12 +1049,96 @@ namespace Manager
             // Re-apply theme
             ApplyTheme(_settings.DarkMode);
             UpdateStatusCounts();
+
+            if (_suppressSettingsReloadLogCount > 0)
+            {
+                _suppressSettingsReloadLogCount--;
+            }
+            else
+            {
+                LogSettingsChanges(previous, _settings, "Settings reloaded from disk");
+            }
         }
 
         private void SettingsTab_DarkModeChanged(bool isDark)
         {
+            bool wasDark = _settings.DarkMode;
             _settings.DarkMode = isDark;
             ApplyTheme(isDark);
+            SaveSettingsFromUi();
+
+            if (wasDark != isDark)
+            {
+                _gameSetupTab.Log("Settings updated: Dark mode " + (isDark ? "enabled" : "disabled") + ".");
+            }
+        }
+
+        private void SettingsTab_ResetWindowRequested()
+        {
+            try
+            {
+                _settings.WindowX = int.MinValue;
+                _settings.WindowY = int.MinValue;
+                _settings.WindowWidth = 0;
+                _settings.WindowHeight = 0;
+                _settings.WindowMaximized = false;
+
+                this.WindowState = FormWindowState.Normal;
+                this.Size = new Size(1182, 703);
+                this.CenterToScreen();
+
+                SaveSettingsFromUi();
+                _gameSetupTab.Log("Settings updated: Manager window placement reset to default.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to reset window placement: " + ex.Message, "Reset Window",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void LogSettingsChanges(AppSettings previous, AppSettings current, string prefix)
+        {
+            if (_gameSetupTab == null || current == null) return;
+            if (previous == null)
+            {
+                _gameSetupTab.Log(prefix + ".");
+                return;
+            }
+
+            var changes = new System.Collections.Generic.List<string>();
+
+            if (!string.Equals(previous.GamePath, current.GamePath, StringComparison.OrdinalIgnoreCase))
+                changes.Add("GamePath");
+            if (!string.Equals(previous.ModsPath, current.ModsPath, StringComparison.OrdinalIgnoreCase))
+                changes.Add("ModsPath");
+            if (previous.DarkMode != current.DarkMode)
+                changes.Add("DarkMode");
+            if (previous.DevMode != current.DevMode)
+                changes.Add("DevMode");
+            if (!string.Equals(previous.LogLevel, current.LogLevel, StringComparison.OrdinalIgnoreCase))
+                changes.Add("LogLevel");
+            if (previous.IgnoreOrderChecks != current.IgnoreOrderChecks)
+                changes.Add("IgnoreOrderChecks");
+            if (previous.SkipHarmonyDependencyCheck != current.SkipHarmonyDependencyCheck)
+                changes.Add("SkipHarmonyDependencyCheck");
+            if (!string.Equals(previous.AutoCondenseSaves, current.AutoCondenseSaves, StringComparison.OrdinalIgnoreCase))
+                changes.Add("AutoCondenseSaves");
+            if (previous.AutoLoadSaveSlot != current.AutoLoadSaveSlot)
+                changes.Add("AutoLoadSaveSlot");
+
+            if (changes.Count == 0)
+            {
+                _gameSetupTab.Log(prefix + ".");
+                return;
+            }
+
+            _gameSetupTab.Log(prefix + ": " + string.Join(", ", changes.ToArray()) + ".");
+        }
+
+        private void SaveSettingsFromUi()
+        {
+            _suppressSettingsReloadLogCount++;
             _settingsService.Save(_settings);
         }
 
@@ -1040,18 +1331,24 @@ namespace Manager
                             if (!string.IsNullOrEmpty(m.modId)) newOrder.Add(m.modId);
                         }
 
-                        // Write Load Order
-                        if (!string.IsNullOrEmpty(_settings.ModsPath))
+                        bool hasManifestOrder = newOrder.Count > 0;
+
+                        // Write Load Order only if manifest explicitly provided mods.
+                        if (hasManifestOrder && !string.IsNullOrEmpty(_settings.ModsPath))
                         {
                             _orderService.SaveOrder(_settings.ModsPath, newOrder);
                             _modManagerTab.RefreshMods();
                             UpdateStatusCounts();
                         }
+                        else
+                        {
+                            _gameSetupTab.Log("Restart request manifest contained no mod list - keeping current load order.");
+                        }
 
                         // Validate
                         bool safeToLaunch = true;
 
-                        if (newOrder.Count > 0)
+                        if (hasManifestOrder)
                         {
                             var allMods = _discoveryService.DiscoverMods(_settings.ModsPath);
                             var enabledMods = _orderService.GetEnabledMods(allMods, _settings.ModsPath);

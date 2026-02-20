@@ -1,5 +1,5 @@
 # ModAPI Events Guide
-## ModAPI v1.2.0
+## ModAPI v1.2.1
 
 **Last Updated:** 2026-01-27  
 **For:** Mod developers using the Sheltered ModAPI

@@ -1,10 +1,10 @@
 ![Mod Manager GUI](documentation/screenshots/mod_manager_gui.png)
-# Sheltered Mod Manager v1.2.0
+# Sheltered Mod Manager v1.2.1
 
 **A modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Unicube & Team17**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.2.0-blue)]()
+[![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.2.1-blue)]()
 
 > **Credit:** Originally created by benjaminfoo (2019)  
 > **Maintained by:** Coolnether123 (2025-Present)
@@ -29,9 +29,9 @@ Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs n
 
 **Key Features:**
 - **Zero-Boilerplate Mods**: New `ModManagerBase` for lightning-fast development (v1.2)
-- **Mod Attributes**: Simple `[ModToggle]` and `[ModSlider]` for in-game settings (v1.2.0)
+- **Mod Attributes**: Simple `[ModToggle]` and `[ModSlider]` for in-game settings (v1.2.1)
 - **Spine Settings API**: Rich, interactive configuration menus (v1.2)
-- **Enhanced Save System**: Per-mod isolated data and dictionary persistence (v1.2.0)
+- **Enhanced Save System**: Per-mod isolated data and dictionary persistence (v1.2.1)
 - Plugin loader with dependency resolution and load order management
 - Unlimited custom save slots with mod tracking and verification
 - Developer API for items, recipes, events, and Harmony patching

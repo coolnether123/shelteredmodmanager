@@ -21,6 +21,11 @@ namespace Manager.Core.Models
         private string _gameBitness;
         private string _installedModApiVersion;
         private string _autoCondenseSaves = "ask"; // yes, no, or ask
+        private int _windowX = int.MinValue;
+        private int _windowY = int.MinValue;
+        private int _windowWidth = 0;
+        private int _windowHeight = 0;
+        private bool _windowMaximized = false;
 
         public AppSettings()
         {
@@ -108,6 +113,36 @@ namespace Manager.Core.Models
         {
             get { return _autoLoadSaveSlot; }
             set { _autoLoadSaveSlot = value; }
+        }
+
+        public int WindowX
+        {
+            get { return _windowX; }
+            set { _windowX = value; }
+        }
+
+        public int WindowY
+        {
+            get { return _windowY; }
+            set { _windowY = value; }
+        }
+
+        public int WindowWidth
+        {
+            get { return _windowWidth; }
+            set { _windowWidth = value; }
+        }
+
+        public int WindowHeight
+        {
+            get { return _windowHeight; }
+            set { _windowHeight = value; }
+        }
+
+        public bool WindowMaximized
+        {
+            get { return _windowMaximized; }
+            set { _windowMaximized = value; }
         }
         
         /// <summary>

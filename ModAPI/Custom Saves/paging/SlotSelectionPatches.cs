@@ -29,6 +29,35 @@ namespace ModAPI.Hooks
     [HarmonyPatch(typeof(SlotSelectionPanel), "RefreshSaveSlotInfo")]
     internal static class SlotSelectionPanel_RefreshSaveSlotInfo_Patch
     {
+        private static string FormatDisplayTime(string rawTime)
+        {
+            if (string.IsNullOrEmpty(rawTime)) return string.Empty;
+
+            try
+            {
+                // Only force UTC->local conversion when offset/UTC is explicit in source text.
+                bool hasExplicitOffset =
+                    rawTime.IndexOf('Z') >= 0 ||
+                    rawTime.IndexOf('+') >= 0 ||
+                    rawTime.LastIndexOf('-') > 9; // catches "yyyy-MM-ddTHH:mm:ss-05:00"
+
+                DateTimeOffset dto;
+                if (hasExplicitOffset && DateTimeOffset.TryParse(rawTime, out dto))
+                    return dto.ToLocalTime().ToString("g");
+
+                DateTime dt;
+                if (DateTime.TryParse(rawTime, out dt))
+                {
+                    if (dt.Kind == DateTimeKind.Utc)
+                        return dt.ToLocalTime().ToString("g");
+                    return dt.ToString("g");
+                }
+            }
+            catch { }
+
+            return rawTime;
+        }
+
         static bool Prefix(SlotSelectionPanel __instance)
         {
             int page = PagingManager.GetPage(__instance);
@@ -113,13 +142,7 @@ namespace ModAPI.Hooks
                         tSlot.Field("m_fog").SetValue(entry.saveInfo.fog);
                         
                         var rawTime = entry.saveInfo.saveTime ?? entry.updatedAt;
-                        string displayTime = rawTime;
-                        try
-                        {
-                            if (DateTime.TryParse(rawTime, out var dt))
-                                displayTime = dt.ToLocalTime().ToString("g");
-                        }
-                        catch { }
+                        string displayTime = FormatDisplayTime(rawTime);
 
                         if (tSlot.Field("m_dateSaved").FieldExists()) tSlot.Field("m_dateSaved").SetValue(displayTime);
                         if (tSlot.Field("m_saveTime").FieldExists()) tSlot.Field("m_saveTime").SetValue(displayTime);

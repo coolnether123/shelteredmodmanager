@@ -209,21 +209,86 @@ namespace ModAPI.Core
 
                 var json = File.ReadAllText(path);
                 var obj = JsonUtility.FromJson<SimpleLoadOrder>(json);
+                string[] order = null;
                 if (obj != null && obj.order != null)
                 {
-                    foreach (var raw in obj.order)
-                    {
-                        if (string.IsNullOrEmpty(raw)) continue;
-                        var id = raw.Trim().ToLowerInvariant();
-                        if (seen.Add(id)) orderedIds.Add(id);
-                    }
+                    order = obj.order;
+                }
+                else
+                {
+                    // Robust fallback parser for loadorder.json formats that JsonUtility can fail on.
+                    order = TryExtractOrderArray(json);
+                }
+
+                if (order == null)
+                {
+                    MMLog.Write("loadorder.json exists but no readable 'order' array was found. Treating as explicit empty load order.");
+                    return new List<string>();
+                }
+
+                foreach (var raw in order)
+                {
+                    if (string.IsNullOrEmpty(raw)) continue;
+                    var id = raw.Trim().ToLowerInvariant();
+                    if (seen.Add(id)) orderedIds.Add(id);
                 }
             }
             catch (Exception ex)
             {
                 MMLog.Write("Failed to read loadorder.json: " + ex.Message);
+                return null;
             }
             return orderedIds;
+        }
+
+        private static string[] TryExtractOrderArray(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return null;
+            try
+            {
+                int keyPos = json.IndexOf("\"order\"", StringComparison.OrdinalIgnoreCase);
+                if (keyPos < 0) return null;
+
+                int arrayStart = json.IndexOf('[', keyPos);
+                if (arrayStart < 0) return null;
+
+                int depth = 0;
+                int arrayEnd = -1;
+                for (int i = arrayStart; i < json.Length; i++)
+                {
+                    char c = json[i];
+                    if (c == '[') depth++;
+                    else if (c == ']')
+                    {
+                        depth--;
+                        if (depth == 0)
+                        {
+                            arrayEnd = i;
+                            break;
+                        }
+                    }
+                }
+                if (arrayEnd < 0) return null;
+
+                string arrayBody = json.Substring(arrayStart + 1, arrayEnd - arrayStart - 1);
+                var matches = System.Text.RegularExpressions.Regex.Matches(
+                    arrayBody,
+                    "\"((?:\\\\.|[^\"\\\\])*)\"",
+                    System.Text.RegularExpressions.RegexOptions.Singleline);
+
+                var result = new List<string>();
+                for (int i = 0; i < matches.Count; i++)
+                {
+                    var raw = matches[i].Groups[1].Value;
+                    if (!string.IsNullOrEmpty(raw))
+                        result.Add(raw.Replace("\\\"", "\"").Replace("\\\\", "\\"));
+                }
+                return result.ToArray();
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         [Serializable]
