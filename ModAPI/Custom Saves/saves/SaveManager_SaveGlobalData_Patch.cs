@@ -44,8 +44,9 @@ namespace ModAPI.Hooks
                         MMLog.WriteError("[SaveGlobalData_Patch] Overwrite operation failed.");
                     }
 
-                    // Prevent the original SaveGlobalData from running
-                    return false; 
+                    // Let vanilla SaveGlobalData run so global preferences (audio/language/input/etc.)
+                    // are persisted as expected.
+                    return true;
                 }
                 catch(Exception ex)
                 {

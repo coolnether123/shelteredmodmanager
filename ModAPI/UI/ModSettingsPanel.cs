@@ -117,7 +117,7 @@ namespace ModAPI.UI
             _modNameLabel.pivot = UIWidget.Pivot.Left;
 
             // Version Label (Created separately to position under name)
-            var versionLabel = CreateLabel(root, "Version", "v1.1.0", new Vector3(leftX + 40, topY - 20, 0), 18, COLOR_SUBTEXT, uiFont, ttfFont, 600);
+            var versionLabel = CreateLabel(root, "Version", "v1.2.1", new Vector3(leftX + 40, topY - 20, 0), 18, COLOR_SUBTEXT, uiFont, ttfFont, 600);
             versionLabel.alignment = NGUIText.Alignment.Left;
             versionLabel.pivot = UIWidget.Pivot.Left;
             // Store ref if needed, or just find it by name later if dynamic updates required (mostly static per open)

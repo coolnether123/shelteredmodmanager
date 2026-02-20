@@ -1,4 +1,4 @@
-# ModAPI Project File Roles (v1.2.0)
+# ModAPI Project File Roles (v1.2.1)
 
 This document outlines the role and purpose of each file within the `ModAPI` project, detailing their primary and secondary functions, and how they interconnect.
 
@@ -247,7 +247,7 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 ### `MMLog.cs`
 **Primary Role:** Core logging engine for ModAPI and mods. Now features high-performance automatic source attribution.
 **Secondary Role:** Centralizes error reporting and provides developer-facing diagnostic tools (timers, once-warnings).
-**Key Features (v1.2.0):**
+**Key Features (v1.2.1):**
 - **Automatic Source Detection**: Uses optimized stack-trace analysis to identify the calling class or mod ID.
 - **Assembly Caching**: Caches the result of assembly-to-mod lookups to minimize `StackTrace` overhead on subsequent logs.
 - **Explicit Source Injection**: `WriteWithSource` allows performance-critical components to bypass stack walks entirely.

@@ -28,7 +28,12 @@ namespace Manager.Views
         public string AppVersion 
         { 
             get { return _appVersion; } 
-            set { _appVersion = value; } 
+            set 
+            { 
+                _appVersion = value;
+                if (_versionLabel != null)
+                    _versionLabel.Text = "Version " + (_appVersion ?? string.Empty);
+            } 
         }
         
         public string Author 
@@ -93,7 +98,7 @@ namespace Manager.Views
                 "• Event subscriptions and Harmony integration.\n" +
                 "• Runtime inspector (F9).\n\n" +
 
-                "Originally created by benjaminfoo (2019). Maintained by Coolnether123 (2025).";
+                "Originally created by benjaminfoo (2019). Maintained by Coolnether123 (2026).";
 
             _descriptionBox.Font = new Font("Segoe UI", 10f);
             _descriptionBox.Location = new Point(20, yPos);
@@ -145,7 +150,7 @@ namespace Manager.Views
                    "• benjaminfoo: Original 2019 mod loader foundation.\n" +
                    "• NeighTools: UnityDoorstop injection framework.\n" +
                    "• Andreas Pardeike: Harmony patching library.\n" +
-                   "• Coolnether123: 2025 active development.";
+                   "• Coolnether123: 2026 active development.";
             _creditsBox.Font = new Font("Segoe UI", 10f);
             _creditsBox.Location = new Point(rightColumnX, rightColumnY);
             _creditsBox.Size = new Size(this.Width - rightColumnX - 40, this.Height - rightColumnY - 20); // Dynamic width and height

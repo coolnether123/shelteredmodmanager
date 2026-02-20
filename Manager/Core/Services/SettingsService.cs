@@ -176,6 +176,41 @@ namespace Manager.Core.Services
                     settings.AutoLoadSaveSlot = slot;
             }
 
+            string windowX;
+            if (raw.TryGetValue("WindowX", out windowX))
+            {
+                if (int.TryParse(windowX, out int x))
+                    settings.WindowX = x;
+            }
+
+            string windowY;
+            if (raw.TryGetValue("WindowY", out windowY))
+            {
+                if (int.TryParse(windowY, out int y))
+                    settings.WindowY = y;
+            }
+
+            string windowWidth;
+            if (raw.TryGetValue("WindowWidth", out windowWidth))
+            {
+                if (int.TryParse(windowWidth, out int width))
+                    settings.WindowWidth = width;
+            }
+
+            string windowHeight;
+            if (raw.TryGetValue("WindowHeight", out windowHeight))
+            {
+                if (int.TryParse(windowHeight, out int height))
+                    settings.WindowHeight = height;
+            }
+
+            string windowMaximized;
+            if (raw.TryGetValue("WindowMaximized", out windowMaximized))
+            {
+                if (bool.TryParse(windowMaximized, out bool maximized))
+                    settings.WindowMaximized = maximized;
+            }
+
             return settings;
         }
 
@@ -204,6 +239,11 @@ namespace Manager.Core.Services
             data["AutoCondenseSaves"] = settings.AutoCondenseSaves ?? "ask";
             data["InstalledModApiVersion"] = settings.InstalledModApiVersion ?? string.Empty;
             data["AutoLoadSaveSlot"] = settings.AutoLoadSaveSlot.ToString();
+            data["WindowX"] = settings.WindowX.ToString();
+            data["WindowY"] = settings.WindowY.ToString();
+            data["WindowWidth"] = settings.WindowWidth.ToString();
+            data["WindowHeight"] = settings.WindowHeight.ToString();
+            data["WindowMaximized"] = settings.WindowMaximized.ToString();
 
             WriteIniFile(data);
             

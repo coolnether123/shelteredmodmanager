@@ -14,6 +14,7 @@ namespace Manager.Views
     /// Delegate for dark mode changed events
     /// </summary>
     public delegate void DarkModeChangedHandler(bool isDark);
+    public delegate void ResetWindowRequestedHandler();
 
     /// <summary>
     /// Settings tab - developer options and logging configuration.
@@ -44,6 +45,7 @@ namespace Manager.Views
 
         // Actions
         private Button _resetButton;
+        private Button _resetWindowButton;
         private Timer _saveDebounceTimer;
 
         // State
@@ -60,6 +62,7 @@ namespace Manager.Views
         /// Event raised when dark mode changes
         /// </summary>
         public event DarkModeChangedHandler DarkModeChanged;
+        public event ResetWindowRequestedHandler ResetWindowRequested;
 
         public SettingsTab()
         {
@@ -173,6 +176,13 @@ namespace Manager.Views
             _resetButton.Size = new Size(140, 35);
             _resetButton.FlatStyle = FlatStyle.Flat;
 
+            _resetWindowButton = new Button();
+            _resetWindowButton.Text = "Reset Manager Window";
+            _resetWindowButton.Font = new Font("Segoe UI", 10f);
+            _resetWindowButton.Location = new Point(170, yPos + 10); // Will be repositioned
+            _resetWindowButton.Size = new Size(190, 35);
+            _resetWindowButton.FlatStyle = FlatStyle.Flat;
+
             // Add all controls
             this.Controls.Add(_themeLabel);
             this.Controls.Add(_darkModeCheckBox);
@@ -182,6 +192,7 @@ namespace Manager.Views
             this.Controls.Add(_devModeCheckBox);
             this.Controls.Add(_devSettingsGroup);
             this.Controls.Add(_resetButton);
+            this.Controls.Add(_resetWindowButton);
 
             this.ResumeLayout();
             
@@ -198,6 +209,8 @@ namespace Manager.Views
             }
             _resetButton.Top = baseY;
             _resetButton.Left = 20; // Align to left
+            _resetWindowButton.Top = baseY;
+            _resetWindowButton.Left = _resetButton.Right + 10;
         }
 
         private void SetupSaveDebounce()
@@ -233,6 +246,7 @@ namespace Manager.Views
             _ignoreOrderCheckBox.CheckedChanged += IgnoreOrderCheckBox_CheckedChanged;
             _autoCondenseCombo.SelectedIndexChanged += AutoCondenseCombo_SelectedIndexChanged;
             _resetButton.Click += ResetButton_Click;
+            _resetWindowButton.Click += ResetWindowButton_Click;
         }
 
         private void AutoCondenseCombo_SelectedIndexChanged(object sender, EventArgs e)
@@ -311,6 +325,18 @@ namespace Manager.Views
                 if (SettingsChanged != null)
                     SettingsChanged(_settings);
             }
+        }
+
+        private void ResetWindowButton_Click(object sender, EventArgs e)
+        {
+            if (MessageBox.Show("Reset manager window size and position to default?", "Reset Window",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                return;
+            }
+
+            if (ResetWindowRequested != null)
+                ResetWindowRequested();
         }
 
         private void LoadFromSettings()
@@ -392,6 +418,9 @@ namespace Manager.Views
                 _resetButton.BackColor = Color.FromArgb(70, 70, 70);
                 _resetButton.ForeColor = Color.White;
                 _resetButton.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
+                _resetWindowButton.BackColor = Color.FromArgb(70, 70, 70);
+                _resetWindowButton.ForeColor = Color.White;
+                _resetWindowButton.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
             }
             else
             {
@@ -413,6 +442,9 @@ namespace Manager.Views
                 _resetButton.BackColor = SystemColors.Control;
                 _resetButton.ForeColor = SystemColors.ControlText;
                 _resetButton.FlatAppearance.BorderColor = SystemColors.ControlDark;
+                _resetWindowButton.BackColor = SystemColors.Control;
+                _resetWindowButton.ForeColor = SystemColors.ControlText;
+                _resetWindowButton.FlatAppearance.BorderColor = SystemColors.ControlDark;
             }
         }
     }

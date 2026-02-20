@@ -191,7 +191,7 @@ namespace ModAPI.Core
                                 JsonUtility.FromJsonOverwrite(entry.json, dataObj);
                                 loadedKeys.Add(entry.key);
                                 
-                                // Support V1.2.0 IModPersistenceLogic hooks
+                                // Support V1.2.1 IModPersistenceLogic hooks
                                 if (dataObj is ModAPI.Persistence.IModPersistenceLogic)
                                 {
                                     try 

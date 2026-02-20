@@ -122,7 +122,7 @@ namespace ModAPI.Core
     }
 
     /// <summary>
-    /// Per-mod save data persistence (v1.1.0).
+    /// Per-mod save data persistence (v1.2.1).
     /// </summary>
     public interface ISaveSystem
     {
