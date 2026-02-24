@@ -174,11 +174,7 @@ if exist "%25BASE%25libs\winhttp.dll" copy /y "%25BASE%25libs\winhttp.dll" "%25B
 if exist "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.dll" copy /y "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.dll" "%25MODS_DIR%25\PluginConsole\Assemblies\"
 if exist "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.pdb" copy /y "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.pdb" "%25MODS_DIR%25\PluginConsole\Assemblies\"
 if exist "%25BASE%25PluginDebugGUI\bin\%25CONFIG%25\PluginDebugGUI.dll" copy /y "%25BASE%25PluginDebugGUI\bin\%25CONFIG%25\PluginDebugGUI.dll" "%25MODS_DIR%25\PluginDebugGUI\Assemblies\"
-if exist "%25BASE%25PluginHarmony\bin\%25CONFIG%25\PluginHarmony.dll" copy /y "%25BASE%25PluginHarmony\bin\%25CONFIG%25\PluginHarmony.dll" "%25MODS_DIR%25\PluginHarmony\Assemblies\"
 if exist "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" copy /y "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" "%25MODS_DIR%25\PluginInitializer\Assemblies\"
-
-if exist "%25BASE%25PluginHarmony\bin\%25CONFIG%25\0Harmony.dll" copy /y "%25BASE%25PluginHarmony\bin\%25CONFIG%25\0Harmony.dll" "%25BIN_DIR%25\"
-if exist "%25BASE%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" copy /y "%25BASE%25packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll" "%25BIN_DIR%25\"
 
 :: Decompiler Tool &amp; Dependencies
 if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.dll" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.dll" "%25DECOMPILER_DIR%25\"

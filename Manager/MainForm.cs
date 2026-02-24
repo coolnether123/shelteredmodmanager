@@ -46,7 +46,7 @@ namespace Manager
         private GameSetupTab _gameSetupTab;
         private bool _windowPlacementInitialized;
         private int _suppressSettingsReloadLogCount;
-        private const string APP_VERSION = "1.2.1";
+        private const string APP_VERSION = "1.2.2";
         private static readonly System.Collections.Generic.Dictionary<string, string> KnownModIdMigrations =
             new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -292,7 +292,7 @@ namespace Manager
             // 
             // _aboutTab
             // 
-            this._aboutTab.AppVersion = "1.2.1";
+            this._aboutTab.AppVersion = "1.2.2";
             this._aboutTab.Author = "Coolnether123";
             this._aboutTab.Dock = System.Windows.Forms.DockStyle.Fill;
             this._aboutTab.Location = new System.Drawing.Point(0, 0);
@@ -1394,3 +1394,4 @@ namespace Manager
         }
     }
 }
+

@@ -153,7 +153,7 @@ namespace ModAPI.Core
             var gameVersion = RuntimeCompat.GameVersion;
             var modApiVersion = RuntimeCompat.ModApiVersion;
             var arch = RuntimeCompat.Architecture;
-            var buildTarget = unityVersion.StartsWith("5.6") ? "Epic Games (x64)" : "Steam (x86)";
+            var buildTarget = unityVersion.StartsWith("5.6") ? "Epic Games (x64)" : "Steam/GOG (x86)";
 
             var banner = new StringBuilder();
             banner.AppendLine("=================================================================================");

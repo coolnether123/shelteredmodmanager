@@ -12,8 +12,8 @@
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
-    <AssemblyVersion>1.2.1.0</AssemblyVersion>
-    <FileVersion>1.2.1.0</FileVersion>
+    <AssemblyVersion>1.2.2.0</AssemblyVersion>
+    <FileVersion>1.2.2.0</FileVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -38,8 +38,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>..\Dist\SMM\bin\0Harmony.dll</HintPath>
-      <Private>False</Private>
+      <HintPath>..\..\..\..\..\Epic Games\Sheltered\SMM\bin\0Harmony.dll</HintPath>
     </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
@@ -144,7 +143,6 @@
     <Compile Include="Core\ModDiscovery.cs" />
     <Compile Include="Core\ModPrefs.cs" />
     <Compile Include="Core\RuntimeCompat.cs" />
-    <Compile Include="Core\GameHelperImpl.cs" />
     <Compile Include="Core\SaveSystemImpl.cs" />
     <Compile Include="Core\ModPersistenceData.cs" />
     <Compile Include="Persistence\ModPersistence.cs" />
@@ -157,6 +155,7 @@
     <Compile Include="Core\ModThreads.cs" />
     <Compile Include="Core\ModManagerBase.cs" />
     <Compile Include="Core\ModManagerBaseT.cs" />
+    <Compile Include="Core\ShelteredModManagerBase.cs" />
     <Compile Include="Content\AssetLoader.cs" />
     <Compile Include="Util\SceneCompat.cs" />
     <Compile Include="Util\SceneUtil.cs" />
@@ -176,7 +175,6 @@
     <Compile Include="Util\GameUtil.cs" />
     <Compile Include="Hooks\WorldHooks.cs" />
     <Compile Include="Hooks\UIHooks.cs" />
-    <Compile Include="Events\GameEvents.cs" />
     <Compile Include="Events\FactionEvents.cs" />
     <Compile Include="Events\ModEventBus.cs" />
     <Compile Include="Events\UIEvents.cs" />
@@ -188,6 +186,7 @@
     <Compile Include="Custom Saves\MainMenuPanel_Quit_Patch.cs" />
     <Compile Include="Custom Saves\SaveManager_SaveToCurrentSlot_Patch.cs" />
     <Compile Include="Custom Saves\paging\PagingManager.cs" />
+    <Compile Include="Custom Saves\paging\CustomSavesWelcomeDialog.cs" />
     <Compile Include="Custom Saves\paging\SlotSelectionPatches.cs" />
     <Compile Include="Custom Saves\paging\SaveVerification.cs" />
     <Compile Include="Custom Saves\paging\SaveDetailsWindow.cs" />
@@ -210,6 +209,12 @@
     <!-- <Compile Include="Examples\SpineHarmonyShowcase.cs" /> -->
     <!-- Commented out: This is a reference example and shouldn't be compiled into ModAPI.dll -->
     <!-- as it causes unwanted Harmony patches to activate when mods call PatchAll() -->
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ShelteredAPI\ShelteredAPI.csproj">
+      <Project>{85DA57B6-F996-4E06-93ED-021D9C711C7F}</Project>
+      <Name>ShelteredAPI</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

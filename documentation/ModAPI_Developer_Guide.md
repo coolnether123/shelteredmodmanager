@@ -105,6 +105,8 @@ using ModAPI.Events;
 public void Start(IPluginContext ctx)
 {
     GameEvents.OnNewDay += day => ctx.Log.Info("Day " + day);
+    GameEvents.OnSixHourTick += batch => ctx.Log.Info("6h tick at day " + batch.Day + ", hour " + batch.Hour);
+    GameEvents.OnStaggeredTick += batch => ctx.Log.Info("Staggered tick interval: " + batch.IntervalHours + "h");
     UIEvents.OnPanelOpened += panel => ctx.Log.Info("Opened: " + panel.GetType().Name);
 }
 ```

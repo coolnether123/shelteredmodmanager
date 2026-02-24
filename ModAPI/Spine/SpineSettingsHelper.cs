@@ -116,26 +116,7 @@ namespace ModAPI.Spine
                 SyncMode = attr.SyncMode
             };
 
-            // Mapping SettingMode to visibility flags
-            if (def.Mode == SettingMode.Advanced)
-            {
-                def.ShowInSimpleView = false;
-                def.ShowInAdvancedView = true;
-            }
-            else if (def.Mode == SettingMode.Simple)
-            {
-                def.ShowInSimpleView = true;
-                def.ShowInAdvancedView = false; // Simple-only? Usually Simple shows in Advanced too, but maybe user wants strict separation.
-                // Re-evaluating: Usually "Simple" is for basic users, "Advanced" is for power users.
-                // If it's Simple, it should probably show in Advanced too unless we want "Simple Mode" to be a subset.
-                // The user's showcase has some as Simple and some as Advanced.
-                def.ShowInAdvancedView = true; 
-            }
-            else if (def.Mode == SettingMode.Both)
-            {
-                def.ShowInSimpleView = true;
-                def.ShowInAdvancedView = true;
-            }
+            ApplyViewVisibilityFromMode(def);
 
             // Wire up OnChanged from attribute (String method name)
             if (!string.IsNullOrEmpty(attr.OnChanged))
@@ -228,6 +209,23 @@ namespace ModAPI.Spine
             }
 
             return def;
+        }
+
+        private static void ApplyViewVisibilityFromMode(SettingDefinition def)
+        {
+            switch (def.Mode)
+            {
+                case SettingMode.Advanced:
+                    def.ShowInSimpleView = false;
+                    def.ShowInAdvancedView = true;
+                    break;
+                case SettingMode.Simple:
+                case SettingMode.Both:
+                default:
+                    def.ShowInSimpleView = true;
+                    def.ShowInAdvancedView = true;
+                    break;
+            }
         }
 
         private static Color ParseColor(string hex)

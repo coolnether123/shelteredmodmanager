@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ModAPI.Core
 {
@@ -26,6 +27,12 @@ namespace ModAPI.Core
         
         private static readonly Dictionary<string, string> _apiProviders 
             = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly HashSet<string> _missingApiWarnings
+            = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly HashSet<string> _typeMismatchWarnings
+            = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         
         private static readonly object _lock = new object();
         
@@ -84,7 +91,20 @@ namespace ModAPI.Core
             {
                 if (!_apis.TryGetValue(apiName, out api) || api == null)
                 {
-                    MMLog.WriteDebug($"API not found: {apiName}");
+                    string warnKey = apiName + "|" + typeof(T).FullName;
+                    bool shouldWarn = _missingApiWarnings.Add(warnKey);
+                    if (shouldWarn)
+                    {
+                        int count = _apis.Count;
+                        string sample = count == 0
+                            ? "none"
+                            : string.Join(", ", _apis.Keys.Take(5).ToArray()) + (count > 5 ? " ..." : "");
+
+                        MMLog.WriteWarning(
+                            "API lookup failed: '" + apiName + "' as " + typeof(T).Name +
+                            ". Registered APIs (" + count + "): " + sample +
+                            ". If optional, use TryGetAPI(...) and guard null.");
+                    }
                     return null;
                 }
             }
@@ -92,12 +112,22 @@ namespace ModAPI.Core
             T typedApi = api as T;
             if (typedApi == null)
             {
-                MMLog.WriteWarning($"Type mismatch for API {apiName}. " +
-                          $"Expected {typeof(T).Name}, got {api.GetType().Name}");
-            }
-            else
-            {
-                MMLog.WriteDebug($"Retrieved API: {apiName} as {typeof(T).Name}");
+                string mismatchKey = apiName + "|" + typeof(T).FullName + "|" + api.GetType().FullName;
+                bool shouldWarn = false;
+                string provider = "unknown";
+
+                lock (_lock)
+                {
+                    shouldWarn = _typeMismatchWarnings.Add(mismatchKey);
+                    provider = _apiProviders.GetValueOrDefault(apiName, "unknown");
+                }
+
+                if (shouldWarn)
+                {
+                    MMLog.WriteWarning(
+                        "API type mismatch for '" + apiName + "'. Requested " + typeof(T).Name +
+                        ", registered " + api.GetType().Name + " (provider: " + provider + ").");
+                }
             }
             
             return typedApi;

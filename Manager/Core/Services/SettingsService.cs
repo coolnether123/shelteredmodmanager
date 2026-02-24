@@ -347,7 +347,7 @@ namespace Manager.Core.Services
                 if (parent != null) grandparent = parent.Parent;
                 if (grandparent != null) searchDirs.Add(grandparent.FullName);
 
-                // 3. Check common Steam locations
+                // 3. Check common Steam/GOG locations
                 try
                 {
                     using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 356040"))
@@ -374,6 +374,9 @@ namespace Manager.Core.Services
                 // Common C: paths
                 searchDirs.Add(@"C:\Program Files (x86)\Steam\steamapps\common\Sheltered");
                 searchDirs.Add(@"C:\Program Files\Steam\steamapps\common\Sheltered");
+                searchDirs.Add(@"C:\Program Files (x86)\GOG Galaxy\Games\Sheltered");
+                searchDirs.Add(@"C:\Program Files\GOG Galaxy\Games\Sheltered");
+                searchDirs.Add(@"C:\GOG Games\Sheltered");
 
                 foreach (var dir in searchDirs)
                 {

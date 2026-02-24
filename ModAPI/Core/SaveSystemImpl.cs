@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using ModAPI.Saves;
 using ModAPI.Events;
 using UnityEngine;
@@ -32,11 +33,17 @@ namespace ModAPI.Core
         public string GetCurrentSlotPath()
         {
             var active = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave;
-            if (active == null) return null;
-            
-            // scenarioId is preferred. Fallback to "Standard" if not set.
-            string scenario = string.IsNullOrEmpty(active.scenarioId) ? "Standard" : active.scenarioId;
-            return DirectoryProvider.SlotRoot(scenario, active.absoluteSlot, false);
+            if (active != null)
+            {
+                // scenarioId is preferred. Fallback to "Standard" if not set.
+                string scenario = string.IsNullOrEmpty(active.scenarioId) ? "Standard" : active.scenarioId;
+                return DirectoryProvider.SlotRoot(scenario, active.absoluteSlot, false);
+            }
+
+            // Fallback for vanilla Slot1/Slot2/Slot3 sessions.
+            int vanillaSlot = ResolveVanillaSlotIndex();
+            if (vanillaSlot <= 0) return null;
+            return DirectoryProvider.SlotRoot("Standard", vanillaSlot, false);
         }
 
         public int ActiveSlotIndex
@@ -44,8 +51,52 @@ namespace ModAPI.Core
             get
             {
                 var custom = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave;
-                return custom != null ? custom.absoluteSlot : -1;
+                if (custom != null) return custom.absoluteSlot;
+
+                int vanillaSlot = ResolveVanillaSlotIndex();
+                return vanillaSlot > 0 ? vanillaSlot : -1;
             }
+        }
+
+        private static int ResolveVanillaSlotIndex()
+        {
+            try
+            {
+                var mgr = SaveManager.instance;
+                if (mgr == null) return -1;
+
+                // SaveManager uses m_slotInUse for active save slot in normal gameplay.
+                var slotField = mgr.GetType().GetField("m_slotInUse", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (slotField != null)
+                {
+                    int slotFromSlotInUse = SaveTypeToSlotIndex(slotField.GetValue(mgr));
+                    if (slotFromSlotInUse > 0) return slotFromSlotInUse;
+                }
+
+                // Fallback used during some transitions.
+                var currentTypeField = mgr.GetType().GetField("m_currentType", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (currentTypeField != null)
+                {
+                    int slotFromCurrentType = SaveTypeToSlotIndex(currentTypeField.GetValue(mgr));
+                    if (slotFromCurrentType > 0) return slotFromCurrentType;
+                }
+            }
+            catch { }
+
+            return -1;
+        }
+
+        private static int SaveTypeToSlotIndex(object rawValue)
+        {
+            if (rawValue == null) return -1;
+
+            int numeric;
+            try { numeric = (int)rawValue; }
+            catch { return -1; }
+
+            // SaveManager.SaveType typically maps Slot1..Slot3 to 1..3.
+            if (numeric >= 1 && numeric <= 3) return numeric;
+            return -1;
         }
 
         public void RegisterModData<T>(string key, T data, Action<T> migrationCallback = null) where T : class

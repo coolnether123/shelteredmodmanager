@@ -141,6 +141,8 @@ namespace ModAPI.Spine
                 SyncMode = attr.SyncMode
             };
 
+            ApplyViewVisibilityFromMode(def);
+
             // Map Types
             if (attr.Type != SettingType.Unknown) def.Type = attr.Type;
             else if (memberType == typeof(bool)) def.Type = SettingType.Bool;
@@ -150,6 +152,23 @@ namespace ModAPI.Spine
             else if (memberType.IsEnum) { def.Type = SettingType.Enum; def.EnumType = memberType; }
 
             return def;
+        }
+
+        private static void ApplyViewVisibilityFromMode(SettingDefinition def)
+        {
+            switch (def.Mode)
+            {
+                case SettingMode.Advanced:
+                    def.ShowInSimpleView = false;
+                    def.ShowInAdvancedView = true;
+                    break;
+                case SettingMode.Simple:
+                case SettingMode.Both:
+                default:
+                    def.ShowInSimpleView = true;
+                    def.ShowInAdvancedView = true;
+                    break;
+            }
         }
 
         private void ProcessPresets(MemberInfo member, SettingDefinition def)

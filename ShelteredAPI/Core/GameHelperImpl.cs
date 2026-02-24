@@ -1,8 +1,5 @@
 using System;
-using System.Collections.Generic;
-using ModAPI.Content;
-using ModAPI.Reflection;
-using UnityEngine;
+using System.Reflection;
 
 namespace ModAPI.Core
 {
@@ -10,7 +7,8 @@ namespace ModAPI.Core
     {
         public int GetTotalOwned(string itemId)
         {
-            if (!ContentInjector.ResolveItemType(itemId, out var type))
+            ItemManager.ItemType type;
+            if (!ResolveItemType(itemId, out type))
                 return 0;
 
             int count = 0;
@@ -71,7 +69,8 @@ namespace ModAPI.Core
 
         public int GetInventoryCount(string itemId)
         {
-            if (!ContentInjector.ResolveItemType(itemId, out var type))
+            ItemManager.ItemType type;
+            if (!ResolveItemType(itemId, out type))
                 return 0;
 
             try
@@ -100,6 +99,69 @@ namespace ModAPI.Core
             }
             catch { }
             return null;
+        }
+
+        private static bool ResolveItemType(string itemId, out ItemManager.ItemType type)
+        {
+            type = ItemManager.ItemType.Undefined;
+            if (string.IsNullOrEmpty(itemId))
+                return false;
+
+            try
+            {
+                var injectorType = Type.GetType("ModAPI.Content.ContentInjector, ModAPI", false);
+                if (injectorType != null)
+                {
+                    var resolveMethod = injectorType.GetMethod("ResolveItemType", BindingFlags.Public | BindingFlags.Static);
+                    if (resolveMethod != null)
+                    {
+                        object[] args = new object[] { itemId, type };
+                        object result = resolveMethod.Invoke(null, args);
+                        if (result is bool && (bool)result)
+                        {
+                            if (args[1] is ItemManager.ItemType)
+                            {
+                                type = (ItemManager.ItemType)args[1];
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return TryParseItemType(itemId, out type);
+        }
+
+        private static bool TryParseItemType(string value, out ItemManager.ItemType result)
+        {
+            result = ItemManager.ItemType.Undefined;
+
+            try
+            {
+                if (Enum.IsDefined(typeof(ItemManager.ItemType), value))
+                {
+                    result = (ItemManager.ItemType)Enum.Parse(typeof(ItemManager.ItemType), value, true);
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            string[] names = Enum.GetNames(typeof(ItemManager.ItemType));
+            for (int i = 0; i < names.Length; i++)
+            {
+                if (string.Equals(names[i], value, StringComparison.OrdinalIgnoreCase))
+                {
+                    result = (ItemManager.ItemType)Enum.Parse(typeof(ItemManager.ItemType), names[i]);
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

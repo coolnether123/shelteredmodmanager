@@ -1,4 +1,4 @@
-# ModAPI Project File Roles (v1.2.1)
+# ModAPI Project File Roles (v1.2.2)
 
 This document outlines the role and purpose of each file within the `ModAPI` project, detailing their primary and secondary functions, and how they interconnect.
 
@@ -247,7 +247,7 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 ### `MMLog.cs`
 **Primary Role:** Core logging engine for ModAPI and mods. Now features high-performance automatic source attribution.
 **Secondary Role:** Centralizes error reporting and provides developer-facing diagnostic tools (timers, once-warnings).
-**Key Features (v1.2.1):**
+**Key Features (v1.2.2):**
 - **Automatic Source Detection**: Uses optimized stack-trace analysis to identify the calling class or mod ID.
 - **Assembly Caching**: Caches the result of assembly-to-mod lookups to minimize `StackTrace` overhead on subsequent logs.
 - **Explicit Source Injection**: `WriteWithSource` allows performance-critical components to bypass stack walks entirely.
@@ -508,7 +508,7 @@ ModAPI.Saves.Events.OnPageChanged  // Save slot page navigation
 
 ### `Util/SceneCompat.cs`
 **Primary Role:** Compatibility layer for different Unity versions.
-**Secondary Role:** Abstracts scene API differences between Steam and EGS versions.
+**Secondary Role:** Abstracts scene API differences between Steam/GOG and EGS versions.
 **Interconnections:** Used by `SceneUtil` for cross-version compatibility.
 
 ### `Util/PersistentDataAPI.cs`
@@ -679,7 +679,7 @@ The ModAPI provides **four complementary event systems** for different use cases
 
 | System | Use When | Example |
 |--------|----------|---------|
-| **GameEvents** | Reacting to core game events | `GameEvents.OnNewDay`, `OnCombatStarted` |
+| **GameEvents** | Reacting to core game events | `GameEvents.OnNewDay`, `OnSixHourTick`, `OnStaggeredTick`, `OnCombatStarted` |
 | **ModEventBus** | Custom inter-mod communication | Custom quest/trade/discovery events |
 | **ModAPIRegistry** | Sharing complex APIs between mods | Crafting framework, economy system APIs |
 | **UIEvents** | Tracking UI panel lifecycle | Auto-save on menu, react to panel opens |
@@ -688,3 +688,5 @@ The ModAPI provides **four complementary event systems** for different use cases
 **Design Philosophy:** RimWorld-style automatic discovery with zero-configuration mod detection. Just add `About.json` and everything works!
 
 For detailed examples and best practices, see `Events_Guide.md`.
+
+

@@ -142,7 +142,7 @@ namespace ModAPI.Harmony
         /// <b>Mod Compatibility.</b> In a modded game, another mod might have already patched 
         /// the method you're looking at. If your primary pattern fails, use <b>MatchEither</b> 
         /// to provide a fallback that accounts for common modded states or difference between 
-        /// game platforms (Steam vs Epic Games). 
+        /// game platforms (Steam/GOG vs Epic Games). 
         /// </para>
         /// </remarks>
         public FluentTranspiler MatchEither(

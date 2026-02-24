@@ -1,4 +1,4 @@
-# Spine Settings Framework Guide (v1.2.1)
+# Spine Settings Framework Guide (v1.2.2)
 
 **Spine** is the high-level mod settings framework for Sheltered ModAPI. It allows modders to create rich, interactive, and persistent configuration menus with almost zero UI code. It utilizes C# Attributes to automatically generate a professional-grade UI in the game's Mod Manager panel.
 
@@ -170,3 +170,4 @@ public bool WeatherEnabled = true;
 [ModSetting("Rain Intensity", DependsOnId = "WeatherEnabled")]
 public float Rain = 0.5f;
 ```
+

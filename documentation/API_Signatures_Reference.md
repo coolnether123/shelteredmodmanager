@@ -143,6 +143,8 @@ public static event Action OnNewGame;
 public static event Action OnSessionStarted;
 public static event Action<EncounterCharacter, EncounterCharacter> OnCombatStarted;
 public static event Action<ExplorationParty> OnPartyReturned;
+public static event Action<TimeTriggerBatch> OnSixHourTick;
+public static event Action<TimeTriggerBatch> OnStaggeredTick;
 
 // ModAPI.Events.UIEvents
 public static event Action<BasePanel> OnPanelOpened;

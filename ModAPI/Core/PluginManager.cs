@@ -103,10 +103,18 @@ namespace ModAPI.Core
             // Because plugins are loaded via bytes (no file lock), they live in an anonymous context.
             // This resolver ensures they link back to the ALREADY LOADED ModAPI instance,
             // preventing duplicate assembly loads and fixing IsAssignableFrom failures.
+            // It also maintains backward compatibility for mods compiled against older ModAPI
+            // event/helper types that are now type-forwarded into ShelteredAPI.
             AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
             {
                 string name = new AssemblyName(args.Name).Name;
                 if (name == "ModAPI" || name == "ModAPI.Core") return Assembly.GetExecutingAssembly();
+                if (name == "ShelteredAPI")
+                {
+                    var gameEventsType = Type.GetType("ModAPI.Events.GameEvents, ShelteredAPI", false);
+                    if (gameEventsType != null) return gameEventsType.Assembly;
+                    try { return Assembly.Load("ShelteredAPI"); } catch { return null; }
+                }
                 return null;
             };
 
