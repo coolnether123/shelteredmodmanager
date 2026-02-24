@@ -91,7 +91,7 @@ namespace Manager.Views
                 "• Save protection - tracks mods per save and warns on mismatches.\n" +
                 "• In-game mod manager accessible from the main menu.\n" +
                 "• Plugin loader with dependency resolution.\n" +
-                "• Supports Steam (32-bit) and Epic (64-bit) via UnityDoorstop.\n\n" +
+                "• Supports Steam/GOG (32-bit) and Epic (64-bit) via UnityDoorstop.\n\n" +
 
                 "Developer API (early development):\n" +
                 "• Item and food injection, custom recipes.\n" +
@@ -242,3 +242,4 @@ namespace Manager.Views
         }
     }
 }
+

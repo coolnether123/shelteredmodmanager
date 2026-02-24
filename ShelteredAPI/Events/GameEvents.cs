@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
 using HarmonyLib;
-using ModAPI.Core;
-using ModAPI.Reflection;
-using ModAPI.Saves;
-using ModAPI.Hooks;
+using System.Reflection;
 using UnityEngine;
 
 namespace ModAPI.Events
@@ -21,11 +18,23 @@ namespace ModAPI.Events
         public static event Action OnSessionStarted;
         public static event Action<EncounterCharacter, EncounterCharacter> OnCombatStarted;
         public static event Action<ExplorationParty> OnPartyReturned;
+        public static event Action<TimeTriggerBatch> OnSixHourTick
+        {
+            add { GameTimeTriggerHelper.OnSixHourTick += value; }
+            remove { GameTimeTriggerHelper.OnSixHourTick -= value; }
+        }
+        public static event Action<TimeTriggerBatch> OnStaggeredTick
+        {
+            add { GameTimeTriggerHelper.OnStaggeredTick += value; }
+            remove { GameTimeTriggerHelper.OnStaggeredTick -= value; }
+        }
 
         private static bool _beforeSaveRaised;
         private static bool _afterLoadRaised;
         private static bool _dayHooked;
         private static bool _partyHooked;
+        private static readonly object WarnOnceSync = new object();
+        private static readonly HashSet<string> LocalWarnOnceKeys = new HashSet<string>(StringComparer.Ordinal);
 
         public static void HookDayEvents()
         {
@@ -38,7 +47,7 @@ namespace ModAPI.Events
             }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("GameEvents.NewDay.Hook", "Failed to hook day event: " + ex.Message);
+                WarnOnce("GameEvents.NewDay.Hook", "Failed to hook day event: " + ex.Message);
             }
         }
 
@@ -57,7 +66,7 @@ namespace ModAPI.Events
             }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("GameEvents.Party.Hook", "Failed to hook party returned event: " + ex.Message);
+                WarnOnce("GameEvents.Party.Hook", "Failed to hook party returned event: " + ex.Message);
             }
         }
 
@@ -73,7 +82,7 @@ namespace ModAPI.Events
                 return;
 
             SaveData data;
-            if (!Safe.TryGetField(mgr, "m_data", out data) || data == null)
+            if (!TryGetField(mgr, "m_data", out data) || data == null)
                 return;
 
             _beforeSaveRaised = true;
@@ -82,15 +91,11 @@ namespace ModAPI.Events
             // ALSO RAISE THE V1.2 CUSTOM SAVE EVENT
             try
             {
-                var customEntry = PlatformSaveProxy.ActiveCustomSave;
-                if (customEntry != null)
-                {
-                    ModAPI.Saves.Events.RaiseBeforeSave(customEntry);
-                }
+                TryRaiseCustomSaveEvent("RaiseBeforeSave", "BeforeSave");
             }
             catch (Exception ex)
             {
-                MMLog.WriteError("[GameEvents] Error raising Custom BeforeSave: " + ex);
+                WriteError("[GameEvents] Error raising Custom BeforeSave: " + ex);
             }
         }
 
@@ -100,11 +105,11 @@ namespace ModAPI.Events
                 return;
 
             SaveData data;
-            if (!Safe.TryGetField(mgr, "m_data", out data) || data == null)
+            if (!TryGetField(mgr, "m_data", out data) || data == null)
                 return;
 
             List<ISaveable> pending;
-            if (Safe.TryGetField(mgr, "m_toLoad", out pending) && pending != null && pending.Count > 0)
+            if (TryGetField(mgr, "m_toLoad", out pending) && pending != null && pending.Count > 0)
                 return;
 
             _afterLoadRaised = true;
@@ -113,15 +118,11 @@ namespace ModAPI.Events
             // ALSO RAISE THE V1.2 CUSTOM SAVE EVENT
             try
             {
-                var customEntry = PlatformSaveProxy.ActiveCustomSave;
-                if (customEntry != null)
-                {
-                    ModAPI.Saves.Events.RaiseAfterLoad(customEntry);
-                }
+                TryRaiseCustomSaveEvent("RaiseAfterLoad", "AfterLoad");
             }
             catch (Exception ex)
             {
-                MMLog.WriteError("[GameEvents] Error raising Custom AfterLoad: " + ex);
+                WriteError("[GameEvents] Error raising Custom AfterLoad: " + ex);
             }
         }
 
@@ -132,9 +133,9 @@ namespace ModAPI.Events
 
             List<EncounterCharacter> players;
             List<EncounterCharacter> npcs;
-            if (!Safe.TryGetField(mgr, "player_encounter_chars", out players) || players == null || players.Count == 0)
+            if (!TryGetField(mgr, "player_encounter_chars", out players) || players == null || players.Count == 0)
                 return;
-            if (!Safe.TryGetField(mgr, "npc_encounter_chars", out npcs) || npcs == null || npcs.Count == 0)
+            if (!TryGetField(mgr, "npc_encounter_chars", out npcs) || npcs == null || npcs.Count == 0)
                 return;
 
             var player = players[0];
@@ -151,7 +152,7 @@ namespace ModAPI.Events
             }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("GameEvents.OnNewDay", "OnNewDay handler failed: " + ex.Message);
+                WarnOnce("GameEvents.OnNewDay", "OnNewDay handler failed: " + ex.Message);
             }
         }
 
@@ -165,14 +166,14 @@ namespace ModAPI.Events
             }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("GameEvents.PartyReturned", "Party returned handler failed: " + ex.Message);
+                WarnOnce("GameEvents.PartyReturned", "Party returned handler failed: " + ex.Message);
             }
         }
 
         private static void SafeInvoke(Action action, string name)
         {
             try { if (action != null) action(); }
-            catch (Exception ex) { MMLog.WarnOnce("GameEvents.Invoke." + name, name + " handler threw: " + ex.Message); }
+            catch (Exception ex) { WarnOnce("GameEvents.Invoke." + name, name + " handler threw: " + ex.Message); }
         }
 
         internal static void TryRaiseNewGame()
@@ -259,6 +260,126 @@ namespace ModAPI.Events
             {
                 GameEvents.RaiseCombat(__instance);
             }
+        }
+
+        private static bool TryGetField<T>(object instance, string fieldName, out T value)
+        {
+            value = default(T);
+            if (instance == null || string.IsNullOrEmpty(fieldName))
+                return false;
+
+            try
+            {
+                FieldInfo field = FindField(instance.GetType(), fieldName);
+                if (field == null)
+                    return false;
+
+                object raw = field.GetValue(instance);
+                if (raw is T)
+                {
+                    value = (T)raw;
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
+        }
+
+        private static FieldInfo FindField(Type type, string name)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            for (Type cursor = type; cursor != null; cursor = cursor.BaseType)
+            {
+                FieldInfo field = cursor.GetField(name, flags);
+                if (field != null)
+                    return field;
+            }
+            return null;
+        }
+
+        private static void TryRaiseCustomSaveEvent(string methodName, string displayName)
+        {
+            try
+            {
+                Type proxyType = Type.GetType("ModAPI.Hooks.PlatformSaveProxy, ModAPI", false);
+                if (proxyType == null)
+                    return;
+
+                FieldInfo activeCustomSave = proxyType.GetField("ActiveCustomSave", BindingFlags.Public | BindingFlags.Static);
+                if (activeCustomSave == null)
+                    return;
+
+                object customEntry = activeCustomSave.GetValue(null);
+                if (customEntry == null)
+                    return;
+
+                Type eventsType = Type.GetType("ModAPI.Saves.Events, ModAPI", false);
+                if (eventsType == null)
+                    return;
+
+                MethodInfo raiseMethod = eventsType.GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+                if (raiseMethod == null)
+                    return;
+
+                raiseMethod.Invoke(null, new object[] { customEntry });
+            }
+            catch (Exception ex)
+            {
+                WriteError("[GameEvents] Error raising Custom " + displayName + ": " + ex);
+            }
+        }
+
+        private static void WarnOnce(string key, string message)
+        {
+            try
+            {
+                Type mmLogType = Type.GetType("ModAPI.Core.MMLog, ModAPI", false);
+                if (mmLogType != null)
+                {
+                    MethodInfo warnOnce = mmLogType.GetMethod("WarnOnce", BindingFlags.Public | BindingFlags.Static);
+                    if (warnOnce != null)
+                    {
+                        warnOnce.Invoke(null, new object[] { key, message });
+                        return;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            lock (WarnOnceSync)
+            {
+                if (LocalWarnOnceKeys.Contains(key))
+                    return;
+                LocalWarnOnceKeys.Add(key);
+            }
+            Debug.LogWarning("[GameEvents] " + message);
+        }
+
+        private static void WriteError(string message)
+        {
+            try
+            {
+                Type mmLogType = Type.GetType("ModAPI.Core.MMLog, ModAPI", false);
+                if (mmLogType != null)
+                {
+                    MethodInfo writeError = mmLogType.GetMethod("WriteError", BindingFlags.Public | BindingFlags.Static);
+                    if (writeError != null)
+                    {
+                        writeError.Invoke(null, new object[] { message });
+                        return;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            Debug.LogError(message);
         }
     }
 }

@@ -23,7 +23,7 @@ namespace ModAPI.Core
 
     /// <summary>
     /// Deterministic random number generator using XorShift64*.
-    /// Guaranteed identical results across Steam (x86) and Epic (x64) builds.
+    /// Guaranteed identical results across Steam/GOG (x86) and Epic (x64) builds.
     /// </summary>
     public static class ModRandom
     {
@@ -45,7 +45,7 @@ namespace ModAPI.Core
 
         /// <summary>
         /// When true, the RNG will restore its previous seed and step count on load.
-        /// When false (default), a new random seed is generated every time a save is loaded.
+        /// When false (default), the save's master seed is reused but step count is not restored.
         /// </summary>
         public static bool IsDeterministic { get; set; }
 

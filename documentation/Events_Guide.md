@@ -1,5 +1,5 @@
 # ModAPI Events Guide
-## ModAPI v1.2.1
+## ModAPI v1.2.2
 
 **Last Updated:** 2026-01-27  
 **For:** Mod developers using the Sheltered ModAPI
@@ -65,6 +65,8 @@ The ModAPI provides **multiple event systems** to help mods react to game state 
 ```csharp
 // Day/time events
 public static event Action<int> OnNewDay;
+public static event Action<TimeTriggerBatch> OnSixHourTick;
+public static event Action<TimeTriggerBatch> OnStaggeredTick;
 
 // Save/load events
 public static event Action<SaveData> OnBeforeSave;
@@ -110,6 +112,37 @@ public class MyMod : IModPlugin
         daysTracked++;
         MMLog.WriteInfo($"Day {dayNumber} - tracked {daysTracked} days total");
     }
+}
+```
+
+### Example: 6-Hour and Staggered Workloads
+
+```csharp
+using ModAPI.Core;
+using ModAPI.Events;
+
+public class HeavyWorkMod : IModPlugin
+{
+    public void Initialize(IPluginContext ctx) { }
+
+    public void Start(IPluginContext ctx)
+    {
+        GameEvents.OnSixHourTick += batch =>
+        {
+            ctx.Log.Info(string.Format("[6h] Day {0} Hour {1} Seq {2}", batch.Day, batch.Hour, batch.Sequence));
+            RunLightMaintenance();
+        };
+
+        GameEvents.OnStaggeredTick += batch =>
+        {
+            // Staggered cadence defaults to deterministic 4-6 in-game hours.
+            ctx.Log.Info(string.Format("[staggered] Day {0} Hour {1} Interval {2}h", batch.Day, batch.Hour, batch.IntervalHours));
+            RunHeavyCalculations();
+        };
+    }
+
+    private void RunLightMaintenance() { }
+    private void RunHeavyCalculations() { }
 }
 ```
 
@@ -760,3 +793,4 @@ foreach (var apiName in apis)
 - Keep handlers **fast** (defer heavy work)
 
 Happy modding!
+

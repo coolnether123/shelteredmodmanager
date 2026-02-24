@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -9,7 +10,7 @@ namespace ModAPI.Util
     /// Used by mods to track persistent state (e.g. character IDs mapped to mod data).
     /// </summary>
     [Serializable]
-    public class SaveLoadDictionary<TKey, TValue>
+    public class SaveLoadDictionary<TKey, TValue> : ISerializationCallbackReceiver, IDictionary<TKey, TValue>
     {
         [Serializable]
         public struct Pair
@@ -35,10 +36,55 @@ namespace ModAPI.Util
             }
         }
 
+        public TValue this[TKey key]
+        {
+            get { return Data[key]; }
+            set { Data[key] = value; }
+        }
+
+        public ICollection<TKey> Keys { get { return Data.Keys; } }
+        public ICollection<TValue> Values { get { return Data.Values; } }
+        public int Count { get { return Data.Count; } }
+        public bool IsReadOnly { get { return false; } }
+
+        public void Add(TKey key, TValue value) { Data.Add(key, value); }
+        public bool Remove(TKey key) { return Data.Remove(key); }
+        public bool ContainsKey(TKey key) { return Data.ContainsKey(key); }
+        public bool TryGetValue(TKey key, out TValue value) { return Data.TryGetValue(key, out value); }
+
+        public void Add(KeyValuePair<TKey, TValue> item) { Add(item.Key, item.Value); }
+        public bool Contains(KeyValuePair<TKey, TValue> item)
+        {
+            TValue value;
+            if (!Data.TryGetValue(item.Key, out value)) return false;
+            return EqualityComparer<TValue>.Default.Equals(value, item.Value);
+        }
+
+        public bool Remove(KeyValuePair<TKey, TValue> item)
+        {
+            if (!Contains(item)) return false;
+            return Data.Remove(item.Key);
+        }
+
+        public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
+        {
+            if (array == null) throw new ArgumentNullException("array");
+            if (arrayIndex < 0) throw new ArgumentOutOfRangeException("arrayIndex");
+            if (array.Length - arrayIndex < Data.Count) throw new ArgumentException("Destination array is too small.");
+
+            foreach (var kv in Data)
+            {
+                array[arrayIndex++] = kv;
+            }
+        }
+
+        public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() { return Data.GetEnumerator(); }
+        IEnumerator IEnumerable.GetEnumerator() { return Data.GetEnumerator(); }
+
         public void Clear()
         {
             Data.Clear();
-            SyncToList();
+            Entries.Clear();
         }
 
         /// <summary>
@@ -65,9 +111,24 @@ namespace ModAPI.Util
             if (Entries == null) return;
             foreach (var entry in Entries)
             {
-                if (entry.Key == null) continue;
+                if (IsNullKey(entry.Key)) continue;
                 _runtimeCache[entry.Key] = entry.Value;
             }
+        }
+
+        public void OnBeforeSerialize()
+        {
+            SyncToList();
+        }
+
+        public void OnAfterDeserialize()
+        {
+            SyncFromList();
+        }
+
+        private static bool IsNullKey(TKey key)
+        {
+            return object.ReferenceEquals(key, null);
         }
     }
 }

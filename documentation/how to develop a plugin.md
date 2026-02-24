@@ -1,4 +1,4 @@
-﻿# How to Develop a Plugin | Sheltered Mod Manager v1.2
+# How to Develop a Plugin | Sheltered Mod Manager v1.2
 
 This guide is for writing a mod plugin that runs under the current `IModPlugin` lifecycle.
 
@@ -15,7 +15,7 @@ Add references:
 - `UnityEngine.dll` (game managed folder)
 
 Game managed folder examples:
-- Steam: `<Sheltered>/Sheltered_Data/Managed`
+- Steam/GOG: `<Sheltered>/Sheltered_Data/Managed`
 - Epic: `<Sheltered>/ShelteredWindows64_EOS_Data/Managed`
 
 ## 2. Folder Layout Required by Loader
@@ -174,3 +174,4 @@ High-value members:
 - Doing heavy work in constructors instead of lifecycle methods.
 - Assuming scene objects exist immediately; use `RunNextFrame` or scene callbacks.
 - Not implementing `IModShutdown` for event unsubscription.
+

@@ -65,10 +65,11 @@ namespace ModAPI.Core
                 }
                 else
                 {
-                    // Random Mode: Even if we have a file, if it says not deterministic, we generate a new seed
-                    int newSeed = GenerateFreshSeed();
-                    ModRandom.Initialize(newSeed);
-                    MMLog.WriteInfo(string.Format("[ModRandom] Session Started (Randomized): New Seed {0}. (File existed but deterministic=false)", newSeed));
+                    // Per-save stable seed mode: reuse the save's master seed on every load.
+                    // This avoids re-rolling RNG identity between loads while still not restoring step history.
+                    RandomnessMode mode = data.mode == (int)RandomnessMode.Legacy ? RandomnessMode.Legacy : RandomnessMode.XorShift;
+                    ModRandom.Initialize(data.masterSeed, mode);
+                    MMLog.WriteInfo(string.Format("[ModRandom] Session Started (Seed Reused): Seed {0}, Mode {1}.", data.masterSeed, mode));
                 }
             }
             else

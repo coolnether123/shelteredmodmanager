@@ -132,15 +132,7 @@ namespace ModAPI.Hooks.Paging
                 {
                     ModPrefs.SetInt("ModAPI_HasSeenCustomSavesHelp", 1);
                     ModPrefs.Save();
-                    MessageBox.Show(
-                        MessageBoxButtons.Okay_Button,
-                        "Welcome to Custom Saves!\n\n" +
-                        "Pages 2+ contain unlimited custom save slots.\n" +
-                        "Use the arrows or keyboard to navigate pages.\n\n" +
-                        "Custom saves stay in their slot numbers unless you reorganize them.\n" +
-                        "If gaps are detected (for example, after deleting saves),\n" +
-                        "you will be asked at startup whether to compact slot numbering.\n\n" +
-                        "Slots 1-3 are vanilla saves.");
+                    CustomSavesWelcomeDialog.Show();
                 }
 
                 panel.RefreshSaveSlotInfo(); 

@@ -56,17 +56,17 @@ The API is under active development - see the documentation for current capabili
 
 ## Installation
 
-Steam users: install the 32-bit package named Steam.
+Steam/GOG users: install the 32-bit package named Steam/GOG.
 
 Epic users: install the 64-bit package named Epic.
 
 1. **Back up your Sheltered folder**
-2.  Copy the (Steam or Epic) files into the Sheltered game directory
+2.  Copy the (Steam/GOG or Epic) files into the Sheltered game directory
    (same folder as `Sheltered.exe` or `ShelteredWindows64_EOS.exe`)
 3. Run `SMM\Manager.exe`
 4. Enable mods and launch the game
 
-If your exe is Sheltered.exe, you’re on Steam. If it’s ShelteredWindows64_EOS.exe, you’re on Epic
+If your exe is Sheltered.exe, you are on Steam/GOG. If it is ShelteredWindows64_EOS.exe, you are on Epic
 
 ### Installing mods
 1. Download mods from *Nexus(Link)*
@@ -113,7 +113,7 @@ A “Mods” button is added to the main menu.
 
 1. Delete the `mods` and `SMM` folders
 2. Remove doorstop_config.ini, SMM\mod_manager.log, and winhttp.dll
-3. Verify game files via Steam/Epic if any issues arise
+3. Verify game files via Steam/GOG/Epic if any issues arise
 
 Your vanilla save files are not deleted.
 Custom saves are stored in mods/ModAPI/... (back this folder up if you want to keep them).
@@ -127,9 +127,9 @@ To start the game fully vanilla, temporarily move winhttp.dll out of the game di
 ## Compatibility
 
 * **Game:** Sheltered 1.8+
-* **Platforms:** Steam, Epic
+* **Platforms:** Steam/GOG, Epic
 * **Architecture:**
-  * Steam: 32-bit
+  * Steam/GOG: 32-bit
   * Epic: 64-bit
 * **OS:** Windows 10 / 11
 * **Unity:** 5.3 and 5.6+ supported
@@ -241,3 +241,5 @@ Planned for future updates:
 | [Events Guide](documentation/Events_Guide.md) | Game and UI event subscriptions |
 | [Harmony Patches](documentation/how%20to%20develop%20a%20patch%20with%20harmony.md) | Runtime code patching |
 | [API Reference](documentation/ModAPI_Documentation.md) | Technical API reference |
+
+

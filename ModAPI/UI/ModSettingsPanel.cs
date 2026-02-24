@@ -14,9 +14,10 @@ namespace ModAPI.UI
     {
         private static GameObject _instance;
         private static Texture2D _whiteTexture;
+        private static SettingMode? _lastClosedViewMode;
 
         private ModEntry _currentMod;
-        private SettingMode _currentViewMode = SettingMode.Advanced;
+        private SettingMode _currentViewMode = SettingMode.Simple;
         
         // UI References
         private GameObject _contentRoot;
@@ -88,6 +89,7 @@ namespace ModAPI.UI
 
             var script = root.AddComponent<ModSettingsPanel>();
             script._currentMod = mod;
+            script._currentViewMode = _lastClosedViewMode ?? SettingMode.Simple;
 
             // Initial snapshot of settings as "Custom" state
             if (mod.SettingsProvider is ISettingsProvider2 sp2) script._customSnapshotJson = sp2.SerializeToJson();
@@ -117,7 +119,7 @@ namespace ModAPI.UI
             _modNameLabel.pivot = UIWidget.Pivot.Left;
 
             // Version Label (Created separately to position under name)
-            var versionLabel = CreateLabel(root, "Version", "v1.2.1", new Vector3(leftX + 40, topY - 20, 0), 18, COLOR_SUBTEXT, uiFont, ttfFont, 600);
+            var versionLabel = CreateLabel(root, "Version", "v1.2.2", new Vector3(leftX + 40, topY - 20, 0), 18, COLOR_SUBTEXT, uiFont, ttfFont, 600);
             versionLabel.alignment = NGUIText.Alignment.Left;
             versionLabel.pivot = UIWidget.Pivot.Left;
             // Store ref if needed, or just find it by name later if dynamic updates required (mostly static per open)
@@ -194,6 +196,8 @@ namespace ModAPI.UI
 
         private void OnClose()
         {
+            _lastClosedViewMode = _currentViewMode;
+
             if (_currentMod != null && _currentMod.SettingsProvider is ISettingsProvider2 sp2)
             {
                  sp2.Save();
@@ -322,10 +326,13 @@ namespace ModAPI.UI
             BuildPresetCycleWidget(uiFont, ttfFont, settings, allDefs);
 
             // 1a. View Mode Toggle Visibility
-            // Hide buttons if the mod doesn't utilize both modes (default to Advanced view)
-            bool hasSimpleSpecific = allDefs.Any(d => d.Mode == SettingMode.Simple);
-            bool hasAdvancedSpecific = allDefs.Any(d => d.Mode == SettingMode.Advanced);
-            bool showToggles = hasSimpleSpecific && hasAdvancedSpecific;
+            // Manual repro validation:
+            // - One Simple + one Advanced => buttons visible; Simple hides Advanced-only; Advanced shows it.
+            // - All entries visible in both views => buttons hidden.
+            bool hasSimpleVisible = allDefs.Any(d => d.ShowInSimpleView);
+            bool hasAdvancedVisible = allDefs.Any(d => d.ShowInAdvancedView);
+            bool showToggles = hasSimpleVisible && hasAdvancedVisible &&
+                               allDefs.Any(d => d.ShowInSimpleView != d.ShowInAdvancedView);
 
             _simpleModeBtn.SetActive(showToggles);
             _advancedModeBtn.SetActive(showToggles);
@@ -811,3 +818,4 @@ namespace ModAPI.UI
         }
     }
 }
+
