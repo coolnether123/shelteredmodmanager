@@ -44,6 +44,7 @@ namespace Manager.Views
         private AppSettings _settings;
         private string _managerVersion = string.Empty;
         private int _latestRequestToken = 0;
+        private DateTime _lastCheckedUtc = DateTime.MinValue;
 
         public event NexusInstallCompletedHandler InstallCompleted;
 
@@ -103,6 +104,8 @@ namespace Manager.Views
                 string domain = GetGameDomain();
                 _statusLabel.Text = "Nexus: Ready (" + domain + ")";
             }
+
+            AdjustListHeights();
         }
 
         public void UpdateInstalledMods(List<ModItem> mods, int mappedMods, int updateCount, string errorMessage)
@@ -130,16 +133,24 @@ namespace Manager.Views
             }
 
             _installedList.EndUpdate();
+            AdjustListHeights();
 
+            int totalMods = source.Count;
             if (!string.IsNullOrEmpty(errorMessage))
-            {
-                _installedSummaryLabel.Text = "Installed: link check failed (" + errorMessage + ")";
-            }
+                _installedSummaryLabel.Text = "Installed: link check failed (" + errorMessage + ")" + BuildLastCheckedSuffix();
             else
-            {
-                int total = source.Count;
-                _installedSummaryLabel.Text = "Installed: " + total + " mods, " + mappedMods + " linked, " + updateCount + " updates";
-            }
+                _installedSummaryLabel.Text = "Installed: " + totalMods + " mods, " + mappedMods + " linked, " + updateCount + " updates" + BuildLastCheckedSuffix();
+        }
+
+        public void SetLastCheckedUtc(DateTime checkedUtc)
+        {
+            if (checkedUtc <= DateTime.MinValue)
+                return;
+
+            _lastCheckedUtc = checkedUtc;
+            // Preserve current summary text, append/update timestamp on next update pass.
+            if (string.IsNullOrEmpty(_installedSummaryLabel.Text))
+                _installedSummaryLabel.Text = "Installed: waiting for mod scan" + BuildLastCheckedSuffix();
         }
 
         public void RefreshLatestModsAsync()
@@ -192,6 +203,7 @@ namespace Manager.Views
                             });
                         }
                         _latestList.EndUpdate();
+                        AdjustListHeights();
 
                         _refreshButton.Enabled = true;
 
@@ -397,9 +409,11 @@ namespace Manager.Views
             _installedHeaderLabel.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
             _installedHeaderLabel.Text = "Installed Mods";
 
-            _installedList.Dock = DockStyle.Fill;
+            _installedList.Dock = DockStyle.Top;
             _installedList.Font = new Font("Segoe UI", 9f);
             _installedList.BorderStyle = BorderStyle.FixedSingle;
+            _installedList.Height = 320;
+            _installedList.IntegralHeight = false;
 
             _installedPanel.Controls.Add(_installedList);
             _installedPanel.Controls.Add(_installedHeaderLabel);
@@ -443,9 +457,11 @@ namespace Manager.Views
             _latestHeaderLabel.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
             _latestHeaderLabel.Text = "Latest On Nexus";
 
-            _latestList.Dock = DockStyle.Fill;
+            _latestList.Dock = DockStyle.Top;
             _latestList.Font = new Font("Segoe UI", 9f);
             _latestList.BorderStyle = BorderStyle.FixedSingle;
+            _latestList.Height = 320;
+            _latestList.IntegralHeight = false;
 
             _latestPanel.Controls.Add(_latestList);
             _latestPanel.Controls.Add(_latestHeaderLabel);
@@ -475,6 +491,7 @@ namespace Manager.Views
             _latestList.SelectedIndexChanged += LatestList_SelectedIndexChanged;
             _detailsPanel.OpenFolderClicked += DetailsPanel_OpenFolderClicked;
             _detailsPanel.WebsiteClicked += DetailsPanel_WebsiteClicked;
+            SizeChanged += delegate { AdjustListHeights(); };
         }
 
         private void DetailsPanel_OpenFolderClicked(object sender, string path)
@@ -718,7 +735,7 @@ namespace Manager.Views
 
         private static ModItem BuildDetailsModFromRemote(NexusRemoteMod mod, string heading)
         {
-            var details = new ModItem(BuildRemoteIdMetadata(mod, heading), mod.Name ?? "Nexus Mod", string.Empty);
+            var details = new ModItem(mod.ModId.ToString(), mod.Name ?? "Nexus Mod", string.Empty);
             details.Version = string.IsNullOrEmpty(mod.Version) ? "Unknown" : mod.Version;
 
             string author = string.IsNullOrEmpty(mod.Author) ? mod.UploaderName : mod.Author;
@@ -739,21 +756,6 @@ namespace Manager.Views
             details.Description = string.IsNullOrEmpty(mod.Summary) ? "No description provided." : mod.Summary.Trim();
 
             return details;
-        }
-
-        private static string BuildRemoteIdMetadata(NexusRemoteMod mod, string heading)
-        {
-            var parts = new List<string>();
-            if (!string.IsNullOrEmpty(heading))
-                parts.Add(heading);
-            if (!string.IsNullOrEmpty(mod.GameDomain))
-                parts.Add("game:" + mod.GameDomain);
-            parts.Add("mod:" + mod.ModId);
-            parts.Add("dl:" + mod.Downloads);
-            parts.Add("endorse:" + mod.Endorsements);
-            if (mod.UpdatedAtUtc.HasValue)
-                parts.Add("updated:" + mod.UpdatedAtUtc.Value.ToString("u"));
-            return string.Join(" | ", parts.ToArray());
         }
 
         private static ModItem BuildDetailsModFromInstalled(ModItem local)
@@ -804,7 +806,7 @@ namespace Manager.Views
             mod.Version = string.Empty;
             mod.Authors = new string[0];
             mod.Description = message ?? string.Empty;
-            mod.Tags = new string[] { "Status" };
+            mod.Tags = new string[0];
             return mod;
         }
 
@@ -821,6 +823,33 @@ namespace Manager.Views
             if (_settings == null || string.IsNullOrEmpty(_settings.NexusGameDomain))
                 return "sheltered";
             return _settings.NexusGameDomain.Trim().ToLowerInvariant();
+        }
+
+        private string BuildLastCheckedSuffix()
+        {
+            if (_lastCheckedUtc <= DateTime.MinValue)
+                return string.Empty;
+            return " | Last checked: " + _lastCheckedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+        }
+
+        private void AdjustListHeights()
+        {
+            if (_installedList == null || _latestList == null || _topPanel == null)
+                return;
+
+            int available = Height - _topPanel.Height - 24;
+            if (available <= 0)
+                return;
+
+            int target = (int)(available * 0.58f);
+            if (target < 220) target = 220;
+            if (target > 420) target = 420;
+
+            int installedMax = Math.Max(180, _installedPanel.Height - _installedHeaderLabel.Height - 16);
+            int latestMax = Math.Max(180, _latestPanel.Height - _latestHeaderLabel.Height - 16);
+
+            _installedList.Height = Math.Min(target, installedMax);
+            _latestList.Height = Math.Min(target, latestMax);
         }
 
         private static void ApplyButtonTheme(Button button, bool isDark, bool primary)

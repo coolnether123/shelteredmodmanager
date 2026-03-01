@@ -57,6 +57,11 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="0Harmony, Version=2.4.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\..\..\Epic Games\Sheltered\SMM\bin\0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\Assembly-CSharp.dll</HintPath>
       <Private>False</Private>
@@ -78,11 +83,6 @@
       <Name>ModAPI</Name>
       <Private>False</Private>
     </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Lib.Harmony">
-      <Version>2.4.1</Version>
-    </PackageReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

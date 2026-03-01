@@ -68,6 +68,7 @@
     <ProjectReference Include="..\ModAPI\ModAPI.csproj">
       <Project>{3C99D6BF-A4A9-45DC-BEF1-5717ECE2A687}</Project>
       <Name>ModAPI</Name>
+      <Private>False</Private>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

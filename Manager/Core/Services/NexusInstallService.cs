@@ -20,6 +20,33 @@ namespace Manager.Core.Services
     /// </summary>
     public class NexusInstallService
     {
+        public static void CleanupStartupArtifacts()
+        {
+            try
+            {
+                string binRoot = GetManagerBinPath();
+                string tempRoot = Path.Combine(binRoot, "_smm_temp");
+                if (!Directory.Exists(tempRoot))
+                    return;
+
+                // Remove staged archives.
+                foreach (var zip in Directory.GetFiles(tempRoot, "*.zip", SearchOption.TopDirectoryOnly))
+                {
+                    TryDeleteFile(zip);
+                }
+
+                // Remove leftover extract folders.
+                foreach (var extractDir in Directory.GetDirectories(tempRoot, "extract_*", SearchOption.TopDirectoryOnly))
+                {
+                    TryDeleteDirectory(extractDir);
+                }
+            }
+            catch
+            {
+                // Best-effort cleanup only.
+            }
+        }
+
         public NexusInstallResult DownloadAndInstall(
             string downloadUrl,
             string modsPath,
@@ -53,7 +80,8 @@ namespace Manager.Core.Services
                 return null;
             }
 
-            var tempRoot = Path.Combine(modsPath, "_smm_temp");
+            string binRoot = GetManagerBinPath();
+            var tempRoot = Path.Combine(binRoot, "_smm_temp");
             if (!Directory.Exists(tempRoot))
                 Directory.CreateDirectory(tempRoot);
 
@@ -100,7 +128,7 @@ namespace Manager.Core.Services
             {
                 if (Directory.Exists(targetPath))
                 {
-                    var backupRoot = Path.Combine(modsPath, "_smm_backup");
+                    var backupRoot = Path.Combine(binRoot, "_smm_backup");
                     if (!Directory.Exists(backupRoot))
                         Directory.CreateDirectory(backupRoot);
 
@@ -122,13 +150,37 @@ namespace Manager.Core.Services
             finally
             {
                 TryDeleteDirectory(extractPath);
+                TryDeleteFile(archivePath);
             }
 
             var result = new NexusInstallResult();
             result.InstalledPath = targetPath;
             result.BackupPath = backupPath;
-            result.DownloadedArchivePath = archivePath;
+            result.DownloadedArchivePath = string.Empty;
             return result;
+        }
+
+        private static string GetManagerBinPath()
+        {
+            string exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            if (string.IsNullOrEmpty(exeDir))
+                return Path.GetTempPath();
+
+            if (string.Equals(Path.GetFileName(exeDir), "bin", StringComparison.OrdinalIgnoreCase))
+                return exeDir;
+
+            string binDir = Path.Combine(exeDir, "bin");
+            try
+            {
+                if (!Directory.Exists(binDir))
+                    Directory.CreateDirectory(binDir);
+            }
+            catch
+            {
+                return exeDir;
+            }
+
+            return binDir;
         }
 
         private static string FindModRoot(string extractPath)
@@ -297,6 +349,15 @@ namespace Manager.Core.Services
                 return;
 
             try { Directory.Delete(path, true); }
+            catch { }
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                return;
+
+            try { File.Delete(path); }
             catch { }
         }
     }
