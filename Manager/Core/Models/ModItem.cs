@@ -43,6 +43,20 @@ namespace Manager.Core.Models
         public string RequiredModApiVersion { get; set; }
         public bool IsModApiCompatible { get; set; }
 
+        // Nexus integration state
+        public string NexusGameDomain { get; set; }
+        public int NexusModId { get; set; }
+        public string NexusPageUrl { get; set; }
+        public string NexusRemoteVersion { get; set; }
+        public DateTime? NexusRemoteUpdatedAtUtc { get; set; }
+        public string NexusRemoteSummary { get; set; }
+        public bool HasUpdateAvailable { get; set; }
+
+        public bool HasNexusReference
+        {
+            get { return !string.IsNullOrEmpty(NexusGameDomain) && NexusModId > 0; }
+        }
+
         public ModItem(string id, string displayName, string rootPath)
         {
             if (id == null) throw new ArgumentNullException("id");
@@ -58,6 +72,13 @@ namespace Manager.Core.Models
             _loadBefore = new string[0];
             Status = ModStatus.Ok;
             IsModApiCompatible = true;
+            NexusGameDomain = string.Empty;
+            NexusModId = 0;
+            NexusPageUrl = string.Empty;
+            NexusRemoteVersion = string.Empty;
+            NexusRemoteSummary = string.Empty;
+            NexusRemoteUpdatedAtUtc = null;
+            HasUpdateAvailable = false;
         }
 
         /// <summary>
@@ -98,6 +119,8 @@ namespace Manager.Core.Models
                 item.LoadAfter = about.loadAfter ?? new string[0];
                 item.LoadBefore = about.loadBefore ?? new string[0];
                 item.Website = about.website ?? string.Empty;
+                item.NexusGameDomain = about.nexusGameDomain ?? string.Empty;
+                item.NexusModId = about.nexusModId;
                 item.HasValidAbout = !string.IsNullOrEmpty(about.id);
             }
             
@@ -133,6 +156,7 @@ namespace Manager.Core.Models
         Ok,                     // All good
         Warning,                // Soft issues (load order)
         Error,                  // Hard issues (missing dependencies)
+        UpdateAvailable,        // Newer Nexus version available
         MissingDependency,      // Required mod not found
         VersionMismatch,        // ModAPI version incompatible
         LoadOrderConflict       // Should load before/after something

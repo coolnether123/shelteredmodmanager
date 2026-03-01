@@ -32,6 +32,8 @@ namespace Manager.Controls
         private Label _tagsLabel;
         private Label _tagsValue;
         private LinkLabel _websiteLink;
+        private Label _nexusStatusLabel;
+        private LinkLabel _nexusLink;
         private Label _descLabel;
         private Panel _separator;
 
@@ -174,16 +176,29 @@ namespace Manager.Controls
             _websiteLink.Visible = false;
             _websiteLink.LinkClicked += WebsiteLink_LinkClicked;
 
+            _nexusStatusLabel = new Label();
+            _nexusStatusLabel.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            _nexusStatusLabel.AutoSize = true;
+            _nexusStatusLabel.Location = new Point(12, 315);
+
+            _nexusLink = new LinkLabel();
+            _nexusLink.Text = "Open Nexus Mod Page";
+            _nexusLink.Font = new Font("Segoe UI", 9f);
+            _nexusLink.AutoSize = true;
+            _nexusLink.Location = new Point(12, 333);
+            _nexusLink.Visible = false;
+            _nexusLink.LinkClicked += NexusLink_LinkClicked;
+
             // Description
             _descLabel = new Label();
             _descLabel.Text = "Description";
             _descLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             _descLabel.AutoSize = true;
-            _descLabel.Location = new Point(12, 318);
+            _descLabel.Location = new Point(12, 356);
 
             _descriptionBox = new RichTextBox();
             _descriptionBox.Font = new Font("Segoe UI", 9f);
-            _descriptionBox.Location = new Point(12, 335);
+            _descriptionBox.Location = new Point(12, 375);
             _descriptionBox.Size = new Size(280, 150);
             _descriptionBox.ReadOnly = true;
             _descriptionBox.Multiline = true;
@@ -216,6 +231,8 @@ namespace Manager.Controls
             this.Controls.Add(_tagsLabel);
             this.Controls.Add(_tagsValue);
             this.Controls.Add(_websiteLink);
+            this.Controls.Add(_nexusStatusLabel);
+            this.Controls.Add(_nexusLink);
             this.Controls.Add(_descLabel);
             this.Controls.Add(_descriptionBox);
             this.Controls.Add(_openFolderButton);
@@ -231,6 +248,21 @@ namespace Manager.Controls
                 if (WebsiteClicked != null)
                     WebsiteClicked(this, _currentMod.Website);
             }
+        }
+
+        private void NexusLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            if (_currentMod == null)
+                return;
+
+            string url = _currentMod.NexusPageUrl;
+            if (string.IsNullOrEmpty(url) && _currentMod.HasNexusReference)
+            {
+                url = "https://www.nexusmods.com/" + _currentMod.NexusGameDomain + "/mods/" + _currentMod.NexusModId;
+            }
+
+            if (!string.IsNullOrEmpty(url) && WebsiteClicked != null)
+                WebsiteClicked(this, url);
         }
 
         private void OpenFolderButton_Click(object sender, EventArgs e)
@@ -251,7 +283,7 @@ namespace Manager.Controls
             _dependsOnValue.Width = contentWidth - 110;
             _tagsValue.Width = contentWidth - 55;
             _descriptionBox.Width = contentWidth;
-            _descriptionBox.Height = Math.Max(50, this.Height - 395);
+            _descriptionBox.Height = Math.Max(50, this.Height - 435);
             _openFolderButton.Top = this.Height - 42;
         }
 
@@ -328,6 +360,7 @@ namespace Manager.Controls
 
             // Website
             _websiteLink.Visible = !string.IsNullOrEmpty(mod.Website);
+            UpdateNexusStatus(mod);
 
             // Description
             if (!string.IsNullOrEmpty(mod.Description))
@@ -364,6 +397,45 @@ namespace Manager.Controls
             }
         }
 
+        private void UpdateNexusStatus(ModItem mod)
+        {
+            _nexusLink.Visible = false;
+
+            if (!mod.HasNexusReference)
+            {
+                _nexusStatusLabel.Text = "NEXUS: Not linked";
+                _nexusStatusLabel.ForeColor = _isDarkMode ? Color.Gray : Color.DimGray;
+                return;
+            }
+
+            string url = mod.NexusPageUrl;
+            if (string.IsNullOrEmpty(url))
+            {
+                url = "https://www.nexusmods.com/" + mod.NexusGameDomain + "/mods/" + mod.NexusModId;
+                mod.NexusPageUrl = url;
+            }
+
+            _nexusLink.Visible = !string.IsNullOrEmpty(url);
+
+            if (mod.HasUpdateAvailable)
+            {
+                string latest = string.IsNullOrEmpty(mod.NexusRemoteVersion) ? "new release" : mod.NexusRemoteVersion;
+                _nexusStatusLabel.Text = "NEXUS: Update available (" + latest + ")";
+                _nexusStatusLabel.ForeColor = _isDarkMode ? Color.DeepSkyBlue : Color.RoyalBlue;
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(mod.NexusRemoteVersion))
+            {
+                _nexusStatusLabel.Text = "NEXUS: Up to date (" + mod.NexusRemoteVersion + ")";
+                _nexusStatusLabel.ForeColor = _isDarkMode ? Color.LightGreen : Color.Green;
+                return;
+            }
+
+            _nexusStatusLabel.Text = "NEXUS: Linked (" + mod.NexusGameDomain + "/" + mod.NexusModId + ")";
+            _nexusStatusLabel.ForeColor = _isDarkMode ? Color.LightGray : Color.Gray;
+        }
+
         private void ShowPlaceholder()
         {
             _currentMod = null;
@@ -396,6 +468,8 @@ namespace Manager.Controls
             _tagsLabel.Visible = true;
             _tagsValue.Visible = true;
             _websiteLink.Visible = true;
+            _nexusStatusLabel.Visible = true;
+            _nexusLink.Visible = true;
             _descLabel.Visible = true;
             _descriptionBox.Visible = true;
             _openFolderButton.Visible = true;
@@ -427,6 +501,7 @@ namespace Manager.Controls
                 _openFolderButton.BackColor = Color.FromArgb(60, 60, 60);
                 _openFolderButton.ForeColor = Color.White;
                 _websiteLink.LinkColor = Color.LightBlue;
+                _nexusLink.LinkColor = Color.LightBlue;
             }
             else
             {
@@ -447,11 +522,15 @@ namespace Manager.Controls
                 _openFolderButton.BackColor = SystemColors.Control;
                 _openFolderButton.ForeColor = SystemColors.ControlText;
                 _websiteLink.LinkColor = SystemColors.HotTrack;
+                _nexusLink.LinkColor = SystemColors.HotTrack;
             }
 
             // Update ModAPI status color if showing mod
             if (_currentMod != null)
+            {
                 UpdateModApiStatus(_currentMod);
+                UpdateNexusStatus(_currentMod);
+            }
         }
     }
 }

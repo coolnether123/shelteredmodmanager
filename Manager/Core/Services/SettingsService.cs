@@ -169,6 +169,36 @@ namespace Manager.Core.Services
             if (raw.TryGetValue("InstalledModApiVersion", out apiVersion))
                 settings.InstalledModApiVersion = apiVersion;
 
+            string enableNexus;
+            if (raw.TryGetValue("EnableNexusIntegration", out enableNexus))
+            {
+                bool enabled;
+                if (bool.TryParse(enableNexus, out enabled))
+                    settings.EnableNexusIntegration = enabled;
+            }
+
+            string nexusDomain;
+            if (raw.TryGetValue("NexusGameDomain", out nexusDomain))
+                settings.NexusGameDomain = nexusDomain;
+
+            string nexusApiKey;
+            if (raw.TryGetValue("NexusApiKey", out nexusApiKey))
+                settings.NexusApiKey = nexusApiKey;
+
+            string managerNexusModId;
+            if (raw.TryGetValue("ManagerNexusModId", out managerNexusModId))
+            {
+                int parsedManagerModId;
+                if (int.TryParse(managerNexusModId, out parsedManagerModId))
+                    settings.ManagerNexusModId = parsedManagerModId;
+            }
+
+            if (settings.ManagerNexusModId <= 0 &&
+                string.Equals(settings.NexusGameDomain ?? "sheltered", "sheltered", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.ManagerNexusModId = 1;
+            }
+
             string autoLoadSlot;
             if (raw.TryGetValue("AutoLoadSaveSlot", out autoLoadSlot))
             {
@@ -238,6 +268,10 @@ namespace Manager.Core.Services
             data["GameBitness"] = settings.GameBitness ?? string.Empty;
             data["AutoCondenseSaves"] = settings.AutoCondenseSaves ?? "ask";
             data["InstalledModApiVersion"] = settings.InstalledModApiVersion ?? string.Empty;
+            data["EnableNexusIntegration"] = settings.EnableNexusIntegration.ToString();
+            data["NexusGameDomain"] = settings.NexusGameDomain ?? "sheltered";
+            data["NexusApiKey"] = settings.NexusApiKey ?? string.Empty;
+            data["ManagerNexusModId"] = settings.ManagerNexusModId.ToString();
             data["AutoLoadSaveSlot"] = settings.AutoLoadSaveSlot.ToString();
             data["WindowX"] = settings.WindowX.ToString();
             data["WindowY"] = settings.WindowY.ToString();

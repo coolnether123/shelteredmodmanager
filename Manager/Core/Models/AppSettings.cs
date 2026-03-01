@@ -21,6 +21,10 @@ namespace Manager.Core.Models
         private string _gameBitness;
         private string _installedModApiVersion;
         private string _autoCondenseSaves = "ask"; // yes, no, or ask
+        private bool _enableNexusIntegration = true;
+        private string _nexusGameDomain = "sheltered";
+        private string _nexusApiKey = string.Empty;
+        private int _managerNexusModId = 1;
         private int _windowX = int.MinValue;
         private int _windowY = int.MinValue;
         private int _windowWidth = 0;
@@ -106,6 +110,30 @@ namespace Manager.Core.Models
         { 
             get { return _autoCondenseSaves; } 
             set { _autoCondenseSaves = value; } 
+        }
+
+        public bool EnableNexusIntegration
+        {
+            get { return _enableNexusIntegration; }
+            set { _enableNexusIntegration = value; }
+        }
+
+        public string NexusGameDomain
+        {
+            get { return _nexusGameDomain; }
+            set { _nexusGameDomain = value; }
+        }
+
+        public string NexusApiKey
+        {
+            get { return _nexusApiKey; }
+            set { _nexusApiKey = value; }
+        }
+
+        public int ManagerNexusModId
+        {
+            get { return _managerNexusModId; }
+            set { _managerNexusModId = value; }
         }
 
         private int _autoLoadSaveSlot = 0;

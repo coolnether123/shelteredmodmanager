@@ -4,6 +4,7 @@ using System.Windows.Forms;
 using System.Reflection;
 using System.IO;
 using System.Threading;
+using System.Net;
 
 namespace Manager
 {
@@ -17,6 +18,7 @@ namespace Manager
         {
             try
             {
+                ConfigureNetworkSecurity();
                 AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
 
                 // Global exception handlers for better crash diagnostics
@@ -42,6 +44,28 @@ namespace Manager
                         "Sheltered Mod Manager",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error);
+                }
+                catch { }
+            }
+        }
+
+        private static void ConfigureNetworkSecurity()
+        {
+            try
+            {
+                // .NET 3.5 does not expose TLS 1.1/1.2 enum values by name.
+                // Cast known protocol constants so HTTPS APIs can negotiate modern TLS.
+                const SecurityProtocolType Tls11 = (SecurityProtocolType)768;
+                const SecurityProtocolType Tls12 = (SecurityProtocolType)3072;
+
+                ServicePointManager.Expect100Continue = false;
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | Tls11 | Tls12;
+            }
+            catch
+            {
+                try
+                {
+                    ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls;
                 }
                 catch { }
             }
