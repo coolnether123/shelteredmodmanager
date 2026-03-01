@@ -95,6 +95,16 @@ namespace Manager
                 }
             }
             catch { }
+
+            // Fallback icon path so taskbar/title bar icon still appears even if resource lookup fails.
+            if (this.Icon == null)
+            {
+                try
+                {
+                    this.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                }
+                catch { }
+            }
         }
 
         private void InitializeServices()
@@ -448,6 +458,9 @@ namespace Manager
         {
             ApplySavedWindowPlacement();
             _windowPlacementInitialized = true;
+
+            // Clean up any stale staged Nexus archives/folders from previous runs.
+            NexusInstallService.CleanupStartupArtifacts();
 
             // Initialize tabs with services and settings
             _gameSetupTab.Initialize(_settings);
@@ -1084,6 +1097,7 @@ namespace Manager
                 _nexusUpdatesLabel.Text = "Nexus Updates: " + updateCount + " (" + mappedMods + " linked)";
             }
 
+            _nexusTab.SetLastCheckedUtc(_modManagerTab.LastNexusRemoteSyncUtc);
             _nexusTab.UpdateInstalledMods(mods, mappedMods, updateCount, errorMessage);
         }
 

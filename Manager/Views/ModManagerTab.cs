@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Manager.Controls;
 using Manager.Core.Models;
@@ -46,12 +48,19 @@ namespace Manager.Views
         private bool _orderDirty = false;
         private bool _isDarkMode = false;
         private int _nexusRefreshToken = 0;
+        private DateTime _lastNexusRemoteSyncUtc = DateTime.MinValue;
+        private int _cachedMappedMods = 0;
+        private int _cachedUpdateCount = 0;
+        private string _cachedNexusError = null;
+        private bool _hasNexusSyncCache = false;
+        private static readonly TimeSpan NexusSyncCooldown = TimeSpan.FromMinutes(5);
 
         /// <summary>
         /// Event raised when order is saved
         /// </summary>
         public event StringArrayHandler OrderSaved;
         public event NexusSyncCompletedHandler NexusSyncCompleted;
+        public DateTime LastNexusRemoteSyncUtc { get { return _lastNexusRemoteSyncUtc; } }
 
         public ModManagerTab()
         {
@@ -532,8 +541,22 @@ namespace Manager.Views
         {
             if (_allMods == null || _allMods.Count == 0)
             {
+                _cachedMappedMods = 0;
+                _cachedUpdateCount = 0;
+                _cachedNexusError = null;
+                _hasNexusSyncCache = true;
                 NotifyNexusSync(0, 0, null);
                 return;
+            }
+
+            if (_hasNexusSyncCache && _lastNexusRemoteSyncUtc > DateTime.MinValue)
+            {
+                var elapsed = DateTime.UtcNow - _lastNexusRemoteSyncUtc;
+                if (elapsed < NexusSyncCooldown)
+                {
+                    NotifyNexusSync(_cachedMappedMods, _cachedUpdateCount, _cachedNexusError);
+                    return;
+                }
             }
 
             // Resolve local references immediately so details panel can show mapping info.
@@ -575,7 +598,7 @@ namespace Manager.Views
             InvalidateModListsAndDetails();
 
             bool nexusEnabled = _settings != null && _settings.EnableNexusIntegration;
-            if (!nexusEnabled || _nexusService == null || referencesByModId.Count == 0)
+            if (!nexusEnabled || _nexusService == null || (referencesByModId.Count == 0 && unresolvedMods.Count == 0))
             {
                 NotifyNexusSync(referencesByModId.Count, 0, null);
                 return;
@@ -583,6 +606,7 @@ namespace Manager.Views
 
             var requestRefs = new List<NexusModReference>(referencesByModId.Values);
             int token = ++_nexusRefreshToken;
+            DateTime syncTimestampUtc = DateTime.UtcNow;
 
             ThreadPool.QueueUserWorkItem(delegate
             {
@@ -616,6 +640,9 @@ namespace Manager.Views
 
                         foreach (var local in unresolvedMods)
                         {
+                            if (referencesByModId.ContainsKey(local.Id))
+                                continue;
+
                             string localKey = NormalizeNameKey(local.DisplayName);
                             if (string.IsNullOrEmpty(localKey))
                                 localKey = NormalizeNameKey(local.Id);
@@ -635,7 +662,57 @@ namespace Manager.Views
 
                             referencesByModId[local.Id] = inferredRef;
                             remoteByRef[inferredRef.Key] = inferred;
+                            TryPersistNexusSidecar(local, inferredRef);
                         }
+                    }
+
+                    foreach (var local in unresolvedMods)
+                    {
+                        if (referencesByModId.ContainsKey(local.Id))
+                            continue;
+
+                        string searchName = !string.IsNullOrEmpty(local.DisplayName) ? local.DisplayName : local.Id;
+                        if (string.IsNullOrEmpty(searchName))
+                            continue;
+
+                        string searchError;
+                        var searchResults = _nexusService.FindModsByName(fallbackDomain, searchName, 10, out searchError);
+                        if (!string.IsNullOrEmpty(searchError))
+                        {
+                            if (string.IsNullOrEmpty(error))
+                                error = searchError;
+                            continue;
+                        }
+
+                        if (searchResults == null || searchResults.Count == 0)
+                            continue;
+
+                        NexusRemoteMod exact = null;
+                        string localKey = NormalizeNameKey(searchName);
+                        int exactCount = 0;
+
+                        foreach (var candidate in searchResults)
+                        {
+                            if (candidate == null || candidate.ModId <= 0) continue;
+                            if (!string.Equals(NormalizeNameKey(candidate.Name), localKey, StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            exact = candidate;
+                            exactCount++;
+                        }
+
+                        if (exactCount != 1 || exact == null)
+                            continue;
+
+                        var inferred = new NexusModReference
+                        {
+                            GameDomain = exact.GameDomain,
+                            ModId = exact.ModId
+                        };
+
+                        referencesByModId[local.Id] = inferred;
+                        remoteByRef[inferred.Key] = exact;
+                        TryPersistNexusSidecar(local, inferred);
                     }
                 }
 
@@ -656,6 +733,9 @@ namespace Manager.Views
                             NexusModReference reference;
                             if (!referencesByModId.TryGetValue(mod.Id, out reference))
                                 continue;
+
+                            mod.NexusGameDomain = reference.GameDomain;
+                            mod.NexusModId = reference.ModId;
 
                             NexusRemoteMod remote;
                             if (!remoteByRef.TryGetValue(reference.Key, out remote))
@@ -681,6 +761,11 @@ namespace Manager.Views
                         }
 
                         InvalidateModListsAndDetails();
+                        _lastNexusRemoteSyncUtc = syncTimestampUtc;
+                        _cachedMappedMods = referencesByModId.Count;
+                        _cachedUpdateCount = updates;
+                        _cachedNexusError = error;
+                        _hasNexusSyncCache = true;
                         NotifyNexusSync(referencesByModId.Count, updates, error);
                     });
                 }
@@ -723,6 +808,34 @@ namespace Manager.Views
                     filtered.Append(c);
             }
             return filtered.ToString();
+        }
+
+        private static void TryPersistNexusSidecar(ModItem mod, NexusModReference reference)
+        {
+            if (mod == null || reference == null || !reference.IsValid)
+                return;
+
+            if (string.IsNullOrEmpty(mod.RootPath) || !Directory.Exists(mod.RootPath))
+                return;
+
+            try
+            {
+                string aboutPath = Path.Combine(mod.RootPath, "About");
+                if (!Directory.Exists(aboutPath))
+                    Directory.CreateDirectory(aboutPath);
+
+                string sidecarPath = Path.Combine(aboutPath, "Nexus.json");
+                var sidecar = new Dictionary<string, object>();
+                sidecar["gameDomain"] = reference.GameDomain;
+                sidecar["modId"] = reference.ModId;
+
+                string json = new JavaScriptSerializer().Serialize(sidecar);
+                File.WriteAllText(sidecarPath, json);
+            }
+            catch
+            {
+                // Ignore persistence errors; runtime mapping still works.
+            }
         }
 
         /// <summary>

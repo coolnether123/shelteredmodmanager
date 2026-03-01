@@ -154,6 +154,88 @@ query latestMods($filter: ModsFilter, $sort: [ModsSort!], $count: Int){
             return null;
         }
 
+        public List<NexusRemoteMod> FindModsByName(string gameDomain, string modName, int count, out string errorMessage)
+        {
+            errorMessage = null;
+            var list = new List<NexusRemoteMod>();
+
+            if (string.IsNullOrEmpty(gameDomain) || string.IsNullOrEmpty(modName))
+            {
+                errorMessage = "Game domain and mod name are required for Nexus name search.";
+                return list;
+            }
+
+            if (count <= 0) count = 10;
+            if (count > 25) count = 25;
+
+            const string query = @"
+query findModsByName($filter: ModsFilter, $sort: [ModsSort!], $count: Int){
+  mods(filter: $filter, sort: $sort, count: $count){
+    nodes{
+      modId
+      uid
+      name
+      author
+      uploader { name }
+      version
+      summary
+      createdAt
+      updatedAt
+      downloads
+      endorsements
+      pictureUrl
+      thumbnailUrl
+      game { id domainName }
+    }
+  }
+}";
+
+            var gameDomainFilter = new Dictionary<string, object>();
+            gameDomainFilter["value"] = gameDomain;
+            gameDomainFilter["op"] = "EQUALS";
+
+            var nameFilter = new Dictionary<string, object>();
+            nameFilter["value"] = modName;
+            nameFilter["op"] = "EQUALS";
+
+            var filter = new Dictionary<string, object>();
+            filter["op"] = "AND";
+            filter["gameDomainName"] = new object[] { gameDomainFilter };
+            filter["name"] = new object[] { nameFilter };
+
+            var updatedSort = new Dictionary<string, object>();
+            updatedSort["direction"] = "DESC";
+            var sortEntry = new Dictionary<string, object>();
+            sortEntry["updatedAt"] = updatedSort;
+
+            var variables = new Dictionary<string, object>();
+            variables["filter"] = filter;
+            variables["sort"] = new object[] { sortEntry };
+            variables["count"] = count;
+
+            var response = _client.Execute(query, variables);
+            if (!string.IsNullOrEmpty(response.ErrorMessage))
+            {
+                errorMessage = response.ErrorMessage;
+                return list;
+            }
+
+            var page = AsDictionary(response.Data, "mods");
+            var nodes = AsArray(page, "nodes");
+            if (nodes == null) return list;
+
+            foreach (var raw in nodes)
+            {
+                var node = raw as Dictionary<string, object>;
+                if (node == null) continue;
+                var parsed = ParseRemoteMod(node, gameDomain);
+                if (parsed != null)
+                    list.Add(parsed);
+            }
+
+            return list;
+        }
+
         public List<NexusRemoteModFile> GetModFiles(int gameId, int modId, out string errorMessage)
         {
             errorMessage = null;

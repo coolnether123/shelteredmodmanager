@@ -36,6 +36,7 @@ namespace Manager.Views
         private TextBox _nexusDomainTextBox;
         private Label _nexusApiKeyLabel;
         private TextBox _nexusApiKeyTextBox;
+        private Button _nexusApiHelpButton;
         private Label _managerNexusModIdLabel;
         private TextBox _managerNexusModIdTextBox;
         
@@ -62,6 +63,8 @@ namespace Manager.Views
         private AppSettings _settings;
         private bool _isDarkMode = false;
         private bool _suppressEvents = false;
+        private ToolTip _helpToolTip;
+        private const string NexusApiKeyHelpUrl = "https://www.nexusmods.com/users/myaccount?tab=api";
 
         /// <summary>
         /// Event raised when settings change
@@ -175,8 +178,28 @@ namespace Manager.Views
             _nexusApiKeyTextBox = new TextBox();
             _nexusApiKeyTextBox.Font = new Font("Segoe UI", 10f);
             _nexusApiKeyTextBox.Location = new Point(150, yPos - 3);
-            _nexusApiKeyTextBox.Width = 260;
+            _nexusApiKeyTextBox.Width = 250;
+
+            _nexusApiHelpButton = new Button();
+            _nexusApiHelpButton.Text = "Get API Key";
+            _nexusApiHelpButton.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            _nexusApiHelpButton.Location = new Point(406, yPos - 4);
+            _nexusApiHelpButton.Size = new Size(105, 27);
+            _nexusApiHelpButton.FlatStyle = FlatStyle.Flat;
+            _nexusApiHelpButton.Cursor = Cursors.Hand;
             yPos += 40;
+
+            _helpToolTip = new ToolTip();
+            _helpToolTip.AutoPopDelay = 12000;
+            _helpToolTip.InitialDelay = 350;
+            _helpToolTip.ReshowDelay = 200;
+            _helpToolTip.ShowAlways = true;
+            _helpToolTip.SetToolTip(_nexusApiKeyTextBox,
+                "Needed for direct Nexus downloads.\nClick 'Get API Key' to open your Nexus API page.");
+            _helpToolTip.SetToolTip(_nexusApiHelpButton,
+                "Open Nexus account API settings to create or copy your personal API key.");
+            _helpToolTip.SetToolTip(_nexusApiKeyLabel,
+                "Personal Nexus API key used for direct downloads.");
 
             // Separator
             _separator = new Panel();
@@ -257,6 +280,7 @@ namespace Manager.Views
             this.Controls.Add(_managerNexusModIdTextBox);
             this.Controls.Add(_nexusApiKeyLabel);
             this.Controls.Add(_nexusApiKeyTextBox);
+            this.Controls.Add(_nexusApiHelpButton);
             this.Controls.Add(_separator);
             this.Controls.Add(_devModeCheckBox);
             this.Controls.Add(_devSettingsGroup);
@@ -328,8 +352,25 @@ namespace Manager.Views
             _nexusDomainTextBox.TextChanged += NexusDomainTextBox_TextChanged;
             _nexusApiKeyTextBox.TextChanged += NexusApiKeyTextBox_TextChanged;
             _managerNexusModIdTextBox.TextChanged += ManagerNexusModIdTextBox_TextChanged;
+            _nexusApiHelpButton.Click += NexusApiHelpButton_Click;
             _resetButton.Click += ResetButton_Click;
             _resetWindowButton.Click += ResetWindowButton_Click;
+        }
+
+        private void NexusApiHelpButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(NexusApiKeyHelpUrl);
+            }
+            catch
+            {
+                MessageBox.Show(
+                    "Unable to open Nexus API key page automatically.\n\nOpen this URL manually:\n" + NexusApiKeyHelpUrl,
+                    "Nexus API Key Help",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
         }
 
         private void AutoCondenseCombo_SelectedIndexChanged(object sender, EventArgs e)
@@ -571,6 +612,9 @@ namespace Manager.Views
                 _nexusApiKeyLabel.ForeColor = Color.White;
                 _nexusApiKeyTextBox.BackColor = Color.FromArgb(60, 60, 62);
                 _nexusApiKeyTextBox.ForeColor = Color.White;
+                _nexusApiHelpButton.BackColor = Color.FromArgb(70, 70, 70);
+                _nexusApiHelpButton.ForeColor = Color.White;
+                _nexusApiHelpButton.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
                 
                 _resetButton.BackColor = Color.FromArgb(70, 70, 70);
                 _resetButton.ForeColor = Color.White;
@@ -607,6 +651,9 @@ namespace Manager.Views
                 _nexusApiKeyLabel.ForeColor = SystemColors.ControlText;
                 _nexusApiKeyTextBox.BackColor = SystemColors.Window;
                 _nexusApiKeyTextBox.ForeColor = SystemColors.WindowText;
+                _nexusApiHelpButton.BackColor = SystemColors.Control;
+                _nexusApiHelpButton.ForeColor = SystemColors.ControlText;
+                _nexusApiHelpButton.FlatAppearance.BorderColor = SystemColors.ControlDark;
                 
                 _resetButton.BackColor = SystemColors.Control;
                 _resetButton.ForeColor = SystemColors.ControlText;
