@@ -538,6 +538,7 @@ namespace Manager.Views
 
             // Resolve local references immediately so details panel can show mapping info.
             var referencesByModId = new Dictionary<string, NexusModReference>(StringComparer.OrdinalIgnoreCase);
+            var unresolvedMods = new List<ModItem>();
             string fallbackDomain = (_settings != null && !string.IsNullOrEmpty(_settings.NexusGameDomain))
                 ? _settings.NexusGameDomain
                 : "sheltered";
@@ -564,6 +565,7 @@ namespace Manager.Views
                     mod.NexusGameDomain = string.Empty;
                     mod.NexusModId = 0;
                     mod.NexusPageUrl = string.Empty;
+                    unresolvedMods.Add(mod);
                 }
 
                 if (mod.Status == ModStatus.UpdateAvailable)
@@ -586,6 +588,56 @@ namespace Manager.Views
             {
                 string error;
                 var remoteByRef = _nexusService.GetModsByReferences(requestRefs, out error);
+
+                if (unresolvedMods.Count > 0)
+                {
+                    string feedError;
+                    var feed = _nexusService.GetLatestMods(fallbackDomain, 200, out feedError);
+                    if (!string.IsNullOrEmpty(feedError) && string.IsNullOrEmpty(error))
+                        error = feedError;
+
+                    if (feed != null && feed.Count > 0)
+                    {
+                        var nameBuckets = new Dictionary<string, List<NexusRemoteMod>>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var remote in feed)
+                        {
+                            if (remote == null || remote.ModId <= 0) continue;
+                            string key = NormalizeNameKey(remote.Name);
+                            if (string.IsNullOrEmpty(key)) continue;
+
+                            List<NexusRemoteMod> bucket;
+                            if (!nameBuckets.TryGetValue(key, out bucket))
+                            {
+                                bucket = new List<NexusRemoteMod>();
+                                nameBuckets[key] = bucket;
+                            }
+                            bucket.Add(remote);
+                        }
+
+                        foreach (var local in unresolvedMods)
+                        {
+                            string localKey = NormalizeNameKey(local.DisplayName);
+                            if (string.IsNullOrEmpty(localKey))
+                                localKey = NormalizeNameKey(local.Id);
+                            if (string.IsNullOrEmpty(localKey))
+                                continue;
+
+                            List<NexusRemoteMod> candidates;
+                            if (!nameBuckets.TryGetValue(localKey, out candidates) || candidates.Count != 1)
+                                continue;
+
+                            var inferred = candidates[0];
+                            var inferredRef = new NexusModReference
+                            {
+                                GameDomain = inferred.GameDomain,
+                                ModId = inferred.ModId
+                            };
+
+                            referencesByModId[local.Id] = inferredRef;
+                            remoteByRef[inferredRef.Key] = inferred;
+                        }
+                    }
+                }
 
                 if (IsDisposed || Disposing)
                     return;
@@ -655,6 +707,22 @@ namespace Manager.Views
             var selected = _enabledList.SelectedItem ?? _availableList.SelectedItem;
             if (selected != null)
                 _detailsPanel.ShowMod(selected);
+        }
+
+        private static string NormalizeNameKey(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            var chars = (value ?? string.Empty).Trim().ToLowerInvariant().ToCharArray();
+            var filtered = new System.Text.StringBuilder(chars.Length);
+            for (int i = 0; i < chars.Length; i++)
+            {
+                char c = chars[i];
+                if (char.IsLetterOrDigit(c))
+                    filtered.Append(c);
+            }
+            return filtered.ToString();
         }
 
         /// <summary>

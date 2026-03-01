@@ -398,6 +398,7 @@ namespace Manager
             // Mod manager events
             _modManagerTab.OrderSaved += ModManagerTab_OrderSaved;
             _modManagerTab.NexusSyncCompleted += ModManagerTab_NexusSyncCompleted;
+            _nexusTab.InstallCompleted += NexusTab_InstallCompleted;
 
             // Settings events
             _settingsTab.SettingsChanged += SettingsTab_SettingsChanged;
@@ -457,15 +458,27 @@ namespace Manager
             // Apply initial theme
             ApplyTheme(_settings.DarkMode);
 
-            // Refresh mods if path is valid
-            if (_settings.IsModsPathValid)
+            // Refresh mod state at startup (includes background Nexus sync when enabled).
+            _modManagerTab.RefreshMods();
+            UpdateStatusCounts();
+
+            // On boot always run Nexus checks for manager updates and latest feed when enabled.
+            if (_settings.EnableNexusIntegration)
             {
-                _modManagerTab.RefreshMods();
-                UpdateStatusCounts();
+                _nexusTab.CheckManagerUpdateAsync(false);
+                _nexusTab.RefreshLatestModsAsync();
             }
 
             // Start restart poll timer
             StartRestartPollTimer();
+        }
+
+        private void NexusTab_InstallCompleted()
+        {
+            // Re-discover local mods so installed/update status reflects the new install immediately.
+            _modManagerTab.RefreshMods();
+            UpdateStatusCounts();
+            _nexusTab.RefreshLatestModsAsync();
         }
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)

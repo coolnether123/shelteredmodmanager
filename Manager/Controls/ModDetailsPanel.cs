@@ -322,7 +322,7 @@ namespace Manager.Controls
 
             // Basic info
             _nameLabel.Text = mod.DisplayName;
-            _versionLabel.Text = "v" + mod.Version;
+            _versionLabel.Text = FormatVersionDisplay(mod.Version);
             
             if (mod.Authors != null && mod.Authors.Length > 0)
             {
@@ -352,10 +352,14 @@ namespace Manager.Controls
             if (mod.Tags != null && mod.Tags.Length > 0)
             {
                 _tagsValue.Text = string.Join(", ", mod.Tags);
+                _tagsLabel.Visible = true;
+                _tagsValue.Visible = true;
             }
             else
             {
-                _tagsValue.Text = "None";
+                _tagsValue.Text = string.Empty;
+                _tagsLabel.Visible = false;
+                _tagsValue.Visible = false;
             }
 
             // Website
@@ -434,6 +438,18 @@ namespace Manager.Controls
 
             _nexusStatusLabel.Text = "NEXUS: Linked (" + mod.NexusGameDomain + "/" + mod.NexusModId + ")";
             _nexusStatusLabel.ForeColor = _isDarkMode ? Color.LightGray : Color.Gray;
+        }
+
+        private static string FormatVersionDisplay(string version)
+        {
+            string value = (version ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(value))
+                return "Unknown version";
+
+            if (value.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                return value;
+
+            return "v" + value;
         }
 
         private void ShowPlaceholder()

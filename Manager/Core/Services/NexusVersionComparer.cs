@@ -9,15 +9,21 @@ namespace Manager.Core.Services
     /// </summary>
     public static class NexusVersionComparer
     {
-        public static bool IsRemoteNewer(string localVersion, string remoteVersion)
+        /// <summary>
+        /// Compares local and remote versions.
+        /// Returns -1 when local is older, 0 when equal/unknown, 1 when local is newer.
+        /// </summary>
+        public static int CompareVersions(string localVersion, string remoteVersion)
         {
             var local = Normalize(localVersion);
             var remote = Normalize(remoteVersion);
 
-            if (string.IsNullOrEmpty(remote))
-                return false;
-            if (string.IsNullOrEmpty(local))
-                return true;
+            if (string.IsNullOrEmpty(local) && string.IsNullOrEmpty(remote))
+                return 0;
+            if (string.IsNullOrEmpty(local) && !string.IsNullOrEmpty(remote))
+                return -1;
+            if (!string.IsNullOrEmpty(local) && string.IsNullOrEmpty(remote))
+                return 1;
 
             List<int> localParts;
             List<int> remoteParts;
@@ -31,13 +37,22 @@ namespace Manager.Core.Services
                 {
                     int lv = i < localParts.Count ? localParts[i] : 0;
                     int rv = i < remoteParts.Count ? remoteParts[i] : 0;
-                    if (rv > lv) return true;
-                    if (rv < lv) return false;
+                    if (lv < rv) return -1;
+                    if (lv > rv) return 1;
                 }
-                return false;
+                return 0;
             }
 
-            return !string.Equals(local, remote, StringComparison.OrdinalIgnoreCase);
+            if (string.Equals(local, remote, StringComparison.OrdinalIgnoreCase))
+                return 0;
+
+            // Fallback when versions are non-numeric labels.
+            return string.Compare(local, remote, StringComparison.OrdinalIgnoreCase) < 0 ? -1 : 1;
+        }
+
+        public static bool IsRemoteNewer(string localVersion, string remoteVersion)
+        {
+            return CompareVersions(localVersion, remoteVersion) < 0;
         }
 
         public static string Normalize(string value)
