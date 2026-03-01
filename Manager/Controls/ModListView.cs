@@ -262,6 +262,11 @@ namespace Manager.Controls
                 icon = "!";
                 iconColor = Color.Orange;
             }
+            else if (mod.HasUpdateAvailable || mod.Status == ModStatus.UpdateAvailable)
+            {
+                icon = "UPD";
+                iconColor = _isDarkMode ? Color.DeepSkyBlue : Color.RoyalBlue;
+            }
 
             // Draw icon
             using (var iconBrush = new SolidBrush(iconColor))

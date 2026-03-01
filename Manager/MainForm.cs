@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
@@ -22,6 +23,7 @@ namespace Manager
         private TabControl _tabControl;
         private TabPage _gameSetupPage;
         private TabPage _modManagerPage;
+        private TabPage _nexusPage;
         private TabPage _settingsPage;
         private TabPage _aboutPage;
 
@@ -29,8 +31,10 @@ namespace Manager
         private Label _statusLabel;
         private Label _modsCountLabel;
         private Label _modApiVersionLabel;
+        private Label _nexusUpdatesLabel;
         private Panel _headerStatusPanel;
         private ModManagerTab _modManagerTab;
+        private NexusModsTab _nexusTab;
         private SettingsTab _settingsTab;
         private AboutTab _aboutTab;
 
@@ -38,6 +42,7 @@ namespace Manager
         private SettingsService _settingsService;
         private ModDiscoveryService _discoveryService;
         private LoadOrderService _orderService;
+        private NexusModsService _nexusService;
 
         // State
         private AppSettings _settings;
@@ -114,6 +119,12 @@ namespace Manager
             }
             
             _discoveryService = new ModDiscoveryService(modApiVersion);
+            _nexusService = new NexusModsService(_settings.NexusApiKey);
+        }
+
+        private void RecreateNexusService()
+        {
+            _nexusService = new NexusModsService(_settings != null ? _settings.NexusApiKey : string.Empty);
         }
 
         private void InitializeComponent()
@@ -122,6 +133,7 @@ namespace Manager
             this._logoBox = new System.Windows.Forms.PictureBox();
             this._titleLabel = new System.Windows.Forms.Label();
             this._headerStatusPanel = new System.Windows.Forms.Panel();
+            this._nexusUpdatesLabel = new System.Windows.Forms.Label();
             this._modApiVersionLabel = new System.Windows.Forms.Label();
             this._modsCountLabel = new System.Windows.Forms.Label();
             this._statusLabel = new System.Windows.Forms.Label();
@@ -129,6 +141,8 @@ namespace Manager
             this._gameSetupPage = new System.Windows.Forms.TabPage();
             this._modManagerPage = new System.Windows.Forms.TabPage();
             this._modManagerTab = new Manager.Views.ModManagerTab();
+            this._nexusPage = new System.Windows.Forms.TabPage();
+            this._nexusTab = new Manager.Views.NexusModsTab();
             this._settingsPage = new System.Windows.Forms.TabPage();
             this._settingsTab = new Manager.Views.SettingsTab();
             this._aboutPage = new System.Windows.Forms.TabPage();
@@ -140,6 +154,7 @@ namespace Manager
             this._tabControl.SuspendLayout();
             this._gameSetupPage.SuspendLayout();
             this._modManagerPage.SuspendLayout();
+            this._nexusPage.SuspendLayout();
             this._settingsPage.SuspendLayout();
             this._aboutPage.SuspendLayout();
             this.SuspendLayout();
@@ -153,7 +168,7 @@ namespace Manager
             this.headerPanel.Location = new System.Drawing.Point(0, 0);
             this.headerPanel.Name = "headerPanel";
             this.headerPanel.Padding = new System.Windows.Forms.Padding(15, 10, 15, 10);
-            this.headerPanel.Size = new System.Drawing.Size(1182, 75);
+            this.headerPanel.Size = new System.Drawing.Size(1182, 95);
             this.headerPanel.TabIndex = 1;
             // 
             // _logoBox
@@ -177,6 +192,7 @@ namespace Manager
             // 
             // _headerStatusPanel
             // 
+            this._headerStatusPanel.Controls.Add(this._nexusUpdatesLabel);
             this._headerStatusPanel.Controls.Add(this._modApiVersionLabel);
             this._headerStatusPanel.Controls.Add(this._modsCountLabel);
             this._headerStatusPanel.Controls.Add(this._statusLabel);
@@ -184,8 +200,19 @@ namespace Manager
             this._headerStatusPanel.Location = new System.Drawing.Point(917, 10);
             this._headerStatusPanel.Name = "_headerStatusPanel";
             this._headerStatusPanel.Padding = new System.Windows.Forms.Padding(0, 0, 15, 0);
-            this._headerStatusPanel.Size = new System.Drawing.Size(250, 55);
+            this._headerStatusPanel.Size = new System.Drawing.Size(250, 75);
             this._headerStatusPanel.TabIndex = 2;
+            // 
+            // _nexusUpdatesLabel
+            // 
+            this._nexusUpdatesLabel.Dock = System.Windows.Forms.DockStyle.Top;
+            this._nexusUpdatesLabel.Font = new System.Drawing.Font("Segoe UI", 8.5F);
+            this._nexusUpdatesLabel.Location = new System.Drawing.Point(0, 56);
+            this._nexusUpdatesLabel.Name = "_nexusUpdatesLabel";
+            this._nexusUpdatesLabel.Size = new System.Drawing.Size(235, 18);
+            this._nexusUpdatesLabel.TabIndex = 3;
+            this._nexusUpdatesLabel.Text = "Nexus Updates: --";
+            this._nexusUpdatesLabel.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
             // 
             // _modApiVersionLabel
             // 
@@ -225,15 +252,16 @@ namespace Manager
             // 
             this._tabControl.Controls.Add(this._gameSetupPage);
             this._tabControl.Controls.Add(this._modManagerPage);
+            this._tabControl.Controls.Add(this._nexusPage);
             this._tabControl.Controls.Add(this._settingsPage);
             this._tabControl.Controls.Add(this._aboutPage);
             this._tabControl.Dock = System.Windows.Forms.DockStyle.Fill;
             this._tabControl.Font = new System.Drawing.Font("Segoe UI", 10F);
-            this._tabControl.Location = new System.Drawing.Point(0, 75);
+            this._tabControl.Location = new System.Drawing.Point(0, 95);
             this._tabControl.Name = "_tabControl";
             this._tabControl.Padding = new System.Drawing.Point(15, 8);
             this._tabControl.SelectedIndex = 0;
-            this._tabControl.Size = new System.Drawing.Size(1182, 628);
+            this._tabControl.Size = new System.Drawing.Size(1182, 608);
             this._tabControl.TabIndex = 0;
             // 
             // _gameSetupPage
@@ -241,7 +269,7 @@ namespace Manager
             this._gameSetupPage.Controls.Add(this._gameSetupTab);
             this._gameSetupPage.Location = new System.Drawing.Point(4, 42);
             this._gameSetupPage.Name = "_gameSetupPage";
-            this._gameSetupPage.Size = new System.Drawing.Size(1174, 582);
+            this._gameSetupPage.Size = new System.Drawing.Size(1174, 562);
             this._gameSetupPage.TabIndex = 0;
             this._gameSetupPage.Text = "Game Setup";
             // 
@@ -250,7 +278,7 @@ namespace Manager
             this._modManagerPage.Controls.Add(this._modManagerTab);
             this._modManagerPage.Location = new System.Drawing.Point(4, 42);
             this._modManagerPage.Name = "_modManagerPage";
-            this._modManagerPage.Size = new System.Drawing.Size(1174, 582);
+            this._modManagerPage.Size = new System.Drawing.Size(1174, 562);
             this._modManagerPage.TabIndex = 1;
             this._modManagerPage.Text = "Mod Manager";
             // 
@@ -260,16 +288,34 @@ namespace Manager
             this._modManagerTab.Location = new System.Drawing.Point(0, 0);
             this._modManagerTab.Name = "_modManagerTab";
             this._modManagerTab.Padding = new System.Windows.Forms.Padding(15);
-            this._modManagerTab.Size = new System.Drawing.Size(1174, 582);
+            this._modManagerTab.Size = new System.Drawing.Size(1174, 562);
             this._modManagerTab.TabIndex = 0;
+            // 
+            // _nexusPage
+            // 
+            this._nexusPage.Controls.Add(this._nexusTab);
+            this._nexusPage.Location = new System.Drawing.Point(4, 42);
+            this._nexusPage.Name = "_nexusPage";
+            this._nexusPage.Size = new System.Drawing.Size(1174, 562);
+            this._nexusPage.TabIndex = 2;
+            this._nexusPage.Text = "Nexus";
+            // 
+            // _nexusTab
+            // 
+            this._nexusTab.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._nexusTab.Location = new System.Drawing.Point(0, 0);
+            this._nexusTab.Name = "_nexusTab";
+            this._nexusTab.Padding = new System.Windows.Forms.Padding(12);
+            this._nexusTab.Size = new System.Drawing.Size(1174, 562);
+            this._nexusTab.TabIndex = 0;
             // 
             // _settingsPage
             // 
             this._settingsPage.Controls.Add(this._settingsTab);
             this._settingsPage.Location = new System.Drawing.Point(4, 42);
             this._settingsPage.Name = "_settingsPage";
-            this._settingsPage.Size = new System.Drawing.Size(1174, 582);
-            this._settingsPage.TabIndex = 2;
+            this._settingsPage.Size = new System.Drawing.Size(1174, 562);
+            this._settingsPage.TabIndex = 3;
             this._settingsPage.Text = "Settings";
             // 
             // _settingsTab
@@ -279,7 +325,7 @@ namespace Manager
             this._settingsTab.Location = new System.Drawing.Point(0, 0);
             this._settingsTab.Name = "_settingsTab";
             this._settingsTab.Padding = new System.Windows.Forms.Padding(20);
-            this._settingsTab.Size = new System.Drawing.Size(1174, 582);
+            this._settingsTab.Size = new System.Drawing.Size(1174, 562);
             this._settingsTab.TabIndex = 0;
             // 
             // _aboutPage
@@ -287,8 +333,8 @@ namespace Manager
             this._aboutPage.Controls.Add(this._aboutTab);
             this._aboutPage.Location = new System.Drawing.Point(4, 42);
             this._aboutPage.Name = "_aboutPage";
-            this._aboutPage.Size = new System.Drawing.Size(1174, 582);
-            this._aboutPage.TabIndex = 3;
+            this._aboutPage.Size = new System.Drawing.Size(1174, 562);
+            this._aboutPage.TabIndex = 4;
             this._aboutPage.Text = "About";
             // 
             // _aboutTab
@@ -299,7 +345,7 @@ namespace Manager
             this._aboutTab.Location = new System.Drawing.Point(0, 0);
             this._aboutTab.Name = "_aboutTab";
             this._aboutTab.Padding = new System.Windows.Forms.Padding(20);
-            this._aboutTab.Size = new System.Drawing.Size(1174, 582);
+            this._aboutTab.Size = new System.Drawing.Size(1174, 562);
             this._aboutTab.TabIndex = 0;
             // 
             // _gameSetupTab
@@ -308,7 +354,7 @@ namespace Manager
             this._gameSetupTab.Location = new System.Drawing.Point(0, 0);
             this._gameSetupTab.Name = "_gameSetupTab";
             this._gameSetupTab.Padding = new System.Windows.Forms.Padding(20);
-            this._gameSetupTab.Size = new System.Drawing.Size(1174, 582);
+            this._gameSetupTab.Size = new System.Drawing.Size(1174, 562);
             this._gameSetupTab.TabIndex = 0;
             // 
             // MainForm
@@ -328,6 +374,7 @@ namespace Manager
             this._tabControl.ResumeLayout(false);
             this._gameSetupPage.ResumeLayout(false);
             this._modManagerPage.ResumeLayout(false);
+            this._nexusPage.ResumeLayout(false);
             this._settingsPage.ResumeLayout(false);
             this._aboutPage.ResumeLayout(false);
             this.ResumeLayout(false);
@@ -350,6 +397,7 @@ namespace Manager
 
             // Mod manager events
             _modManagerTab.OrderSaved += ModManagerTab_OrderSaved;
+            _modManagerTab.NexusSyncCompleted += ModManagerTab_NexusSyncCompleted;
 
             // Settings events
             _settingsTab.SettingsChanged += SettingsTab_SettingsChanged;
@@ -402,7 +450,8 @@ namespace Manager
 
             // Initialize tabs with services and settings
             _gameSetupTab.Initialize(_settings);
-            _modManagerTab.Initialize(_discoveryService, _orderService, _settings);
+            _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
+            _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _settingsTab.Initialize(_settings);
 
             // Apply initial theme
@@ -441,6 +490,10 @@ namespace Manager
             {
                 _modManagerTab.RefreshMods();
             }
+            else if (_tabControl.SelectedTab == _nexusPage)
+            {
+                _nexusTab.RefreshLatestModsAsync();
+            }
         }
 
         private void GameSetupTab_GamePathChanged(string newPath)
@@ -460,7 +513,8 @@ namespace Manager
                 
                 // Recreate discovery service with new version
                 _discoveryService = new ModDiscoveryService(_settings.InstalledModApiVersion);
-                _modManagerTab.Initialize(_discoveryService, _orderService, _settings);
+                _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
+                _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
                 
                 // Setup doorstop
                 try
@@ -1002,16 +1056,40 @@ namespace Manager
             UpdateStatusCounts();
         }
 
+        private void ModManagerTab_NexusSyncCompleted(List<ModItem> mods, int mappedMods, int updateCount, string errorMessage)
+        {
+            if (!string.IsNullOrEmpty(errorMessage))
+            {
+                _nexusUpdatesLabel.Text = "Nexus Updates: check failed";
+            }
+            else if (!_settings.EnableNexusIntegration)
+            {
+                _nexusUpdatesLabel.Text = "Nexus Updates: disabled";
+            }
+            else
+            {
+                _nexusUpdatesLabel.Text = "Nexus Updates: " + updateCount + " (" + mappedMods + " linked)";
+            }
+
+            _nexusTab.UpdateInstalledMods(mods, mappedMods, updateCount, errorMessage);
+        }
+
         private void SettingsTab_SettingsChanged(AppSettings settings)
         {
             var previous = _settings;
             _settings = settings;
+            RecreateNexusService();
+            _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
+            _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             SaveSettingsFromUi();
 
             LogSettingsChanges(previous, _settings, "Settings updated");
             
             // Re-apply theme in case it changed
             ApplyTheme(_settings.DarkMode);
+
+            if (_settings.IsModsPathValid)
+                _modManagerTab.RefreshMods();
         }
 
         private void SettingsService_SettingsChanged(AppSettings settings)
@@ -1041,14 +1119,19 @@ namespace Manager
                 }
                 catch { }
             }
+
+            RecreateNexusService();
             
             // Re-initialize tabs with new settings
             _gameSetupTab.Initialize(_settings);
-            _modManagerTab.Initialize(_discoveryService, _orderService, _settings);
+            _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
+            _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _settingsTab.Initialize(_settings);
             
             // Re-apply theme
             ApplyTheme(_settings.DarkMode);
+            if (_settings.IsModsPathValid)
+                _modManagerTab.RefreshMods();
             UpdateStatusCounts();
 
             if (_suppressSettingsReloadLogCount > 0)
@@ -1127,6 +1210,14 @@ namespace Manager
                 changes.Add("AutoCondenseSaves");
             if (previous.AutoLoadSaveSlot != current.AutoLoadSaveSlot)
                 changes.Add("AutoLoadSaveSlot");
+            if (previous.EnableNexusIntegration != current.EnableNexusIntegration)
+                changes.Add("EnableNexusIntegration");
+            if (!string.Equals(previous.NexusGameDomain, current.NexusGameDomain, StringComparison.OrdinalIgnoreCase))
+                changes.Add("NexusGameDomain");
+            if (!string.Equals(previous.NexusApiKey, current.NexusApiKey, StringComparison.Ordinal))
+                changes.Add("NexusApiKey");
+            if (previous.ManagerNexusModId != current.ManagerNexusModId)
+                changes.Add("ManagerNexusModId");
 
             if (changes.Count == 0)
             {
@@ -1168,6 +1259,8 @@ namespace Manager
                 _statusLabel.ForeColor = _settings.DarkMode ? Color.LightGreen : Color.Green;
                 _modsCountLabel.Text = "Active Mods: " + count;
                 _modApiVersionLabel.Text = "ModAPI Version: " + apiVersion;
+                if (!_settings.EnableNexusIntegration)
+                    _nexusUpdatesLabel.Text = "Nexus Updates: disabled";
 
                 // Also update the tab if it still exists/is used
                 _gameSetupTab.UpdateStatus(true, count, apiVersion);
@@ -1178,6 +1271,7 @@ namespace Manager
                 _statusLabel.ForeColor = Color.Red;
                 _modsCountLabel.Text = "Active Mods: 0";
                 _modApiVersionLabel.Text = "ModAPI Version: Unknown";
+                _nexusUpdatesLabel.Text = _settings.EnableNexusIntegration ? "Nexus Updates: --" : "Nexus Updates: disabled";
             }
         }
 
@@ -1196,6 +1290,7 @@ namespace Manager
                 _statusLabel.ForeColor = Color.LightGreen;
                 _modsCountLabel.ForeColor = Color.LightGray;
                 _modApiVersionLabel.ForeColor = Color.LightGray;
+                _nexusUpdatesLabel.ForeColor = Color.LightGray;
 
                 foreach (Control c in this.Controls)
                 {
@@ -1219,14 +1314,16 @@ namespace Manager
             {
                 this.BackColor = SystemColors.Control;
                 _titleLabel.ForeColor = SystemColors.ControlText;
+                _headerStatusPanel.BackColor = Color.Transparent;
                 
                 _statusLabel.ForeColor = Color.Green;
                 _modsCountLabel.ForeColor = SystemColors.ControlText;
                 _modApiVersionLabel.ForeColor = SystemColors.ControlText;
+                _nexusUpdatesLabel.ForeColor = SystemColors.ControlText;
 
                 foreach (Control c in this.Controls)
                 {
-                    if (c is Panel)
+                    if (c is Panel && c != _headerStatusPanel)
                     {
                         c.BackColor = SystemColors.Control;
                         foreach (Control child in c.Controls)
@@ -1247,6 +1344,7 @@ namespace Manager
             // Apply to tabs
             _gameSetupTab.ApplyTheme(isDark);
             _modManagerTab.ApplyTheme(isDark);
+            _nexusTab.ApplyTheme(isDark);
             _settingsTab.ApplyTheme(isDark);
             _aboutTab.ApplyTheme(isDark);
         }

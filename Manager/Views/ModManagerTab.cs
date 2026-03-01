@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
 using Manager.Controls;
 using Manager.Core.Models;
@@ -13,6 +14,7 @@ namespace Manager.Views
     /// Delegate for string array events
     /// </summary>
     public delegate void StringArrayHandler(string[] items);
+    public delegate void NexusSyncCompletedHandler(List<ModItem> mods, int mappedMods, int updateCount, string errorMessage);
 
     /// <summary>
     /// The Mod Manager tab - handles enabling, disabling, and ordering mods.
@@ -29,22 +31,27 @@ namespace Manager.Views
         private ActionButton _disableButton;
         private ActionButton _moveUpButton;
         private ActionButton _moveDownButton;
+        private ActionButton _refreshNexusButton;
         private Panel _buttonPanel;
 
         // Services
         private ModDiscoveryService _discoveryService;
         private LoadOrderService _orderService;
+        private NexusModsService _nexusService;
+        private readonly NexusReferenceResolver _nexusResolver = new NexusReferenceResolver();
 
         // State
         private AppSettings _settings;
         private List<ModItem> _allMods = new List<ModItem>();
         private bool _orderDirty = false;
         private bool _isDarkMode = false;
+        private int _nexusRefreshToken = 0;
 
         /// <summary>
         /// Event raised when order is saved
         /// </summary>
         public event StringArrayHandler OrderSaved;
+        public event NexusSyncCompletedHandler NexusSyncCompleted;
 
         public ModManagerTab()
         {
@@ -56,11 +63,12 @@ namespace Manager.Views
         /// <summary>
         /// Initialize with services and settings
         /// </summary>
-        public void Initialize(ModDiscoveryService discoveryService, LoadOrderService orderService, AppSettings settings)
+        public void Initialize(ModDiscoveryService discoveryService, LoadOrderService orderService, AppSettings settings, NexusModsService nexusService)
         {
             _discoveryService = discoveryService;
             _orderService = orderService;
             _settings = settings;
+            _nexusService = nexusService;
             
             _detailsPanel.InstalledModApiVersion = settings.InstalledModApiVersion;
         }
@@ -73,6 +81,7 @@ namespace Manager.Views
             this._disableButton = new Manager.Controls.ActionButton();
             this._moveUpButton = new Manager.Controls.ActionButton();
             this._moveDownButton = new Manager.Controls.ActionButton();
+            this._refreshNexusButton = new Manager.Controls.ActionButton();
             this._enabledList = new Manager.Controls.ModListView();
             this._detailsPanel = new Manager.Controls.ModDetailsPanel();
             this._buttonPanel.SuspendLayout();
@@ -96,6 +105,7 @@ namespace Manager.Views
             this._buttonPanel.Controls.Add(this._disableButton);
             this._buttonPanel.Controls.Add(this._moveUpButton);
             this._buttonPanel.Controls.Add(this._moveDownButton);
+            this._buttonPanel.Controls.Add(this._refreshNexusButton);
             this._buttonPanel.Dock = System.Windows.Forms.DockStyle.Left;
             this._buttonPanel.Location = new System.Drawing.Point(295, 15);
             this._buttonPanel.MinimumSize = new System.Drawing.Size(130, 300);
@@ -171,6 +181,23 @@ namespace Manager.Views
             this._moveDownButton.Text = "Move Down";
             this._moveDownButton.UseVisualStyleBackColor = false;
             // 
+            // _refreshNexusButton
+            // 
+            this._refreshNexusButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(240)))), ((int)(((byte)(240)))), ((int)(((byte)(240)))));
+            this._refreshNexusButton.Cursor = System.Windows.Forms.Cursors.Hand;
+            this._refreshNexusButton.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(180)))), ((int)(((byte)(180)))), ((int)(((byte)(180)))));
+            this._refreshNexusButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this._refreshNexusButton.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this._refreshNexusButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(60)))), ((int)(((byte)(60)))), ((int)(((byte)(60)))));
+            this._refreshNexusButton.IsPrimary = false;
+            this._refreshNexusButton.Location = new System.Drawing.Point(0, 0);
+            this._refreshNexusButton.MinimumSize = new System.Drawing.Size(100, 35);
+            this._refreshNexusButton.Name = "_refreshNexusButton";
+            this._refreshNexusButton.Size = new System.Drawing.Size(110, 35);
+            this._refreshNexusButton.TabIndex = 4;
+            this._refreshNexusButton.Text = "Check Nexus";
+            this._refreshNexusButton.UseVisualStyleBackColor = false;
+            // 
             // _enabledList
             // 
             this._enabledList.Dock = System.Windows.Forms.DockStyle.Left;
@@ -222,6 +249,7 @@ namespace Manager.Views
             _disableButton.Click += DisableButton_Click;
             _moveUpButton.Click += MoveUpButton_Click;
             _moveDownButton.Click += MoveDownButton_Click;
+            _refreshNexusButton.Click += RefreshNexusButton_Click;
 
             // Open folder
             _detailsPanel.OpenFolderClicked += DetailsPanel_OpenFolderClicked;
@@ -238,8 +266,8 @@ namespace Manager.Views
             int spacing = 10;
             int groupSpacing = 20; // Extra space between button groups
             
-            // Calculate total height: 2 buttons + gap + 2 buttons
-            int totalHeight = (buttonHeight * 4) + (spacing * 2) + groupSpacing;
+            // Calculate total height: 2 buttons + gap + 2 buttons + gap + 1 button
+            int totalHeight = (buttonHeight * 5) + (spacing * 2) + (groupSpacing * 2);
             int startY = Math.Max(10, (_buttonPanel.Height - totalHeight) / 2);
             int centerX = Math.Max(0, (_buttonPanel.Width - 110) / 2);
             
@@ -251,6 +279,10 @@ namespace Manager.Views
             int moveGroupY = startY + (buttonHeight * 2) + spacing + groupSpacing;
             _moveUpButton.Location = new Point(centerX, moveGroupY);
             _moveDownButton.Location = new Point(centerX, moveGroupY + buttonHeight + spacing);
+
+            // Position Nexus refresh button
+            int nexusY = moveGroupY + (buttonHeight * 2) + spacing + groupSpacing;
+            _refreshNexusButton.Location = new Point(centerX, nexusY);
         }
 
         private void AvailableList_SelectionChanged(object sender, ModItem mod)
@@ -293,6 +325,11 @@ namespace Manager.Views
         private void MoveDownButton_Click(object sender, EventArgs e)
         {
             MoveSelectedDown();
+        }
+
+        private void RefreshNexusButton_Click(object sender, EventArgs e)
+        {
+            RefreshNexusStatusAsync();
         }
 
         private void DetailsPanel_OpenFolderClicked(object sender, string path)
@@ -350,6 +387,7 @@ namespace Manager.Views
 
             _orderDirty = false;
             UpdateButtonStates();
+            RefreshNexusStatusAsync();
         }
 
         private void EnableSelectedMods()
@@ -482,6 +520,141 @@ namespace Manager.Views
             
             _moveUpButton.Enabled = enabledSelected != null && selectedIndex > 0;
             _moveDownButton.Enabled = enabledSelected != null && selectedIndex >= 0 && selectedIndex < enabledItems.Count - 1;
+            _refreshNexusButton.Enabled = _allMods.Count > 0 && _settings != null && _settings.EnableNexusIntegration;
+        }
+
+        public List<ModItem> GetAllModsSnapshot()
+        {
+            return new List<ModItem>(_allMods);
+        }
+
+        private void RefreshNexusStatusAsync()
+        {
+            if (_allMods == null || _allMods.Count == 0)
+            {
+                NotifyNexusSync(0, 0, null);
+                return;
+            }
+
+            // Resolve local references immediately so details panel can show mapping info.
+            var referencesByModId = new Dictionary<string, NexusModReference>(StringComparer.OrdinalIgnoreCase);
+            string fallbackDomain = (_settings != null && !string.IsNullOrEmpty(_settings.NexusGameDomain))
+                ? _settings.NexusGameDomain
+                : "sheltered";
+
+            foreach (var mod in _allMods)
+            {
+                if (mod == null) continue;
+
+                mod.HasUpdateAvailable = false;
+                mod.NexusRemoteVersion = string.Empty;
+                mod.NexusRemoteSummary = string.Empty;
+                mod.NexusRemoteUpdatedAtUtc = null;
+
+                var reference = _nexusResolver.Resolve(mod, fallbackDomain);
+                if (reference != null && reference.IsValid)
+                {
+                    mod.NexusGameDomain = reference.GameDomain;
+                    mod.NexusModId = reference.ModId;
+                    mod.NexusPageUrl = "https://www.nexusmods.com/" + reference.GameDomain + "/mods/" + reference.ModId;
+                    referencesByModId[mod.Id] = reference;
+                }
+                else
+                {
+                    mod.NexusGameDomain = string.Empty;
+                    mod.NexusModId = 0;
+                    mod.NexusPageUrl = string.Empty;
+                }
+
+                if (mod.Status == ModStatus.UpdateAvailable)
+                    mod.Status = ModStatus.Ok;
+            }
+
+            InvalidateModListsAndDetails();
+
+            bool nexusEnabled = _settings != null && _settings.EnableNexusIntegration;
+            if (!nexusEnabled || _nexusService == null || referencesByModId.Count == 0)
+            {
+                NotifyNexusSync(referencesByModId.Count, 0, null);
+                return;
+            }
+
+            var requestRefs = new List<NexusModReference>(referencesByModId.Values);
+            int token = ++_nexusRefreshToken;
+
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                string error;
+                var remoteByRef = _nexusService.GetModsByReferences(requestRefs, out error);
+
+                if (IsDisposed || Disposing)
+                    return;
+
+                try
+                {
+                    BeginInvoke((MethodInvoker)delegate
+                    {
+                        if (token != _nexusRefreshToken)
+                            return;
+
+                        int updates = 0;
+
+                        foreach (var mod in _allMods)
+                        {
+                            NexusModReference reference;
+                            if (!referencesByModId.TryGetValue(mod.Id, out reference))
+                                continue;
+
+                            NexusRemoteMod remote;
+                            if (!remoteByRef.TryGetValue(reference.Key, out remote))
+                                continue;
+
+                            mod.NexusRemoteVersion = remote.Version ?? string.Empty;
+                            mod.NexusRemoteSummary = remote.Summary ?? string.Empty;
+                            mod.NexusRemoteUpdatedAtUtc = remote.UpdatedAtUtc;
+                            mod.NexusPageUrl = remote.GetPageUrl();
+
+                            bool updateAvailable = NexusVersionComparer.IsRemoteNewer(mod.Version, remote.Version);
+                            mod.HasUpdateAvailable = updateAvailable;
+                            if (updateAvailable)
+                            {
+                                updates++;
+                                if (mod.Status == ModStatus.Ok)
+                                    mod.Status = ModStatus.UpdateAvailable;
+                            }
+                            else if (mod.Status == ModStatus.UpdateAvailable)
+                            {
+                                mod.Status = ModStatus.Ok;
+                            }
+                        }
+
+                        InvalidateModListsAndDetails();
+                        NotifyNexusSync(referencesByModId.Count, updates, error);
+                    });
+                }
+                catch
+                {
+                    // UI already gone, ignore.
+                }
+            });
+        }
+
+        private void NotifyNexusSync(int mappedMods, int updateCount, string errorMessage)
+        {
+            if (NexusSyncCompleted != null)
+            {
+                NexusSyncCompleted(new List<ModItem>(_allMods), mappedMods, updateCount, errorMessage);
+            }
+        }
+
+        private void InvalidateModListsAndDetails()
+        {
+            _availableList.Invalidate();
+            _enabledList.Invalidate();
+
+            var selected = _enabledList.SelectedItem ?? _availableList.SelectedItem;
+            if (selected != null)
+                _detailsPanel.ShowMod(selected);
         }
 
         /// <summary>
@@ -505,6 +678,7 @@ namespace Manager.Views
             _disableButton.ApplyTheme(isDark);
             _moveUpButton.ApplyTheme(isDark);
             _moveDownButton.ApplyTheme(isDark);
+            _refreshNexusButton.ApplyTheme(isDark);
         }
     }
 }

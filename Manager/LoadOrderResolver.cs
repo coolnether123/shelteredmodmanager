@@ -26,6 +26,8 @@ namespace Manager
             public string[] loadAfter;
             public string[] tags;
             public string website;
+            public string nexusGameDomain;
+            public int nexusModId;
         }
 
         public class ModInfo
