@@ -37,6 +37,7 @@
   <ItemGroup>
     <Reference Include="0Harmony">
       <HintPath>..\..\..\..\..\Epic Games\Sheltered\SMM\bin\0Harmony.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
@@ -51,11 +52,23 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Adapters\GameHelperExtensions.cs" />
+    <!-- Character IMPLEMENTATIONS (contracts now live in ModAPI) -->
+    <Compile Include="Characters\CharacterEffectSystem.cs" />
+    <Compile Include="Characters\Internal\CharacterEffectSystemImpl.cs" />
+    <Compile Include="Characters\Internal\CharacterRuntime.cs" />
+    <Compile Include="Characters\Models\CharacterDataModel.cs" />
+    <Compile Include="Characters\Models\SyntheticCharacterProxy.cs" />
     <Compile Include="Core\GameHelperImpl.cs" />
-    <Compile Include="Core\IGameHelper.cs" />
-    <Compile Include="Events\GameTimeTriggerHelper.cs" />
-    <Compile Include="Events\GameEvents.cs" />
+    <!-- IGameHelper interface is now in ModAPI; only the implementation lives here -->
+    <Compile Include="Core\ShelteredPatterns.cs" />
+    <Compile Include="Core\ShelteredModManagerBase.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ModAPI\ModAPI.csproj">
+      <Project>{3C99D6BF-A4A9-45DC-BEF1-5717ECE2A687}</Project>
+      <Name>ModAPI</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
- </Project>
+</Project>

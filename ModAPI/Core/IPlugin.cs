@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections;
 using ModAPI.Spine;
+using ModAPI.Characters;
 
 namespace ModAPI.Core
 {
@@ -76,6 +77,7 @@ namespace ModAPI.Core
         ISettingsProvider Settings { get; }
         IModLogger Log { get; }
         IGameHelper Game { get; }
+        ICharacterEffectSystem Characters { get; }
         string GameRoot { get; }
         string ModsRoot { get; }
         bool IsModernUnity { get; }

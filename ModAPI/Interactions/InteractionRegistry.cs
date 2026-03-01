@@ -10,6 +10,7 @@ namespace ModAPI.Interactions
     /// Registry for adding new interactions to existing game objects.
     /// Interactions are injected automatically when objects are spawned.
     /// </summary>
+    [Obsolete("Compatibility API retained in ModAPI 1.3. Planned to move to ShelteredAPI in a future major release.", false)]
     public static class InteractionRegistry
     {
         private struct InteractionEntry

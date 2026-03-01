@@ -46,7 +46,8 @@ namespace Manager
         private GameSetupTab _gameSetupTab;
         private bool _windowPlacementInitialized;
         private int _suppressSettingsReloadLogCount;
-        private const string APP_VERSION = "1.2.2";
+        private DateTime _lastNoChangeSettingsReloadLogUtc = DateTime.MinValue;
+        private const string APP_VERSION = "1.3.0";
         private static readonly System.Collections.Generic.Dictionary<string, string> KnownModIdMigrations =
             new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -292,7 +293,7 @@ namespace Manager
             // 
             // _aboutTab
             // 
-            this._aboutTab.AppVersion = "1.2.2";
+            this._aboutTab.AppVersion = "1.3.0";
             this._aboutTab.Author = "Coolnether123";
             this._aboutTab.Dock = System.Windows.Forms.DockStyle.Fill;
             this._aboutTab.Location = new System.Drawing.Point(0, 0);
@@ -1129,6 +1130,16 @@ namespace Manager
 
             if (changes.Count == 0)
             {
+                // File watcher notifications can fire more than once for a single write.
+                // Keep logs clean by collapsing back-to-back no-change reload messages.
+                if (string.Equals(prefix, "Settings reloaded from disk", StringComparison.OrdinalIgnoreCase))
+                {
+                    var now = DateTime.UtcNow;
+                    if ((now - _lastNoChangeSettingsReloadLogUtc).TotalMilliseconds < 2000)
+                        return;
+                    _lastNoChangeSettingsReloadLogUtc = now;
+                }
+
                 _gameSetupTab.Log(prefix + ".");
                 return;
             }

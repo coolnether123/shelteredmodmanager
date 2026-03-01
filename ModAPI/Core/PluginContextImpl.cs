@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using ModAPI.Characters;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -15,6 +16,7 @@ namespace ModAPI.Core
         public ModAPI.Spine.ISettingsProvider Settings { get; set; }
         public IModLogger Log { get; set; }
         public IGameHelper Game { get; set; }
+        public ICharacterEffectSystem Characters { get; set; }
         public ISaveSystem SaveSystem { get; set; }
         public string GameRoot { get; set; }
         public string ModsRoot { get; set; }

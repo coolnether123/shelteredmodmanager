@@ -1,6 +1,15 @@
 # ModAPI Events Guide
 ## ModAPI v1.2.2
 
+### Compatibility Matrix
+
+| Scope | Applies To | Status |
+|-------|------------|--------|
+| Event concepts and most examples | Current `ModAPI.dll` | Supported |
+| Header version label `v1.2.2` | Doc header only | Legacy label |
+
+Use `documentation/API_Signatures_Reference.md` for exact current signatures.
+
 **Last Updated:** 2026-01-27  
 **For:** Mod developers using the Sheltered ModAPI
 

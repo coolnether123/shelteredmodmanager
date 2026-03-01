@@ -10,6 +10,7 @@ namespace ModAPI.Util
     /// Provides a single save-group for mods to store JSON blobs keyed by mod id.
     /// Mods interact via ctx.SaveData/LoadData helpers; the proxy serializes once per save.
     /// </summary>
+    [Obsolete("Compatibility API retained in ModAPI 1.3. Planned to move to ShelteredAPI in a future major release.", false)]
     public static class PersistentDataAPI
     {
         public static void SaveData<T>(this IPluginContext ctx, string key, T data)
