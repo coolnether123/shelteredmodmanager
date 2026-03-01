@@ -12,6 +12,8 @@ namespace Manager.Core.Models
         public int ModId { get; set; }
         public string Uid { get; set; }
         public string Name { get; set; }
+        public string Author { get; set; }
+        public string UploaderName { get; set; }
         public string Version { get; set; }
         public string Summary { get; set; }
         public string PictureUrl { get; set; }
