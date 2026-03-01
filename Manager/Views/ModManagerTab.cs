@@ -53,7 +53,18 @@ namespace Manager.Views
         private int _cachedUpdateCount = 0;
         private string _cachedNexusError = null;
         private bool _hasNexusSyncCache = false;
+        private readonly Dictionary<string, NexusSyncCacheEntry> _nexusStateByModId = new Dictionary<string, NexusSyncCacheEntry>(StringComparer.OrdinalIgnoreCase);
         private static readonly TimeSpan NexusSyncCooldown = TimeSpan.FromMinutes(5);
+
+        private sealed class NexusSyncCacheEntry
+        {
+            public string ReferenceKey;
+            public string RemoteVersion;
+            public string RemoteSummary;
+            public DateTime? RemoteUpdatedAtUtc;
+            public string PageUrl;
+            public bool HasUpdateAvailable;
+        }
 
         /// <summary>
         /// Event raised when order is saved
@@ -373,6 +384,9 @@ namespace Manager.Views
             
             foreach (var mod in enabled)
             {
+                bool hasVersionMismatch = mod.Status == ModStatus.VersionMismatch;
+                string mismatchMessage = hasVersionMismatch ? mod.StatusMessage : null;
+
                 if (validation.HardIssueModIds.Contains(mod.Id))
                 {
                     mod.Status = ModStatus.Error;
@@ -383,9 +397,16 @@ namespace Manager.Views
                     mod.Status = ModStatus.Warning;
                     mod.StatusMessage = "Load order may not be optimal";
                 }
+                else if (hasVersionMismatch)
+                {
+                    // Preserve ModAPI incompatibility status discovered from assemblies.
+                    mod.Status = ModStatus.VersionMismatch;
+                    mod.StatusMessage = mismatchMessage;
+                }
                 else
                 {
                     mod.Status = ModStatus.Ok;
+                    mod.StatusMessage = null;
                 }
             }
 
@@ -537,10 +558,22 @@ namespace Manager.Views
             return new List<ModItem>(_allMods);
         }
 
+        public void InvalidateNexusCache()
+        {
+            _nexusRefreshToken++;
+            _lastNexusRemoteSyncUtc = DateTime.MinValue;
+            _cachedMappedMods = 0;
+            _cachedUpdateCount = 0;
+            _cachedNexusError = null;
+            _hasNexusSyncCache = false;
+            _nexusStateByModId.Clear();
+        }
+
         private void RefreshNexusStatusAsync()
         {
             if (_allMods == null || _allMods.Count == 0)
             {
+                _nexusStateByModId.Clear();
                 _cachedMappedMods = 0;
                 _cachedUpdateCount = 0;
                 _cachedNexusError = null;
@@ -549,15 +582,7 @@ namespace Manager.Views
                 return;
             }
 
-            if (_hasNexusSyncCache && _lastNexusRemoteSyncUtc > DateTime.MinValue)
-            {
-                var elapsed = DateTime.UtcNow - _lastNexusRemoteSyncUtc;
-                if (elapsed < NexusSyncCooldown)
-                {
-                    NotifyNexusSync(_cachedMappedMods, _cachedUpdateCount, _cachedNexusError);
-                    return;
-                }
-            }
+            bool withinCooldown = IsWithinNexusSyncCooldown();
 
             // Resolve local references immediately so details panel can show mapping info.
             var referencesByModId = new Dictionary<string, NexusModReference>(StringComparer.OrdinalIgnoreCase);
@@ -570,11 +595,6 @@ namespace Manager.Views
             {
                 if (mod == null) continue;
 
-                mod.HasUpdateAvailable = false;
-                mod.NexusRemoteVersion = string.Empty;
-                mod.NexusRemoteSummary = string.Empty;
-                mod.NexusRemoteUpdatedAtUtc = null;
-
                 var reference = _nexusResolver.Resolve(mod, fallbackDomain);
                 if (reference != null && reference.IsValid)
                 {
@@ -582,20 +602,47 @@ namespace Manager.Views
                     mod.NexusModId = reference.ModId;
                     mod.NexusPageUrl = "https://www.nexusmods.com/" + reference.GameDomain + "/mods/" + reference.ModId;
                     referencesByModId[mod.Id] = reference;
+
+                    if (withinCooldown)
+                    {
+                        ApplyCachedNexusState(mod, reference);
+                    }
+                    else
+                    {
+                        mod.HasUpdateAvailable = false;
+                        mod.NexusRemoteVersion = string.Empty;
+                        mod.NexusRemoteSummary = string.Empty;
+                        mod.NexusRemoteUpdatedAtUtc = null;
+                    }
                 }
                 else
                 {
                     mod.NexusGameDomain = string.Empty;
                     mod.NexusModId = 0;
                     mod.NexusPageUrl = string.Empty;
+                    mod.HasUpdateAvailable = false;
+                    mod.NexusRemoteVersion = string.Empty;
+                    mod.NexusRemoteSummary = string.Empty;
+                    mod.NexusRemoteUpdatedAtUtc = null;
+                    _nexusStateByModId.Remove(mod.Id);
                     unresolvedMods.Add(mod);
                 }
 
-                if (mod.Status == ModStatus.UpdateAvailable)
-                    mod.Status = ModStatus.Ok;
+                ApplyUpdateStatus(mod, mod.HasUpdateAvailable);
             }
 
             InvalidateModListsAndDetails();
+
+            if (withinCooldown)
+            {
+                int updates = CountModsWithUpdates(_allMods);
+                _cachedMappedMods = referencesByModId.Count;
+                _cachedUpdateCount = updates;
+                _cachedNexusError = null;
+                _hasNexusSyncCache = true;
+                NotifyNexusSync(_cachedMappedMods, _cachedUpdateCount, _cachedNexusError);
+                return;
+            }
 
             bool nexusEnabled = _settings != null && _settings.EnableNexusIntegration;
             if (!nexusEnabled || _nexusService == null || (referencesByModId.Count == 0 && unresolvedMods.Count == 0))
@@ -739,7 +786,15 @@ namespace Manager.Views
 
                             NexusRemoteMod remote;
                             if (!remoteByRef.TryGetValue(reference.Key, out remote))
+                            {
+                                mod.HasUpdateAvailable = false;
+                                mod.NexusRemoteVersion = string.Empty;
+                                mod.NexusRemoteSummary = string.Empty;
+                                mod.NexusRemoteUpdatedAtUtc = null;
+                                ApplyUpdateStatus(mod, false);
+                                _nexusStateByModId.Remove(mod.Id);
                                 continue;
+                            }
 
                             mod.NexusRemoteVersion = remote.Version ?? string.Empty;
                             mod.NexusRemoteSummary = remote.Summary ?? string.Empty;
@@ -751,13 +806,10 @@ namespace Manager.Views
                             if (updateAvailable)
                             {
                                 updates++;
-                                if (mod.Status == ModStatus.Ok)
-                                    mod.Status = ModStatus.UpdateAvailable;
                             }
-                            else if (mod.Status == ModStatus.UpdateAvailable)
-                            {
-                                mod.Status = ModStatus.Ok;
-                            }
+
+                            ApplyUpdateStatus(mod, updateAvailable);
+                            CacheNexusState(mod, reference);
                         }
 
                         InvalidateModListsAndDetails();
@@ -808,6 +860,83 @@ namespace Manager.Views
                     filtered.Append(c);
             }
             return filtered.ToString();
+        }
+
+        private bool IsWithinNexusSyncCooldown()
+        {
+            if (!_hasNexusSyncCache || _lastNexusRemoteSyncUtc <= DateTime.MinValue)
+                return false;
+
+            return (DateTime.UtcNow - _lastNexusRemoteSyncUtc) < NexusSyncCooldown;
+        }
+
+        private static int CountModsWithUpdates(List<ModItem> mods)
+        {
+            if (mods == null || mods.Count == 0)
+                return 0;
+
+            int count = 0;
+            foreach (var mod in mods)
+            {
+                if (mod != null && mod.HasUpdateAvailable)
+                    count++;
+            }
+            return count;
+        }
+
+        private void ApplyCachedNexusState(ModItem mod, NexusModReference reference)
+        {
+            if (mod == null || reference == null || !reference.IsValid)
+                return;
+
+            NexusSyncCacheEntry cached;
+            if (!_nexusStateByModId.TryGetValue(mod.Id, out cached) || cached == null)
+                return;
+
+            if (!string.Equals(cached.ReferenceKey, reference.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                _nexusStateByModId.Remove(mod.Id);
+                return;
+            }
+
+            mod.NexusRemoteVersion = cached.RemoteVersion ?? string.Empty;
+            mod.NexusRemoteSummary = cached.RemoteSummary ?? string.Empty;
+            mod.NexusRemoteUpdatedAtUtc = cached.RemoteUpdatedAtUtc;
+            mod.NexusPageUrl = !string.IsNullOrEmpty(cached.PageUrl)
+                ? cached.PageUrl
+                : "https://www.nexusmods.com/" + reference.GameDomain + "/mods/" + reference.ModId;
+            mod.HasUpdateAvailable = cached.HasUpdateAvailable;
+        }
+
+        private void CacheNexusState(ModItem mod, NexusModReference reference)
+        {
+            if (mod == null || reference == null || !reference.IsValid)
+                return;
+
+            var entry = new NexusSyncCacheEntry();
+            entry.ReferenceKey = reference.Key;
+            entry.RemoteVersion = mod.NexusRemoteVersion ?? string.Empty;
+            entry.RemoteSummary = mod.NexusRemoteSummary ?? string.Empty;
+            entry.RemoteUpdatedAtUtc = mod.NexusRemoteUpdatedAtUtc;
+            entry.PageUrl = mod.NexusPageUrl ?? string.Empty;
+            entry.HasUpdateAvailable = mod.HasUpdateAvailable;
+            _nexusStateByModId[mod.Id] = entry;
+        }
+
+        private static void ApplyUpdateStatus(ModItem mod, bool hasUpdateAvailable)
+        {
+            if (mod == null)
+                return;
+
+            if (hasUpdateAvailable)
+            {
+                if (mod.Status == ModStatus.Ok)
+                    mod.Status = ModStatus.UpdateAvailable;
+                return;
+            }
+
+            if (mod.Status == ModStatus.UpdateAvailable)
+                mod.Status = ModStatus.Ok;
         }
 
         private static void TryPersistNexusSidecar(ModItem mod, NexusModReference reference)

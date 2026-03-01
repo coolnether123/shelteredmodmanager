@@ -236,10 +236,18 @@ namespace Manager.Controls
             Color textColor = e.ForeColor;
             
             bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            bool hasUpdate = mod.HasUpdateAvailable || mod.Status == ModStatus.UpdateAvailable;
 
             if (!isSelected)
             {
-                bgColor = _isDarkMode ? Color.FromArgb(45, 45, 48) : SystemColors.Window;
+                if (hasUpdate)
+                {
+                    bgColor = _isDarkMode ? Color.FromArgb(25, 55, 85) : Color.FromArgb(232, 243, 255);
+                }
+                else
+                {
+                    bgColor = _isDarkMode ? Color.FromArgb(45, 45, 48) : SystemColors.Window;
+                }
                 textColor = _isDarkMode ? Color.White : SystemColors.WindowText;
             }
 
@@ -268,18 +276,23 @@ namespace Manager.Controls
                 iconColor = _isDarkMode ? Color.DeepSkyBlue : Color.RoyalBlue;
             }
 
-            // Draw icon
+            using (var iconFont = new Font("Segoe UI", 9f, FontStyle.Bold))
             using (var iconBrush = new SolidBrush(iconColor))
             {
-                e.Graphics.DrawString(icon, new Font("Segoe UI", 9f, FontStyle.Bold), iconBrush, 
-                    new PointF(e.Bounds.X + 5, e.Bounds.Y + 4));
-            }
+                float iconX = e.Bounds.X + 5;
+                float textY = e.Bounds.Y + 4;
+                e.Graphics.DrawString(icon, iconFont, iconBrush, new PointF(iconX, textY));
 
-            // Draw mod name
-            using (var textBrush = new SolidBrush(textColor))
-            {
-                e.Graphics.DrawString(mod.DisplayName, e.Font, textBrush, 
-                    new PointF(e.Bounds.X + 28, e.Bounds.Y + 4));
+                // Keep a safe gap so long markers like "UPD" never overlap names.
+                int iconWidth = (int)Math.Ceiling(e.Graphics.MeasureString(icon, iconFont).Width);
+                int nameX = e.Bounds.X + 5 + iconWidth + 8;
+
+                // Draw mod name
+                using (var textBrush = new SolidBrush(textColor))
+                {
+                    e.Graphics.DrawString(mod.DisplayName, e.Font, textBrush, 
+                        new PointF(nameX, textY));
+                }
             }
 
             e.DrawFocusRectangle();

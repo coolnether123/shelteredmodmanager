@@ -125,7 +125,10 @@ namespace Manager
                     return results;
                 }
 
-                foreach (var dllPath in Directory.GetFiles(assembliesPath, "*.dll"))
+                var dllPaths = Directory.GetFiles(assembliesPath, "*.dll", SearchOption.AllDirectories);
+                Array.Sort(dllPaths, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var dllPath in dllPaths)
                 {
                     // Skip known framework/dependency DLLs
                     string fileName = Path.GetFileName(dllPath);

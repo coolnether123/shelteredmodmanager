@@ -12,6 +12,7 @@ using Manager.Core.Services;
 namespace Manager.Views
 {
     public delegate void NexusInstallCompletedHandler();
+    public delegate void NexusActivityHandler(string message);
 
     /// <summary>
     /// Nexus browsing, update status, and install workflow tab.
@@ -47,6 +48,7 @@ namespace Manager.Views
         private DateTime _lastCheckedUtc = DateTime.MinValue;
 
         public event NexusInstallCompletedHandler InstallCompleted;
+        public event NexusActivityHandler NexusActivity;
 
         private sealed class NexusListItem
         {
@@ -64,16 +66,25 @@ namespace Manager.Views
                         return "[UNLINKED] " + LocalMod.DisplayName;
 
                     if (LocalMod.HasUpdateAvailable)
-                        return "[UPDATE] " + LocalMod.DisplayName + "  (" + (LocalMod.Version ?? "?") + " -> " + (LocalMod.NexusRemoteVersion ?? "?") + ")";
+                        return "[UPDATE] " + LocalMod.DisplayName + "  (" + FormatVersion(LocalMod.Version) + " -> " + FormatVersion(LocalMod.NexusRemoteVersion) + ")";
 
-                    return "[OK] " + LocalMod.DisplayName + "  (" + (LocalMod.Version ?? "?") + ")";
+                    return "[OK] " + LocalMod.DisplayName + "  (" + FormatVersion(LocalMod.Version) + ")";
                 }
 
                 if (RemoteMod == null) return "Unknown";
-                string version = (RemoteMod.Version ?? "?").Trim();
-                if (!version.StartsWith("v", StringComparison.OrdinalIgnoreCase))
-                    version = "v" + version;
-                return RemoteMod.Name + "  (" + version + ")";
+                return RemoteMod.Name + "  (" + FormatVersion(RemoteMod.Version) + ")";
+            }
+
+            private static string FormatVersion(string version)
+            {
+                string value = (version ?? string.Empty).Trim();
+                if (string.IsNullOrEmpty(value))
+                    return "?";
+
+                if (value.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                    return value;
+
+                return "v" + value;
             }
         }
 
@@ -105,6 +116,7 @@ namespace Manager.Views
                 _statusLabel.Text = "Nexus: Ready (" + domain + ")";
             }
 
+            AdjustColumnWidths();
             AdjustListHeights();
         }
 
@@ -158,12 +170,14 @@ namespace Manager.Views
             if (_settings != null && !_settings.EnableNexusIntegration)
             {
                 _statusLabel.Text = "Nexus: Disabled in Settings";
+                EmitActivity("Feed refresh skipped because Nexus integration is disabled.");
                 return;
             }
 
             if (_nexusService == null)
             {
                 _statusLabel.Text = "Nexus: Service unavailable";
+                EmitActivity("Feed refresh failed: Nexus service is unavailable.");
                 return;
             }
 
@@ -171,10 +185,12 @@ namespace Manager.Views
             if (string.IsNullOrEmpty(domain))
             {
                 _statusLabel.Text = "Nexus: Game domain not configured";
+                EmitActivity("Feed refresh failed: game domain is not configured.");
                 return;
             }
 
             _statusLabel.Text = "Nexus: Loading latest releases...";
+            EmitActivity("Refreshing Nexus feed for '" + domain + "'.");
             _refreshButton.Enabled = false;
             int token = ++_latestRequestToken;
 
@@ -210,11 +226,13 @@ namespace Manager.Views
                         if (!string.IsNullOrEmpty(error))
                         {
                             _statusLabel.Text = "Nexus: Load failed";
+                            EmitActivity("Nexus feed refresh failed: " + error);
                             _detailsPanel.ShowMod(CreateStatusMod("Nexus Load Failed", error));
                         }
                         else
                         {
                             _statusLabel.Text = "Nexus: Loaded " + latest.Count + " latest mods (" + domain + ")";
+                            EmitActivity("Nexus feed refresh complete: loaded " + latest.Count + " mods for '" + domain + "'.");
                             if (latest.Count == 0)
                                 _detailsPanel.ShowMod(CreateStatusMod("No Nexus Results", "No mods were returned for this game domain."));
                         }
@@ -232,12 +250,14 @@ namespace Manager.Views
             if (!_settings.EnableNexusIntegration)
             {
                 _managerUpdateLabel.Text = "Manager update: Nexus integration is disabled.";
+                EmitActivity("Manager update check skipped because Nexus integration is disabled.");
                 return;
             }
 
             if (_settings.ManagerNexusModId <= 0)
             {
                 _managerUpdateLabel.Text = "Manager update: set Manager Mod ID in Settings.";
+                EmitActivity("Manager update check skipped: Manager Mod ID is not set.");
                 return;
             }
 
@@ -245,12 +265,14 @@ namespace Manager.Views
             if (string.IsNullOrEmpty(domain))
             {
                 _managerUpdateLabel.Text = "Manager update: game domain is missing.";
+                EmitActivity("Manager update check failed: game domain is missing.");
                 return;
             }
 
             _managerUpdateLabel.Text = userInitiated
                 ? "Manager update: checking..."
                 : "Manager update: auto-checking...";
+            EmitActivity("Checking manager update on Nexus (" + domain + "/mods/" + _settings.ManagerNexusModId + ").");
             _checkManagerButton.Enabled = false;
 
             ThreadPool.QueueUserWorkItem(delegate
@@ -269,27 +291,34 @@ namespace Manager.Views
                         if (!string.IsNullOrEmpty(error))
                         {
                             _managerUpdateLabel.Text = "Manager update: check failed (" + error + ")";
+                            EmitActivity("Manager update check failed: " + error);
                             return;
                         }
 
                         if (remote == null)
                         {
                             _managerUpdateLabel.Text = "Manager update: Nexus entry not found.";
+                            EmitActivity("Manager update check: Nexus entry was not found.");
                             return;
                         }
 
                         int comparison = NexusVersionComparer.CompareVersions(_managerVersion, remote.Version);
+                        string localVersion = FormatVersionLabel(_managerVersion);
+                        string remoteVersion = FormatVersionLabel(remote.Version);
                         if (comparison < 0)
                         {
-                            _managerUpdateLabel.Text = "Manager update available: v" + remote.Version + " (current: v" + _managerVersion + ")";
+                            _managerUpdateLabel.Text = "Manager update available: " + remoteVersion + " (current: " + localVersion + ")";
+                            EmitActivity("Manager update available: " + remoteVersion + " (current: " + localVersion + ").");
                         }
                         else if (comparison == 0)
                         {
-                            _managerUpdateLabel.Text = "Manager is up to date (v" + _managerVersion + ")";
+                            _managerUpdateLabel.Text = "Manager is up to date (" + localVersion + ")";
+                            EmitActivity("Manager is up to date (" + localVersion + ").");
                         }
                         else
                         {
-                            _managerUpdateLabel.Text = "Local build v" + _managerVersion + " is newer than Nexus v" + remote.Version;
+                            _managerUpdateLabel.Text = "Local build " + localVersion + " is newer than Nexus " + remoteVersion;
+                            EmitActivity("Local manager build is newer than Nexus (" + localVersion + " > " + remoteVersion + ").");
                         }
                     });
                 }
@@ -414,6 +443,9 @@ namespace Manager.Views
             _installedList.BorderStyle = BorderStyle.FixedSingle;
             _installedList.Height = 320;
             _installedList.IntegralHeight = false;
+            _installedList.DrawMode = DrawMode.OwnerDrawFixed;
+            _installedList.ItemHeight = 24;
+            _installedList.DrawItem += InstalledList_DrawItem;
 
             _installedPanel.Controls.Add(_installedList);
             _installedPanel.Controls.Add(_installedHeaderLabel);
@@ -468,7 +500,7 @@ namespace Manager.Views
 
             _detailsPanel.Dock = DockStyle.Fill;
             _detailsPanel.Padding = new Padding(12);
-            _detailsPanel.MinimumSize = new Size(300, 380);
+            _detailsPanel.MinimumSize = new Size(340, 380);
 
             Controls.Add(_detailsPanel);
             Controls.Add(_latestPanel);
@@ -478,6 +510,7 @@ namespace Manager.Views
             Name = "NexusModsTab";
             Padding = new Padding(0);
 
+            LayoutActionButtons();
             ResumeLayout(false);
         }
 
@@ -491,7 +524,12 @@ namespace Manager.Views
             _latestList.SelectedIndexChanged += LatestList_SelectedIndexChanged;
             _detailsPanel.OpenFolderClicked += DetailsPanel_OpenFolderClicked;
             _detailsPanel.WebsiteClicked += DetailsPanel_WebsiteClicked;
-            SizeChanged += delegate { AdjustListHeights(); };
+            SizeChanged += delegate
+            {
+                AdjustColumnWidths();
+                LayoutActionButtons();
+                AdjustListHeights();
+            };
         }
 
         private void DetailsPanel_OpenFolderClicked(object sender, string path)
@@ -544,18 +582,21 @@ namespace Manager.Views
             if (!_settings.EnableNexusIntegration)
             {
                 _statusLabel.Text = "Nexus: Disabled in Settings";
+                EmitActivity("Install skipped because Nexus integration is disabled.");
                 return;
             }
 
             if (!_settings.IsModsPathValid)
             {
                 _statusLabel.Text = "Install failed: Mods path is not valid.";
+                EmitActivity("Install failed: mods path is not valid.");
                 return;
             }
 
             if (string.IsNullOrEmpty(_settings.NexusApiKey))
             {
                 _statusLabel.Text = "Install failed: Set Nexus API key in Settings for direct downloads.";
+                EmitActivity("Install failed: Nexus API key is missing.");
                 return;
             }
 
@@ -563,11 +604,13 @@ namespace Manager.Views
             if (selected == null)
             {
                 _statusLabel.Text = "Install failed: Select a Nexus mod first.";
+                EmitActivity("Install failed: no Nexus mod selected.");
                 return;
             }
 
             _installSelectedButton.Enabled = false;
             _statusLabel.Text = "Installing '" + selected.Name + "'...";
+            EmitActivity("Installing from Nexus: " + selected.Name + " (" + selected.GameDomain + "/mods/" + selected.ModId + ").");
 
             ThreadPool.QueueUserWorkItem(delegate
             {
@@ -614,6 +657,7 @@ namespace Manager.Views
                     {
                         _installSelectedButton.Enabled = true;
                         _statusLabel.Text = "Installed '" + selected.Name + "' to " + result.InstalledPath;
+                        EmitActivity("Install complete: " + selected.Name + " -> " + result.InstalledPath);
                         if (InstallCompleted != null)
                             InstallCompleted();
                     });
@@ -631,6 +675,7 @@ namespace Manager.Views
                 {
                     _installSelectedButton.Enabled = true;
                     _statusLabel.Text = message;
+                    EmitActivity(message);
                 });
             }
             catch { }
@@ -841,15 +886,164 @@ namespace Manager.Views
             if (available <= 0)
                 return;
 
-            int target = (int)(available * 0.58f);
+            // Use proportional height so lists grow/shrink with window size.
+            int target = (int)(available * 0.70f);
             if (target < 220) target = 220;
-            if (target > 420) target = 420;
 
             int installedMax = Math.Max(180, _installedPanel.Height - _installedHeaderLabel.Height - 16);
             int latestMax = Math.Max(180, _latestPanel.Height - _latestHeaderLabel.Height - 16);
 
             _installedList.Height = Math.Min(target, installedMax);
             _latestList.Height = Math.Min(target, latestMax);
+        }
+
+        private void AdjustColumnWidths()
+        {
+            if (_installedPanel == null || _actionsPanel == null || _latestPanel == null)
+                return;
+
+            int totalWidth = ClientSize.Width;
+            if (totalWidth <= 0)
+                return;
+
+            // Ratio-based column sizing so layout scales with available width.
+            const double installedRatio = 0.22;
+            const double actionsRatio = 0.12;
+            const double latestRatio = 0.31;
+
+            const int minInstalled = 190;
+            const int minActions = 120;
+            const int minLatest = 180;
+            const int minDetails = 320;
+
+            int installed = Math.Max(minInstalled, (int)Math.Round(totalWidth * installedRatio));
+            int actions = Math.Max(minActions, (int)Math.Round(totalWidth * actionsRatio));
+            int latest = Math.Max(minLatest, (int)Math.Round(totalWidth * latestRatio));
+
+            int details = totalWidth - installed - actions - latest;
+            if (details < minDetails)
+            {
+                int deficit = minDetails - details;
+
+                int latestSlack = latest - minLatest;
+                int takeLatest = Math.Min(deficit, latestSlack);
+                latest -= takeLatest;
+                deficit -= takeLatest;
+
+                int installedSlack = installed - minInstalled;
+                int takeInstalled = Math.Min(deficit, installedSlack);
+                installed -= takeInstalled;
+                deficit -= takeInstalled;
+
+                int actionsSlack = actions - minActions;
+                int takeActions = Math.Min(deficit, actionsSlack);
+                actions -= takeActions;
+                deficit -= takeActions;
+            }
+
+            _installedPanel.Width = installed;
+            _actionsPanel.Width = actions;
+            _latestPanel.Width = latest;
+            LayoutActionButtons();
+        }
+
+        private void LayoutActionButtons()
+        {
+            if (_actionsPanel == null) return;
+
+            int leftPadding = _actionsPanel.Padding.Left;
+            int rightPadding = _actionsPanel.Padding.Right;
+            int top = _actionsPanel.Padding.Top;
+            int width = Math.Max(104, _actionsPanel.Width - leftPadding - rightPadding);
+            int x = leftPadding;
+
+            _refreshButton.Location = new Point(x, top);
+            _refreshButton.Size = new Size(width, 34);
+
+            _checkManagerButton.Location = new Point(x, _refreshButton.Bottom + 10);
+            _checkManagerButton.Size = new Size(width, 34);
+
+            _installSelectedButton.Location = new Point(x, _checkManagerButton.Bottom + 10);
+            _installSelectedButton.Size = new Size(width, 34);
+
+            _openPageButton.Location = new Point(x, _installSelectedButton.Bottom + 10);
+            _openPageButton.Size = new Size(width, 34);
+        }
+
+        private void InstalledList_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0)
+                return;
+
+            var item = _installedList.Items[e.Index] as NexusListItem;
+            if (item == null)
+                return;
+
+            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            bool hasUpdate = item.LocalMod != null && item.LocalMod.HasUpdateAvailable;
+            bool dark = BackColor.R < 90 && BackColor.G < 90 && BackColor.B < 90;
+
+            Color background;
+            if (selected)
+            {
+                background = SystemColors.Highlight;
+            }
+            else if (hasUpdate)
+            {
+                background = dark ? Color.FromArgb(25, 55, 85) : Color.FromArgb(232, 243, 255);
+            }
+            else
+            {
+                background = _installedList.BackColor;
+            }
+
+            Color textColor = selected ? SystemColors.HighlightText : _installedList.ForeColor;
+            Color updateColor = dark ? Color.DeepSkyBlue : Color.RoyalBlue;
+
+            using (var bg = new SolidBrush(background))
+            {
+                e.Graphics.FillRectangle(bg, e.Bounds);
+            }
+
+            string text = item.ToString();
+            if (selected || !hasUpdate)
+            {
+                using (var brush = new SolidBrush(textColor))
+                {
+                    e.Graphics.DrawString(text, _installedList.Font, brush, new PointF(e.Bounds.X + 4, e.Bounds.Y + 3));
+                }
+            }
+            else
+            {
+                using (var brush = new SolidBrush(updateColor))
+                using (var font = new Font(_installedList.Font, FontStyle.Bold))
+                {
+                    e.Graphics.DrawString(text, font, brush, new PointF(e.Bounds.X + 4, e.Bounds.Y + 3));
+                }
+            }
+
+            e.DrawFocusRectangle();
+        }
+
+        private static string FormatVersionLabel(string version)
+        {
+            string value = (version ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(value))
+                return "Unknown";
+
+            if (value.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                return value;
+
+            return "v" + value;
+        }
+
+        private void EmitActivity(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+                return;
+
+            if (NexusActivity != null)
+                NexusActivity(message);
         }
 
         private static void ApplyButtonTheme(Button button, bool isDark, bool primary)

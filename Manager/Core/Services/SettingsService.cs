@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Manager.Core.Models;
+using Manager.Core.Security;
 
 namespace Manager.Core.Services
 {
@@ -13,6 +14,8 @@ namespace Manager.Core.Services
     public class SettingsService
     {
         private const string INI_FILENAME = "mod_manager.ini";
+        private const string LegacyNexusApiKeyKey = "NexusApiKey";
+        private const string ProtectedNexusApiKeyKey = "NexusApiKeyProtected";
         private readonly string _iniPath;
         private FileSystemWatcher _watcher;
         private DateTime _lastRead = DateTime.MinValue;
@@ -181,9 +184,28 @@ namespace Manager.Core.Services
             if (raw.TryGetValue("NexusGameDomain", out nexusDomain))
                 settings.NexusGameDomain = nexusDomain;
 
-            string nexusApiKey;
-            if (raw.TryGetValue("NexusApiKey", out nexusApiKey))
-                settings.NexusApiKey = nexusApiKey;
+            string protectedNexusApiKey;
+            bool hasProtectedApiKey = raw.TryGetValue(ProtectedNexusApiKeyKey, out protectedNexusApiKey);
+            if (hasProtectedApiKey && !string.IsNullOrEmpty(protectedNexusApiKey))
+            {
+                string decrypted;
+                if (NexusApiKeyProtector.TryUnprotect(protectedNexusApiKey, out decrypted))
+                {
+                    settings.NexusApiKey = decrypted;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("Nexus API key decrypt failed. Falling back to legacy plaintext key if available.");
+                }
+            }
+
+            // Legacy plaintext fallback for migration from older settings files.
+            if (string.IsNullOrEmpty(settings.NexusApiKey))
+            {
+                string legacyNexusApiKey;
+                if (raw.TryGetValue(LegacyNexusApiKeyKey, out legacyNexusApiKey))
+                    settings.NexusApiKey = legacyNexusApiKey;
+            }
 
             string managerNexusModId;
             if (raw.TryGetValue("ManagerNexusModId", out managerNexusModId))
@@ -270,7 +292,30 @@ namespace Manager.Core.Services
             data["InstalledModApiVersion"] = settings.InstalledModApiVersion ?? string.Empty;
             data["EnableNexusIntegration"] = settings.EnableNexusIntegration.ToString();
             data["NexusGameDomain"] = settings.NexusGameDomain ?? "sheltered";
-            data["NexusApiKey"] = settings.NexusApiKey ?? string.Empty;
+            string plaintextNexusApiKey = settings.NexusApiKey ?? string.Empty;
+            string protectedNexusApiKeyValue = NexusApiKeyProtector.Protect(plaintextNexusApiKey);
+            if (!string.IsNullOrEmpty(protectedNexusApiKeyValue))
+            {
+                data[ProtectedNexusApiKeyKey] = protectedNexusApiKeyValue;
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(plaintextNexusApiKey))
+                {
+                    data[ProtectedNexusApiKeyKey] = string.Empty;
+                }
+                else
+                {
+                    string existingProtected;
+                    if (!data.TryGetValue(ProtectedNexusApiKeyKey, out existingProtected))
+                        existingProtected = string.Empty;
+
+                    data[ProtectedNexusApiKeyKey] = existingProtected;
+                    System.Diagnostics.Debug.WriteLine("Failed to protect Nexus API key. Keeping previously stored protected value.");
+                }
+            }
+            // Never persist plaintext Nexus API key.
+            data.Remove(LegacyNexusApiKeyKey);
             data["ManagerNexusModId"] = settings.ManagerNexusModId.ToString();
             data["AutoLoadSaveSlot"] = settings.AutoLoadSaveSlot.ToString();
             data["WindowX"] = settings.WindowX.ToString();
