@@ -276,15 +276,7 @@ namespace Manager.Controls
 
         private void ModDetailsPanel_Resize(object sender, EventArgs e)
         {
-            int contentWidth = this.Width - 24;
-            
-            _nameLabel.Width = contentWidth;
-            _authorsLabel.Width = contentWidth;
-            _dependsOnValue.Width = contentWidth - 110;
-            _tagsValue.Width = contentWidth - 55;
-            _descriptionBox.Width = contentWidth;
-            _descriptionBox.Height = Math.Max(50, this.Height - 435);
-            _openFolderButton.Top = this.Height - 42;
+            LayoutDetailContent();
         }
 
         /// <summary>
@@ -375,6 +367,8 @@ namespace Manager.Controls
             {
                 _descriptionBox.Text = "No description provided.";
             }
+
+            LayoutDetailContent();
         }
 
         private void UpdateModApiStatus(ModItem mod)
@@ -489,6 +483,84 @@ namespace Manager.Controls
             _descLabel.Visible = true;
             _descriptionBox.Visible = true;
             _openFolderButton.Visible = true;
+
+            LayoutDetailContent();
+        }
+
+        private void LayoutDetailContent()
+        {
+            if (_placeholderPanel.Visible)
+                return;
+
+            int left = 12;
+            int top = 10;
+            int contentWidth = Math.Max(120, this.Width - 24);
+
+            bool showPreview = _previewImage.Visible && contentWidth >= 430;
+            int previewWidth = 140;
+            int previewHeight = 84;
+            int gap = 12;
+
+            if (showPreview)
+            {
+                _previewImage.Size = new Size(previewWidth, previewHeight);
+                _previewImage.Location = new Point(left + contentWidth - previewWidth, top);
+            }
+
+            int textRight = showPreview ? (_previewImage.Left - gap) : (left + contentWidth);
+            int textWidth = Math.Max(140, textRight - left);
+
+            _nameLabel.Location = new Point(left, top);
+            _nameLabel.Width = textWidth;
+
+            _versionLabel.Location = new Point(left, top + 34);
+            _authorsLabel.Location = new Point(left, top + 56);
+            _authorsLabel.Width = textWidth;
+            _idLabel.Location = new Point(left, top + 76);
+
+            int separatorY = _idLabel.Bottom + 10;
+            if (showPreview)
+                separatorY = Math.Max(separatorY, _previewImage.Bottom + 10);
+
+            _separator.Location = new Point(left, separatorY);
+            _separator.Width = contentWidth;
+
+            int infoY = separatorY + 10;
+            _dependsOnLabel.Location = new Point(left, infoY);
+            _dependsOnValue.Location = new Point(left + 98, infoY);
+            _dependsOnValue.Width = Math.Max(70, contentWidth - 98);
+
+            _modApiLabel.Location = new Point(left, infoY + 32);
+            _modApiValue.Location = new Point(left + 70, infoY + 32);
+
+            int tagsY = infoY + 56;
+            if (_tagsLabel.Visible && _tagsValue.Visible)
+            {
+                _tagsLabel.Location = new Point(left, tagsY);
+                _tagsValue.Location = new Point(left + 43, tagsY);
+                _tagsValue.Width = Math.Max(70, contentWidth - 43);
+            }
+
+            int linksY = (_tagsLabel.Visible && _tagsValue.Visible) ? (tagsY + 24) : (infoY + 56);
+            if (_websiteLink.Visible)
+                _websiteLink.Location = new Point(left, linksY);
+
+            int nexusStatusY = _websiteLink.Visible ? (linksY + 24) : linksY;
+            _nexusStatusLabel.Location = new Point(left, nexusStatusY);
+
+            int nexusLinkY = nexusStatusY + 24;
+            if (_nexusLink.Visible)
+                _nexusLink.Location = new Point(left, nexusLinkY);
+
+            int descTitleY = _nexusLink.Visible ? (nexusLinkY + 28) : (nexusStatusY + 28);
+            _descLabel.Location = new Point(left, descTitleY);
+
+            _descriptionBox.Location = new Point(left, descTitleY + 20);
+            _descriptionBox.Width = contentWidth;
+
+            _openFolderButton.Left = left;
+            _openFolderButton.Top = this.Height - 42;
+            _descriptionBox.Height = Math.Max(60, _openFolderButton.Top - _descriptionBox.Top - 10);
         }
 
         /// <summary>

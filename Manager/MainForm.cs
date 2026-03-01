@@ -52,6 +52,7 @@ namespace Manager
         private bool _windowPlacementInitialized;
         private int _suppressSettingsReloadLogCount;
         private DateTime _lastNoChangeSettingsReloadLogUtc = DateTime.MinValue;
+        private bool _startupNexusUpdateAnnouncementsPending = true;
         private const string APP_VERSION = "1.3.0";
         private static readonly System.Collections.Generic.Dictionary<string, string> KnownModIdMigrations =
             new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -409,6 +410,7 @@ namespace Manager
             _modManagerTab.OrderSaved += ModManagerTab_OrderSaved;
             _modManagerTab.NexusSyncCompleted += ModManagerTab_NexusSyncCompleted;
             _nexusTab.InstallCompleted += NexusTab_InstallCompleted;
+            _nexusTab.NexusActivity += NexusTab_NexusActivity;
 
             // Settings events
             _settingsTab.SettingsChanged += SettingsTab_SettingsChanged;
@@ -488,10 +490,20 @@ namespace Manager
 
         private void NexusTab_InstallCompleted()
         {
+            // Installation changes local versions immediately; bypass Nexus cooldown cache.
+            _modManagerTab.InvalidateNexusCache();
             // Re-discover local mods so installed/update status reflects the new install immediately.
             _modManagerTab.RefreshMods();
             UpdateStatusCounts();
             _nexusTab.RefreshLatestModsAsync();
+        }
+
+        private void NexusTab_NexusActivity(string message)
+        {
+            if (_gameSetupTab == null || string.IsNullOrEmpty(message))
+                return;
+
+            _gameSetupTab.Log("Nexus: " + message);
         }
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
@@ -1099,6 +1111,27 @@ namespace Manager
 
             _nexusTab.SetLastCheckedUtc(_modManagerTab.LastNexusRemoteSyncUtc);
             _nexusTab.UpdateInstalledMods(mods, mappedMods, updateCount, errorMessage);
+
+            if (_startupNexusUpdateAnnouncementsPending && string.IsNullOrEmpty(errorMessage))
+            {
+                var source = mods ?? new List<ModItem>();
+                var announced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var mod in source)
+                {
+                    if (mod == null || !mod.HasUpdateAvailable)
+                        continue;
+
+                    string key = !string.IsNullOrEmpty(mod.Id) ? mod.Id : (mod.DisplayName ?? string.Empty);
+                    if (!announced.Add(key))
+                        continue;
+
+                    string name = !string.IsNullOrEmpty(mod.DisplayName) ? mod.DisplayName : "Unknown mod";
+                    if (_gameSetupTab != null)
+                        _gameSetupTab.Log(name + " has an update available!");
+                }
+
+                _startupNexusUpdateAnnouncementsPending = false;
+            }
         }
 
         private void SettingsTab_SettingsChanged(AppSettings settings)

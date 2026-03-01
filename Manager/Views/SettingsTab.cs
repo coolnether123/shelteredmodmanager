@@ -37,6 +37,7 @@ namespace Manager.Views
         private Label _nexusApiKeyLabel;
         private TextBox _nexusApiKeyTextBox;
         private Button _nexusApiHelpButton;
+        private Button _nexusApiRevealButton;
         private Label _managerNexusModIdLabel;
         private TextBox _managerNexusModIdTextBox;
         
@@ -63,6 +64,8 @@ namespace Manager.Views
         private AppSettings _settings;
         private bool _isDarkMode = false;
         private bool _suppressEvents = false;
+        private bool _nexusApiKeyRevealed = false;
+        private bool _skipNextNexusApiAutoHide = false;
         private ToolTip _helpToolTip;
         private const string NexusApiKeyHelpUrl = "https://www.nexusmods.com/users/myaccount?tab=api";
 
@@ -170,7 +173,7 @@ namespace Manager.Views
             yPos += 30;
 
             _nexusApiKeyLabel = new Label();
-            _nexusApiKeyLabel.Text = "API Key (optional):";
+            _nexusApiKeyLabel.Text = "Nexus API Key:";
             _nexusApiKeyLabel.Font = new Font("Segoe UI", 10f);
             _nexusApiKeyLabel.AutoSize = true;
             _nexusApiKeyLabel.Location = new Point(30, yPos);
@@ -178,15 +181,23 @@ namespace Manager.Views
             _nexusApiKeyTextBox = new TextBox();
             _nexusApiKeyTextBox.Font = new Font("Segoe UI", 10f);
             _nexusApiKeyTextBox.Location = new Point(150, yPos - 3);
-            _nexusApiKeyTextBox.Width = 250;
+            _nexusApiKeyTextBox.Width = 170;
 
             _nexusApiHelpButton = new Button();
             _nexusApiHelpButton.Text = "Get API Key";
             _nexusApiHelpButton.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-            _nexusApiHelpButton.Location = new Point(406, yPos - 4);
-            _nexusApiHelpButton.Size = new Size(105, 27);
+            _nexusApiHelpButton.Location = new Point(326, yPos - 4);
+            _nexusApiHelpButton.Size = new Size(95, 27);
             _nexusApiHelpButton.FlatStyle = FlatStyle.Flat;
             _nexusApiHelpButton.Cursor = Cursors.Hand;
+
+            _nexusApiRevealButton = new Button();
+            _nexusApiRevealButton.Text = "Reveal Key";
+            _nexusApiRevealButton.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            _nexusApiRevealButton.Location = new Point(426, yPos - 4);
+            _nexusApiRevealButton.Size = new Size(95, 27);
+            _nexusApiRevealButton.FlatStyle = FlatStyle.Flat;
+            _nexusApiRevealButton.Cursor = Cursors.Hand;
             yPos += 40;
 
             _helpToolTip = new ToolTip();
@@ -195,11 +206,13 @@ namespace Manager.Views
             _helpToolTip.ReshowDelay = 200;
             _helpToolTip.ShowAlways = true;
             _helpToolTip.SetToolTip(_nexusApiKeyTextBox,
-                "Needed for direct Nexus downloads.\nClick 'Get API Key' to open your Nexus API page.");
+                "Enter a Nexus API key to enable downloading and updating mods from Nexus. Stored encrypted per Windows user.");
             _helpToolTip.SetToolTip(_nexusApiHelpButton,
                 "Open Nexus account API settings to create or copy your personal API key.");
+            _helpToolTip.SetToolTip(_nexusApiRevealButton,
+                "Reveal or hide the stored Nexus API key for manual editing.");
             _helpToolTip.SetToolTip(_nexusApiKeyLabel,
-                "Personal Nexus API key used for direct downloads.");
+                "Personal Nexus API key used for direct downloads and updates. Stored encrypted on this PC.");
 
             // Separator
             _separator = new Panel();
@@ -281,6 +294,7 @@ namespace Manager.Views
             this.Controls.Add(_nexusApiKeyLabel);
             this.Controls.Add(_nexusApiKeyTextBox);
             this.Controls.Add(_nexusApiHelpButton);
+            this.Controls.Add(_nexusApiRevealButton);
             this.Controls.Add(_separator);
             this.Controls.Add(_devModeCheckBox);
             this.Controls.Add(_devSettingsGroup);
@@ -312,6 +326,8 @@ namespace Manager.Views
             _nexusDomainTextBox.Enabled = enabled;
             _nexusApiKeyLabel.Enabled = enabled;
             _nexusApiKeyTextBox.Enabled = enabled;
+            _nexusApiHelpButton.Enabled = enabled;
+            _nexusApiRevealButton.Enabled = enabled && !string.IsNullOrEmpty(_settings != null ? _settings.NexusApiKey : string.Empty);
             _managerNexusModIdLabel.Enabled = enabled;
             _managerNexusModIdTextBox.Enabled = enabled;
         }
@@ -351,10 +367,21 @@ namespace Manager.Views
             _enableNexusCheckBox.CheckedChanged += EnableNexusCheckBox_CheckedChanged;
             _nexusDomainTextBox.TextChanged += NexusDomainTextBox_TextChanged;
             _nexusApiKeyTextBox.TextChanged += NexusApiKeyTextBox_TextChanged;
+            _nexusApiKeyTextBox.KeyDown += NexusApiKeyTextBox_KeyDown;
+            _nexusApiKeyTextBox.Leave += NexusApiKeyTextBox_Leave;
             _managerNexusModIdTextBox.TextChanged += ManagerNexusModIdTextBox_TextChanged;
             _nexusApiHelpButton.Click += NexusApiHelpButton_Click;
+            _nexusApiRevealButton.MouseDown += NexusApiRevealButton_MouseDown;
+            _nexusApiRevealButton.Click += NexusApiRevealButton_Click;
             _resetButton.Click += ResetButton_Click;
             _resetWindowButton.Click += ResetWindowButton_Click;
+        }
+
+        private void NexusApiRevealButton_MouseDown(object sender, MouseEventArgs e)
+        {
+            // Clicking reveal/hide moves focus away from textbox first (Leave event).
+            // Skip that single auto-hide so click intent wins deterministically.
+            _skipNextNexusApiAutoHide = true;
         }
 
         private void NexusApiHelpButton_Click(object sender, EventArgs e)
@@ -370,6 +397,43 @@ namespace Manager.Views
                     "Nexus API Key Help",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
+            }
+        }
+
+        private void NexusApiRevealButton_Click(object sender, EventArgs e)
+        {
+            if (_settings == null)
+                return;
+
+            if (string.IsNullOrEmpty(_settings.NexusApiKey))
+            {
+                _nexusApiKeyRevealed = true;
+                ApplyNexusApiKeyDisplayMode();
+                _nexusApiKeyTextBox.Focus();
+                return;
+            }
+
+            _nexusApiKeyRevealed = !_nexusApiKeyRevealed;
+            ApplyNexusApiKeyDisplayMode();
+            if (_nexusApiKeyRevealed)
+                _nexusApiKeyTextBox.Focus();
+        }
+
+        private void NexusApiKeyTextBox_Leave(object sender, EventArgs e)
+        {
+            if (_settings == null || !_nexusApiKeyRevealed)
+                return;
+
+            if (_skipNextNexusApiAutoHide)
+            {
+                _skipNextNexusApiAutoHide = false;
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(_settings.NexusApiKey))
+            {
+                _nexusApiKeyRevealed = false;
+                ApplyNexusApiKeyDisplayMode();
             }
         }
 
@@ -407,8 +471,36 @@ namespace Manager.Views
         {
             if (_suppressEvents || _settings == null) return;
 
+            // Editable when revealing an existing key OR entering a new key for the first time.
+            if (!IsNexusApiKeyEditable())
+                return;
+
             _settings.NexusApiKey = (_nexusApiKeyTextBox.Text ?? string.Empty).Trim();
+            _nexusApiRevealButton.Enabled = !string.IsNullOrEmpty(_settings.NexusApiKey);
             TriggerSave();
+        }
+
+        private void NexusApiKeyTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode != Keys.Enter)
+                return;
+
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+
+            if (_suppressEvents || _settings == null || !IsNexusApiKeyEditable())
+                return;
+
+            _settings.NexusApiKey = (_nexusApiKeyTextBox.Text ?? string.Empty).Trim();
+            _nexusApiRevealButton.Enabled = !string.IsNullOrEmpty(_settings.NexusApiKey);
+            TriggerSave();
+
+            // Give immediate visual confirmation that the key is stored.
+            if (!string.IsNullOrEmpty(_settings.NexusApiKey))
+            {
+                _nexusApiKeyRevealed = false;
+                ApplyNexusApiKeyDisplayMode();
+            }
         }
 
         private void ManagerNexusModIdTextBox_TextChanged(object sender, EventArgs e)
@@ -538,7 +630,8 @@ namespace Manager.Views
 
                 _enableNexusCheckBox.Checked = _settings.EnableNexusIntegration;
                 _nexusDomainTextBox.Text = _settings.NexusGameDomain ?? "sheltered";
-                _nexusApiKeyTextBox.Text = _settings.NexusApiKey ?? string.Empty;
+                _nexusApiKeyRevealed = false;
+                ApplyNexusApiKeyDisplayMode();
                 _managerNexusModIdTextBox.Text = _settings.ManagerNexusModId > 0 ? _settings.ManagerNexusModId.ToString() : string.Empty;
                 SetNexusInputsEnabled(_enableNexusCheckBox.Checked);
 
@@ -568,13 +661,72 @@ namespace Manager.Views
 
             _settings.EnableNexusIntegration = _enableNexusCheckBox.Checked;
             _settings.NexusGameDomain = (_nexusDomainTextBox.Text ?? string.Empty).Trim().ToLowerInvariant();
-            _settings.NexusApiKey = (_nexusApiKeyTextBox.Text ?? string.Empty).Trim();
+            if (IsNexusApiKeyEditable())
+                _settings.NexusApiKey = (_nexusApiKeyTextBox.Text ?? string.Empty).Trim();
 
             int managerModId;
             if (int.TryParse((_managerNexusModIdTextBox.Text ?? string.Empty).Trim(), out managerModId) && managerModId >= 0)
                 _settings.ManagerNexusModId = managerModId;
             else
                 _settings.ManagerNexusModId = 0;
+        }
+
+        private void ApplyNexusApiKeyDisplayMode()
+        {
+            if (_settings == null)
+                return;
+
+            string stored = (_settings.NexusApiKey ?? string.Empty).Trim();
+            bool hasStored = stored.Length > 0;
+            bool previousSuppress = _suppressEvents;
+
+            _suppressEvents = true;
+            try
+            {
+                if (!hasStored)
+                {
+                    _nexusApiKeyTextBox.ReadOnly = false;
+                    _nexusApiKeyTextBox.Text = string.Empty;
+                    _nexusApiRevealButton.Text = "Reveal Key";
+                    _nexusApiRevealButton.Enabled = false;
+                    return;
+                }
+
+                if (_nexusApiKeyRevealed)
+                {
+                    _nexusApiKeyTextBox.ReadOnly = false;
+                    _nexusApiKeyTextBox.Text = stored;
+                    _nexusApiRevealButton.Text = "Hide Key";
+                    _nexusApiRevealButton.Enabled = true;
+                }
+                else
+                {
+                    _nexusApiKeyTextBox.ReadOnly = true;
+                    _nexusApiKeyTextBox.Text = "API key stored";
+                    _nexusApiRevealButton.Text = "Reveal Key";
+                    _nexusApiRevealButton.Enabled = true;
+                }
+            }
+            finally
+            {
+                _suppressEvents = previousSuppress;
+            }
+        }
+
+        private bool HasStoredNexusApiKey()
+        {
+            if (_settings == null)
+                return false;
+
+            return !string.IsNullOrEmpty((_settings.NexusApiKey ?? string.Empty).Trim());
+        }
+
+        private bool IsNexusApiKeyEditable()
+        {
+            if (_settings == null)
+                return false;
+
+            return _nexusApiKeyRevealed || !HasStoredNexusApiKey();
         }
 
         /// <summary>
@@ -615,6 +767,9 @@ namespace Manager.Views
                 _nexusApiHelpButton.BackColor = Color.FromArgb(70, 70, 70);
                 _nexusApiHelpButton.ForeColor = Color.White;
                 _nexusApiHelpButton.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
+                _nexusApiRevealButton.BackColor = Color.FromArgb(70, 70, 70);
+                _nexusApiRevealButton.ForeColor = Color.White;
+                _nexusApiRevealButton.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
                 
                 _resetButton.BackColor = Color.FromArgb(70, 70, 70);
                 _resetButton.ForeColor = Color.White;
@@ -654,6 +809,9 @@ namespace Manager.Views
                 _nexusApiHelpButton.BackColor = SystemColors.Control;
                 _nexusApiHelpButton.ForeColor = SystemColors.ControlText;
                 _nexusApiHelpButton.FlatAppearance.BorderColor = SystemColors.ControlDark;
+                _nexusApiRevealButton.BackColor = SystemColors.Control;
+                _nexusApiRevealButton.ForeColor = SystemColors.ControlText;
+                _nexusApiRevealButton.FlatAppearance.BorderColor = SystemColors.ControlDark;
                 
                 _resetButton.BackColor = SystemColors.Control;
                 _resetButton.ForeColor = SystemColors.ControlText;

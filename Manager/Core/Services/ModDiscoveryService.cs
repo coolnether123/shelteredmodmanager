@@ -34,11 +34,9 @@ namespace Manager.Core.Services
                 foreach (var dir in Directory.GetDirectories(modsRootPath))
                 {
                     var folderName = Path.GetFileName(dir);
-                    
-                    // Skip reserved folder names
-                    if (string.Equals(folderName, "disabled", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(folderName, "SMM", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(folderName, "ModAPI", StringComparison.OrdinalIgnoreCase))
+
+                    // Skip reserved/internal directories.
+                    if (IsReservedFolderName(folderName))
                         continue;
 
                     var mod = DiscoverMod(dir);
@@ -105,36 +103,113 @@ namespace Manager.Core.Services
 
         private void CheckModApiCompatibility(ModItem mod)
         {
-            if (string.IsNullOrEmpty(_installedModApiVersion))
-                return;
-
             try
             {
                 var assemblies = AssemblyVersionChecker.ScanModAssemblies(mod.RootPath);
-                
-                AssemblyVersionChecker.ModAssemblyVersion requirement = default(AssemblyVersionChecker.ModAssemblyVersion);
+
+                var apiVersions = new List<string>();
                 foreach (var a in assemblies)
                 {
-                    if (!string.IsNullOrEmpty(a.ApiVersion))
+                    if (string.IsNullOrEmpty(a.ApiVersion))
+                        continue;
+
+                    bool exists = false;
+                    for (int i = 0; i < apiVersions.Count; i++)
                     {
-                        requirement = a;
-                        break;
+                        if (string.Equals(apiVersions[i], a.ApiVersion, StringComparison.OrdinalIgnoreCase))
+                        {
+                            exists = true;
+                            break;
+                        }
                     }
+
+                    if (!exists)
+                        apiVersions.Add(a.ApiVersion);
                 }
 
-                if (!string.IsNullOrEmpty(requirement.ApiVersion))
+                if (apiVersions.Count > 0)
                 {
-                    mod.RequiredModApiVersion = requirement.ApiVersion;
-                    mod.IsModApiCompatible = AssemblyVersionChecker.IsCompatible(_installedModApiVersion, requirement.ApiVersion);
+                    string requirement = SelectPreferredRequirement(apiVersions, _installedModApiVersion);
+                    mod.RequiredModApiVersion = requirement;
 
-                    if (!mod.IsModApiCompatible)
+                    if (!string.IsNullOrEmpty(_installedModApiVersion))
                     {
-                        mod.Status = ModStatus.VersionMismatch;
-                        mod.StatusMessage = "Requires ModAPI " + requirement.ApiVersion + " (installed: " + _installedModApiVersion + ")";
+                        bool isCompatible = true;
+                        for (int i = 0; i < apiVersions.Count; i++)
+                        {
+                            if (!AssemblyVersionChecker.IsCompatible(_installedModApiVersion, apiVersions[i]))
+                            {
+                                isCompatible = false;
+                                break;
+                            }
+                        }
+
+                        mod.IsModApiCompatible = isCompatible;
+                        if (!isCompatible)
+                        {
+                            mod.Status = ModStatus.VersionMismatch;
+                            mod.StatusMessage = "Requires ModAPI " + requirement + " (installed: " + _installedModApiVersion + ")";
+                        }
                     }
                 }
             }
             catch { }
+        }
+
+        private static bool IsReservedFolderName(string folderName)
+        {
+            if (string.IsNullOrEmpty(folderName))
+                return true;
+
+            if (string.Equals(folderName, "disabled", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(folderName, "SMM", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(folderName, "ModAPI", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Manager internal working directories should never appear as mods.
+            return folderName.StartsWith("_smm_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string SelectPreferredRequirement(List<string> apiVersions, string installedModApiVersion)
+        {
+            if (apiVersions == null || apiVersions.Count == 0)
+                return string.Empty;
+
+            if (!string.IsNullOrEmpty(installedModApiVersion))
+            {
+                for (int i = 0; i < apiVersions.Count; i++)
+                {
+                    if (!AssemblyVersionChecker.IsCompatible(installedModApiVersion, apiVersions[i]))
+                        return apiVersions[i];
+                }
+            }
+
+            // Fallback: choose highest declared API version for stable display.
+            string selected = apiVersions[0];
+            for (int i = 1; i < apiVersions.Count; i++)
+            {
+                if (CompareVersionStrings(apiVersions[i], selected) > 0)
+                    selected = apiVersions[i];
+            }
+
+            return selected;
+        }
+
+        private static int CompareVersionStrings(string left, string right)
+        {
+            if (string.IsNullOrEmpty(left))
+                return string.IsNullOrEmpty(right) ? 0 : -1;
+            if (string.IsNullOrEmpty(right))
+                return 1;
+
+            try
+            {
+                return new Version(left).CompareTo(new Version(right));
+            }
+            catch
+            {
+                return string.Compare(left, right, StringComparison.OrdinalIgnoreCase);
+            }
         }
     }
 }
