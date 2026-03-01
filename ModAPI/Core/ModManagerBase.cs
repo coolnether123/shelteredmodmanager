@@ -90,8 +90,8 @@ namespace ModAPI.Core
                     }
                 };
                 Events.Bind(
-                    delegate { ModAPI.Events.GameEvents.OnSessionStarted += sessionStartedHandler; },
-                    delegate { ModAPI.Events.GameEvents.OnSessionStarted -= sessionStartedHandler; });
+                    delegate { PluginManager.OnSessionStartedEvent += sessionStartedHandler; },
+                    delegate { PluginManager.OnSessionStartedEvent -= sessionStartedHandler; });
             }
 
             if (Log != null) Log.Info(string.Format("{0} initialized. Settings Mode: {1}", GetType().Name, Config != null ? "Active" : "None"));
@@ -132,8 +132,8 @@ namespace ModAPI.Core
                 }
             };
             Events.Bind(
-                delegate { ModAPI.Events.GameEvents.OnSessionStarted += sessionStartedHandler; },
-                delegate { ModAPI.Events.GameEvents.OnSessionStarted -= sessionStartedHandler; });
+                delegate { PluginManager.OnSessionStartedEvent += sessionStartedHandler; },
+                delegate { PluginManager.OnSessionStartedEvent -= sessionStartedHandler; });
         }
 
         protected virtual void ScanForPersistence()
@@ -173,6 +173,18 @@ namespace ModAPI.Core
         public new Coroutine StartCoroutine(IEnumerator routine)
         {
             return Context != null ? Context.StartCoroutine(routine) : base.StartCoroutine(routine);
+        }
+
+        /// <summary>
+        /// v1.3 convenience wrapper: runs work on a background thread and forwards the result to Unity main thread.
+        /// </summary>
+        /// <typeparam name="TResult">Result type produced by the background calculation.</typeparam>
+        /// <param name="work">Background calculation. Do not access Unity objects here.</param>
+        /// <param name="onMainThread">Main-thread callback for applying results to gameplay/UI.</param>
+        /// <param name="onError">Main-thread callback for background exceptions. Optional.</param>
+        protected void RunInBackground<TResult>(Func<TResult> work, Action<TResult> onMainThread, Action<Exception> onError = null)
+        {
+            ModThreads.RunAsync(work, onMainThread, onError);
         }
 
         public virtual void OnSettingsLoaded() { }

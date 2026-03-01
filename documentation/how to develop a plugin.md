@@ -4,6 +4,16 @@ This guide is for writing a mod plugin that runs under the current `IModPlugin` 
 
 Exact API signatures: `documentation/API_Signatures_Reference.md`.
 
+## Compatibility Matrix
+
+| This Guide Section | Applies To | Status |
+|--------------------|------------|--------|
+| `IModPlugin` lifecycle and context usage | Current `ModAPI.dll` | Supported |
+| `ModManagerBase` usage | Current `ModAPI.dll` | Supported |
+| Header version label `v1.2` | Doc title only | Legacy label |
+
+If this file conflicts with signatures in `API_Signatures_Reference.md`, follow the signature reference.
+
 ## 1. Project Setup
 
 Create a C# Class Library targeting `.NET Framework 3.5`.

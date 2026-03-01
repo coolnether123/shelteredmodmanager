@@ -4,6 +4,13 @@ This guide focuses on the current transpiler stack under `ModAPI.Harmony.Transpi
 
 Canonical signatures for the APIs referenced here: `documentation/API_Signatures_Reference.md`.
 
+## Compatibility Matrix
+
+| Scope | Applies To | Status |
+|-------|------------|--------|
+| Transpiler workflow and diagnostics | Current `ModAPI.dll` | Supported |
+| Header version label `v1.2` | Doc title only | Legacy label |
+
 ## 1. Recommended Workflow
 
 1. Start with `FluentTranspiler.For(...)`.

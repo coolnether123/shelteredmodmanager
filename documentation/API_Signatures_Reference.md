@@ -1,6 +1,24 @@
-# ModAPI v1.2 API Signatures Reference
+# ModAPI + ShelteredAPI v1.3 API Signatures Reference
 
 This is the source-of-truth signature sheet for the current code in this repo.
+
+Related usage guide:
+- `documentation/ShelteredAPI_Characters_Guide.md`
+
+## Compatibility Matrix
+
+| Surface | Assembly | Status |
+|---------|----------|--------|
+| Core loader/plugin/content/settings APIs | `ModAPI.dll` | Current |
+| Backward-compat event/helper APIs used by v1.2 mods (`GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`, `GameUtil`, `PersistentDataAPI`) | `ModAPI.dll` | Current (Deprecated for future major) |
+| `IGameHelper` adapters and Sheltered-specific implementations | `ShelteredAPI.dll` | Current |
+| Old v1.2 docs/snippets with conflicting signatures | mixed | Deprecated |
+
+## v1.2 Compatibility (1.3 Line)
+
+The v1.2 mod ecosystem was built against key gameplay helper/event types in `ModAPI.dll`.
+For `1.3`, those surfaces remain in `ModAPI.dll` to preserve backward compatibility.
+They are marked `[Obsolete(..., false)]` to signal migration planning without breaking builds.
 
 ## Plugin Lifecycle (`ModAPI.Core`)
 
@@ -36,6 +54,7 @@ public interface IPluginContext
     ISettingsProvider Settings { get; }
     IModLogger Log { get; }
     IGameHelper Game { get; }
+    ICharacterEffectSystem Characters { get; }
     string GameRoot { get; }
     string ModsRoot { get; }
     bool IsModernUnity { get; }
@@ -63,6 +82,88 @@ public interface ISaveSystem
     string GetCurrentSlotPath();
     int ActiveSlotIndex { get; }
     void RegisterModData<T>(string key, T data, Action<T> migrationCallback = null) where T : class;
+}
+```
+
+## Character System (`ModAPI.Characters`, ShelteredAPI)
+
+```csharp
+public enum CharacterSource { RealFamily, Visitor, Synthetic }
+public enum CharacterLocation { Shelter, Expedition, Missing, Away, Unknown }
+public enum CharacterState
+{
+    InShelter, OnExpedition, Unconscious, CatatonicGhost, Dead,
+    InEncounter, TemporarilyAbsent, SyntheticIdle, SyntheticInEncounter, SyntheticAbsent
+}
+
+public interface ICharacterData
+{
+    int UniqueId { get; }
+    string PersistenceKey { get; }
+    string FirstName { get; set; }
+    string LastName { get; set; }
+    bool IsMale { get; set; }
+    string MeshId { get; set; }
+    Color SkinColor { get; set; }
+    Color HairColor { get; set; }
+    int StrengthLevel { get; set; }
+    int DexterityLevel { get; set; }
+    int IntelligenceLevel { get; set; }
+    int CharismaLevel { get; set; }
+    int PerceptionLevel { get; set; }
+    int Health { get; set; }
+    int MaxHealth { get; set; }
+    CharacterSource Source { get; }
+    string SourceMod { get; }
+    bool IsPersistent { get; }
+    float CreatedAtTime { get; }
+    void SetCustomData(string key, object value);
+    T GetCustomData<T>(string key);
+    bool HasCustomData(string key);
+}
+```
+
+## Spine Settings (`ModAPI.Spine`, `ModAPI.Attributes`)
+
+```csharp
+// ModAPI.Attributes
+[AttributeUsage(AttributeTargets.Class)]
+public class ModConfigurationAttribute : Attribute
+{
+    public string Title { get; set; }
+    public ModConfigurationAttribute(string title = null);
+}
+
+// ModAPI.Spine
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property | AttributeTargets.Method)]
+public class ModSettingAttribute : Attribute
+{
+    public string Label;
+    public string Tooltip;
+    public SettingMode Mode; // default: Advanced
+    public float MinValue;
+    public float MaxValue;
+    public float StepSize;
+    public string Category;
+    public string DependsOnId;
+    public bool ControlsChildVisibility;
+    public string VisibilityMethod;
+    public string OptionsSource;
+    public string ValidateMethod;
+    public string OnChanged;
+}
+
+public interface ISettingsProvider
+{
+    IEnumerable<SettingDefinition> GetSettings();
+    object GetSettingsObject();
+    void OnSettingsLoaded();
+    void ResetToDefaults();
+}
+
+public static class SpineSettingsHelper
+{
+    public static List<SettingDefinition> Scan(object settingsObject);
 }
 ```
 
@@ -114,6 +215,10 @@ public static void RecordSnapshot(string modId, string stepName, IEnumerable<Cod
 
 ## Content + Assets (`ModAPI.Content`)
 
+Note on type collisions:
+- Prefer aliasing `ModAPI.Content.ItemDefinition` in mod code:
+  `using ContentItemDefinition = ModAPI.Content.ItemDefinition;`
+
 ```csharp
 public static RegistrationResult RegisterItem(ItemDefinition def);
 public static RegistrationResult RegisterItemWithFixedId(string modId, string itemId, ItemDefinition def);
@@ -131,6 +236,24 @@ public static AssetBundle LoadBundle(Assembly asm, string relativePath);
 public static AssetBundle LoadBundle(string modRootPath, string relativePath);
 public static GameObject LoadPrefabFromBundle(AssetBundle bundle, string assetPath);
 ```
+
+`ItemDefinition` fluent localization APIs (ModAPI v1.3):
+
+```csharp
+public ItemDefinition WithDisplayName(string name);           // legacy key-or-text auto-detection
+public ItemDefinition WithDescription(string desc);           // legacy key-or-text auto-detection
+public ItemDefinition WithDisplayNameKey(string key);         // explicit key
+public ItemDefinition WithDescriptionKey(string key);         // explicit key
+public ItemDefinition WithDisplayNameText(string text);       // explicit literal text
+public ItemDefinition WithDescriptionText(string text);       // explicit literal text
+```
+
+Localization behavior for content injection (ModAPI v1.3):
+- `m_NameLocalizationKey` / `m_DescLocalizationKey` are always set to keys (never raw text).
+- For `...Text(...)`, ModAPI auto-generates keys like `modapi.<modid>.<itemid>.name|desc` and registers values in its custom table.
+- Legacy `WithDisplayName/WithDescription` values are interpreted as `key` if they look like keys (`.` and no spaces), otherwise as literal text.
+- ModAPI patches `Localization.Get(string,bool)` and returns custom-table values directly (preserving original case for literal text).
+- Injector logs localization mode diagnostics per item (`name=key|text`, `desc=key|text`, final keys).
 
 ## Event + Registry APIs
 
@@ -174,6 +297,51 @@ public static bool Find(string modId);
 public static ModEntry GetMod(string modId);
 public static bool TryGetMod(string modId, out ModEntry entry);
 public static List<string> GetLoadedModIds();
+```
+
+## ShelteredAPI Trigger Scheduler (`ModAPI.Events`)
+
+```csharp
+public enum TimeTriggerCadence { SixHour = 1, Staggered = 2, Both = 3 }
+public enum TimeTriggerKind { SixHour = 1, Staggered = 2 }
+
+public static class GameTimeTriggerHelper
+{
+    public static event Action<TimeTriggerBatch> OnSixHourTick;
+    public static event Action<TimeTriggerBatch> OnStaggeredTick;
+
+    public static int StaggeredMinHours { get; }
+    public static int StaggeredMaxHours { get; }
+
+    public static void RegisterTrigger(string triggerId);
+    public static void RegisterTrigger(string triggerId, int priority);
+    public static void RegisterTrigger(string triggerId, int priority, TimeTriggerCadence cadence);
+    public static void RegisterTrigger(string triggerId, int priority, TimeTriggerCadence cadence, Action<TimeTriggerBatch> callback);
+    public static bool UnregisterTrigger(string triggerId);
+    public static List<TimeTriggerInfo> GetPriorityList(TimeTriggerCadence cadence);
+    public static void ConfigureStaggeredRange(int minInclusive, int maxInclusive);
+}
+```
+
+## ShelteredAPI `IGameHelper` Adapter Extension (`ShelteredAPI.Adapters`)
+
+```csharp
+public static class GameHelperExtensions
+{
+    public static int GetTotalOwned(this IGameHelper helper, ItemManager.ItemType itemType);
+}
+```
+
+## Background Processing (v1.3)
+
+```csharp
+// ModAPI.Core.ModThreads
+public static void RunAsync(Action action);
+public static void RunAsync<TResult>(Func<TResult> work, Action<TResult> onMainThread);
+public static void RunAsync<TResult>(Func<TResult> work, Action<TResult> onMainThread, Action<Exception> onError);
+
+// ModAPI.Core.ModManagerBase
+protected void RunInBackground<TResult>(Func<TResult> work, Action<TResult> onMainThread, Action<Exception> onError = null);
 ```
 
 ## Persistent Data (`ModAPI.Util`)

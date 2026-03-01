@@ -4,6 +4,14 @@ This document outlines the role and purpose of each file within the `ModAPI` pro
 
 For exact callable signatures, use `documentation/API_Signatures_Reference.md`.
 
+## Compatibility Matrix
+
+| Scope | Applies To | Status |
+|-------|------------|--------|
+| File-role descriptions and architecture intent | Current codebase | Mostly current |
+| Header version label `v1.2.2` | Doc title only | Legacy label |
+| API signatures and examples | See signature reference | Prefer signature reference |
+
 ## Event System
 
 ### `ModEventBus.cs`
@@ -274,9 +282,10 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 **Secondary Role:** Handles the "fast-forwarding" of the RNG on load and restoration of deterministic seeds.
 
 ### `ModAttributes.cs`
-**Primary Role:** Defines attributes for the **Spine** settings framework (`[ModConfiguration]`, `[ModSetting]`, `[ModSettingPreset]`).
+**Primary Role:** Defines `ModConfiguration` metadata attribute (`[ModConfiguration]`).
 **Secondary Role:** Enables zero-boilerplate UI generation and reflective settings discovery.
-**Interconnections:** Used by `SpineSettingsHelper.cs` and `ModManagerBase.cs`.
+**Interconnections:** Used alongside Spine attributes.
+**Namespace clarification:** `[ModSetting]` and `[ModSettingPreset]` are defined in `ModAPI.Spine`, not `ModAPI.Attributes`.
 
 ### `ModManagerBase.cs`
 **Primary Role:** A high-level base class for mods that provides automatic lifecycle management, singleton access, and **Spine** settings binding.

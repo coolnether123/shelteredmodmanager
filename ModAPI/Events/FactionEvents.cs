@@ -9,6 +9,7 @@ namespace ModAPI.Events
     /// Events related to the game's Faction system.
     /// Allows mods to react to faction behavior without individual Harmony patches.
     /// </summary>
+    [Obsolete("Compatibility API retained in ModAPI 1.3. Planned to move to ShelteredAPI in a future major release.", false)]
     public static class FactionEvents
     {
         /// <summary>

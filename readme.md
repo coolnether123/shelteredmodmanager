@@ -237,9 +237,13 @@ Planned for future updates:
 |-------|-------------|
 | [How to Develop a Plugin](documentation/how%20to%20develop%20a%20plugin.md) | Getting started with mod development |
 | [Spine Settings Guide](documentation/Spine_Settings_Guide.md) | Attribute-based settings API |
+| [Settings and Persistence](documentation/SETTINGS.md) | Pattern A/B settings and save APIs |
 | [ModAPI Developer Guide](documentation/ModAPI_Developer_Guide.md) | Comprehensive API usage guide |
+| [API Signatures Reference](documentation/API_Signatures_Reference.md) | Canonical current signatures |
+| [ShelteredAPI Guide](documentation/ShelteredAPI_Guide.md) | Extended helper and trigger APIs |
+| [API Troubleshooting](documentation/API_Troubleshooting.md) | Common failures and log signatures |
 | [Events Guide](documentation/Events_Guide.md) | Game and UI event subscriptions |
 | [Harmony Patches](documentation/how%20to%20develop%20a%20patch%20with%20harmony.md) | Runtime code patching |
-| [API Reference](documentation/ModAPI_Documentation.md) | Technical API reference |
+| [ModAPI File Roles](documentation/ModAPI_Documentation.md) | Project file-role reference |
 
 

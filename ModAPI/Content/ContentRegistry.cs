@@ -71,7 +71,7 @@ namespace ModAPI.Content
         {
             if (def == null) return RegistrationResult.Failed("ItemDefinition cannot be null");
             if (string.IsNullOrEmpty(def.Id)) return RegistrationResult.Failed("Item ID is required");
-            if (string.IsNullOrEmpty(def.DisplayName)) return RegistrationResult.Failed("DisplayName is required");
+            if (!def.HasDisplayNameValue()) return RegistrationResult.Failed("DisplayName is required (key or text)");
 
             if (def.OwnerAssembly == null)
             {
@@ -99,6 +99,7 @@ namespace ModAPI.Content
             if (def == null) return RegistrationResult.Failed("ItemDefinition cannot be null");
             if (string.IsNullOrEmpty(modId)) return RegistrationResult.Failed("Mod ID is required");
             if (string.IsNullOrEmpty(itemId)) return RegistrationResult.Failed("Item ID is required");
+            if (!def.HasDisplayNameValue()) return RegistrationResult.Failed("DisplayName is required (key or text)");
 
             def.Id = string.IsNullOrEmpty(def.Id) ? itemId : def.Id;
             if (def.OwnerAssembly == null)
@@ -361,8 +362,12 @@ namespace ModAPI.Content
     public class ItemDefinition
     {
         public string Id;                // unique key, e.g., com.mod.item.myhammer
-        public string DisplayName;       // user-facing name
-        public string Description;       // user-facing description
+        public string DisplayName;       // legacy: key-or-text (auto-detected)
+        public string Description;       // legacy: key-or-text (auto-detected)
+        public string DisplayNameKey;    // explicit localization key
+        public string DescriptionKey;    // explicit localization key
+        public string DisplayNameText;   // explicit literal text
+        public string DescriptionText;   // explicit literal text
         public string IconPath;          // optional icon file path (use AssetPath helpers)
         public string PrefabPath;        // optional prefab path for instantiation
         public ItemCategory Category = ItemCategory.Normal;
@@ -419,6 +424,10 @@ namespace ModAPI.Content
         public ItemDefinition WithId(string id) { Id = id; return this; }
         public ItemDefinition WithDisplayName(string name) { DisplayName = name; return this; }
         public ItemDefinition WithDescription(string desc) { Description = desc; return this; }
+        public ItemDefinition WithDisplayNameKey(string key) { DisplayNameKey = key; DisplayNameText = null; DisplayName = key; return this; }
+        public ItemDefinition WithDescriptionKey(string key) { DescriptionKey = key; DescriptionText = null; Description = key; return this; }
+        public ItemDefinition WithDisplayNameText(string text) { DisplayNameText = text; DisplayNameKey = null; DisplayName = text; return this; }
+        public ItemDefinition WithDescriptionText(string text) { DescriptionText = text; DescriptionKey = null; Description = text; return this; }
         public ItemDefinition WithIcon(string path) { IconPath = AssetPath.FromAssets(path); return this; }
         public ItemDefinition WithPrefab(string path) { PrefabPath = AssetPath.FromAssets(path); return this; }
         public ItemDefinition WithCategory(ItemCategory cat) { Category = cat; return this; }
@@ -457,6 +466,20 @@ namespace ModAPI.Content
             return this;
         }
         public ItemDefinition WithOwner(System.Reflection.Assembly asm) { OwnerAssembly = asm; return this; }
+
+        internal bool HasDisplayNameValue()
+        {
+            return !string.IsNullOrEmpty(DisplayNameKey) ||
+                   !string.IsNullOrEmpty(DisplayNameText) ||
+                   !string.IsNullOrEmpty(DisplayName);
+        }
+
+        internal static bool LooksLikeLocalizationKey(string value)
+        {
+            return !string.IsNullOrEmpty(value) &&
+                   value.IndexOf('.') >= 0 &&
+                   value.IndexOf(' ') < 0;
+        }
     }
 
     /// <summary>Templates for common item patterns to reduce boilerplate.</summary>

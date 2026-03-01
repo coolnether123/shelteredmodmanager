@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Threading;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -22,6 +23,17 @@ namespace ModAPI.Core
         /// Singleton runtime host attached to the persistent loader root.
         /// </summary>
         public static PluginRunner Instance { get; private set; }
+        /// <summary>
+        /// Unity main thread managed id captured at runner startup.
+        /// </summary>
+        public static int MainThreadId { get; private set; }
+        /// <summary>
+        /// True when called from the Unity main thread.
+        /// </summary>
+        public static bool IsMainThread
+        {
+            get { return Thread.CurrentThread.ManagedThreadId == MainThreadId; }
+        }
 
         private readonly Queue<Action> _nextFrame = new Queue<Action>();
         public PluginManager Manager;
@@ -55,8 +67,10 @@ namespace ModAPI.Core
         private void Awake()
         {
             if (Instance == null) Instance = this;
+            MainThreadId = Thread.CurrentThread.ManagedThreadId;
             IsQuitting = false;
             ModAPI.Hooks.PlatformSaveProxy.ResetStatus();
+            ModThreads.FlushPendingMainThreadCallbacks();
             HookUnityLogBridge();
             _useModernApi = TryHookModernSceneEvents();
             IsModernUnity = _useModernApi;
@@ -291,6 +305,8 @@ namespace ModAPI.Core
         /// </summary>
         private void Update()
         {
+            ModThreads.FlushPendingMainThreadCallbacks();
+
             if (IsQuitting && Time.realtimeSinceStartup >= _nextQuitHeartbeatAt)
             {
                 _nextQuitHeartbeatAt = Time.realtimeSinceStartup + 0.5f;
@@ -314,12 +330,22 @@ namespace ModAPI.Core
                 SaveExitTracker.Mark("QuittingHeartbeat", detail);
             }
 
+            Action[] actions = null;
             lock (_nextFrame)
             {
-                while (_nextFrame.Count > 0)
+                if (_nextFrame.Count > 0)
                 {
-                    var a = _nextFrame.Dequeue();
-                    try { a(); } catch (Exception ex) { MMLog.Write($"next-frame action failed: {ex.Message}"); }
+                    actions = _nextFrame.ToArray();
+                    _nextFrame.Clear();
+                }
+            }
+
+            if (actions != null)
+            {
+                for (int i = 0; i < actions.Length; i++)
+                {
+                    try { actions[i](); }
+                    catch (Exception ex) { MMLog.Write($"next-frame action failed: {ex.Message}"); }
                 }
             }
             if (Manager != null) Manager.OnUnityUpdate();

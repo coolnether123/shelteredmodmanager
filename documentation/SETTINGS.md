@@ -1,30 +1,78 @@
-# Settings and Persistence (Current v1.2)
+# Settings and Persistence (Current v1.3 Line)
 
-Use `Spine` for mod configuration UI and `ISaveSystem`/`PersistentDataAPI` for data persistence.
+## Compatibility Matrix
+
+| Pattern / API | Applies To | Status |
+|---------------|------------|--------|
+| `ModManagerBase<T>` auto-settings | `ModAPI.dll` current | Recommended |
+| `ISettingsProvider` + `SpineSettingsHelper.Scan` | `ModAPI.dll` current | Supported |
+| `ISaveSystem.RegisterModData` | `ModAPI.dll` current | Recommended |
+| `ctx.SaveData/ctx.LoadData` extensions | `ModAPI.Util` current | Supported |
+| Legacy `ctx.Settings.GetInt/SetInt/SaveUser` style | Older API style | Deprecated |
 
 Canonical signatures: `documentation/API_Signatures_Reference.md`.
 
-## 1. Recommended Settings Flow (Spine + ModManagerBase)
+## 1. Settings Pattern A: `ModManagerBase<T>` (Recommended)
 
 ```csharp
-public class MyMod : ModManagerBase, IModPlugin
+using ModAPI.Core;
+using ModAPI.Spine;
+
+public class MySettings
 {
     [ModSetting("Enable Feature")]
     public bool Enabled = true;
+}
 
-    [ModSetting("Multiplier", Min = 0.5f, Max = 3.0f, StepSize = 0.1f)]
-    public float Multiplier = 1.0f;
-
+public class MyMod : ModManagerBase<MySettings>, IModPlugin
+{
     public override void Initialize(IPluginContext ctx)
     {
-        base.Initialize(ctx); // settings controller is discovered and loaded here
+        base.Initialize(ctx); // auto controller + load
     }
+
+    public void Start(IPluginContext ctx) { }
 }
 ```
 
-## 2. Runtime Toggles (Global ModAPI Flags)
+## 2. Settings Pattern B: Manual `ISettingsProvider`
 
-Use `ModPrefs` for loader/runtime flags:
+```csharp
+using System.Collections.Generic;
+using ModAPI.Core;
+using ModAPI.Spine;
+
+public class MyMod : IModPlugin, ISettingsProvider
+{
+    private readonly MySettings _settings = new MySettings();
+    private List<SettingDefinition> _defs;
+
+    public void Initialize(IPluginContext ctx)
+    {
+        _defs = SpineSettingsHelper.Scan(_settings);
+    }
+
+    public void Start(IPluginContext ctx) { }
+
+    public IEnumerable<SettingDefinition> GetSettings() => _defs;
+    public object GetSettingsObject() => _settings;
+    public void OnSettingsLoaded() { }
+    public void ResetToDefaults() => _settings.Enabled = true;
+}
+
+public class MySettings
+{
+    [ModSetting("Enable Feature")]
+    public bool Enabled = true;
+}
+```
+
+When to use Pattern B:
+- You keep settings in a separate object graph.
+- You need custom save/reset/load behavior beyond base-controller defaults.
+- You want explicit control over scanning and definition caching.
+
+## 3. Runtime Toggles (Global ModAPI Flags)
 
 ```csharp
 ModPrefs.DebugTranspilers = true;
@@ -32,7 +80,7 @@ ModPrefs.TranspilerSafeMode = true;
 ModPrefs.Save();
 ```
 
-## 3. Per-Save Typed Data (`ISaveSystem`)
+## 4. Per-Save Typed Data (`ISaveSystem`)
 
 ```csharp
 public class MySaveState
@@ -40,38 +88,20 @@ public class MySaveState
     public int Visits;
 }
 
-public class MyMod : IModPlugin
+private readonly MySaveState _state = new MySaveState();
+
+public void Initialize(IPluginContext ctx)
 {
-    private readonly MySaveState _state = new MySaveState();
-
-    public void Initialize(IPluginContext ctx)
-    {
-        ctx.SaveSystem.RegisterModData("state", _state);
-    }
-
-    public void Start(IPluginContext ctx) { }
+    ctx.SaveSystem.RegisterModData("state", _state);
 }
 ```
 
-## 4. SaveData/LoadData Extension Methods (`PersistentDataAPI`)
-
-These are extension methods on `IPluginContext`:
+## 5. SaveData/LoadData (`PersistentDataAPI` Extensions)
 
 ```csharp
-// Save
 ctx.SaveData("custom_blob", myData);
-
-// Load
 if (ctx.LoadData("custom_blob", out MyData loaded))
 {
     myData = loaded;
 }
 ```
-
-## 5. What Not to Use
-
-Legacy calls below are no longer current API:
-- `ctx.Settings.GetInt(...)`
-- `ctx.Settings.SetInt(...)`
-- `ctx.Settings.SaveUser()`
-- `PersistentDataAPI.SaveData(...)` (static style without `ctx`)

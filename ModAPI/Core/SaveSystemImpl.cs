@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -24,9 +24,9 @@ namespace ModAPI.Core
         public SaveSystemImpl(string modId)
         {
             _modId = modId;
-            // Subscribe to global life-cycle events
-            GameEvents.OnBeforeSave += HandleBeforeSave;
-            GameEvents.OnAfterLoad += HandleAfterLoad;
+            // Subscribe to generic ModAPI save lifecycle events (fed by ModAPI.Events.GameEvents)
+            ModAPI.Saves.Events.OnBeforeSave += HandleBeforeSave;
+            ModAPI.Saves.Events.OnAfterLoad += HandleAfterLoad;
             _instances.Add(this);
         }
 
@@ -134,7 +134,7 @@ namespace ModAPI.Core
             }
         }
 
-        private void HandleBeforeSave(SaveData gameData)
+        private void HandleBeforeSave(SaveEntry gameData)
         {
             try
             {
@@ -207,7 +207,7 @@ namespace ModAPI.Core
             }
         }
 
-        private void HandleAfterLoad(SaveData gameData)
+        private void HandleAfterLoad(SaveEntry gameData)
         {
             var rootPath = GetCurrentSlotPath();
             if (string.IsNullOrEmpty(rootPath)) return;
@@ -288,3 +288,4 @@ namespace ModAPI.Core
         }
     }
 }
+

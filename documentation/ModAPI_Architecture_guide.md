@@ -4,6 +4,15 @@ This document describes how the loader actually behaves at runtime based on the 
 
 For exact interface/method signatures referenced by this architecture doc, use `documentation/API_Signatures_Reference.md`.
 
+## Compatibility Matrix
+
+| Scope | Applies To | Status |
+|-------|------------|--------|
+| Loader flow and lifecycle sequencing | Current codebase | Supported |
+| Header version label `v1.2` | Doc title only | Legacy label |
+
+When this guide and signature docs differ, trust `API_Signatures_Reference.md`.
+
 ## 1. Startup Pipeline
 
 Entry path:

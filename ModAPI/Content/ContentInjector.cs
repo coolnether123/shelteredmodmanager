@@ -179,9 +179,17 @@ namespace ModAPI.Content
                 def.name = "ModItem_" + definition.Id;
                 UnityEngine.Object.DontDestroyOnLoad(def.gameObject);
 
+                var nameLoc = ResolveLocalization(definition, true);
+                var descLoc = ResolveLocalization(definition, false);
+
                 SetField(def, "m_Type", itemType);
-                SetField(def, "m_NameLocalizationKey", definition.DisplayName);
-                SetField(def, "m_DescLocalizationKey", definition.Description);
+                SetField(def, "m_NameLocalizationKey", nameLoc.Key);
+                SetField(def, "m_DescLocalizationKey", descLoc.Key);
+
+                MMLog.WriteDebug(
+                    $"Localization '{definition.Id}': " +
+                    $"name={nameLoc.Mode}, desc={descLoc.Mode}, " +
+                    $"nameKey='{nameLoc.Key}', descKey='{descLoc.Key}'");
                 
                 // Map Category
                 var category = (ItemManager.ItemCategory)definition.Category;
@@ -519,6 +527,123 @@ namespace ModAPI.Content
         {
             var f = obj.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
             if (f != null) f.SetValue(obj, val);
+        }
+
+        private struct LocalizedFieldResolution
+        {
+            public string Key;
+            public string Mode;
+        }
+
+        private static LocalizedFieldResolution ResolveLocalization(ItemDefinition definition, bool isName)
+        {
+            var explicitKey = isName ? definition.DisplayNameKey : definition.DescriptionKey;
+            var explicitText = isName ? definition.DisplayNameText : definition.DescriptionText;
+            var legacyValue = isName ? definition.DisplayName : definition.Description;
+            var label = isName ? "name" : "description";
+
+            if (!string.IsNullOrEmpty(explicitKey))
+            {
+                WarnIfLikelyLiteralKey(definition, label, explicitKey);
+                return new LocalizedFieldResolution { Key = explicitKey, Mode = "key" };
+            }
+
+            if (!string.IsNullOrEmpty(explicitText))
+            {
+                var generatedKey = BuildGeneratedLocalizationKey(definition, isName);
+                ModLocalization.Set(generatedKey, explicitText);
+                return new LocalizedFieldResolution { Key = generatedKey, Mode = "text" };
+            }
+
+            if (!string.IsNullOrEmpty(legacyValue))
+            {
+                if (ItemDefinition.LooksLikeLocalizationKey(legacyValue))
+                {
+                    WarnIfLikelyLiteralKey(definition, label, legacyValue);
+                    return new LocalizedFieldResolution { Key = legacyValue, Mode = "key" };
+                }
+
+                var generatedKey = BuildGeneratedLocalizationKey(definition, isName);
+                ModLocalization.Set(generatedKey, legacyValue);
+                return new LocalizedFieldResolution { Key = generatedKey, Mode = "text" };
+            }
+
+            if (isName)
+            {
+                var fallbackKey = BuildGeneratedLocalizationKey(definition, true);
+                ModLocalization.Set(fallbackKey, definition.Id ?? "Mod Item");
+                MMLog.WriteWarning($"Item '{definition.Id}' is missing display name text/key. Falling back to item id.");
+                return new LocalizedFieldResolution { Key = fallbackKey, Mode = "text" };
+            }
+
+            return new LocalizedFieldResolution { Key = string.Empty, Mode = "none" };
+        }
+
+        private static void WarnIfLikelyLiteralKey(ItemDefinition definition, string label, string key)
+        {
+            if (string.IsNullOrEmpty(key)) return;
+            if (!ItemDefinition.LooksLikeLocalizationKey(key))
+            {
+                MMLog.WriteWarning(
+                    $"Item '{definition.Id}' {label} localization is likely literal text but is being treated as a key: '{key}'. " +
+                    $"Use With{(label == "name" ? "DisplayName" : "Description")}Text(...) for literals.");
+            }
+        }
+
+        private static string BuildGeneratedLocalizationKey(ItemDefinition definition, bool isName)
+        {
+            var modId = ResolveModId(definition);
+            var itemId = ResolveItemIdSegment(definition);
+            var suffix = isName ? "name" : "desc";
+            return $"modapi.{SanitizeKeyPart(modId)}.{SanitizeKeyPart(itemId)}.{suffix}";
+        }
+
+        private static string ResolveModId(ItemDefinition definition)
+        {
+            try
+            {
+                Core.ModEntry entry;
+                if (Core.ModRegistry.TryGetModByAssembly(definition.OwnerAssembly, out entry) &&
+                    entry != null &&
+                    !string.IsNullOrEmpty(entry.Id))
+                {
+                    return entry.Id;
+                }
+            }
+            catch { }
+
+            try { return definition.OwnerAssembly != null ? definition.OwnerAssembly.GetName().Name : "mod"; }
+            catch { return "mod"; }
+        }
+
+        private static string ResolveItemIdSegment(ItemDefinition definition)
+        {
+            var id = definition.Id;
+            if (string.IsNullOrEmpty(id)) return "item";
+
+            var lastDot = id.LastIndexOf('.');
+            if (lastDot >= 0 && lastDot < id.Length - 1)
+                return id.Substring(lastDot + 1);
+
+            return id;
+        }
+
+        private static string SanitizeKeyPart(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return "unknown";
+
+            var chars = value.ToCharArray();
+            for (var i = 0; i < chars.Length; i++)
+            {
+                var c = chars[i];
+                var ok = (c >= 'a' && c <= 'z') ||
+                         (c >= 'A' && c <= 'Z') ||
+                         (c >= '0' && c <= '9') ||
+                         c == '_' || c == '-';
+                if (!ok) chars[i] = '_';
+            }
+
+            return new string(chars).ToLowerInvariant();
         }
 
         [HarmonyPatch(typeof(ItemButtonBase), "UpdateSprite")]

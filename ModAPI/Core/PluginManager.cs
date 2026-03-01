@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,6 +8,7 @@ using HarmonyLib;
 using ModAPI.Harmony;
 using ModAPI.Hooks;
 using ModAPI.Spine;
+using ModAPI.Characters;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -35,6 +36,8 @@ namespace ModAPI.Core
         /// </summary>
         public static List<ModEntry> LoadedMods { get; private set; }
 
+        public static event Action OnSessionStartedEvent;
+        public static event Action OnNewGameEvent;
 
         private PluginManager()
         {
@@ -103,16 +106,15 @@ namespace ModAPI.Core
             // Because plugins are loaded via bytes (no file lock), they live in an anonymous context.
             // This resolver ensures they link back to the ALREADY LOADED ModAPI instance,
             // preventing duplicate assembly loads and fixing IsAssignableFrom failures.
-            // It also maintains backward compatibility for mods compiled against older ModAPI
-            // event/helper types that are now type-forwarded into ShelteredAPI.
+            // It also keeps ShelteredAPI resolution deterministic when mods reference both APIs.
             AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
             {
                 string name = new AssemblyName(args.Name).Name;
                 if (name == "ModAPI" || name == "ModAPI.Core") return Assembly.GetExecutingAssembly();
                 if (name == "ShelteredAPI")
                 {
-                    var gameEventsType = Type.GetType("ModAPI.Events.GameEvents, ShelteredAPI", false);
-                    if (gameEventsType != null) return gameEventsType.Assembly;
+                    var shelteredType = Type.GetType("ShelteredAPI.Core.ShelteredModManagerBase, ShelteredAPI", false);
+                    if (shelteredType != null) return shelteredType.Assembly;
                     try { return Assembly.Load("ShelteredAPI"); } catch { return null; }
                 }
                 return null;
@@ -140,10 +142,6 @@ namespace ModAPI.Core
                 // Initialize Core Systems
                 ModAPI.Saves.Events.OnAfterLoad += ModRandomState.Load;
                 ModAPI.Saves.Events.OnBeforeSave += ModRandomState.Save;
-
-                // Track lifecycle events for plugins
-                ModAPI.Events.GameEvents.OnSessionStarted += OnSessionStarted;
-                ModAPI.Events.GameEvents.OnNewGame += OnNewGame;
             }
             catch (Exception ex)
             {
@@ -532,8 +530,9 @@ namespace ModAPI.Core
         /// <summary>
         /// Broadcasts session-start events after game state is considered live.
         /// </summary>
-        internal void OnSessionStarted()
+        public void OnSessionStarted()
         {
+            var h = OnSessionStartedEvent; if (h != null) h();
             for (int i = 0; i < _sessionEvents.Count; i++)
             {
                 try { _sessionEvents[i].OnSessionStarted(); }
@@ -544,8 +543,9 @@ namespace ModAPI.Core
         /// <summary>
         /// Handles New Game lifecycle fanout and reseeds session-scoped ModRandom state.
         /// </summary>
-        internal void OnNewGame()
+        public void OnNewGame()
         {
+            var h = OnNewGameEvent; if (h != null) h();
             // Initialize ModRandom for the new world
             ModRandom.Initialize(Environment.TickCount ^ Guid.NewGuid().GetHashCode());
             ModRandom.NotifySeedChanged();
@@ -611,7 +611,8 @@ namespace ModAPI.Core
                 Mod = entry,
                 Settings = settings,
                 Log = log,
-                Game = new GameHelperImpl(),
+                Game = ModAPIRegistry.GetAPI<IGameHelper>("ShelteredAPI.GameHelper"),
+                Characters = ModAPIRegistry.GetAPI<ICharacterEffectSystem>("ShelteredAPI.CharacterEffects"),
                 SaveSystem = new SaveSystemImpl(modId),
                 GameRoot = _gameRoot,
                 ModsRoot = _modsRoot,
@@ -681,3 +682,4 @@ namespace ModAPI.Core
     }
 
 }
+

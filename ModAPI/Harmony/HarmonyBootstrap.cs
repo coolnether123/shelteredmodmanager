@@ -75,9 +75,8 @@ namespace ModAPI.Harmony
 
                 ModAPI.Harmony.HarmonyUtil.PatchAll(harmony, asm, opts);
 
-                // Backward compatibility: core game-facing hooks were moved out of ModAPI.
-                // We patch ShelteredAPI as well so existing mods still see the same behavior
-                // when referencing ModAPI.Events.GameEvents.
+                // Backward compatibility: patch ShelteredAPI too so Sheltered-specific
+                // implementations and adapters are activated alongside core ModAPI hooks.
                 var shelteredAssembly = ResolveShelteredApiAssembly();
                 if (shelteredAssembly != null && shelteredAssembly != asm)
                 {
@@ -151,12 +150,12 @@ namespace ModAPI.Harmony
         private static Assembly ResolveShelteredApiAssembly()
         {
             // Prefer type-based resolve first so we bind to the already-loaded instance.
-            // This avoids duplicate loads and preserves compatibility for forwarded ModAPI types.
+            // This avoids duplicate loads and preserves compatibility for mods referencing both APIs.
             try
             {
-                var gameEventsType = Type.GetType("ModAPI.Events.GameEvents, ShelteredAPI", false);
-                if (gameEventsType != null)
-                    return gameEventsType.Assembly;
+                var shelteredType = Type.GetType("ShelteredAPI.Core.ShelteredModManagerBase, ShelteredAPI", false);
+                if (shelteredType != null)
+                    return shelteredType.Assembly;
             }
             catch { }
 

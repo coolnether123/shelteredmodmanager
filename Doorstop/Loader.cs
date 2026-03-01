@@ -144,6 +144,9 @@ public static class UnityInitHook
         LoaderDebugLog.Write("[Loader] Poller thread started (max 120 attempts, 500ms interval).");
         _poller = new Thread(() =>
         {
+            LoaderDebugLog.Write("[Loader] Giving Unity engine 1500ms to initialize native bindings...");
+            Thread.Sleep(1500);
+
             for (int i = 0; i < 120 && !Loader.BootstrapTriggered; i++)
             {
                 _pollAttempts = i + 1;

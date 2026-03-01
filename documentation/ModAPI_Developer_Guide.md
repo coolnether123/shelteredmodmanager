@@ -1,16 +1,26 @@
-# ModAPI Developer Guide (v1.2, Current)
+# ModAPI Developer Guide (Current v1.3 Line)
 
-This guide is aligned to the current codebase signatures.
+## Compatibility Matrix
 
-Exact API signatures live in: `documentation/API_Signatures_Reference.md`.
+| Area | Assembly | Status |
+|------|----------|--------|
+| Core plugin lifecycle, context, settings, content APIs | `ModAPI.dll` | Current |
+| Backward-compat game helpers/events used by v1.2 mods | `ModAPI.dll` | Current (Deprecated for future major) |
+| Sheltered-specific adapters and implementations | `ShelteredAPI.dll` | Current |
+| Docs labeled `v1.2` in this repo | Historical reference | Deprecated where conflicting |
+
+Exact signatures: `documentation/API_Signatures_Reference.md`.
 
 ## 1. Start Here
 
-- Plugin lifecycle and context usage: `documentation/how to develop a plugin.md`
+- Plugin lifecycle and context usage: `documentation/how to develop a plugin.md` (contains legacy title, signatures still usable)
 - Harmony + transpilers: `documentation/how to develop a patch with harmony.md`
 - Transpiler safety/debugging: `documentation/Transpiler_and_Debugging_Guide.md`
 - Loader/runtime architecture: `documentation/ModAPI_Architecture_guide.md`
 - Spine settings UI: `documentation/Spine_Settings_Guide.md`
+- Settings + persistence patterns: `documentation/SETTINGS.md`
+- ShelteredAPI helper surface: `documentation/ShelteredAPI_Guide.md`
+- Failures and log signatures: `documentation/API_Troubleshooting.md`
 
 ## 2. Minimal Plugin Template
 
@@ -31,44 +41,40 @@ public class MyPlugin : IModPlugin
 }
 ```
 
-## 3. Optional Lifecycle Interfaces
+## 3. Content Registration (Current API)
+
+Register via `ContentRegistry` in `Start(...)` (safe lifecycle guidance below).
+
+### 3.1 Type-Name Collision Warning
+
+`ItemDefinition` exists both in game code and in `ModAPI.Content`. Use aliases in mod code:
 
 ```csharp
-public class MyPlugin : IModPlugin, IModUpdate, IModShutdown, IModSceneEvents, IModSessionEvents
-{
-    public void Initialize(IPluginContext ctx) { }
-    public void Start(IPluginContext ctx) { }
-    public void Update() { }
-    public void Shutdown() { }
-    public void OnSceneLoaded(string sceneName) { }
-    public void OnSceneUnloaded(string sceneName) { }
-    public void OnSessionStarted() { }
-    public void OnNewGame() { }
-}
+using ContentItemDefinition = ModAPI.Content.ItemDefinition;
+using GameItemDefinition = global::ItemDefinition;
 ```
 
-## 4. Content Registration (Current API)
-
-Register through `ContentRegistry` (not legacy `RegisterCustomItem`/`RegisterCustomRecipe` helpers).
+### 3.2 Recommended Registration Example
 
 ```csharp
 using ModAPI.Content;
+using ContentItemDefinition = ModAPI.Content.ItemDefinition;
 
 public void Start(IPluginContext ctx)
 {
-    var item = new ItemDefinition()
+    var item = new ContentItemDefinition()
         .WithId("com.mymod.power_cell")
-        .WithDisplayName("Power Cell")
-        .WithDescription("A high-capacity energy cell")
+        .WithDisplayNameText("Power Cell")
+        .WithDescriptionText("A high-capacity energy cell")
         .WithCategory(ItemCategory.Normal)
         .WithStackSize(10)
         .WithScrapValue(5f)
         .WithIcon("Assets/Icons/power_cell.png");
 
-    var itemResult = ContentRegistry.RegisterItem(item);
-    if (!itemResult.Success)
+    var result = ContentRegistry.RegisterItem(item);
+    if (!result.Success)
     {
-        ctx.Log.Error("Item registration failed: " + itemResult.ErrorMessage);
+        ctx.Log.Error("Item registration failed: " + result.ErrorMessage);
         return;
     }
 
@@ -84,20 +90,46 @@ public void Start(IPluginContext ctx)
 }
 ```
 
-## 5. Asset Loading Signatures
+### 3.3 Localization Keys vs Text (ModAPI v1.3)
 
-```csharp
-using System.Reflection;
-using ModAPI.Content;
+Use explicit APIs when possible:
+- `.WithDisplayNameKey("mymod.items.power_cell.name")`
+- `.WithDescriptionKey("mymod.items.power_cell.desc")`
+- `.WithDisplayNameText("Power Cell")`
+- `.WithDescriptionText("A high-capacity energy cell")`
 
-public void Start(IPluginContext ctx)
-{
-    Sprite iconA = AssetLoader.LoadSprite(Assembly.GetExecutingAssembly(), "Assets/Icons/power_cell.png");
-    Sprite iconB = AssetLoader.LoadSprite(ctx.Mod.RootPath, "Assets/Icons/power_cell.png");
-}
-```
+Backward-compatible behavior:
+- Legacy `.WithDisplayName(...)` / `.WithDescription(...)` still work.
+- Values are treated as keys if they look like keys (`.` and no spaces), otherwise treated as literal text.
+- For literal text, ModAPI generates and registers internal keys before item UI reads localization.
+- This prevents vanilla fallback lowercasing issues when key lookup misses.
 
-## 6. Events
+### 3.4 Registration Timing and Lifecycle
+
+Use this ordering:
+1. `Initialize(...)`: cache context, wire events, set up state only.
+2. `Start(...)`: register items/recipes/patches.
+
+Rationale:
+- `ContentInjector` bootstraps only when managers are ready (`ItemManager.Instance` and `CraftingManager.Instance`).
+- Definitions registered by `Start(...)` are available by the time injector bootstraps.
+- Registering in constructors is unsafe and can race before loader context exists.
+
+Guaranteed-safe recipe:
+- Put all `ContentRegistry.RegisterItem/RegisterRecipe/RegisterCookingRecipe` calls in `Start(...)`.
+- Do not require managers directly in `Start(...)`; let injector consume registry entries.
+
+## 4. Settings Patterns
+
+Two supported patterns:
+- Pattern A: `ModManagerBase<T>` auto-controller and auto-load.
+- Pattern B: `ISettingsProvider` manual provider with `SpineSettingsHelper.Scan`.
+
+Use A unless you explicitly need B. Full examples are in:
+- `documentation/Spine_Settings_Guide.md`
+- `documentation/SETTINGS.md`
+
+## 5. Events (ModAPI + ShelteredAPI)
 
 ```csharp
 using ModAPI.Events;
@@ -105,32 +137,34 @@ using ModAPI.Events;
 public void Start(IPluginContext ctx)
 {
     GameEvents.OnNewDay += day => ctx.Log.Info("Day " + day);
-    GameEvents.OnSixHourTick += batch => ctx.Log.Info("6h tick at day " + batch.Day + ", hour " + batch.Hour);
-    GameEvents.OnStaggeredTick += batch => ctx.Log.Info("Staggered tick interval: " + batch.IntervalHours + "h");
-    UIEvents.OnPanelOpened += panel => ctx.Log.Info("Opened: " + panel.GetType().Name);
+    GameEvents.OnSixHourTick += batch => ctx.Log.Info("6h tick seq=" + batch.Sequence);
+    GameEvents.OnStaggeredTick += batch => ctx.Log.Info("Staggered every " + batch.IntervalHours + "h");
 }
 ```
 
-## 7. Mod-to-Mod APIs
+## 6. ShelteredAPI-Specific Helpers
+
+`ShelteredAPI` ships additional helpers under existing namespaces (`ModAPI.Core`, `ModAPI.Events`).
+
+Example: explicit trigger registration and priority ordering.
 
 ```csharp
-// Publish
-ModAPIRegistry.RegisterAPI<IMyApi>("com.mymod.api", new MyApiImpl(), ctx.Mod.Id);
+using ModAPI.Events;
 
-// Consume
-if (ModAPIRegistry.TryGetAPI<IMyApi>("com.othermod.api", out var api))
+public void Start(IPluginContext ctx)
 {
-    api.DoWork();
+    GameTimeTriggerHelper.RegisterTrigger(
+        triggerId: "com.mymod.economy.tick",
+        priority: 50,
+        cadence: TimeTriggerCadence.SixHour,
+        callback: batch => ctx.Log.Info("Economy tick " + batch.TotalHours));
 }
 ```
 
-## 8. Persistence
-
-Use `ISaveSystem` for structured per-save data:
+## 7. Persistence
 
 ```csharp
 public class SaveState { public int Counter; }
-
 private readonly SaveState _state = new SaveState();
 
 public void Initialize(IPluginContext ctx)
@@ -138,8 +172,6 @@ public void Initialize(IPluginContext ctx)
     ctx.SaveSystem.RegisterModData("state", _state);
 }
 ```
-
-Use `PersistentDataAPI` extension methods when you want key/value blobs on the plugin context:
 
 ```csharp
 ctx.SaveData("stats", myStats);
@@ -149,38 +181,7 @@ if (ctx.LoadData("stats", out MyStats loaded))
 }
 ```
 
-## 9. Settings
-
-Use Spine attributes with `ModManagerBase`:
-
-```csharp
-using ModAPI.Core;
-using ModAPI.Spine;
-
-public class MyMod : ModManagerBase, IModPlugin
-{
-    [ModSetting("Enable Feature")]
-    public bool Enabled = true;
-
-    [ModSetting("Multiplier", Min = 0.5f, Max = 3.0f, StepSize = 0.1f)]
-    public float Multiplier = 1f;
-
-    public override void Initialize(IPluginContext ctx)
-    {
-        base.Initialize(ctx);
-    }
-
-    public void Start(IPluginContext ctx) { }
-}
-```
-
-## 10. Logging
+## 8. Logging
 
 - Preferred for mod logs: `ctx.Log.Info/Warn/Error/Debug`.
-- Static/internal logs: `MMLog.WriteInfo`, `MMLog.WriteWarning`, `MMLog.WriteError`, `MMLog.WriteDebug`.
-
-## 11. Transpiler Safety Reminder
-
-- Prefer targeted replacements over broad IL rewrites.
-- Use `Build(strict: true, validateStack: true)` by default.
-- For advanced transforms, use transaction patterns (`WithTransaction`) and inspect dumps via `TranspilerDebugger.DumpWithDiff(...)`.
+- Internal/static logs: `MMLog.WriteInfo`, `MMLog.WriteWarning`, `MMLog.WriteError`, `MMLog.WriteDebug`.

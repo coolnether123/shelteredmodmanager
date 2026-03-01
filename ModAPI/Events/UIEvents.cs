@@ -15,6 +15,7 @@ namespace ModAPI.Events
     ///       }
     ///   };
     /// </summary>
+    [Obsolete("Compatibility API retained in ModAPI 1.3. Planned to move to ShelteredAPI in a future major release.", false)]
     public static class UIEvents
     {
         // Panel lifecycle events

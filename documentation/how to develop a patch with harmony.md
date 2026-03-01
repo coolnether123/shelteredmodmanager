@@ -4,6 +4,13 @@ This guide covers practical Harmony usage with ModAPI.
 
 Exact API signatures: `documentation/API_Signatures_Reference.md`.
 
+## Compatibility Matrix
+
+| Scope | Applies To | Status |
+|-------|------------|--------|
+| Harmony patch workflow and safety practices | Current `ModAPI.dll` | Supported |
+| Header version label `v1.2` | Doc title only | Legacy label |
+
 ## 1. Reference Setup
 
 Add `0Harmony.dll` from your SMM install (`SMM/bin/0Harmony.dll`).
