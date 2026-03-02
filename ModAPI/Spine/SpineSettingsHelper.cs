@@ -200,6 +200,7 @@ namespace ModAPI.Spine
                 else if (memberType == typeof(int)) def.Type = SettingType.Int;
                 else if (memberType == typeof(float)) def.Type = SettingType.Float;
                 else if (memberType == typeof(string)) def.Type = SettingType.String;
+                else if (memberType == typeof(KeyCode)) { def.Type = SettingType.Keybind; def.EnumType = memberType; }
                 else if (memberType == typeof(Color)) def.Type = SettingType.Color;
                 else if (memberType.IsEnum)
                 {

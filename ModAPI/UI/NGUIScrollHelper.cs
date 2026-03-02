@@ -63,6 +63,15 @@ namespace ModAPI.UI
             {
                 scroll = Input.mouseScrollDelta.y;
             }
+
+            // Keyboard fallback for users without reliable wheel/gesture support.
+            if (scroll == 0f)
+            {
+                if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
+                    scroll = 1f;
+                else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.PageDown))
+                    scroll = -1f;
+            }
             
             if (scroll != 0f)
             {

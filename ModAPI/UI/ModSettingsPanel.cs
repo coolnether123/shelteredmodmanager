@@ -255,6 +255,15 @@ namespace ModAPI.UI
             lbl.alignment = NGUIText.Alignment.Left;
             lbl.text = string.Empty;
 
+            // Some Unity 5.3/NGUI environments throw inside UIInput.Start when only TTF fonts
+            // are available (no bitmap font in scene). Disable search input in that case.
+            if (lbl.bitmapFont == null)
+            {
+                lbl.text = "Search unavailable";
+                lbl.color = COLOR_SUBTEXT;
+                return;
+            }
+
             _searchInput = inputGO.AddComponent<UIInput>();
             _searchInput.label = lbl;
             _searchInput.activeTextColor = Color.white;

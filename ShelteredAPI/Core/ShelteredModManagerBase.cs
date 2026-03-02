@@ -1,5 +1,6 @@
 using ModAPI.Core;
 using ModAPI.Events;
+using ShelteredAPI.Input;
 
 namespace ShelteredAPI.Core
 {
@@ -11,6 +12,8 @@ namespace ShelteredAPI.Core
         public override void Initialize(IPluginContext context)
         {
             base.Initialize(context);
+            ShelteredInputActions.EnsureRegistered();
+            ShelteredKeybindsProvider.Instance.EnsureLoaded();
 
             Events.Bind(
                 delegate { GameEvents.OnBeforeSave += HandleBeforeSave; },

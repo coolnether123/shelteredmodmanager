@@ -721,6 +721,13 @@ namespace ModAPI.Hooks.Paging
             // Check for scroll input
             float scroll = Input.GetAxis("Mouse ScrollWheel");
             if (scroll == 0f) scroll = Input.mouseScrollDelta.y;
+            if (scroll == 0f)
+            {
+                if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
+                    scroll = 1f;
+                else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.PageDown))
+                    scroll = -1f;
+            }
             if (scroll == 0f) return;
             
             // Check if mouse is within the window bounds
@@ -772,6 +779,13 @@ namespace ModAPI.Hooks.Paging
             
             float scroll = Input.GetAxis("Mouse ScrollWheel");
             if (scroll == 0f) scroll = Input.mouseScrollDelta.y;
+            if (scroll == 0f)
+            {
+                if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
+                    scroll = 1f;
+                else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.PageDown))
+                    scroll = -1f;
+            }
             if (scroll == 0f) return;
             
             // Check mouse bounds (roughly center area)

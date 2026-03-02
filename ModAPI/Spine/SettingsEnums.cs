@@ -52,6 +52,7 @@ namespace ModAPI.Spine
         Header,
         Spacer,
         NumericInt,
+        Keybind,
         Choice
     }
 
