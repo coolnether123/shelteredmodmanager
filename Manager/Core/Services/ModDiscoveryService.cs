@@ -152,6 +152,18 @@ namespace Manager.Core.Services
                         }
                     }
                 }
+                else if (!string.IsNullOrEmpty(mod.RequiredModApiVersion) && !string.IsNullOrEmpty(_installedModApiVersion))
+                {
+                    // Fallback for mods that declare required API in About.json but do not expose
+                    // a readable ModAPI/ShelteredAPI assembly reference.
+                    bool isCompatible = AssemblyVersionChecker.IsCompatible(_installedModApiVersion, mod.RequiredModApiVersion);
+                    mod.IsModApiCompatible = isCompatible;
+                    if (!isCompatible)
+                    {
+                        mod.Status = ModStatus.VersionMismatch;
+                        mod.StatusMessage = "Requires ModAPI " + mod.RequiredModApiVersion + " (installed: " + _installedModApiVersion + ")";
+                    }
+                }
             }
             catch { }
         }

@@ -26,6 +26,10 @@ namespace Manager
             public string[] loadAfter;
             public string[] tags;
             public string website;
+            public string requiredModApiVersion;
+            public string modApiVersion;
+            public string requiredShelteredApiVersion;
+            public string shelteredApiVersion;
             public string nexusGameDomain;
             public int nexusModId;
         }

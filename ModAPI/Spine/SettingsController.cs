@@ -414,12 +414,44 @@ namespace ModAPI.Spine
                 {
                     try
                     {
-                        object val = ConvertValue(kvp.Value, def.Getter(_owner).GetType());
+                        Type targetType = ResolveSettingType(def);
+                        object val = ConvertValue(kvp.Value, targetType);
                         def.Setter(_owner, val);
                     }
                     catch (Exception ex) { MMLog.WriteError($"Failed to apply setting {kvp.Key}: {ex.Message}"); }
                 }
             }
+        }
+
+        private Type ResolveSettingType(SettingDefinition def)
+        {
+            if (def == null) return typeof(string);
+            if (def.EnumType != null) return def.EnumType;
+
+            var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            Type ownerType = _owner != null ? _owner.GetType() : null;
+
+            if (ownerType != null && !string.IsNullOrEmpty(def.FieldName))
+            {
+                var field = ownerType.GetField(def.FieldName, flags);
+                if (field != null) return field.FieldType;
+
+                var prop = ownerType.GetProperty(def.FieldName, flags);
+                if (prop != null) return prop.PropertyType;
+            }
+
+            if (def.DefaultValue != null) return def.DefaultValue.GetType();
+            if (def.Getter != null)
+            {
+                try
+                {
+                    object current = def.Getter(_owner);
+                    if (current != null) return current.GetType();
+                }
+                catch { }
+            }
+
+            return typeof(string);
         }
 
         private Dictionary<string, object> ParseJson(string json)

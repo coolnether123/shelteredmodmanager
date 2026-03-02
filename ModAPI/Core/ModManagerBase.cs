@@ -7,6 +7,7 @@ using UnityEngine;
 using ModAPI.Harmony;
 using ModAPI.Core;
 using ModAPI.Spine;
+using ModAPI.Events;
 
 namespace ModAPI.Core
 {
@@ -95,6 +96,24 @@ namespace ModAPI.Core
             }
 
             if (Log != null) Log.Info(string.Format("{0} initialized. Settings Mode: {1}", GetType().Name, Config != null ? "Active" : "None"));
+
+            // Persist Spine settings on every game save boundary (including Save & Exit).
+            // This ensures in-session changes are flushed even if the settings UI was left open.
+            Action<SaveData> beforeSaveHandler = delegate(SaveData _)
+            {
+                try
+                {
+                    var provider = context.Mod != null ? context.Mod.SettingsProvider as ISettingsProvider2 : null;
+                    if (provider != null) provider.Save();
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError("[ModManagerBase] Pre-save settings flush failed: " + ex.Message);
+                }
+            };
+            Events.Bind(
+                delegate { GameEvents.OnBeforeSave += beforeSaveHandler; },
+                delegate { GameEvents.OnBeforeSave -= beforeSaveHandler; });
             
             ScanForPersistence();
         }

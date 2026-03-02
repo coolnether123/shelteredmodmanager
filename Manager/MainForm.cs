@@ -495,7 +495,7 @@ namespace Manager
             // Re-discover local mods so installed/update status reflects the new install immediately.
             _modManagerTab.RefreshMods();
             UpdateStatusCounts();
-            _nexusTab.RefreshLatestModsAsync();
+            _nexusTab.RefreshLatestModsAsync(true);
         }
 
         private void NexusTab_NexusActivity(string message)

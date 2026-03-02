@@ -44,7 +44,7 @@ namespace Manager
         }
 
         /// <summary>
-        /// Gets the ModAPI version that a mod's DLL was compiled against.
+        /// Gets the ModAPI/ShelteredAPI version that a mod's DLL was compiled against.
         /// </summary>
         /// <param name="modDllPath">Path to the mod's assembly DLL</param>
         /// <returns>Version string or null if no ModAPI reference found</returns>
@@ -62,10 +62,11 @@ namespace Manager
                 var assembly = Assembly.ReflectionOnlyLoad(assemblyBytes);
                 var references = assembly.GetReferencedAssemblies();
 
-                // Find the ModAPI reference
+                // Find the ModAPI/ShelteredAPI reference
                 foreach (var reference in references)
                 {
-                    if (reference.Name == "ModAPI")
+                    if (string.Equals(reference.Name, "ModAPI", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(reference.Name, "ShelteredAPI", StringComparison.OrdinalIgnoreCase))
                     {
                         return reference.Version?.ToString();
                     }
@@ -133,7 +134,8 @@ namespace Manager
                     // Skip known framework/dependency DLLs
                     string fileName = Path.GetFileName(dllPath);
                     if (fileName.Equals("0Harmony.dll", StringComparison.OrdinalIgnoreCase) ||
-                        fileName.Equals("ModAPI.dll", StringComparison.OrdinalIgnoreCase))
+                        fileName.Equals("ModAPI.dll", StringComparison.OrdinalIgnoreCase) ||
+                        fileName.Equals("ShelteredAPI.dll", StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
