@@ -11,6 +11,30 @@ using UnityEngine;
 
 namespace ModAPI.Harmony
 {
+    internal static class AutoLoadFlow
+    {
+        // Sentinel value from Manager: AutoLoadSaveSlot=-1 means "start a new game in lowest free slot".
+        public const int NewSaveSentinel = -1;
+
+        public static bool PendingNewSave = false;
+        public static bool ModeChosen = false;
+        public static bool SlotChosen = false;
+
+        public static void BeginNewSave()
+        {
+            PendingNewSave = true;
+            ModeChosen = false;
+            SlotChosen = false;
+        }
+
+        public static void Reset()
+        {
+            PendingNewSave = false;
+            ModeChosen = false;
+            SlotChosen = false;
+        }
+    }
+
     [HarmonyPatch(typeof(MainMenu), "OnShow")]
     public static class MainMenu_OnShow_Patch
     {
@@ -116,7 +140,21 @@ namespace ModAPI.Harmony
             try
             {
                 int slot = HarmonyBootstrap.ReadManagerInt("AutoLoadSaveSlot", 0);
-                if (slot <= 0) return;
+                if (slot == AutoLoadFlow.NewSaveSentinel)
+                {
+                    MMLog.Write("Auto-new-save requested. Navigating to new game flow.");
+                    AutoLoadFlow.BeginNewSave();
+                    __instance.OnPlayButtonPressed();
+                    return;
+                }
+
+                if (slot <= 0)
+                {
+                    AutoLoadFlow.Reset();
+                    return;
+                }
+
+                AutoLoadFlow.Reset();
 
                 MMLog.Write($"Auto-loading save slot {slot} requested via config.");
 
@@ -162,6 +200,7 @@ namespace ModAPI.Harmony
             }
             catch (Exception ex)
             {
+                AutoLoadFlow.Reset();
                 MMLog.WriteError("Failed: " + ex.Message);
             }
         }
@@ -184,6 +223,111 @@ namespace ModAPI.Harmony
                 return false; // Skip original logic (which would push GameModeSelectionPanel)
             }
             return true;
+        }
+    }
+
+    [HarmonyPatch(typeof(GameModeSelectionPanel), "OnTweenFinished")]
+    internal static class GameModeSelectionPanel_OnTweenFinished_AutoNewSave_Patch
+    {
+        static void Postfix(GameModeSelectionPanel __instance)
+        {
+            if (!AutoLoadFlow.PendingNewSave || AutoLoadFlow.ModeChosen) return;
+
+            try
+            {
+                var tweenField = typeof(GameModeSelectionPanel).GetField("m_tween", BindingFlags.NonPublic | BindingFlags.Instance);
+                var tween = (TweenAlpha)tweenField?.GetValue(__instance);
+                if (tween != null && tween.direction == AnimationOrTween.Direction.Reverse) return;
+
+                AutoLoadFlow.ModeChosen = true;
+                MMLog.WriteDebug("[AutoLoad] Auto-selecting Survival mode for New Save.");
+                __instance.OnSurvivalModeChosen();
+            }
+            catch (Exception ex)
+            {
+                AutoLoadFlow.Reset();
+                MMLog.WriteError("[AutoLoad] Failed choosing mode: " + ex.Message);
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(SlotSelectionPanel), "OnTweenFinished")]
+    internal static class SlotSelectionPanel_OnTweenFinished_AutoNewSave_Patch
+    {
+        static void Postfix(SlotSelectionPanel __instance)
+        {
+            if (!AutoLoadFlow.PendingNewSave || AutoLoadFlow.SlotChosen) return;
+            if (!__instance.m_inputEnabled) return;
+
+            try
+            {
+                var tweenField = typeof(SlotSelectionPanel).GetField("m_tween", BindingFlags.NonPublic | BindingFlags.Instance);
+                var tween = (TweenAlpha)tweenField?.GetValue(__instance);
+                if (tween != null && tween.direction == AnimationOrTween.Direction.Reverse) return;
+
+                AutoLoadFlow.SlotChosen = true;
+
+                int lowestSlot = FindLowestAvailableSurvivalSlot();
+                int targetPage;
+                int targetIndex;
+
+                if (lowestSlot <= 3)
+                {
+                    targetPage = 0;
+                    targetIndex = lowestSlot - 1;
+                }
+                else
+                {
+                    int customOffset = lowestSlot - 4;
+                    targetPage = (customOffset / 3) + 1;
+                    targetIndex = customOffset % 3;
+                }
+
+                int currentPage = PagingManager.GetPage(__instance);
+                while (currentPage < targetPage)
+                {
+                    int before = currentPage;
+                    PagingManager.ChangePage(__instance, +1);
+                    currentPage = PagingManager.GetPage(__instance);
+                    if (currentPage == before) break;
+                }
+
+                while (currentPage > targetPage)
+                {
+                    int before = currentPage;
+                    PagingManager.ChangePage(__instance, -1);
+                    currentPage = PagingManager.GetPage(__instance);
+                    if (currentPage == before) break;
+                }
+
+                Traverse.Create(__instance).Field("m_selectedSlot").SetValue(targetIndex);
+                MMLog.Write($"[AutoLoad] Starting New Save in slot {lowestSlot} (page {targetPage}, index {targetIndex}).");
+
+                __instance.OnSlotChosen();
+                AutoLoadFlow.Reset();
+            }
+            catch (Exception ex)
+            {
+                AutoLoadFlow.Reset();
+                MMLog.WriteError("[AutoLoad] Failed choosing New Save slot: " + ex.Message);
+            }
+        }
+
+        private static int FindLowestAvailableSurvivalSlot()
+        {
+            for (int slot = 1; slot <= 3; slot++)
+            {
+                var info = SaveRegistryCore.ReadVanillaSaveInfo(slot);
+                if (info == null) return slot;
+            }
+
+            int customSlot = 4;
+            while (ExpandedVanillaSaves.GetBySlot(customSlot) != null)
+            {
+                customSlot++;
+            }
+
+            return customSlot;
         }
     }
 }

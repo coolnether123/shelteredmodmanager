@@ -766,18 +766,32 @@ namespace ModAPI.UI
 
         private static void SetTooltip(GameObject go, string text)
         {
-            if (string.IsNullOrEmpty(text)) return;
+            if (go == null || string.IsNullOrEmpty(text)) return;
             
             // NGUI hover events require a collider.
-            if (go.GetComponent<Collider>() == null)
+            var box = go.GetComponent<BoxCollider>();
+            if (box == null)
             {
                 NGUITools.AddWidgetCollider(go);
+                box = go.GetComponent<BoxCollider>();
             }
 
-            UIEventListener.Get(go).onHover += (obj, isOver) => {
-                if (isOver) ModTooltip.Show(text);
-                else ModTooltip.Hide();
-            };
+            if (box != null)
+            {
+                var widget = go.GetComponent<UIWidget>();
+                if (widget != null && (box.size.x < 1f || box.size.y < 1f))
+                {
+                    box.size = new Vector3(Mathf.Max(widget.width, 200), Mathf.Max(widget.height, 24), 1);
+                    box.center = new Vector3(box.size.x / 2, 0, 0);
+                }
+            }
+
+            var panel = NGUITools.FindInParents<UIPanel>(go);
+            var root = panel != null ? panel.transform : (go.transform != null ? go.transform.root : null);
+            if (root == null) return;
+
+            var label = go.GetComponent<UILabel>();
+            UIHelper.AddTooltip(go, root, text, label != null ? label.bitmapFont : null, label != null ? label.trueTypeFont : null);
         }
 
         private int GetPresetPriority(string name)

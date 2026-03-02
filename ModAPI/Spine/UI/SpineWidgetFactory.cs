@@ -68,7 +68,7 @@ namespace ModAPI.Spine.UI
 
         private static void SetTooltip(GameObject go, string text)
         {
-            if (string.IsNullOrEmpty(text)) return;
+            if (go == null || string.IsNullOrEmpty(text)) return;
             
             // Ensure we have a collider
             var box = go.GetComponent<BoxCollider>();
@@ -94,10 +94,22 @@ namespace ModAPI.Spine.UI
                 }
             }
 
-            UIEventListener.Get(go).onHover += (obj, isOver) => {
-                if (isOver) ModTooltip.Show(text);
-                else ModTooltip.Hide();
-            };
+            var tooltipRoot = ResolveTooltipRoot(go);
+            if (tooltipRoot == null) return;
+
+            var label = go.GetComponent<UILabel>();
+            UIHelper.AddTooltip(go, tooltipRoot, text, label != null ? label.bitmapFont : null, label != null ? label.trueTypeFont : null);
+        }
+
+        private static Transform ResolveTooltipRoot(GameObject go)
+        {
+            var panel = NGUITools.FindInParents<UIPanel>(go);
+            if (panel != null) return panel.transform;
+
+            var uiRoot = NGUITools.FindInParents<UIRoot>(go);
+            if (uiRoot != null) return uiRoot.transform;
+
+            return go.transform != null ? go.transform.root : null;
         }
 
         private static GameObject CreateBoolWidget(SettingDefinition def, Transform parent, object settingsObject, ModSettingsPanel panel)

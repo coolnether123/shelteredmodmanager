@@ -54,6 +54,8 @@ namespace Manager.Views
         private Label _autoLoadLabel;
         private ComboBox _autoLoadComboBox;
         private Button _refreshSavesButton;
+        private const int AUTO_LOAD_NONE = 0;
+        private const int AUTO_LOAD_NEW_SAVE = -1;
 
         // State
         private AppSettings _settings;
@@ -286,8 +288,8 @@ namespace Manager.Views
             _autoLoadComboBox.Location = new Point(20, 280);
             _autoLoadComboBox.Width = 350;
             // Keep 10 actual save slots visible before scroll starts.
-            // The list always includes "(None - Boot to Menu)" as an extra item.
-            _autoLoadComboBox.MaxDropDownItems = 10;
+            // The list also includes "(None)" + "(New Save)" as extra items.
+            _autoLoadComboBox.MaxDropDownItems = 12;
 
             _refreshSavesButton = new Button();
             _refreshSavesButton.Text = "Refresh";
@@ -334,7 +336,10 @@ namespace Manager.Views
             if (selected != null)
             {
                 _settings.AutoLoadSaveSlot = selected.Slot;
-                Log("Auto-load slot set to: " + selected.ToString());
+                if (selected.Slot == AUTO_LOAD_NEW_SAVE)
+                    Log("Auto-load set to: New Save (lowest available slot)");
+                else
+                    Log("Auto-load slot set to: " + selected.ToString());
             }
         }
 
@@ -350,7 +355,8 @@ namespace Manager.Views
             if (_settings == null || !_settings.IsGamePathValid)
             {
                 _autoLoadComboBox.Items.Clear();
-                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = 0, Description = "(None - Boot to Menu)" });
+                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = AUTO_LOAD_NONE, Description = "(None - Boot to Menu)" });
+                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = AUTO_LOAD_NEW_SAVE, Description = "(New Save - lowest available slot)" });
                 _autoLoadComboBox.SelectedIndex = 0;
                 return;
             }
@@ -360,12 +366,17 @@ namespace Manager.Views
             {
                 int currentSelection = _settings.AutoLoadSaveSlot;
                 _autoLoadComboBox.Items.Clear();
-                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = 0, Description = "(None - Boot to Menu)" });
+                _autoLoadComboBox.Items.Add(new SaveSlotItem { Slot = AUTO_LOAD_NONE, Description = "(None - Boot to Menu)" });
+                int selectIndex = 0;
+                if (currentSelection == AUTO_LOAD_NONE) selectIndex = 0;
+
+                int newSaveIndex = _autoLoadComboBox.Items.Add(
+                    new SaveSlotItem { Slot = AUTO_LOAD_NEW_SAVE, Description = "(New Save - lowest available slot)" }
+                );
+                if (currentSelection == AUTO_LOAD_NEW_SAVE) selectIndex = newSaveIndex;
 
                 var discovery = new Manager.Core.Services.SaveDiscoveryService();
                 var saves = discovery.DiscoverSaves(_settings.GamePath);
-
-                int selectIndex = 0;
                 foreach (var save in saves)
                 {
                     var item = new SaveSlotItem { Slot = save.AbsoluteSlot, Description = save.ToString() };
