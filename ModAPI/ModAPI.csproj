@@ -91,6 +91,9 @@
     <Compile Include="Core\SaveExitTracer.cs" />
     <Compile Include="Core\LoggerExtensions.cs" />
     <Compile Include="Core\ContextExtensions.cs" />
+    <Compile Include="Input\InputBinding.cs" />
+    <Compile Include="Input\ModInputAction.cs" />
+    <Compile Include="Input\InputActionRegistry.cs" />
     <Compile Include="UI\UIFlowGuard.cs" />
     <Compile Include="UI\UIFontCache.cs" />
     <Compile Include="UI\UIUtil.cs" />
@@ -127,6 +130,7 @@
     <Compile Include="Inspector\RuntimeDebuggerUI.cs" />
     <Compile Include="Spine\SpineSettingsHelper.cs" />
     <Compile Include="Spine\UI\SpineWidgetFactory.cs" />
+    <Compile Include="Spine\UI\KeybindCaptureListener.cs" />
     <Compile Include="Harmony\HarmonyBootstrap.cs" />
     <Compile Include="Harmony\HarmonyUtil.cs" />
     <Compile Include="Harmony\HarmonyHelper.cs" />

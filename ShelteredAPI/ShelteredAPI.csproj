@@ -59,6 +59,10 @@
     <Compile Include="Characters\Models\CharacterDataModel.cs" />
     <Compile Include="Characters\Models\SyntheticCharacterProxy.cs" />
     <Compile Include="Core\GameHelperImpl.cs" />
+    <Compile Include="Harmony\ModManagerKeybindsPatches.cs" />
+    <Compile Include="Input\ShelteredInputActions.cs" />
+    <Compile Include="Input\ShelteredKeybindsProvider.cs" />
+    <Compile Include="UI\ShelteredKeybindsUI.cs" />
     <!-- IGameHelper interface is now in ModAPI; only the implementation lives here -->
     <Compile Include="Core\ShelteredPatterns.cs" />
     <Compile Include="Core\ShelteredModManagerBase.cs" />

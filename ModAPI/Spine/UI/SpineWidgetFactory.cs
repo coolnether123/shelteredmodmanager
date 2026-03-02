@@ -35,6 +35,7 @@ namespace ModAPI.Spine.UI
                     case SettingType.Header: result = CreateHeaderWidget(def, parent); break;
                     case SettingType.Spacer: result = new GameObject("Spacer_" + def.Id) { transform = { parent = parent } }; break;
                     case SettingType.NumericInt: result = CreateNumericIntWidget(def, parent, settingsObject, panel); break;
+                    case SettingType.Keybind: result = CreateKeybindWidget(def, parent, settingsObject, panel); break;
                     case SettingType.Choice: result = CreateChoiceWidget(def, parent, settingsObject, panel); break;
                     default: result = UIUtil.CreateLabelQuick(parent.gameObject, $"Unknown: {def.Type}", 14, Vector3.zero).gameObject; break;
                 }
@@ -151,6 +152,16 @@ namespace ModAPI.Spine.UI
             if (label.bitmapFont != null) inputLabel.bitmapFont = label.bitmapFont;
             else if (label.trueTypeFont != null) inputLabel.trueTypeFont = label.trueTypeFont;
 
+            if (inputLabel.bitmapFont == null)
+            {
+                // Fallback for old NGUI setups where UIInput can null-ref with TTF-only labels.
+                inputLabel.text = GetValue<string>(def, settingsObject) ?? "";
+                inputLabel.color = new Color(0.75f, 0.75f, 0.75f);
+                MMLog.WarnOnce("SpineWidgetFactory.StringInput.BitmapMissing",
+                    "[Settings] Bitmap font unavailable; string text input disabled for compatibility.");
+                return container;
+            }
+
             var input = inputGO.AddComponent<UIInput>();
             input.label = inputLabel;
             input.value = GetValue<string>(def, settingsObject) ?? "";
@@ -249,83 +260,102 @@ namespace ModAPI.Spine.UI
             var valueLabel = UIUtil.CreateLabelQuick(container, "", 16, new Vector3(210, -20, 0));
             valueLabel.alignment = NGUIText.Alignment.Right;
             valueLabel.width = 60;
-            
-            var inputBG = NGUITools.AddChild<UISprite>(container);
-            inputBG.name = "InputBG";
-            inputBG.spriteName = "Blank";
-            inputBG.color = new Color(0.1f, 0.1f, 0.1f, 0.5f);
-            inputBG.width = 65;
-            inputBG.height = 24;
-            inputBG.depth = WIDGET_DEPTH - 5;
-            inputBG.transform.localPosition = new Vector3(210, -20, 0);
+            bool canUseInput = valueLabel.bitmapFont != null;
+            UIInput valInput = null;
 
-            var valCol = valueLabel.gameObject.AddComponent<BoxCollider>();
-            valCol.size = new Vector3(65, 24, 1);
-            valCol.center = Vector3.zero;
-
-            var valInput = valueLabel.gameObject.AddComponent<UIInput>();
-            valInput.label = valueLabel;
-            valInput.activeTextColor = new Color(0.7f, 1f, 0.7f);
-            valInput.validation = snapToInt ? UIInput.Validation.Integer : UIInput.Validation.Float;
-            
              float min = def.MinValue ?? 0f;
              float max = def.MaxValue ?? (snapToInt ? 100f : 1f);
              UISlider slider = null;
 
             void RefreshDisplay(float val)
             {
+                string display;
                 if (snapToInt)
                 {
                     int iv = Mathf.RoundToInt(val);
-                    valInput.value = iv.ToString();
+                    display = iv.ToString();
                     float norm = Mathf.InverseLerp(min, max, iv);
                     if (slider != null) slider.value = norm;
                 }
                 else
                 {
-                    valInput.value = val.ToString("F2");
+                    display = val.ToString("F2");
                     float norm = Mathf.InverseLerp(min, max, val);
                     if (slider != null) slider.value = norm;
                 }
+
+                valueLabel.text = display;
+                if (canUseInput && valInput != null) valInput.value = display;
             }
 
-            Action handleSliderSubmit = () => {
-                string text = valInput.value;
-                if (float.TryParse(text, out float fVal))
-                {
-                    fVal = Mathf.Clamp(fVal, min, max);
-                    if (snapToInt)
+            if (canUseInput)
+            {
+                var inputBG = NGUITools.AddChild<UISprite>(container);
+                inputBG.name = "InputBG";
+                inputBG.spriteName = "Blank";
+                inputBG.color = new Color(0.1f, 0.1f, 0.1f, 0.5f);
+                inputBG.width = 65;
+                inputBG.height = 24;
+                inputBG.depth = WIDGET_DEPTH - 5;
+                inputBG.transform.localPosition = new Vector3(210, -20, 0);
+
+                var valCol = valueLabel.gameObject.AddComponent<BoxCollider>();
+                valCol.size = new Vector3(65, 24, 1);
+                valCol.center = Vector3.zero;
+
+                valInput = valueLabel.gameObject.AddComponent<UIInput>();
+                valInput.label = valueLabel;
+                valInput.activeTextColor = new Color(0.7f, 1f, 0.7f);
+                valInput.validation = snapToInt ? UIInput.Validation.Integer : UIInput.Validation.Float;
+
+                Action handleSliderSubmit = () => {
+                    string text = valInput.value;
+                    if (float.TryParse(text, out float fVal))
                     {
-                        int iVal = Mathf.RoundToInt(fVal);
-                        if (def.StepSize.HasValue && def.StepSize.Value > 0)
+                        fVal = Mathf.Clamp(fVal, min, max);
+                        if (snapToInt)
                         {
-                            float step = def.StepSize.Value;
-                            iVal = Mathf.RoundToInt(Mathf.Round(fVal / step) * step);
+                            int iVal = Mathf.RoundToInt(fVal);
+                            if (def.StepSize.HasValue && def.StepSize.Value > 0)
+                            {
+                                float step = def.StepSize.Value;
+                                iVal = Mathf.RoundToInt(Mathf.Round(fVal / step) * step);
+                            }
+                            if (TryApplyValue(def, settingsObject, iVal)) NotifyChange(def, settingsObject, panel);
                         }
-                        if (TryApplyValue(def, settingsObject, iVal)) NotifyChange(def, settingsObject, panel);
+                        else
+                        {
+                            if (TryApplyValue(def, settingsObject, fVal)) NotifyChange(def, settingsObject, panel);
+                        }
                     }
-                    else
-                    {
-                        if (TryApplyValue(def, settingsObject, fVal)) NotifyChange(def, settingsObject, panel);
-                    }
-                }
-                valInput.isSelected = false; 
-                float currentVal = snapToInt ? (float)GetValue<int>(def, settingsObject) : GetValue<float>(def, settingsObject);
-                RefreshDisplay(currentVal);
-            };
-
-            var okBtn = UIUtil.CreateButton(container, ButtonTemplate, "OK", 30, 24, new Vector3(260, -20, 0), () => {
-                 handleSliderSubmit();
-                 valInput.RemoveFocus();
-                 if (UICamera.selectedObject == valInput.gameObject) UICamera.selectedObject = null;
-            });
-
-            if (okBtn != null) {
-                okBtn.gameObject.SetActive(false);
-                UIEventListener.Get(valInput.gameObject).onSelect += (go, selected) => {
-                    if (selected) okBtn.gameObject.SetActive(true);
-                    else if (UICamera.hoveredObject != okBtn.gameObject) okBtn.gameObject.SetActive(false);
+                    valInput.isSelected = false;
+                    float currentVal = snapToInt ? (float)GetValue<int>(def, settingsObject) : GetValue<float>(def, settingsObject);
+                    RefreshDisplay(currentVal);
                 };
+
+                var okBtn = UIUtil.CreateButton(container, ButtonTemplate, "OK", 30, 24, new Vector3(260, -20, 0), () => {
+                     handleSliderSubmit();
+                     valInput.RemoveFocus();
+                     if (UICamera.selectedObject == valInput.gameObject) UICamera.selectedObject = null;
+                });
+
+                if (okBtn != null) {
+                    okBtn.gameObject.SetActive(false);
+                    UIEventListener.Get(valInput.gameObject).onSelect += (go, selected) => {
+                        if (selected) okBtn.gameObject.SetActive(true);
+                        else if (UICamera.hoveredObject != okBtn.gameObject) okBtn.gameObject.SetActive(false);
+                    };
+                }
+
+                EventDelegate.Add(valInput.onSubmit, () => {
+                    handleSliderSubmit();
+                    if (UICamera.selectedObject == valInput.gameObject) UICamera.selectedObject = null;
+                });
+            }
+            else
+            {
+                MMLog.WarnOnce("SpineWidgetFactory.SliderInput.BitmapMissing",
+                    "[Settings] Bitmap font unavailable; numeric text entry disabled for compatibility.");
             }
 
             if (SliderTemplate != null)
@@ -342,11 +372,6 @@ namespace ModAPI.Spine.UI
                 var sliderWidget = sliderGO.GetComponent<UIWidget>();
                 if (sliderWidget != null) { sliderWidget.width = 200; sliderWidget.depth = WIDGET_DEPTH; }
             }
-
-            EventDelegate.Add(valInput.onSubmit, () => {
-                handleSliderSubmit();
-                if (UICamera.selectedObject == valInput.gameObject) UICamera.selectedObject = null;
-            });
 
             float current = snapToInt ? GetValue<int>(def, settingsObject) : GetValue<float>(def, settingsObject);
             RefreshDisplay(current);
@@ -367,7 +392,8 @@ namespace ModAPI.Spine.UI
                         }
                         if (raw < (int)min) raw = (int)min;
                         if (raw > (int)max) raw = (int)max;
-                        valInput.value = raw.ToString();
+                        valueLabel.text = raw.ToString();
+                        if (canUseInput && valInput != null) valInput.value = raw.ToString();
                         if (GetValue<int>(def, settingsObject) != raw)
                         {
                             if (TryApplyValue(def, settingsObject, raw)) NotifyChange(def, settingsObject, panel);
@@ -380,7 +406,8 @@ namespace ModAPI.Spine.UI
                         if (step > 0) val = Mathf.Round(val / step) * step;
                         if (val < min) val = min;
                         if (val > max) val = max;
-                        valInput.value = val.ToString("F2");
+                        valueLabel.text = val.ToString("F2");
+                        if (canUseInput && valInput != null) valInput.value = val.ToString("F2");
                         if (Mathf.Abs(GetValue<float>(def, settingsObject) - val) > 0.001f)
                         {
                             if (TryApplyValue(def, settingsObject, val)) NotifyChange(def, settingsObject, panel);
@@ -463,6 +490,70 @@ namespace ModAPI.Spine.UI
                     Refresh();
                     NotifyChange(def, settingsObject, panel);
                 }
+            });
+
+            return container;
+        }
+
+        private static string FormatKeyCode(KeyCode key)
+        {
+            if (key == KeyCode.None) return "UNBOUND";
+
+            string raw = key.ToString();
+            if (raw.StartsWith("Alpha") && raw.Length == 6) return raw.Substring(5);
+            if (raw.StartsWith("Keypad")) return "KP " + raw.Substring(6).ToUpperInvariant();
+            if (raw.EndsWith("Arrow")) return raw.Replace("Arrow", "").ToUpperInvariant();
+            if (raw == "Mouse0") return "MOUSE LEFT";
+            if (raw == "Mouse1") return "MOUSE RIGHT";
+            if (raw == "Mouse2") return "MOUSE MIDDLE";
+            return raw.ToUpperInvariant();
+        }
+
+        private static GameObject CreateKeybindWidget(SettingDefinition def, Transform parent, object settingsObject, ModSettingsPanel panel)
+        {
+            var container = NGUITools.AddChild(parent.gameObject);
+            container.name = "Keybind_" + def.Id;
+            NGUITools.SetLayer(container, parent.gameObject.layer);
+
+            var label = UIUtil.CreateLabelQuick(container, def.Label, 16, Vector3.zero);
+            label.pivot = UIWidget.Pivot.Left;
+            SetTooltip(label.gameObject, def.Tooltip);
+
+            var valueLabel = UIUtil.CreateLabelQuick(container, "", 16, new Vector3(210, 0, 0));
+            valueLabel.alignment = NGUIText.Alignment.Center;
+            valueLabel.width = 130;
+
+            Action refresh = () =>
+            {
+                KeyCode current = GetValue<KeyCode>(def, settingsObject);
+                valueLabel.text = FormatKeyCode(current);
+            };
+            refresh();
+
+            var capture = container.AddComponent<KeybindCaptureListener>();
+            capture.ValueLabel = valueLabel;
+            capture.OnCanceled = refresh;
+            capture.OnCaptured = (key) =>
+            {
+                if (TryApplyValue(def, settingsObject, key))
+                {
+                    NotifyChange(def, settingsObject, panel);
+                }
+                refresh();
+            };
+
+            UIUtil.CreateButton(container, ButtonTemplate, "REBIND", 95, 40, new Vector3(340, 0, 0), () =>
+            {
+                capture.StartCapture();
+            });
+
+            UIUtil.CreateButton(container, ButtonTemplate, "CLEAR", 70, 40, new Vector3(430, 0, 0), () =>
+            {
+                if (TryApplyValue(def, settingsObject, KeyCode.None))
+                {
+                    NotifyChange(def, settingsObject, panel);
+                }
+                refresh();
             });
 
             return container;

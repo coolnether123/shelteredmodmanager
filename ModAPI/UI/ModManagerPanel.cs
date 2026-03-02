@@ -771,6 +771,14 @@ namespace ModAPI.UI
             float scroll = Input.GetAxis("Mouse ScrollWheel");
             if (scroll == 0f)
                 scroll = Input.mouseScrollDelta.y;
+
+            if (scroll == 0f)
+            {
+                if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.PageUp))
+                    scroll = 3f * Time.unscaledDeltaTime;
+                else if (Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.PageDown))
+                    scroll = -3f * Time.unscaledDeltaTime;
+            }
             
             if (scroll == 0f) return;
             
