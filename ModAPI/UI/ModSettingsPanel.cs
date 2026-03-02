@@ -44,6 +44,7 @@ namespace ModAPI.UI
         private string _presetOverride = null;
         private string _customSnapshotJson = null;
         private bool _isRebuilding = false;
+        private bool _isClosing = false;
 
         // Colors
         private static readonly Color COLOR_HEADER = new Color(0.9f, 0.85f, 0.7f);
@@ -196,14 +197,27 @@ namespace ModAPI.UI
 
         private void OnClose()
         {
-            _lastClosedViewMode = _currentViewMode;
+            if (_isClosing) return;
+            _isClosing = true;
 
-            if (_currentMod != null && _currentMod.SettingsProvider is ISettingsProvider2 sp2)
-            {
-                 sp2.Save();
-            }
+            _lastClosedViewMode = _currentViewMode;
+            FlushPendingSettingInputs();
+            SaveCurrentSettings();
+
             Destroy(_instance);
             _instance = null;
+        }
+
+        private void OnDestroy()
+        {
+            if (_isClosing) return;
+
+            // If this panel is destroyed outside the normal close flow (scene change/reopen),
+            // persist pending edits so settings are not lost.
+            FlushPendingSettingInputs();
+            SaveCurrentSettings();
+
+            if (_instance == gameObject) _instance = null;
         }
 
         private void CreateSearchBar(Transform parent, UIFont uiFont, Font ttfFont)
@@ -212,33 +226,43 @@ namespace ModAPI.UI
             searchLabel.pivot = UIWidget.Pivot.Right; // Right align label to input box
             searchLabel.transform.localPosition = new Vector3(-110, 0, 0);
 
-            // Background for visual container
-            var bg = CreateTexturedBox(parent, "SearchBG", new Vector3(60, 0, 0), 320, 35, new Color(0.1f, 0.1f, 0.1f, 0.8f), 100, false);
-            
             var inputGO = new GameObject("SearchInput");
             inputGO.transform.SetParent(parent, false);
             inputGO.transform.localPosition = new Vector3(60, 0, 0); // Center on BG
             inputGO.layer = parent.gameObject.layer;
 
-            var lbl = inputGO.AddComponent<UILabel>();
+            var inputBg = inputGO.AddComponent<UITexture>();
+            inputBg.mainTexture = _whiteTexture;
+            inputBg.width = 320;
+            inputBg.height = 35;
+            inputBg.depth = 100;
+            inputBg.color = new Color(0.1f, 0.1f, 0.1f, 0.8f);
+
+            var lblGO = new GameObject("Label");
+            lblGO.transform.SetParent(inputGO.transform, false);
+            lblGO.layer = inputGO.layer;
+            lblGO.transform.localPosition = new Vector3(-150, 0, 0);
+
+            var lbl = lblGO.AddComponent<UILabel>();
+            lbl.pivot = UIWidget.Pivot.Left;
             lbl.fontSize = 16;
-            lbl.width = 310;
+            lbl.width = 300;
             lbl.depth = 105;
-            lbl.overflowMethod = UILabel.Overflow.ResizeFreely;
+            lbl.overflowMethod = UILabel.Overflow.ClampContent;
             if (uiFont != null) lbl.bitmapFont = uiFont;
             else if (ttfFont != null) lbl.trueTypeFont = ttfFont;
+            else lbl.trueTypeFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
             lbl.alignment = NGUIText.Alignment.Left;
+            lbl.text = string.Empty;
 
             _searchInput = inputGO.AddComponent<UIInput>();
             _searchInput.label = lbl;
-            _searchInput.defaultText = "Filter settings...";
-            _searchInput.selectionColor = new Color(1f, 1f, 1f, 0.5f);
-            _searchInput.caretColor = Color.white;
             _searchInput.activeTextColor = Color.white;
+            _searchInput.defaultText = string.Empty;
 
             // CRITICAL: NGUI UIInput needs a Collider to be clickable
             var col = inputGO.AddComponent<BoxCollider>();
-            col.size = new Vector3(310, 35, 1);
+            col.size = new Vector3(320, 35, 1);
             col.center = Vector3.zero;
 
             EventDelegate.Add(_searchInput.onChange, () => {
@@ -414,9 +438,15 @@ namespace ModAPI.UI
             // Clear existing preset bar
             foreach(Transform child in _presetBarRoot.transform) Destroy(child.gameObject);
 
-            List<string> fullList = new List<string>(_availablePresets);
-            // We don't add "Custom" to the scrollable list usually, 
-            // but we need to handle it if the current state is custom.
+            // Hide the preset strip entirely for mods that do not define presets
+            // (custom-only settings without Easy/Normal/Hard, etc.).
+            if (_availablePresets == null || _availablePresets.Count == 0)
+            {
+                _presetBarRoot.SetActive(false);
+                return;
+            }
+
+            _presetBarRoot.SetActive(true);
             
             float boxW = 200;
             float boxH = 40;
@@ -441,6 +471,42 @@ namespace ModAPI.UI
                 new Vector3(boxW/2 + arrowSize/2 + 10, 0, 0), 20, Color.white, uiFont, ttfFont, (int)arrowSize, (int)boxH, () => {
                     CyclePreset(1, allDefs, settings, uiFont, ttfFont);
                 });
+        }
+
+        private void FlushPendingSettingInputs()
+        {
+            try
+            {
+                if (_contentRoot == null) return;
+
+                var inputs = _contentRoot.GetComponentsInChildren<UIInput>(true);
+                for (int i = 0; i < inputs.Length; i++)
+                {
+                    var input = inputs[i];
+                    if (input == null || !input.isSelected) continue;
+                    EventDelegate.Execute(input.onSubmit);
+                    input.RemoveFocus();
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ModSettingsPanel] Failed to flush pending input values: " + ex.Message);
+            }
+        }
+
+        private void SaveCurrentSettings()
+        {
+            try
+            {
+                if (_currentMod != null && _currentMod.SettingsProvider is ISettingsProvider2 sp2)
+                {
+                    sp2.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[ModSettingsPanel] Save failed while closing panel: " + ex.Message);
+            }
         }
 
         private void CyclePreset(int delta, List<SettingDefinition> allDefs, object settings, UIFont uiFont, Font ttfFont)

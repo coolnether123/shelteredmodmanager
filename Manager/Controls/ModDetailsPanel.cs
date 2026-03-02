@@ -150,8 +150,9 @@ namespace Manager.Controls
 
             _modApiValue = new Label();
             _modApiValue.Font = new Font("Segoe UI", 9f);
-            _modApiValue.AutoSize = true;
+            _modApiValue.AutoSize = false;
             _modApiValue.Location = new Point(75, 253);
+            _modApiValue.Size = new Size(210, 22);
 
             // Tags
             _tagsLabel = new Label();
@@ -390,7 +391,10 @@ namespace Manager.Controls
             }
             else
             {
-                _modApiValue.Text = _installedModApiVersion ?? "Unknown";
+                if (!string.IsNullOrEmpty(_installedModApiVersion))
+                    _modApiValue.Text = "Unknown (Installed: " + _installedModApiVersion + ")";
+                else
+                    _modApiValue.Text = "Unknown";
                 _modApiValue.ForeColor = _isDarkMode ? Color.LightGray : Color.Gray;
             }
         }
@@ -529,11 +533,25 @@ namespace Manager.Controls
             _dependsOnLabel.Location = new Point(left, infoY);
             _dependsOnValue.Location = new Point(left + 98, infoY);
             _dependsOnValue.Width = Math.Max(70, contentWidth - 98);
+            var measuredDepends = TextRenderer.MeasureText(
+                _dependsOnValue.Text ?? string.Empty,
+                _dependsOnValue.Font,
+                new Size(_dependsOnValue.Width, 120),
+                TextFormatFlags.WordBreak);
+            _dependsOnValue.Height = Math.Max(20, Math.Min(44, measuredDepends.Height + 2));
 
-            _modApiLabel.Location = new Point(left, infoY + 32);
-            _modApiValue.Location = new Point(left + 70, infoY + 32);
+            int modApiY = _dependsOnValue.Bottom + 8;
+            _modApiLabel.Location = new Point(left, modApiY);
+            _modApiValue.Location = new Point(left + 70, modApiY);
+            _modApiValue.Width = Math.Max(80, contentWidth - 70);
+            var measuredModApi = TextRenderer.MeasureText(
+                _modApiValue.Text ?? string.Empty,
+                _modApiValue.Font,
+                new Size(_modApiValue.Width, 200),
+                TextFormatFlags.WordBreak);
+            _modApiValue.Height = Math.Max(22, Math.Min(64, measuredModApi.Height + 2));
 
-            int tagsY = infoY + 56;
+            int tagsY = Math.Max(infoY + 56, _modApiValue.Bottom + 8);
             if (_tagsLabel.Visible && _tagsValue.Visible)
             {
                 _tagsLabel.Location = new Point(left, tagsY);
@@ -541,7 +559,7 @@ namespace Manager.Controls
                 _tagsValue.Width = Math.Max(70, contentWidth - 43);
             }
 
-            int linksY = (_tagsLabel.Visible && _tagsValue.Visible) ? (tagsY + 24) : (infoY + 56);
+            int linksY = (_tagsLabel.Visible && _tagsValue.Visible) ? (_tagsValue.Bottom + 4) : (_modApiValue.Bottom + 8);
             if (_websiteLink.Visible)
                 _websiteLink.Location = new Point(left, linksY);
 

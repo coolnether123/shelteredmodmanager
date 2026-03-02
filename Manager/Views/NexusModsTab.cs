@@ -46,6 +46,10 @@ namespace Manager.Views
         private string _managerVersion = string.Empty;
         private int _latestRequestToken = 0;
         private DateTime _lastCheckedUtc = DateTime.MinValue;
+        private static readonly TimeSpan LatestFeedCooldown = TimeSpan.FromMinutes(5);
+        private List<NexusRemoteMod> _latestFeedCache = new List<NexusRemoteMod>();
+        private DateTime _latestFeedCacheUtc = DateTime.MinValue;
+        private string _latestFeedCacheDomain = string.Empty;
 
         public event NexusInstallCompletedHandler InstallCompleted;
         public event NexusActivityHandler NexusActivity;
@@ -108,12 +112,12 @@ namespace Manager.Views
 
             if (!enabled)
             {
-                _statusLabel.Text = "Nexus: Disabled in Settings";
+                _statusLabel.Text = "Feed: Disabled in Settings";
             }
             else
             {
                 string domain = GetGameDomain();
-                _statusLabel.Text = "Nexus: Ready (" + domain + ")";
+                _statusLabel.Text = "Feed: Ready (" + domain + ")";
             }
 
             AdjustColumnWidths();
@@ -151,7 +155,7 @@ namespace Manager.Views
             if (!string.IsNullOrEmpty(errorMessage))
                 _installedSummaryLabel.Text = "Installed: link check failed (" + errorMessage + ")" + BuildLastCheckedSuffix();
             else
-                _installedSummaryLabel.Text = "Installed: " + totalMods + " mods, " + mappedMods + " linked, " + updateCount + " updates" + BuildLastCheckedSuffix();
+                _installedSummaryLabel.Text = "Installed: " + totalMods + " | Linked: " + mappedMods + " | Updates: " + updateCount + BuildLastCheckedSuffix();
         }
 
         public void SetLastCheckedUtc(DateTime checkedUtc)
@@ -167,16 +171,21 @@ namespace Manager.Views
 
         public void RefreshLatestModsAsync()
         {
+            RefreshLatestModsAsync(false);
+        }
+
+        public void RefreshLatestModsAsync(bool forceRefresh)
+        {
             if (_settings != null && !_settings.EnableNexusIntegration)
             {
-                _statusLabel.Text = "Nexus: Disabled in Settings";
+                _statusLabel.Text = "Feed: Disabled in Settings";
                 EmitActivity("Feed refresh skipped because Nexus integration is disabled.");
                 return;
             }
 
             if (_nexusService == null)
             {
-                _statusLabel.Text = "Nexus: Service unavailable";
+                _statusLabel.Text = "Feed: Service unavailable";
                 EmitActivity("Feed refresh failed: Nexus service is unavailable.");
                 return;
             }
@@ -184,12 +193,19 @@ namespace Manager.Views
             string domain = GetGameDomain();
             if (string.IsNullOrEmpty(domain))
             {
-                _statusLabel.Text = "Nexus: Game domain not configured";
+                _statusLabel.Text = "Feed: Game domain not configured";
                 EmitActivity("Feed refresh failed: game domain is not configured.");
                 return;
             }
 
-            _statusLabel.Text = "Nexus: Loading latest releases...";
+            if (!forceRefresh && HasLatestFeedCache(domain))
+            {
+                PopulateLatestList(_latestFeedCache);
+                _statusLabel.Text = "Feed: " + _latestFeedCache.Count + " mods (" + domain + ", cached)";
+                return;
+            }
+
+            _statusLabel.Text = "Feed: Loading latest releases...";
             EmitActivity("Refreshing Nexus feed for '" + domain + "'.");
             _refreshButton.Enabled = false;
             int token = ++_latestRequestToken;
@@ -208,30 +224,21 @@ namespace Manager.Views
                         if (token != _latestRequestToken)
                             return;
 
-                        _latestList.BeginUpdate();
-                        _latestList.Items.Clear();
-                        foreach (var mod in latest)
-                        {
-                            _latestList.Items.Add(new NexusListItem
-                            {
-                                IsInstalledRow = false,
-                                RemoteMod = mod
-                            });
-                        }
-                        _latestList.EndUpdate();
-                        AdjustListHeights();
-
                         _refreshButton.Enabled = true;
 
                         if (!string.IsNullOrEmpty(error))
                         {
-                            _statusLabel.Text = "Nexus: Load failed";
+                            _statusLabel.Text = "Feed: Load failed";
                             EmitActivity("Nexus feed refresh failed: " + error);
                             _detailsPanel.ShowMod(CreateStatusMod("Nexus Load Failed", error));
                         }
                         else
                         {
-                            _statusLabel.Text = "Nexus: Loaded " + latest.Count + " latest mods (" + domain + ")";
+                            _latestFeedCache = latest ?? new List<NexusRemoteMod>();
+                            _latestFeedCacheUtc = DateTime.UtcNow;
+                            _latestFeedCacheDomain = domain;
+                            PopulateLatestList(_latestFeedCache);
+                            _statusLabel.Text = "Feed: " + latest.Count + " mods (" + domain + ")";
                             EmitActivity("Nexus feed refresh complete: loaded " + latest.Count + " mods for '" + domain + "'.");
                             if (latest.Count == 0)
                                 _detailsPanel.ShowMod(CreateStatusMod("No Nexus Results", "No mods were returned for this game domain."));
@@ -249,14 +256,14 @@ namespace Manager.Views
 
             if (!_settings.EnableNexusIntegration)
             {
-                _managerUpdateLabel.Text = "Manager update: Nexus integration is disabled.";
+                _managerUpdateLabel.Text = "SMM: Nexus integration is disabled.";
                 EmitActivity("Manager update check skipped because Nexus integration is disabled.");
                 return;
             }
 
             if (_settings.ManagerNexusModId <= 0)
             {
-                _managerUpdateLabel.Text = "Manager update: set Manager Mod ID in Settings.";
+                _managerUpdateLabel.Text = "SMM: Set Manager Mod ID in Settings.";
                 EmitActivity("Manager update check skipped: Manager Mod ID is not set.");
                 return;
             }
@@ -264,14 +271,14 @@ namespace Manager.Views
             string domain = GetGameDomain();
             if (string.IsNullOrEmpty(domain))
             {
-                _managerUpdateLabel.Text = "Manager update: game domain is missing.";
+                _managerUpdateLabel.Text = "SMM: Game domain is missing.";
                 EmitActivity("Manager update check failed: game domain is missing.");
                 return;
             }
 
             _managerUpdateLabel.Text = userInitiated
-                ? "Manager update: checking..."
-                : "Manager update: auto-checking...";
+                ? "SMM: checking..."
+                : "SMM: auto-checking...";
             EmitActivity("Checking manager update on Nexus (" + domain + "/mods/" + _settings.ManagerNexusModId + ").");
             _checkManagerButton.Enabled = false;
 
@@ -290,14 +297,14 @@ namespace Manager.Views
 
                         if (!string.IsNullOrEmpty(error))
                         {
-                            _managerUpdateLabel.Text = "Manager update: check failed (" + error + ")";
+                            _managerUpdateLabel.Text = "SMM: check failed (" + error + ")";
                             EmitActivity("Manager update check failed: " + error);
                             return;
                         }
 
                         if (remote == null)
                         {
-                            _managerUpdateLabel.Text = "Manager update: Nexus entry not found.";
+                            _managerUpdateLabel.Text = "SMM: Nexus entry not found.";
                             EmitActivity("Manager update check: Nexus entry was not found.");
                             return;
                         }
@@ -307,17 +314,17 @@ namespace Manager.Views
                         string remoteVersion = FormatVersionLabel(remote.Version);
                         if (comparison < 0)
                         {
-                            _managerUpdateLabel.Text = "Manager update available: " + remoteVersion + " (current: " + localVersion + ")";
+                            _managerUpdateLabel.Text = "SMM: Update available " + remoteVersion + " (current " + localVersion + ")";
                             EmitActivity("Manager update available: " + remoteVersion + " (current: " + localVersion + ").");
                         }
                         else if (comparison == 0)
                         {
-                            _managerUpdateLabel.Text = "Manager is up to date (" + localVersion + ")";
+                            _managerUpdateLabel.Text = "SMM: Up to date (" + localVersion + ")";
                             EmitActivity("Manager is up to date (" + localVersion + ").");
                         }
                         else
                         {
-                            _managerUpdateLabel.Text = "Local build " + localVersion + " is newer than Nexus " + remoteVersion;
+                            _managerUpdateLabel.Text = "SMM: " + localVersion + " is newer than Nexus " + remoteVersion;
                             EmitActivity("Local manager build is newer than Nexus (" + localVersion + " > " + remoteVersion + ").");
                         }
                     });
@@ -412,12 +419,12 @@ namespace Manager.Views
             _statusLabel.AutoSize = true;
             _statusLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             _statusLabel.Location = new Point(12, 10);
-            _statusLabel.Text = "Nexus: Ready";
+            _statusLabel.Text = "Feed: Ready";
 
             _managerUpdateLabel.AutoSize = true;
             _managerUpdateLabel.Font = new Font("Segoe UI", 9f);
             _managerUpdateLabel.Location = new Point(12, 31);
-            _managerUpdateLabel.Text = "Manager update: not checked";
+            _managerUpdateLabel.Text = "SMM: not checked";
 
             _installedSummaryLabel.AutoSize = true;
             _installedSummaryLabel.Font = new Font("Segoe UI", 9f);
@@ -516,7 +523,7 @@ namespace Manager.Views
 
         private void WireEvents()
         {
-            _refreshButton.Click += delegate { RefreshLatestModsAsync(); };
+            _refreshButton.Click += delegate { RefreshLatestModsAsync(true); };
             _checkManagerButton.Click += delegate { CheckManagerUpdateAsync(true); };
             _installSelectedButton.Click += InstallSelectedButton_Click;
             _openPageButton.Click += OpenPageButton_Click;
@@ -581,7 +588,7 @@ namespace Manager.Views
 
             if (!_settings.EnableNexusIntegration)
             {
-                _statusLabel.Text = "Nexus: Disabled in Settings";
+                _statusLabel.Text = "Install disabled: Nexus integration is disabled.";
                 EmitActivity("Install skipped because Nexus integration is disabled.");
                 return;
             }
@@ -874,7 +881,7 @@ namespace Manager.Views
         {
             if (_lastCheckedUtc <= DateTime.MinValue)
                 return string.Empty;
-            return " | Last checked: " + _lastCheckedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+            return " | Checked: " + _lastCheckedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
         }
 
         private void AdjustListHeights()
@@ -1035,6 +1042,38 @@ namespace Manager.Views
                 return value;
 
             return "v" + value;
+        }
+
+        private bool HasLatestFeedCache(string domain)
+        {
+            if (_latestFeedCache == null || _latestFeedCache.Count == 0)
+                return false;
+
+            if (_latestFeedCacheUtc <= DateTime.MinValue)
+                return false;
+
+            if (!string.Equals(_latestFeedCacheDomain, domain, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return (DateTime.UtcNow - _latestFeedCacheUtc) < LatestFeedCooldown;
+        }
+
+        private void PopulateLatestList(List<NexusRemoteMod> latest)
+        {
+            var source = latest ?? new List<NexusRemoteMod>();
+
+            _latestList.BeginUpdate();
+            _latestList.Items.Clear();
+            foreach (var mod in source)
+            {
+                _latestList.Items.Add(new NexusListItem
+                {
+                    IsInstalledRow = false,
+                    RemoteMod = mod
+                });
+            }
+            _latestList.EndUpdate();
+            AdjustListHeights();
         }
 
         private void EmitActivity(string message)

@@ -686,6 +686,7 @@ namespace Manager.Views
                 if (!hasStored)
                 {
                     _nexusApiKeyTextBox.ReadOnly = false;
+                    _nexusApiKeyTextBox.UseSystemPasswordChar = false;
                     _nexusApiKeyTextBox.Text = string.Empty;
                     _nexusApiRevealButton.Text = "Reveal Key";
                     _nexusApiRevealButton.Enabled = false;
@@ -695,6 +696,7 @@ namespace Manager.Views
                 if (_nexusApiKeyRevealed)
                 {
                     _nexusApiKeyTextBox.ReadOnly = false;
+                    _nexusApiKeyTextBox.UseSystemPasswordChar = false;
                     _nexusApiKeyTextBox.Text = stored;
                     _nexusApiRevealButton.Text = "Hide Key";
                     _nexusApiRevealButton.Enabled = true;
@@ -702,7 +704,8 @@ namespace Manager.Views
                 else
                 {
                     _nexusApiKeyTextBox.ReadOnly = true;
-                    _nexusApiKeyTextBox.Text = "API key stored";
+                    _nexusApiKeyTextBox.UseSystemPasswordChar = true;
+                    _nexusApiKeyTextBox.Text = stored;
                     _nexusApiRevealButton.Text = "Reveal Key";
                     _nexusApiRevealButton.Enabled = true;
                 }

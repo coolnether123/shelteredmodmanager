@@ -119,6 +119,11 @@ namespace Manager.Core.Models
                 item.LoadAfter = about.loadAfter ?? new string[0];
                 item.LoadBefore = about.loadBefore ?? new string[0];
                 item.Website = about.website ?? string.Empty;
+                item.RequiredModApiVersion = FirstNonEmpty(
+                    about.requiredModApiVersion,
+                    about.modApiVersion,
+                    about.requiredShelteredApiVersion,
+                    about.shelteredApiVersion);
                 item.NexusGameDomain = about.nexusGameDomain ?? string.Empty;
                 item.NexusModId = about.nexusModId;
                 item.HasValidAbout = !string.IsNullOrEmpty(about.id);
@@ -145,6 +150,21 @@ namespace Manager.Core.Models
         public override int GetHashCode()
         {
             return StringComparer.OrdinalIgnoreCase.GetHashCode(Id ?? string.Empty);
+        }
+
+        private static string FirstNonEmpty(params string[] values)
+        {
+            if (values == null)
+                return string.Empty;
+
+            for (int i = 0; i < values.Length; i++)
+            {
+                string candidate = values[i];
+                if (!string.IsNullOrEmpty(candidate))
+                    return candidate.Trim();
+            }
+
+            return string.Empty;
         }
     }
 
