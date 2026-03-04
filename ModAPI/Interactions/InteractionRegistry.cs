@@ -236,7 +236,7 @@ namespace ModAPI.Interactions
         /// <param name="interactionType">The class inheriting from Int_Base to instantiate</param>
         public static void Register<TTarget>(string interactionName, Type interactionType) where TTarget : Obj_Base
         {
-            ModLog.WarnOnce(
+            MMLog.WarnOnce(
                 "InteractionRegistry.RegisterGeneric.Unsupported",
                 "[InteractionRegistry] Register<TTarget> is deprecated and cannot infer ObjectType. Use InteractionRegistry.For(ObjectType)...Register().");
         }
@@ -479,7 +479,7 @@ namespace ModAPI.Interactions
                     catch (Exception ex)
                     {
                         Trace(entry, "reorder:custom resolver threw " + ex.Message + ", defaulting to end");
-                        ModLog.WarnOnce(
+                        MMLog.WarnOnce(
                             "InteractionRegistry.CustomIndexResolverError",
                             "[InteractionRegistry] Custom index resolver error: " + ex.Message);
                         return interactions.Count;

@@ -175,6 +175,9 @@ namespace ModAPI.UI
         {
             if (Input.GetKeyDown(KeyCode.Escape))
             {
+                // Esc is consumed by keybind capture while listening.
+                if (KeybindCaptureListener.ShouldBlockEscapeClose())
+                    return;
                 OnClose();
             }
         }
@@ -255,10 +258,15 @@ namespace ModAPI.UI
             lbl.alignment = NGUIText.Alignment.Left;
             lbl.text = string.Empty;
 
-            // Some Unity 5.3/NGUI environments throw inside UIInput.Start when only TTF fonts
-            // are available (no bitmap font in scene). Disable search input in that case.
-            if (lbl.bitmapFont == null)
+            // Keep search enabled for either bitmap or TTF fonts.
+            // Only disable if no usable font exists at all.
+            bool hasUsableFont = lbl.bitmapFont != null || lbl.trueTypeFont != null;
+            if (!hasUsableFont)
             {
+                searchLabel.gameObject.SetActive(false);
+                lbl.pivot = UIWidget.Pivot.Center;
+                lbl.alignment = NGUIText.Alignment.Center;
+                lbl.transform.localPosition = Vector3.zero;
                 lbl.text = "Search unavailable";
                 lbl.color = COLOR_SUBTEXT;
                 return;

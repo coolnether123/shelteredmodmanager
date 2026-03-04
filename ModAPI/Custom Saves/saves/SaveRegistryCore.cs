@@ -97,30 +97,14 @@ namespace ModAPI.Saves
         public bool DeleteBySlot(int absoluteSlot)
         {
             MMLog.Write($"DeleteBySlot called for slot {absoluteSlot}");
-            
-            var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, absoluteSlot, false);
-            
-            try 
-            { 
-                if (Directory.Exists(slotRoot))
-                {
-                    MMLog.Write($"DeleteBySlot: Deleting directory '{slotRoot}'");
-                    Directory.Delete(slotRoot, true);
-                    InvalidateCache();
-                    MMLog.Write($"DeleteBySlot: Successfully deleted slot {absoluteSlot}");
-                    return true;
-                }
-                else
-                {
-                    MMLog.WriteError($"DeleteBySlot: Directory does not exist: '{slotRoot}'");
-                    return false;
-                }
-            } 
-            catch (Exception ex)
-            { 
-                MMLog.WriteError($"DeleteBySlot failed: {ex.Message}");
-                return false;
+
+            var deleted = DeleteSlotDirectory(absoluteSlot, "DeleteBySlot", true);
+            if (deleted)
+            {
+                InvalidateCache();
+                MMLog.Write($"DeleteBySlot: Successfully deleted slot {absoluteSlot}");
             }
+            return deleted;
         }
 
         public int CountSaves()
@@ -323,26 +307,9 @@ namespace ModAPI.Saves
 
             MMLog.Write($"DeleteSave: Found entry - Slot={entry.absoluteSlot}, Name='{entry.name}'");
 
-            var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, entry.absoluteSlot, false);
-            MMLog.Write($"DeleteSave: Slot directory = '{slotRoot}'");
-            
-            // Delete the entire slot directory
-            try 
-            { 
-                if (Directory.Exists(slotRoot))
-                {
-                    MMLog.Write($"DeleteSave: Deleting directory '{slotRoot}'");
-                    Directory.Delete(slotRoot, true);
-                    MMLog.Write($"DeleteSave: Directory deleted successfully");
-                }
-                else
-                {
-                    MMLog.WriteError($"DeleteSave: Directory does not exist: '{slotRoot}'");
-                }
-            } 
-            catch (Exception ex)
-            { 
-                MMLog.WriteError($"Failed to delete slot directory: {ex.Message}");
+            var deleted = DeleteSlotDirectory(entry.absoluteSlot, "DeleteSave", false);
+            if (!deleted)
+            {
                 return false;
             }
             
@@ -352,6 +319,31 @@ namespace ModAPI.Saves
             InvalidateCache();
             MMLog.Write($"DeleteSave: Completed for slot {entry.absoluteSlot}");
             return true;
+        }
+
+        private bool DeleteSlotDirectory(int absoluteSlot, string operation, bool failIfMissing)
+        {
+            var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, absoluteSlot, false);
+            MMLog.Write(string.Format("{0}: Slot directory = '{1}'", operation, slotRoot));
+
+            try
+            {
+                if (!Directory.Exists(slotRoot))
+                {
+                    MMLog.WriteError(string.Format("{0}: Directory does not exist: '{1}'", operation, slotRoot));
+                    return !failIfMissing;
+                }
+
+                MMLog.Write(string.Format("{0}: Deleting directory '{1}'", operation, slotRoot));
+                Directory.Delete(slotRoot, true);
+                MMLog.Write(string.Format("{0}: Directory deleted successfully", operation));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError(string.Format("{0}: Failed to delete slot directory: {1}", operation, ex.Message));
+                return false;
+            }
         }
 
         internal void UpdateSlotManifest(int absoluteSlot, SaveInfo info)
@@ -737,49 +729,17 @@ namespace ModAPI.Saves
                     int bracketStart = json.IndexOf('[', arrayStart);
                     if (bracketStart >= 0)
                     {
-                        // Find matching closing bracket by counting depth (handles nested [] in warnings)
-                        int bracketDepth = 0;
-                        int bracketEnd = -1;
-                        for (int i = bracketStart; i < json.Length; i++)
-                        {
-                            if (json[i] == '[') bracketDepth++;
-                            else if (json[i] == ']')
-                            {
-                                bracketDepth--;
-                                if (bracketDepth == 0)
-                                {
-                                    bracketEnd = i;
-                                    break;
-                                }
-                            }
-                        }
-                        
+                        int bracketEnd = FindMatchingBracketIgnoringStrings(json, bracketStart, '[', ']');
+
                         if (bracketEnd > bracketStart)
                         {
                             string arrayContent = json.Substring(bracketStart + 1, bracketEnd - bracketStart - 1);
-                            
-                            // Find each object {...} in the array (also count depth to handle nested objects)
-                            int depth = 0;
-                            int objStart = -1;
-                            for (int i = 0; i < arrayContent.Length; i++)
+
+                            var objects = ExtractTopLevelJsonObjects(arrayContent);
+                            for (int i = 0; i < objects.Count; i++)
                             {
-                                char c = arrayContent[i];
-                                if (c == '{')
-                                {
-                                    if (depth == 0) objStart = i;
-                                    depth++;
-                                }
-                                else if (c == '}')
-                                {
-                                    depth--;
-                                    if (depth == 0 && objStart >= 0)
-                                    {
-                                        string objJson = arrayContent.Substring(objStart, i - objStart + 1);
-                                        var mod = ParseLoadedModInfo(objJson);
-                                        if (mod != null) mods.Add(mod);
-                                        objStart = -1;
-                                    }
-                                }
+                                var mod = ParseLoadedModInfo(objects[i]);
+                                if (mod != null) mods.Add(mod);
                             }
                         }
                     }
@@ -813,19 +773,13 @@ namespace ModAPI.Saves
                 if (warningsStart >= 0)
                 {
                     int arrStart = objJson.IndexOf('[', warningsStart);
-                    int arrEnd = objJson.IndexOf(']', arrStart);
+                    int arrEnd = FindMatchingBracketIgnoringStrings(objJson, arrStart, '[', ']');
                     if (arrStart >= 0 && arrEnd > arrStart)
                     {
                         string arrContent = objJson.Substring(arrStart + 1, arrEnd - arrStart - 1).Trim();
                         if (!string.IsNullOrEmpty(arrContent))
                         {
-                            // Simple string array parsing
-                            var parts = arrContent.Split(',');
-                            foreach (var part in parts)
-                            {
-                                string trimmed = part.Trim().Trim('"');
-                                if (!string.IsNullOrEmpty(trimmed)) warnings.Add(trimmed);
-                            }
+                            warnings.AddRange(ParseJsonStringArray(arrContent));
                         }
                     }
                 }
@@ -847,22 +801,187 @@ namespace ModAPI.Saves
             
             int colonIndex = json.IndexOf(':', keyIndex + pattern.Length);
             if (colonIndex < 0) return "";
-            
-            // Find the opening quote
-            int quoteStart = json.IndexOf('"', colonIndex);
-            if (quoteStart < 0) return "";
-            
-            // Find the closing quote (handle escaped quotes)
-            int quoteEnd = quoteStart + 1;
-            while (quoteEnd < json.Length)
+
+            int quoteStart = -1;
+            for (int i = colonIndex + 1; i < json.Length; i++)
             {
-                if (json[quoteEnd] == '"' && json[quoteEnd - 1] != '\\')
+                if (!char.IsWhiteSpace(json[i]))
+                {
+                    if (json[i] != '"') return "";
+                    quoteStart = i;
                     break;
-                quoteEnd++;
+                }
             }
-            
-            if (quoteEnd >= json.Length) return "";
-            return json.Substring(quoteStart + 1, quoteEnd - quoteStart - 1);
+            if (quoteStart < 0) return "";
+
+            string value;
+            int nextIndex;
+            if (!TryReadJsonString(json, quoteStart, out value, out nextIndex)) return "";
+            return value;
+        }
+
+        private static int FindMatchingBracketIgnoringStrings(string s, int start, char open, char close)
+        {
+            if (string.IsNullOrEmpty(s) || start < 0 || start >= s.Length || s[start] != open) return -1;
+
+            int depth = 0;
+            bool inString = false;
+            bool escaping = false;
+            for (int i = start; i < s.Length; i++)
+            {
+                char c = s[i];
+
+                if (inString)
+                {
+                    if (escaping) escaping = false;
+                    else if (c == '\\') escaping = true;
+                    else if (c == '"') inString = false;
+                    continue;
+                }
+
+                if (c == '"') inString = true;
+                else if (c == open) depth++;
+                else if (c == close)
+                {
+                    depth--;
+                    if (depth == 0) return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static List<string> ExtractTopLevelJsonObjects(string arrayContent)
+        {
+            var objects = new List<string>();
+            if (string.IsNullOrEmpty(arrayContent)) return objects;
+
+            bool inString = false;
+            bool escaping = false;
+            int depth = 0;
+            int objectStart = -1;
+
+            for (int i = 0; i < arrayContent.Length; i++)
+            {
+                char c = arrayContent[i];
+
+                if (inString)
+                {
+                    if (escaping) escaping = false;
+                    else if (c == '\\') escaping = true;
+                    else if (c == '"') inString = false;
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    inString = true;
+                    continue;
+                }
+
+                if (c == '{')
+                {
+                    if (depth == 0) objectStart = i;
+                    depth++;
+                    continue;
+                }
+
+                if (c == '}')
+                {
+                    depth--;
+                    if (depth == 0 && objectStart >= 0)
+                    {
+                        objects.Add(arrayContent.Substring(objectStart, i - objectStart + 1));
+                        objectStart = -1;
+                    }
+                }
+            }
+
+            return objects;
+        }
+
+        private static List<string> ParseJsonStringArray(string arrayContent)
+        {
+            var result = new List<string>();
+            if (string.IsNullOrEmpty(arrayContent)) return result;
+
+            int i = 0;
+            while (i < arrayContent.Length)
+            {
+                while (i < arrayContent.Length && (char.IsWhiteSpace(arrayContent[i]) || arrayContent[i] == ',')) i++;
+                if (i >= arrayContent.Length) break;
+
+                if (arrayContent[i] != '"')
+                {
+                    while (i < arrayContent.Length && arrayContent[i] != ',') i++;
+                    continue;
+                }
+
+                string value;
+                int nextIndex;
+                if (!TryReadJsonString(arrayContent, i, out value, out nextIndex))
+                {
+                    break;
+                }
+
+                result.Add(value);
+                i = nextIndex;
+            }
+
+            return result;
+        }
+
+        private static bool TryReadJsonString(string source, int quoteStart, out string value, out int nextIndex)
+        {
+            value = string.Empty;
+            nextIndex = quoteStart;
+            if (string.IsNullOrEmpty(source) || quoteStart < 0 || quoteStart >= source.Length || source[quoteStart] != '"')
+            {
+                return false;
+            }
+
+            var sb = new StringBuilder();
+            bool escaping = false;
+
+            for (int i = quoteStart + 1; i < source.Length; i++)
+            {
+                char c = source[i];
+
+                if (escaping)
+                {
+                    switch (c)
+                    {
+                        case '"': sb.Append('"'); break;
+                        case '\\': sb.Append('\\'); break;
+                        case '/': sb.Append('/'); break;
+                        case 'b': sb.Append('\b'); break;
+                        case 'f': sb.Append('\f'); break;
+                        case 'n': sb.Append('\n'); break;
+                        case 'r': sb.Append('\r'); break;
+                        case 't': sb.Append('\t'); break;
+                        default: sb.Append(c); break;
+                    }
+                    escaping = false;
+                    continue;
+                }
+
+                if (c == '\\')
+                {
+                    escaping = true;
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    value = sb.ToString();
+                    nextIndex = i + 1;
+                    return true;
+                }
+
+                sb.Append(c);
+            }
+
+            return false;
         }
 
         /// <summary>

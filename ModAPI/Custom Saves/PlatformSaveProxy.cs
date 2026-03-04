@@ -3,7 +3,6 @@ using ModAPI.Saves;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using UnityEngine;
 using ModAPI.Core;
@@ -30,12 +29,29 @@ namespace ModAPI.Hooks
             _inner = inner;
         }
 
-        public static bool NextSaveTargetExists() => NextSave.Count > 0;
+        public static bool NextSaveTargetExists()
+        {
+            lock (_nextSaveLock)
+            {
+                return NextSave.Count > 0;
+            }
+        }
+
         public static KeyValuePair<SaveManager.SaveType, Target> GetNextSaveTargetAndClear()
         {
-            var target = NextSave.First();
-            NextSave.Clear();
-            return target;
+            lock (_nextSaveLock)
+            {
+                if (NextSave.Count == 0)
+                {
+                    throw new InvalidOperationException("GetNextSaveTargetAndClear called with no pending save targets.");
+                }
+
+                var e = NextSave.GetEnumerator();
+                e.MoveNext();
+                var target = e.Current;
+                NextSave.Clear();
+                return target;
+            }
         }
 
         public override bool IsSaving() => _inner.IsSaving();
@@ -45,7 +61,16 @@ namespace ModAPI.Hooks
         public override void DoesSaveExist(SaveManager.SaveType type, out bool exists, out bool corrupted) => _inner.DoesSaveExist(type, out exists, out corrupted);
         public override void PlatformInit() => _inner.PlatformInit();
         public override void PlatformUpdate() => _inner.PlatformUpdate();
-        public override bool PlatformDelete(SaveManager.SaveType type) => _inner.PlatformDelete(type);
+        public override bool PlatformDelete(SaveManager.SaveType type)
+        {
+            bool routedResult;
+            if (SaveDeleteRouter.TryDeleteBySaveType(type, out routedResult))
+            {
+                return routedResult;
+            }
+
+            return _inner.PlatformDelete(type);
+        }
 
 
         public override bool PlatformSave(SaveManager.SaveType type, byte[] data)
@@ -179,19 +204,34 @@ namespace ModAPI.Hooks
                             : ScenarioSaves.GetRegistry(scenarioId);
 
                         var entry = saveApi.Get(saveId);
-                        if (entry == null) return false;
+                        if (entry == null)
+                        {
+                            MMLog.WriteWarning(string.Format("[PlatformLoad] Pending custom target missing: scenario={0}, saveId={1}. Clearing redirect for {2}.", scenarioId, saveId, type));
+                            ClearPendingLoad_NoLock(type);
+                            _customLoadedXml = null;
+                            ActiveCustomSave = null;
+                            return false;
+                        }
 
                         var path = DirectoryProvider.EntryPath(scenarioId, entry.absoluteSlot);
-                        if (!File.Exists(path)) return false;
+                        if (!File.Exists(path))
+                        {
+                            MMLog.WriteWarning(string.Format("[PlatformLoad] Pending custom save file missing: {0}. Clearing redirect for {1}.", path, type));
+                            ClearPendingLoad_NoLock(type);
+                            _customLoadedXml = null;
+                            ActiveCustomSave = null;
+                            return false;
+                        }
 
                         _customLoadedXml = File.ReadAllText(path);
                         ActiveCustomSave = entry;
-                        NextLoad.Remove(type);
+                        ClearPendingLoad_NoLock(type);
                         return true;
                     }
                     catch (Exception ex)
                     {
                         MMLog.WriteError("custom load error: " + ex);
+                        ClearPendingLoad_NoLock(type);
                         _customLoadedXml = null;
                         ActiveCustomSave = null;
                         return false;
@@ -241,6 +281,11 @@ namespace ModAPI.Hooks
         public static void ResetStatus()
         {
             _quitSaveCompleted = false;
+        }
+
+        private static void ClearPendingLoad_NoLock(SaveManager.SaveType type)
+        {
+            NextLoad.Remove(type);
         }
     }
 }

@@ -51,6 +51,11 @@ namespace ModAPI.Core
         private IModLogger _scopedLog;
 
         /// <summary>
+        /// Optional Unity lifecycle hook for derived manager types.
+        /// </summary>
+        protected virtual void Awake() { }
+
+        /// <summary>
         /// Called by the ModAPI when the plugin is initialized.
         /// </summary>
         public virtual void Initialize(IPluginContext context)

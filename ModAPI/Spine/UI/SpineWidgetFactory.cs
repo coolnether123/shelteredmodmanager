@@ -544,6 +544,11 @@ namespace ModAPI.Spine.UI
 
             var capture = container.AddComponent<KeybindCaptureListener>();
             capture.ValueLabel = valueLabel;
+            capture.DisplayTextProvider = () =>
+            {
+                KeyCode current = GetValue<KeyCode>(def, settingsObject);
+                return FormatKeyCode(current);
+            };
             capture.OnCanceled = refresh;
             capture.OnCaptured = (key) =>
             {

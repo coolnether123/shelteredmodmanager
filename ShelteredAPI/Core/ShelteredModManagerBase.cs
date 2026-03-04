@@ -9,6 +9,22 @@ namespace ShelteredAPI.Core
     /// </summary>
     public abstract class ShelteredModManagerBase : ModManagerBase
     {
+        protected override void Awake()
+        {
+            base.Awake();
+
+            try
+            {
+                // Always apply ShelteredAPI patches for derived managers.
+                // ModManagerBase.ApplyPatches() is idempotent.
+                ApplyPatches();
+            }
+            catch (System.Exception ex)
+            {
+                ModAPI.Core.MMLog.WriteWarning("[ShelteredModManagerBase] Auto patch activation failed in Awake: " + ex.Message);
+            }
+        }
+
         public override void Initialize(IPluginContext context)
         {
             base.Initialize(context);
