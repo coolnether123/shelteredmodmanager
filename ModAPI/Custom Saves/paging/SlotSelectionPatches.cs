@@ -298,7 +298,7 @@ namespace ModAPI.Hooks
                             if (vanillaSaveInfo == null && System.IO.File.Exists(manPath))
                             {
                                  MMLog.WriteDebug($"[OnSlotChosen] Found orphaned manifest for empty vanilla slot {chosenSlotIndex + 1}. Auto-cleaning.");
-                                try { ExpandedVanillaSaves.DeleteBySlot(chosenSlotIndex + 1); } catch {}
+                                SaveDeleteRouter.DeleteAbsoluteSlot(chosenSlotIndex + 1, "OnSlotChosen.OrphanedManifestCleanup");
                                 return true; // Treat as empty slot -> New Game
                             }
 
@@ -481,7 +481,7 @@ namespace ModAPI.Hooks
                             MMLog.WriteDebug($"[OnDeleteMessageBox] Detected vanilla save deletion for Slot {absoluteSlot}. Cleaning up metadata...");
                             
                             // Delete the Slot_X folder managed by ModAPI
-                            ExpandedVanillaSaves.DeleteBySlot(absoluteSlot);
+                            SaveDeleteRouter.DeleteAbsoluteSlot(absoluteSlot, "OnDeleteMessageBox.VanillaCleanup");
                         }
                         catch (Exception ex)
                         {
@@ -505,7 +505,7 @@ namespace ModAPI.Hooks
                     if (entry != null)
                     {
                         MMLog.WriteDebug($"[OnDeleteMessageBox] Deleting custom slot {entry.absoluteSlot}...");
-                        ExpandedVanillaSaves.DeleteBySlot(entry.absoluteSlot);
+                        SaveDeleteRouter.DeleteAbsoluteSlot(entry.absoluteSlot, "OnDeleteMessageBox.CustomDelete");
                         t.Field("m_infoNeedsRefresh").SetValue(true);
                     }
                     else

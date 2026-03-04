@@ -93,7 +93,16 @@ namespace ModAPI.UI
                 Color textColor = _bookFound ? new Color(0.1f, 0.1f, 0.1f) : Color.white;
 
                 // Title (left page, top-center)
-                CreateSimpleLabel("Installed Mods", -280f, 275f, 34, textColor, NGUIText.Alignment.Center, 300);
+                // Force single-line title rendering to prevent occasional trailing-character wrap.
+                var installedModsHeader = CreateSimpleLabel("Installed Mods", -280f, 275f, 34, textColor, NGUIText.Alignment.Center, 380);
+                if (installedModsHeader != null)
+                {
+                    installedModsHeader.multiLine = false;
+                    installedModsHeader.overflowMethod = UILabel.Overflow.ShrinkContent;
+                    installedModsHeader.alignment = NGUIText.Alignment.Center;
+                    installedModsHeader.ProcessText();
+                    installedModsHeader.MarkAsChanged();
+                }
 
                 // Mod list buttons (left page, centered vertically)
                 CreateModButtons(buttonTemplate, textColor);
