@@ -318,7 +318,7 @@ namespace ModAPI.Core
 
             if (orderedModIds.Count == 0)
             {
-                MMLog.Write("Explicit empty load order found. Enabling NO mods.");
+                MMLog.Write("Explicit empty load order found. Enabling NO mods (core ModAPI/ShelteredAPI runtime remains active).");
                 LoadedMods = new List<ModEntry>();
                 return;
             }

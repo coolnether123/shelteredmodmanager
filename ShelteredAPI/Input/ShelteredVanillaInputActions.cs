@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.InputActions;
+using ModAPI.Core;
 using UnityEngine;
 
 namespace ShelteredAPI.Input
@@ -40,6 +41,8 @@ namespace ShelteredAPI.Input
                 RegisterRange(InputDefs.Values);
                 RegisterRange(MenuDefs.Values);
                 _registered = true;
+                MMLog.WriteInfo("[ShelteredVanillaInputActions] Registered "
+                    + InputDefs.Count + " gameplay actions and " + MenuDefs.Count + " menu actions.");
             }
         }
 
@@ -53,6 +56,7 @@ namespace ShelteredAPI.Input
                 if (_runtimeLoaded) return;
                 ShelteredKeybindsProvider.Instance.EnsureLoaded();
                 _runtimeLoaded = true;
+                MMLog.WriteInfo("[ShelteredVanillaInputActions] Runtime keybinds loaded from provider.");
             }
         }
 

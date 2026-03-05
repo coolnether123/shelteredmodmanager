@@ -59,6 +59,8 @@ namespace ShelteredAPI.Input
             KeyCode parsed;
             if (TryParseRawKey(rawValue, out parsed) && IsValidForContext(parsed, context))
             {
+                MMLog.WriteDebug("[KeyValidationPolicy] Parsed key '" + rawValue + "' => " + parsed
+                    + " for " + actionId + " (" + context + ").");
                 return parsed;
             }
 

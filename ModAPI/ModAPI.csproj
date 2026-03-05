@@ -98,6 +98,7 @@
     <Compile Include="UI\UIFontCache.cs" />
     <Compile Include="UI\UIUtil.cs" />
     <Compile Include="UI\UIHelper.cs" />
+    <Compile Include="UI\TouchInputBridge.cs" />
     <Compile Include="UI\UIFactory.cs" />
     <Compile Include="UI\ModManagerPanel.cs" />
     <Compile Include="UI\ModSettingsPanel.cs" />

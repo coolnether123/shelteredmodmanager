@@ -80,8 +80,24 @@ namespace ModAPI.Harmony
                 var shelteredAssembly = ResolveShelteredApiAssembly();
                 if (shelteredAssembly != null && shelteredAssembly != asm)
                 {
+                    string location = "<dynamic>";
+                    try { location = shelteredAssembly.Location; } catch { }
+                    MMLog.WriteInfo("HarmonyBootstrap: applying ShelteredAPI patches from "
+                        + shelteredAssembly.GetName().Name + " v" + shelteredAssembly.GetName().Version
+                        + " @" + location);
                     ModAPI.Harmony.HarmonyUtil.PatchAll(harmony, shelteredAssembly, opts);
+                    TryInitializeShelteredApiCore(shelteredAssembly);
                 }
+                else
+                {
+                    MMLog.WriteInfo("HarmonyBootstrap: ShelteredAPI assembly not found for patching (or same as ModAPI).");
+                }
+
+                LogPatchStatus("SettingsPCPanel.OnControlsButtonPressed", "SettingsPCPanel", "OnControlsButtonPressed");
+                LogPatchStatus("SettingsPCPanel.OnControlsButtonPressed_PAD", "SettingsPCPanel", "OnControlsButtonPressed_PAD");
+                LogPatchStatus("UIPanelManager.PushPanel(BasePanel)", "UIPanelManager", "PushPanel", "BasePanel");
+                LogPatchStatus("PlatformInput_PC.GetButtonDown(InputButton)", "PlatformInput_PC", "GetButtonDown", "PlatformInput+InputButton");
+                LogPatchStatus("PlatformInput_PC.GetButtonDown(MenuInputButton)", "PlatformInput_PC", "GetButtonDown", "PlatformInput+MenuInputButton");
 
                 // Explicitly verify UIPatches was discovered and patched
                 var uiPatches = asm.GetType("ModAPI.UI.UIPatches");
@@ -175,6 +191,82 @@ namespace ModAPI.Harmony
             _runnerGo = new GameObject("HarmonyRetryRunner");
             UnityEngine.Object.DontDestroyOnLoad(_runnerGo);
             _runnerGo.AddComponent<HarmonyRetryRunner>();
+        }
+
+        private static void TryInitializeShelteredApiCore(Assembly shelteredAssembly)
+        {
+            if (shelteredAssembly == null) return;
+
+            try
+            {
+                var bootstrapType = shelteredAssembly.GetType("ShelteredAPI.Core.ShelteredApiRuntimeBootstrap", false);
+                if (bootstrapType == null)
+                {
+                    MMLog.WriteInfo("HarmonyBootstrap: ShelteredAPI runtime bootstrap type not found.");
+                    return;
+                }
+
+                var init = bootstrapType.GetMethod("Initialize", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                if (init == null)
+                {
+                    MMLog.WriteInfo("HarmonyBootstrap: ShelteredAPI runtime bootstrap Initialize method not found.");
+                    return;
+                }
+
+                init.Invoke(null, null);
+                MMLog.WriteInfo("HarmonyBootstrap: ShelteredAPI runtime bootstrap initialized.");
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("HarmonyBootstrap: ShelteredAPI runtime bootstrap failed: " + ex.Message);
+            }
+        }
+
+        private static void LogPatchStatus(string label, string typeName, string methodName, string parameterTypeName = null)
+        {
+            try
+            {
+                Type targetType = AccessTools.TypeByName(typeName);
+                if (targetType == null)
+                {
+                    MMLog.WriteInfo("HarmonyBootstrap: patch verify target type missing: " + label);
+                    return;
+                }
+
+                MethodBase target = null;
+                if (string.IsNullOrEmpty(parameterTypeName))
+                {
+                    target = AccessTools.Method(targetType, methodName);
+                }
+                else
+                {
+                    Type parameterType = AccessTools.TypeByName(parameterTypeName);
+                    if (parameterType == null)
+                    {
+                        MMLog.WriteInfo("HarmonyBootstrap: patch verify parameter type missing for " + label + ": " + parameterTypeName);
+                        return;
+                    }
+                    target = AccessTools.Method(targetType, methodName, new[] { parameterType });
+                }
+
+                if (target == null)
+                {
+                    MMLog.WriteInfo("HarmonyBootstrap: patch verify target method missing: " + label);
+                    return;
+                }
+
+                var info = HarmonyLib.Harmony.GetPatchInfo(target);
+                bool patched = info != null && (
+                    (info.Prefixes != null && info.Prefixes.Count > 0) ||
+                    (info.Postfixes != null && info.Postfixes.Count > 0) ||
+                    (info.Transpilers != null && info.Transpilers.Count > 0));
+
+                MMLog.WriteInfo("HarmonyBootstrap: patch verify " + label + " => " + (patched ? "patched" : "not patched"));
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("HarmonyBootstrap: patch verify failed for " + label + ": " + ex.Message);
+            }
         }
     }
 

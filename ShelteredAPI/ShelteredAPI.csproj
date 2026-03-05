@@ -59,6 +59,8 @@
     <Compile Include="Characters\Models\CharacterDataModel.cs" />
     <Compile Include="Characters\Models\SyntheticCharacterProxy.cs" />
     <Compile Include="Core\GameHelperImpl.cs" />
+    <Compile Include="Core\ShelteredApiRuntimeBootstrap.cs" />
+    <Compile Include="Core\ShelteredKeybindPersistenceGuard.cs" />
     <Compile Include="Debugging\DebugValueTakeover.cs" />
     <Compile Include="Harmony\ModManagerKeybindsPatches.cs" />
     <Compile Include="Harmony\PlatformInputKeybindPatches.cs" />

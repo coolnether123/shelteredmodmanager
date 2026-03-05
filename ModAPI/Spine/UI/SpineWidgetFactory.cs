@@ -513,12 +513,46 @@ namespace ModAPI.Spine.UI
 
             string raw = key.ToString();
             if (raw.StartsWith("Alpha") && raw.Length == 6) return raw.Substring(5);
-            if (raw.StartsWith("Keypad")) return "KP " + raw.Substring(6).ToUpperInvariant();
+            if (raw.StartsWith("Keypad")) return "KP " + HumanizeKeyName(raw.Substring(6)).ToUpperInvariant();
             if (raw.EndsWith("Arrow")) return raw.Replace("Arrow", "").ToUpperInvariant();
             if (raw == "Mouse0") return "MOUSE LEFT";
             if (raw == "Mouse1") return "MOUSE RIGHT";
             if (raw == "Mouse2") return "MOUSE MIDDLE";
-            return raw.ToUpperInvariant();
+            return HumanizeKeyName(raw).ToUpperInvariant();
+        }
+
+        private static string HumanizeKeyName(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+
+            var sb = new System.Text.StringBuilder(value.Length + 8);
+            char prev = '\0';
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (c == '_' || c == '-')
+                {
+                    if (sb.Length > 0 && sb[sb.Length - 1] != ' ') sb.Append(' ');
+                    prev = c;
+                    continue;
+                }
+
+                bool addSpace =
+                    i > 0 &&
+                    (
+                        (char.IsUpper(c) && (char.IsLower(prev) || char.IsDigit(prev))) ||
+                        (char.IsDigit(c) && char.IsLetter(prev)) ||
+                        (char.IsLetter(c) && char.IsDigit(prev))
+                    );
+
+                if (addSpace && sb.Length > 0 && sb[sb.Length - 1] != ' ')
+                    sb.Append(' ');
+
+                sb.Append(c);
+                prev = c;
+            }
+
+            return sb.ToString().Trim();
         }
 
         private static GameObject CreateKeybindWidget(SettingDefinition def, Transform parent, object settingsObject, ModSettingsPanel panel)
@@ -603,8 +637,13 @@ namespace ModAPI.Spine.UI
         {
             var container = NGUITools.AddChild(parent.gameObject);
             NGUITools.SetLayer(container, parent.gameObject.layer);
-            var lbl = UIUtil.CreateLabelQuick(container, def.Label.ToUpper(), 18, Vector3.zero);
+            var lbl = UIUtil.CreateLabelQuick(container, def.Label.ToUpper(), 17, Vector3.zero);
             lbl.pivot = UIWidget.Pivot.Left;
+            lbl.alignment = NGUIText.Alignment.Left;
+            lbl.transform.localPosition = Vector3.zero;
+            lbl.width = 260;
+            lbl.overflowMethod = UILabel.Overflow.ClampContent;
+            lbl.multiLine = false;
             lbl.color = def.HeaderColor ?? new Color(1f, 0.8f, 0.2f);
             return container;
         }
