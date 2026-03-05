@@ -15,6 +15,7 @@ namespace ShelteredAPI.UI
         {
             var provider = ShelteredKeybindsProvider.Instance;
             provider.EnsureLoaded();
+            ModAPI.Core.MMLog.WriteInfo("[ShelteredKeybindsUI] Opening Sheltered Controls keybind panel.");
 
             var entry = new ModEntry
             {

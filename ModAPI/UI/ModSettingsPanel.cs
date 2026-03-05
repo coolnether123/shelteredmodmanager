@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Globalization; // Added for CultureInfo
+using System.Text;
 using UnityEngine;
 using ModAPI.Core;
 using ModAPI.Spine;
@@ -13,8 +14,10 @@ namespace ModAPI.UI
     public class ModSettingsPanel : MonoBehaviour
     {
         private static GameObject _instance;
+        private static ModSettingsPanel _activeInstance;
         private static Texture2D _whiteTexture;
         private static SettingMode? _lastClosedViewMode;
+        private static int _externalInputLockCount;
 
         private ModEntry _currentMod;
         private SettingMode _currentViewMode = SettingMode.Simple;
@@ -32,6 +35,12 @@ namespace ModAPI.UI
         private GameObject _nextBtn;
         private UILabel _customIndicatorLabel;
         private UIInput _searchInput;
+        private UILabel _searchDisplayLabel;
+        private GameObject _searchInputRoot;
+        private bool _manualSearchEnabled;
+        private bool _searchHasFocus;
+        private UIFont _activeBitmapFont;
+        private Font _activeTtfFont;
 
         // State
         private List<List<GameObject>> _pages = new List<List<GameObject>>();
@@ -45,6 +54,8 @@ namespace ModAPI.UI
         private string _customSnapshotJson = null;
         private bool _isRebuilding = false;
         private bool _isClosing = false;
+        private bool _inputLockedExternally = false;
+        private const int MaxSearchLength = 64;
 
         // Colors
         private static readonly Color COLOR_HEADER = new Color(0.9f, 0.85f, 0.7f);
@@ -66,13 +77,16 @@ namespace ModAPI.UI
             if (mod == null || mod.SettingsProvider == null) return;
 
             if (_instance != null) Destroy(_instance);
+            UIFontCache.RefreshIfMissing();
 
-            var panel = UIUtil.EnsureOverlayPanel("ModAPI_SettingsPanel", 11000);
+            var panel = UIUtil.EnsureOverlayPanel("ModAPI_SettingsPanel", 50000);
             
             if (_whiteTexture == null)
             {
                 _whiteTexture = new Texture2D(2, 2);
                 for (int x = 0; x < 2; x++) for (int y = 0; y < 2; y++) _whiteTexture.SetPixel(x, y, Color.white);
+                _whiteTexture.filterMode = FilterMode.Point;
+                _whiteTexture.wrapMode = TextureWrapMode.Clamp;
                 _whiteTexture.Apply();
             }
 
@@ -91,16 +105,34 @@ namespace ModAPI.UI
             var script = root.AddComponent<ModSettingsPanel>();
             script._currentMod = mod;
             script._currentViewMode = _lastClosedViewMode ?? SettingMode.Simple;
+            _activeInstance = script;
 
             // Initial snapshot of settings as "Custom" state
             if (mod.SettingsProvider is ISettingsProvider2 sp2) script._customSnapshotJson = sp2.SerializeToJson();
 
             script.InitialiseAndBuild(root.transform, uiFont, ttfFont);
+            script.ApplyExternalInputLock(_externalInputLockCount > 0);
+        }
+
+        public static void PushExternalInputLock()
+        {
+            _externalInputLockCount++;
+            if (_activeInstance != null)
+                _activeInstance.ApplyExternalInputLock(true);
+        }
+
+        public static void PopExternalInputLock()
+        {
+            _externalInputLockCount = Mathf.Max(0, _externalInputLockCount - 1);
+            if (_activeInstance != null)
+                _activeInstance.ApplyExternalInputLock(_externalInputLockCount > 0);
         }
 
         private void InitialiseAndBuild(Transform root, UIFont uiFont, Font ttfFont)
         {
             MMLog.WriteDebug("InitialiseAndBuild() started");
+            _activeBitmapFont = uiFont;
+            _activeTtfFont = ttfFont;
             CaptureTemplates(uiFont, ttfFont);
 
             // Backgrounds - Lowered opacity for transparency
@@ -110,7 +142,7 @@ namespace ModAPI.UI
             CreateTexturedBox(root, "WindowBorder", Vector3.zero, WINDOW_WIDTH + 4, WINDOW_HEIGHT + 4, new Color(0.5f, 0.4f, 0.3f, 1f), 9, false);
 
             float topY = WINDOW_HEIGHT / 2 - 40;
-            float leftX = -WINDOW_WIDTH / 2 + 40;
+            float leftX = -WINDOW_WIDTH / 2 + 70;
             float rightX = WINDOW_WIDTH / 2 - 40;
 
             // 1. Title (Top Left)
@@ -118,11 +150,13 @@ namespace ModAPI.UI
             _modNameLabel = CreateLabel(root, "Title", "MOD NAME", new Vector3(leftX + 40, topY + 10, 0), 28, COLOR_HEADER, uiFont, ttfFont, 600);
             _modNameLabel.alignment = NGUIText.Alignment.Left;
             _modNameLabel.pivot = UIWidget.Pivot.Left;
+            _modNameLabel.transform.localPosition = new Vector3(leftX + 40, topY + 10, 0);
 
             // Version Label (Created separately to position under name)
             var versionLabel = CreateLabel(root, "Version", "v1.3", new Vector3(leftX + 40, topY - 20, 0), 18, COLOR_SUBTEXT, uiFont, ttfFont, 600);
             versionLabel.alignment = NGUIText.Alignment.Left;
             versionLabel.pivot = UIWidget.Pivot.Left;
+            versionLabel.transform.localPosition = new Vector3(leftX + 40, topY - 20, 0);
             // Store ref if needed, or just find it by name later if dynamic updates required (mostly static per open)
             _modVersionLabel = versionLabel;
 
@@ -173,8 +207,14 @@ namespace ModAPI.UI
 
         private void Update()
         {
+            if (!_inputLockedExternally)
+                HandleManualSearchInput();
+
             if (Input.GetKeyDown(KeyCode.Escape))
             {
+                if (_inputLockedExternally)
+                    return;
+
                 // Esc is consumed by keybind capture while listening.
                 if (KeybindCaptureListener.ShouldBlockEscapeClose())
                     return;
@@ -209,6 +249,7 @@ namespace ModAPI.UI
 
             Destroy(_instance);
             _instance = null;
+            if (_activeInstance == this) _activeInstance = null;
         }
 
         private void OnDestroy()
@@ -221,6 +262,20 @@ namespace ModAPI.UI
             SaveCurrentSettings();
 
             if (_instance == gameObject) _instance = null;
+            if (_activeInstance == this) _activeInstance = null;
+        }
+
+        private void ApplyExternalInputLock(bool locked)
+        {
+            _inputLockedExternally = locked;
+
+            var colliders = GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                var c = colliders[i];
+                if (c == null) continue;
+                c.enabled = !locked;
+            }
         }
 
         private void CreateSearchBar(Transform parent, UIFont uiFont, Font ttfFont)
@@ -258,8 +313,12 @@ namespace ModAPI.UI
             lbl.alignment = NGUIText.Alignment.Left;
             lbl.text = string.Empty;
 
-            // Keep search enabled for either bitmap or TTF fonts.
-            // Only disable if no usable font exists at all.
+            _searchInputRoot = inputGO;
+            _searchDisplayLabel = lbl;
+            _searchInput = null;
+            _manualSearchEnabled = false;
+            _searchHasFocus = false;
+
             bool hasUsableFont = lbl.bitmapFont != null || lbl.trueTypeFont != null;
             if (!hasUsableFont)
             {
@@ -272,24 +331,108 @@ namespace ModAPI.UI
                 return;
             }
 
-            _searchInput = inputGO.AddComponent<UIInput>();
-            _searchInput.label = lbl;
-            _searchInput.activeTextColor = Color.white;
-            _searchInput.defaultText = string.Empty;
+            // Manual search mode is used in all runtimes to avoid Unity 5.3/5.6 UIInput edge cases.
+            EnableManualSearchInput(inputGO, lbl);
+            MMLog.WriteInfo("[ModSettingsPanel] Search using manual input mode.");
+        }
 
-            // CRITICAL: NGUI UIInput needs a Collider to be clickable
-            var col = inputGO.AddComponent<BoxCollider>();
+        private void EnableManualSearchInput(GameObject inputGO, UILabel label)
+        {
+            if (inputGO == null || label == null) return;
+
+            _manualSearchEnabled = true;
+            _searchHasFocus = false;
+
+            label.pivot = UIWidget.Pivot.Left;
+            label.alignment = NGUIText.Alignment.Left;
+            label.transform.localPosition = new Vector3(-150, 0, 0);
+            label.color = Color.white;
+
+            var col = inputGO.GetComponent<BoxCollider>();
+            if (col == null) col = inputGO.AddComponent<BoxCollider>();
             col.size = new Vector3(320, 35, 1);
             col.center = Vector3.zero;
 
-            EventDelegate.Add(_searchInput.onChange, () => {
-                string newVal = _searchInput.value;
-                if (_searchFilter != newVal) 
+            UIEventListener.Get(inputGO).onClick = _ =>
+            {
+                _searchHasFocus = true;
+                UICamera.selectedObject = null;
+                UpdateManualSearchDisplay();
+            };
+
+            UpdateManualSearchDisplay();
+        }
+
+        private void HandleManualSearchInput()
+        {
+            if (!_manualSearchEnabled || _searchInputRoot == null || _searchDisplayLabel == null) return;
+
+            if (Input.GetMouseButtonDown(0))
+            {
+                _searchHasFocus = IsHoveredWithin(_searchInputRoot);
+                UpdateManualSearchDisplay();
+            }
+
+            if (!_searchHasFocus) return;
+
+            string typed = Input.inputString;
+            if (string.IsNullOrEmpty(typed)) return;
+
+            bool changed = false;
+            for (int i = 0; i < typed.Length; i++)
+            {
+                char c = typed[i];
+                if (c == '\b')
                 {
-                    _searchFilter = newVal;
-                    BuildMenu(uiFont, ttfFont, true); 
+                    if (!string.IsNullOrEmpty(_searchFilter))
+                    {
+                        _searchFilter = _searchFilter.Substring(0, _searchFilter.Length - 1);
+                        changed = true;
+                    }
+                    continue;
                 }
-            });
+
+                if (c == '\n' || c == '\r')
+                {
+                    _searchHasFocus = false;
+                    continue;
+                }
+
+                if (char.IsControl(c)) continue;
+                if (_searchFilter.Length >= MaxSearchLength) continue;
+
+                _searchFilter += c;
+                changed = true;
+            }
+
+            if (changed)
+                BuildMenu(_activeBitmapFont, _activeTtfFont, true);
+
+            UpdateManualSearchDisplay();
+        }
+
+        private void UpdateManualSearchDisplay()
+        {
+            if (_searchDisplayLabel == null) return;
+
+            if (string.IsNullOrEmpty(_searchFilter))
+            {
+                _searchDisplayLabel.text = _searchHasFocus ? "|" : "Search...";
+                _searchDisplayLabel.color = _searchHasFocus ? Color.white : COLOR_SUBTEXT;
+                return;
+            }
+
+            _searchDisplayLabel.text = _searchHasFocus ? (_searchFilter + "|") : _searchFilter;
+            _searchDisplayLabel.color = Color.white;
+        }
+
+        private static bool IsHoveredWithin(GameObject root)
+        {
+            if (root == null) return false;
+            var hovered = UICamera.hoveredObject;
+            if (hovered == null) return false;
+            if (hovered == root) return true;
+            return hovered.transform != null && hovered.transform.IsChildOf(root.transform);
         }
         
         private void CaptureTemplates(UIFont uiFont, Font ttfFont)
@@ -435,8 +578,16 @@ namespace ModAPI.UI
             }
             else
             {
-                // Increase items per page to 18 (9 rows per col)
-                CreatePaginatedGrid(visible, allDefs, settings, itemsPerPage: 18);
+                if (IsShelteredKeybindPanel())
+                {
+                    // Keybind rows are wide; use a single-column layout and fewer rows per page
+                    // so page controls at the bottom remain unobstructed.
+                    CreatePaginatedGrid(visible, allDefs, settings, itemsPerPage: 10, columns: 1, rowHeight: 50, startY: WINDOW_HEIGHT / 2 - 195f);
+                }
+                else
+                {
+                    CreatePaginatedGrid(visible, allDefs, settings, itemsPerPage: 18, columns: 2, rowHeight: 55, startY: WINDOW_HEIGHT / 2 - 200f);
+                }
             }
 
             if (!keepPage) _currentPageIndex = 0;
@@ -448,6 +599,12 @@ namespace ModAPI.UI
             {
                 _isRebuilding = false;
             }
+        }
+
+        private bool IsShelteredKeybindPanel()
+        {
+            return _currentMod != null &&
+                   string.Equals(_currentMod.Id, "ShelteredAPI.Keybinds", StringComparison.OrdinalIgnoreCase);
         }
 
         private void BuildPresetCycleWidget(UIFont uiFont, Font ttfFont, object settings, List<SettingDefinition> allDefs)
@@ -635,45 +792,462 @@ namespace ModAPI.UI
             MMLog.WriteDebug($"Preset '{presetName}' applied ({appliedCount} fields updated)");
         }
 
-        private void CreatePaginatedGrid(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs, object data, int itemsPerPage = 18)
+        private void CreatePaginatedGrid(
+            List<SettingDefinition> visibleItems,
+            List<SettingDefinition> allDefs,
+            object data,
+            int itemsPerPage,
+            int columns,
+            int rowHeight,
+            float startY)
         {
-            int cols = 2;
-            int rowsPerPage = Mathf.CeilToInt((float)itemsPerPage / cols);
-
-            float startY = WINDOW_HEIGHT / 2 - 200; // Moved up significantly (was 250)
-            int rowHeight = (itemsPerPage > 10) ? 55 : ROW_HEIGHT; 
+            if (visibleItems == null) visibleItems = new List<SettingDefinition>();
+            if (allDefs == null) allDefs = new List<SettingDefinition>();
+            if (itemsPerPage <= 0) itemsPerPage = 18;
+            if (columns <= 0) columns = 1;
+            if (rowHeight <= 0) rowHeight = ROW_HEIGHT;
 
             var hierarchy = new SettingsHierarchy(allDefs);
-            
-            for (int i = 0; i < visibleItems.Count; i += itemsPerPage)
+            var displayEntries = BuildDisplayEntries(visibleItems, allDefs);
+
+            for (int i = 0; i < displayEntries.Count; i += itemsPerPage)
             {
                 var pageItems = new List<GameObject>();
-                var segment = visibleItems.Skip(i).Take(itemsPerPage).ToList();
+                var segment = displayEntries.Skip(i).Take(itemsPerPage).ToList();
+                int renderedRows = 0;
+
                 for (int j = 0; j < segment.Count; j++)
                 {
-                    var def = segment[j];
-                    int col = j % cols;
-                    int row = j / cols;
-                    float x = (col == 0) ? -420f : 80f;
+                    var entry = segment[j];
+                    if (entry == null || entry.Primary == null) continue;
+
+                    int col = renderedRows % columns;
+                    int row = renderedRows / columns;
+
+                    float x;
+                    if (columns == 1)
+                    {
+                        x = -260f;
+                    }
+                    else if (columns == 2)
+                    {
+                        x = (col == 0) ? -420f : 80f;
+                    }
+                    else
+                    {
+                        x = -420f + (col * 300f);
+                    }
+
                     float y = startY - (row * rowHeight);
 
-                    var widget = SpineWidgetFactory.CreateWidget(def, _contentRoot.transform, data, this);
+                    GameObject widget;
+                    if (entry.Secondary != null)
+                    {
+                        widget = CreateDualKeybindWidget(entry.Primary, entry.Secondary, data);
+                    }
+                    else
+                    {
+                        widget = SpineWidgetFactory.CreateWidget(entry.Primary, _contentRoot.transform, data, this);
+                    }
+
                     if (widget != null)
                     {
-                         widget.transform.localPosition = new Vector3(x, y, 0);
-                         pageItems.Add(widget);
-                         foreach(var w in widget.GetComponentsInChildren<UIWidget>(true)) w.depth += 100; 
-                         
-                         // Use hierarchy to check if any ancestor disables this widget
-                         UpdateWidgetEnabled(widget, !hierarchy.IsDisabledByAncestor(def, data));
+                        widget.transform.localPosition = new Vector3(x, y, 0);
+                        pageItems.Add(widget);
+                        foreach (var w in widget.GetComponentsInChildren<UIWidget>(true)) w.depth += 100;
+
+                        // Use hierarchy to check if any ancestor disables this widget.
+                        UpdateWidgetEnabled(widget, !hierarchy.IsDisabledByAncestor(entry.Primary, data));
+                        renderedRows++;
                     }
                 }
                 _pages.Add(pageItems);
             }
+
             if (_pages.Count == 0 || (_pages.Count == 1 && _pages[0].Count == 0 && !string.IsNullOrEmpty(_searchFilter)))
             {
-                 // Handle no search results
-                 if (_pages.Count == 0) _pages.Add(new List<GameObject>());
+                // Handle no search results.
+                if (_pages.Count == 0) _pages.Add(new List<GameObject>());
+            }
+        }
+
+        private List<KeybindDisplayEntry> BuildDisplayEntries(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs)
+        {
+            var entries = new List<KeybindDisplayEntry>();
+            bool useDual = IsShelteredKeybindPanel();
+
+            if (!useDual)
+            {
+                for (int i = 0; i < visibleItems.Count; i++)
+                {
+                    var def = visibleItems[i];
+                    if (def == null) continue;
+                    entries.Add(new KeybindDisplayEntry(def, null));
+                }
+                return entries;
+            }
+
+            var visibleById = new Dictionary<string, SettingDefinition>(StringComparer.OrdinalIgnoreCase);
+            var allById = new Dictionary<string, SettingDefinition>(StringComparer.OrdinalIgnoreCase);
+            var consumed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < visibleItems.Count; i++)
+            {
+                var def = visibleItems[i];
+                if (def != null && !string.IsNullOrEmpty(def.Id))
+                    visibleById[def.Id] = def;
+            }
+
+            for (int i = 0; i < allDefs.Count; i++)
+            {
+                var def = allDefs[i];
+                if (def != null && !string.IsNullOrEmpty(def.Id))
+                    allById[def.Id] = def;
+            }
+
+            for (int i = 0; i < visibleItems.Count; i++)
+            {
+                var def = visibleItems[i];
+                if (def == null || string.IsNullOrEmpty(def.Id)) continue;
+                if (consumed.Contains(def.Id)) continue;
+
+                if (def.Type != SettingType.Keybind)
+                {
+                    consumed.Add(def.Id);
+                    entries.Add(new KeybindDisplayEntry(def, null));
+                    continue;
+                }
+
+                string baseId = GetKeybindActionBaseId(def.Id);
+                if (string.IsNullOrEmpty(baseId))
+                {
+                    consumed.Add(def.Id);
+                    entries.Add(new KeybindDisplayEntry(def, null));
+                    continue;
+                }
+
+                string primaryId = baseId + ".primary";
+                string secondaryId = baseId + ".secondary";
+
+                SettingDefinition primary;
+                SettingDefinition secondary;
+                visibleById.TryGetValue(primaryId, out primary);
+                visibleById.TryGetValue(secondaryId, out secondary);
+
+                if (primary == null) allById.TryGetValue(primaryId, out primary);
+                if (secondary == null) allById.TryGetValue(secondaryId, out secondary);
+
+                if (primary == null && secondary == null)
+                {
+                    consumed.Add(def.Id);
+                    entries.Add(new KeybindDisplayEntry(def, null));
+                    continue;
+                }
+
+                if (primary == null) primary = def;
+                consumed.Add(primary.Id);
+                if (secondary != null) consumed.Add(secondary.Id);
+
+                entries.Add(new KeybindDisplayEntry(primary, secondary));
+            }
+
+            return entries;
+        }
+
+        private GameObject CreateDualKeybindWidget(SettingDefinition primaryDef, SettingDefinition secondaryDef, object data)
+        {
+            var container = NGUITools.AddChild(_contentRoot);
+            container.name = "DualKeybind_" + (primaryDef != null ? primaryDef.Id : "Unknown");
+            NGUITools.SetLayer(container, _contentRoot.layer);
+            const int keySlotWidth = 158;
+            const int keySlotHeight = 38;
+            const int clearWidth = 96;
+            const int clearHeight = 38;
+
+            string actionLabel = GetActionLabel(primaryDef, secondaryDef);
+            var label = UIUtil.CreateLabelQuick(container, actionLabel, 16, new Vector3(0, 0, 0));
+            label.pivot = UIWidget.Pivot.Left;
+            label.alignment = NGUIText.Alignment.Left;
+            label.transform.localPosition = Vector3.zero;
+            label.width = 230;
+            label.overflowMethod = UILabel.Overflow.ClampContent;
+            label.multiLine = false;
+            SetTooltip(label.gameObject, primaryDef != null ? primaryDef.Tooltip : (secondaryDef != null ? secondaryDef.Tooltip : null));
+
+            KeybindCaptureListener primaryCapture = null;
+            KeybindCaptureListener secondaryCapture = null;
+
+            Func<string> primaryDisplay = () => FormatKeyCode(ReadKeyCode(primaryDef, data));
+            Func<string> secondaryDisplay = () => FormatKeyCode(ReadKeyCode(secondaryDef, data));
+
+            Action refreshCapture = () =>
+            {
+                if (primaryCapture != null && primaryCapture.DisplayTextProvider != null && primaryCapture.ValueLabel != null)
+                    primaryCapture.ValueLabel.text = primaryCapture.DisplayTextProvider();
+                if (secondaryCapture != null && secondaryCapture.DisplayTextProvider != null && secondaryCapture.ValueLabel != null)
+                    secondaryCapture.ValueLabel.text = secondaryCapture.DisplayTextProvider();
+            };
+
+            primaryCapture = CreateClickableKeySlot(
+                container.transform,
+                "Primary",
+                new Vector3(290, 0, 0),
+                primaryDisplay,
+                null,
+                key =>
+                {
+                    if (ApplySettingValue(primaryDef, data, key))
+                    {
+                        OnSettingChanged();
+                        refreshCapture();
+                    }
+                },
+                keySlotWidth,
+                keySlotHeight);
+
+            secondaryCapture = CreateClickableKeySlot(
+                container.transform,
+                "Secondary",
+                new Vector3(465, 0, 0),
+                secondaryDisplay,
+                null,
+                key =>
+                {
+                    if (ApplySettingValue(secondaryDef, data, key))
+                    {
+                        OnSettingChanged();
+                        refreshCapture();
+                    }
+                },
+                keySlotWidth,
+                keySlotHeight);
+
+            CreateButton(
+                container.transform,
+                "Clear",
+                "CLEAR",
+                new Vector3(630, 0, 0),
+                13,
+                Color.white,
+                _activeBitmapFont,
+                _activeTtfFont,
+                clearWidth,
+                clearHeight,
+                () =>
+                {
+                    bool changed = false;
+                    if (ApplySettingValue(primaryDef, data, KeyCode.None)) changed = true;
+                    if (ApplySettingValue(secondaryDef, data, KeyCode.None)) changed = true;
+
+                    if (changed)
+                    {
+                        OnSettingChanged();
+                        refreshCapture();
+                    }
+                });
+
+            return container;
+        }
+
+        private KeybindCaptureListener CreateClickableKeySlot(
+            Transform parent,
+            string name,
+            Vector3 localPosition,
+            Func<string> displayTextProvider,
+            Action onSelected,
+            Action<KeyCode> onCaptured,
+            int slotWidth,
+            int slotHeight)
+        {
+            var slot = new GameObject(name);
+            slot.transform.SetParent(parent, false);
+            slot.transform.localPosition = localPosition;
+            slot.layer = parent.gameObject.layer;
+
+            var bg = slot.AddComponent<UITexture>();
+            bg.mainTexture = _whiteTexture;
+            bg.width = slotWidth;
+            bg.height = slotHeight;
+            bg.depth = 100;
+            bg.color = new Color(0.19f, 0.15f, 0.12f, 0.95f);
+
+            var valueLabel = CreateLabel(
+                slot.transform,
+                "Value",
+                displayTextProvider != null ? displayTextProvider() : string.Empty,
+                Vector3.zero,
+                14,
+                Color.white,
+                _activeBitmapFont,
+                _activeTtfFont,
+                101);
+            valueLabel.alignment = NGUIText.Alignment.Center;
+            valueLabel.width = Mathf.Max(40, slotWidth - 8);
+            valueLabel.height = Mathf.Max(20, slotHeight - 4);
+            valueLabel.overflowMethod = UILabel.Overflow.ClampContent;
+            valueLabel.multiLine = false;
+
+            var col = slot.AddComponent<BoxCollider>();
+            col.size = new Vector3(slotWidth, slotHeight, 1);
+            col.center = Vector3.zero;
+
+            var capture = slot.AddComponent<KeybindCaptureListener>();
+            capture.ValueLabel = valueLabel;
+            capture.DisplayTextProvider = displayTextProvider;
+            capture.OnCanceled = () =>
+            {
+                if (displayTextProvider != null)
+                    valueLabel.text = displayTextProvider();
+            };
+            capture.OnCaptured = key =>
+            {
+                if (onCaptured != null) onCaptured(key);
+                if (displayTextProvider != null)
+                    valueLabel.text = displayTextProvider();
+            };
+
+            UIEventListener.Get(slot).onClick = _ =>
+            {
+                if (onSelected != null) onSelected();
+                capture.StartCapture();
+            };
+
+            return capture;
+        }
+
+        private static bool ApplySettingValue(SettingDefinition def, object settingsObject, object newValue)
+        {
+            if (def == null) return false;
+
+            try
+            {
+                if (def.Validate != null && !def.Validate(newValue, settingsObject))
+                    return false;
+
+                if (def.Setter != null)
+                    def.Setter(settingsObject, newValue);
+
+                if (def.OnChanged != null)
+                    def.OnChanged(settingsObject);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ModSettingsPanel] Failed to apply keybind value for " + def.Id + ": " + ex.Message);
+                return false;
+            }
+        }
+
+        private static KeyCode ReadKeyCode(SettingDefinition def, object settingsObject)
+        {
+            if (def == null) return KeyCode.None;
+
+            object value = null;
+            try
+            {
+                if (def.Getter != null)
+                    value = def.Getter(settingsObject);
+            }
+            catch { }
+
+            if (value is KeyCode) return (KeyCode)value;
+            if (value is int) return (KeyCode)(int)value;
+
+            if (value != null)
+            {
+                try
+                {
+                    return (KeyCode)Enum.Parse(typeof(KeyCode), value.ToString(), true);
+                }
+                catch { }
+            }
+
+            if (def.DefaultValue is KeyCode) return (KeyCode)def.DefaultValue;
+            return KeyCode.None;
+        }
+
+        private static string GetKeybindActionBaseId(string settingId)
+        {
+            if (string.IsNullOrEmpty(settingId)) return null;
+
+            if (settingId.EndsWith(".primary", StringComparison.OrdinalIgnoreCase))
+                return settingId.Substring(0, settingId.Length - ".primary".Length);
+            if (settingId.EndsWith(".secondary", StringComparison.OrdinalIgnoreCase))
+                return settingId.Substring(0, settingId.Length - ".secondary".Length);
+
+            return null;
+        }
+
+        private static string GetActionLabel(SettingDefinition primaryDef, SettingDefinition secondaryDef)
+        {
+            if (primaryDef != null && !string.IsNullOrEmpty(primaryDef.Label))
+                return primaryDef.Label.Replace(" (Alt)", string.Empty);
+
+            if (secondaryDef != null && !string.IsNullOrEmpty(secondaryDef.Label))
+                return secondaryDef.Label.Replace(" (Alt)", string.Empty);
+
+            return "UNNAMED ACTION";
+        }
+
+        private static string FormatKeyCode(KeyCode key)
+        {
+            if (key == KeyCode.None) return "UNBOUND";
+
+            string raw = key.ToString();
+            if (raw.StartsWith("Alpha", StringComparison.Ordinal) && raw.Length == 6) return raw.Substring(5);
+            if (raw.StartsWith("Keypad", StringComparison.Ordinal)) return "KP " + HumanizeKeyName(raw.Substring(6)).ToUpperInvariant();
+            if (raw.EndsWith("Arrow", StringComparison.Ordinal)) return raw.Replace("Arrow", string.Empty).ToUpperInvariant();
+            if (raw == "Mouse0") return "MOUSE LEFT";
+            if (raw == "Mouse1") return "MOUSE RIGHT";
+            if (raw == "Mouse2") return "MOUSE MIDDLE";
+            return HumanizeKeyName(raw).ToUpperInvariant();
+        }
+
+        private static string HumanizeKeyName(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+
+            var sb = new StringBuilder(value.Length + 8);
+            char prev = '\0';
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (c == '_' || c == '-')
+                {
+                    if (sb.Length > 0 && sb[sb.Length - 1] != ' ')
+                        sb.Append(' ');
+                    prev = c;
+                    continue;
+                }
+
+                bool addSpace =
+                    i > 0 &&
+                    (
+                        (char.IsUpper(c) && (char.IsLower(prev) || char.IsDigit(prev))) ||
+                        (char.IsDigit(c) && char.IsLetter(prev)) ||
+                        (char.IsLetter(c) && char.IsDigit(prev))
+                    );
+
+                if (addSpace && sb.Length > 0 && sb[sb.Length - 1] != ' ')
+                    sb.Append(' ');
+
+                sb.Append(c);
+                prev = c;
+            }
+
+            return sb.ToString().Trim();
+        }
+
+        private sealed class KeybindDisplayEntry
+        {
+            public readonly SettingDefinition Primary;
+            public readonly SettingDefinition Secondary;
+
+            public KeybindDisplayEntry(SettingDefinition primary, SettingDefinition secondary)
+            {
+                Primary = primary;
+                Secondary = secondary;
             }
         }
 
@@ -820,6 +1394,10 @@ namespace ModAPI.UI
             var labelGo = new GameObject("Label"); labelGo.transform.SetParent(go.transform, false); labelGo.layer = go.layer;
             var label = labelGo.AddComponent<UILabel>(); label.text = text; label.fontSize = fontSize; label.color = color; label.depth = 101;
             label.alignment = NGUIText.Alignment.Center; label.bitmapFont = uiFont; label.trueTypeFont = ttfFont;
+            label.width = Mathf.Max(20, w - 8);
+            label.height = h;
+            label.overflowMethod = UILabel.Overflow.ClampContent;
+            label.multiLine = false;
             var col = go.AddComponent<BoxCollider>(); col.size = new Vector3(w, h, 1);
             var btn = go.AddComponent<UIButton>(); btn.tweenTarget = go;
             if (onClick != null) EventDelegate.Set(btn.onClick, () => onClick());

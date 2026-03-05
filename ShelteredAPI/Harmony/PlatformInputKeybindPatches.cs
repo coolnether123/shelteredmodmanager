@@ -1,5 +1,7 @@
 using HarmonyLib;
 using ModAPI.InputActions;
+using ModAPI.Core;
+using ModAPI.UI;
 using ShelteredAPI.Input;
 using UnityEngine;
 
@@ -11,6 +13,11 @@ namespace ShelteredAPI.Harmony
     internal static class PlatformInputKeybindPatches
     {
         private const float AxisEpsilon = 0.001f;
+        private const float FullUiMinX = -10000f;
+        private const float FullUiMaxX = 10000f;
+        private static bool _loggedInputHook;
+        private static bool _loggedMenuHook;
+        private static bool _loggedTouchMapHook;
 
         [HarmonyPatch(typeof(PlatformInput_PC), "GetButtonDown", new System.Type[] { typeof(PlatformInput.InputButton) })]
         [HarmonyPrefix]
@@ -64,6 +71,11 @@ namespace ShelteredAPI.Harmony
                 __result = true;
                 return;
             }
+            if (TouchInputBridge.IsTouchDragHeld(FullUiMinX, FullUiMaxX))
+            {
+                __result = true;
+                return;
+            }
 
             __result =
                 Mathf.Abs(UnityEngine.Input.GetAxisRaw("PC_CursorHorizontal")) > AxisEpsilon ||
@@ -84,6 +96,12 @@ namespace ShelteredAPI.Harmony
             if (!ShelteredVanillaInputActions.TryGetBinding(button, out binding))
                 return false;
 
+            if (!_loggedInputHook)
+            {
+                _loggedInputHook = true;
+                MMLog.WriteInfo("[PlatformInputKeybindPatches] Gameplay input hook active.");
+            }
+
             if (button == PlatformInput.InputButton.Action
                 || button == PlatformInput.InputButton.Interact
                 || button == PlatformInput.InputButton.GoHere)
@@ -99,11 +117,50 @@ namespace ShelteredAPI.Harmony
 
         private static bool TryResolveMenuButton(PlatformInput.MenuInputButton button, KeyState state, ref bool result)
         {
+            if (TryResolveTouchMapDrag(button, state, ref result))
+                return true;
+
             InputBinding binding;
             if (!ShelteredVanillaInputActions.TryGetBinding(button, out binding))
                 return false;
 
+            if (!_loggedMenuHook)
+            {
+                _loggedMenuHook = true;
+                MMLog.WriteInfo("[PlatformInputKeybindPatches] Menu input hook active.");
+            }
+
             result = Evaluate(binding, state);
+            return true;
+        }
+
+        private static bool TryResolveTouchMapDrag(PlatformInput.MenuInputButton button, KeyState state, ref bool result)
+        {
+            if (button != PlatformInput.MenuInputButton.UIdragMap)
+                return false;
+
+            switch (state)
+            {
+                case KeyState.Down:
+                    result = TouchInputBridge.IsTouchDragDown(FullUiMinX, FullUiMaxX);
+                    break;
+                case KeyState.Up:
+                    result = TouchInputBridge.IsTouchDragUp(FullUiMinX, FullUiMaxX);
+                    break;
+                default:
+                    result = TouchInputBridge.IsTouchDragHeld(FullUiMinX, FullUiMaxX);
+                    break;
+            }
+
+            if (!result)
+                return false;
+
+            if (!_loggedTouchMapHook)
+            {
+                _loggedTouchMapHook = true;
+                MMLog.WriteInfo("[PlatformInputKeybindPatches] Touch drag mapped to UIdragMap.");
+            }
+
             return true;
         }
 

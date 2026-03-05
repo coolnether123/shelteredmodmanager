@@ -397,7 +397,21 @@ namespace ModAPI.UI
             }
 
             var panel = go.GetComponent<UIPanel>() ?? go.AddComponent<UIPanel>();
-            panel.depth = depth;
+            // Always sit above any existing UI panel to avoid pause/settings overlays covering mod UI.
+            int targetDepth = depth;
+            var allPanels = UnityEngine.Object.FindObjectsOfType<UIPanel>();
+            if (allPanels != null)
+            {
+                for (int i = 0; i < allPanels.Length; i++)
+                {
+                    var existing = allPanels[i];
+                    if (existing == null || existing == panel) continue;
+                    if (existing.depth >= targetDepth)
+                        targetDepth = existing.depth + 100;
+                }
+            }
+
+            panel.depth = targetDepth;
             panel.clipping = UIDrawCall.Clipping.None;
             panel.alpha = 1f;
             return panel;

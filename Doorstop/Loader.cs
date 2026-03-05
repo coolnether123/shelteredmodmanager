@@ -621,30 +621,40 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
                     return loaded;
                 }
 
-                string assemblyPath = System.IO.Path.Combine(smmBinPath, assemblyName + ".dll");
+                // Prefer SMM root for core APIs so newly built Dist\SMM outputs are not shadowed by stale SMM\bin copies.
+                bool preferRoot = string.Equals(assemblyName, "ShelteredAPI", StringComparison.OrdinalIgnoreCase)
+                                  || string.Equals(assemblyName, "ModAPI", StringComparison.OrdinalIgnoreCase);
 
-                if (System.IO.File.Exists(assemblyPath))
+                string rootAssemblyPath = System.IO.Path.Combine(smmPath, assemblyName + ".dll");
+                string binAssemblyPath = System.IO.Path.Combine(smmBinPath, assemblyName + ".dll");
+
+                string firstPath = preferRoot ? rootAssemblyPath : binAssemblyPath;
+                string secondPath = preferRoot ? binAssemblyPath : rootAssemblyPath;
+                string firstTag = preferRoot ? "root|" : "bin|";
+                string secondTag = preferRoot ? "bin|" : "root|";
+                string firstLabel = preferRoot ? "SMM root" : "SMM/bin";
+                string secondLabel = preferRoot ? "SMM/bin" : "SMM root";
+
+                if (System.IO.File.Exists(firstPath))
                 {
                     bool shouldLog;
-                    lock (_resolveLogLock) shouldLog = _resolveLoadPathLogged.Add("bin|" + assemblyName);
+                    lock (_resolveLogLock) shouldLog = _resolveLoadPathLogged.Add(firstTag + assemblyName);
                     if (shouldLog)
                     {
-                        LoaderDebugLog.Write(string.Format("[Bootstrap] AssemblyResolve loaded from SMM/bin: {0}", assemblyName));
+                        LoaderDebugLog.Write(string.Format("[Bootstrap] AssemblyResolve loaded from {0}: {1}", firstLabel, assemblyName));
                     }
-                    return System.Reflection.Assembly.LoadFrom(assemblyPath);
+                    return System.Reflection.Assembly.LoadFrom(firstPath);
                 }
 
-                // Also check SMM root
-                assemblyPath = System.IO.Path.Combine(smmPath, assemblyName + ".dll");
-                if (System.IO.File.Exists(assemblyPath))
+                if (System.IO.File.Exists(secondPath))
                 {
-                     bool shouldLog;
-                     lock (_resolveLogLock) shouldLog = _resolveLoadPathLogged.Add("root|" + assemblyName);
-                     if (shouldLog)
-                     {
-                         LoaderDebugLog.Write(string.Format("[Bootstrap] AssemblyResolve loaded from SMM root: {0}", assemblyName));
-                     }
-                     return System.Reflection.Assembly.LoadFrom(assemblyPath);
+                    bool shouldLog;
+                    lock (_resolveLogLock) shouldLog = _resolveLoadPathLogged.Add(secondTag + assemblyName);
+                    if (shouldLog)
+                    {
+                        LoaderDebugLog.Write(string.Format("[Bootstrap] AssemblyResolve loaded from {0}: {1}", secondLabel, assemblyName));
+                    }
+                    return System.Reflection.Assembly.LoadFrom(secondPath);
                 }
 
                 bool shouldLogMiss;

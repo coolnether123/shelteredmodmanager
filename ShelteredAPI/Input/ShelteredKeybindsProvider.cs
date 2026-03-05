@@ -5,6 +5,7 @@ using System.Text;
 using ModAPI.Core;
 using ModAPI.InputActions;
 using ModAPI.Spine;
+using ModAPI.UI;
 using UnityEngine;
 
 namespace ShelteredAPI.Input
@@ -73,6 +74,7 @@ namespace ShelteredAPI.Input
                 PersistActionBinding(action.Id, InputActionRegistry.GetBinding(action.Id));
             }
             ModPrefs.Save();
+            MMLog.WriteInfo("[ShelteredKeybindsProvider] Save persisted " + actions.Count + " managed keybind actions.");
         }
 
         public string SerializeToJson()
@@ -106,10 +108,12 @@ namespace ShelteredAPI.Input
             {
                 if (_loaded) return;
 
+                MMLog.WriteInfo("[ShelteredKeybindsProvider] EnsureLoaded starting.");
                 EnsureActionsRegistered();
                 LoadFromPrefs();
                 _definitions = BuildDefinitions();
                 _loaded = true;
+                MMLog.WriteInfo("[ShelteredKeybindsProvider] EnsureLoaded complete. Definitions=" + (_definitions != null ? _definitions.Count : 0));
             }
         }
 
@@ -122,6 +126,8 @@ namespace ShelteredAPI.Input
         {
             EnsureLoaded();
             if (string.IsNullOrEmpty(actionId)) return false;
+            MMLog.WriteInfo("[Keybinds] Apply request action=" + actionId + ", slot=" + (primary ? "Primary" : "Secondary")
+                + ", key=" + keyCode + ", context=" + context + ".");
 
             if (keyCode != KeyCode.None)
             {
@@ -155,6 +161,7 @@ namespace ShelteredAPI.Input
                     if (TryPromptConflictAndApply(actionId, primary, replacedKey, keyCode, proposed, detected))
                     {
                         // Deferred apply via MessageBox callback.
+                        MMLog.WriteInfo("[Keybinds] Conflict prompt shown for action=" + actionId + " key=" + keyCode + ".");
                         return false;
                     }
 
@@ -174,16 +181,20 @@ namespace ShelteredAPI.Input
                     }
 
                     PersistAffectedActions(fallbackResolution.AffectedActionIds);
+                    MMLog.WriteInfo("[Keybinds] Fallback conflict resolution applied for action=" + actionId + ". Affected="
+                        + fallbackResolution.AffectedActionIds.Count + ".");
                 }
             }
 
             ApplyAndPersist(actionId, proposed);
+            MMLog.WriteInfo("[Keybinds] Apply complete action=" + actionId + " => primary=" + proposed.Primary + ", secondary=" + proposed.Secondary + ".");
             return true;
         }
 
         private void LoadFromPrefs()
         {
             var actions = GetShelteredActions();
+            int normalizedCount = 0;
             for (int i = 0; i < actions.Count; i++)
             {
                 var action = actions[i];
@@ -203,10 +214,14 @@ namespace ShelteredAPI.Input
                     loaded.Secondary = defaults.Secondary;
 
                 if (loaded.Primary != KeyCode.None && loaded.Primary == loaded.Secondary)
+                {
                     loaded.Secondary = KeyCode.None;
+                    normalizedCount++;
+                }
 
                 InputActionRegistry.SetBinding(action.Id, loaded);
             }
+            MMLog.WriteInfo("[ShelteredKeybindsProvider] Loaded " + actions.Count + " actions from ModPrefs. NormalizedDuplicates=" + normalizedCount + ".");
         }
 
         private List<SettingDefinition> BuildDefinitions()
@@ -249,7 +264,7 @@ namespace ShelteredAPI.Input
                     var binding = InputActionRegistry.GetBinding(action.Id);
                     return primary ? (object)binding.Primary : binding.Secondary;
                 },
-                Validate = (_, value) =>
+                Validate = (value, _) =>
                 {
                     var binding = InputActionRegistry.GetBinding(action.Id);
                     KeyCode fallback = primary ? binding.Primary : binding.Secondary;
@@ -275,31 +290,40 @@ namespace ShelteredAPI.Input
             try
             {
                 string message = BuildConflictPrompt(actionId, proposedKey, detected);
+                ModSettingsPanel.PushExternalInputLock();
                 MessageBox.Show(
                     MessageBoxButtons.YesNo_Buttons,
                     message,
                     delegate(int response)
                     {
-                        KeyConflictUserChoice choice = response == 1
-                            ? KeyConflictUserChoice.Override
-                            : KeyConflictUserChoice.Cancel;
-
-                        KeyConflictResolution resolution = KeyConflictResolver.ResolveConflict(
-                            actionId,
-                            primary ? KeyBindingSlot.Primary : KeyBindingSlot.Secondary,
-                            replacedKey,
-                            proposedKey,
-                            detected,
-                            choice);
-
-                        if (!resolution.Applied)
+                        try
                         {
-                            MMLog.WriteInfo("[Keybinds] Conflict prompt cancelled for " + actionId + ".");
-                            return;
-                        }
+                            MMLog.WriteInfo("[Keybinds] Conflict prompt response=" + response + " for " + actionId + ".");
+                            KeyConflictUserChoice choice = response == 1
+                                ? KeyConflictUserChoice.Override
+                                : KeyConflictUserChoice.Cancel;
 
-                        PersistAffectedActions(resolution.AffectedActionIds);
-                        ApplyAndPersist(actionId, proposedBinding);
+                            KeyConflictResolution resolution = KeyConflictResolver.ResolveConflict(
+                                actionId,
+                                primary ? KeyBindingSlot.Primary : KeyBindingSlot.Secondary,
+                                replacedKey,
+                                proposedKey,
+                                detected,
+                                choice);
+
+                            if (!resolution.Applied)
+                            {
+                                MMLog.WriteInfo("[Keybinds] Conflict prompt cancelled for " + actionId + ".");
+                                return;
+                            }
+
+                            PersistAffectedActions(resolution.AffectedActionIds);
+                            ApplyAndPersist(actionId, proposedBinding);
+                        }
+                        finally
+                        {
+                            ModSettingsPanel.PopExternalInputLock();
+                        }
                     },
                     null,
                     null,
@@ -309,6 +333,7 @@ namespace ShelteredAPI.Input
             }
             catch (Exception ex)
             {
+                ModSettingsPanel.PopExternalInputLock();
                 MMLog.WriteWarning("[Keybinds] Conflict prompt failed: " + ex.Message);
                 return false;
             }
@@ -319,6 +344,7 @@ namespace ShelteredAPI.Input
             InputActionRegistry.SetBinding(actionId, binding);
             PersistActionBinding(actionId, binding);
             ModPrefs.Save();
+            MMLog.WriteInfo("[ShelteredKeybindsProvider] Persisted action=" + actionId + " primary=" + binding.Primary + " secondary=" + binding.Secondary + ".");
         }
 
         private static void PersistAffectedActions(List<string> affectedActionIds)
@@ -333,6 +359,7 @@ namespace ShelteredAPI.Input
             }
 
             ModPrefs.Save();
+            MMLog.WriteInfo("[ShelteredKeybindsProvider] Persisted " + affectedActionIds.Count + " affected conflict action(s).");
         }
 
         private static void PersistActionBinding(string actionId, InputBinding binding)
@@ -350,6 +377,8 @@ namespace ShelteredAPI.Input
             // Keep the newly changed slot and clear the other one.
             if (changedPrimary) binding.Secondary = KeyCode.None;
             else binding.Primary = KeyCode.None;
+            MMLog.WriteInfo("[ShelteredKeybindsProvider] Normalized self-overlap by clearing "
+                + (changedPrimary ? "secondary" : "primary") + " slot.");
         }
 
         private static string BuildConflictPrompt(string actionId, KeyCode key, KeyConflictDetection detected)
@@ -406,8 +435,9 @@ namespace ShelteredAPI.Input
         {
             EnsureActionsRegistered();
             return InputActionRegistry.GetAllActions()
-                .Where(a => ShelteredInputActions.IsShelteredAction(a.Id))
-                .OrderBy(a => a.Category)
+                .Where(a => IsManagedActionId(a.Id))
+                .OrderBy(a => GetActionSortWeight(a))
+                .ThenBy(a => a.Category)
                 .ThenBy(a => a.Label)
                 .ToList();
         }
@@ -416,6 +446,21 @@ namespace ShelteredAPI.Input
         {
             ShelteredInputActions.EnsureRegistered();
             ShelteredVanillaInputActions.EnsureRegistered();
+        }
+
+        private static bool IsManagedActionId(string actionId)
+        {
+            if (string.IsNullOrEmpty(actionId)) return false;
+            if (ShelteredInputActions.IsShelteredAction(actionId)) return true;
+            return ShelteredVanillaInputActions.GetContextForActionId(actionId) != InputContext.Unknown;
+        }
+
+        private static int GetActionSortWeight(ModInputAction action)
+        {
+            if (action == null || string.IsNullOrEmpty(action.Id)) return 99;
+            if (action.Id.StartsWith("sheltered.vanilla.", StringComparison.OrdinalIgnoreCase)) return 0;
+            if (ShelteredInputActions.IsShelteredAction(action.Id)) return 1;
+            return 2;
         }
 
         private static string Escape(string value)

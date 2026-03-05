@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.InputActions;
+using ModAPI.Core;
 using UnityEngine;
 
 namespace ShelteredAPI.Input
@@ -111,6 +112,10 @@ namespace ShelteredAPI.Input
                     result.RecommendedChoice = KeyConflictUserChoice.Override;
                     result.Recommendation = "Same-context conflict detected. Recommended: override.";
                 }
+
+                MMLog.WriteInfo("[KeyConflictResolver] Conflict detected for action=" + targetActionId
+                    + " key=" + proposedKey + " context=" + targetContext
+                    + " count=" + result.ActionList.Count + " recommendation=" + result.RecommendedChoice + ".");
             }
 
             return result;
@@ -136,6 +141,7 @@ namespace ShelteredAPI.Input
             {
                 resolution.Cancelled = true;
                 resolution.Message = "Conflict resolution cancelled by user.";
+                MMLog.WriteInfo("[KeyConflictResolver] Resolution cancelled by user for action=" + targetActionId + ".");
                 return resolution;
             }
 
@@ -158,6 +164,8 @@ namespace ShelteredAPI.Input
 
                 resolution.Applied = true;
                 resolution.Message = "Conflicts resolved by override.";
+                MMLog.WriteInfo("[KeyConflictResolver] Override applied for action=" + targetActionId
+                    + ". Affected=" + resolution.AffectedActionIds.Count + ".");
                 return resolution;
             }
 
@@ -189,6 +197,8 @@ namespace ShelteredAPI.Input
 
                 resolution.Applied = true;
                 resolution.Message = "Conflicts resolved by swap.";
+                MMLog.WriteInfo("[KeyConflictResolver] Swap applied for action=" + targetActionId
+                    + " with action=" + single.ActionId + ".");
                 return resolution;
             }
 
