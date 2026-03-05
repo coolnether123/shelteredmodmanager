@@ -13,6 +13,8 @@ namespace ModAPI.UI
 {
     public class ModSettingsPanel : MonoBehaviour
     {
+        public static event Action Closed;
+
         private static GameObject _instance;
         private static ModSettingsPanel _activeInstance;
         private static Texture2D _whiteTexture;
@@ -70,6 +72,8 @@ namespace ModAPI.UI
         private const int WINDOW_WIDTH = 1200;
         private const int WINDOW_HEIGHT = 900;
         private const int ROW_HEIGHT = 70;
+        private const float ShelteredKeybindRowX = -420f;
+        private const float ShelteredSectionHeaderLocalX = 76f;
         
         public static void Show(ModEntry mod)
         {
@@ -250,6 +254,7 @@ namespace ModAPI.UI
             Destroy(_instance);
             _instance = null;
             if (_activeInstance == this) _activeInstance = null;
+            RaiseClosed();
         }
 
         private void OnDestroy()
@@ -263,6 +268,14 @@ namespace ModAPI.UI
 
             if (_instance == gameObject) _instance = null;
             if (_activeInstance == this) _activeInstance = null;
+            RaiseClosed();
+        }
+
+        private static void RaiseClosed()
+        {
+            var handler = Closed;
+            if (handler != null)
+                handler();
         }
 
         private void ApplyExternalInputLock(bool locked)
@@ -806,6 +819,7 @@ namespace ModAPI.UI
             if (itemsPerPage <= 0) itemsPerPage = 18;
             if (columns <= 0) columns = 1;
             if (rowHeight <= 0) rowHeight = ROW_HEIGHT;
+            bool isShelteredPanel = IsShelteredKeybindPanel();
 
             var hierarchy = new SettingsHierarchy(allDefs);
             var displayEntries = BuildDisplayEntries(visibleItems, allDefs);
@@ -825,7 +839,11 @@ namespace ModAPI.UI
                     int row = renderedRows / columns;
 
                     float x;
-                    if (columns == 1)
+                    if (isShelteredPanel && columns == 1)
+                    {
+                        x = ShelteredKeybindRowX;
+                    }
+                    else if (columns == 1)
                     {
                         x = -260f;
                     }
@@ -841,7 +859,13 @@ namespace ModAPI.UI
                     float y = startY - (row * rowHeight);
 
                     GameObject widget;
-                    if (entry.Secondary != null)
+                    bool isSectionHeader = IsShelteredSectionHeaderEntry(entry);
+
+                    if (isShelteredPanel && isSectionHeader)
+                    {
+                        widget = CreateShelteredSectionHeaderWidget(entry.Primary);
+                    }
+                    else if (entry.Secondary != null)
                     {
                         widget = CreateDualKeybindWidget(entry.Primary, entry.Secondary, data);
                     }
@@ -853,6 +877,8 @@ namespace ModAPI.UI
                     if (widget != null)
                     {
                         widget.transform.localPosition = new Vector3(x, y, 0);
+                        if (isShelteredPanel)
+                            NormalizeShelteredWidgetAlignment(widget, entry);
                         pageItems.Add(widget);
                         foreach (var w in widget.GetComponentsInChildren<UIWidget>(true)) w.depth += 100;
 
@@ -965,11 +991,11 @@ namespace ModAPI.UI
             const int clearHeight = 38;
 
             string actionLabel = GetActionLabel(primaryDef, secondaryDef);
-            var label = UIUtil.CreateLabelQuick(container, actionLabel, 16, new Vector3(0, 0, 0));
+            var label = CreateLabel(container.transform, "ActionLabel", actionLabel, new Vector3(0, 0, 0), 16, COLOR_TEXT, _activeBitmapFont, _activeTtfFont, 102);
             label.pivot = UIWidget.Pivot.Left;
             label.alignment = NGUIText.Alignment.Left;
             label.transform.localPosition = Vector3.zero;
-            label.width = 230;
+            label.width = 250;
             label.overflowMethod = UILabel.Overflow.ClampContent;
             label.multiLine = false;
             SetTooltip(label.gameObject, primaryDef != null ? primaryDef.Tooltip : (secondaryDef != null ? secondaryDef.Tooltip : null));
@@ -1047,6 +1073,88 @@ namespace ModAPI.UI
                 });
 
             return container;
+        }
+
+        private GameObject CreateShelteredSectionHeaderWidget(SettingDefinition def)
+        {
+            var container = NGUITools.AddChild(_contentRoot);
+            container.name = "ShelteredSectionHeader_" + (def != null ? def.Id : "Unknown");
+            NGUITools.SetLayer(container, _contentRoot.layer);
+
+            string title = def != null && !string.IsNullOrEmpty(def.Label)
+                ? def.Label.ToUpperInvariant()
+                : "SECTION";
+
+            var label = CreateLabel(
+                container.transform,
+                "SectionLabel",
+                title,
+                new Vector3(0, 0, 0),
+                20,
+                new Color(0.35f, 0.70f, 0.90f, 1f),
+                _activeBitmapFont,
+                _activeTtfFont,
+                102);
+            label.pivot = UIWidget.Pivot.Left;
+            label.alignment = NGUIText.Alignment.Left;
+            label.transform.localPosition = new Vector3(ShelteredSectionHeaderLocalX, 0, 0);
+            label.width = 300;
+            label.overflowMethod = UILabel.Overflow.ClampContent;
+            label.multiLine = false;
+
+            return container;
+        }
+
+        private static bool IsShelteredSectionHeaderEntry(KeybindDisplayEntry entry)
+        {
+            return entry != null
+                && entry.Secondary == null
+                && entry.Primary != null
+                && (entry.Primary.Type == SettingType.Header
+                    || (!string.IsNullOrEmpty(entry.Primary.Id)
+                        && entry.Primary.Id.StartsWith("CatHeader_", StringComparison.OrdinalIgnoreCase)));
+        }
+
+        private void NormalizeShelteredWidgetAlignment(GameObject widget, KeybindDisplayEntry entry)
+        {
+            if (widget == null || entry == null) return;
+
+            var labels = widget.GetComponentsInChildren<UILabel>(true);
+            if (labels == null || labels.Length == 0) return;
+
+            bool isHeader = IsShelteredSectionHeaderEntry(entry);
+            string target = isHeader
+                ? ((entry.Primary != null && !string.IsNullOrEmpty(entry.Primary.Label))
+                    ? entry.Primary.Label.ToUpperInvariant()
+                    : "SECTION")
+                : GetActionLabel(entry.Primary, entry.Secondary);
+
+            UILabel best = null;
+            for (int i = 0; i < labels.Length; i++)
+            {
+                UILabel candidate = labels[i];
+                if (candidate == null) continue;
+
+                string text = candidate.text ?? string.Empty;
+                if (string.Equals(text.Trim(), target.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    best = candidate;
+                    break;
+                }
+            }
+
+            if (best == null)
+                best = labels[0];
+            if (best == null) return;
+
+            best.pivot = UIWidget.Pivot.Left;
+            best.alignment = NGUIText.Alignment.Left;
+            best.multiLine = false;
+            best.overflowMethod = UILabel.Overflow.ClampContent;
+            best.width = isHeader ? 320 : 250;
+
+            var pos = best.transform.localPosition;
+            best.transform.localPosition = new Vector3(isHeader ? ShelteredSectionHeaderLocalX : 0f, pos.y, pos.z);
         }
 
         private KeybindCaptureListener CreateClickableKeySlot(
