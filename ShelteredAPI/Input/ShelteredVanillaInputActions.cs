@@ -20,6 +20,8 @@ namespace ShelteredAPI.Input
             new Dictionary<PlatformInput.InputButton, ActionDef>();
         private static readonly Dictionary<PlatformInput.MenuInputButton, ActionDef> MenuDefs =
             new Dictionary<PlatformInput.MenuInputButton, ActionDef>();
+        private static readonly Dictionary<PlatformInput.MenuInputButton, string> MenuAliasActionIds =
+            new Dictionary<PlatformInput.MenuInputButton, string>();
         private static readonly Dictionary<string, InputContext> ActionContexts =
             new Dictionary<string, InputContext>(StringComparer.OrdinalIgnoreCase);
 
@@ -76,8 +78,14 @@ namespace ShelteredAPI.Input
             EnsureRuntimeLoaded();
 
             ActionDef def;
-            if (!MenuDefs.TryGetValue(button, out def)) return false;
-            return InputActionRegistry.TryGetBinding(def.Id, out binding);
+            if (MenuDefs.TryGetValue(button, out def))
+                return InputActionRegistry.TryGetBinding(def.Id, out binding);
+
+            string aliasActionId;
+            if (MenuAliasActionIds.TryGetValue(button, out aliasActionId))
+                return InputActionRegistry.TryGetBinding(aliasActionId, out binding);
+
+            return false;
         }
 
         public static bool IsAnyMappedKeyDown()
@@ -130,6 +138,11 @@ namespace ShelteredAPI.Input
 
         private static void BuildCatalog()
         {
+            string actionId = InputPrefix + "action";
+            string cancelId = InputPrefix + "cancel";
+            string contextId = InputPrefix + "context";
+            string goHereId = InputPrefix + "go_here";
+
             AddInput(PlatformInput.InputButton.Action, "action", "Primary Action", "Gameplay", KeyCode.Mouse0, KeyCode.None, "Primary in-world action.");
             AddInput(PlatformInput.InputButton.Interact, "interact", "Interact", "Gameplay", KeyCode.Mouse1, KeyCode.None, "Secondary interaction.");
             AddInput(PlatformInput.InputButton.CancelJob, "cancel_job", "Cancel Job", "Gameplay", KeyCode.C, KeyCode.None, "Cancel current character job.");
@@ -154,17 +167,19 @@ namespace ShelteredAPI.Input
             AddInput(PlatformInput.InputButton.SkipCutscene, "skip_cutscene", "Skip Cutscene", "Cinematics", KeyCode.Escape, KeyCode.None, "Skip active cutscene.", InputContext.System);
             AddInput(PlatformInput.InputButton.SkipSpeech, "skip_speech", "Skip Speech", "Cinematics", KeyCode.Space, KeyCode.None, "Skip current speech.");
 
-            AddMenu(PlatformInput.MenuInputButton.UIselect, "select", "UI Select", "Menu", KeyCode.Mouse0, KeyCode.None, "Confirm/select in menu.");
-            AddMenu(PlatformInput.MenuInputButton.UIcancel, "cancel", "UI Cancel", "Menu", KeyCode.Escape, KeyCode.None, "Cancel/back in menu.");
-            AddMenu(PlatformInput.MenuInputButton.UIextra1, "extra_1", "UI Extra 1", "Menu", KeyCode.Mouse0, KeyCode.None, "Additional menu shortcut.");
-            AddMenu(PlatformInput.MenuInputButton.UIextra2, "extra_2", "UI Extra 2", "Menu", KeyCode.Mouse0, KeyCode.None, "Additional menu shortcut.");
-            AddMenu(PlatformInput.MenuInputButton.UIextra3, "extra_3", "UI Extra 3", "Menu", KeyCode.Mouse0, KeyCode.None, "Additional menu shortcut.");
-            AddMenu(PlatformInput.MenuInputButton.UIextra4, "extra_4", "UI Extra 4", "Menu", KeyCode.Mouse0, KeyCode.None, "Additional menu shortcut.");
-            AddMenu(PlatformInput.MenuInputButton.UITabRight, "tab_right", "Tab Right", "Menu", KeyCode.Mouse0, KeyCode.None, "Move to next menu tab.");
-            AddMenu(PlatformInput.MenuInputButton.UITabLeft, "tab_left", "Tab Left", "Menu", KeyCode.Mouse0, KeyCode.None, "Move to previous menu tab.");
-            AddMenu(PlatformInput.MenuInputButton.UIstart, "start", "UI Start", "Menu", KeyCode.Space, KeyCode.None, "Start/confirm from menu.");
             AddMenu(PlatformInput.MenuInputButton.UIdragMap, "drag_map", "Drag Map", "Menu", KeyCode.Mouse1, KeyCode.None, "Drag map view.");
-            AddMenu(PlatformInput.MenuInputButton.UIdragWaypoint, "drag_waypoint", "Drag Waypoint", "Menu", KeyCode.Mouse0, KeyCode.None, "Drag waypoint marker.");
+
+            // Internal menu aliases (not user-facing in keybind UI) to avoid redundant entries.
+            AddMenuAlias(PlatformInput.MenuInputButton.UIselect, actionId);
+            AddMenuAlias(PlatformInput.MenuInputButton.UIcancel, cancelId);
+            AddMenuAlias(PlatformInput.MenuInputButton.UIextra1, actionId);
+            AddMenuAlias(PlatformInput.MenuInputButton.UIextra2, actionId);
+            AddMenuAlias(PlatformInput.MenuInputButton.UIextra3, actionId);
+            AddMenuAlias(PlatformInput.MenuInputButton.UIextra4, actionId);
+            AddMenuAlias(PlatformInput.MenuInputButton.UITabRight, actionId);
+            AddMenuAlias(PlatformInput.MenuInputButton.UITabLeft, actionId);
+            AddMenuAlias(PlatformInput.MenuInputButton.UIstart, contextId);
+            AddMenuAlias(PlatformInput.MenuInputButton.UIdragWaypoint, goHereId);
         }
 
         private static void AddInput(
@@ -202,6 +217,12 @@ namespace ShelteredAPI.Input
                 new InputBinding(primary, secondary),
                 description);
             ActionContexts[MenuPrefix + idSuffix] = InputContext.Menu;
+        }
+
+        private static void AddMenuAlias(PlatformInput.MenuInputButton button, string sourceActionId)
+        {
+            if (string.IsNullOrEmpty(sourceActionId)) return;
+            MenuAliasActionIds[button] = sourceActionId;
         }
 
         private sealed class ActionDef

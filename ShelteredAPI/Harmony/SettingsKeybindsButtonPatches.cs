@@ -4,6 +4,7 @@ using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.UI;
 using ShelteredAPI.UI;
+using UnityEngine;
 
 namespace ShelteredAPI.Harmony
 {
@@ -13,6 +14,8 @@ namespace ShelteredAPI.Harmony
     internal static class SettingsKeybindsButtonPatches
     {
         private static readonly HashSet<string> LoggedPanelTypes = new HashSet<string>(StringComparer.Ordinal);
+        private static readonly List<GameObject> TemporarilyHiddenObjects = new List<GameObject>();
+        private static bool _restoreHooked;
 
         [HarmonyPatch(typeof(SettingsPCPanel), "OnControlsButtonPressed")]
         [HarmonyPrefix]
@@ -61,6 +64,9 @@ namespace ShelteredAPI.Harmony
         {
             try
             {
+                EnsureRestoreHook();
+                RestoreTemporarilyHiddenObjects();
+
                 if (sourcePanel != null && sourcePanel.gameObject != null)
                     UIFontCache.SeedFromGameObject(sourcePanel.gameObject, source);
 
@@ -76,8 +82,17 @@ namespace ShelteredAPI.Harmony
             }
         }
 
+        private static void EnsureRestoreHook()
+        {
+            if (_restoreHooked) return;
+            _restoreHooked = true;
+            ModSettingsPanel.Closed += RestoreTemporarilyHiddenObjects;
+        }
+
         private static void HidePanelsForKeybindOpen(BasePanel sourcePanel, string source)
         {
+            TrackSourceAncestorsForTemporaryHide(sourcePanel, source);
+
             var panels = CollectPanelsToHide(sourcePanel);
             if (panels.Count == 0) return;
 
@@ -145,10 +160,7 @@ namespace ShelteredAPI.Harmony
             {
                 // Hide immediately so the vanilla settings panel does not visually overlap the ModAPI panel.
                 if (panel.gameObject != null)
-                    panel.gameObject.SetActive(false);
-
-                if (UIPanelManager.instance != null)
-                    UIPanelManager.instance.PopPanel(panel);
+                    TrackAndHide(panel.gameObject, source);
 
                 MMLog.WriteInfo("[SettingsKeybindsButtonPatches] Hid panel " + panel.GetType().Name + " before " + source + ".");
             }
@@ -156,6 +168,58 @@ namespace ShelteredAPI.Harmony
             {
                 MMLog.WriteWarning("[SettingsKeybindsButtonPatches] Could not hide panel for " + source + ": " + ex.Message);
             }
+        }
+
+        private static void TrackSourceAncestorsForTemporaryHide(BasePanel sourcePanel, string source)
+        {
+            if (sourcePanel == null || sourcePanel.transform == null) return;
+
+            // SettingsPCPanel can be nested; hide nearest visual parent containers too.
+            Transform current = sourcePanel.transform.parent;
+            int levels = 0;
+            while (current != null && levels < 2)
+            {
+                TrackAndHide(current.gameObject, source);
+                current = current.parent;
+                levels++;
+            }
+        }
+
+        private static void TrackAndHide(GameObject obj, string source)
+        {
+            if (obj == null) return;
+            if (!obj.activeSelf) return;
+            if (obj.GetComponent<UIRoot>() != null) return;
+            if (obj.name.StartsWith("ModAPI_", StringComparison.OrdinalIgnoreCase)) return;
+
+            if (!TemporarilyHiddenObjects.Contains(obj))
+                TemporarilyHiddenObjects.Add(obj);
+
+            obj.SetActive(false);
+            MMLog.WriteInfo("[SettingsKeybindsButtonPatches] Temporarily hid object " + obj.name + " for " + source + ".");
+        }
+
+        private static void RestoreTemporarilyHiddenObjects()
+        {
+            if (TemporarilyHiddenObjects.Count == 0) return;
+
+            for (int i = 0; i < TemporarilyHiddenObjects.Count; i++)
+            {
+                var obj = TemporarilyHiddenObjects[i];
+                if (obj == null) continue;
+
+                try
+                {
+                    obj.SetActive(true);
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteWarning("[SettingsKeybindsButtonPatches] Failed to restore hidden object: " + ex.Message);
+                }
+            }
+
+            MMLog.WriteInfo("[SettingsKeybindsButtonPatches] Restored " + TemporarilyHiddenObjects.Count + " temporarily hidden settings object(s).");
+            TemporarilyHiddenObjects.Clear();
         }
     }
 }
