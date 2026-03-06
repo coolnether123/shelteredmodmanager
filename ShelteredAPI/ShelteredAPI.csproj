@@ -54,10 +54,12 @@
     <Compile Include="Adapters\GameHelperExtensions.cs" />
     <Compile Include="Actors\ActorSystem.cs" />
     <Compile Include="Actors\Internal\ActorSystemImpl.cs" />
+    <Compile Include="Characters\Models\CharacterDataModel.cs" />
     <Compile Include="Core\GameHelperImpl.cs" />
     <Compile Include="Core\ShelteredApiRuntimeBootstrap.cs" />
     <Compile Include="Core\ShelteredKeybindPersistenceGuard.cs" />
     <Compile Include="Debugging\DebugValueTakeover.cs" />
+    <Compile Include="Events\GameEvents.cs" />
     <Compile Include="Harmony\ModManagerKeybindsPatches.cs" />
     <Compile Include="Harmony\PlatformInputKeybindPatches.cs" />
     <Compile Include="Harmony\SettingsKeybindsButtonPatches.cs" />
