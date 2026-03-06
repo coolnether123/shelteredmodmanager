@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Globalization; // Added for CultureInfo
-using System.Text;
 using UnityEngine;
 using ModAPI.Core;
+using ModAPI.Internal.UI;
 using ModAPI.Spine;
 using ModAPI.Spine.UI;
 
@@ -36,24 +36,16 @@ namespace ModAPI.UI
         private GameObject _prevBtn;
         private GameObject _nextBtn;
         private UILabel _customIndicatorLabel;
-        private UIInput _searchInput;
-        private UILabel _searchDisplayLabel;
-        private GameObject _searchInputRoot;
-        private bool _manualSearchEnabled;
-        private bool _searchHasFocus;
         private UIFont _activeBitmapFont;
         private Font _activeTtfFont;
+        private readonly ModSettingsSearchController _searchController = new ModSettingsSearchController();
+        private readonly ModSettingsPresetController _presetController = new ModSettingsPresetController();
 
         // State
         private List<List<GameObject>> _pages = new List<List<GameObject>>();
         private int _currentPageIndex = 0;
         private GameObject _sliderTemplate;
         private GameObject _buttonTemplate;
-        private List<string> _availablePresets = new List<string>();
-        private string _currentPresetName = "Custom";
-        private string _searchFilter = "";
-        private string _presetOverride = null;
-        private string _customSnapshotJson = null;
         private bool _isRebuilding = false;
         private bool _isClosing = false;
         private bool _inputLockedExternally = false;
@@ -110,9 +102,7 @@ namespace ModAPI.UI
             script._currentMod = mod;
             script._currentViewMode = _lastClosedViewMode ?? SettingMode.Simple;
             _activeInstance = script;
-
-            // Initial snapshot of settings as "Custom" state
-            if (mod.SettingsProvider is ISettingsProvider2 sp2) script._customSnapshotJson = sp2.SerializeToJson();
+            script._presetController.Initialize(mod);
 
             script.InitialiseAndBuild(root.transform, uiFont, ttfFont);
             script.ApplyExternalInputLock(_externalInputLockCount > 0);
@@ -212,7 +202,10 @@ namespace ModAPI.UI
         private void Update()
         {
             if (!_inputLockedExternally)
-                HandleManualSearchInput();
+                _searchController.HandleInput(MaxSearchLength, COLOR_SUBTEXT, delegate
+                {
+                    BuildMenu(_activeBitmapFont, _activeTtfFont, true);
+                });
 
             if (Input.GetKeyDown(KeyCode.Escape))
             {
@@ -231,10 +224,8 @@ namespace ModAPI.UI
             if (_currentMod == null || _currentMod.SettingsProvider == null) return;
             _currentMod.SettingsProvider.ResetToDefaults();
             
-            // Update snapshot so Defaults become the new Custom base
-            var settings = _currentMod.SettingsProvider.GetSettingsObject();
-            if (settings != null) _customSnapshotJson = JsonUtility.ToJson(settings);
-            _presetOverride = null;
+            _presetController.CaptureCurrentSettingsAsCustom();
+            _presetController.ClearOverride();
 
             // Auto-save after reset
             if (_currentMod.SettingsProvider is ISettingsProvider2 sp3) sp3.Save();
@@ -293,159 +284,8 @@ namespace ModAPI.UI
 
         private void CreateSearchBar(Transform parent, UIFont uiFont, Font ttfFont)
         {
-            var searchLabel = CreateLabel(parent, "SearchLabel", "SEARCH:", new Vector3(-160, 0, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
-            searchLabel.pivot = UIWidget.Pivot.Right; // Right align label to input box
-            searchLabel.transform.localPosition = new Vector3(-110, 0, 0);
-
-            var inputGO = new GameObject("SearchInput");
-            inputGO.transform.SetParent(parent, false);
-            inputGO.transform.localPosition = new Vector3(60, 0, 0); // Center on BG
-            inputGO.layer = parent.gameObject.layer;
-
-            var inputBg = inputGO.AddComponent<UITexture>();
-            inputBg.mainTexture = _whiteTexture;
-            inputBg.width = 320;
-            inputBg.height = 35;
-            inputBg.depth = 100;
-            inputBg.color = new Color(0.1f, 0.1f, 0.1f, 0.8f);
-
-            var lblGO = new GameObject("Label");
-            lblGO.transform.SetParent(inputGO.transform, false);
-            lblGO.layer = inputGO.layer;
-            lblGO.transform.localPosition = new Vector3(-150, 0, 0);
-
-            var lbl = lblGO.AddComponent<UILabel>();
-            lbl.pivot = UIWidget.Pivot.Left;
-            lbl.fontSize = 16;
-            lbl.width = 300;
-            lbl.depth = 105;
-            lbl.overflowMethod = UILabel.Overflow.ClampContent;
-            if (uiFont != null) lbl.bitmapFont = uiFont;
-            else if (ttfFont != null) lbl.trueTypeFont = ttfFont;
-            else lbl.trueTypeFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            lbl.alignment = NGUIText.Alignment.Left;
-            lbl.text = string.Empty;
-
-            _searchInputRoot = inputGO;
-            _searchDisplayLabel = lbl;
-            _searchInput = null;
-            _manualSearchEnabled = false;
-            _searchHasFocus = false;
-
-            bool hasUsableFont = lbl.bitmapFont != null || lbl.trueTypeFont != null;
-            if (!hasUsableFont)
-            {
-                searchLabel.gameObject.SetActive(false);
-                lbl.pivot = UIWidget.Pivot.Center;
-                lbl.alignment = NGUIText.Alignment.Center;
-                lbl.transform.localPosition = Vector3.zero;
-                lbl.text = "Search unavailable";
-                lbl.color = COLOR_SUBTEXT;
-                return;
-            }
-
-            // Manual search mode is used in all runtimes to avoid Unity 5.3/5.6 UIInput edge cases.
-            EnableManualSearchInput(inputGO, lbl);
+            _searchController.CreateSearchBar(parent, uiFont, ttfFont, _whiteTexture, COLOR_SUBTEXT, CreateLabel);
             MMLog.WriteInfo("[ModSettingsPanel] Search using manual input mode.");
-        }
-
-        private void EnableManualSearchInput(GameObject inputGO, UILabel label)
-        {
-            if (inputGO == null || label == null) return;
-
-            _manualSearchEnabled = true;
-            _searchHasFocus = false;
-
-            label.pivot = UIWidget.Pivot.Left;
-            label.alignment = NGUIText.Alignment.Left;
-            label.transform.localPosition = new Vector3(-150, 0, 0);
-            label.color = Color.white;
-
-            var col = inputGO.GetComponent<BoxCollider>();
-            if (col == null) col = inputGO.AddComponent<BoxCollider>();
-            col.size = new Vector3(320, 35, 1);
-            col.center = Vector3.zero;
-
-            UIEventListener.Get(inputGO).onClick = _ =>
-            {
-                _searchHasFocus = true;
-                UICamera.selectedObject = null;
-                UpdateManualSearchDisplay();
-            };
-
-            UpdateManualSearchDisplay();
-        }
-
-        private void HandleManualSearchInput()
-        {
-            if (!_manualSearchEnabled || _searchInputRoot == null || _searchDisplayLabel == null) return;
-
-            if (Input.GetMouseButtonDown(0))
-            {
-                _searchHasFocus = IsHoveredWithin(_searchInputRoot);
-                UpdateManualSearchDisplay();
-            }
-
-            if (!_searchHasFocus) return;
-
-            string typed = Input.inputString;
-            if (string.IsNullOrEmpty(typed)) return;
-
-            bool changed = false;
-            for (int i = 0; i < typed.Length; i++)
-            {
-                char c = typed[i];
-                if (c == '\b')
-                {
-                    if (!string.IsNullOrEmpty(_searchFilter))
-                    {
-                        _searchFilter = _searchFilter.Substring(0, _searchFilter.Length - 1);
-                        changed = true;
-                    }
-                    continue;
-                }
-
-                if (c == '\n' || c == '\r')
-                {
-                    _searchHasFocus = false;
-                    continue;
-                }
-
-                if (char.IsControl(c)) continue;
-                if (_searchFilter.Length >= MaxSearchLength) continue;
-
-                _searchFilter += c;
-                changed = true;
-            }
-
-            if (changed)
-                BuildMenu(_activeBitmapFont, _activeTtfFont, true);
-
-            UpdateManualSearchDisplay();
-        }
-
-        private void UpdateManualSearchDisplay()
-        {
-            if (_searchDisplayLabel == null) return;
-
-            if (string.IsNullOrEmpty(_searchFilter))
-            {
-                _searchDisplayLabel.text = _searchHasFocus ? "|" : "Search...";
-                _searchDisplayLabel.color = _searchHasFocus ? Color.white : COLOR_SUBTEXT;
-                return;
-            }
-
-            _searchDisplayLabel.text = _searchHasFocus ? (_searchFilter + "|") : _searchFilter;
-            _searchDisplayLabel.color = Color.white;
-        }
-
-        private static bool IsHoveredWithin(GameObject root)
-        {
-            if (root == null) return false;
-            var hovered = UICamera.hoveredObject;
-            if (hovered == null) return false;
-            if (hovered == root) return true;
-            return hovered.transform != null && hovered.transform.IsChildOf(root.transform);
         }
         
         private void CaptureTemplates(UIFont uiFont, Font ttfFont)
@@ -512,14 +352,8 @@ namespace ModAPI.UI
             }
 
             // 1. Preset Management
-            _availablePresets = allDefs.Where(d => d.Presets != null)
-                                      .SelectMany(d => d.Presets.Keys)
-                                      .Distinct()
-                                      .OrderBy(k => GetPresetPriority(k))
-                                      .ThenBy(k => k)
-                                      .ToList();
-
-            UpdateCurrentPresetState(settings, allDefs);
+            _presetController.RefreshAvailablePresets(allDefs);
+            _presetController.UpdateCurrentPresetState(settings, allDefs);
             BuildPresetCycleWidget(uiFont, ttfFont, settings, allDefs);
 
             // 1a. View Mode Toggle Visibility
@@ -551,7 +385,7 @@ namespace ModAPI.UI
             var visible = hierarchy.GetFlattenedForView(viewMode, settings).ToList();
             
             // Inject Category Headers if not searching
-            if (string.IsNullOrEmpty(_searchFilter))
+            if (string.IsNullOrEmpty(_searchController.Filter))
             {
                 var withCategories = new List<SettingDefinition>();
                 string lastCategory = null;
@@ -578,7 +412,7 @@ namespace ModAPI.UI
             else
             {
                 // Apply Search Filter
-                visible = visible.Where(d => (d.Label ?? d.Id).IndexOf(_searchFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                visible = visible.Where(d => (d.Label ?? d.Id).IndexOf(_searchController.Filter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
             }
 
             if (provider is ICustomSettingsUI custom)
@@ -617,24 +451,7 @@ namespace ModAPI.UI
 
         private static bool ShouldUseWideKeybindLayout(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs)
         {
-            return HasPairedKeybindDefinitions(visibleItems) || HasPairedKeybindDefinitions(allDefs);
-        }
-
-        private static bool HasPairedKeybindDefinitions(List<SettingDefinition> items)
-        {
-            if (items == null) return false;
-
-            for (int i = 0; i < items.Count; i++)
-            {
-                var def = items[i];
-                if (def == null || def.Type != SettingType.Keybind || string.IsNullOrEmpty(def.Id))
-                    continue;
-
-                if (GetKeybindActionBaseId(def.Id) != null)
-                    return true;
-            }
-
-            return false;
+            return ModSettingsKeybindLayout.ShouldUseWideKeybindLayout(visibleItems, allDefs);
         }
 
         private void BuildPresetCycleWidget(UIFont uiFont, Font ttfFont, object settings, List<SettingDefinition> allDefs)
@@ -644,7 +461,7 @@ namespace ModAPI.UI
 
             // Hide the preset strip entirely for mods that do not define presets
             // (custom-only settings without Easy/Normal/Hard, etc.).
-            if (_availablePresets == null || _availablePresets.Count == 0)
+            if (!_presetController.HasPresets)
             {
                 _presetBarRoot.SetActive(false);
                 return;
@@ -664,10 +481,10 @@ namespace ModAPI.UI
 
             // 2. Preset Name Box
             var bg = CreateTexturedBox(_presetBarRoot.transform, "PresetDisplay", Vector3.zero, (int)boxW, (int)boxH, COLOR_BTN_INACTIVE, 100, false);
-            var lbl = CreateLabel(_presetBarRoot.transform, "PresetLabel", _currentPresetName.ToUpper(), Vector3.zero, 18, COLOR_TEXT, uiFont, ttfFont, 101);
+            var lbl = CreateLabel(_presetBarRoot.transform, "PresetLabel", _presetController.CurrentPresetName.ToUpper(), Vector3.zero, 18, COLOR_TEXT, uiFont, ttfFont, 101);
             lbl.alignment = NGUIText.Alignment.Center;
             
-            if (_currentPresetName == "Custom") bg.GetComponent<UITexture>().color = COLOR_CUSTOM;
+            if (_presetController.CurrentPresetName == "Custom") bg.GetComponent<UITexture>().color = COLOR_CUSTOM;
             else bg.GetComponent<UITexture>().color = COLOR_PRESET_MATCH;
 
             // 3. Right Arrow
@@ -715,111 +532,13 @@ namespace ModAPI.UI
 
         private void CyclePreset(int delta, List<SettingDefinition> allDefs, object settings, UIFont uiFont, Font ttfFont)
         {
-            // If no presets exist at all, do nothing
-            if (_availablePresets.Count == 0) return;
-
-            // Combine "Custom" + Presets into a single navigable list
-            List<string> cycleList = new List<string> { "Custom" };
-            cycleList.AddRange(_availablePresets);
-
-            int currentIndex = cycleList.IndexOf(_currentPresetName);
-            if (currentIndex == -1) currentIndex = 0; // Default to Custom if unknown
-
-            int nextIndex = currentIndex + delta;
-            
-            // Wrap around
-            if (nextIndex >= cycleList.Count) nextIndex = 0;
-            if (nextIndex < 0) nextIndex = cycleList.Count - 1;
-
-            string targetPreset = cycleList[nextIndex];
-            MMLog.WriteDebug($"Cycling Preset to: {targetPreset}");
-
-            if (targetPreset == "Custom")
-            {
-                // RESTORE Custom State: Put back the values the user edited manually
-                if (!string.IsNullOrEmpty(_customSnapshotJson))
-                {
-                    var settingsObj = _currentMod.SettingsProvider.GetSettingsObject();
-                    if (settingsObj != null)
-                    {
-                        MMLog.WriteDebug("Restoring Custom Snapshot...");
-                        JsonUtility.FromJsonOverwrite(_customSnapshotJson, settingsObj);
-                        
-                        // Notify mod of change
-                        _currentMod.SettingsProvider.OnSettingsLoaded();
-                    }
-                }
-                _presetOverride = "Custom";
-            }
-            else
-            {
-                // It's a real preset
-                ApplyPreset(targetPreset, allDefs, settings);
-                _presetOverride = targetPreset;
-            }
-
-            BuildMenu(uiFont, ttfFont, true);
+            if (_presetController.CyclePreset(delta, allDefs, settings))
+                BuildMenu(uiFont, ttfFont, true);
         }
 
         private void UpdateCurrentPresetState(object settings, List<SettingDefinition> allDefs)
         {
-            if (_presetOverride != null)
-            {
-                _currentPresetName = _presetOverride;
-                // We don't null it here, because BuildMenu might be called multiple times during UI assembly.
-                // We'll trust the Cycle/Change calls to manage the override lifecycle.
-                return;
-            }
-
-            _currentPresetName = "Custom";
-            foreach(var preset in _availablePresets)
-            {
-                bool match = true;
-                bool hasCheck = false; // Ensure at least one setting uses this preset name
-                foreach(var def in allDefs)
-                {
-                    if (def.Presets != null && def.Presets.ContainsKey(preset))
-                    {
-                        hasCheck = true;
-                        object pVal = def.Presets[preset];
-                        object cVal = ReflectionHelper.GetValue(def, settings);
-                        
-                        // Compare values - handle loose typing
-                        string sP = Convert.ToString(pVal, CultureInfo.InvariantCulture);
-                        string sC = Convert.ToString(cVal, CultureInfo.InvariantCulture);
-                        
-                        if (!string.Equals(sP, sC)) 
-                        { 
-                            match = false; 
-                            break; 
-                        }
-                    }
-                }
-                if (match && hasCheck) { _currentPresetName = preset; break; }
-            }
-        }
-
-        private void ApplyPreset(string presetName, List<SettingDefinition> allDefs, object settings)
-        {
-            MMLog.WriteDebug($"Applying Preset: {presetName}");
-            int appliedCount = 0;
-            foreach(var def in allDefs)
-            {
-                if (def.Presets != null && def.Presets.TryGetValue(presetName, out var pVal))
-                {
-                     ReflectionHelper.SetValue(def, settings, pVal);
-                     appliedCount++;
-                }
-            }
-            
-            // Notify mod that settings have changed so it can update its internal logic
-            if (_currentMod != null && _currentMod.SettingsProvider != null)
-            {
-                _currentMod.SettingsProvider.OnSettingsLoaded();
-            }
-
-            if (_currentMod.SettingsProvider is ISettingsProvider2 sp2) sp2.Save();
-            MMLog.WriteDebug($"Preset '{presetName}' applied ({appliedCount} fields updated)");
+            _presetController.UpdateCurrentPresetState(settings, allDefs);
         }
 
         private void CreatePaginatedGrid(
@@ -907,93 +626,16 @@ namespace ModAPI.UI
                 _pages.Add(pageItems);
             }
 
-            if (_pages.Count == 0 || (_pages.Count == 1 && _pages[0].Count == 0 && !string.IsNullOrEmpty(_searchFilter)))
+            if (_pages.Count == 0 || (_pages.Count == 1 && _pages[0].Count == 0 && !string.IsNullOrEmpty(_searchController.Filter)))
             {
                 // Handle no search results.
                 if (_pages.Count == 0) _pages.Add(new List<GameObject>());
             }
         }
 
-        private List<KeybindDisplayEntry> BuildDisplayEntries(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs, bool pairKeybinds)
+        private List<ModSettingsKeybindDisplayEntry> BuildDisplayEntries(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs, bool pairKeybinds)
         {
-            var entries = new List<KeybindDisplayEntry>();
-
-            if (!pairKeybinds)
-            {
-                for (int i = 0; i < visibleItems.Count; i++)
-                {
-                    var def = visibleItems[i];
-                    if (def == null) continue;
-                    entries.Add(new KeybindDisplayEntry(def, null));
-                }
-                return entries;
-            }
-
-            var visibleById = new Dictionary<string, SettingDefinition>(StringComparer.OrdinalIgnoreCase);
-            var allById = new Dictionary<string, SettingDefinition>(StringComparer.OrdinalIgnoreCase);
-            var consumed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            for (int i = 0; i < visibleItems.Count; i++)
-            {
-                var def = visibleItems[i];
-                if (def != null && !string.IsNullOrEmpty(def.Id))
-                    visibleById[def.Id] = def;
-            }
-
-            for (int i = 0; i < allDefs.Count; i++)
-            {
-                var def = allDefs[i];
-                if (def != null && !string.IsNullOrEmpty(def.Id))
-                    allById[def.Id] = def;
-            }
-
-            for (int i = 0; i < visibleItems.Count; i++)
-            {
-                var def = visibleItems[i];
-                if (def == null || string.IsNullOrEmpty(def.Id)) continue;
-                if (consumed.Contains(def.Id)) continue;
-
-                if (def.Type != SettingType.Keybind)
-                {
-                    consumed.Add(def.Id);
-                    entries.Add(new KeybindDisplayEntry(def, null));
-                    continue;
-                }
-
-                string baseId = GetKeybindActionBaseId(def.Id);
-                if (string.IsNullOrEmpty(baseId))
-                {
-                    consumed.Add(def.Id);
-                    entries.Add(new KeybindDisplayEntry(def, null));
-                    continue;
-                }
-
-                string primaryId = baseId + ".primary";
-                string secondaryId = baseId + ".secondary";
-
-                SettingDefinition primary;
-                SettingDefinition secondary;
-                visibleById.TryGetValue(primaryId, out primary);
-                visibleById.TryGetValue(secondaryId, out secondary);
-
-                if (primary == null) allById.TryGetValue(primaryId, out primary);
-                if (secondary == null) allById.TryGetValue(secondaryId, out secondary);
-
-                if (primary == null && secondary == null)
-                {
-                    consumed.Add(def.Id);
-                    entries.Add(new KeybindDisplayEntry(def, null));
-                    continue;
-                }
-
-                if (primary == null) primary = def;
-                consumed.Add(primary.Id);
-                if (secondary != null) consumed.Add(secondary.Id);
-
-                entries.Add(new KeybindDisplayEntry(primary, secondary));
-            }
-
-            return entries;
+            return ModSettingsKeybindLayout.BuildDisplayEntries(visibleItems, allDefs, pairKeybinds);
         }
 
         private GameObject CreateDualKeybindWidget(SettingDefinition primaryDef, SettingDefinition secondaryDef, object data)
@@ -1121,17 +763,12 @@ namespace ModAPI.UI
             return container;
         }
 
-        private static bool IsSectionHeaderEntry(KeybindDisplayEntry entry)
+        private static bool IsSectionHeaderEntry(ModSettingsKeybindDisplayEntry entry)
         {
-            return entry != null
-                && entry.Secondary == null
-                && entry.Primary != null
-                && (entry.Primary.Type == SettingType.Header
-                    || (!string.IsNullOrEmpty(entry.Primary.Id)
-                        && entry.Primary.Id.StartsWith("CatHeader_", StringComparison.OrdinalIgnoreCase)));
+            return ModSettingsKeybindLayout.IsSectionHeaderEntry(entry);
         }
 
-        private void NormalizeWideKeybindWidgetAlignment(GameObject widget, KeybindDisplayEntry entry)
+        private void NormalizeWideKeybindWidgetAlignment(GameObject widget, ModSettingsKeybindDisplayEntry entry)
         {
             if (widget == null || entry == null) return;
 
@@ -1241,138 +878,32 @@ namespace ModAPI.UI
 
         private static bool ApplySettingValue(SettingDefinition def, object settingsObject, object newValue)
         {
-            if (def == null) return false;
-
-            try
-            {
-                if (def.Validate != null && !def.Validate(newValue, settingsObject))
-                    return false;
-
-                if (def.Setter != null)
-                    def.Setter(settingsObject, newValue);
-
-                if (def.OnChanged != null)
-                    def.OnChanged(settingsObject);
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("[ModSettingsPanel] Failed to apply keybind value for " + def.Id + ": " + ex.Message);
-                return false;
-            }
+            return ModSettingsKeybindRuntime.ApplySettingValue(def, settingsObject, newValue);
         }
 
         private static KeyCode ReadKeyCode(SettingDefinition def, object settingsObject)
         {
-            if (def == null) return KeyCode.None;
-
-            object value = null;
-            try
-            {
-                if (def.Getter != null)
-                    value = def.Getter(settingsObject);
-            }
-            catch { }
-
-            if (value is KeyCode) return (KeyCode)value;
-            if (value is int) return (KeyCode)(int)value;
-
-            if (value != null)
-            {
-                try
-                {
-                    return (KeyCode)Enum.Parse(typeof(KeyCode), value.ToString(), true);
-                }
-                catch { }
-            }
-
-            if (def.DefaultValue is KeyCode) return (KeyCode)def.DefaultValue;
-            return KeyCode.None;
+            return ModSettingsKeybindRuntime.ReadKeyCode(def, settingsObject);
         }
 
         private static string GetKeybindActionBaseId(string settingId)
         {
-            if (string.IsNullOrEmpty(settingId)) return null;
-
-            if (settingId.EndsWith(".primary", StringComparison.OrdinalIgnoreCase))
-                return settingId.Substring(0, settingId.Length - ".primary".Length);
-            if (settingId.EndsWith(".secondary", StringComparison.OrdinalIgnoreCase))
-                return settingId.Substring(0, settingId.Length - ".secondary".Length);
-
-            return null;
+            return ModSettingsKeybindLayout.GetKeybindActionBaseId(settingId);
         }
 
         private static string GetActionLabel(SettingDefinition primaryDef, SettingDefinition secondaryDef)
         {
-            if (primaryDef != null && !string.IsNullOrEmpty(primaryDef.Label))
-                return primaryDef.Label.Replace(" (Alt)", string.Empty);
-
-            if (secondaryDef != null && !string.IsNullOrEmpty(secondaryDef.Label))
-                return secondaryDef.Label.Replace(" (Alt)", string.Empty);
-
-            return "UNNAMED ACTION";
+            return ModSettingsKeybindLayout.GetActionLabel(primaryDef, secondaryDef);
         }
 
         private static string FormatKeyCode(KeyCode key)
         {
-            if (key == KeyCode.None) return "UNBOUND";
-
-            string raw = key.ToString();
-            if (raw.StartsWith("Alpha", StringComparison.Ordinal) && raw.Length == 6) return raw.Substring(5);
-            if (raw.StartsWith("Keypad", StringComparison.Ordinal)) return "KP " + HumanizeKeyName(raw.Substring(6)).ToUpperInvariant();
-            if (raw.EndsWith("Arrow", StringComparison.Ordinal)) return raw.Replace("Arrow", string.Empty).ToUpperInvariant();
-            if (raw == "Mouse0") return "MOUSE LEFT";
-            if (raw == "Mouse1") return "MOUSE RIGHT";
-            if (raw == "Mouse2") return "MOUSE MIDDLE";
-            return HumanizeKeyName(raw).ToUpperInvariant();
+            return ModSettingsKeybindLayout.FormatKeyCode(key);
         }
 
         private static string HumanizeKeyName(string value)
         {
-            if (string.IsNullOrEmpty(value)) return string.Empty;
-
-            var sb = new StringBuilder(value.Length + 8);
-            char prev = '\0';
-            for (int i = 0; i < value.Length; i++)
-            {
-                char c = value[i];
-                if (c == '_' || c == '-')
-                {
-                    if (sb.Length > 0 && sb[sb.Length - 1] != ' ')
-                        sb.Append(' ');
-                    prev = c;
-                    continue;
-                }
-
-                bool addSpace =
-                    i > 0 &&
-                    (
-                        (char.IsUpper(c) && (char.IsLower(prev) || char.IsDigit(prev))) ||
-                        (char.IsDigit(c) && char.IsLetter(prev)) ||
-                        (char.IsLetter(c) && char.IsDigit(prev))
-                    );
-
-                if (addSpace && sb.Length > 0 && sb[sb.Length - 1] != ' ')
-                    sb.Append(' ');
-
-                sb.Append(c);
-                prev = c;
-            }
-
-            return sb.ToString().Trim();
-        }
-
-        private sealed class KeybindDisplayEntry
-        {
-            public readonly SettingDefinition Primary;
-            public readonly SettingDefinition Secondary;
-
-            public KeybindDisplayEntry(SettingDefinition primary, SettingDefinition secondary)
-            {
-                Primary = primary;
-                Secondary = secondary;
-            }
+            return ModSettingsKeybindLayout.HumanizeKeyName(value);
         }
 
         public void RefreshDependents(string changedId)
@@ -1391,14 +922,11 @@ namespace ModAPI.UI
         public void OnSettingChanged()
         {
             // Any manual edit IMMEDIATELY makes this a Custom state
-            _presetOverride = "Custom"; 
-            
-            if (_currentMod == null) return;
-            
-            // Update the snapshot so this manual change becomes the stored "Custom" state
-            var settings = _currentMod.SettingsProvider.GetSettingsObject();
-            if (_currentMod.SettingsProvider is ISettingsProvider2 sp2) _customSnapshotJson = sp2.SerializeToJson();
+            _presetController.MarkCurrentStateAsCustom();
 
+            if (_currentMod == null) return;
+
+            var settings = _currentMod.SettingsProvider.GetSettingsObject();
             var provider = _currentMod.SettingsProvider;
             var allDefs = provider.GetSettings().ToList();
             
@@ -1498,17 +1026,6 @@ namespace ModAPI.UI
 
             var label = go.GetComponent<UILabel>();
             UIHelper.AddTooltip(go, root, text, label != null ? label.bitmapFont : null, label != null ? label.trueTypeFont : null);
-        }
-
-        private int GetPresetPriority(string name)
-        {
-            if (string.IsNullOrEmpty(name)) return 999;
-            string n = name.ToLowerInvariant();
-            if (n == "easy") return 1;
-            if (n == "medium" || n == "normal") return 2;
-            if (n == "hard") return 3;
-            if (n == "insane" || n == "extreme" || n == "hardcore") return 4;
-            return 100;
         }
 
         private GameObject CreateButton(Transform parent, string name, string text, Vector3 pos, int fontSize, Color color, UIFont uiFont, Font ttfFont, int w, int h, Action onClick)

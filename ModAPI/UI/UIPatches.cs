@@ -7,6 +7,7 @@ using ModAPI.Content;
 using ModAPI.Core;
 using ModAPI.Events;
 using ModAPI.Harmony;
+using ModAPI.Internal.UI;
 
 namespace ModAPI.UI
 {
@@ -29,28 +30,28 @@ namespace ModAPI.UI
         [HarmonyPostfix]
         static void Postfix_StoragePanel_OnShow(StoragePanel __instance)
         {
-            UIPatchCoordinator.AugmentStoragePanel(__instance);
+            UIItemPanelRuntimeService.AugmentStoragePanel(__instance);
         }
 
         [HarmonyPatch(typeof(RecyclingPanel), "OnShow")]
         [HarmonyPostfix]
         static void Postfix_RecyclingPanel_OnShow(RecyclingPanel __instance)
         {
-            UIPatchCoordinator.AugmentRecyclingPanel(__instance);
+            UIItemPanelRuntimeService.AugmentRecyclingPanel(__instance);
         }
 
         [HarmonyPatch(typeof(ItemFabricationPanel), "OnShow")]
         [HarmonyPostfix]
         static void Postfix_ItemFabricationPanel_OnShow(ItemFabricationPanel __instance)
         {
-            UIPatchCoordinator.AugmentItemFabricationPanel(__instance);
+            UIItemPanelRuntimeService.AugmentItemFabricationPanel(__instance);
         }
 
         [HarmonyPatch(typeof(TradingPanel), "OnShow")]
         [HarmonyPostfix]
         static void Postfix_TradingPanel_OnShow(TradingPanel __instance)
         {
-            UIPatchCoordinator.AugmentTradingPanel(__instance);
+            UIItemPanelRuntimeService.AugmentTradingPanel(__instance);
         }
 
         [HarmonyPatch(typeof(ItemTransferPanel), "OnShow")]
@@ -81,7 +82,7 @@ namespace ModAPI.UI
         [HarmonyPostfix]
         static void Postfix_UIPanelManager_PushPanel(BasePanel panel)
         {
-            UIPatchCoordinator.RaisePanelOpened(panel);
+            UIPanelLifecycleRuntimeService.RaisePanelOpened(panel);
         }
         
         /// <summary>
@@ -92,7 +93,7 @@ namespace ModAPI.UI
         [HarmonyPostfix]
         static void Postfix_UIPanelManager_PopPanel(BasePanel panel)
         {
-            UIPatchCoordinator.RaisePanelClosed(panel);
+            UIPanelLifecycleRuntimeService.RaisePanelClosed(panel);
         }
         
         /// <summary>
@@ -103,7 +104,7 @@ namespace ModAPI.UI
         [HarmonyPostfix]
         static void Postfix_BasePanel_OnResume(BasePanel __instance)
         {
-            UIPatchCoordinator.RaisePanelResumed(__instance);
+            UIPanelLifecycleRuntimeService.RaisePanelResumed(__instance);
         }
         
         /* 
