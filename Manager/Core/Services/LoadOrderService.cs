@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Web.Script.Serialization;
 using Manager.Core.Models;
+using GameModding.Shared.Mods;
 
 namespace Manager.Core.Services
 {
@@ -17,8 +16,6 @@ namespace Manager.Core.Services
     /// </summary>
     public class LoadOrderService
     {
-        private const string ORDER_FILENAME = "loadorder.json";
-
         /// <summary>
         /// Event raised when load order changes
         /// </summary>
@@ -31,17 +28,7 @@ namespace Manager.Core.Services
         {
             try
             {
-                string orderPath = Path.Combine(modsPath, ORDER_FILENAME);
-                if (!File.Exists(orderPath))
-                    return new string[0];
-
-                string json = File.ReadAllText(orderPath);
-                var serializer = new JavaScriptSerializer();
-                var data = serializer.Deserialize<LoadOrderData>(json);
-
-                if (data != null && data.order != null)
-                    return data.order;
-                return new string[0];
+                return LoadOrderFileStore.ReadOrder(modsPath);
             }
             catch (Exception ex)
             {
@@ -57,19 +44,11 @@ namespace Manager.Core.Services
         {
             try
             {
-                string orderPath = Path.Combine(modsPath, ORDER_FILENAME);
-                
                 var orderList = new List<string>(modIds);
-                var data = new LoadOrderData();
-                data.order = orderList.ToArray();
-                
-                var serializer = new JavaScriptSerializer();
-                string json = serializer.Serialize(data);
-                
-                File.WriteAllText(orderPath, json);
+                LoadOrderFileStore.WriteOrder(modsPath, orderList);
                 
                 if (OrderChanged != null)
-                    OrderChanged(data.order);
+                    OrderChanged(orderList.ToArray());
             }
             catch (Exception ex)
             {
@@ -249,15 +228,15 @@ namespace Manager.Core.Services
             
             try
             {
-                var modInfos = new List<ModTypes.ModInfo>();
+                var modInfos = new List<ModInfo>();
                 foreach (var m in enabledMods)
                 {
-                    var info = new ModTypes.ModInfo();
+                    var info = new ModInfo();
                     info.Id = m.Id;
                     info.Name = m.DisplayName;
                     info.RootPath = m.RootPath;
                     
-                    var about = new ModTypes.ModAboutInfo();
+                    var about = new ModAboutInfo();
                     about.id = m.Id;
                     about.name = m.DisplayName;
                     about.dependsOn = m.DependsOn;
@@ -305,12 +284,6 @@ namespace Manager.Core.Services
             }
 
             return validation;
-        }
-
-        // Internal JSON model
-        private class LoadOrderData
-        {
-            public string[] order { get; set; }
         }
     }
 

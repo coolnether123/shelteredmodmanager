@@ -11,6 +11,7 @@ namespace ModAPI.Inspector
 {
     public class RuntimeDebuggerUI : MonoBehaviour
     {
+        private const KeyCode ToggleKey = KeyCode.F7;
         private bool _active;
         private Rect _windowRect = new Rect(60, 60, 1040, 700);
         private readonly RuntimeVariableEditor _variableEditor = new RuntimeVariableEditor();
@@ -67,7 +68,11 @@ namespace ModAPI.Inspector
 
         public void Update()
         {
-            if (Input.GetKeyDown(KeyCode.F12)) _active = !_active;
+            if (Input.GetKeyDown(ToggleKey))
+            {
+                _active = !_active;
+                MMLog.WriteInfo("[RuntimeDebuggerUI] " + (_active ? "Opened" : "Closed") + " via " + ToggleKey + ".");
+            }
             if (_active && Input.GetKeyDown(KeyCode.Escape)) _active = false;
             _variableEditor.ProcessPendingEdits();
         }
@@ -76,7 +81,7 @@ namespace ModAPI.Inspector
         {
             if (!_active) return;
             EnsureStyles();
-            _windowRect = GUI.Window(9999, _windowRect, DrawWindow, "Runtime Debugger v2.0 (F12)");
+            _windowRect = GUI.Window(9999, _windowRect, DrawWindow, "Runtime Debugger v2.0 (F7)");
         }
 
         private void DrawWindow(int id)
@@ -86,7 +91,7 @@ namespace ModAPI.Inspector
             if (GUILayout.Toggle(_mode == DebugMode.Snapshot, "Snapshot", "button", GUILayout.Width(120))) _mode = DebugMode.Snapshot;
             if (GUILayout.Toggle(_mode == DebugMode.Build, "Build Patch", "button", GUILayout.Width(120))) _mode = DebugMode.Build;
             GUILayout.FlexibleSpace();
-            GUILayout.Label("F12/Esc to close");
+            GUILayout.Label("F7/Esc to close");
             if (GUILayout.Button("Close", GUILayout.Width(80))) _active = false;
             GUILayout.EndHorizontal();
 

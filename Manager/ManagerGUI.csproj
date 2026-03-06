@@ -60,16 +60,11 @@
     <Reference Include="System.Xml" />
     <Reference Include="System.Security" />
     <Reference Include="System.Web.Extensions" />
-    <Reference Include="UnityEngine">
-      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ManagerSettings.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="ThemeManager.cs" />
-    <Compile Include="LoadOrderResolver.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\Settings.Designer.cs">
       <AutoGen>True</AutoGen>
@@ -89,7 +84,6 @@
       <DependentUpon>Resources.resx</DependentUpon>
       <DesignTime>True</DesignTime>
     </Compile>
-    <Compile Include="Shared\ModAboutReader.cs" />
     <Compile Include="AssemblyVersionChecker.cs" />
     <!-- New modular architecture -->
     <Compile Include="MainForm.cs">
@@ -107,6 +101,8 @@
     <Compile Include="Core\Services\SettingsService.cs" />
     <Compile Include="Core\Services\ModDiscoveryService.cs" />
     <Compile Include="Core\Services\LoadOrderService.cs" />
+    <Compile Include="Core\Services\RestartLaunchCoordinator.cs" />
+    <Compile Include="Core\Services\RestartRequestReader.cs" />
     <Compile Include="Core\Services\SaveDiscoveryService.cs" />
     <Compile Include="Core\Services\NexusGraphQlClient.cs" />
     <Compile Include="Core\Services\NexusReferenceResolver.cs" />
@@ -147,12 +143,44 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
+    <None Include="App.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
     <EmbeddedResource Include="Icon.png" />
     <EmbeddedResource Include="Icon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Doorstop\Doorstop.csproj">
+      <Project>{62B61CCC-0775-4CF4-B37A-EB5E33CBD08C}</Project>
+      <Name>Doorstop</Name>
+      <Private>False</Private>
+      <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex\Cortex.csproj">
+      <Project>{D982DFB0-FEA1-4DC8-A001-35F5181F212A}</Project>
+      <Name>Cortex</Name>
+      <Private>False</Private>
+      <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\ModAPI\ModAPI.csproj">
+      <Project>{3C99D6BF-A4A9-45DC-BEF1-5717ECE2A687}</Project>
+      <Name>ModAPI</Name>
+      <Private>False</Private>
+      <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\ShelteredAPI\ShelteredAPI.csproj">
+      <Project>{85DA57B6-F996-4E06-93ED-021D9C711C7F}</Project>
+      <Name>ShelteredAPI</Name>
+      <Private>False</Private>
+      <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\GameModding.Shared\GameModding.Shared.csproj">
+      <Project>{6AA53E5A-2A1B-4EE4-9B3E-B85E99A28C21}</Project>
+      <Name>GameModding.Shared</Name>
+      <Private>False</Private>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
@@ -169,18 +197,14 @@ SET SMM_DIR=%25BASE%25Dist\SMM
 SET BIN_DIR=%25SMM_DIR%25\bin
 SET DECOMPILER_DIR=%25BIN_DIR%25\decompiler
 SET MODS_DIR=%25BASE%25Dist\mods
-SET DOORSTOP_DLL=%25BASE%25Doorstop\bin\%25CONFIG%25\Doorstop.dll
-SET MODAPI_DLL=%25BASE%25Dist\SMM\ModAPI.dll
-SET MANAGER_EXE=%25TargetPath%25
+SET HARMONY_DLL=%25BASE%25libs\0Harmony.dll
 
 mkdir "%25SMM_DIR%25" 2&gt;nul
 mkdir "%25BIN_DIR%25" 2&gt;nul
 mkdir "%25DECOMPILER_DIR%25" 2&gt;nul
 mkdir "%25MODS_DIR%25" 2&gt;nul
 
-if exist "%25MANAGER_EXE%25" copy /y "%25MANAGER_EXE%25" "%25SMM_DIR%25\"
-if exist "%25MODAPI_DLL%25" copy /y "%25MODAPI_DLL%25" "%25SMM_DIR%25\"
-if exist "%25DOORSTOP_DLL%25" copy /y "%25DOORSTOP_DLL%25" "%25BIN_DIR%25\"
+if exist "%25HARMONY_DLL%25" copy /y "%25HARMONY_DLL%25" "%25BIN_DIR%25\"
 
 if exist "%25BASE%25libs\winhttp.dll" copy /y "%25BASE%25libs\winhttp.dll" "%25BASE%25Dist\"
 
@@ -190,12 +214,6 @@ if exist "%25BASE%25PluginDebugGUI\bin\%25CONFIG%25\PluginDebugGUI.dll" copy /y 
 if exist "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" copy /y "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" "%25MODS_DIR%25\PluginInitializer\Assemblies\"
 
 :: Decompiler Tool &amp; Dependencies
-if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.dll" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.dll" "%25DECOMPILER_DIR%25\"
-if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.exe" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.exe" "%25DECOMPILER_DIR%25\"
-if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.runtimeconfig.json" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.runtimeconfig.json" "%25DECOMPILER_DIR%25\"
-if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.deps.json" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\Decompiler.deps.json" "%25DECOMPILER_DIR%25\"
-if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\ICSharpCode.Decompiler.dll" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\ICSharpCode.Decompiler.dll" "%25DECOMPILER_DIR%25\"
-if exist "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\System.CommandLine.dll" copy /y "%25BASE%25Decompiler\bin\%25CONFIG%25\net8.0\System.CommandLine.dll" "%25DECOMPILER_DIR%25\"
 </PostBuildEvent>
   </PropertyGroup>
 </Project>

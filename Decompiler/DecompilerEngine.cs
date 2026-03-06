@@ -31,7 +31,17 @@ namespace ModAPI.Decompiler
         /// Decompiles a single method token from an assembly into a transport-friendly artifact.
         /// Applies privacy policy before performing full decompilation.
         /// </summary>
-        public MethodArtifact Decompile(string assemblyPath, int methodToken)
+        public MethodArtifact Decompile(string assemblyPath, int metadataToken, EntityKind entityKind)
+        {
+            if (entityKind == EntityKind.Type)
+            {
+                return DecompileType(assemblyPath, metadataToken);
+            }
+
+            return DecompileMethod(assemblyPath, metadataToken);
+        }
+
+        public MethodArtifact DecompileMethod(string assemblyPath, int methodToken)
         {
             var privacy = _privacyInspector.Check(assemblyPath, methodToken);
 
@@ -74,6 +84,42 @@ namespace ModAPI.Decompiler
                 PopulateSourceAndMap(assemblyPath, methodToken, il, artifact);
                 return artifact;
             }
+        }
+
+        public MethodArtifact DecompileType(string assemblyPath, int typeToken)
+        {
+            var artifact = new MethodArtifact
+            {
+                MetadataToken = typeToken,
+                TimestampTicksUtc = DateTime.UtcNow.Ticks,
+                PrivacyLevel = PrivacyLevel.Public,
+                PrivacyReason = string.Empty
+            };
+
+            var module = new PEFile(assemblyPath);
+            var targetFramework = module.DetectTargetFrameworkId();
+            var resolver = new UniversalAssemblyResolver(assemblyPath, false, targetFramework);
+            resolver.AddSearchDirectory(Path.GetDirectoryName(assemblyPath));
+
+            var settings = new DecompilerSettings
+            {
+                ThrowOnAssemblyResolveErrors = false,
+                UseDebugSymbols = true
+            };
+
+            var decompiler = new CSharpDecompiler(module, resolver, settings);
+            var handle = MetadataTokens.EntityHandle(typeToken);
+            var syntaxTree = decompiler.Decompile(handle);
+
+            var sourceWriter = new StringWriter();
+            var outputVisitor = new CSharpOutputVisitor(new TextWriterTokenWriter(sourceWriter) { IndentationString = "    " }, settings.CSharpFormattingOptions);
+            syntaxTree.AcceptVisitor(outputVisitor);
+
+            artifact.SourceCode = sourceWriter.ToString();
+            artifact.SourceMap = BuildSyntheticMap(artifact.SourceCode, new List<int> { 0 });
+            artifact.MethodName = "Type_0x" + typeToken.ToString("X8");
+            artifact.MethodSignature = "Type token " + typeToken;
+            return artifact;
         }
 
         /// <summary>

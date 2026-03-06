@@ -39,14 +39,9 @@
   <ItemGroup>
     <Reference Include="0Harmony">
       <HintPath>..\..\..\..\..\Epic Games\Sheltered\SMM\bin\0Harmony.dll</HintPath>
-      <Private>False</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Manager">
-      <HintPath>..\Manager\bin\Debug\Manager.exe</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System.Core" />
@@ -82,6 +77,8 @@
     <Compile Include="Core\SaveExitTracer.cs" />
     <Compile Include="Core\LoggerExtensions.cs" />
     <Compile Include="Core\ContextExtensions.cs" />
+    <Compile Include="Core\IRestartRequestWriter.cs" />
+    <Compile Include="Core\RestartRequestWriter.cs" />
     <Compile Include="Input\InputBinding.cs" />
     <Compile Include="Input\ModInputAction.cs" />
     <Compile Include="Input\InputActionRegistry.cs" />
@@ -225,27 +222,15 @@
     <!-- Commented out: This is a reference example and shouldn't be compiled into ModAPI.dll -->
     <!-- as it causes unwanted Harmony patches to activate when mods call PatchAll() -->
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\GameModding.Shared\GameModding.Shared.csproj">
+      <Project>{6AA53E5A-2A1B-4EE4-9B3E-B85E99A28C21}</Project>
+      <Name>GameModding.Shared</Name>
+      <Private>False</Private>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>SET BASE=$(SolutionDir)
-SET BIN_DIR=%25BASE%25Dist\SMM\bin
-
-:: Ensure directories exist
-if not exist "%25BIN_DIR%25" mkdir "%25BIN_DIR%25"
-if not exist "%25BIN_DIR%25\decompiler" mkdir "%25BIN_DIR%25\decompiler"
-
-:: Decompiler Tool (Isolated .NET 8 environment)
-for %%C in (Debug Release) do (
-    if exist "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.exe" (
-        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.dll" "%25BIN_DIR%25\decompiler\"
-        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.exe" "%25BIN_DIR%25\decompiler\"
-        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.runtimeconfig.json" "%25BIN_DIR%25\decompiler\"
-        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.deps.json" "%25BIN_DIR%25\decompiler\"
-        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\ICSharpCode.Decompiler.dll" "%25BIN_DIR%25\decompiler\"
-        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\System.CommandLine.dll" "%25BIN_DIR%25\decompiler\"
-    )
-)
-exit /b 0
-</PostBuildEvent>
+    <PostBuildEvent />
   </PropertyGroup>
 </Project>

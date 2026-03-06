@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Manager.Core.Models;
 using Manager.Core.Security;
+using GameModding.Shared.Configuration;
 
 namespace Manager.Core.Services
 {
@@ -332,31 +333,15 @@ namespace Manager.Core.Services
 
         private Dictionary<string, string> ReadIniFile()
         {
-            var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            
-            if (!File.Exists(_iniPath)) 
-                return settings;
-
             try
             {
-                foreach (var line in File.ReadAllLines(_iniPath))
-                {
-                    if (string.IsNullOrEmpty(line) || line.Trim().Length == 0 || line.TrimStart().StartsWith("#"))
-                        continue;
-
-                    var parts = line.Split(new char[] { '=' }, 2);
-                    if (parts.Length == 2)
-                    {
-                        settings[parts[0].Trim()] = parts[1].Trim();
-                    }
-                }
+                return IniFileStore.Read(_iniPath);
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("Error reading INI: " + ex.Message);
+                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
-
-            return settings;
         }
 
         private void WriteIniFile(Dictionary<string, string> data)
@@ -365,20 +350,7 @@ namespace Manager.Core.Services
             {
                 _suppressWatcher = true;
                 
-                var lines = new List<string>();
-                lines.Add("# Sheltered Mod Manager Configuration");
-                lines.Add("# Last modified: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
-                lines.Add("");
-
-                var sortedKeys = new List<string>(data.Keys);
-                sortedKeys.Sort();
-                
-                foreach (var key in sortedKeys)
-                {
-                    lines.Add(key + "=" + data[key]);
-                }
-
-                File.WriteAllLines(_iniPath, lines.ToArray());
+                IniFileStore.Write(_iniPath, data, "Sheltered Mod Manager Configuration");
                 
                 // Give the watcher time to process any pending events before re-enabling
                 System.Threading.Thread.Sleep(100);

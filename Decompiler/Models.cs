@@ -14,6 +14,12 @@ namespace ModAPI.Decompiler
         Binary
     }
 
+    public enum EntityKind
+    {
+        Method = 0,
+        Type = 1
+    }
+
     /// <summary>
     /// Privacy visibility levels used by ModPrivacy policy.
     /// </summary>

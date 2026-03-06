@@ -365,8 +365,10 @@ namespace ModAPI.Core
                 if (_loaderRoot.GetComponent<ModAPI.UI.UIDebugInspector>() == null)
                     _loaderRoot.AddComponent<ModAPI.UI.UIDebugInspector>();
 
+                AttachCortexShell();
+
                 // Advanced developer tools (Disabled if decompiler is missing)
-                // This ensures F10 and F12 tools are not accessible in production builds.
+                // This ensures F10 and F7 tools are not accessible in production builds.
                 if (File.Exists(ModAPI.Inspector.SourceCacheManager.ResolveDecompilerPath()))
                 {
                     if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeILInspector>() == null)
@@ -376,14 +378,57 @@ namespace ModAPI.Core
                     if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeDebuggerUI>() == null)
                         _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeDebuggerUI>();
                     
-                    MMLog.WriteDebug("Advanced developer tools (F10/F12) enabled.");
+                    MMLog.WriteDebug("Advanced developer tools (F10/F7) enabled.");
                 }
                 else
                 {
-                    MMLog.WriteDebug("Decompiler not found. Advanced developer tools (F10/F12) disabled for production.");
+                    MMLog.WriteDebug("Decompiler not found. Advanced developer tools (F10/F7) disabled for production.");
                 }
             }
             catch (Exception ex) { MMLog.WarnOnce("PluginManager.AttachInspectorTools", "Error attaching inspector: " + ex.Message); }
+        }
+
+        private void AttachCortexShell()
+        {
+            try
+            {
+                var modApiDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
+                var cortexPath = Path.Combine(Path.Combine(Path.Combine(modApiDir, "bin"), "decompiler"), "Cortex.dll");
+                if (!File.Exists(cortexPath))
+                {
+                    cortexPath = Path.Combine(modApiDir, "Cortex.dll");
+                }
+
+                MMLog.WriteDebug("AttachCortexShell: probing Cortex at '" + cortexPath + "'.");
+
+                if (!File.Exists(cortexPath))
+                {
+                    MMLog.WriteDebug("Cortex.dll not found. Cortex IDE shell disabled.");
+                    return;
+                }
+
+                var cortexAssembly = Assembly.LoadFrom(cortexPath);
+                var shellType = cortexAssembly.GetType("Cortex.CortexShell", false);
+                if (shellType == null || !typeof(MonoBehaviour).IsAssignableFrom(shellType))
+                {
+                    MMLog.WriteWarning("Cortex shell type was not found in Cortex.dll.");
+                    return;
+                }
+
+                if (_loaderRoot.GetComponent(shellType) == null)
+                {
+                    _loaderRoot.AddComponent(shellType);
+                    MMLog.WriteInfo("Cortex IDE shell attached.");
+                }
+                else
+                {
+                    MMLog.WriteDebug("Cortex IDE shell already attached.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("PluginManager.AttachCortexShell", "Failed to attach Cortex shell: " + ex.Message);
+            }
         }
 
         /// <summary>
