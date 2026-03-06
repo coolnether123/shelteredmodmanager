@@ -776,36 +776,17 @@ namespace ModAPI.UI
             // Check if description needs scrolling (height > clip area)
             if (_detailDescription.height <= 360) return;
             
-            // Check for scroll input
-            float scroll = Input.GetAxis("Mouse ScrollWheel");
-            bool touchScroll = false;
-            if (scroll == 0f)
-                scroll = Input.mouseScrollDelta.y;
+            float scroll;
 
-            if (scroll == 0f)
+            if (!ScrollInputBridge.TryGetVerticalScroll(50f, 600f, out scroll))
             {
                 if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.PageUp))
                     scroll = 3f * Time.unscaledDeltaTime;
                 else if (Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.PageDown))
                     scroll = -3f * Time.unscaledDeltaTime;
             }
-
-            if (scroll == 0f)
-            {
-                touchScroll = TouchInputBridge.TryGetTouchScroll(50f, 600f, out scroll);
-            }
             
             if (scroll == 0f) return;
-
-            if (!touchScroll)
-            {
-                // Check if mouse is over right page (description area)
-                Vector3 mousePos = Input.mousePosition;
-                float uiX = (mousePos.x - Screen.width / 2f);
-                
-                // Right page is roughly X: 50 to 550
-                if (uiX < 50f || uiX > 600f) return;
-            }
             
             // Adjust description Y position
             // Scroll DOWN (negative scroll) = text moves UP (increase Y) to show more below
