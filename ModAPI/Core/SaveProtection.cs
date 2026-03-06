@@ -125,8 +125,7 @@ namespace ModAPI.Core
                         // SKIP manifest update here if it's a custom save! 
                         // The PlatformSaveProxy calls OverwriteSave which already calls UpdateSlotManifest with the correct absolute slot.
                         // Continuing here would use the vanilla 'type' (1, 2, or 3) and create wrong folders like Slot_1, Slot_2.
-                        if (ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave != null || 
-                            ModAPI.Hooks.PlatformSaveProxy.NextSave.ContainsKey(type))
+                        if (SaveRuntimeState.HasActiveCustomSave || SaveRuntimeState.HasPendingSave(type))
                         {
                             MMLog.WriteDebug(string.Format("[SaveGamePatch] Skipping manifest update for {0} (handled by Proxy)", type));
                             return;
@@ -223,10 +222,11 @@ namespace ModAPI.Core
                         try
                         {
                             // Use the actual custom slot if active, or if a load is pending redirect, otherwise fallback to vanilla type
-                            int absoluteSlot = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave != null ? ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave.absoluteSlot : (int)type;
+                            int absoluteSlot = SaveRuntimeState.HasActiveCustomSave ? SaveRuntimeState.ActiveCustomSave.absoluteSlot : (int)type;
                             
                             // Check for pending redirects
-                            if (ModAPI.Hooks.PlatformSaveProxy.NextLoad.TryGetValue(type, out var pending))
+                            ModAPI.Hooks.PlatformSaveProxy.Target pending;
+                            if (SaveRuntimeState.TryGetPendingLoad(type, out pending) && pending != null)
                             {
                                 var pendingEntry = pending.scenarioId == "Standard" 
                                     ? ModAPI.Saves.ExpandedVanillaSaves.Get(pending.saveId)
@@ -287,7 +287,7 @@ namespace ModAPI.Core
                         var entry = new ModAPI.Saves.SaveEntry
                         {
                             id = "temp_load_entry",
-                            absoluteSlot = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave?.absoluteSlot ?? (int)type,
+                            absoluteSlot = SaveRuntimeState.ActiveCustomSave != null ? SaveRuntimeState.ActiveCustomSave.absoluteSlot : (int)type,
                             saveInfo = new ModAPI.Saves.SaveInfo 
                             { 
                                 familyName = data.info != null ? data.info.m_familyName : "Unknown",

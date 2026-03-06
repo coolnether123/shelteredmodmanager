@@ -77,26 +77,7 @@ namespace ModAPI
         /// </summary>
         public static string GetSaveSlotKey(SaveManager.SaveType type)
         {
-            if (type == SaveManager.SaveType.GlobalData) return "Global";
-            if (type == SaveManager.SaveType.Invalid) return "Invalid";
-
-            // 1. Check if we are currently LOADING a custom save (intercepted by proxy)
-            if (ModAPI.Hooks.PlatformSaveProxy.NextLoad.ContainsKey(type))
-            {
-                var target = ModAPI.Hooks.PlatformSaveProxy.NextLoad[type];
-                return string.Format("{0}_{1}", target.scenarioId, target.saveId);
-            }
-
-            // 2. Check if we currently HAVE an active custom save loaded
-            var active = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave;
-            if (active != null)
-            {
-                string scenario = string.IsNullOrEmpty(active.scenarioId) ? "Standard" : active.scenarioId;
-                return string.Format("{0}_{1}", scenario, active.id);
-            }
-
-            // 3. Fallback to vanilla slot name for non-modded slots
-            return type.ToString();
+            return SaveRuntimeState.GetSaveSlotKey(type);
         }
     }
 }

@@ -20,7 +20,7 @@ namespace ModAPI.Hooks
                 return false;
             }
 
-            var active = PlatformSaveProxy.ActiveCustomSave;
+            var active = SaveRuntimeState.ActiveCustomSave;
             if (active == null || active.absoluteSlot <= 0)
             {
                 return false;
@@ -63,44 +63,12 @@ namespace ModAPI.Hooks
 
         private static void ClearProxyStateAfterDelete(SaveManager.SaveType requestedType, string deletedSaveId)
         {
-            if (PlatformSaveProxy.ActiveCustomSave != null && PlatformSaveProxy.ActiveCustomSave.id == deletedSaveId)
+            if (SaveRuntimeState.ActiveCustomSave != null && SaveRuntimeState.ActiveCustomSave.id == deletedSaveId)
             {
-                PlatformSaveProxy.ActiveCustomSave = null;
+                SaveRuntimeState.ActiveCustomSave = null;
             }
 
-            lock (PlatformSaveProxy._nextLoadLock)
-            {
-                var keysToRemove = new List<SaveManager.SaveType>();
-                foreach (var pair in PlatformSaveProxy.NextLoad)
-                {
-                    if (pair.Key == requestedType || (pair.Value != null && pair.Value.saveId == deletedSaveId))
-                    {
-                        keysToRemove.Add(pair.Key);
-                    }
-                }
-
-                for (int i = 0; i < keysToRemove.Count; i++)
-                {
-                    PlatformSaveProxy.NextLoad.Remove(keysToRemove[i]);
-                }
-            }
-
-            lock (PlatformSaveProxy._nextSaveLock)
-            {
-                var keysToRemove = new List<SaveManager.SaveType>();
-                foreach (var pair in PlatformSaveProxy.NextSave)
-                {
-                    if (pair.Key == requestedType || (pair.Value != null && pair.Value.saveId == deletedSaveId))
-                    {
-                        keysToRemove.Add(pair.Key);
-                    }
-                }
-
-                for (int i = 0; i < keysToRemove.Count; i++)
-                {
-                    PlatformSaveProxy.NextSave.Remove(keysToRemove[i]);
-                }
-            }
+            SaveRuntimeState.ClearTrackedReferences(requestedType, deletedSaveId);
         }
 
         private static bool IsProxyVanillaSlot(SaveManager.SaveType type)
