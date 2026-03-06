@@ -7,6 +7,7 @@ using HarmonyLib;
 using UnityEngine;
 using ModAPI.Saves;
 using ModAPI.Hooks.Paging;
+using ModAPI.Harmony;
 
 namespace ModAPI.Core
 {
@@ -45,6 +46,10 @@ namespace ModAPI.Core
     /// <summary>
     /// Manual Harmony patch installer for save/load protection hooks.
     /// </summary>
+    [PatchPolicy(PatchDomain.SaveFlow, "SaveProtection",
+        TargetBehavior = "SaveManager.StartSave, SaveManager.Update_LoadData",
+        FailureMode = "Mod compatibility verification is skipped or save manifest protection becomes inconsistent.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or skip manual SaveProtection module registration.")]
     internal static class SaveProtectionPatches
     {
         private static HarmonyLib.Harmony _harmony;

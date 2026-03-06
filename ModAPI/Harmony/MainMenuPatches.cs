@@ -35,6 +35,10 @@ namespace ModAPI.Harmony
         }
     }
 
+    [PatchPolicy(PatchDomain.UI, "MainMenuModsEntry",
+        TargetBehavior = "Main menu mods button injection and manager-driven auto-load/new-save flow",
+        FailureMode = "Mods entry or manager-driven auto-load flow fails to start from the main menu.",
+        RollbackStrategy = "Disable the UI patch domain or remove the main menu patch host.")]
     [HarmonyPatch(typeof(MainMenu), "OnShow")]
     public static class MainMenu_OnShow_Patch
     {
@@ -206,6 +210,10 @@ namespace ModAPI.Harmony
         }
     }
 
+    [PatchPolicy(PatchDomain.UI, "MainMenuTransitionRedirect",
+        TargetBehavior = "Main menu transition redirect into the Mod Manager panel",
+        FailureMode = "Main menu transitions return to vanilla flow instead of opening the Mod Manager panel.",
+        RollbackStrategy = "Disable the UI patch domain or remove the menu transition redirect patch.")]
     [HarmonyPatch(typeof(MainMenu), "OnTweenFinished")]
     public static class MainMenu_OnTweenFinished_Patch
     {
@@ -226,6 +234,10 @@ namespace ModAPI.Harmony
         }
     }
 
+    [PatchPolicy(PatchDomain.SaveFlow, "AutoNewSaveModeSelection",
+        TargetBehavior = "Automatic new-save mode selection during manager-driven flow",
+        FailureMode = "Auto-new-save stalls before choosing a game mode.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the auto-new-save mode selector.")]
     [HarmonyPatch(typeof(GameModeSelectionPanel), "OnTweenFinished")]
     internal static class GameModeSelectionPanel_OnTweenFinished_AutoNewSave_Patch
     {
@@ -251,6 +263,10 @@ namespace ModAPI.Harmony
         }
     }
 
+    [PatchPolicy(PatchDomain.SaveFlow, "AutoNewSaveSlotSelection",
+        TargetBehavior = "Automatic slot selection during manager-driven new-save flow",
+        FailureMode = "Auto-new-save chooses the wrong slot or stalls before entering gameplay.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the auto-new-save slot selector.")]
     [HarmonyPatch(typeof(SlotSelectionPanel), "OnTweenFinished")]
     internal static class SlotSelectionPanel_OnTweenFinished_AutoNewSave_Patch
     {

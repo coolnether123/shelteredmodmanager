@@ -1,6 +1,7 @@
 using System;
 using HarmonyLib;
 using ModAPI.Core;
+using ModAPI.Harmony;
 using ModAPI.UI;
 using UnityEngine;
 
@@ -10,6 +11,10 @@ namespace ShelteredAPI.Harmony
     /// Ensures the legacy KEYBINDS button is not present in the Mod Manager panel.
     /// Keybinds should only be opened from Settings -> Controls.
     /// </summary>
+    [PatchPolicy(PatchDomain.UI, "ShelteredModManagerKeybindCleanup",
+        TargetBehavior = "Removal of legacy keybind entry points from Mod Manager UI",
+        FailureMode = "Duplicate or obsolete keybind entry points remain visible in the Mod Manager panel.",
+        RollbackStrategy = "Disable the UI patch domain or remove the Mod Manager cleanup patch.")]
     [HarmonyPatch(typeof(ModManagerPanel), "Initialise")]
     internal static class ModManagerKeybindsPatches
     {

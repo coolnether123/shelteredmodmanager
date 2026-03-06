@@ -90,6 +90,7 @@
     <Compile Include="UI\UIFontCache.cs" />
     <Compile Include="UI\UIUtil.cs" />
     <Compile Include="UI\UIHelper.cs" />
+    <Compile Include="UI\UIPatchCoordinator.cs" />
     <Compile Include="UI\TouchInputBridge.cs" />
     <Compile Include="UI\ScrollInputBridge.cs" />
     <Compile Include="UI\UIFactory.cs" />
@@ -128,6 +129,7 @@
     <Compile Include="Harmony\HarmonyBootstrap.cs" />
     <Compile Include="Harmony\HarmonyUtil.cs" />
     <Compile Include="Harmony\HarmonyHelper.cs" />
+    <Compile Include="Harmony\PatchRegistry.cs" />
     <Compile Include="Harmony\MainMenuPatches.cs" />
     <Compile Include="Harmony\Transpilers\FluentTranspiler.cs" />
     <Compile Include="Harmony\Transpilers\FluentTranspiler_Features.cs" />

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
+using ModAPI.Harmony;
 using ModAPI.Reflection;
 
 namespace ModAPI.Interactions
@@ -186,6 +187,10 @@ namespace ModAPI.Interactions
     /// Registry for adding new interactions (interaction-menu buttons) to existing game objects.
     /// Interactions are injected automatically when objects are spawned, with fluent placement controls.
     /// </summary>
+    [PatchPolicy(PatchDomain.Interactions, "InteractionRegistry",
+        TargetBehavior = "Object interaction injection and menu reordering",
+        FailureMode = "Registered interaction buttons will not inject or appear in the intended order.",
+        RollbackStrategy = "Disable the Interactions patch domain or remove the interaction registry patch host.")]
     [Obsolete("Compatibility API retained in ModAPI 1.3. Planned to move to ShelteredAPI in a future major release.", false)]
     public static class InteractionRegistry
     {
