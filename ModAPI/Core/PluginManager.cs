@@ -8,7 +8,7 @@ using HarmonyLib;
 using ModAPI.Harmony;
 using ModAPI.Hooks;
 using ModAPI.Spine;
-using ModAPI.Characters;
+using ModAPI.Actors;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -612,7 +612,7 @@ namespace ModAPI.Core
                 Settings = settings,
                 Log = log,
                 Game = ModAPIRegistry.GetAPI<IGameHelper>("ShelteredAPI.GameHelper"),
-                Characters = ModAPIRegistry.GetAPI<ICharacterEffectSystem>("ShelteredAPI.CharacterEffects"),
+                Actors = ModAPIRegistry.GetAPI<IActorSystem>("ShelteredAPI.Actors"),
                 SaveSystem = new SaveSystemImpl(modId),
                 GameRoot = _gameRoot,
                 ModsRoot = _modsRoot,

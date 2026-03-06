@@ -69,18 +69,9 @@
     <Compile Include="Content\InventoryIntegration.cs" />
     <Compile Include="GameState\ManagerStateHelper.cs" />
     <Compile Include="Items\InventoryHelper.cs" />
-    <!-- Character contracts (interfaces + value types) - canonical home is ModAPI -->
-    <Compile Include="Characters\Abstractions\ICharacterEffect.cs" />
-    <Compile Include="Characters\Abstractions\ICharacterEffects.cs" />
-    <Compile Include="Characters\Abstractions\ICharacterAttributes.cs" />
-    <Compile Include="Characters\Abstractions\ICharacterProxy.cs" />
-    <Compile Include="Characters\Abstractions\ICharacterData.cs" />
-    <Compile Include="Characters\Abstractions\ICharacterEffectSystem.cs" />
-    <Compile Include="Characters\Models\AttributeModifier.cs" />
-    <Compile Include="Characters\Models\CharacterQuery.cs" />
-    <Compile Include="Characters\Models\CharacterSaveData.cs" />
-    <Compile Include="Characters\Models\EffectInstance.cs" />
-    <!-- Backward-compat: Sheltered-specific helpers kept here until next breaking release -->
+    <Compile Include="Actors\Abstractions\IActorSystem.cs" />
+    <Compile Include="Actors\Models\ActorModels.cs" />
+    <Compile Include="Actors\Models\ActorComponents.cs" />
     <Compile Include="Characters\PartyHelper.cs" />
     <Compile Include="Characters\PartyPatches.cs" />
     <Compile Include="Core\IGameHelper.cs" />

@@ -52,12 +52,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Adapters\GameHelperExtensions.cs" />
-    <!-- Character IMPLEMENTATIONS (contracts now live in ModAPI) -->
-    <Compile Include="Characters\CharacterEffectSystem.cs" />
-    <Compile Include="Characters\Internal\CharacterEffectSystemImpl.cs" />
-    <Compile Include="Characters\Internal\CharacterRuntime.cs" />
-    <Compile Include="Characters\Models\CharacterDataModel.cs" />
-    <Compile Include="Characters\Models\SyntheticCharacterProxy.cs" />
+    <Compile Include="Actors\ActorSystem.cs" />
+    <Compile Include="Actors\Internal\ActorSystemImpl.cs" />
     <Compile Include="Core\GameHelperImpl.cs" />
     <Compile Include="Core\ShelteredApiRuntimeBootstrap.cs" />
     <Compile Include="Core\ShelteredKeybindPersistenceGuard.cs" />

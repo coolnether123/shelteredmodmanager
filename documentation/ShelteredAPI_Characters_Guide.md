@@ -1,26 +1,24 @@
-# ShelteredAPI Characters Guide
+# ShelteredAPI Actors Guide
 
-This guide explains how to use the `ModAPI.Characters` API exposed through:
+This guide covers the actor system exposed through:
 
 ```csharp
-IPluginContext.Characters
+IPluginContext.Actors
 ```
 
 ## 1. Getting Started
 
-In your plugin:
-
 ```csharp
+using ModAPI.Actors;
 using ModAPI.Core;
-using ModAPI.Characters;
 
 public class MyMod : IModPlugin
 {
-    private ICharacterEffectSystem _characters;
+    private IActorSystem _actors;
 
     public void Initialize(IPluginContext ctx)
     {
-        _characters = ctx.Characters;
+        _actors = ctx.Actors;
     }
 
     public void Start(IPluginContext ctx)
@@ -29,166 +27,143 @@ public class MyMod : IModPlugin
 }
 ```
 
-## 2. Character Types
+## 2. Actor Identity
 
-`CharacterSource` tells you where a character comes from:
-
-- `RealFamily`: a real `FamilyMember`
-- `Visitor`: a real `NpcVisitor`
-- `Synthetic`: pure data character created by mods
-
-Use `CharacterState` for lifecycle and `CharacterLocation` for shelter/away context.
-
-## 3. Accessing Real Characters
+Every actor uses a typed `ActorId`:
 
 ```csharp
-FamilyMember member = FamilyManager.Instance.GetFamilyMember(1);
-ICharacterProxy proxy = _characters.GetCharacter(member);
-
-string name = proxy.Name;
-CharacterState state = proxy.State;
-CharacterLocation location = proxy.Location;
+var id = new ActorId(ActorKind.Citizen, 1, "mymod");
 ```
 
-You can also query all tracked characters:
+- `Kind` prevents collisions between players, visitors, factions, and synthetic actors.
+- `Domain` is the mod namespace for custom actor spaces.
+- `LocalId` is stable inside that `(Kind, Domain)` scope.
+
+## 3. Creating Actors
 
 ```csharp
-var all = _characters.GetAllCharacters();
-```
-
-## 4. Creating Synthetic Characters
-
-Persistent synthetic character:
-
-```csharp
-var citizen = _characters.CreateSyntheticCharacter(
-    firstName: "Aria",
-    lastName: "Stone",
-    persistenceKey: "mymod.faction.citizen.001",
-    sourceModId: "mymod",
-    isPersistent: true
-);
-```
-
-Temporary synthetic character:
-
-```csharp
-var tempNpc = _characters.CreateTemporaryCharacter(
-    firstName: "Scout",
-    lastName: "One",
-    sourceModId: "mymod"
-);
-```
-
-Important:
-
-- Persistence keys must be unique.
-- Use namespaced keys (`modid.something`) to avoid collisions.
-
-## 5. Synthetic Lifecycle
-
-```csharp
-_characters.SyntheticCharacterCreated += c => { /* track */ };
-_characters.SyntheticCharacterUnloaded += c => { /* cleanup */ };
-```
-
-Unload temporary synthetic characters when your encounter/session ends:
-
-```csharp
-int removed = _characters.UnloadTemporaryCharacters("mymod");
-```
-
-## 6. Character Data (including custom data)
-
-`ICharacterData` contains structured fields plus arbitrary mod data:
-
-```csharp
-var c = _characters.GetSyntheticCharacter("mymod.faction.citizen.001");
-c.Data.Health = 85;
-c.Data.MaxHealth = 100;
-
-c.Data.SetCustomData("mymod.rank", "captain");
-c.Data.SetCustomData("mymod.reputation", 42);
-
-string rank = c.Data.GetCustomData<string>("mymod.rank");
-bool hasRep = c.Data.HasCustomData("mymod.reputation");
-```
-
-## 7. Effects and Attributes
-
-Register effect types once:
-
-```csharp
-_characters.RegisterEffectType<MyBleedEffect>("mymod.bleed");
-```
-
-Apply/query/remove:
-
-```csharp
-ICharacterProxy target = _characters.GetCharacterById(1);
-
-target.Effects.Apply("mymod.bleed", duration: 30f, sourceModId: "mymod");
-bool bleeding = target.Effects.Has("mymod.bleed");
-target.Effects.RemoveAllOfType("mymod.bleed");
-```
-
-Attributes:
-
-```csharp
-target.Attributes.Apply("Strength", 2f, 60f, "mymod");
-float total = target.Attributes.GetModifier("Strength");
-```
-
-## 8. Query API
-
-```csharp
-var persistentSynthetic = _characters.Query()
-    .FromSource(CharacterSource.Synthetic)
-    .OnlyPersistent()
-    .ToList();
-
-var myModTemps = _characters.Query()
-    .CreatedByMod("mymod")
-    .OnlyTemporary()
-    .ToList();
-```
-
-## 9. Encounter Swapping
-
-`SwapEncounterCharacter(...)` performs a best-effort actor swap (name + combat-relevant stats where available through reflection):
-
-```csharp
-_characters.SwapEncounterCharacter(encounterActor, citizenProxy, swapped =>
+var actor = _actors.Create(new ActorCreateRequest
 {
-    // Optional post-swap logic
+    Kind = ActorKind.Citizen,
+    Domain = "mymod",
+    LifecycleState = ActorLifecycleState.Registered,
+    PresenceState = ActorPresenceState.Offscreen,
+    Flags = ActorFlags.Persistent | ActorFlags.Synthetic,
+    Origin = new ActorOrigin
+    {
+        SourceModId = "mymod",
+        SourceKey = "mymod.citizen.1",
+        Generator = "worldgen"
+    }
 });
 ```
 
-Note:
+## 4. Built-In Components
 
-- This is intentionally defensive due to changing internal game fields.
-- If a field/property does not exist in a game build, it is skipped.
-
-## 10. Events
+Profile data:
 
 ```csharp
-_characters.EffectApplied += (character, effect) => { };
-_characters.EffectRemoved += (character, effect, reason) => { };
-_characters.DataChanged += (character, key, value) => { };
+_actors.Set(actor.Id, new ActorProfileComponent
+{
+    FirstName = "Aria",
+    LastName = "Stone",
+    Health = 85,
+    MaxHealth = 100
+}, "shelteredapi");
 ```
 
-## 11. Save/Load Behavior
+Attribute storage for mods:
 
-- Persistent synthetic characters are saved/loaded by the character system.
-- Temporary synthetic characters are in-memory only.
-- Effect instance custom payload (`EffectInstance.CustomData`) is serialized/restored.
-- `ICharacterData` custom data is serialized/restored for persistent synthetic characters.
+```csharp
+var attrs = new ActorAttributeSetComponent();
+attrs.SetValue("mymod.reputation", 42f, "mymod");
+attrs.SetValue("mymod.courage", 8f, "mymod");
 
-## 12. Recommended Conventions
+_actors.Set(actor.Id, attrs, "mymod");
+```
 
-- Always namespace IDs and keys:
-  - Effects: `modid.effectname`
-  - Persistence keys: `modid.entity.type.id`
-  - Custom data keys: `modid.key`
-- Use `OnlyTemporary()` queries + `UnloadTemporaryCharacters(modId)` for cleanup discipline.
-- Treat encounter swaps as best-effort patch points, not hard engine contracts.
+## 5. Custom Components
+
+Define a namespaced component:
+
+```csharp
+[Serializable]
+public class PersonalityComponent : IActorComponent
+{
+    public string Disposition;
+    public int Loyalty;
+
+    public string ComponentId { get { return "mymod.personality"; } }
+    public int Version { get { return 1; } }
+    public ActorConflictPolicy ConflictPolicy { get { return ActorConflictPolicy.Replace; } }
+}
+```
+
+Register a serializer once:
+
+```csharp
+_actors.RegisterSerializer(
+    new ActorJsonComponentSerializer<PersonalityComponent>("mymod.personality", 1));
+```
+
+Attach/query/remove:
+
+```csharp
+_actors.Set(actor.Id, new PersonalityComponent { Disposition = "calm", Loyalty = 7 }, "mymod");
+
+PersonalityComponent personality;
+if (_actors.TryGet(actor.Id, out personality))
+{
+    int loyalty = personality.Loyalty;
+}
+
+_actors.Remove(actor.Id, "mymod.personality", "mymod");
+```
+
+## 6. Queries
+
+```csharp
+var persistentCitizens = _actors.Enumerate(
+    _actors.Query()
+        .ByKind(ActorKind.Citizen)
+        .OnlyPersistent()
+        .WithComponent("mymod.personality")
+        .Build());
+```
+
+## 7. Simulation
+
+```csharp
+public class LoyaltyDecaySystem : IActorSimulationSystem
+{
+    public string SystemId { get { return "mymod.loyalty_decay"; } }
+    public int Priority { get { return 100; } }
+
+    public void Tick(ActorSimulationContext context, int tickStep)
+    {
+        var actors = context.Registry.Enumerate(
+            new ActorQueryBuilder()
+                .ByKind(ActorKind.Citizen)
+                .WithComponent("mymod.personality")
+                .Build());
+    }
+}
+
+_actors.RegisterSystem(new LoyaltyDecaySystem());
+_actors.Tick(1, "mymod.sim");
+```
+
+## 8. Events and Persistence
+
+```csharp
+_actors.Subscribe(evt =>
+{
+    if (evt.EventType == ActorEventType.ComponentAdded)
+    {
+    }
+});
+```
+
+- Persistent actors/components are saved through the actor save envelope.
+- Unknown component payloads are preserved until a serializer is available.
+- Component ids must be namespaced like `modid.component_name`.

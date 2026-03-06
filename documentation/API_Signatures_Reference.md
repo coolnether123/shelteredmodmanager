@@ -54,7 +54,7 @@ public interface IPluginContext
     ISettingsProvider Settings { get; }
     IModLogger Log { get; }
     IGameHelper Game { get; }
-    ICharacterEffectSystem Characters { get; }
+    IActorSystem Actors { get; }
     string GameRoot { get; }
     string ModsRoot { get; }
     bool IsModernUnity { get; }
@@ -85,41 +85,39 @@ public interface ISaveSystem
 }
 ```
 
-## Character System (`ModAPI.Characters`, ShelteredAPI)
+## Actor System (`ModAPI.Actors`, ShelteredAPI)
 
 ```csharp
-public enum CharacterSource { RealFamily, Visitor, Synthetic }
-public enum CharacterLocation { Shelter, Expedition, Missing, Away, Unknown }
-public enum CharacterState
+public enum ActorKind { Player, Faction, Citizen, Visitor, NeutralShelter, Synthetic, Custom }
+public enum ActorLifecycleState { Unknown, Registered, Active, Inactive, Unloaded, Destroyed }
+public enum ActorPresenceState { Unknown, InShelter, Expedition, Encounter, Offscreen }
+[Flags] public enum ActorFlags { None = 0, Persistent = 1, RuntimeOnly = 2, Synthetic = 4, Loaded = 8 }
+
+public sealed class ActorId
 {
-    InShelter, OnExpedition, Unconscious, CatatonicGhost, Dead,
-    InEncounter, TemporarilyAbsent, SyntheticIdle, SyntheticInEncounter, SyntheticAbsent
+    public ActorKind Kind;
+    public int LocalId;
+    public string Domain;
 }
 
-public interface ICharacterData
+public interface IActorSystem : IActorRegistry, IActorComponentStore, IActorEvents, IActorSimulationScheduler, IActorSerializationService {}
+
+public interface IActorRegistry
 {
-    int UniqueId { get; }
-    string PersistenceKey { get; }
-    string FirstName { get; set; }
-    string LastName { get; set; }
-    bool IsMale { get; set; }
-    string MeshId { get; set; }
-    Color SkinColor { get; set; }
-    Color HairColor { get; set; }
-    int StrengthLevel { get; set; }
-    int DexterityLevel { get; set; }
-    int IntelligenceLevel { get; set; }
-    int CharismaLevel { get; set; }
-    int PerceptionLevel { get; set; }
-    int Health { get; set; }
-    int MaxHealth { get; set; }
-    CharacterSource Source { get; }
-    string SourceMod { get; }
-    bool IsPersistent { get; }
-    float CreatedAtTime { get; }
-    void SetCustomData(string key, object value);
-    T GetCustomData<T>(string key);
-    bool HasCustomData(string key);
+    IActorRecord Get(ActorId id);
+    bool TryGet(ActorId id, out IActorRecord actor);
+    IActorRecord Create(ActorCreateRequest request);
+    bool Update(ActorId id, ActorRecordMutation mutation);
+    bool Destroy(ActorId id, ActorDestroyReason reason);
+    IReadOnlyList<IActorRecord> Enumerate(ActorQuery query);
+    ActorQueryBuilder Query();
+}
+
+public interface IActorComponentStore
+{
+    ActorComponentWriteResult Set(ActorId actorId, IActorComponent component, string sourceModId);
+    bool TryGet<TComponent>(ActorId actorId, out TComponent component) where TComponent : class, IActorComponent;
+    bool Remove(ActorId actorId, string componentId, string sourceModId);
 }
 ```
 
