@@ -435,7 +435,10 @@ foreach (string modId in ModRegistry.GetLoadedModIds())
 
 ---
 
-## Character System
+## Actor / Party Data
+
+The old character-effect layer has been replaced by the actor system in `ModAPI.Actors` and `ShelteredAPI.Actors`.
+The remaining files in `Characters/` are party/family helpers only.
 
 ### `Characters/PartyHelper.cs`
 **Primary Role:** Provides utilities for managing expedition parties and family members.

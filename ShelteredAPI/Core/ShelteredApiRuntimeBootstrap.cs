@@ -1,4 +1,5 @@
 using ModAPI.Core;
+using ModAPI.Actors;
 using ShelteredAPI.Input;
 using UnityEngine;
 
@@ -24,6 +25,7 @@ namespace ShelteredAPI.Core
                 ShelteredVanillaInputActions.EnsureRegistered();
                 ShelteredKeybindsProvider.Instance.EnsureLoaded();
                 EnsurePersistenceGuard();
+                EnsureApiRegistrations();
 
                 _initialized = true;
                 MMLog.WriteInfo("[ShelteredApiRuntimeBootstrap] Core ShelteredAPI input and keybind systems initialized.");
@@ -43,6 +45,19 @@ namespace ShelteredAPI.Core
 
             if (runtimeRoot.GetComponent<ShelteredKeybindPersistenceGuard>() == null)
                 runtimeRoot.AddComponent<ShelteredKeybindPersistenceGuard>();
+        }
+
+        private static void EnsureApiRegistrations()
+        {
+            ModAPIRegistry.RegisterAPI<IGameHelper>("ShelteredAPI.GameHelper", new GameHelperImpl(), "shelteredapi");
+
+            IActorSystem actors = ActorSystem.Instance;
+            ModAPIRegistry.RegisterAPI<IActorSystem>("ShelteredAPI.Actors", actors, "shelteredapi");
+            ModAPIRegistry.RegisterAPI<IActorRegistry>("ShelteredAPI.ActorRegistry", actors, "shelteredapi");
+            ModAPIRegistry.RegisterAPI<IActorComponentStore>("ShelteredAPI.ActorComponents", actors, "shelteredapi");
+            ModAPIRegistry.RegisterAPI<IActorSimulationScheduler>("ShelteredAPI.ActorSimulation", actors, "shelteredapi");
+            ModAPIRegistry.RegisterAPI<IActorEvents>("ShelteredAPI.ActorEvents", actors, "shelteredapi");
+            ModAPIRegistry.RegisterAPI<IActorSerializationService>("ShelteredAPI.ActorSerialization", actors, "shelteredapi");
         }
     }
 }
