@@ -1,9 +1,14 @@
 using System;
 using HarmonyLib;
 using ModAPI.Characters;
+using ModAPI.Harmony;
 
 namespace ModAPI.Harmony
 {
+    [PatchPolicy(PatchDomain.Characters, "ShelteredPartyEvents",
+        TargetBehavior = "Sheltered expedition party membership change notifications",
+        FailureMode = "Sheltered party callbacks stop reflecting party membership changes.",
+        RollbackStrategy = "Disable the Characters patch domain or remove the Sheltered party patch host.")]
     [HarmonyPatch(typeof(ExplorationParty), "AddMember")]
     internal static class ExplorationParty_AddMember_Patch
     {

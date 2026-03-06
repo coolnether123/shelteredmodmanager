@@ -3,12 +3,17 @@ using System.Collections.Generic;
 using HarmonyLib;
 using System.Reflection;
 using UnityEngine;
+using ModAPI.Harmony;
 
 namespace ModAPI.Events
 {
     /// <summary>
     /// Central event bus so mods can subscribe instead of duplicating Harmony patches.
     /// </summary>
+    [PatchPolicy(PatchDomain.Events, "ShelteredGameEvents",
+        TargetBehavior = "Sheltered event bridges for session, save/load, combat, and party lifecycle",
+        FailureMode = "Sheltered event callbacks stop firing for dependent mods.",
+        RollbackStrategy = "Disable the Events patch domain or remove the Sheltered game event bridge.")]
     public static class GameEvents
     {
         public static event Action<int> OnNewDay;

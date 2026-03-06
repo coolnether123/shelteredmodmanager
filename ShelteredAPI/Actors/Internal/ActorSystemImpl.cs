@@ -1,6 +1,7 @@
 using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Events;
+using ModAPI.Harmony;
 using ModAPI.Util;
 using System;
 using System.Collections.Generic;
@@ -9,6 +10,10 @@ using UnityEngine;
 
 namespace ModAPI.Actors.Internal
 {
+    [PatchPolicy(PatchDomain.World, "ShelteredActorSystemTicks",
+        TargetBehavior = "Sheltered actor system registration and ticking from GameTime lifecycle updates",
+        FailureMode = "Actor simulation systems stop registering or advancing with the game clock.",
+        RollbackStrategy = "Disable the World patch domain or remove the Sheltered actor system tick patch host.")]
     internal sealed class ActorSystemImpl : IActorSystem, ISaveable
     {
         private const string SaveGroupName = "ModAPI_Actors_V1";

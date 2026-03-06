@@ -205,6 +205,7 @@
     <Compile Include="Custom Saves\SaveManager_SaveToCurrentSlot_Patch.cs" />
     <Compile Include="Custom Saves\paging\PagingManager.cs" />
     <Compile Include="Custom Saves\paging\CustomSavesWelcomeDialog.cs" />
+    <Compile Include="Custom Saves\paging\SlotSelectionPatchCoordinator.cs" />
     <Compile Include="Custom Saves\paging\SlotSelectionPatches.cs" />
     <Compile Include="Custom Saves\paging\SaveVerification.cs" />
     <Compile Include="Custom Saves\paging\SaveDetailsWindow.cs" />

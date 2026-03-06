@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using ModAPI.Core;
+using ModAPI.Harmony;
 using UnityEngine;
 
 namespace ModAPI.Util
@@ -230,6 +231,10 @@ namespace ModAPI.Util
         }
     }
 
+    [PatchPolicy(PatchDomain.SaveFlow, "PersistentDataRegistration",
+        TargetBehavior = "Persistent mod data registration during SaveManager startup",
+        FailureMode = "Mods using PersistentDataAPI may not load or save their data automatically.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the PersistentDataAPI registration hook.")]
     [HarmonyLib.HarmonyPatch(typeof(SaveManager), "Awake")]
     internal static class PersistentDataAPI_SaveManagerHook
     {

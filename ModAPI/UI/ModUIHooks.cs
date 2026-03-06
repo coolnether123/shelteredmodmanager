@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
+using ModAPI.Harmony;
 using ModAPI.Reflection;
 using UnityEngine;
 
@@ -22,6 +23,10 @@ namespace ModAPI.UI
     /// <summary>
     /// Standardized way to inject UI elements into existing game panels.
     /// </summary>
+    [PatchPolicy(PatchDomain.UI, "ModUIHooks",
+        TargetBehavior = "Shared button injection into supported runtime panels",
+        FailureMode = "Registered ModUIHooks buttons do not appear when panels open.",
+        RollbackStrategy = "Disable the UI patch domain or remove the ModUIHooks patch host.")]
     public static class ModUIHooks
     {
         private class ButtonHook
