@@ -55,18 +55,10 @@ namespace ModAPI.UI
         {
             if (_items == null || _items.Count == 0 || _items.Count <= _maxVisibleItems) return;
             
-            // Mouse wheel scrolling - restricted to horizontal bounds defined in Initialize()
-            float scroll = Input.GetAxis("Mouse ScrollWheel");
-            bool touchScroll = false;
-            
-            // Fallback to delta for some Unity versions/input setups
-            if (scroll == 0f)
-            {
-                scroll = Input.mouseScrollDelta.y;
-            }
+            float scroll;
 
             // Keyboard fallback for users without reliable wheel/gesture support.
-            if (scroll == 0f)
+            if (!ScrollInputBridge.TryGetVerticalScroll(_minX, _maxX, out scroll))
             {
                 if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
                     scroll = 1f;
@@ -74,24 +66,8 @@ namespace ModAPI.UI
                     scroll = -1f;
             }
 
-            // Touch drag fallback for touch-screen monitors.
-            if (scroll == 0f)
-            {
-                touchScroll = TouchInputBridge.TryGetTouchScroll(_minX, _maxX, out scroll);
-            }
-            
             if (scroll != 0f)
             {
-                if (!touchScroll)
-                {
-                    // Convert screen mouse position to UI coordinates for the boundary check
-                    Vector3 mousePos = Input.mousePosition;
-                    float uiX = (mousePos.x - Screen.width / 2f);
-                    
-                    // Only scroll if mouse is within the specified horizontal range (e.g. over the left page)
-                    if (uiX < _minX || uiX > _maxX) return;
-                }
-                
                 int previousOffset = _currentOffset;
                 
                 if (scroll > 0f && _currentOffset > 0)

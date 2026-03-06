@@ -90,6 +90,20 @@ namespace ShelteredAPI.Harmony
                 Mathf.Abs(UnityEngine.Input.GetAxisRaw("PC_MouseY")) > AxisEpsilon;
         }
 
+        [HarmonyPatch(typeof(PlatformInput_PC), "GetInputAxis", new System.Type[] { typeof(PlatformInput.MenuInputAxis) })]
+        [HarmonyPrefix]
+        private static bool MenuAxisPrefix(PlatformInput.MenuInputAxis axis, ref float __result)
+        {
+            return !TryResolveMenuAxis(axis, false, ref __result);
+        }
+
+        [HarmonyPatch(typeof(PlatformInput_PC), "GetInputAxisRaw", new System.Type[] { typeof(PlatformInput.MenuInputAxis) })]
+        [HarmonyPrefix]
+        private static bool MenuAxisRawPrefix(PlatformInput.MenuInputAxis axis, ref float __result)
+        {
+            return !TryResolveMenuAxis(axis, true, ref __result);
+        }
+
         private static bool TryResolveInputButton(PlatformInput.InputButton button, KeyState state, ref bool result)
         {
             InputBinding binding;
@@ -161,6 +175,20 @@ namespace ShelteredAPI.Harmony
                 MMLog.WriteInfo("[PlatformInputKeybindPatches] Touch drag mapped to UIdragMap.");
             }
 
+            return true;
+        }
+
+        private static bool TryResolveMenuAxis(PlatformInput.MenuInputAxis axis, bool raw, ref float result)
+        {
+            if (axis != PlatformInput.MenuInputAxis.UIscroll)
+                return false;
+
+            float scroll;
+            bool resolved = raw
+                ? ScrollInputBridge.TryGetVerticalScrollAnywhereRaw(out scroll)
+                : ScrollInputBridge.TryGetVerticalScrollAnywhere(out scroll);
+
+            result = resolved ? scroll : 0f;
             return true;
         }
 

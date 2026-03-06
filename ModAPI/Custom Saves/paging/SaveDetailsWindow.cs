@@ -718,10 +718,8 @@ namespace ModAPI.Hooks.Paging
             if (_items == null || _items.Count == 0) return;
             if (_maxOffset <= 0) return; // No scrolling needed
             
-            // Check for scroll input
-            float scroll = Input.GetAxis("Mouse ScrollWheel");
-            if (scroll == 0f) scroll = Input.mouseScrollDelta.y;
-            if (scroll == 0f)
+            float scroll;
+            if (!ScrollInputBridge.TryGetVerticalScroll(_minX, _maxX, out scroll))
             {
                 if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
                     scroll = 1f;
@@ -729,11 +727,6 @@ namespace ModAPI.Hooks.Paging
                     scroll = -1f;
             }
             if (scroll == 0f) return;
-            
-            // Check if mouse is within the window bounds
-            Vector3 mousePos = Input.mousePosition;
-            float uiX = mousePos.x - Screen.width / 2f;
-            if (uiX < _minX || uiX > _maxX) return;
             
             // Update scroll offset (negative scroll = move content up)
             float scrollSpeed = _rowHeight; 
@@ -777,9 +770,8 @@ namespace ModAPI.Hooks.Paging
             float contentHeight = _label.height;
             if (contentHeight <= _clipHeight) return;
             
-            float scroll = Input.GetAxis("Mouse ScrollWheel");
-            if (scroll == 0f) scroll = Input.mouseScrollDelta.y;
-            if (scroll == 0f)
+            float scroll;
+            if (!ScrollInputBridge.TryGetVerticalScroll(-400f, 400f, out scroll))
             {
                 if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
                     scroll = 1f;
@@ -787,11 +779,6 @@ namespace ModAPI.Hooks.Paging
                     scroll = -1f;
             }
             if (scroll == 0f) return;
-            
-            // Check mouse bounds (roughly center area)
-            Vector3 mousePos = Input.mousePosition;
-            float uiX = mousePos.x - Screen.width / 2f;
-            if (Mathf.Abs(uiX) > 400) return;
             
             float scrollSpeed = 30f;
             _scrollY -= scroll * scrollSpeed;
