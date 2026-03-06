@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Manager.Core.Models;
+using GameModding.Shared.Mods;
 
 namespace Manager.Core.Services
 {
@@ -36,7 +37,7 @@ namespace Manager.Core.Services
                     var folderName = Path.GetFileName(dir);
 
                     // Skip reserved/internal directories.
-                    if (IsReservedFolderName(folderName))
+                    if (ModDiscoveryRules.IsReservedFolderName(folderName))
                         continue;
 
                     var mod = DiscoverMod(dir);
@@ -61,7 +62,7 @@ namespace Manager.Core.Services
         {
             try
             {
-                ModTypes.ModAboutInfo about;
+                ModAboutInfo about;
                 string normalizedId, displayName, previewPath;
                 
                 bool hasAbout = ModAboutReader.TryLoad(modPath, out about, out normalizedId, out displayName, out previewPath);
@@ -166,20 +167,6 @@ namespace Manager.Core.Services
                 }
             }
             catch { }
-        }
-
-        private static bool IsReservedFolderName(string folderName)
-        {
-            if (string.IsNullOrEmpty(folderName))
-                return true;
-
-            if (string.Equals(folderName, "disabled", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(folderName, "SMM", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(folderName, "ModAPI", StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            // Manager internal working directories should never appear as mods.
-            return folderName.StartsWith("_smm_", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string SelectPreferredRequirement(List<string> apiVersions, string installedModApiVersion)

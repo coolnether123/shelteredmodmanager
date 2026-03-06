@@ -32,6 +32,11 @@ namespace ModAPI.Decompiler
                 name: "--output",
                 description: "Output file path");
 
+            var entityOption = new Option<string>(
+                name: "--entity",
+                getDefaultValue: () => "method",
+                description: "Decompiler entity: method or type");
+
             var formatOption = new Option<string>(
                 name: "--format",
                 getDefaultValue: () => "source",
@@ -48,10 +53,11 @@ namespace ModAPI.Decompiler
             rootCommand.AddOption(assemblyOption);
             rootCommand.AddOption(tokenOption);
             rootCommand.AddOption(outputOption);
+            rootCommand.AddOption(entityOption);
             rootCommand.AddOption(formatOption);
             rootCommand.AddOption(privacyCheckOption);
 
-            rootCommand.SetHandler((assembly, token, output, format, privacyCheck) =>
+            rootCommand.SetHandler((assembly, token, output, entity, format, privacyCheck) =>
             {
                 try
                 {
@@ -84,8 +90,9 @@ namespace ModAPI.Decompiler
                     EnsureOutputDirectory(output);
 
                     var outputFormat = ParseFormat(format);
+                    var entityKind = ParseEntityKind(entity);
                     var engine = new DecompilerEngine();
-                    var artifact = engine.Decompile(assembly, token);
+                    var artifact = engine.Decompile(assembly, token, entityKind);
 
                     if (outputFormat == OutputFormat.Source)
                     {
@@ -111,7 +118,7 @@ namespace ModAPI.Decompiler
                     Console.Error.WriteLine(ex.StackTrace);
                     Environment.Exit(2);
                 }
-            }, assemblyOption, tokenOption, outputOption, formatOption, privacyCheckOption);
+            }, assemblyOption, tokenOption, outputOption, entityOption, formatOption, privacyCheckOption);
 
             return await rootCommand.InvokeAsync(args);
         }
@@ -152,6 +159,25 @@ namespace ModAPI.Decompiler
                     return OutputFormat.Binary;
                 default:
                     throw new ArgumentException("Unsupported format '" + format + "'. Expected: source, json, binary.");
+            }
+        }
+
+        private static EntityKind ParseEntityKind(string entity)
+        {
+            if (string.IsNullOrWhiteSpace(entity))
+            {
+                return EntityKind.Method;
+            }
+
+            switch (entity.Trim().ToLowerInvariant())
+            {
+                case "method":
+                    return EntityKind.Method;
+                case "type":
+                case "class":
+                    return EntityKind.Type;
+                default:
+                    throw new ArgumentException("Unsupported entity '" + entity + "'. Expected: method or type.");
             }
         }
 

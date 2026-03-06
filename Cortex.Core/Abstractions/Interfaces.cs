@@ -1,0 +1,96 @@
+using System.Collections.Generic;
+using Cortex.Core.Models;
+using GameModding.Shared.Restart;
+
+namespace Cortex.Core.Abstractions
+{
+    public interface IProjectCatalog
+    {
+        IList<CortexProjectDefinition> GetProjects();
+        CortexProjectDefinition GetProject(string modId);
+        void Upsert(CortexProjectDefinition definition);
+        void Remove(string modId);
+    }
+
+    public interface IProjectConfigurationStore
+    {
+        IList<CortexProjectDefinition> LoadProjects();
+        void SaveProjects(IList<CortexProjectDefinition> projects);
+    }
+
+    public interface ICortexSettingsStore
+    {
+        CortexSettings Load();
+        void Save(CortexSettings settings);
+    }
+
+    public interface IWorkspaceLocator
+    {
+        CortexWorkspacePaths GetWorkspace(CortexProjectDefinition project);
+    }
+
+    public interface IDocumentService
+    {
+        DocumentSession Open(string filePath);
+        bool Save(DocumentSession session);
+        bool Reload(DocumentSession session);
+        bool HasExternalChanges(DocumentSession session);
+    }
+
+    public interface IBuildCommandResolver
+    {
+        BuildCommand Resolve(CortexProjectDefinition project, bool clean, string configuration);
+    }
+
+    public interface IBuildExecutor
+    {
+        BuildResult Execute(BuildCommand command);
+    }
+
+    public interface IBuildOutputParser
+    {
+        IList<BuildDiagnostic> Parse(IList<string> outputLines);
+    }
+
+    public interface IDecompilerClient
+    {
+        DecompilerResponse Decompile(DecompilerRequest request);
+    }
+
+    public interface ISourceReferenceService
+    {
+        DecompilerResponse GetSource(DecompilerRequest request);
+        int MapSourceLineToOffset(string mapText, int sourceLine);
+        int MapOffsetToSourceLine(string mapText, int ilOffset);
+    }
+
+    public interface IRuntimeLogFeed
+    {
+        IList<RuntimeLogEntry> ReadRecent(string minimumLevel, int maxCount);
+        IList<string> ReadBacklog(string logPath, int maxCount);
+    }
+
+    public interface IRuntimeSymbolResolver
+    {
+        SourceNavigationTarget Resolve(RuntimeStackFrame frame, CortexProjectDefinition project);
+    }
+
+    public interface IRuntimeSourceNavigationService
+    {
+        SourceNavigationTarget Resolve(RuntimeLogEntry entry, int frameIndex, CortexProjectDefinition project);
+    }
+
+    public interface IRuntimeToolBridge
+    {
+        void ToggleRuntimeInspector();
+        void ToggleIlInspector();
+        void ToggleUiDebugger();
+        void ToggleRuntimeDebugger();
+    }
+
+    public interface IRestartCoordinator
+    {
+        bool RequestCurrentSessionRestart(out string errorMessage);
+        bool RequestManifestRestart(RestartRequest request, out string errorMessage);
+    }
+}

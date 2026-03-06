@@ -4,9 +4,9 @@ namespace ModAPI.Decompiler
     {
         private readonly DecompilerEngine _engine = new DecompilerEngine();
 
-        public string DecompileMethod(string assemblyPath, int methodToken, out string keyMap)
+        public string Decompile(string assemblyPath, int metadataToken, EntityKind entityKind, out string keyMap)
         {
-            var artifact = _engine.Decompile(assemblyPath, methodToken);
+            var artifact = _engine.Decompile(assemblyPath, metadataToken, entityKind);
             keyMap = artifact.GetMapText();
             return artifact.SourceCode;
         }

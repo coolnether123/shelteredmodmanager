@@ -42,6 +42,8 @@ namespace Manager
         private SettingsService _settingsService;
         private ModDiscoveryService _discoveryService;
         private LoadOrderService _orderService;
+        private RestartRequestReader _restartRequestReader;
+        private RestartLaunchCoordinator _restartLaunchCoordinator;
         private NexusModsService _nexusService;
 
         // State
@@ -130,6 +132,8 @@ namespace Manager
             }
             
             _discoveryService = new ModDiscoveryService(modApiVersion);
+            _restartRequestReader = new RestartRequestReader();
+            _restartLaunchCoordinator = new RestartLaunchCoordinator(_orderService, _discoveryService);
             _nexusService = new NexusModsService(_settings.NexusApiKey);
         }
 
@@ -1422,130 +1426,63 @@ namespace Manager
             CheckAndHandleRestartRequest();
         }
 
-        #region Restart Request Handling
-
-        private class RestartRequest
-        {
-            public string Action;
-            public string LoadFromManifest;
-        }
-
-        private class ManagerSlotManifest
-        {
-            public ManagerLoadedModInfo[] lastLoadedMods;
-        }
-
-        private class ManagerLoadedModInfo
-        {
-            public string modId;
-            public string version;
-        }
-
         private void CheckAndHandleRestartRequest()
         {
             try
             {
-                if (!_settings.IsGamePathValid) return;
-
-                // Look for restart.json in SMM/Bin
-                var gameDir = Path.GetDirectoryName(_settings.GamePath);
-                var restartPath = Path.Combine(Path.Combine(Path.Combine(gameDir, "SMM"), "Bin"), "restart.json");
-
-                if (!File.Exists(restartPath)) return;
-
-                // Found restart request
-                RestartRequest req = null;
-                try
+                if (!_settings.IsGamePathValid)
                 {
-                    var json = File.ReadAllText(restartPath);
-                    req = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<RestartRequest>(json);
-                }
-                catch
-                {
-                    // Failed to parse, delete to prevent loops
-                    try { File.Delete(restartPath); } catch { }
                     return;
                 }
 
-                if (req != null && string.Equals(req.Action, "Restart", StringComparison.OrdinalIgnoreCase)
-                    && !string.IsNullOrEmpty(req.LoadFromManifest))
+                GameModding.Shared.Restart.RestartRequest request;
+                var restartPath = _restartRequestReader.GetRestartRequestPath(_settings);
+                if (!File.Exists(restartPath))
                 {
-                    if (!File.Exists(req.LoadFromManifest))
-                    {
-                        try { File.Delete(restartPath); } catch { }
-                        return;
-                    }
-
-                    // Read Manifest
-                    ManagerSlotManifest manifest = null;
-                    try
-                    {
-                        var manifestJson = File.ReadAllText(req.LoadFromManifest);
-                        manifest = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<ManagerSlotManifest>(manifestJson);
-                    }
-                    catch
-                    {
-                        try { File.Delete(restartPath); } catch { }
-                        return;
-                    }
-
-                    if (manifest != null)
-                    {
-                        var modsFromManifest = manifest.lastLoadedMods ?? new ManagerLoadedModInfo[0];
-
-                        // Extract Mod IDs
-                        var newOrder = new System.Collections.Generic.List<string>();
-                        foreach (var m in modsFromManifest)
-                        {
-                            if (!string.IsNullOrEmpty(m.modId)) newOrder.Add(m.modId);
-                        }
-
-                        bool hasManifestOrder = newOrder.Count > 0;
-
-                        // Write Load Order only if manifest explicitly provided mods.
-                        if (hasManifestOrder && !string.IsNullOrEmpty(_settings.ModsPath))
-                        {
-                            _orderService.SaveOrder(_settings.ModsPath, newOrder);
-                            _modManagerTab.RefreshMods();
-                            UpdateStatusCounts();
-                        }
-                        else
-                        {
-                            _gameSetupTab.Log("Restart request manifest contained no mod list - keeping current load order.");
-                        }
-
-                        // Validate
-                        bool safeToLaunch = true;
-
-                        if (hasManifestOrder)
-                        {
-                            var allMods = _discoveryService.DiscoverMods(_settings.ModsPath);
-                            var enabledMods = _orderService.GetEnabledMods(allMods, _settings.ModsPath);
-                            var validation = _orderService.ValidateOrder(enabledMods, _settings.ModsPath, _settings.SkipHarmonyDependencyCheck);
-
-                            if (validation.HasIssues)
-                            {
-                                safeToLaunch = false;
-                                MessageBox.Show("The save's mod list has dependency issues (missing mods or cycles).\n\nPlease review the load order before launching.",
-                                    "Restart Interrupted", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            }
-                        }
-
-                        // Delete restart file
-                        try { File.Delete(restartPath); } catch { }
-
-                        // Launch if safe
-                        if (safeToLaunch)
-                        {
-                            _gameSetupTab.Log("ModAPI restart request - relaunching...");
-                            LaunchWithMods();
-                        }
-                    }
+                    return;
                 }
-                else
+
+                if (!_restartRequestReader.TryRead(_settings, out request))
                 {
-                    // Invalid request, cleanup
-                    try { File.Delete(restartPath); } catch { }
+                    _restartRequestReader.Delete(_settings);
+                    return;
+                }
+
+                var decision = _restartLaunchCoordinator.Evaluate(request, _settings);
+                if (decision.UpdateLoadOrder && !string.IsNullOrEmpty(_settings.ModsPath))
+                {
+                    _orderService.SaveOrder(_settings.ModsPath, decision.LoadOrder);
+                    _modManagerTab.RefreshMods();
+                    UpdateStatusCounts();
+                }
+                else if (!string.IsNullOrEmpty(decision.StatusMessage))
+                {
+                    _gameSetupTab.Log(decision.StatusMessage);
+                }
+
+                if (decision.DeleteRequestFile)
+                {
+                    _restartRequestReader.Delete(_settings);
+                }
+
+                if (decision.BlockedByValidation)
+                {
+                    MessageBox.Show(
+                        decision.ValidationMessage,
+                        "Restart Interrupted",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+
+                if (decision.ShouldLaunch)
+                {
+                    if (!string.IsNullOrEmpty(decision.StatusMessage))
+                    {
+                        _gameSetupTab.Log(decision.StatusMessage);
+                    }
+
+                    LaunchWithMods();
                 }
             }
             catch (Exception ex)
@@ -1554,8 +1491,6 @@ namespace Manager
                 _gameSetupTab.Log("Restart handling error: " + ex.Message);
             }
         }
-
-        #endregion
 
         private void _gameSetupTab_Load(object sender, EventArgs e)
         {

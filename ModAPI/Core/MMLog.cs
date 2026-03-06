@@ -47,6 +47,20 @@ namespace ModAPI.Core
             public LogCategory Category;
             public string Source;
             public string Message;
+            public List<RuntimeStackFrameInfo> StackFrames;
+        }
+
+        public sealed class RuntimeStackFrameInfo
+        {
+            public string AssemblyPath;
+            public string TypeName;
+            public string MethodName;
+            public int MetadataToken;
+            public int IlOffset;
+            public string FilePath;
+            public int LineNumber;
+            public int ColumnNumber;
+            public string DisplayText;
         }
 
         private static readonly object _lock = new object();
@@ -298,7 +312,7 @@ namespace ModAPI.Core
                 depth++;
             }
 
-            WriteInternal(LogLevel.Error, category, GetCallerInfo(), message.ToString());
+            WriteInternal(LogLevel.Error, category, GetCallerInfo(), message.ToString(), ExtractRuntimeFrames(ex));
         }
 
         public static void WritePluginLifecycle(string pluginName, string phase, string details = "", bool isError = false)
@@ -410,13 +424,14 @@ namespace ModAPI.Core
                         Level = e.Level,
                         Category = e.Category,
                         Source = e.Source,
-                        Message = e.Message
+                        Message = e.Message,
+                        StackFrames = CloneRuntimeFrames(e.StackFrames)
                     })
                     .ToList();
             }
         }
 
-        private static void WriteInternal(LogLevel level, LogCategory category, string source, string message)
+        private static void WriteInternal(LogLevel level, LogCategory category, string source, string message, List<RuntimeStackFrameInfo> stackFrames = null)
         {
             if (level < _minLevel) return;
             if (message == null) message = string.Empty;
@@ -451,7 +466,7 @@ namespace ModAPI.Core
 
                 var formattedMessage = FormatLogMessage(level, category, source, message, now);
                 WriteToFile(formattedMessage);
-                PushRecentEntry_NoLock(now, level, category, source, message);
+                PushRecentEntry_NoLock(now, level, category, source, message, stackFrames);
 
                 TrackModLogCount(source);
 
@@ -502,7 +517,7 @@ namespace ModAPI.Core
             _lastWriteUtc = nowUtc;
         }
 
-        private static void PushRecentEntry_NoLock(DateTime timestamp, LogLevel level, LogCategory category, string source, string message)
+        private static void PushRecentEntry_NoLock(DateTime timestamp, LogLevel level, LogCategory category, string source, string message, List<RuntimeStackFrameInfo> stackFrames = null)
         {
             _recentEntries.Enqueue(new LogEntry
             {
@@ -510,7 +525,8 @@ namespace ModAPI.Core
                 Level = level,
                 Category = category,
                 Source = source ?? "Unknown",
-                Message = message ?? string.Empty
+                Message = message ?? string.Empty,
+                StackFrames = CloneRuntimeFrames(stackFrames)
             });
             while (_recentEntries.Count > _maxRecentEntries)
             {
@@ -696,7 +712,201 @@ namespace ModAPI.Core
                 }
             }
 
-            WriteInternal(LogLevel.Error, LogCategory.Plugin, "PluginManager", message.ToString());
+            WriteInternal(LogLevel.Error, LogCategory.Plugin, "PluginManager", message.ToString(), ExtractRuntimeFrames(ex));
+        }
+
+        private static List<RuntimeStackFrameInfo> ExtractRuntimeFrames(Exception ex)
+        {
+            if (ex == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                var trace = new StackTrace(ex, true);
+                var frames = trace.GetFrames();
+                if (frames == null || frames.Length == 0)
+                {
+                    return null;
+                }
+
+                var results = new List<RuntimeStackFrameInfo>(frames.Length);
+                for (var i = 0; i < frames.Length; i++)
+                {
+                    var runtimeFrame = BuildRuntimeFrame(frames[i]);
+                    if (runtimeFrame != null)
+                    {
+                        results.Add(runtimeFrame);
+                    }
+                }
+
+                return results.Count > 0 ? results : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static RuntimeStackFrameInfo BuildRuntimeFrame(StackFrame frame)
+        {
+            if (frame == null)
+            {
+                return null;
+            }
+
+            MethodBase method = null;
+            try
+            {
+                method = frame.GetMethod();
+            }
+            catch
+            {
+            }
+
+            var assemblyPath = string.Empty;
+            var typeName = string.Empty;
+            var methodName = string.Empty;
+            if (method != null)
+            {
+                methodName = method.Name ?? string.Empty;
+                typeName = method.DeclaringType != null ? (method.DeclaringType.FullName ?? string.Empty) : string.Empty;
+                try
+                {
+                    assemblyPath = method.Module != null && method.Module.Assembly != null
+                        ? (method.Module.Assembly.Location ?? string.Empty)
+                        : string.Empty;
+                }
+                catch
+                {
+                    assemblyPath = string.Empty;
+                }
+            }
+
+            string filePath;
+            int lineNumber;
+            int columnNumber;
+            try
+            {
+                filePath = frame.GetFileName() ?? string.Empty;
+                lineNumber = frame.GetFileLineNumber();
+                columnNumber = frame.GetFileColumnNumber();
+            }
+            catch
+            {
+                filePath = string.Empty;
+                lineNumber = 0;
+                columnNumber = 0;
+            }
+
+            int ilOffset;
+            try
+            {
+                ilOffset = frame.GetILOffset();
+            }
+            catch
+            {
+                ilOffset = -1;
+            }
+
+            var displayText = BuildFrameDisplayText(typeName, methodName, filePath, lineNumber, ilOffset);
+            return new RuntimeStackFrameInfo
+            {
+                AssemblyPath = assemblyPath,
+                TypeName = typeName,
+                MethodName = methodName,
+                MetadataToken = SafeGetMetadataToken(method),
+                IlOffset = ilOffset,
+                FilePath = filePath,
+                LineNumber = lineNumber,
+                ColumnNumber = columnNumber,
+                DisplayText = displayText
+            };
+        }
+
+        private static List<RuntimeStackFrameInfo> CloneRuntimeFrames(List<RuntimeStackFrameInfo> stackFrames)
+        {
+            if (stackFrames == null || stackFrames.Count == 0)
+            {
+                return null;
+            }
+
+            var clones = new List<RuntimeStackFrameInfo>(stackFrames.Count);
+            for (var i = 0; i < stackFrames.Count; i++)
+            {
+                var frame = stackFrames[i];
+                if (frame == null)
+                {
+                    continue;
+                }
+
+                clones.Add(new RuntimeStackFrameInfo
+                {
+                    AssemblyPath = frame.AssemblyPath,
+                    TypeName = frame.TypeName,
+                    MethodName = frame.MethodName,
+                    MetadataToken = frame.MetadataToken,
+                    IlOffset = frame.IlOffset,
+                    FilePath = frame.FilePath,
+                    LineNumber = frame.LineNumber,
+                    ColumnNumber = frame.ColumnNumber,
+                    DisplayText = frame.DisplayText
+                });
+            }
+
+            return clones;
+        }
+
+        private static int SafeGetMetadataToken(MethodBase method)
+        {
+            if (method == null)
+            {
+                return 0;
+            }
+
+            try
+            {
+                return method.MetadataToken;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static string BuildFrameDisplayText(string typeName, string methodName, string filePath, int lineNumber, int ilOffset)
+        {
+            var builder = new StringBuilder();
+            if (!string.IsNullOrEmpty(typeName))
+            {
+                builder.Append(typeName);
+            }
+            else
+            {
+                builder.Append("UnknownType");
+            }
+
+            builder.Append(".");
+            builder.Append(string.IsNullOrEmpty(methodName) ? "UnknownMethod" : methodName);
+
+            if (!string.IsNullOrEmpty(filePath))
+            {
+                builder.Append(" @ ");
+                builder.Append(Path.GetFileName(filePath));
+                if (lineNumber > 0)
+                {
+                    builder.Append(":");
+                    builder.Append(lineNumber);
+                }
+            }
+            else if (ilOffset >= 0)
+            {
+                builder.Append(" @ IL ");
+                builder.Append(ilOffset);
+            }
+
+            return builder.ToString();
         }
 
         public sealed class MeasureScope : IDisposable

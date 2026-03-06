@@ -579,32 +579,11 @@ namespace ModAPI.Hooks.Paging
         
         // === RESTART REQUEST LOGIC ===
         
-        [Serializable]
-        private class RestartRequest
-        {
-            public string Action;
-            public string LoadFromManifest;
-        }
-
         private void CreateRestartRequest(int slotNumber, SlotManifest manifest, SaveEntry entry)
         {
             try
             {
-                // We don't overwrite loadorder.json. 
-                // We create a restart.json file in SMM/Bin for the Manager to handle.
-                
-                // Assuming standard path: Sheltered/SMM/Bin/restart.json
                 var gameRoot = Directory.GetParent(Application.dataPath).FullName;
-                var smmBin = Path.Combine(Path.Combine(gameRoot, "SMM"), "Bin");
-
-                if (!Directory.Exists(smmBin))
-                {
-                    // Fallback try - maybe SMM is elsewhere?
-                    // But usually mod tools are in root.
-                }
-                
-                // Construct path to manifest
-                // Determine path to the slot manifest: mods/ModAPI/Saves/Standard/Slot_X/manifest.json
                 var modsRoot = Path.Combine(gameRoot, "mods");
                 var slotDir = Path.Combine(Path.Combine(Path.Combine(modsRoot, "ModAPI"), "Saves"), Path.Combine("Standard", $"Slot_{slotNumber}"));
                 var manifestPath = Path.Combine(slotDir, "manifest.json");
@@ -639,23 +618,16 @@ namespace ModAPI.Hooks.Paging
                     MMLog.WriteDebug($"[SaveDetailsWindow] Manifest detected at: {manifestPath}");
                 }
 
-                var req = new RestartRequest
+                var restartWriter = new ModAPI.Core.RestartRequestWriter();
+                string restartPath;
+                string errorMessage;
+                if (!restartWriter.WriteRequest(manifestPath, out restartPath, out errorMessage))
                 {
-                    Action = "Restart",
-                    LoadFromManifest = manifestPath
-                };
-                
-                string json = JsonUtility.ToJson(req, true);
-                
-                // Write to SMM/Bin/restart.json
-                string restartPath = Path.Combine(smmBin, "restart.json");
-                
-                // Ensure directory exists
-                Directory.CreateDirectory(smmBin);
-                
-                File.WriteAllText(restartPath, json);
+                    MMLog.WriteError("Failed to create restart request: " + errorMessage);
+                    return;
+                }
+
                 MMLog.Write($"[SaveDetailsWindow] Application restart requested for automated mod loading. Request saved to: {restartPath}");
-                MMLog.WriteDebug($"[SaveDetailsWindow] Restart Payload: {json}");
 
                 Application.Quit();
             }

@@ -121,6 +121,13 @@ namespace Manager
             // Get the name of the assembly that failed to load
             string assemblyName = new AssemblyName(args.Name).Name;
 
+            string runtimeBinPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bin");
+            string runtimeAssemblyPath = Path.Combine(runtimeBinPath, assemblyName + ".dll");
+            if (File.Exists(runtimeAssemblyPath))
+            {
+                return Assembly.LoadFrom(runtimeAssemblyPath);
+            }
+
             // Only attempt to resolve if GameRootPath has been set and exists
             if (string.IsNullOrEmpty(GameRootPath) || !File.Exists(GameRootPath))
             {

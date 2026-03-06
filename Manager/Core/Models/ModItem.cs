@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GameModding.Shared.Mods;
 
 namespace Manager.Core.Models
 {
@@ -84,7 +85,7 @@ namespace Manager.Core.Models
         /// <summary>
         /// Creates a ModItem from About.json data
         /// </summary>
-        public static ModItem FromAbout(ModTypes.ModAboutInfo about, string rootPath, string previewPath)
+        public static ModItem FromAbout(ModAboutInfo about, string rootPath, string previewPath)
         {
             string id;
             if (about != null && !string.IsNullOrEmpty(about.id))
