@@ -201,10 +201,11 @@ namespace ModAPI.Harmony
             {
                 if (attribute == null)
                     return null;
+
+                // .NET 3.5 does not expose CustomAttributeData.AttributeType.
+                // Constructor.DeclaringType is the compatible path for this target.
                 if (attribute.Constructor != null && attribute.Constructor.DeclaringType != null)
                     return attribute.Constructor.DeclaringType.FullName;
-                if (attribute.AttributeType != null)
-                    return attribute.AttributeType.FullName;
             }
             catch
             {

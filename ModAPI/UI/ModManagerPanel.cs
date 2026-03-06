@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using ModAPI.Core;
+using ModAPI.Internal.UI;
 using UnityEngine;
 
 namespace ModAPI.UI
@@ -30,6 +30,7 @@ namespace ModAPI.UI
         private bool _bookFound;
         private bool _initialized = false;
         private NGUIScrollHelper _scrollHelper;
+        private ModManagerDescriptionScroller _descriptionScroller;
         private List<GameObject> _modButtonObjects = new List<GameObject>();
 
         public static void ShowPanel()
@@ -76,13 +77,13 @@ namespace ModAPI.UI
                 _tween.ignoreTimeScale = true;
 
                 // --- CLONE BOOK VISUALS ---
-                _bookFound = CloneBookVisuals();
+                _bookFound = ModManagerPanelScaffolding.TryCloneBookVisuals(this);
 
                 // --- CLICK BLOCKER (but it should NOT trigger back, just block) ---
-                CreateClickBlocker();
+                ModManagerPanelScaffolding.CreateClickBlocker(transform, gameObject.layer);
 
                 // --- FIND BUTTON TEMPLATE ---
-                UIButton buttonTemplate = FindScenarioButtonTemplate();
+                UIButton buttonTemplate = ModManagerPanelScaffolding.FindScenarioButtonTemplate();
                 if (buttonTemplate == null)
                 {
                     MMLog.WriteError("[ModManagerPanel] Could not find button template!");
@@ -144,153 +145,6 @@ namespace ModAPI.UI
             }
             
             base.Initialise();
-        }
-
-        private bool CloneBookVisuals()
-        {
-            try
-            {
-                BasePanel scenarioPanel = FindScenarioPanel();
-                if (scenarioPanel == null) return false;
-
-                // We clone the book visuals from the ScenarioSelectionPanel to maintain game's aesthetic.
-                ModAPI.Core.MMLog.WriteDebug("Loading Mod Manager UI...");
-                
-                foreach (Transform child in scenarioPanel.transform)
-                {
-                    // Skip UI panels and buttons
-                    if (child.GetComponent<UIPanel>() != null) continue;
-                    if (child.GetComponent<UIButton>() != null) continue;
-                    
-                    // Clone visual elements (book background, etc.)
-                    string name = child.name.ToLower();
-                    bool isVisual = name.Contains("background") || name.Contains("book") || 
-                                   name.Contains("visual") || name.Contains("root") || name.Contains("tween");
-                    
-                    if (isVisual)
-                    {
-                        var clone = (GameObject)UnityEngine.Object.Instantiate(child.gameObject);
-                        clone.transform.parent = transform;
-                        clone.name = "Cloned_" + child.name;
-                        clone.transform.localPosition = child.localPosition;
-                        clone.transform.localScale = child.localScale;
-                        clone.transform.localRotation = child.localRotation;
-                        clone.layer = gameObject.layer;
-
-                        // Remove ALL interactive components and text from cloned visuals
-                        var buttons = clone.GetComponentsInChildren<UIButton>(true);
-                        foreach (var b in buttons) UnityEngine.Object.Destroy(b.gameObject);
-                        
-                        var labels = clone.GetComponentsInChildren<UILabel>(true);
-                        foreach (var l in labels) UnityEngine.Object.Destroy(l.gameObject);
-                        
-                        // Destroy all colliders to prevent click-through to scenario buttons
-                        // since we clone the entire background tree including old button targets
-                        var colliders = clone.GetComponentsInChildren<Collider>(true);
-                        foreach (var c in colliders) UnityEngine.Object.Destroy(c);
-                        
-                        // Set depth for background elements
-                        var widgets = clone.GetComponentsInChildren<UIWidget>(true);
-                        foreach (var w in widgets)
-                        {
-                            w.gameObject.layer = gameObject.layer;
-                            w.depth = 10005; // Behind our content but above main menu
-                        }
-                        
-                        clone.SetActive(true);
-                        
-                        // Found and cloned book visuals successfully.
-                        return true; 
-                    }
-                }
-            }
-            catch (Exception ex) 
-            { 
-                MMLog.WriteError("[ModManagerPanel] Book clone error: " + ex.Message); 
-            }
-            return false;
-        }
-
-        private void CreateClickBlocker()
-        {
-            var blocker = new GameObject("ClickBlocker");
-            blocker.transform.parent = transform;
-            blocker.transform.localPosition = Vector3.zero;
-            blocker.layer = gameObject.layer;
-            
-            var sprite = blocker.AddComponent<UISprite>();
-            sprite.color = new Color(0, 0, 0, 0.75f);
-            sprite.width = 10000;
-            sprite.height = 10000;
-            sprite.depth = 9999; // Behind book
-            
-            var col = blocker.AddComponent<BoxCollider>();
-            col.size = new Vector3(10000, 10000, 1);
-            
-            // Block clicks without triggering any action
-            UIEventListener.Get(blocker).onClick = (g) => { /* Do nothing, just block */ };
-        }
-
-        private UIButton FindScenarioButtonTemplate()
-        {
-            try
-            {
-                BasePanel scenarioPanel = FindScenarioPanel();
-                if (scenarioPanel != null)
-                {
-                    var buttons = scenarioPanel.GetComponentsInChildren<UIButton>(true);
-                    
-                    if (buttons != null && buttons.Length > 0)
-                    {
-                        // Find a non-back button (scenario selection button)
-                        foreach (var btn in buttons)
-                        {
-                            string name = btn.name.ToLower();
-                            if (!name.Contains("back") && !name.Contains("cancel"))
-                            {
-                                return btn;
-                            }
-                        }
-                        return buttons[0]; // Fallback to first button
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteError("[ModManagerPanel] Error finding button template: " + ex.Message);
-            }
-
-            // Ultimate fallback
-            return UIUtil.FindAnyButtonTemplate();
-        }
-        
-        
-        private BasePanel FindScenarioPanel()
-        {
-            // Try hierarchy traversal first
-            var fe = FrontEndController.instance;
-            if (fe != null && fe.mainMenu != null)
-            {
-                var mm = fe.mainMenu as MainMenu;
-                var modeField = typeof(MainMenu).GetField("m_gameModeSelectionPanel", BindingFlags.NonPublic | BindingFlags.Instance);
-                var modePanel = modeField?.GetValue(mm) as GameModeSelectionPanel;
-                if (modePanel != null)
-                {
-                    var scenarioField = typeof(GameModeSelectionPanel).GetField("m_scenarioSelectionPanel", BindingFlags.NonPublic | BindingFlags.Instance);
-                    var panel = scenarioField?.GetValue(modePanel) as BasePanel;
-                    if (panel != null) return panel;
-                }
-            }
-
-            // Fallback to searching all panels
-            var allPanels = Resources.FindObjectsOfTypeAll<BasePanel>();
-            foreach (var p in allPanels)
-            {
-                if (p.name.Contains("ScenarioSelectionPanel") || p.GetType().Name.Contains("ScenarioSelection"))
-                    return p;
-            }
-            
-            return null;
         }
 
         private void CreateModButtons(UIButton template, Color textColor)
@@ -463,6 +317,9 @@ namespace ModAPI.UI
                 _detailDescription.trueTypeFont = arialFont;
                 _detailDescription.bitmapFont = null;
             }
+
+            _descriptionScroller = descContainer.AddComponent<ModManagerDescriptionScroller>();
+            _descriptionScroller.Initialize(_detailDescription, 360f, 50f, 600f, 150f, 50f);
             
             scrollView.ResetPosition();
         }
@@ -693,7 +550,10 @@ namespace ModAPI.UI
             
             // Reset description position to start (Y=150) when switching mods
             // to prevent scrolled state from carrying over
-            _detailDescription.transform.localPosition = new Vector3(0f, 150f, 0f);
+            if (_descriptionScroller != null)
+                _descriptionScroller.ResetToTop();
+            else
+                _detailDescription.transform.localPosition = new Vector3(0f, 150f, 0f);
             
             // Force NGUI to update text geometry
             _detailTitle.ProcessText();
@@ -765,48 +625,5 @@ namespace ModAPI.UI
         public override bool PausesGameInput() => true;
         public override bool PausesGameTime() => true;
         public override bool Popup() => false;
-        
-        /// <summary>
-        /// Handles manual scrolling for the mod description label.
-        /// </summary>
-        void Update()
-        {
-            if (_detailDescription == null) return;
-            
-            // Check if description needs scrolling (height > clip area)
-            if (_detailDescription.height <= 360) return;
-            
-            float scroll;
-
-            if (!ScrollInputBridge.TryGetVerticalScroll(50f, 600f, out scroll))
-            {
-                if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.PageUp))
-                    scroll = 3f * Time.unscaledDeltaTime;
-                else if (Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.PageDown))
-                    scroll = -3f * Time.unscaledDeltaTime;
-            }
-            
-            if (scroll == 0f) return;
-            
-            // Adjust description Y position
-            // Scroll DOWN (negative scroll) = text moves UP (increase Y) to show more below
-            // Scroll UP (positive scroll) = text moves DOWN (decrease Y) to show content above
-            Vector3 pos = _detailDescription.transform.localPosition;
-            float scrollSpeed = 50f; // pixels per scroll unit
-            
-            // INVERT: negative scroll (down) should increase Y (text moves up)
-            pos.y -= scroll * scrollSpeed;
-            
-            // Clamp: Start at 150 (top), can go UP to show more content (higher Y values)
-            float minY = 150f; // Starting/top position - text at top of clip area
-            float maxY = 150f + (_detailDescription.height - 360f); // Fully scrolled - shows bottom of text
-            
-            pos.y = Mathf.Clamp(pos.y, minY, maxY);
-            
-            _detailDescription.transform.localPosition = pos;
-            
-            MMLog.Write(string.Format("[ModManagerPanel] Description scrolled to Y={0:F1} (range: {1:F1} to {2:F1})", 
-                pos.y, minY, maxY));
-        }
     }
 }
