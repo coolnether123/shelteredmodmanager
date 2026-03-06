@@ -72,8 +72,8 @@ namespace ModAPI.UI
         private const int WINDOW_WIDTH = 1200;
         private const int WINDOW_HEIGHT = 900;
         private const int ROW_HEIGHT = 70;
-        private const float ShelteredKeybindRowX = -420f;
-        private const float ShelteredSectionHeaderLocalX = 76f;
+        private const float WideKeybindRowX = -420f;
+        private const float SectionHeaderLocalX = 76f;
         
         public static void Show(ModEntry mod)
         {
@@ -591,15 +591,16 @@ namespace ModAPI.UI
             }
             else
             {
-                if (IsShelteredKeybindPanel())
+                bool useWideKeybindLayout = ShouldUseWideKeybindLayout(visible, allDefs);
+                if (useWideKeybindLayout)
                 {
                     // Keybind rows are wide; use a single-column layout and fewer rows per page
                     // so page controls at the bottom remain unobstructed.
-                    CreatePaginatedGrid(visible, allDefs, settings, itemsPerPage: 10, columns: 1, rowHeight: 50, startY: WINDOW_HEIGHT / 2 - 195f);
+                    CreatePaginatedGrid(visible, allDefs, settings, itemsPerPage: 10, columns: 1, rowHeight: 50, startY: WINDOW_HEIGHT / 2 - 195f, useWideKeybindLayout: true);
                 }
                 else
                 {
-                    CreatePaginatedGrid(visible, allDefs, settings, itemsPerPage: 18, columns: 2, rowHeight: 55, startY: WINDOW_HEIGHT / 2 - 200f);
+                    CreatePaginatedGrid(visible, allDefs, settings, itemsPerPage: 18, columns: 2, rowHeight: 55, startY: WINDOW_HEIGHT / 2 - 200f, useWideKeybindLayout: false);
                 }
             }
 
@@ -614,10 +615,26 @@ namespace ModAPI.UI
             }
         }
 
-        private bool IsShelteredKeybindPanel()
+        private static bool ShouldUseWideKeybindLayout(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs)
         {
-            return _currentMod != null &&
-                   string.Equals(_currentMod.Id, "ShelteredAPI.Keybinds", StringComparison.OrdinalIgnoreCase);
+            return HasPairedKeybindDefinitions(visibleItems) || HasPairedKeybindDefinitions(allDefs);
+        }
+
+        private static bool HasPairedKeybindDefinitions(List<SettingDefinition> items)
+        {
+            if (items == null) return false;
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                var def = items[i];
+                if (def == null || def.Type != SettingType.Keybind || string.IsNullOrEmpty(def.Id))
+                    continue;
+
+                if (GetKeybindActionBaseId(def.Id) != null)
+                    return true;
+            }
+
+            return false;
         }
 
         private void BuildPresetCycleWidget(UIFont uiFont, Font ttfFont, object settings, List<SettingDefinition> allDefs)
@@ -812,17 +829,17 @@ namespace ModAPI.UI
             int itemsPerPage,
             int columns,
             int rowHeight,
-            float startY)
+            float startY,
+            bool useWideKeybindLayout)
         {
             if (visibleItems == null) visibleItems = new List<SettingDefinition>();
             if (allDefs == null) allDefs = new List<SettingDefinition>();
             if (itemsPerPage <= 0) itemsPerPage = 18;
             if (columns <= 0) columns = 1;
             if (rowHeight <= 0) rowHeight = ROW_HEIGHT;
-            bool isShelteredPanel = IsShelteredKeybindPanel();
 
             var hierarchy = new SettingsHierarchy(allDefs);
-            var displayEntries = BuildDisplayEntries(visibleItems, allDefs);
+            var displayEntries = BuildDisplayEntries(visibleItems, allDefs, useWideKeybindLayout);
 
             for (int i = 0; i < displayEntries.Count; i += itemsPerPage)
             {
@@ -839,9 +856,9 @@ namespace ModAPI.UI
                     int row = renderedRows / columns;
 
                     float x;
-                    if (isShelteredPanel && columns == 1)
+                    if (useWideKeybindLayout && columns == 1)
                     {
-                        x = ShelteredKeybindRowX;
+                        x = WideKeybindRowX;
                     }
                     else if (columns == 1)
                     {
@@ -859,11 +876,11 @@ namespace ModAPI.UI
                     float y = startY - (row * rowHeight);
 
                     GameObject widget;
-                    bool isSectionHeader = IsShelteredSectionHeaderEntry(entry);
+                    bool isSectionHeader = IsSectionHeaderEntry(entry);
 
-                    if (isShelteredPanel && isSectionHeader)
+                    if (useWideKeybindLayout && isSectionHeader)
                     {
-                        widget = CreateShelteredSectionHeaderWidget(entry.Primary);
+                        widget = CreateSectionHeaderWidget(entry.Primary);
                     }
                     else if (entry.Secondary != null)
                     {
@@ -877,8 +894,8 @@ namespace ModAPI.UI
                     if (widget != null)
                     {
                         widget.transform.localPosition = new Vector3(x, y, 0);
-                        if (isShelteredPanel)
-                            NormalizeShelteredWidgetAlignment(widget, entry);
+                        if (useWideKeybindLayout)
+                            NormalizeWideKeybindWidgetAlignment(widget, entry);
                         pageItems.Add(widget);
                         foreach (var w in widget.GetComponentsInChildren<UIWidget>(true)) w.depth += 100;
 
@@ -897,12 +914,11 @@ namespace ModAPI.UI
             }
         }
 
-        private List<KeybindDisplayEntry> BuildDisplayEntries(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs)
+        private List<KeybindDisplayEntry> BuildDisplayEntries(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs, bool pairKeybinds)
         {
             var entries = new List<KeybindDisplayEntry>();
-            bool useDual = IsShelteredKeybindPanel();
 
-            if (!useDual)
+            if (!pairKeybinds)
             {
                 for (int i = 0; i < visibleItems.Count; i++)
                 {
@@ -1075,10 +1091,10 @@ namespace ModAPI.UI
             return container;
         }
 
-        private GameObject CreateShelteredSectionHeaderWidget(SettingDefinition def)
+        private GameObject CreateSectionHeaderWidget(SettingDefinition def)
         {
             var container = NGUITools.AddChild(_contentRoot);
-            container.name = "ShelteredSectionHeader_" + (def != null ? def.Id : "Unknown");
+            container.name = "SectionHeader_" + (def != null ? def.Id : "Unknown");
             NGUITools.SetLayer(container, _contentRoot.layer);
 
             string title = def != null && !string.IsNullOrEmpty(def.Label)
@@ -1091,13 +1107,13 @@ namespace ModAPI.UI
                 title,
                 new Vector3(0, 0, 0),
                 20,
-                new Color(0.35f, 0.70f, 0.90f, 1f),
+                def != null && def.HeaderColor.HasValue ? def.HeaderColor.Value : new Color(0.35f, 0.70f, 0.90f, 1f),
                 _activeBitmapFont,
                 _activeTtfFont,
                 102);
             label.pivot = UIWidget.Pivot.Left;
             label.alignment = NGUIText.Alignment.Left;
-            label.transform.localPosition = new Vector3(ShelteredSectionHeaderLocalX, 0, 0);
+            label.transform.localPosition = new Vector3(SectionHeaderLocalX, 0, 0);
             label.width = 300;
             label.overflowMethod = UILabel.Overflow.ClampContent;
             label.multiLine = false;
@@ -1105,7 +1121,7 @@ namespace ModAPI.UI
             return container;
         }
 
-        private static bool IsShelteredSectionHeaderEntry(KeybindDisplayEntry entry)
+        private static bool IsSectionHeaderEntry(KeybindDisplayEntry entry)
         {
             return entry != null
                 && entry.Secondary == null
@@ -1115,14 +1131,14 @@ namespace ModAPI.UI
                         && entry.Primary.Id.StartsWith("CatHeader_", StringComparison.OrdinalIgnoreCase)));
         }
 
-        private void NormalizeShelteredWidgetAlignment(GameObject widget, KeybindDisplayEntry entry)
+        private void NormalizeWideKeybindWidgetAlignment(GameObject widget, KeybindDisplayEntry entry)
         {
             if (widget == null || entry == null) return;
 
             var labels = widget.GetComponentsInChildren<UILabel>(true);
             if (labels == null || labels.Length == 0) return;
 
-            bool isHeader = IsShelteredSectionHeaderEntry(entry);
+            bool isHeader = IsSectionHeaderEntry(entry);
             string target = isHeader
                 ? ((entry.Primary != null && !string.IsNullOrEmpty(entry.Primary.Label))
                     ? entry.Primary.Label.ToUpperInvariant()
@@ -1154,7 +1170,7 @@ namespace ModAPI.UI
             best.width = isHeader ? 320 : 250;
 
             var pos = best.transform.localPosition;
-            best.transform.localPosition = new Vector3(isHeader ? ShelteredSectionHeaderLocalX : 0f, pos.y, pos.z);
+            best.transform.localPosition = new Vector3(isHeader ? SectionHeaderLocalX : 0f, pos.y, pos.z);
         }
 
         private KeybindCaptureListener CreateClickableKeySlot(

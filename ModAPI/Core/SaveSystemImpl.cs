@@ -32,7 +32,7 @@ namespace ModAPI.Core
 
         public string GetCurrentSlotPath()
         {
-            var active = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave;
+            var active = SaveRuntimeState.ActiveCustomSave;
             if (active != null)
             {
                 // scenarioId is preferred. Fallback to "Standard" if not set.
@@ -50,7 +50,7 @@ namespace ModAPI.Core
         {
             get
             {
-                var custom = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave;
+                var custom = SaveRuntimeState.ActiveCustomSave;
                 if (custom != null) return custom.absoluteSlot;
 
                 int vanillaSlot = ResolveVanillaSlotIndex();
@@ -164,7 +164,7 @@ namespace ModAPI.Core
                 {
                     MMLog.WriteDebug($"[SaveSystem] Serializing live mod data for {_modId} to {modFilePath}");
                     
-                    var saveEntry = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave;
+                    var saveEntry = SaveRuntimeState.ActiveCustomSave;
                     var containerObj = new ModPersistenceData();
                     foreach (var kv in _registeredData)
                     {
@@ -247,7 +247,7 @@ namespace ModAPI.Core
                                 {
                                     try 
                                     { 
-                                        var saveEntry = ModAPI.Hooks.PlatformSaveProxy.ActiveCustomSave;
+                                        var saveEntry = SaveRuntimeState.ActiveCustomSave;
                                         (dataObj as ModAPI.Persistence.IModPersistenceLogic).OnLoaded(saveEntry); 
                                     }
                                     catch (Exception logicEx) { MMLog.WriteError($"[SaveSystem] {entry.key}.OnLoaded failed: {logicEx.Message}"); }

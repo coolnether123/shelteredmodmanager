@@ -35,19 +35,16 @@ namespace ModAPI.Hooks
             }
 
             // Must check for pending redirect first (from new game or slot selection flow)
-            lock (PlatformSaveProxy._nextSaveLock)
+            if (SaveRuntimeState.HasPendingSave(slot))
             {
-                if (PlatformSaveProxy.NextSave.ContainsKey(slot))
-                {
-                    // We have a pending custom REDIRECT. Let the proxy handle this in PlatformSave.
-                    // The redirect target has already been queued by SlotSelectionPanel, MainMenuPanel, etc.
-                    // Just return true and let vanilla code call into the proxy.
-                    if (PluginRunner.IsQuitting) SaveExitTracker.Mark("SaveToCurrentSlot.Prefix", "Pending NEW GAME for " + slot);
-                    return true;
-                }
+                // We have a pending custom REDIRECT. Let the proxy handle this in PlatformSave.
+                // The redirect target has already been queued by SlotSelectionPanel, MainMenuPanel, etc.
+                // Just return true and let vanilla code call into the proxy.
+                if (PluginRunner.IsQuitting) SaveExitTracker.Mark("SaveToCurrentSlot.Prefix", "Pending NEW GAME for " + slot);
+                return true;
             }
 
-            if (PlatformSaveProxy.ActiveCustomSave != null && PlatformSaveProxy.ActiveCustomSave.absoluteSlot == (int)slot)
+            if (SaveRuntimeState.ActiveCustomSave != null && SaveRuntimeState.ActiveCustomSave.absoluteSlot == (int)slot)
             {
                 if (PluginRunner.IsQuitting) SaveExitTracker.Mark("SaveToCurrentSlot.Prefix", "Active custom session for " + slot);
             }

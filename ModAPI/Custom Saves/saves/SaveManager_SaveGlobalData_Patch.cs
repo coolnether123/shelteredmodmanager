@@ -12,7 +12,7 @@ namespace ModAPI.Hooks
         {
             MMLog.Write("[SaveGlobalData_Patch] TRIGGERED.");
             // If we are currently in a custom save session
-            if (PlatformSaveProxy.ActiveCustomSave != null)
+            if (SaveRuntimeState.ActiveCustomSave != null)
             {
                 MMLog.Write("[SaveGlobalData_Patch] Intercepting in-game save for active custom save.");
                 try
@@ -33,10 +33,10 @@ namespace ModAPI.Hooks
                     byte[] bytes = saveData.GetBytes();
 
                     // Overwrite the active custom save with the new data
-                    var updatedEntry = ExpandedVanillaSaves.Instance.Overwrite(PlatformSaveProxy.ActiveCustomSave.id, null, bytes);
+                    var updatedEntry = ExpandedVanillaSaves.Instance.Overwrite(SaveRuntimeState.ActiveCustomSave.id, null, bytes);
                     if (updatedEntry != null)
                     {
-                        PlatformSaveProxy.ActiveCustomSave = updatedEntry;
+                        SaveRuntimeState.ActiveCustomSave = updatedEntry;
                         MMLog.Write("[SaveGlobalData_Patch] Successfully updated custom save file and manifest.");
                     }
                     else
