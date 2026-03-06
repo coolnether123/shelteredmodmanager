@@ -137,6 +137,10 @@
     <Compile Include="Spine\SpineSettingsHelper.cs" />
     <Compile Include="Spine\UI\SpineWidgetFactory.cs" />
     <Compile Include="Spine\UI\KeybindCaptureListener.cs" />
+    <Compile Include="Spine\Internal\SpineWidgetRuntime.cs" />
+    <Compile Include="Spine\Internal\SpineScalarWidgetBuilder.cs" />
+    <Compile Include="Spine\Internal\SpineSelectionWidgetBuilder.cs" />
+    <Compile Include="Spine\Internal\SpineActionWidgetBuilder.cs" />
     <Compile Include="Harmony\HarmonyBootstrap.cs" />
     <Compile Include="Harmony\HarmonyUtil.cs" />
     <Compile Include="Harmony\HarmonyHelper.cs" />
