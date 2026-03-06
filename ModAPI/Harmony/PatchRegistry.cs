@@ -362,7 +362,7 @@ namespace ModAPI.Harmony
         private static void LogSummary(PatchApplyReport report, PatchRegistryOptions options)
         {
             string source = !string.IsNullOrEmpty(options.SourceName) ? options.SourceName : "runtime";
-            MMLog.WriteInfo("[PatchRegistry] " + source
+            MMLog.WriteInfo(source
                 + " discovered=" + report.Discovered.Count
                 + ", applied=" + report.Applied.Count
                 + ", skipped=" + report.Skipped.Count
@@ -374,7 +374,7 @@ namespace ModAPI.Harmony
                 for (int i = 0; i < max; i++)
                 {
                     var record = report.MissingPolicy[i];
-                    MMLog.WriteDebug("[PatchRegistry] Missing policy: " + DescribeRecord(record));
+                    MMLog.WriteDebug("Missing policy: " + DescribeRecord(record));
                 }
             }
         }
@@ -382,14 +382,14 @@ namespace ModAPI.Harmony
         private static void LogSkip(PatchRecord record, PatchRegistryOptions options)
         {
             if (record == null) return;
-            MMLog.WriteInfo("[PatchRegistry] skipped " + DescribeRecord(record)
+            MMLog.WriteDebug("skipped " + DescribeRecord(record)
                 + " source=" + (options != null ? options.SourceName : string.Empty));
         }
 
         private static void LogManualApply(PatchRecord record, PatchRegistryOptions options)
         {
             if (record == null) return;
-            MMLog.WriteInfo("[PatchRegistry] manual apply " + DescribeRecord(record)
+            MMLog.WriteInfo("manual apply " + DescribeRecord(record)
                 + " source=" + (options != null ? options.SourceName : string.Empty));
         }
 

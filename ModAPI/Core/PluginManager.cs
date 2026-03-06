@@ -9,6 +9,7 @@ using ModAPI.Harmony;
 using ModAPI.Hooks;
 using ModAPI.Spine;
 using ModAPI.Actors;
+using ModAPI.Events;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -152,14 +153,111 @@ namespace ModAPI.Core
                     typeof(SaveProtectionPatches),
                     delegate { SaveProtectionPatches.ApplyPatches(harmony); },
                     registryOptions);
-                
+
+                EnsureBuiltInApiRegistrations();
+
                 // Initialize Core Systems
                 ModAPI.Saves.Events.OnAfterLoad += ModRandomState.Load;
                 ModAPI.Saves.Events.OnBeforeSave += ModRandomState.Save;
+                GameEvents.OnSessionStarted += OnSessionStarted;
+                GameEvents.OnNewGame += OnNewGame;
             }
             catch (Exception ex)
             {
                 MMLog.WarnOnce("PluginManager.InitializeLoader", "Failed to apply save protection patches: " + ex.Message);
+            }
+        }
+
+        private static void EnsureBuiltInApiRegistrations()
+        {
+            TryRunShelteredApiBootstrap();
+            EnsureGameHelperRegistration();
+            EnsureActorApiRegistrations();
+        }
+
+        private static void TryRunShelteredApiBootstrap()
+        {
+            try
+            {
+                var bootstrapType = Type.GetType("ShelteredAPI.Core.ShelteredApiRuntimeBootstrap, ShelteredAPI", false);
+                if (bootstrapType == null)
+                    return;
+
+                var init = bootstrapType.GetMethod("Initialize", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                if (init != null)
+                    init.Invoke(null, null);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("PluginManager.BuiltInApis.Bootstrap", "Failed to initialize ShelteredAPI runtime bootstrap: " + ex.Message);
+            }
+        }
+
+        private static void EnsureGameHelperRegistration()
+        {
+            if (ModAPIRegistry.IsAPIRegistered("ShelteredAPI.GameHelper"))
+                return;
+
+            try
+            {
+                var helperType = Type.GetType("ModAPI.Core.GameHelperImpl, ShelteredAPI", false);
+                if (helperType == null)
+                    return;
+
+                var helper = Activator.CreateInstance(helperType, true) as IGameHelper;
+                if (helper != null)
+                    ModAPIRegistry.RegisterAPI<IGameHelper>("ShelteredAPI.GameHelper", helper, "shelteredapi");
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("PluginManager.BuiltInApis.GameHelper", "Failed to register built-in game helper API: " + ex.Message);
+            }
+        }
+
+        private static void EnsureActorApiRegistrations()
+        {
+            if (ModAPIRegistry.IsAPIRegistered("ShelteredAPI.Actors"))
+                return;
+
+            try
+            {
+                var actorSystemType = Type.GetType("ModAPI.Actors.ActorSystem, ShelteredAPI", false);
+                if (actorSystemType == null)
+                    return;
+
+                var instanceProperty = actorSystemType.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
+                if (instanceProperty == null)
+                    return;
+
+                var actors = instanceProperty.GetValue(null, null) as IActorSystem;
+                if (actors == null)
+                    return;
+
+                ModAPIRegistry.RegisterAPI<IActorSystem>("ShelteredAPI.Actors", actors, "shelteredapi");
+
+                var registry = actors as IActorRegistry;
+                if (registry != null)
+                    ModAPIRegistry.RegisterAPI<IActorRegistry>("ShelteredAPI.ActorRegistry", registry, "shelteredapi");
+
+                var componentStore = actors as IActorComponentStore;
+                if (componentStore != null)
+                    ModAPIRegistry.RegisterAPI<IActorComponentStore>("ShelteredAPI.ActorComponents", componentStore, "shelteredapi");
+
+                var scheduler = actors as IActorSimulationScheduler;
+                if (scheduler != null)
+                    ModAPIRegistry.RegisterAPI<IActorSimulationScheduler>("ShelteredAPI.ActorSimulation", scheduler, "shelteredapi");
+
+                var eventsApi = actors as IActorEvents;
+                if (eventsApi != null)
+                    ModAPIRegistry.RegisterAPI<IActorEvents>("ShelteredAPI.ActorEvents", eventsApi, "shelteredapi");
+
+                var serialization = actors as IActorSerializationService;
+                if (serialization != null)
+                    ModAPIRegistry.RegisterAPI<IActorSerializationService>("ShelteredAPI.ActorSerialization", serialization, "shelteredapi");
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("PluginManager.BuiltInApis.Actors", "Failed to register built-in actor APIs: " + ex.Message);
             }
         }
 

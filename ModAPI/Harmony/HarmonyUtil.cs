@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -172,19 +173,44 @@ namespace ModAPI.Harmony
         {
             try
             {
-                // Check class attributes
-                if (t.GetCustomAttributes(true).Any(a => a.GetType().FullName.StartsWith("HarmonyLib.Harmony")))
+                if (t == null)
+                    return false;
+
+                if (CustomAttributeData.GetCustomAttributes(t).Any(a => HasHarmonyAttributeName(GetAttributeTypeName(a))))
                     return true;
 
-                // Check static methods for attributes (standard for multi-patch classes)
                 var methods = t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                return methods.Any(m => m.GetCustomAttributes(true).Any(a => a.GetType().FullName.StartsWith("HarmonyLib.Harmony")));
+                return methods.Any(m => CustomAttributeData.GetCustomAttributes(m).Any(a => HasHarmonyAttributeName(GetAttributeTypeName(a))));
             }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("HarmonyUtil.HasHarmonyPatchAttributes", "Error checking for Harmony attributes: " + ex.Message);
+                if (!(ex is ReflectionTypeLoadException) && !(ex is TypeLoadException) && !(ex is FileNotFoundException))
+                    MMLog.WarnOnce("HarmonyUtil.HasHarmonyPatchAttributes", "Error checking for Harmony attributes: " + ex.Message);
                 return false;
             }
+        }
+
+        private static bool HasHarmonyAttributeName(string fullName)
+        {
+            return !string.IsNullOrEmpty(fullName) && fullName.StartsWith("HarmonyLib.Harmony", StringComparison.Ordinal);
+        }
+
+        private static string GetAttributeTypeName(CustomAttributeData attribute)
+        {
+            try
+            {
+                if (attribute == null)
+                    return null;
+                if (attribute.Constructor != null && attribute.Constructor.DeclaringType != null)
+                    return attribute.Constructor.DeclaringType.FullName;
+                if (attribute.AttributeType != null)
+                    return attribute.AttributeType.FullName;
+            }
+            catch
+            {
+            }
+
+            return null;
         }
 
         public static bool HasDebugAttribute(Type t)
