@@ -1,5 +1,6 @@
 using HarmonyLib;
 using ModAPI.Core;
+using ModAPI.Harmony;
 using UnityEngine;
 
 namespace ModAPI.Hooks
@@ -22,6 +23,10 @@ namespace ModAPI.Hooks
     /// <summary>
     /// Intercepts the "Are you sure you want to Save & Exit?" dialog response.
     /// </summary>
+    [PatchPolicy(PatchDomain.SaveFlow, "ManagedShutdownQuitFlow",
+        TargetBehavior = "Managed Save & Exit flow interception and quit-state tracing",
+        FailureMode = "Quit/save sequencing falls back to vanilla timing and becomes harder to diagnose.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the managed shutdown patch host.")]
     [HarmonyPatch(typeof(MainMenuPanel), "OnMessageBoxClosed")]
     public static class ManagedShutdown_Interceptor
     {

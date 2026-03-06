@@ -5,6 +5,7 @@ using ModAPI.Saves;
 using UnityEngine;
 using ModAPI.Hooks.Paging;
 using ModAPI.Core;
+using ModAPI.Harmony;
 
 namespace ModAPI.Hooks
 {
@@ -17,6 +18,10 @@ namespace ModAPI.Hooks
         public static SaveManager.SaveType IntendedSlotInUse = SaveManager.SaveType.Invalid;
     }
 
+    [PatchPolicy(PatchDomain.SaveFlow, "SlotSelectionPagingInit",
+        TargetBehavior = "Paged custom-save initialization when the slot selection panel opens",
+        FailureMode = "Paged save UI does not initialize correctly.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the slot selection init patch.")]
     [HarmonyPatch(typeof(SlotSelectionPanel), "OnShow")]
     internal static class SlotSelectionPanel_OnShow_Patch
     {
@@ -26,6 +31,10 @@ namespace ModAPI.Hooks
         }
     }
 
+    [PatchPolicy(PatchDomain.SaveFlow, "SlotSelectionRefreshTakeover",
+        TargetBehavior = "Custom-save page takeover for slot info rendering",
+        FailureMode = "Custom saves render incorrectly or page state drifts from save metadata.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the slot info refresh takeover.")]
     [HarmonyPatch(typeof(SlotSelectionPanel), "RefreshSaveSlotInfo")]
     internal static class SlotSelectionPanel_RefreshSaveSlotInfo_Patch
     {
@@ -226,6 +235,10 @@ namespace ModAPI.Hooks
         }
     }
 
+    [PatchPolicy(PatchDomain.SaveFlow, "SlotSelectionLabelRewrite",
+        TargetBehavior = "Visible slot label rewrite for paged custom saves",
+        FailureMode = "Paged custom slots show misleading slot numbers.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the slot label rewrite patch.")]
     [HarmonyPatch(typeof(SlotSelectionPanel), "RefreshSlotLabels")]
     internal static class SlotSelectionPanel_RefreshSlotLabels_Patch
     {
@@ -269,6 +282,10 @@ namespace ModAPI.Hooks
         }
     }
 
+    [PatchPolicy(PatchDomain.SaveFlow, "SlotSelectionLoadSaveRouting",
+        TargetBehavior = "Custom-save create/load/delete routing from slot selection",
+        FailureMode = "Loads, deletes, or new games can target the wrong slot or skip verification.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the slot chosen routing patch.")]
     [HarmonyPatch(typeof(SlotSelectionPanel), "OnSlotChosen")]
     internal static class SlotSelectionPanel_OnSlotChosen_Patch
     {

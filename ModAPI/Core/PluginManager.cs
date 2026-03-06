@@ -137,7 +137,21 @@ namespace ModAPI.Core
             try
             {
                 var harmony = new HarmonyLib.Harmony("ShelteredModManager.PluginManager");
-                SaveProtectionPatches.ApplyPatches(harmony);
+                var patchOptions = new ModAPI.Harmony.HarmonyUtil.PatchOptions
+                {
+                    AllowDebugPatches = HarmonyBootstrap.ReadManagerBool("EnableDebugPatches", false),
+                    AllowDangerousPatches = HarmonyBootstrap.ReadManagerBool("AllowDangerousPatches", false),
+                    AllowStructReturns = HarmonyBootstrap.ReadManagerBool("AllowStructReturns", false)
+                };
+                var registryOptions = ModAPI.Harmony.PatchRegistry.CreateManagerOptions(
+                    patchOptions,
+                    "PluginManager",
+                    key => HarmonyBootstrap.ReadManagerString(key, null));
+                ModAPI.Harmony.PatchRegistry.ApplyManualModule(
+                    harmony,
+                    typeof(SaveProtectionPatches),
+                    delegate { SaveProtectionPatches.ApplyPatches(harmony); },
+                    registryOptions);
                 
                 // Initialize Core Systems
                 ModAPI.Saves.Events.OnAfterLoad += ModRandomState.Load;

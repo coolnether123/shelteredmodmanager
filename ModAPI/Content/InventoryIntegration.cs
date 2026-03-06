@@ -1,6 +1,7 @@
 using HarmonyLib;
 using ModAPI.Reflection;
 using ModAPI.Core;
+using ModAPI.Harmony;
 using System;
 using System.Collections.Generic;
 
@@ -11,6 +12,10 @@ namespace ModAPI.Content
     /// Fixes the race condition where InventoryManager.InitialiseInventory() runs
     /// before ContentInjector adds custom items to ItemManager.
     /// </summary>
+    [PatchPolicy(PatchDomain.Content, "InventoryIntegration",
+        TargetBehavior = "InventoryManager custom-item slot allocation",
+        FailureMode = "Custom items may exist in registries but never receive runtime inventory slots.",
+        RollbackStrategy = "Disable the Content patch domain or remove the inventory integration patch.")]
     [HarmonyPatch(typeof(InventoryManager), "InitialiseInventory")]
     internal static class InventoryIntegrationPatch
     {
@@ -120,6 +125,13 @@ namespace ModAPI.Content
     /// <summary>
     /// Debug patches to verify item addition flow for custom items.
     /// </summary>
+    [HarmonyUtil.DebugPatch("InventoryIntegrationDebug")]
+    [PatchPolicy(PatchDomain.Diagnostics, "InventoryIntegrationDebug",
+        TargetBehavior = "Custom item inventory-flow diagnostics",
+        FailureMode = "Inventory-flow debug traces are unavailable.",
+        RollbackStrategy = "Disable the Diagnostics patch domain or turn off debug patches.",
+        IsOptional = true,
+        DeveloperOnly = true)]
     [HarmonyPatch]
     internal static class InventoryDebugPatches
     {

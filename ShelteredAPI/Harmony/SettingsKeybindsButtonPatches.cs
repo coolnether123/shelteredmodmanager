@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
+using ModAPI.Harmony;
 using ModAPI.UI;
 using ShelteredAPI.UI;
 using UnityEngine;
@@ -11,6 +12,10 @@ namespace ShelteredAPI.Harmony
     /// <summary>
     /// Takes over vanilla PC controls entry points and routes to ModAPI keybind UI.
     /// </summary>
+    [PatchPolicy(PatchDomain.Input, "ShelteredSettingsKeybindsTakeover",
+        TargetBehavior = "Vanilla controls-entry takeover into ModAPI keybind UI",
+        FailureMode = "Sheltered controls open the vanilla path instead of the managed ModAPI keybind UI.",
+        RollbackStrategy = "Disable the Input patch domain or remove the Sheltered settings takeover host.")]
     internal static class SettingsKeybindsButtonPatches
     {
         private static readonly HashSet<string> LoggedPanelTypes = new HashSet<string>(StringComparer.Ordinal);

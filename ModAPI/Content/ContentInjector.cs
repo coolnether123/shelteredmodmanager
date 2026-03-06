@@ -3,12 +3,17 @@ using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using ModAPI.Core;
+using ModAPI.Harmony;
 using ModAPI.Reflection;
 using UnityEngine;
 using GameItemDefinition = global::ItemDefinition;
 
 namespace ModAPI.Content
 {
+    [PatchPolicy(PatchDomain.Content, "ContentInjector",
+        TargetBehavior = "Custom item, loot, and icon injection into vanilla systems",
+        FailureMode = "Registered content exists in metadata but fails to appear in runtime systems or UI.",
+        RollbackStrategy = "Disable the Content patch domain or remove the content injector patch host.")]
     public static class ContentInjector
     {
         private const int CustomItemTypeStart = 10000;

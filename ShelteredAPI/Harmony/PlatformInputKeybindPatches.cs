@@ -1,6 +1,7 @@
 using HarmonyLib;
 using ModAPI.InputActions;
 using ModAPI.Core;
+using ModAPI.Harmony;
 using ModAPI.UI;
 using ShelteredAPI.Input;
 using UnityEngine;
@@ -10,6 +11,10 @@ namespace ShelteredAPI.Harmony
     /// <summary>
     /// Routes vanilla PC input polling through ModAPI keybindings (primary + secondary).
     /// </summary>
+    [PatchPolicy(PatchDomain.Input, "ShelteredPlatformInputBridge",
+        TargetBehavior = "Vanilla input polling bridge through ModAPI-managed keybindings",
+        FailureMode = "Configured keybindings do not override vanilla PC input correctly.",
+        RollbackStrategy = "Disable the Input patch domain or remove the Sheltered platform input bridge.")]
     internal static class PlatformInputKeybindPatches
     {
         private const float AxisEpsilon = 0.001f;
