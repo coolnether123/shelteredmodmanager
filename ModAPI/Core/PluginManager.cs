@@ -251,6 +251,10 @@ namespace ModAPI.Core
                 if (adapterRegistry != null)
                     ModAPIRegistry.RegisterAPI<IActorAdapterRegistry>("ShelteredAPI.ActorAdapters", adapterRegistry, "shelteredapi");
 
+                var diagnostics = actors as IActorDiagnostics;
+                if (diagnostics != null)
+                    ModAPIRegistry.RegisterAPI<IActorDiagnostics>("ShelteredAPI.ActorDiagnostics", diagnostics, "shelteredapi");
+
                 var scheduler = actors as IActorSimulationScheduler;
                 if (scheduler != null)
                     ModAPIRegistry.RegisterAPI<IActorSimulationScheduler>("ShelteredAPI.ActorSimulation", scheduler, "shelteredapi");

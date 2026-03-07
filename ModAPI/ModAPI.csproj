@@ -70,8 +70,10 @@
     <Compile Include="GameState\ManagerStateHelper.cs" />
     <Compile Include="Items\InventoryHelper.cs" />
     <Compile Include="Actors\Abstractions\IActorSystem.cs" />
+    <Compile Include="Actors\Abstractions\ActorAdapterBase.cs" />
     <Compile Include="Actors\Models\ActorModels.cs" />
     <Compile Include="Actors\Models\ActorComponents.cs" />
+    <Compile Include="Actors\Models\ActorRuntimeModels.cs" />
     <Compile Include="Characters\PartyHelper.cs" />
     <Compile Include="Characters\PartyPatches.cs" />
     <Compile Include="Characters\Abstractions\ICharacterAttributes.cs" />

@@ -67,11 +67,22 @@ namespace ModAPI.Actors
         void Synchronize(IActorSystem actors, long currentTick);
     }
 
+    public interface IConditionalActorAdapter : IActorAdapter
+    {
+        bool ShouldSynchronize(ActorAdapterContext context);
+    }
+
     public interface IActorAdapterRegistry
     {
         void RegisterAdapter(IActorAdapter adapter);
         bool UnregisterAdapter(string adapterId);
         IReadOnlyList<IActorAdapter> GetAdapters();
+    }
+
+    public interface IActorDiagnostics
+    {
+        ActorRuntimeSnapshot GetRuntimeSnapshot();
+        IReadOnlyList<ActorFailureRecord> GetFailureRecords();
     }
 
     public interface IActorSimulationScheduler
@@ -100,6 +111,7 @@ namespace ModAPI.Actors
         IActorBindingStore,
         IActorEvents,
         IActorAdapterRegistry,
+        IActorDiagnostics,
         IActorSimulationScheduler,
         IActorSerializationService
     {
