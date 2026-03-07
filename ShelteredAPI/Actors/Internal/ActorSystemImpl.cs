@@ -23,6 +23,9 @@ namespace ModAPI.Actors.Internal
         private readonly object _sync = new object();
         private readonly Dictionary<ActorId, ActorRecord> _records = new Dictionary<ActorId, ActorRecord>();
         private readonly Dictionary<ActorId, Dictionary<string, ActorComponentSlot>> _components = new Dictionary<ActorId, Dictionary<string, ActorComponentSlot>>();
+        private readonly Dictionary<ActorId, List<ActorBinding>> _bindings = new Dictionary<ActorId, List<ActorBinding>>();
+        private readonly Dictionary<string, ActorId> _bindingIndex = new Dictionary<string, ActorId>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, HashSet<ActorId>> _bindingTypeIndex = new Dictionary<string, HashSet<ActorId>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<ActorKind, HashSet<ActorId>> _kindIndex = new Dictionary<ActorKind, HashSet<ActorId>>();
         private readonly Dictionary<ActorLifecycleState, HashSet<ActorId>> _lifecycleIndex = new Dictionary<ActorLifecycleState, HashSet<ActorId>>();
         private readonly Dictionary<ActorPresenceState, HashSet<ActorId>> _presenceIndex = new Dictionary<ActorPresenceState, HashSet<ActorId>>();
@@ -30,6 +33,7 @@ namespace ModAPI.Actors.Internal
         private readonly Dictionary<string, HashSet<ActorId>> _componentIndex = new Dictionary<string, HashSet<ActorId>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, IActorComponentSerializer> _serializers = new Dictionary<string, IActorComponentSerializer>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, int> _nextIdsByScope = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<IActorAdapter> _adapters = new List<IActorAdapter>();
         private readonly List<IActorSimulationSystem> _systems = new List<IActorSimulationSystem>();
         private readonly List<ActorSubscription> _subscriptions = new List<ActorSubscription>();
         private readonly List<ActorEventEnvelope> _recentEvents = new List<ActorEventEnvelope>();
@@ -76,33 +80,39 @@ namespace ModAPI.Actors.Internal
             if (request == null) return null;
             EnsureRegistered();
 
-            ActorRecord created = null;
+            ActorRecord snapshot = null;
+            bool created = false;
             lock (_sync)
             {
-                ActorId id = request.Id ?? AllocateIdLocked(request.Kind, request.Domain);
-                if (id == null) return null;
-
-                if (_records.ContainsKey(id))
-                {
-                    PublishLocked(ActorEventType.SerializationWarning, BuiltInOwner, id, null, "Actor id collision: " + id);
-                    return _records[id].Clone();
-                }
-
-                long tick = request.CreatedTick ?? NowTick();
-                created = new ActorRecord();
-                created.Id = new ActorId(id.Kind, id.LocalId, id.Domain);
-                created.LifecycleState = request.LifecycleState == ActorLifecycleState.Unknown ? ActorLifecycleState.Registered : request.LifecycleState;
-                created.PresenceState = request.PresenceState;
-                created.Flags = request.Flags;
-                created.Origin = CloneOrigin(request.Origin) ?? BuildDefaultOrigin(id);
-                created.CreatedTick = tick;
-                created.UpdatedTick = request.UpdatedTick ?? tick;
-                AddRecordLocked(created);
+                snapshot = EnsureActorLocked(request, true, out created);
             }
 
-            RaiseActorCreated(created.Clone());
-            Publish(ActorEventType.ActorCreated, BuiltInOwner, created.Id, null, "Actor created");
-            return created.Clone();
+            if (created)
+            {
+                RaiseActorCreated(snapshot);
+                Publish(ActorEventType.ActorCreated, BuiltInOwner, snapshot.Id, null, "Actor created");
+            }
+            return snapshot;
+        }
+
+        public IActorRecord Ensure(ActorCreateRequest request)
+        {
+            if (request == null) return null;
+            EnsureRegistered();
+
+            ActorRecord snapshot = null;
+            bool created = false;
+            lock (_sync)
+            {
+                snapshot = EnsureActorLocked(request, false, out created);
+            }
+
+            if (created)
+            {
+                RaiseActorCreated(snapshot);
+                Publish(ActorEventType.ActorCreated, BuiltInOwner, snapshot.Id, null, "Actor ensured");
+            }
+            return snapshot;
         }
 
         public bool Update(ActorId id, ActorRecordMutation mutation)
@@ -305,6 +315,88 @@ namespace ModAPI.Actors.Internal
             return ids.ToReadOnlyList();
         }
 
+        public bool Bind(ActorId actorId, ActorBinding binding, bool replaceExisting)
+        {
+            if (actorId == null || binding == null) return false;
+
+            lock (_sync)
+            {
+                if (!_records.ContainsKey(actorId)) return false;
+                return BindLocked(actorId, binding, replaceExisting);
+            }
+        }
+
+        public bool Unbind(string bindingType, string bindingKey)
+        {
+            if (string.IsNullOrEmpty(bindingType) || string.IsNullOrEmpty(bindingKey)) return false;
+            lock (_sync)
+            {
+                return RemoveBindingLocked(bindingType, bindingKey);
+            }
+        }
+
+        public bool TryResolve(string bindingType, string bindingKey, out ActorId actorId)
+        {
+            actorId = null;
+            if (string.IsNullOrEmpty(bindingType) || string.IsNullOrEmpty(bindingKey)) return false;
+
+            lock (_sync)
+            {
+                ActorId resolved;
+                if (!_bindingIndex.TryGetValue(BuildBindingIndexKey(bindingType, bindingKey), out resolved) || resolved == null)
+                    return false;
+
+                actorId = new ActorId(resolved.Kind, resolved.LocalId, resolved.Domain);
+                return true;
+            }
+        }
+
+        public IReadOnlyList<ActorBinding> GetBindings(ActorId actorId)
+        {
+            List<ActorBinding> bindings = new List<ActorBinding>();
+            if (actorId == null) return bindings.ToReadOnlyList();
+
+            lock (_sync)
+            {
+                List<ActorBinding> list;
+                if (!_bindings.TryGetValue(actorId, out list) || list == null) return bindings.ToReadOnlyList();
+
+                for (int i = 0; i < list.Count; i++)
+                {
+                    ActorBinding binding = list[i];
+                    if (binding == null) continue;
+                    bindings.Add(binding.Clone());
+                }
+            }
+
+            bindings.Sort(delegate(ActorBinding left, ActorBinding right)
+            {
+                int byType = string.Compare(left.BindingType, right.BindingType, StringComparison.OrdinalIgnoreCase);
+                if (byType != 0) return byType;
+                return string.Compare(left.BindingKey, right.BindingKey, StringComparison.OrdinalIgnoreCase);
+            });
+            return bindings.ToReadOnlyList();
+        }
+
+        public IReadOnlyList<ActorId> GetBoundActors(string bindingType)
+        {
+            List<ActorId> actors = new List<ActorId>();
+            if (string.IsNullOrEmpty(bindingType)) return actors.ToReadOnlyList();
+
+            lock (_sync)
+            {
+                HashSet<ActorId> ids = GetIndexValues(_bindingTypeIndex, NormalizeKey(bindingType));
+                foreach (ActorId id in ids)
+                {
+                    if (id == null) continue;
+                    actors.Add(new ActorId(id.Kind, id.LocalId, id.Domain));
+                }
+            }
+
+            actors.Sort();
+            return actors.ToReadOnlyList();
+        }
+
         public IDisposable Subscribe(Action<ActorEventEnvelope> handler)
         {
             return Subscribe(null, handler);
@@ -331,6 +423,52 @@ namespace ModAPI.Actors.Internal
                     events.Add(CloneEvent(_recentEvents[i]));
             }
             return events.ToReadOnlyList();
+        }
+
+        public void RegisterAdapter(IActorAdapter adapter)
+        {
+            if (adapter == null || string.IsNullOrEmpty(adapter.AdapterId)) return;
+
+            lock (_sync)
+            {
+                for (int i = 0; i < _adapters.Count; i++)
+                {
+                    if (!string.Equals(_adapters[i].AdapterId, adapter.AdapterId, StringComparison.OrdinalIgnoreCase)) continue;
+                    _adapters[i] = adapter;
+                    SortAdaptersLocked();
+                    return;
+                }
+
+                _adapters.Add(adapter);
+                SortAdaptersLocked();
+            }
+        }
+
+        public bool UnregisterAdapter(string adapterId)
+        {
+            if (string.IsNullOrEmpty(adapterId)) return false;
+
+            lock (_sync)
+            {
+                for (int i = _adapters.Count - 1; i >= 0; i--)
+                {
+                    if (!string.Equals(_adapters[i].AdapterId, adapterId, StringComparison.OrdinalIgnoreCase)) continue;
+                    _adapters.RemoveAt(i);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public IReadOnlyList<IActorAdapter> GetAdapters()
+        {
+            List<IActorAdapter> copy;
+            lock (_sync)
+            {
+                copy = new List<IActorAdapter>(_adapters);
+            }
+            return copy.ToReadOnlyList();
         }
 
         public void RegisterSystem(IActorSimulationSystem system)
@@ -450,6 +588,7 @@ namespace ModAPI.Actors.Internal
                     ActorRecordSaveEntry entry = new ActorRecordSaveEntry();
                     entry.Record = record.Clone();
                     entry.Components = new List<ActorComponentSaveEntry>();
+                    entry.Bindings = new List<ActorBinding>();
 
                     Dictionary<string, ActorComponentSlot> map;
                     if (_components.TryGetValue(record.Id, out map) && map != null)
@@ -461,6 +600,28 @@ namespace ModAPI.Actors.Internal
                             ActorComponentSaveEntry componentEntry = BuildComponentSaveEntryLocked(map[componentIds[c]]);
                             if (componentEntry != null) entry.Components.Add(componentEntry);
                         }
+                    }
+
+                    List<ActorBinding> bindings;
+                    if (_bindings.TryGetValue(record.Id, out bindings) && bindings != null)
+                    {
+                        List<ActorBinding> orderedBindings = new List<ActorBinding>();
+                        for (int b = 0; b < bindings.Count; b++)
+                        {
+                            ActorBinding binding = bindings[b];
+                            if (binding == null || !binding.Persistent) continue;
+                            orderedBindings.Add(binding.Clone());
+                        }
+
+                        orderedBindings.Sort(delegate(ActorBinding left, ActorBinding right)
+                        {
+                            int byType = string.Compare(left.BindingType, right.BindingType, StringComparison.OrdinalIgnoreCase);
+                            if (byType != 0) return byType;
+                            return string.Compare(left.BindingKey, right.BindingKey, StringComparison.OrdinalIgnoreCase);
+                        });
+
+                        for (int b = 0; b < orderedBindings.Count; b++)
+                            entry.Bindings.Add(orderedBindings[b]);
                     }
 
                     envelope.Actors.Add(entry);
@@ -511,6 +672,15 @@ namespace ModAPI.Actors.Internal
 
                         ActorRecord record = entry.Record.Clone();
                         AddRecordLocked(record);
+                        if (entry.Bindings != null)
+                        {
+                            for (int b = 0; b < entry.Bindings.Count; b++)
+                            {
+                                ActorBinding binding = entry.Bindings[b];
+                                if (binding == null) continue;
+                                RestoreBindingLocked(record.Id, binding);
+                            }
+                        }
                         if (entry.Components == null) continue;
 
                         for (int c = 0; c < entry.Components.Count; c++)
@@ -560,6 +730,7 @@ namespace ModAPI.Actors.Internal
         {
             EnsureRegistered();
             RefreshLiveActors();
+            RunAdapters();
         }
 
         private void HandleSessionReset()
@@ -667,6 +838,7 @@ namespace ModAPI.Actors.Internal
                     changed = UpdateRecordStateLocked(record, ActorLifecycleState.Active, ResolvePresence(member), desiredFlags, NowTick());
                 }
 
+                BindLocked(id, CreateBinding("core.family", member.GetId().ToString(), "core", true), true);
                 snapshot = record.Clone();
             }
 
@@ -713,6 +885,7 @@ namespace ModAPI.Actors.Internal
                     changed = UpdateRecordStateLocked(record, ActorLifecycleState.Active, ResolvePresence(visitor), desiredFlags, NowTick());
                 }
 
+                BindLocked(id, CreateBinding("core.visitor", visitor.npcId.ToString(), "core", true), true);
                 snapshot = record.Clone();
             }
 
@@ -840,6 +1013,160 @@ namespace ModAPI.Actors.Internal
 
             map[entry.ComponentId] = slot;
             AddToStringIndex(_componentIndex, entry.ComponentId, actorId);
+        }
+
+        private void RestoreBindingLocked(ActorId actorId, ActorBinding binding)
+        {
+            if (actorId == null || binding == null) return;
+            BindLocked(actorId, binding, true);
+        }
+
+        private ActorRecord EnsureActorLocked(ActorCreateRequest request, bool publishCollisionWarning, out bool created)
+        {
+            created = false;
+            ActorId id = request.Id ?? AllocateIdLocked(request.Kind, request.Domain);
+            if (id == null) return null;
+
+            ActorRecord existing;
+            if (_records.TryGetValue(id, out existing))
+            {
+                if (publishCollisionWarning)
+                    PublishLocked(ActorEventType.SerializationWarning, BuiltInOwner, id, null, "Actor id collision: " + id);
+                return existing.Clone();
+            }
+
+            long tick = request.CreatedTick ?? NowTick();
+            ActorRecord record = new ActorRecord();
+            record.Id = new ActorId(id.Kind, id.LocalId, id.Domain);
+            record.LifecycleState = request.LifecycleState == ActorLifecycleState.Unknown ? ActorLifecycleState.Registered : request.LifecycleState;
+            record.PresenceState = request.PresenceState;
+            record.Flags = request.Flags;
+            record.Origin = CloneOrigin(request.Origin) ?? BuildDefaultOrigin(id);
+            record.CreatedTick = tick;
+            record.UpdatedTick = request.UpdatedTick ?? tick;
+            AddRecordLocked(record);
+            created = true;
+            return record.Clone();
+        }
+
+        private bool BindLocked(ActorId actorId, ActorBinding binding, bool replaceExisting)
+        {
+            if (actorId == null || binding == null) return false;
+
+            string bindingType = NormalizeKey(binding.BindingType);
+            string bindingKey = NormalizeKey(binding.BindingKey);
+            if (!IsValidBindingType(bindingType) || string.IsNullOrEmpty(bindingKey)) return false;
+            if (!IsOwnedBindingType(bindingType, binding.SourceModId)) return false;
+
+            string indexKey = BuildBindingIndexKey(bindingType, bindingKey);
+            ActorId existingActorId;
+            if (_bindingIndex.TryGetValue(indexKey, out existingActorId) && existingActorId != null)
+            {
+                if (!existingActorId.Equals(actorId))
+                {
+                    if (!replaceExisting) return false;
+                    RemoveBindingLocked(bindingType, bindingKey);
+                }
+            }
+
+            List<ActorBinding> list;
+            if (!_bindings.TryGetValue(actorId, out list))
+            {
+                list = new List<ActorBinding>();
+                _bindings[actorId] = list;
+            }
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                ActorBinding existing = list[i];
+                if (existing == null) continue;
+                if (!string.Equals(NormalizeKey(existing.BindingType), bindingType, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!string.Equals(NormalizeKey(existing.BindingKey), bindingKey, StringComparison.OrdinalIgnoreCase)) continue;
+
+                existing.BindingType = bindingType;
+                existing.BindingKey = bindingKey;
+                existing.SourceModId = binding.SourceModId ?? string.Empty;
+                existing.Persistent = binding.Persistent;
+                _bindingIndex[indexKey] = actorId;
+                AddToStringIndex(_bindingTypeIndex, bindingType, actorId);
+                return true;
+            }
+
+            ActorBinding stored = binding.Clone();
+            stored.BindingType = bindingType;
+            stored.BindingKey = bindingKey;
+            stored.SourceModId = binding.SourceModId ?? string.Empty;
+            list.Add(stored);
+            _bindingIndex[indexKey] = actorId;
+            AddToStringIndex(_bindingTypeIndex, bindingType, actorId);
+            return true;
+        }
+
+        private bool RemoveBindingLocked(string bindingType, string bindingKey)
+        {
+            string normalizedType = NormalizeKey(bindingType);
+            string normalizedKey = NormalizeKey(bindingKey);
+            if (string.IsNullOrEmpty(normalizedType) || string.IsNullOrEmpty(normalizedKey)) return false;
+
+            string indexKey = BuildBindingIndexKey(normalizedType, normalizedKey);
+            ActorId actorId;
+            if (!_bindingIndex.TryGetValue(indexKey, out actorId) || actorId == null) return false;
+
+            List<ActorBinding> list;
+            if (!_bindings.TryGetValue(actorId, out list) || list == null)
+            {
+                _bindingIndex.Remove(indexKey);
+                return false;
+            }
+
+            for (int i = list.Count - 1; i >= 0; i--)
+            {
+                ActorBinding existing = list[i];
+                if (existing == null) continue;
+                if (!string.Equals(NormalizeKey(existing.BindingType), normalizedType, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!string.Equals(NormalizeKey(existing.BindingKey), normalizedKey, StringComparison.OrdinalIgnoreCase)) continue;
+                list.RemoveAt(i);
+            }
+
+            _bindingIndex.Remove(indexKey);
+            if (!HasBindingTypeLocked(actorId, normalizedType))
+                RemoveFromStringIndex(_bindingTypeIndex, normalizedType, actorId);
+            if (list.Count == 0) _bindings.Remove(actorId);
+            return true;
+        }
+
+        private void RemoveAllBindingsLocked(ActorId actorId)
+        {
+            if (actorId == null) return;
+
+            List<ActorBinding> list;
+            if (!_bindings.TryGetValue(actorId, out list) || list == null) return;
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                ActorBinding binding = list[i];
+                if (binding == null) continue;
+                _bindingIndex.Remove(BuildBindingIndexKey(binding.BindingType, binding.BindingKey));
+                RemoveFromStringIndex(_bindingTypeIndex, binding.BindingType, actorId);
+            }
+
+            _bindings.Remove(actorId);
+        }
+
+        private bool HasBindingTypeLocked(ActorId actorId, string bindingType)
+        {
+            List<ActorBinding> list;
+            if (!_bindings.TryGetValue(actorId, out list) || list == null) return false;
+
+            string normalizedType = NormalizeKey(bindingType);
+            for (int i = 0; i < list.Count; i++)
+            {
+                ActorBinding binding = list[i];
+                if (binding == null) continue;
+                if (string.Equals(NormalizeKey(binding.BindingType), normalizedType, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         private ActorComponentWriteResult SetComponentLocked(ActorId actorId, IActorComponent component, string sourceModId, out ActorEventType eventType, out string message)
@@ -1085,6 +1412,7 @@ namespace ModAPI.Actors.Internal
 
             _records.Remove(record.Id);
             _components.Remove(record.Id);
+            RemoveAllBindingsLocked(record.Id);
             RemoveFromEnumIndex(_kindIndex, record.Id.Kind, record.Id);
             RemoveFromEnumIndex(_lifecycleIndex, record.LifecycleState, record.Id);
             RemoveFromEnumIndex(_presenceIndex, record.PresenceState, record.Id);
@@ -1099,6 +1427,9 @@ namespace ModAPI.Actors.Internal
         {
             _records.Clear();
             _components.Clear();
+            _bindings.Clear();
+            _bindingIndex.Clear();
+            _bindingTypeIndex.Clear();
             _kindIndex.Clear();
             _lifecycleIndex.Clear();
             _presenceIndex.Clear();
@@ -1173,6 +1504,39 @@ namespace ModAPI.Actors.Internal
                     return;
                 }
             }
+        }
+
+        private void RunAdapters()
+        {
+            List<IActorAdapter> adapters;
+            long currentTick;
+            lock (_sync)
+            {
+                adapters = new List<IActorAdapter>(_adapters);
+                currentTick = _currentTick;
+            }
+
+            for (int i = 0; i < adapters.Count; i++)
+            {
+                IActorAdapter adapter = adapters[i];
+                if (adapter == null) continue;
+
+                try { adapter.Synchronize(this, currentTick); }
+                catch (Exception ex)
+                {
+                    Publish(ActorEventType.SerializationError, BuiltInOwner, null, null, "Actor adapter '" + adapter.AdapterId + "' failed: " + ex.Message);
+                }
+            }
+        }
+
+        private void SortAdaptersLocked()
+        {
+            _adapters.Sort(delegate(IActorAdapter left, IActorAdapter right)
+            {
+                int byPriority = left.Priority.CompareTo(right.Priority);
+                if (byPriority != 0) return byPriority;
+                return string.Compare(left.AdapterId, right.AdapterId, StringComparison.OrdinalIgnoreCase);
+            });
         }
 
         private void SortSystemsLocked()
@@ -1257,6 +1621,37 @@ namespace ModAPI.Actors.Internal
         private static string NormalizeKey(string value)
         {
             return string.IsNullOrEmpty(value) ? string.Empty : value.Trim();
+        }
+
+        private static string BuildBindingIndexKey(string bindingType, string bindingKey)
+        {
+            return NormalizeKey(bindingType) + "|" + NormalizeKey(bindingKey);
+        }
+
+        private static ActorBinding CreateBinding(string bindingType, string bindingKey, string sourceModId, bool persistent)
+        {
+            ActorBinding binding = new ActorBinding();
+            binding.BindingType = NormalizeKey(bindingType);
+            binding.BindingKey = NormalizeKey(bindingKey);
+            binding.SourceModId = sourceModId ?? string.Empty;
+            binding.Persistent = persistent;
+            return binding;
+        }
+
+        private static bool IsValidBindingType(string bindingType)
+        {
+            return !string.IsNullOrEmpty(bindingType) && bindingType.Contains(".");
+        }
+
+        private static bool IsOwnedBindingType(string bindingType, string sourceModId)
+        {
+            if (string.IsNullOrEmpty(bindingType) || string.IsNullOrEmpty(sourceModId)) return true;
+            if (string.Equals(sourceModId, "core", StringComparison.OrdinalIgnoreCase))
+                return bindingType.StartsWith("core.", StringComparison.OrdinalIgnoreCase);
+            if (string.Equals(sourceModId, BuiltInOwner, StringComparison.OrdinalIgnoreCase))
+                return bindingType.StartsWith("sheltered.", StringComparison.OrdinalIgnoreCase)
+                    || bindingType.StartsWith("shelteredapi.", StringComparison.OrdinalIgnoreCase);
+            return bindingType.StartsWith(sourceModId + ".", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsValidComponentId(string componentId)

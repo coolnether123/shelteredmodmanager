@@ -55,6 +55,8 @@ namespace ShelteredAPI.Core
             ModAPIRegistry.RegisterAPI<IActorSystem>("ShelteredAPI.Actors", actors, "shelteredapi");
             ModAPIRegistry.RegisterAPI<IActorRegistry>("ShelteredAPI.ActorRegistry", actors, "shelteredapi");
             ModAPIRegistry.RegisterAPI<IActorComponentStore>("ShelteredAPI.ActorComponents", actors, "shelteredapi");
+            ModAPIRegistry.RegisterAPI<IActorBindingStore>("ShelteredAPI.ActorBindings", actors, "shelteredapi");
+            ModAPIRegistry.RegisterAPI<IActorAdapterRegistry>("ShelteredAPI.ActorAdapters", actors, "shelteredapi");
             ModAPIRegistry.RegisterAPI<IActorSimulationScheduler>("ShelteredAPI.ActorSimulation", actors, "shelteredapi");
             ModAPIRegistry.RegisterAPI<IActorEvents>("ShelteredAPI.ActorEvents", actors, "shelteredapi");
             ModAPIRegistry.RegisterAPI<IActorSerializationService>("ShelteredAPI.ActorSerialization", actors, "shelteredapi");
