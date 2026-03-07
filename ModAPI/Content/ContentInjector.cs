@@ -73,6 +73,61 @@ namespace ModAPI.Content
 
         public static void NotifyManagerReady(string name) => TryBootstrap();
 
+        [Obsolete("Use ContentRegistry.RegisterItem(...) for new code. This wrapper is retained for binary compatibility.", false)]
+        public static void RegisterCustomItem(ItemManager.ItemType itemType, ItemDefinition definition)
+        {
+            if (definition == null)
+                throw new ArgumentNullException(nameof(definition));
+
+            definition.NormalizeLegacyFields();
+            if (definition.OwnerAssembly == null)
+            {
+                try { definition.OwnerAssembly = Assembly.GetCallingAssembly(); } catch { }
+            }
+
+            definition.CustomTypeId = (int)itemType;
+            if (string.IsNullOrEmpty(definition.Id))
+                definition.Id = BuildLegacyItemId(itemType);
+
+            var result = ContentRegistry.RegisterItem(definition);
+            if (!result.Success)
+                throw new InvalidOperationException("Legacy item registration failed for " + itemType + ": " + result.ErrorMessage);
+        }
+
+        [Obsolete("Use ContentRegistry.RegisterRecipe(...) for new code. This wrapper is retained for binary compatibility.", false)]
+        public static void RegisterCustomRecipe(CraftingManager.Recipe recipe)
+        {
+            if (recipe == null)
+                throw new ArgumentNullException(nameof(recipe));
+
+            var definition = new RecipeDefinition
+            {
+                Id = string.IsNullOrEmpty(recipe.ID) ? BuildLegacyRecipeId(recipe.Result) : recipe.ID,
+                ResultItemId = BuildLegacyItemId(recipe.Result),
+                Level = recipe.level,
+                Unique = recipe.unique,
+                Locked = recipe.locked,
+                CraftTimeSeconds = ExtractLegacyCraftTime(recipe),
+                ResultCount = ExtractLegacyResultCount(recipe),
+                CraftingStation = MapCraftLocation(recipe.location)
+            };
+
+            if (recipe.Input != null)
+            {
+                for (var i = 0; i < recipe.Input.Length; i++)
+                {
+                    var ingredient = recipe.Input[i];
+                    definition.Ingredients.Add(new RecipeIngredient
+                    {
+                        ItemId = BuildLegacyItemId(ingredient.Item),
+                        Count = ingredient.Quantity
+                    });
+                }
+            }
+
+            ContentRegistry.RegisterRecipe(definition);
+        }
+
         private static void TryBootstrap()
         {
             MMLog.WriteDebug($"TryBootstrap called. Bootstrapped={_bootstrapped}, ItemManager={(ItemManager.Instance != null)}, CraftingManager={(CraftingManager.Instance != null)}");
@@ -261,6 +316,7 @@ namespace ModAPI.Content
 
             foreach (var def in ContentRegistry.Recipes)
             {
+                def.NormalizeLegacyFields();
                 if (!ItemKeyToType.TryGetValue(def.ResultItemId, out var resultType))
                 {
                     // Maybe it's a vanilla item ID?
@@ -292,6 +348,8 @@ namespace ModAPI.Content
                     failed++;
                     continue;
                 }
+
+                ApplyLegacyResultCountCompatibility(def, resultType);
 
                 var recipe = new CraftingManager.Recipe(resultType, ingredients.ToArray())
                 {
@@ -465,6 +523,93 @@ namespace ModAPI.Content
 
             result = default(T);
             return false;
+        }
+
+        private static string BuildLegacyItemId(ItemManager.ItemType itemType)
+        {
+            return itemType.ToString();
+        }
+
+        private static string BuildLegacyRecipeId(ItemManager.ItemType resultType)
+        {
+            return "legacy.recipe." + resultType;
+        }
+
+        private static float ExtractLegacyCraftTime(CraftingManager.Recipe recipe)
+        {
+            try
+            {
+                var field = typeof(CraftingManager.Recipe).GetField("CraftTime", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (field != null)
+                {
+                    var value = field.GetValue(recipe);
+                    if (value is float)
+                        return (float)value;
+                }
+            }
+            catch { }
+
+            return 1f;
+        }
+
+        private static int ExtractLegacyResultCount(CraftingManager.Recipe recipe)
+        {
+            try
+            {
+                var field = typeof(CraftingManager.Recipe).GetField("ResultCount", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (field != null)
+                {
+                    var value = field.GetValue(recipe);
+                    if (value is int && (int)value > 0)
+                        return (int)value;
+                }
+            }
+            catch { }
+
+            return 1;
+        }
+
+        private static ObjectManager.ObjectType MapCraftLocation(CraftingManager.CraftLocation location)
+        {
+            switch (location)
+            {
+                case CraftingManager.CraftLocation.Lab:
+                    return ObjectManager.ObjectType.Laboratory;
+                case CraftingManager.CraftLocation.AmmoPress:
+                    return ObjectManager.ObjectType.AmmoPress;
+                case CraftingManager.CraftLocation.Workbench:
+                default:
+                    return ObjectManager.ObjectType.WorkBench;
+            }
+        }
+
+        private static void ApplyLegacyResultCountCompatibility(RecipeDefinition definition, ItemManager.ItemType resultType)
+        {
+            if (definition == null || definition.ResultCount <= 1)
+                return;
+
+            ResolvedItem resolved;
+            if (ResolvedByType.TryGetValue(resultType, out resolved) &&
+                resolved != null &&
+                resolved.Definition != null)
+            {
+                if (resolved.Definition.CraftStackSize <= 1)
+                {
+                    resolved.Definition.CraftStackSize = definition.ResultCount;
+                }
+
+                GameItemDefinition runtimeDefinition;
+                if (RuntimeDefinitions.TryGetValue(resultType, out runtimeDefinition) && runtimeDefinition != null)
+                {
+                    SetField(runtimeDefinition, "m_CraftStackSize", resolved.Definition.CraftStackSize);
+                }
+
+                return;
+            }
+
+            MMLog.WarnOnce(
+                "ContentInjector.LegacyResultCount." + definition.Id,
+                $"Recipe '{definition.Id}' requested legacy ResultCount={definition.ResultCount}, but '{definition.ResultItemId}' is not a custom registered item. The current runtime only preserves multi-output on injected item definitions.");
         }
 
         [HarmonyPatch(typeof(ExpeditionMap), "LoadRegionPrefabs")]
