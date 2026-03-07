@@ -14,7 +14,7 @@ namespace ModAPI.Actors.Internal
         TargetBehavior = "Sheltered actor system registration and ticking from GameTime lifecycle updates",
         FailureMode = "Actor simulation systems stop registering or advancing with the game clock.",
         RollbackStrategy = "Disable the World patch domain or remove the Sheltered actor system tick patch host.")]
-    internal sealed class ActorSystemImpl : IActorSystem, ISaveable
+    internal sealed partial class ActorSystemImpl : IActorSystem, ISaveable
     {
         private const string SaveGroupName = "ModAPI_Actors_V1";
         private const int MaxRecentEvents = 256;
@@ -191,11 +191,7 @@ namespace ModAPI.Actors.Internal
                 result = SetComponentLocked(actorId, component, sourceModId, out eventType, out message);
             }
 
-            if (!string.Equals(message, "Component unchanged", StringComparison.Ordinal)
-                && (result == ActorComponentWriteResult.Added
-                || result == ActorComponentWriteResult.Updated
-                || result == ActorComponentWriteResult.Replaced
-                || result == ActorComponentWriteResult.Merged))
+            if (ShouldPublishComponentWrite(result, message))
             {
                 Publish(eventType, sourceModId, actorId, component.ComponentId, message);
             }
@@ -271,6 +267,7 @@ namespace ModAPI.Actors.Internal
                 map.Remove(componentId);
                 RemoveFromStringIndex(_componentIndex, componentId, actorId);
                 if (map.Count == 0) _components.Remove(actorId);
+                MarkRegistryChangedLocked();
                 removed = true;
             }
 
@@ -454,6 +451,7 @@ namespace ModAPI.Actors.Internal
                 {
                     if (!string.Equals(_adapters[i].AdapterId, adapterId, StringComparison.OrdinalIgnoreCase)) continue;
                     _adapters.RemoveAt(i);
+                    _adapterStates.Remove(adapterId);
                     return true;
                 }
             }
@@ -512,32 +510,6 @@ namespace ModAPI.Actors.Internal
                 copy = new List<IActorSimulationSystem>(_systems);
             }
             return copy.ToReadOnlyList();
-        }
-
-        public void Tick(int tickStep, string streamName)
-        {
-            if (tickStep <= 0) tickStep = 1;
-
-            List<IActorSimulationSystem> systems;
-            long tick;
-            lock (_sync)
-            {
-                _currentTick += tickStep;
-                tick = _currentTick;
-                systems = new List<IActorSimulationSystem>(_systems);
-            }
-
-            string resolvedStream = string.IsNullOrEmpty(streamName) ? "ShelteredAPI.Actors" : streamName;
-            ActorSimulationContext context = new ActorSimulationContext(this, this, this, ModRandom.GetStream(resolvedStream), tick);
-
-            for (int i = 0; i < systems.Count; i++)
-            {
-                try { systems[i].Tick(context, tickStep); }
-                catch (Exception ex)
-                {
-                    Publish(ActorEventType.SerializationError, BuiltInOwner, null, null, "Simulation system '" + systems[i].SystemId + "' failed: " + ex.Message);
-                }
-            }
         }
 
         public void RegisterSerializer(IActorComponentSerializer serializer)
@@ -726,183 +698,6 @@ namespace ModAPI.Actors.Internal
             _registered = true;
         }
 
-        internal void Update()
-        {
-            EnsureRegistered();
-            RefreshLiveActors();
-            RunAdapters();
-        }
-
-        private void HandleSessionReset()
-        {
-            lock (_sync)
-            {
-                ClearStateLocked();
-                _currentTick = 0;
-            }
-        }
-
-        private void RefreshLiveActors()
-        {
-            HashSet<int> seenFamily = new HashSet<int>();
-            HashSet<int> seenVisitors = new HashSet<int>();
-
-            try
-            {
-                FamilyManager familyManager = FamilyManager.Instance;
-                if (familyManager != null)
-                {
-                    IList<FamilyMember> members = familyManager.GetAllFamilyMembers();
-                    if (members != null)
-                    {
-                        for (int i = 0; i < members.Count; i++)
-                        {
-                            FamilyMember member = members[i];
-                            if (member == null) continue;
-                            seenFamily.Add(member.GetId());
-                            UpsertFamilyActor(member);
-                        }
-                    }
-                }
-            }
-            catch { }
-
-            try
-            {
-                NpcVisitManager manager = NpcVisitManager.Instance;
-                if (manager != null && manager.Visitors != null)
-                {
-                    for (int i = 0; i < manager.Visitors.Count; i++)
-                    {
-                        NpcVisitor visitor = manager.Visitors[i];
-                        if (visitor == null) continue;
-                        seenVisitors.Add(visitor.npcId);
-                        UpsertVisitorActor(visitor);
-                    }
-                }
-            }
-            catch { }
-
-            List<ActorRecord> changed = new List<ActorRecord>();
-            lock (_sync)
-            {
-                foreach (ActorRecord record in _records.Values)
-                {
-                    if (record == null || record.Id == null || record.Origin == null) continue;
-                    if (!string.Equals(record.Origin.SourceModId ?? string.Empty, "core", StringComparison.OrdinalIgnoreCase)) continue;
-
-                    bool missing = false;
-                    if (record.Id.Kind == ActorKind.Player) missing = !seenFamily.Contains(record.Id.LocalId);
-                    else if (record.Id.Kind == ActorKind.Visitor) missing = !seenVisitors.Contains(record.Id.LocalId);
-                    if (!missing) continue;
-
-                    ActorFlags flags = record.Flags & ~ActorFlags.Loaded;
-                    if (UpdateRecordStateLocked(record, ActorLifecycleState.Unloaded, ActorPresenceState.Offscreen, flags, NowTick()))
-                        changed.Add(record.Clone());
-                }
-            }
-
-            for (int i = 0; i < changed.Count; i++)
-            {
-                RaiseActorStateChanged(changed[i]);
-                Publish(ActorEventType.ActorStateChanged, BuiltInOwner, changed[i].Id, null, "Core actor unloaded");
-            }
-        }
-
-        private void UpsertFamilyActor(FamilyMember member)
-        {
-            ActorId id = new ActorId(ActorKind.Player, member.GetId(), string.Empty);
-            ActorRecord snapshot = null;
-            bool created = false;
-            bool changed = false;
-
-            lock (_sync)
-            {
-                ActorRecord record;
-                if (!_records.TryGetValue(id, out record))
-                {
-                    record = new ActorRecord();
-                    record.Id = new ActorId(id.Kind, id.LocalId, id.Domain);
-                    record.LifecycleState = ActorLifecycleState.Active;
-                    record.PresenceState = ResolvePresence(member);
-                    record.Flags = ActorFlags.Persistent | ActorFlags.Loaded;
-                    record.Origin = ActorOrigin.Core("family");
-                    record.CreatedTick = NowTick();
-                    record.UpdatedTick = record.CreatedTick;
-                    AddRecordLocked(record);
-                    created = true;
-                }
-                else
-                {
-                    ActorFlags desiredFlags = record.Flags | ActorFlags.Persistent | ActorFlags.Loaded;
-                    changed = UpdateRecordStateLocked(record, ActorLifecycleState.Active, ResolvePresence(member), desiredFlags, NowTick());
-                }
-
-                BindLocked(id, CreateBinding("core.family", member.GetId().ToString(), "core", true), true);
-                snapshot = record.Clone();
-            }
-
-            Set(id, BuildProfile(member), BuiltInOwner);
-
-            if (created)
-            {
-                RaiseActorCreated(snapshot);
-                Publish(ActorEventType.ActorCreated, BuiltInOwner, id, null, "Family actor discovered");
-            }
-            else if (changed)
-            {
-                RaiseActorStateChanged(snapshot);
-                Publish(ActorEventType.ActorStateChanged, BuiltInOwner, id, null, "Family actor refreshed");
-            }
-        }
-
-        private void UpsertVisitorActor(NpcVisitor visitor)
-        {
-            ActorId id = new ActorId(ActorKind.Visitor, visitor.npcId, string.Empty);
-            ActorRecord snapshot = null;
-            bool created = false;
-            bool changed = false;
-
-            lock (_sync)
-            {
-                ActorRecord record;
-                if (!_records.TryGetValue(id, out record))
-                {
-                    record = new ActorRecord();
-                    record.Id = new ActorId(id.Kind, id.LocalId, id.Domain);
-                    record.LifecycleState = ActorLifecycleState.Active;
-                    record.PresenceState = ResolvePresence(visitor);
-                    record.Flags = ActorFlags.Loaded;
-                    record.Origin = ActorOrigin.Core("visitor");
-                    record.CreatedTick = NowTick();
-                    record.UpdatedTick = record.CreatedTick;
-                    AddRecordLocked(record);
-                    created = true;
-                }
-                else
-                {
-                    ActorFlags desiredFlags = record.Flags | ActorFlags.Loaded;
-                    changed = UpdateRecordStateLocked(record, ActorLifecycleState.Active, ResolvePresence(visitor), desiredFlags, NowTick());
-                }
-
-                BindLocked(id, CreateBinding("core.visitor", visitor.npcId.ToString(), "core", true), true);
-                snapshot = record.Clone();
-            }
-
-            Set(id, BuildProfile(visitor), BuiltInOwner);
-
-            if (created)
-            {
-                RaiseActorCreated(snapshot);
-                Publish(ActorEventType.ActorCreated, BuiltInOwner, id, null, "Visitor actor discovered");
-            }
-            else if (changed)
-            {
-                RaiseActorStateChanged(snapshot);
-                Publish(ActorEventType.ActorStateChanged, BuiltInOwner, id, null, "Visitor actor refreshed");
-            }
-        }
-
         private void RegisterSerializerInternal(IActorComponentSerializer serializer, bool publish)
         {
             if (serializer == null || string.IsNullOrEmpty(serializer.ComponentId)) return;
@@ -1013,6 +808,7 @@ namespace ModAPI.Actors.Internal
 
             map[entry.ComponentId] = slot;
             AddToStringIndex(_componentIndex, entry.ComponentId, actorId);
+            MarkRegistryChangedLocked();
         }
 
         private void RestoreBindingLocked(ActorId actorId, ActorBinding binding)
@@ -1089,6 +885,7 @@ namespace ModAPI.Actors.Internal
                 existing.Persistent = binding.Persistent;
                 _bindingIndex[indexKey] = actorId;
                 AddToStringIndex(_bindingTypeIndex, bindingType, actorId);
+                MarkRegistryChangedLocked();
                 return true;
             }
 
@@ -1099,6 +896,7 @@ namespace ModAPI.Actors.Internal
             list.Add(stored);
             _bindingIndex[indexKey] = actorId;
             AddToStringIndex(_bindingTypeIndex, bindingType, actorId);
+            MarkRegistryChangedLocked();
             return true;
         }
 
@@ -1132,6 +930,7 @@ namespace ModAPI.Actors.Internal
             if (!HasBindingTypeLocked(actorId, normalizedType))
                 RemoveFromStringIndex(_bindingTypeIndex, normalizedType, actorId);
             if (list.Count == 0) _bindings.Remove(actorId);
+            MarkRegistryChangedLocked();
             return true;
         }
 
@@ -1151,6 +950,7 @@ namespace ModAPI.Actors.Internal
             }
 
             _bindings.Remove(actorId);
+            MarkRegistryChangedLocked();
         }
 
         private bool HasBindingTypeLocked(ActorId actorId, string bindingType)
@@ -1215,6 +1015,7 @@ namespace ModAPI.Actors.Internal
                 AddToStringIndex(_componentIndex, componentId, actorId);
                 eventType = ActorEventType.ComponentAdded;
                 message = "Component added";
+                MarkRegistryChangedLocked();
                 return ActorComponentWriteResult.Added;
             }
 
@@ -1236,6 +1037,7 @@ namespace ModAPI.Actors.Internal
                     slot.Version = slot.Component != null ? slot.Component.Version : component.Version;
                     slot.RawPayload = null;
                     message = "Component merged";
+                    MarkRegistryChangedLocked();
                     return ActorComponentWriteResult.Merged;
                 }
             }
@@ -1252,6 +1054,7 @@ namespace ModAPI.Actors.Internal
             slot.Version = component.Version;
             slot.RawPayload = null;
             message = ownerChanged ? "Component replaced" : "Component updated";
+            MarkRegistryChangedLocked();
             return ownerChanged ? ActorComponentWriteResult.Replaced : ActorComponentWriteResult.Updated;
         }
 
@@ -1306,6 +1109,7 @@ namespace ModAPI.Actors.Internal
                 RemoveFromStringIndex(_originIndex, NormalizeKey(record.Origin != null ? record.Origin.SourceModId : null), record.Id);
                 record.Origin = CloneOrigin(mutation.Origin);
                 AddToStringIndex(_originIndex, NormalizeKey(record.Origin != null ? record.Origin.SourceModId : null), record.Id);
+                if (!changed) MarkRegistryChangedLocked();
                 changed = true;
             }
 
@@ -1338,7 +1142,11 @@ namespace ModAPI.Actors.Internal
                 changed = true;
             }
 
-            if (changed) record.UpdatedTick = updatedTick;
+            if (changed)
+            {
+                record.UpdatedTick = updatedTick;
+                MarkRegistryChangedLocked();
+            }
             return changed;
         }
 
@@ -1404,6 +1212,7 @@ namespace ModAPI.Actors.Internal
             AddToEnumIndex(_lifecycleIndex, record.LifecycleState, record.Id);
             AddToEnumIndex(_presenceIndex, record.PresenceState, record.Id);
             AddToStringIndex(_originIndex, NormalizeKey(record.Origin != null ? record.Origin.SourceModId : null), record.Id);
+            MarkRegistryChangedLocked();
         }
 
         private void RemoveRecordLocked(ActorRecord record)
@@ -1421,6 +1230,7 @@ namespace ModAPI.Actors.Internal
             List<string> keys = _componentIndex.Keys.ToList();
             for (int i = 0; i < keys.Count; i++)
                 RemoveFromStringIndex(_componentIndex, keys[i], record.Id);
+            MarkRegistryChangedLocked();
         }
 
         private void ClearStateLocked()
@@ -1436,6 +1246,7 @@ namespace ModAPI.Actors.Internal
             _originIndex.Clear();
             _componentIndex.Clear();
             _nextIdsByScope.Clear();
+            ResetRuntimeDiagnosticsLocked();
         }
 
         private void RaiseActorCreated(IActorRecord record)
@@ -1502,29 +1313,6 @@ namespace ModAPI.Actors.Internal
                     if (_subscriptions[i].Id != id) continue;
                     _subscriptions.RemoveAt(i);
                     return;
-                }
-            }
-        }
-
-        private void RunAdapters()
-        {
-            List<IActorAdapter> adapters;
-            long currentTick;
-            lock (_sync)
-            {
-                adapters = new List<IActorAdapter>(_adapters);
-                currentTick = _currentTick;
-            }
-
-            for (int i = 0; i < adapters.Count; i++)
-            {
-                IActorAdapter adapter = adapters[i];
-                if (adapter == null) continue;
-
-                try { adapter.Synchronize(this, currentTick); }
-                catch (Exception ex)
-                {
-                    Publish(ActorEventType.SerializationError, BuiltInOwner, null, null, "Actor adapter '" + adapter.AdapterId + "' failed: " + ex.Message);
                 }
             }
         }

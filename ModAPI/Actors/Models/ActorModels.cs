@@ -71,7 +71,13 @@ namespace ModAPI.Actors
         SerializationError = 7,
         SerializerRegistered = 8,
         ImportCompleted = 9,
-        ExportCompleted = 10
+        ExportCompleted = 10,
+        AdapterFailed = 11,
+        AdapterRecovered = 12,
+        SimulationFailed = 13,
+        SimulationRecovered = 14,
+        LiveSyncFailed = 15,
+        LiveSyncRecovered = 16
     }
 
     [Serializable]
