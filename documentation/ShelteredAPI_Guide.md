@@ -1,25 +1,38 @@
 # ShelteredAPI Guide (Current v1.3 Line)
 
-`ShelteredAPI` extends the mod surface with Sheltered-specific adapters/implementations while keeping namespaces under `ModAPI.*` where needed.
+`ShelteredAPI` supplies Sheltered-specific runtime implementations while most public contracts remain in `ModAPI.*`.
 
 Canonical signatures: `documentation/API_Signatures_Reference.md`.
 
 ## 1. What ShelteredAPI Adds
 
-- `IGameHelper` adapter extensions: `ShelteredAPI.Adapters.GameHelperExtensions`
-- Sheltered-specific implementations registered into ModAPI registries (for example `IGameHelper`, character effect runtime)
+- `IGameHelper` implementation and `ShelteredAPI.Adapters.GameHelperExtensions`
+- the default implementation behind `IPluginContext.Actors`
+- built-in actor API registrations:
+  - `ShelteredAPI.Actors`
+  - `ShelteredAPI.ActorRegistry`
+  - `ShelteredAPI.ActorComponents`
+  - `ShelteredAPI.ActorBindings`
+  - `ShelteredAPI.ActorAdapters`
+  - `ShelteredAPI.ActorSimulation`
+  - `ShelteredAPI.ActorEvents`
+  - `ShelteredAPI.ActorSerialization`
+- Sheltered-specific UI and input helpers under `ShelteredAPI.*`
 
 ## 2. Referencing It
 
 Add assembly references:
-- Always: `ModAPI.dll`
-- Optional: `ShelteredAPI.dll` (only if you use `ShelteredAPI.*` adapter namespaces directly)
+- always: `ModAPI.dll`
+- optional: `ShelteredAPI.dll` if you use `ShelteredAPI.*` namespaces directly
+
+If you only use `IPluginContext.Game` or `IPluginContext.Actors`, the public types come from `ModAPI.dll`.
 
 Common imports:
 
 ```csharp
 using ModAPI.Core;
 using ModAPI.Events;
+using ModAPI.Actors;
 using ShelteredAPI.Adapters;
 ```
 
@@ -28,6 +41,7 @@ using ShelteredAPI.Adapters;
 ```csharp
 using ModAPI.Core;
 using ModAPI.Events;
+using ModAPI.Actors;
 using ShelteredAPI.Adapters;
 
 public class MyPlugin : IModPlugin
@@ -36,11 +50,18 @@ public class MyPlugin : IModPlugin
 
     public void Start(IPluginContext ctx)
     {
-        // Core helper from context (type lives in ModAPI.Core)
         int ownedWater = ctx.Game.GetTotalOwned(ItemManager.ItemType.Water);
         ctx.Log.Info("Owned water: " + ownedWater);
 
-        // Register deterministic scheduler trigger (lives in ModAPI.Events)
+        var actor = ctx.Actors.Ensure(new ActorCreateRequest
+        {
+            Kind = ActorKind.Custom,
+            Domain = "com.mymod",
+            LifecycleState = ActorLifecycleState.Active,
+            PresenceState = ActorPresenceState.Offscreen,
+            Flags = ActorFlags.Persistent | ActorFlags.Synthetic
+        });
+
         GameTimeTriggerHelper.RegisterTrigger(
             triggerId: "com.mymod.economy.tick",
             priority: 50,
@@ -52,7 +73,7 @@ public class MyPlugin : IModPlugin
 
 ## 4. Operational Notes
 
-- Scheduler/events compatibility surfaces (`GameEvents`, `GameTimeTriggerHelper`) are hosted in `ModAPI.dll` in the 1.3 line.
-- Register triggers in `Start(...)`, not constructors.
-- Use unique trigger IDs (`your.mod.id.feature`).
-- Keep callbacks lightweight; offload heavy work with `ModThreads` or `RunInBackground`.
+- scheduler/events compatibility surfaces such as `GameEvents` and `GameTimeTriggerHelper` are hosted in `ModAPI.dll` in the 1.3 line
+- actor contracts live in `ModAPI.Actors`; `ShelteredAPI` provides the default runtime implementation
+- register triggers and runtime behavior in `Start(...)`, not constructors
+- use unique IDs for triggers, actor bindings, components, and adapters

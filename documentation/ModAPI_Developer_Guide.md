@@ -13,13 +13,14 @@ Exact signatures: `documentation/API_Signatures_Reference.md`.
 
 ## 1. Start Here
 
-- Plugin lifecycle and context usage: `documentation/how to develop a plugin.md` (contains legacy title, signatures still usable)
+- Plugin lifecycle and context usage: `documentation/how to develop a plugin.md`
 - Harmony + transpilers: `documentation/how to develop a patch with harmony.md`
 - Transpiler safety/debugging: `documentation/Transpiler_and_Debugging_Guide.md`
 - Loader/runtime architecture: `documentation/ModAPI_Architecture_guide.md`
 - Spine settings UI: `documentation/Spine_Settings_Guide.md`
 - Settings + persistence patterns: `documentation/SETTINGS.md`
 - ShelteredAPI helper surface: `documentation/ShelteredAPI_Guide.md`
+- Actor registry/components/bindings/adapters: `documentation/ShelteredAPI_Characters_Guide.md`
 - Failures and log signatures: `documentation/API_Troubleshooting.md`
 
 ## 2. Minimal Plugin Template
@@ -158,6 +159,24 @@ public void Start(IPluginContext ctx)
         priority: 50,
         cadence: TimeTriggerCadence.SixHour,
         callback: batch => ctx.Log.Info("Economy tick " + batch.TotalHours));
+}
+```
+
+Actor services are exposed through `ctx.Actors`:
+
+```csharp
+using ModAPI.Actors;
+
+public void Start(IPluginContext ctx)
+{
+    var actor = ctx.Actors.Ensure(new ActorCreateRequest
+    {
+        Kind = ActorKind.Faction,
+        Domain = "com.mymod",
+        LifecycleState = ActorLifecycleState.Active,
+        PresenceState = ActorPresenceState.Offscreen,
+        Flags = ActorFlags.Persistent | ActorFlags.Synthetic
+    });
 }
 ```
 

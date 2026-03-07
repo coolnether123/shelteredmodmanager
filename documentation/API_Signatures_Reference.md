@@ -100,7 +100,14 @@ public sealed class ActorId
     public string Domain;
 }
 
-public interface IActorSystem : IActorRegistry, IActorComponentStore, IActorEvents, IActorSimulationScheduler, IActorSerializationService {}
+public interface IActorSystem :
+    IActorRegistry,
+    IActorComponentStore,
+    IActorBindingStore,
+    IActorEvents,
+    IActorAdapterRegistry,
+    IActorSimulationScheduler,
+    IActorSerializationService {}
 
 public interface IActorRegistry
 {
@@ -117,8 +124,16 @@ public interface IActorRegistry
 public interface IActorComponentStore
 {
     ActorComponentWriteResult Set(ActorId actorId, IActorComponent component, string sourceModId);
-    bool TryGet<TComponent>(ActorId actorId, out TComponent component) where TComponent : class, IActorComponent;
+    ActorComponentWriteResult Set<TComponent>(ActorId actorId, TComponent component, string sourceModId)
+        where TComponent : class, IActorComponent;
+    bool TryGet<TComponent>(ActorId actorId, out TComponent component)
+        where TComponent : class, IActorComponent;
+    bool TryGet(ActorId actorId, string componentId, out IActorComponent component);
+    IActorComponent GetByComponentId(ActorId actorId, string componentId);
+    bool HasComponent(ActorId actorId, string componentId);
     bool Remove(ActorId actorId, string componentId, string sourceModId);
+    IReadOnlyList<IActorComponent> GetAllComponents(ActorId actorId);
+    IReadOnlyList<string> GetComponentIds(ActorId actorId);
 }
 
 public sealed class ActorBinding
@@ -151,7 +166,62 @@ public interface IActorAdapterRegistry
     bool UnregisterAdapter(string adapterId);
     IReadOnlyList<IActorAdapter> GetAdapters();
 }
+
+public interface IActorSimulationSystem
+{
+    string SystemId { get; }
+    int Priority { get; }
+    void Tick(ActorSimulationContext context, int tickStep);
+}
+
+public sealed class ActorSimulationContext
+{
+    public IActorRegistry Registry { get; }
+    public IActorComponentStore Components { get; }
+    public IActorEvents Events { get; }
+    public ModRandomStream Random { get; }
+    public long CurrentTick { get; }
+}
+
+public interface IActorEvents
+{
+    event Action<ActorEventEnvelope> EventPublished;
+
+    IDisposable Subscribe(Action<ActorEventEnvelope> handler);
+    IDisposable Subscribe(Predicate<ActorEventEnvelope> filter, Action<ActorEventEnvelope> handler);
+    IReadOnlyList<ActorEventEnvelope> GetRecentEvents();
+}
+
+public interface IActorSimulationScheduler
+{
+    long CurrentTick { get; }
+
+    void RegisterSystem(IActorSimulationSystem system);
+    bool UnregisterSystem(string systemId);
+    IReadOnlyList<IActorSimulationSystem> GetSystems();
+    void Tick(int tickStep, string streamName);
+}
+
+public interface IActorSerializationService
+{
+    int CurrentSchemaVersion { get; }
+
+    void RegisterSerializer(IActorComponentSerializer serializer);
+    bool TryGetSerializer(string componentId, out IActorComponentSerializer serializer);
+    string ExportJson();
+    bool ImportJson(string json);
+}
 ```
+
+Built-in actor API registration names:
+- `ShelteredAPI.Actors`
+- `ShelteredAPI.ActorRegistry`
+- `ShelteredAPI.ActorComponents`
+- `ShelteredAPI.ActorBindings`
+- `ShelteredAPI.ActorAdapters`
+- `ShelteredAPI.ActorSimulation`
+- `ShelteredAPI.ActorEvents`
+- `ShelteredAPI.ActorSerialization`
 
 ## Spine Settings (`ModAPI.Spine`, `ModAPI.Attributes`)
 

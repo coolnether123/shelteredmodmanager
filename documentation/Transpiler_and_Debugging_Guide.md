@@ -1,22 +1,23 @@
-﻿# ModAPI Transpiler and Debugging Guide (v1.2)
+# ModAPI Transpiler and Debugging Guide (Current v1.3 Line)
 
 This guide focuses on the current transpiler stack under `ModAPI.Harmony.Transpilers`.
 
-Canonical signatures for the APIs referenced here: `documentation/API_Signatures_Reference.md`.
+Canonical signatures: `documentation/API_Signatures_Reference.md`.
 
 ## Compatibility Matrix
 
 | Scope | Applies To | Status |
 |-------|------------|--------|
 | Transpiler workflow and diagnostics | Current `ModAPI.dll` | Supported |
-| Header version label `v1.2` | Doc title only | Legacy label |
+| Intent API helpers | Current `ModAPI.dll` | Supported |
+| Cooperative transpiler pipeline | Current `ModAPI.dll` | Supported |
 
 ## 1. Recommended Workflow
 
 1. Start with `FluentTranspiler.For(...)`.
-2. Match with explicit `SearchMode`.
+2. Match using explicit anchors.
 3. Apply the smallest safe edit.
-4. Build with validation (`Build(...)`).
+4. Build with validation.
 5. Inspect runtime/diff diagnostics if behavior changes unexpectedly.
 
 Minimal template:
@@ -39,35 +40,29 @@ public static class TargetMethod_Patch
 }
 ```
 
-## 2. Core Types and When to Use Them
+## 2. Core Types
 
-- `FluentTranspiler`: primary match/edit API.
-- `IntentAPI`: high-level helpers (`RedirectCall`, `ChangeConstant`, etc.).
-- `StackSentinel`: stack analysis used during build validation.
-- `CooperativePatcher`: multi-mod transpiler pipeline sequencing.
-- `TranspilerDebugger`: dump + diff files and runtime snapshots.
-- `TranspilerTestHarness`: unit-style testing without launching game.
-
-### Exact Signatures (Most Used)
-
-```csharp
-public static FluentTranspiler For(IEnumerable<CodeInstruction> instructions, MethodBase originalMethod = null, ILGenerator generator = null);
-public FluentTranspiler ReplaceAllPatterns(Func<CodeInstruction, bool>[] patternPredicates, CodeInstruction[] replaceWith, bool preserveInstructionCount = false);
-public FluentTranspiler ReplaceAll(IEnumerable<CodeInstruction> newInstructions);
-public FluentTranspiler WithTransaction(Action<FluentTranspiler> action);
-public IEnumerable<CodeInstruction> Build(bool strict = true, bool validateStack = true);
-```
+- `FluentTranspiler`: primary match/edit API
+- `IntentAPI`: high-level helpers such as `RedirectCall` and `ChangeConstant`
+- `StackSentinel`: stack validation during build
+- `CooperativePatcher`: ordered multi-mod transpiler composition
+- `TranspilerDebugger`: before/after dumps and diagnostics
+- `TranspilerTestHarness`: isolated testing without launching the game
 
 ## 3. Matching Correctly
 
+Use the strongest anchor available:
+- method calls
+- field loads/stores
+- distinctive constant patterns
+- short instruction sequences
+
 `SearchMode` matters:
-- `Start`: reset matcher to index 0, then search forward.
-- `Current`: search from current index.
-- `Next`: advance one instruction, then search forward.
+- `Start`: reset matcher to index 0 and search forward
+- `Current`: search from the current index
+- `Next`: advance one instruction and search forward
 
-Use `Start` for first anchor and `Next` for follow-up anchors in sequence.
-
-Example:
+Typical pattern:
 
 ```csharp
 var t = FluentTranspiler.For(instructions, original)
@@ -75,170 +70,72 @@ var t = FluentTranspiler.For(instructions, original)
     .FindCall(typeof(A), "Second", SearchMode.Next);
 ```
 
-## 4. Edit APIs and Safety Characteristics
+## 4. Edit APIs
 
-Common edit calls:
+Common calls:
 - `ReplaceWith(...)`
 - `ReplaceWithCall(...)`
 - `ReplaceSequence(...)`
 - `ReplaceAll(...)`
 - `ReplaceAllCalls(...)`
 - `ReplaceAllPatterns(...)`
+- `WithTransaction(...)`
 
-`ReplaceAllPatterns(...)` is best for "replace every known shape" scenarios.
+`ReplaceAllPatterns(...)` is especially useful when you need to replace every known IL shape for the same behavior.
 
-```csharp
-t.ReplaceAllPatterns(
-    new Func<CodeInstruction, bool>[] {
-        i => i.opcode == OpCodes.Ldc_R4 && (float)i.operand == 0f,
-        i => i.opcode == OpCodes.Ldc_R4 && (float)i.operand == 0f,
-        i => i.IsNewobjVector2()
-    },
-    new[] { new CodeInstruction(OpCodes.Call, helperMethod) },
-    preserveInstructionCount: true);
-```
+## 5. Intent API
 
-Use `preserveInstructionCount: true` when branch targets may land inside the replaced region.
-
-## 5. IntentAPI Usage
-
-Intent helpers reduce opcode choreography.
+Intent helpers reduce opcode choreography:
 
 ```csharp
-// Replace one occurrence
 t.RedirectCall(typeof(GameModeManager), "OnDayPassed", typeof(Hooks), "OnDayPassedHook");
-
-// Replace all occurrences
 t.RedirectCallAll(typeof(GameModeManager), "OnDayPassed", typeof(Hooks), "OnDayPassedHook");
-
-// Constants
 t.ChangeConstant(1.0f, 1.5f);
 t.ChangeConstantAll(5, 10);
-
-// Remove a call
-// (pops arguments and provides default return where needed)
 t.RemoveCall(typeof(Analytics), "TrackEvent");
-
-// Insert a hook before call site
-t.InjectBeforeCall(typeof(Bunker), "Open", typeof(Hooks), "BeforeOpen");
 ```
 
-## 6. Build-Time Validation
+Use them whenever an intent helper expresses the change clearly.
 
-`Build(strict: true, validateStack: true)` is default.
+## 6. Validation
 
-- `strict: true`: warnings become exceptions.
-- `strict: false`: warnings are logged; patch continues.
-- `validateStack: true`: runs `StackSentinel` + lint pass.
+Default guidance:
+- development: `Build(strict: true, validateStack: true)`
+- compatibility-sensitive patches: keep stack validation on
+- only relax strictness when you have a concrete reason and have inspected the result
 
-Important current behavior:
-- `StackSentinel` currently does **not** support full exception-handler analysis (`try/catch/finally/filter`) and fails validation for those methods.
-- If your target method uses exception handlers, avoid complex transpilers or isolate patch points to safer Prefix/Postfix paths.
-- Stack analysis now merges type state across control-flow joins and reports unresolved values as `unknown` instead of pretending they are `object`.
-- `ReplaceSequence`/`ReplaceAllPatterns` now preserve Harmony exception block markers (`CodeInstruction.blocks`) and require exact index-aligned replacement on EH methods.
-- `ReplaceAll` is blocked on EH methods to prevent exception-clause boundary corruption.
-- `ReplaceAll` now applies transactional rollback on failures (including internal list mismatches), uses matcher-first replacement, and emits critical diagnostics with method name, old/new counts, and opcode previews.
-- `FluentTranspiler` instances are not thread-safe; do not share a single instance across threads.
+## 7. Cooperative Patching
 
-If you are iterating quickly, use `strict: false` temporarily, then restore strict mode before shipping.
+When multiple mods need to transpile the same method, prefer `CooperativePatcher`.
 
-## 7. Cooperative Multi-Mod Patching
+Benefits:
+- ordered registration
+- dependency constraints
+- conflict declarations
+- easier diagnostics when one participant fails
 
-`CooperativePatcher` lets multiple mods patch one target in a managed order.
+## 8. Debugging
 
-```csharp
-CooperativePatcher.RegisterTranspiler(
-    target: typeof(GameManager).GetMethod("Update"),
-    anchorId: "MyMod.UpdateFix",
-    priority: PatchPriority.High,
-    patchLogic: t => t.FindCall(typeof(GameManager), "OldLogic").ReplaceWithCall(typeof(Hooks), "NewLogic"),
-    dependsOn: new[] { "OtherMod.BaseFix" },
-    conflictsWith: new[] { "IncompatibleMod.Override" });
-```
+Useful tools:
+- `RuntimeILInspector` (`F10`)
+- `TranspilerDebugger`
+- `TranspilerTestHarness`
+- `UIDebugInspector` (`F11`) when patch results surface through UI
 
-Notes:
-- Pipeline runs by `PatchPriority` order.
-- Missing `dependsOn` anchors skip that patch.
-- Matched `conflictsWith` anchors skip that patch.
-- Failed patch step is skipped; prior valid instruction stream is kept.
-- In current safe-mode defaults, cooperative builds use strict validation and can quarantine a patch owner after critical failures.
+When a transpiler misbehaves:
+1. dump original IL
+2. confirm the anchor still exists
+3. reduce the edit to the smallest reproducer
+4. re-enable validation if it was disabled
 
-## 8. Safety Policy Flags (ModPrefs)
+## 9. Common Failure Modes
 
-ModAPI now exposes global transpiler safety controls through `ModPrefs`:
-- `TranspilerSafeMode` (default `true`)
-- `TranspilerForcePreserveInstructionCount` (default `true`)
-- `TranspilerFailFastCritical` (default `true`)
-- `TranspilerCooperativeStrictBuild` (default `true`)
-- `TranspilerQuarantineOnFailure` (default `true`)
+- no match found: target method changed or overload mismatch
+- invalid stack: replacement left pushes/pops unbalanced
+- wrong branch behavior: replaced region contained branch destinations
+- silent no-op: wrong target method or patch assembly never loaded
 
-Practical effect:
-- Risky `ReplaceAllPatterns(... preserveInstructionCount: false)` calls are upgraded to preserve mode in safe mode.
-- Preserve mode now rejects unsafe NOP-padding cases when removed tail instructions are not stack-neutral.
-- Critical warnings (for example stack or branch-risk warnings) can hard-fail the patch.
-- Catastrophic lint findings are emitted as `[CRITICAL LINT]` (invalid branch operands, unresolved labels, bad local/arg indices, invalid castclass operands).
-- Cooperative pipelines can quarantine a failing owner to prevent repeated unsafe mutations.
-- Transpiler debugger history snapshots are now stored with locking and exposed as copy-on-read to avoid race conditions in debug UI.
-
-Detailed reference: `documentation/Transpiler_Safety_Settings.md`
-
-## 9. Debug and Inspection Tooling
-
-In-game tools are available to help debug transpilers and inspect the runtime state.
-
-**Key Bindings:**
-- `F9`: **Runtime Inspector** (Hierarchy & Properties) - *Always Available*
-- `F10`: **Runtime IL Inspector** (View live IL) - *Dev Only*
-- `F11`: **UI Debugger** (UI Raycast & Structure) - *Always Available*
-- `F12`: **Runtime Debugger** (Harmony/Transpiler Snapshots) - *Dev Only*
-
-### Production vs. Development
-The advanced debugging tools (**F10** and **F12**) depend on the **Decompiler** component to function. 
-- **Development Builds:** Include the `bin/decompiler/` directory. All tools function normally.
-- **Production/Release Builds:** Do not include the decompiler. **F10 and F12 are automatically disabled**.
-
-### Decompiler Requirements
-For F10 and F12 to work, the following must be present in your ModAPI installation:
-- Directory: `Sheltered_Data/Managed/bin/decompiler/`
-- Files: `Decompiler.exe` (plus dependencies)
-- **Privacy Check:** The decompiler performs a local privacy check on valid game ownership before running. If this check fails, the tools will remain disabled.
-
-### Dump Files
-- `TranspilerDebugger.DumpWithDiff(...)` writes before/after/diff output under:
-  - `Mods/<ModName>/Logs/TranspilerDumps/<Label>/`
-
-### Snapshot History
-- `TranspilerDebugger.RecordSnapshot(...)` stores patch history used by the runtime debug UI (F12).
-
-## 10. Test Harness Pattern
-
-`TranspilerTestHarness` can validate small transforms without launching Unity.
-
-```csharp
-[Test]
-public void ReplacesCall()
-{
-    var input = new[]
-    {
-        new CodeInstruction(OpCodes.Ldstr, "hello"),
-        new CodeInstruction(OpCodes.Call, typeof(Console).GetMethod("WriteLine", new[] { typeof(string) }))
-    };
-
-    var result = TranspilerTestHarness.FromInstructions(input)
-        .FindCall(typeof(Console), "WriteLine")
-        .ReplaceWith(OpCodes.Pop)
-        .Build(strict: true, validateStack: true)
-        .ToList();
-
-    TranspilerTestHarness.AssertInstruction(result, 1, OpCodes.Pop);
-}
-```
-
-## 11. Failure Triage Checklist
-
-If a patch breaks after a game update:
-1. Re-run with `strict: true` and capture warning/exception text.
-2. Use `DumpWithDiff(...)` to verify actual instruction change.
-3. Replace brittle opcode chains with stronger anchors (`FindCall`, `MapAnchors`, patterns).
-4. If replacing blocks, enable `preserveInstructionCount` where branch risk exists.
-5. Add or update a `TranspilerTestHarness` regression test.
+In practice, the safest fixes are usually:
+- use stronger anchors
+- edit a smaller region
+- replace a call instead of rewriting a broad block

@@ -76,11 +76,16 @@ Likely causes:
 - No listeners/callbacks registered.
 - Game currently loading.
 - Trigger not registered for expected cadence.
+- Trigger ID was reused and overwritten by a later registration.
 
 Log lines to look for:
 - `GameTimeTriggerHelper.SubscribeLifecycle`
 - `GameTimeTriggerHelper.Catchup`
 - `Trigger callback threw for '<triggerId>': <message>`
+
+Quick checks:
+- Confirm `RegisterTrigger(...)` runs in `Start(...)`.
+- Confirm `GetPriorityList(...)` contains your trigger for the expected cadence.
 
 ## 7. Quick Verification Checklist
 
