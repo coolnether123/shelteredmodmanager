@@ -540,7 +540,11 @@ namespace ModAPI.Core
 
                     Type[] types = null;
                     try { types = asm.GetTypes(); }
-                    catch (ReflectionTypeLoadException rtle) { types = rtle.Types; }
+                    catch (ReflectionTypeLoadException rtle)
+                    {
+                        MMLog.WritePluginError(entry.Id, "type discovery", rtle);
+                        types = rtle.Types;
+                    }
 
                     if (types == null) continue;
 
@@ -588,6 +592,7 @@ namespace ModAPI.Core
                         }
                         catch (Exception ex)
                         {
+                            MMLog.WritePluginError(type.FullName, "startup", ex);
                             MMLog.WriteError($"error starting plugin '{type.FullName}': {ex.Message}");
                             _loadErrors++;
                         }
