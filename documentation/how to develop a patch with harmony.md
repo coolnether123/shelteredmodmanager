@@ -1,6 +1,6 @@
-﻿# How to Develop a Harmony Patch | Sheltered Mod Manager v1.2
+# How to Develop a Harmony Patch | Sheltered Mod Manager v1.3
 
-This guide covers practical Harmony usage with ModAPI.
+This guide covers practical Harmony usage with the current ModAPI stack.
 
 Exact API signatures: `documentation/API_Signatures_Reference.md`.
 
@@ -9,20 +9,22 @@ Exact API signatures: `documentation/API_Signatures_Reference.md`.
 | Scope | Applies To | Status |
 |-------|------------|--------|
 | Harmony patch workflow and safety practices | Current `ModAPI.dll` | Supported |
-| Header version label `v1.2` | Doc title only | Legacy label |
+| Fluent transpiler helpers | Current `ModAPI.dll` | Supported |
+| Detailed IL debugging tools | Current `ModAPI.dll` | Supported |
 
 ## 1. Reference Setup
 
-Add `0Harmony.dll` from your SMM install (`SMM/bin/0Harmony.dll`).
-
-Also reference:
+Add references to:
 - `ModAPI.dll`
+- `0Harmony.dll`
 - `Assembly-CSharp.dll`
 - `UnityEngine.dll`
 
-## 2. Apply Patches in Plugin `Start`
+Add `ShelteredAPI.dll` only if your patch code uses `ShelteredAPI.*` namespaces directly.
 
-Patch in `Start(...)`, not constructor, so context/logging are ready.
+## 2. Apply Patches in `Start(...)`
+
+Patch in `Start(...)`, not in constructors, so loader context and logging are ready.
 
 ```csharp
 using ModAPI.Core;
@@ -58,19 +60,17 @@ public static class SomeGameType_MethodName_Patch
 {
     public static void Prefix()
     {
-        // Runs before original method
     }
 
     public static void Postfix()
     {
-        // Runs after original method
     }
 }
 ```
 
-## 4. Transpiler Template (Fluent)
+## 4. Fluent Transpiler Template
 
-Use ModAPI's fluent transpiler instead of raw instruction surgery when possible.
+Prefer ModAPI's fluent transpiler surface over raw opcode surgery when possible.
 
 ```csharp
 using HarmonyLib;
@@ -96,49 +96,42 @@ public static class SomeGameType_MethodName_Transpiler
 }
 ```
 
-Current key signatures used above:
-
-```csharp
-public static FluentTranspiler For(IEnumerable<CodeInstruction> instructions, MethodBase originalMethod = null, ILGenerator generator = null);
-public FluentTranspiler FindCall(Type type, string methodName, SearchMode mode = SearchMode.Start, Type[] parameterTypes = null, Type[] genericArguments = null, bool includeInherited = true);
-public FluentTranspiler ReplaceWithCall(Type type, string methodName, Type[] parameterTypes = null);
-public IEnumerable<CodeInstruction> Build(bool strict = true, bool validateStack = true);
-```
-
 ## 5. Patch Design Rules
 
-- Use a unique Harmony ID (`author.modname`).
-- Prefer Prefix/Postfix over Transpiler when enough.
-- Keep each patch focused on one behavioral change.
-- Fail loudly in development (`Build(strict: true)`).
-- Add logging around risky branches and patch setup.
+- Use a unique Harmony ID such as `author.modname`.
+- Prefer Prefix/Postfix over transpilers when they are sufficient.
+- Keep each patch focused on one behavior change.
+- Use stable anchors such as method calls and known patterns instead of brittle opcode offsets.
+- In development, keep validation on with `Build(strict: true, validateStack: true)`.
 
 ## 6. Multi-Mod Compatibility
 
-If multiple mods touch the same target method heavily, use `CooperativePatcher` instead of standalone transpilers.
+If several mods need to transpile the same method, prefer `CooperativePatcher` over isolated transpilers.
 
 Benefits:
-- explicit order (`PatchPriority`)
-- dependency checks (`dependsOn`)
-- conflict guards (`conflictsWith`)
+- explicit patch order
+- declared dependencies
+- declared conflicts
+- better failure isolation
 
 ## 7. Debugging
 
-Use these tools:
-- `RuntimeILInspector` (`F10`) to inspect patched IL in-game.
-- `TranspilerDebugger.DumpWithDiff(...)` for before/after files.
-- `TranspilerTestHarness` for isolated transform tests.
+Useful tools in the current stack:
+- `RuntimeILInspector` (`F10`) for in-game IL inspection
+- `TranspilerDebugger` for before/after dumps
+- `TranspilerTestHarness` for isolated transform tests
+- `UIDebugInspector` (`F11`) for UI-oriented runtime investigation
 
-For detailed IL workflow, see:
-- `documentation/Transpiler_and_Debugging_Guide.md`
+For a deeper IL workflow, see `documentation/Transpiler_and_Debugging_Guide.md`.
 
 ## 8. Common Failure Modes
 
-- `No match for call ...`: game method changed or overload mismatch.
-- Stack validation warning/exception: replace logic unbalanced stack.
-- Patch silently ineffective: wrong target signature or patch class not loaded by `PatchAll`.
+- `No match for call ...`: target method changed or overload mismatch
+- stack validation failures: replacement logic left the evaluation stack unbalanced
+- patch appears inactive: wrong target signature or patch assembly never loaded
 
 When this happens:
-1. Confirm target method signature.
+1. Confirm the target method signature.
 2. Dump before/after IL.
-3. Replace brittle opcode chains with stronger anchors (`FindCall`, `ReplaceAllPatterns`).
+3. Replace brittle instruction chains with stronger anchors.
+4. Reduce the patch to the smallest working edit.

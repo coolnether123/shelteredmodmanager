@@ -1,4 +1,4 @@
-# How to Develop a Plugin | Sheltered Mod Manager v1.2
+# How to Develop a Plugin | Sheltered Mod Manager v1.3
 
 This guide is for writing a mod plugin that runs under the current `IModPlugin` lifecycle.
 
@@ -10,7 +10,7 @@ Exact API signatures: `documentation/API_Signatures_Reference.md`.
 |--------------------|------------|--------|
 | `IModPlugin` lifecycle and context usage | Current `ModAPI.dll` | Supported |
 | `ModManagerBase` usage | Current `ModAPI.dll` | Supported |
-| Header version label `v1.2` | Doc title only | Legacy label |
+| Actor access via `IPluginContext.Actors` | Current `ModAPI.dll` + `ShelteredAPI` runtime | Supported |
 
 If this file conflicts with signatures in `API_Signatures_Reference.md`, follow the signature reference.
 
@@ -85,13 +85,17 @@ public interface IModPlugin
 ```csharp
 public interface IPluginContext
 {
+    GameObject LoaderRoot { get; }
+    GameObject PluginRoot { get; }
     ModEntry Mod { get; }
     ISettingsProvider Settings { get; }
     IModLogger Log { get; }
     IGameHelper Game { get; }
+    IActorSystem Actors { get; }
     ISaveSystem SaveSystem { get; }
     string GameRoot { get; }
     string ModsRoot { get; }
+    bool IsModernUnity { get; }
     void RunNextFrame(Action action);
     Coroutine StartCoroutine(IEnumerator routine);
     GameObject FindPanel(string nameOrPath);
@@ -173,10 +177,13 @@ Implement only what you need:
 High-value members:
 - `Log`: mod-prefixed logging
 - `SaveSystem`: per-save mod data
+- `Actors`: registry/components/bindings/adapters/simulation facade
 - `RunNextFrame(Action)`: defer to next Unity frame
 - `StartCoroutine(...)`: run coroutine from loader host
 - `FindPanel(...)` and `AddComponentToPanel<T>(...)`: UI integration
 - `GameRoot` / `ModsRoot`: path roots
+
+If you use actor adapters or `ShelteredAPI.*` namespaces directly, add a reference to `ShelteredAPI.dll` too.
 
 ## 9. Common Pitfalls
 

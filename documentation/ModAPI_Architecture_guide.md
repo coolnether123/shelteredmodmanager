@@ -1,124 +1,142 @@
-﻿# ModAPI v1.2 Architecture Guide
+# ModAPI v1.3 Architecture Guide
 
-This document describes how the loader actually behaves at runtime based on the current `ModAPI/Core` implementation.
+This document summarizes the current loader/runtime architecture.
 
-For exact interface/method signatures referenced by this architecture doc, use `documentation/API_Signatures_Reference.md`.
+For exact signatures, use `documentation/API_Signatures_Reference.md`.
 
 ## Compatibility Matrix
 
 | Scope | Applies To | Status |
 |-------|------------|--------|
 | Loader flow and lifecycle sequencing | Current codebase | Supported |
-| Header version label `v1.2` | Doc title only | Legacy label |
-
-When this guide and signature docs differ, trust `API_Signatures_Reference.md`.
+| Runtime host responsibilities | Current codebase | Supported |
+| Public interface details | See signature reference | Prefer signature reference |
 
 ## 1. Startup Pipeline
 
 Entry path:
 - Doorstop/bootstrap calls `PluginManager.getInstance().loadAssemblies(...)`.
 
-Inside `loadAssemblies(...)`:
+High-level flow:
 1. `InitializeLoader(...)`
 2. `ReadLoadOrderFromFile(...)`
 3. `DiscoverAndOrderMods(...)`
 4. `AttachInspectorTools()`
 5. `LoadAndInitializePlugins(...)`
 
-## 2. Loader Initialization Details
+## 2. Loader Initialization
 
-`InitializeLoader(...)` does the following:
-- Registers an `AssemblyResolve` bridge so plugins loaded from bytes can resolve `ModAPI` to the already-loaded assembly.
-- Resolves game/mod roots:
-  - `GameRoot = Directory.GetParent(Application.dataPath)`
-  - `ModsRoot = Path.Combine(GameRoot, "mods")`
-- Creates or reuses `ModAPI.Loader` and marks it `DontDestroyOnLoad`.
-- Ensures `PluginRunner` exists and attaches manager reference.
-- Applies Harmony bootstrap and save protection patches.
-- Wires session/save events:
-  - `ModAPI.Saves.Events.OnAfterLoad -> ModRandomState.Load`
-  - `ModAPI.Saves.Events.OnBeforeSave -> ModRandomState.Save`
-  - `GameEvents.OnSessionStarted -> PluginManager.OnSessionStarted`
-  - `GameEvents.OnNewGame -> PluginManager.OnNewGame`
+`InitializeLoader(...)` is responsible for:
+- resolving `GameRoot` and `ModsRoot`
+- creating or reusing `ModAPI.Loader`
+- ensuring `PluginRunner` exists
+- applying Harmony bootstrap and save-protection patches
+- wiring save/session lifecycle hooks
+- registering built-in APIs exposed by the current runtime
 
-## 3. Mod Discovery and Load Order
+That last step includes actor API registration when `ShelteredAPI` is present:
+- `ShelteredAPI.Actors`
+- `ShelteredAPI.ActorRegistry`
+- `ShelteredAPI.ActorComponents`
+- `ShelteredAPI.ActorBindings`
+- `ShelteredAPI.ActorAdapters`
+- `ShelteredAPI.ActorSimulation`
+- `ShelteredAPI.ActorEvents`
+- `ShelteredAPI.ActorSerialization`
 
-Discovery source: `ModDiscovery.DiscoverAllMods()`
-- Scans `<GameRoot>/mods/*`
-- Skips reserved folders: `disabled`, `ModAPI`
-- Requires `About/About.json`
-- Required About fields:
-  - `id`, `name`, `version`, `description`, `authors[]`
-- Normalizes `id` to lowercase for matching.
+## 3. Discovery and Load Order
 
-Load order source: `mods/loadorder.json`
-- Missing file: all discovered mods are enabled.
-- Present but empty `order`: no mods enabled.
-- Unknown IDs in `order`: ignored.
-- Duplicates: deduped case-insensitively.
+Discovery is driven by `ModDiscovery.DiscoverAllMods()`:
+- scans `<GameRoot>/mods/*`
+- skips reserved folders such as `disabled` and `ModAPI`
+- requires `About/About.json`
+- normalizes mod IDs to lowercase for matching
 
-## 4. Assembly Loading and Plugin Instantiation
+Load order is driven by `mods/loadorder.json`:
+- missing file means all discovered mods are enabled
+- unknown IDs are ignored
+- duplicates are removed case-insensitively
 
-For each ordered mod:
-- Loads all DLLs under `Assemblies/` with `Assembly.Load(byte[])` (avoids locking files during development).
-- Registers mod and assembly with `ModRegistry`.
-- Scans each assembly type and instantiates concrete classes implementing `IModPlugin`.
+## 4. Plugin Instantiation
+
+For each enabled mod:
+- all DLLs under `Assemblies/` are loaded via `Assembly.Load(byte[])`
+- the mod is registered with `ModRegistry`
+- concrete `IModPlugin` types are instantiated
 
 For each plugin instance:
-- Creates `GameObject` named `Mod-[ModId]` under loader root.
-- Builds `IPluginContext` via `PluginContextImpl`.
-- Registers optional interfaces if implemented:
-  - `IModUpdate`
-  - `IModShutdown`
-  - `IModSceneEvents`
-  - `IModSessionEvents`
-- Calls lifecycle in order:
-  1. `Initialize(context)`
-  2. `Start(context)`
+1. a `Mod-[ModId]` GameObject is created under the loader root
+2. `PluginContextImpl` is built
+3. optional interfaces are registered
+4. `Initialize(context)` runs
+5. `Start(context)` runs
 
-## 5. Runtime Host (`PluginRunner`)
+Optional interfaces currently recognized:
+- `IModUpdate`
+- `IModShutdown`
+- `IModSceneEvents`
+- `IModSessionEvents`
 
-`PluginRunner` responsibilities:
-- Main-thread queue via `Enqueue(...)` + drain in `Update()`.
-- Per-frame update fanout: `PluginManager.OnUnityUpdate()`.
-- Scene event bridge:
-  - Modern path: reflection hook into `SceneManager.sceneLoaded/sceneUnloaded`
-  - Fallback path: `OnLevelWasLoaded(int)` for legacy runtime
-- Quit boundary handling:
-  - `IsQuitting = true`
-  - Calls `PluginManager.ShutdownAll()`
+## 5. Runtime Host
 
-Runtime tool toggles:
-- `RuntimeInspector`: `F9` (Always available)
-- `RuntimeILInspector`: `F10` (Requires Decompiler)
-- `UIDebugInspector`: `F11` (Always available)
-- `RuntimeDebuggerUI`: `F12` (Requires Decompiler)
+`PluginRunner` is the main runtime host. It is responsible for:
+- draining the main-thread queue
+- fanout of per-frame `IModUpdate.Update()`
+- scene lifecycle bridging
+- quit-boundary shutdown
 
-## 6. `IPluginContext` Services
+Runtime tooling shortcuts:
+- `F9`: Runtime Inspector
+- `F10`: Runtime IL Inspector
+- `F11`: UI Debug Inspector
+- `F12`: Runtime Debugger UI
+
+## 6. `IPluginContext`
 
 Per-plugin context exposes:
-- `Log`: mod-prefixed logger (`PrefixedLogger`)
-- `SaveSystem`: per-mod data persistence API
-- `Game`: helper access to game state wrappers
-- `RunNextFrame(Action)`: schedule onto next Unity frame
-- `StartCoroutine(IEnumerator)`: coroutine host on loader runner
-- `FindPanel(...)` and `AddComponentToPanel<T>(...)`
-- Paths: `GameRoot`, `ModsRoot`
-- Runtime mode: `IsModernUnity`
+- `LoaderRoot`
+- `PluginRoot`
+- `Mod`
+- `Settings`
+- `Log`
+- `Game`
+- `Actors`
+- `SaveSystem`
+- `GameRoot`
+- `ModsRoot`
+- `IsModernUnity`
+- `RunNextFrame(...)`
+- `StartCoroutine(...)`
+- `FindPanel(...)`
+- `AddComponentToPanel<T>(...)`
 
-## 7. `ModManagerBase` Behavior
+`Actors` is the registry-first actor facade. It combines:
+- registry CRUD
+- component storage
+- binding resolution
+- adapter registration
+- event subscriptions
+- simulation scheduling
+- serialization
 
-`ModManagerBase` is a convenience base class for plugin authors:
-- Stores `Context`, exposes `Log`, `SaveSystem`, deterministic `Random` stream.
-- If settings attributes exist on the plugin class, it auto-creates `SettingsController`, loads config, and wires session reload.
-- Supports manual settings creation through `CreateSettings<T>()`.
-- Supports persistence registration via `RegisterPersistentData<T>()`.
+## 7. `ModManagerBase`
 
-## 8. Practical Guidance for Mod Authors
+`ModManagerBase` is the high-level base class for larger mods. It provides:
+- `Context`
+- `Log`
+- `SaveSystem`
+- deterministic `Random`
+- event registry/disposal support
+- automatic settings discovery and loading
+- automatic persistence scanning
 
-- Put lightweight setup in `Initialize`; patch application is usually safe in `Start`.
-- If you subscribe to events, implement `IModShutdown` and unsubscribe in `Shutdown`.
+`ModManagerBase<T>` adds a strongly typed `Config` surface.
+
+## 8. Practical Guidance
+
+- Keep constructors side-effect free.
+- Put lightweight wiring in `Initialize(...)`.
+- Apply patches and register runtime behavior in `Start(...)`.
 - Use `RunNextFrame(...)` when scene objects may not yet exist.
-- Do not assume all discovered mods load; load order filtering may exclude them.
-- Keep plugin constructors side-effect free; rely on context lifecycle.
-- If you use transpilers, expect safety policy defaults to favor runtime stability over permissive patching (`TranspilerSafeMode`, cooperative strict build, quarantine-on-failure).
+- Unsubscribe/cleanup in `Shutdown()` if you implement `IModShutdown`.
+- Prefer documented extension points before reaching for invasive patches.
