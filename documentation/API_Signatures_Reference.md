@@ -107,6 +107,7 @@ public interface IActorRegistry
     IActorRecord Get(ActorId id);
     bool TryGet(ActorId id, out IActorRecord actor);
     IActorRecord Create(ActorCreateRequest request);
+    IActorRecord Ensure(ActorCreateRequest request);
     bool Update(ActorId id, ActorRecordMutation mutation);
     bool Destroy(ActorId id, ActorDestroyReason reason);
     IReadOnlyList<IActorRecord> Enumerate(ActorQuery query);
@@ -118,6 +119,37 @@ public interface IActorComponentStore
     ActorComponentWriteResult Set(ActorId actorId, IActorComponent component, string sourceModId);
     bool TryGet<TComponent>(ActorId actorId, out TComponent component) where TComponent : class, IActorComponent;
     bool Remove(ActorId actorId, string componentId, string sourceModId);
+}
+
+public sealed class ActorBinding
+{
+    public string BindingType;
+    public string BindingKey;
+    public string SourceModId;
+    public bool Persistent;
+}
+
+public interface IActorBindingStore
+{
+    bool Bind(ActorId actorId, ActorBinding binding, bool replaceExisting);
+    bool Unbind(string bindingType, string bindingKey);
+    bool TryResolve(string bindingType, string bindingKey, out ActorId actorId);
+    IReadOnlyList<ActorBinding> GetBindings(ActorId actorId);
+    IReadOnlyList<ActorId> GetBoundActors(string bindingType);
+}
+
+public interface IActorAdapter
+{
+    string AdapterId { get; }
+    int Priority { get; }
+    void Synchronize(IActorSystem actors, long currentTick);
+}
+
+public interface IActorAdapterRegistry
+{
+    void RegisterAdapter(IActorAdapter adapter);
+    bool UnregisterAdapter(string adapterId);
+    IReadOnlyList<IActorAdapter> GetAdapters();
 }
 ```
 

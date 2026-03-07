@@ -131,7 +131,60 @@ var persistentCitizens = _actors.Enumerate(
         .Build());
 ```
 
-## 7. Simulation
+## 7. Bindings
+
+Bindings let a mod declare stable external identity for an actor without forcing
+other mods to know that mod's concrete runtime types.
+
+```csharp
+var actor = _actors.Ensure(new ActorCreateRequest
+{
+    Kind = ActorKind.Faction,
+    Domain = "factionoverhaul",
+    Flags = ActorFlags.Persistent | ActorFlags.Synthetic,
+    LifecycleState = ActorLifecycleState.Active,
+    PresenceState = ActorPresenceState.Offscreen
+});
+
+_actors.Bind(actor.Id, new ActorBinding
+{
+    BindingType = "factionoverhaul.faction",
+    BindingKey = "12",
+    SourceModId = "factionoverhaul",
+    Persistent = true
+}, true);
+```
+
+Other systems can resolve that actor later:
+
+```csharp
+ActorId actorId;
+if (_actors.TryResolve("factionoverhaul.faction", "12", out actorId))
+{
+}
+```
+
+## 8. Adapters
+
+Adapters are modular sync/reconciliation units. A large mod can register many of
+them, one per subsystem, without pushing its internal storage model into the
+actor registry.
+
+```csharp
+public sealed class FactionRosterAdapter : IActorAdapter
+{
+    public string AdapterId { get { return "factionoverhaul.roster"; } }
+    public int Priority { get { return 100; } }
+
+    public void Synchronize(IActorSystem actors, long currentTick)
+    {
+    }
+}
+
+_actors.RegisterAdapter(new FactionRosterAdapter());
+```
+
+## 9. Simulation
 
 ```csharp
 public class LoyaltyDecaySystem : IActorSimulationSystem
@@ -153,7 +206,7 @@ _actors.RegisterSystem(new LoyaltyDecaySystem());
 _actors.Tick(1, "mymod.sim");
 ```
 
-## 8. Events and Persistence
+## 10. Events and Persistence
 
 ```csharp
 _actors.Subscribe(evt =>
@@ -165,5 +218,6 @@ _actors.Subscribe(evt =>
 ```
 
 - Persistent actors/components are saved through the actor save envelope.
+- Persistent bindings are saved with the actor entry and restored on load.
 - Unknown component payloads are preserved until a serializer is available.
 - Component ids must be namespaced like `modid.component_name`.

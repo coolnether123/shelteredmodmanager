@@ -164,6 +164,31 @@ namespace ModAPI.Actors
         }
     }
 
+    [Serializable]
+    public sealed class ActorBinding
+    {
+        public string BindingType;
+        public string BindingKey;
+        public string SourceModId;
+        public bool Persistent;
+
+        public ActorBinding Clone()
+        {
+            return new ActorBinding
+            {
+                BindingType = BindingType,
+                BindingKey = BindingKey,
+                SourceModId = SourceModId,
+                Persistent = Persistent
+            };
+        }
+
+        public override string ToString()
+        {
+            return (BindingType ?? string.Empty) + ":" + (BindingKey ?? string.Empty);
+        }
+    }
+
     public interface IActorRecord
     {
         ActorId Id { get; }
@@ -367,6 +392,7 @@ namespace ModAPI.Actors
     {
         public ActorRecord Record;
         public List<ActorComponentSaveEntry> Components;
+        public List<ActorBinding> Bindings;
     }
 
     [Serializable]

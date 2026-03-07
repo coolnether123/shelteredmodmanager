@@ -243,6 +243,14 @@ namespace ModAPI.Core
                 if (componentStore != null)
                     ModAPIRegistry.RegisterAPI<IActorComponentStore>("ShelteredAPI.ActorComponents", componentStore, "shelteredapi");
 
+                var bindingStore = actors as IActorBindingStore;
+                if (bindingStore != null)
+                    ModAPIRegistry.RegisterAPI<IActorBindingStore>("ShelteredAPI.ActorBindings", bindingStore, "shelteredapi");
+
+                var adapterRegistry = actors as IActorAdapterRegistry;
+                if (adapterRegistry != null)
+                    ModAPIRegistry.RegisterAPI<IActorAdapterRegistry>("ShelteredAPI.ActorAdapters", adapterRegistry, "shelteredapi");
+
                 var scheduler = actors as IActorSimulationScheduler;
                 if (scheduler != null)
                     ModAPIRegistry.RegisterAPI<IActorSimulationScheduler>("ShelteredAPI.ActorSimulation", scheduler, "shelteredapi");
