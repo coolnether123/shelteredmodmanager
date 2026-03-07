@@ -6,9 +6,9 @@ using System.Reflection;
 using System.IO;
 using System.Text.RegularExpressions;
 using UnityEngine;
-using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Debugging;
+using ModAPI.Internal.DebugUI;
 using ModAPI.Inspector;
 
 namespace ModAPI.UI
@@ -888,7 +888,7 @@ namespace ModAPI.UI
             }
 
             _scrollSource = GUILayout.BeginScrollView(_scrollSource, GUI.skin.box);
-            DrawSourceLineList(SplitLines(activeSource), _sourceSingleViewMode != SourceSingleViewMode.Decompiled);
+            DrawSourceLineList(UIDebugSourcePreviewService.SplitLines(activeSource), _sourceSingleViewMode != SourceSingleViewMode.Decompiled);
             GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
@@ -899,7 +899,7 @@ namespace ModAPI.UI
             var originalSource = string.IsNullOrEmpty(_sourceText) ? "// Source is not loaded for this method yet." : _sourceText;
             var patchedView = _showSourceOverlayComments ? _patchedSourceText : _patchedSourceRewrittenText;
             var patchedSource = string.IsNullOrEmpty(patchedView) ? "// Patched preview is not available yet." : patchedView;
-            var alignedRows = BuildAlignedSourceDiffRows(originalSource, patchedSource);
+            var alignedRows = UIDebugSourcePreviewService.BuildAlignedSourceDiffRows(originalSource, patchedSource);
             GUILayout.BeginArea(new Rect(x, y, width, height));
             GUILayout.Label("<b>Source Diff (Estimated)</b>  <size=10><i>Patched view uses IL diff + regex-assisted source rewrite.</i></size>");
 
@@ -953,7 +953,7 @@ namespace ModAPI.UI
                 _scrollRegexDiagnostics = GUILayout.BeginScrollView(_scrollRegexDiagnostics, GUILayout.Height(90));
                 for (var i = 0; i < _sourceRegexSummaries.Count; i++)
                 {
-                    GUILayout.Label("<size=10>" + EscapeRichText(_sourceRegexSummaries[i]) + "</size>");
+                    GUILayout.Label("<size=10>" + UIDebugSourcePreviewService.EscapeRichText(_sourceRegexSummaries[i]) + "</size>");
                 }
                 GUILayout.EndScrollView();
                 GUILayout.EndVertical();
@@ -979,7 +979,7 @@ namespace ModAPI.UI
             var lines = normalized.Split('\n');
             for (var i = 0; i < lines.Length; i++)
             {
-                GUILayout.Label(FormatSourceLineForDisplay(lines[i], patched), _sourceLineStyle);
+                GUILayout.Label(UIDebugSourcePreviewService.FormatSourceLineForDisplay(lines[i], patched), _sourceLineStyle);
             }
         }
 
@@ -987,7 +987,7 @@ namespace ModAPI.UI
         {
             if (lines == null || lines.Count == 0)
             {
-                GUILayout.Label(FormatSourceLineForDisplay(string.Empty, patched), _sourceLineStyle);
+                GUILayout.Label(UIDebugSourcePreviewService.FormatSourceLineForDisplay(string.Empty, patched), _sourceLineStyle);
                 return;
             }
 
@@ -996,7 +996,7 @@ namespace ModAPI.UI
                 var line = lines[i];
                 if (line == null) line = string.Empty;
                 if (line.Length == 0) line = " ";
-                var display = FormatSourceLineForDisplay(line, patched);
+                var display = UIDebugSourcePreviewService.FormatSourceLineForDisplay(line, patched);
                 if (GUILayout.Button(display, _sourceLineStyle, GUILayout.ExpandWidth(true)))
                 {
                     var isDouble = Event.current != null && Event.current.clickCount >= 2;
@@ -1138,7 +1138,7 @@ namespace ModAPI.UI
         {
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("<b>Source Line Inspector</b>  <size=10>(double-click a source line)</size>");
-            GUILayout.Label(EscapeRichText(_sourceLineInspectText));
+            GUILayout.Label(UIDebugSourcePreviewService.EscapeRichText(_sourceLineInspectText));
             GUILayout.EndVertical();
         }
 
@@ -1354,232 +1354,6 @@ namespace ModAPI.UI
             return new string(chars);
         }
 
-        private SourceDiffAlignedRows BuildAlignedSourceDiffRows(string originalSource, string patchedSource)
-        {
-            var left = SplitLines(originalSource);
-            var rightAll = SplitLines(patchedSource);
-
-            var rightReal = new List<string>(rightAll.Count);
-            var rightSynthetic = new Dictionary<int, List<string>>();
-            var seenReal = 0;
-
-            for (var i = 0; i < rightAll.Count; i++)
-            {
-                var line = rightAll[i] ?? string.Empty;
-                if (IsSyntheticPatchedOverlayLine(line))
-                {
-                    if (!rightSynthetic.TryGetValue(seenReal, out var list))
-                    {
-                        list = new List<string>();
-                        rightSynthetic[seenReal] = list;
-                    }
-                    list.Add(line);
-                    continue;
-                }
-
-                rightReal.Add(line);
-                seenReal++;
-            }
-
-            var alignedLeft = new List<string>(Math.Max(left.Count, rightReal.Count));
-            var alignedRight = new List<string>(Math.Max(left.Count, rightReal.Count));
-
-            // LCS align original source against non-synthetic patched source lines.
-            var m = left.Count;
-            var n = rightReal.Count;
-            var lcs = new int[m + 1, n + 1];
-
-            for (var i = 1; i <= m; i++)
-            {
-                for (var j = 1; j <= n; j++)
-                {
-                    if (string.Equals(left[i - 1], rightReal[j - 1], StringComparison.Ordinal))
-                    {
-                        lcs[i, j] = lcs[i - 1, j - 1] + 1;
-                    }
-                    else
-                    {
-                        lcs[i, j] = Math.Max(lcs[i - 1, j], lcs[i, j - 1]);
-                    }
-                }
-            }
-
-            var rowStack = new Stack<SourceAlignRow>();
-            var x = m;
-            var y = n;
-
-            while (x > 0 && y > 0)
-            {
-                if (string.Equals(left[x - 1], rightReal[y - 1], StringComparison.Ordinal))
-                {
-                    rowStack.Push(new SourceAlignRow { Left = left[x - 1], Right = rightReal[y - 1] });
-                    x--;
-                    y--;
-                }
-                else if (lcs[x - 1, y] >= lcs[x, y - 1])
-                {
-                    rowStack.Push(new SourceAlignRow { Left = left[x - 1], Right = string.Empty });
-                    x--;
-                }
-                else
-                {
-                    rowStack.Push(new SourceAlignRow { Left = string.Empty, Right = rightReal[y - 1] });
-                    y--;
-                }
-            }
-
-            while (x > 0)
-            {
-                rowStack.Push(new SourceAlignRow { Left = left[x - 1], Right = string.Empty });
-                x--;
-            }
-
-            while (y > 0)
-            {
-                rowStack.Push(new SourceAlignRow { Left = string.Empty, Right = rightReal[y - 1] });
-                y--;
-            }
-
-            var realIndex = 0;
-            var injectedSynthetic = new HashSet<int>();
-            while (rowStack.Count > 0)
-            {
-                if (!injectedSynthetic.Contains(realIndex) && rightSynthetic.TryGetValue(realIndex, out var syntheticBefore))
-                {
-                    for (var s = 0; s < syntheticBefore.Count; s++)
-                    {
-                        AddSyntheticOverlayRow(syntheticBefore[s], alignedLeft, alignedRight);
-                    }
-                    injectedSynthetic.Add(realIndex);
-                }
-
-                var row = rowStack.Pop();
-                alignedLeft.Add(row.Left ?? string.Empty);
-                alignedRight.Add(row.Right ?? string.Empty);
-
-                if (!string.IsNullOrEmpty(row.Right))
-                {
-                    realIndex++;
-                }
-            }
-
-            if (!injectedSynthetic.Contains(realIndex) && rightSynthetic.TryGetValue(realIndex, out var trailingSynthetic))
-            {
-                for (var s = 0; s < trailingSynthetic.Count; s++)
-                {
-                    AddSyntheticOverlayRow(trailingSynthetic[s], alignedLeft, alignedRight);
-                }
-            }
-
-            return new SourceDiffAlignedRows { LeftLines = alignedLeft, RightLines = alignedRight };
-        }
-
-        private static void AddSyntheticOverlayRow(string syntheticLine, List<string> alignedLeft, List<string> alignedRight)
-        {
-            var line = syntheticLine ?? string.Empty;
-            var trimmed = line.TrimStart();
-
-            // Keep IL delta lines spatially mirrored:
-            // removed lines belong to left pane, added lines belong to right pane.
-            if (trimmed.StartsWith("//   -", StringComparison.Ordinal))
-            {
-                alignedLeft.Add(line);
-                alignedRight.Add(string.Empty);
-                return;
-            }
-
-            if (trimmed.StartsWith("//   +", StringComparison.Ordinal))
-            {
-                alignedLeft.Add(string.Empty);
-                alignedRight.Add(line);
-                return;
-            }
-
-            alignedLeft.Add(string.Empty);
-            alignedRight.Add(line);
-        }
-
-        private static List<string> SplitLines(string text)
-        {
-            return (text ?? string.Empty).Replace("\r\n", "\n").Split('\n').ToList();
-        }
-
-        private static bool IsSyntheticPatchedOverlayLine(string line)
-        {
-            if (string.IsNullOrEmpty(line)) return false;
-
-            var trimmed = line.TrimStart();
-            if (!trimmed.StartsWith("//", StringComparison.Ordinal)) return false;
-
-            return
-                line.IndexOf("TRANSPILE INJECTION PREVIEW", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                trimmed.StartsWith("// This shows likely runtime-injected operations", StringComparison.Ordinal) ||
-                trimmed.StartsWith("// [Regex Rewrite]", StringComparison.Ordinal) ||
-                trimmed.StartsWith("// Hunk", StringComparison.Ordinal) ||
-                trimmed.StartsWith("//   +", StringComparison.Ordinal) ||
-                trimmed.StartsWith("//   -", StringComparison.Ordinal) ||
-                trimmed.StartsWith("// ... ", StringComparison.Ordinal) ||
-                line.IndexOf("END INJECTION PREVIEW", StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private sealed class SourceDiffAlignedRows
-        {
-            public List<string> LeftLines = new List<string>();
-            public List<string> RightLines = new List<string>();
-        }
-
-        private sealed class SourceAlignRow
-        {
-            public string Left;
-            public string Right;
-        }
-
-        private string FormatSourceLineForDisplay(string raw, bool patched)
-        {
-            var line = raw ?? string.Empty;
-            var trimmed = line.TrimStart();
-            var escaped = EscapeRichText(line);
-
-            if (!patched)
-            {
-                return "<color=#D8D8D8>" + escaped + "</color>";
-            }
-
-            if (trimmed.StartsWith("//   +", StringComparison.Ordinal))
-            {
-                return "<color=#7CFC00>" + escaped + "</color>";
-            }
-
-            if (trimmed.StartsWith("//   -", StringComparison.Ordinal))
-            {
-                return "<color=#FF8A8A>" + escaped + "</color>";
-            }
-
-            if (trimmed.StartsWith("// [Regex Rewrite]", StringComparison.Ordinal) || line.IndexOf("[REGEX_PATCH]", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "<color=#F6D365>" + escaped + "</color>";
-            }
-
-            if (line.IndexOf("TRANSPILE INJECTION PREVIEW", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                trimmed.StartsWith("// Hunk", StringComparison.Ordinal))
-            {
-                return "<color=#8ED6FF>" + escaped + "</color>";
-            }
-
-            if (trimmed.StartsWith("//", StringComparison.Ordinal))
-            {
-                return "<color=#B0B0B0>" + escaped + "</color>";
-            }
-
-            return "<color=#EDEDED>" + escaped + "</color>";
-        }
-
-        private static string EscapeRichText(string value)
-        {
-            if (string.IsNullOrEmpty(value)) return string.Empty;
-            return value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
-        }
-
         private void DrawInstructionAnalysisPanel(float x, float y, float width, float height)
         {
             GUILayout.BeginArea(new Rect(x, y, width, height));
@@ -1632,85 +1406,14 @@ namespace ModAPI.UI
 
         private List<ModAPI.Harmony.TranspilerDebugger.Snapshot> GetVisibleSnapshots()
         {
-            var history = ModAPI.Harmony.TranspilerDebugger.History;
-            if (history == null) return new List<ModAPI.Harmony.TranspilerDebugger.Snapshot>();
-            IEnumerable<ModAPI.Harmony.TranspilerDebugger.Snapshot> query = history;
-
-            query = query.Where(s =>
-            {
-                var isCore = IsCoreSnapshot(s);
-                if (isCore && !_showCorePatches) return false;
-                if (!isCore && !_showExternalPatches) return false;
-                return true;
-            });
-
-            var hasMethodSearch = !string.IsNullOrEmpty(_historyMethodSearch);
-            if (_sceneFilteredOnly && !hasMethodSearch)
-            {
-                query = query.Where(IsSnapshotSceneRelevant);
-            }
-
-            if (hasMethodSearch)
-            {
-                var search = _historyMethodSearch.Trim();
-                query = query.Where(s =>
-                {
-                    if (s == null) return false;
-                    var methodId = BuildSnapshotMethodId(s) ?? string.Empty;
-                    var haystack = string.Join(" ", new[]
-                    {
-                        s.ModId ?? string.Empty,
-                        methodId,
-                        s.StepName ?? string.Empty,
-                        s.MethodName ?? string.Empty,
-                        s.PatchOrigin ?? string.Empty
-                    });
-                    return haystack.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0;
-                });
-            }
-
-            var filtered = query.ToList();
-            if (filtered.Count <= 1) return filtered;
-
-            // Some patches can be recorded twice in the same startup tick due to multi-stage patch flows.
-            // Collapse identical per-method snapshots occurring in the same second.
-            var deduped = new Dictionary<string, ModAPI.Harmony.TranspilerDebugger.Snapshot>(StringComparer.Ordinal);
-            for (var i = 0; i < filtered.Count; i++)
-            {
-                var snap = filtered[i];
-                var key = BuildSnapshotDedupKey(snap);
-                if (string.IsNullOrEmpty(key))
-                {
-                    key = "__index__" + i;
-                }
-
-                if (deduped.TryGetValue(key, out var existing))
-                {
-                    if (existing == null || snap.Timestamp > existing.Timestamp)
-                    {
-                        deduped[key] = snap;
-                    }
-                }
-                else
-                {
-                    deduped[key] = snap;
-                }
-            }
-
-            return deduped.Values.OrderBy(s => s.Timestamp).ToList();
-        }
-
-        private static string BuildSnapshotDedupKey(ModAPI.Harmony.TranspilerDebugger.Snapshot snap)
-        {
-            if (snap == null) return string.Empty;
-
-            var methodId = BuildSnapshotMethodId(snap);
-
-            return string.Join("|", new[]
-            {
-                snap.ModId ?? string.Empty,
-                methodId ?? string.Empty,
-            });
+            return UIDebugSnapshotService.GetVisibleSnapshots(
+                ModAPI.Harmony.TranspilerDebugger.History,
+                _showCorePatches,
+                _showExternalPatches,
+                _sceneFilteredOnly,
+                _historyMethodSearch,
+                _activeSceneName,
+                _sceneTypeHints);
         }
 
         private void DrawRuntimeMethodMatches(string search)
@@ -1778,121 +1481,17 @@ namespace ModAPI.UI
             _runtimeMethodSearchLast = search;
             _nextRuntimeMethodSearchTime = Time.realtimeSinceStartup + 1.0f;
             _runtimeMethodMatches.Clear();
-
-            const int maxMatches = 40;
-            var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
-            var normalized = search.Trim();
-            if (string.IsNullOrEmpty(normalized)) return;
-
-            var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-            var assemblies = new List<Assembly>(allAssemblies.Length);
-            for (var i = 0; i < allAssemblies.Length; i++)
-            {
-                var asm = allAssemblies[i];
-                if (asm == null) continue;
-                assemblies.Add(asm);
-            }
-
-            assemblies.Sort((a, b) =>
-            {
-                var an = a != null ? (a.GetName().Name ?? string.Empty) : string.Empty;
-                var bn = b != null ? (b.GetName().Name ?? string.Empty) : string.Empty;
-                var ar = string.Equals(an, "Assembly-CSharp", StringComparison.OrdinalIgnoreCase) ? 0
-                    : (an.IndexOf("ModAPI", StringComparison.OrdinalIgnoreCase) >= 0 ? 1 : 2);
-                var br = string.Equals(bn, "Assembly-CSharp", StringComparison.OrdinalIgnoreCase) ? 0
-                    : (bn.IndexOf("ModAPI", StringComparison.OrdinalIgnoreCase) >= 0 ? 1 : 2);
-                var byRank = ar.CompareTo(br);
-                if (byRank != 0) return byRank;
-                return string.Compare(an, bn, StringComparison.OrdinalIgnoreCase);
-            });
-
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            for (var a = 0; a < assemblies.Count && _runtimeMethodMatches.Count < maxMatches; a++)
-            {
-                Type[] types;
-                try
-                {
-                    types = assemblies[a].GetTypes();
-                }
-                catch (ReflectionTypeLoadException rtl)
-                {
-                    var tmp = new List<Type>();
-                    if (rtl.Types != null)
-                    {
-                        for (var i = 0; i < rtl.Types.Length; i++)
-                        {
-                            var t = rtl.Types[i];
-                            if (t != null) tmp.Add(t);
-                        }
-                    }
-                    types = tmp.ToArray();
-                }
-                catch
-                {
-                    continue;
-                }
-
-                for (var t = 0; t < types.Length && _runtimeMethodMatches.Count < maxMatches; t++)
-                {
-                    var type = types[t];
-                    if (type == null) continue;
-                    var typeName = type.FullName ?? type.Name ?? string.Empty;
-                    MethodInfo[] methods;
-                    try
-                    {
-                        methods = type.GetMethods(flags);
-                    }
-                    catch
-                    {
-                        continue;
-                    }
-
-                    for (var m = 0; m < methods.Length && _runtimeMethodMatches.Count < maxMatches; m++)
-                    {
-                        var method = methods[m];
-                        if (method == null) continue;
-                        var hit =
-                            typeName.IndexOf(normalized, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            method.Name.IndexOf(normalized, StringComparison.OrdinalIgnoreCase) >= 0;
-                        if (!hit) continue;
-
-                        var key = typeName + "::" + method.Name;
-                        if (seen.Contains(key)) continue;
-                        seen.Add(key);
-                        _runtimeMethodMatches.Add(method);
-                    }
-                }
-            }
+            _runtimeMethodMatches.AddRange(UIDebugSnapshotService.FindRuntimeMethodMatches(search, 40));
         }
 
         private static bool IsCoreSnapshot(ModAPI.Harmony.TranspilerDebugger.Snapshot snap)
         {
-            if (snap == null) return false;
-            var mod = snap.ModId ?? string.Empty;
-            if (string.Equals(mod, "ModAPI", StringComparison.OrdinalIgnoreCase)) return true;
-
-            var origin = snap.PatchOrigin ?? string.Empty;
-            if (origin.IndexOf("Owner:ModAPI", StringComparison.OrdinalIgnoreCase) >= 0) return true;
-            if (origin.IndexOf("CooperativePatcher|ModAPI|", StringComparison.OrdinalIgnoreCase) >= 0) return true;
-            return false;
+            return UIDebugSnapshotService.IsCoreSnapshot(snap);
         }
 
         private bool IsSnapshotSceneRelevant(ModAPI.Harmony.TranspilerDebugger.Snapshot snap)
         {
-            if (snap == null) return false;
-            if (_sceneTypeHints.Count == 0) return true;
-
-            var probe = (snap.MethodName ?? string.Empty) + " " + (snap.StepName ?? string.Empty) + " " + (snap.PatchOrigin ?? string.Empty);
-            if (string.IsNullOrEmpty(probe)) return false;
-            if (!string.IsNullOrEmpty(_activeSceneName) && probe.IndexOf(_activeSceneName, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-
-            foreach (var hint in _sceneTypeHints)
-            {
-                if (string.IsNullOrEmpty(hint)) continue;
-                if (probe.IndexOf(hint, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-            }
-
-            return false;
+            return UIDebugSnapshotService.IsSnapshotSceneRelevant(snap, _activeSceneName, _sceneTypeHints);
         }
 
         private void RefreshActiveScriptsIfNeeded()
@@ -1929,1245 +1528,53 @@ namespace ModAPI.UI
 
         private static string BuildMethodDisplayName(MethodBase method, ModAPI.Harmony.TranspilerDebugger.Snapshot fallback)
         {
-            if (method != null && method.DeclaringType != null)
-            {
-                return method.DeclaringType.FullName + "." + method.Name;
-            }
-
-            if (fallback != null)
-            {
-                return BuildSnapshotMethodId(fallback);
-            }
-
-            return "<unresolved method>";
+            return UIDebugSnapshotService.BuildMethodDisplayName(method, fallback);
         }
 
         private static string BuildSnapshotMethodId(ModAPI.Harmony.TranspilerDebugger.Snapshot snap)
         {
-            if (snap == null) return "<unresolved method>";
-            if (!string.IsNullOrEmpty(snap.MethodName)) return snap.MethodName;
-            if (!string.IsNullOrEmpty(snap.StepName)) return snap.StepName;
-            return "<unresolved method>";
+            return UIDebugSnapshotService.BuildSnapshotMethodId(snap);
         }
 
         private static string BuildSnapshotDisplayTitle(ModAPI.Harmony.TranspilerDebugger.Snapshot snap)
         {
-            var methodId = BuildSnapshotMethodId(snap);
-            var lastDot = methodId.LastIndexOf('.');
-            if (lastDot > 0 && lastDot < methodId.Length - 1)
-            {
-                var previousDot = methodId.LastIndexOf('.', lastDot - 1);
-                if (previousDot >= 0 && previousDot < methodId.Length - 1)
-                {
-                    return methodId.Substring(previousDot + 1);
-                }
-            }
-
-            return methodId;
+            return UIDebugSnapshotService.BuildSnapshotDisplayTitle(snap);
         }
 
         private static bool IsSnapshotForMethod(ModAPI.Harmony.TranspilerDebugger.Snapshot snap, MethodBase method)
         {
-            if (snap == null || method == null) return false;
-
-            var methodId = method.DeclaringType != null
-                ? method.DeclaringType.FullName + "." + method.Name
-                : method.Name;
-            if (string.IsNullOrEmpty(methodId)) return false;
-
-            if (!string.IsNullOrEmpty(snap.MethodName) &&
-                string.Equals(snap.MethodName, methodId, StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            if (!string.IsNullOrEmpty(snap.StepName) &&
-                string.Equals(snap.StepName, methodId, StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            return false;
+            return UIDebugSnapshotService.IsSnapshotForMethod(snap, method);
         }
 
         private static string SafeValue(object value)
         {
-            if (value == null) return "null";
-            var text = value.ToString() ?? string.Empty;
-            if (text.Length > 160)
-            {
-                return text.Substring(0, 157) + "...";
-            }
-
-            return text;
+            return UIDebugSnapshotService.SafeValue(value);
         }
 
         private ModAPI.Harmony.TranspilerDebugger.Snapshot FindLatestSnapshotForMethod(MethodBase method)
         {
-            if (method == null) return null;
-
-            var history = ModAPI.Harmony.TranspilerDebugger.History;
-            if (history == null) return null;
-
-            for (var i = history.Count - 1; i >= 0; i--)
-            {
-                var snap = history[i];
-                if (IsSnapshotForMethod(snap, method))
-                {
-                    return snap;
-                }
-            }
-
-            return null;
+            return UIDebugSnapshotService.FindLatestSnapshotForMethod(method, ModAPI.Harmony.TranspilerDebugger.History);
         }
 
         private string BuildPatchedSourcePreview(string vanillaSource, ModAPI.Harmony.TranspilerDebugger.Snapshot snap)
         {
-            _sourceRegexReplaceCount = 0;
+            var preview = UIDebugSourcePreviewService.BuildPatchedSourcePreview(
+                vanillaSource,
+                snap,
+                _selectedMethod,
+                _selectedMethodId,
+                _currentDiff);
+
+            _patchedSourceRewrittenText = preview.PatchedSourceRewrittenText;
+            _sourceRegexReplaceCount = preview.RegexReplaceCount;
             _sourceRegexSummaries.Clear();
-            _patchedSourceRewrittenText = string.Empty;
-
-            if (string.IsNullOrEmpty(vanillaSource))
-            {
-                _patchedSourceRewrittenText = "// Patched preview unavailable: vanilla source is empty.";
-                return "// Patched preview unavailable: vanilla source is empty.";
-            }
-
-            if (snap == null)
-            {
-                _patchedSourceRewrittenText = vanillaSource;
-                return vanillaSource;
-            }
-
-            var hunks = BuildSourcePreviewHunks(snap);
-            if (hunks.Count == 0)
-            {
-                _patchedSourceRewrittenText = vanillaSource;
-                return vanillaSource + "\n\n// [Transpiler Injection Preview] No IL additions/removals were detected.";
-            }
-
-            var rewritten = ApplyRegexSourceRewrites(vanillaSource, hunks, snap, out var rewriteSummaries, out var rewriteCount);
-            _patchedSourceRewrittenText = rewritten;
-            _sourceRegexReplaceCount = rewriteCount;
-            if (rewriteSummaries != null && rewriteSummaries.Count > 0)
-            {
-                _sourceRegexSummaries.AddRange(rewriteSummaries);
-            }
-
-            var normalized = rewritten.Replace("\r\n", "\n");
-            var lines = normalized.Split('\n').ToList();
-            var methodName = _selectedMethod != null ? _selectedMethod.Name : ExtractMethodNameFromSelectedId(_selectedMethodId);
-            var insertLine = FindBestOverlayInsertLine(lines, hunks, methodName);
-            var indent = GuessIndentation(lines, insertLine);
-            var overlay = RenderSourcePreviewOverlay(hunks, indent, _sourceRegexSummaries, _sourceRegexReplaceCount);
-
-            lines.InsertRange(insertLine, overlay);
-            return string.Join("\n", lines.ToArray());
+            _sourceRegexSummaries.AddRange(preview.RegexSummaries);
+            return preview.PatchedSourceText;
         }
 
-        private string ApplyRegexSourceRewrites(string source, List<SourcePreviewHunk> hunks, ModAPI.Harmony.TranspilerDebugger.Snapshot snap, out List<string> summaries, out int replaceCount)
-        {
-            summaries = new List<string>();
-            replaceCount = 0;
-            if (string.IsNullOrEmpty(source) || hunks == null || hunks.Count == 0)
-            {
-                return source;
-            }
 
-            var methodName = _selectedMethod != null ? _selectedMethod.Name : ExtractMethodNameFromSelectedId(_selectedMethodId);
-            int scopeStart;
-            int scopeLength;
-            var hasScopedBody = TryFindMethodBodySpan(source, methodName, out scopeStart, out scopeLength);
-            var scopePrefix = hasScopedBody ? source.Substring(0, scopeStart) : string.Empty;
-            var scope = hasScopedBody ? source.Substring(scopeStart, scopeLength) : source;
-            var scopeSuffix = hasScopedBody ? source.Substring(scopeStart + scopeLength) : string.Empty;
-            var rewrittenScope = scope;
 
-            var anyCandidate = false;
-            var appliedPairSet = new HashSet<string>(StringComparer.Ordinal);
-            var pairRewriteOrdinals = new Dictionary<string, int>(StringComparer.Ordinal);
-            for (var h = 0; h < hunks.Count; h++)
-            {
-                if (replaceCount >= 8) break;
-
-                var hunk = hunks[h];
-                var addedExpressions = ExtractAddedExpressionsFromHunk(hunk);
-                var removedNames = ExtractRemovedSourceTokensFromHunk(hunk);
-
-                // Even if nothing was removed in IL, we might be inserting before/after a symbolic name.
-                if (addedExpressions.Count == 0) continue;
-
-                if (removedNames.Count == 0 && hunk.StartIndexBefore < snap.BeforeInstructions.Count)
-                {
-                    // Peek ahead up to 5 instructions to find a symbolic anchor for the insertion.
-                    for (int i = hunk.StartIndexBefore; i < Math.Min(hunk.StartIndexBefore + 5, snap.BeforeInstructions.Count); i++)
-                    {
-                        var tokens = ExtractTokensFromILLine(snap.BeforeInstructions[i]);
-                        foreach (var t in tokens)
-                        {
-                            if (!removedNames.Contains(t) && !IsHighRiskRemovedToken(t)) 
-                                removedNames.Add(t);
-                        }
-                        if (removedNames.Count > 0) break;
-                    }
-                }
-
-                anyCandidate = true;
-                for (var a = 0; a < addedExpressions.Count; a++)
-                {
-                    if (replaceCount >= 8) break;
-                    var replacementExpr = addedExpressions[a];
-                    if (string.IsNullOrEmpty(replacementExpr)) continue;
-
-                    for (var r = 0; r < removedNames.Count; r++)
-                    {
-                        if (replaceCount >= 8) break;
-
-                        var token = removedNames[r];
-                        if (string.IsNullOrEmpty(token)) continue;
-
-                        var pairKey = token + "->" + replacementExpr;
-                        if (appliedPairSet.Contains(pairKey)) continue;
-                        int ordinalCursor;
-                        if (!pairRewriteOrdinals.TryGetValue(pairKey, out ordinalCursor))
-                        {
-                            ordinalCursor = 0;
-                        }
-
-                        var before = replaceCount;
-                        if (string.Equals(token, "__VECTOR2_ZERO_ZERO__", StringComparison.Ordinal) ||
-                            string.Equals(token, "__VECTOR2_CTOR__", StringComparison.Ordinal))
-                        {
-                            // Handles both exact zero ctor and generic ctor-only removal cases.
-                            var vector2LiteralPattern = string.Equals(token, "__VECTOR2_ZERO_ZERO__", StringComparison.Ordinal)
-                                ? @"new\s+Vector2\s*\(\s*0(?:\.0+)?f?\s*,\s*0(?:\.0+)?f?\s*\)"
-                                : @"new\s+Vector2\s*\(\s*[^,\)]+?\s*,\s*[^,\)]+?\s*\)";
-                            rewrittenScope = TryApplyUniqueRegexRewrite(
-                                rewrittenScope,
-                                vector2LiteralPattern,
-                                replacementExpr + " /* [REGEX_PATCH] */",
-                                "Hunk " + (h + 1) + " literal new Vector2(...) -> " + replacementExpr,
-                                summaries,
-                                ref replaceCount,
-                                ref ordinalCursor,
-                                true);
-                        }
-                        else if (string.Equals(token, "__GRIDREF_HALF_COORDS__", StringComparison.Ordinal))
-                        {
-                            // FindClearSpace-style center-point construction:
-                            // new GridRef(width / 2, height / 2) -> <replacementExpr>
-                            
-                            // Improved pattern to handle:
-                            // - Optional 'this.' qualification
-                            // - Optional '(float)' or '(int)' casts
-                            // - 'width' or 'm_width'
-                            // - Division by 2.0f, 2f, 2, or bitshift >> 1
-                            var gridRefHalfPattern =
-                                @"new\s+(?:[\w\.]+\.)*GridRef\s*\(\s*" +
-                                // Arg 1: width/2
-                                @"(?:[\w\.]+\.)*(?:m_)?width\s*(?:/[^,]+|>>\s*1)\s*," +
-                                // Arg 2: height/2
-                                @"\s*(?:[\w\.]+\.)*(?:m_)?height\s*(?:/[^)]+|>>\s*1)\s*\)";
-
-                            rewrittenScope = TryApplyUniqueRegexRewrite(
-                                rewrittenScope,
-                                gridRefHalfPattern,
-                                replacementExpr, // Removed redundant comment suffix here, TryApply adds one if needed
-                                "Hunk " + (h + 1) + " literal new GridRef(width/2,height/2) -> " + replacementExpr,
-                                summaries,
-                                ref replaceCount,
-                                ref ordinalCursor,
-                                true);
-
-                            if (replaceCount == before)
-                            {
-                                // Broader fallback when decompiler renders equivalent center math differently.
-                                // We still keep occurrence-based matching to avoid global rewrites.
-                                var anyGridRefCtorPattern = @"new\s+(?:[A-Za-z_]\w*\.)*GridRef\s*\((?:[^()]|\([^()]*\))*\)";
-                                rewrittenScope = TryApplyUniqueRegexRewrite(
-                                    rewrittenScope,
-                                    anyGridRefCtorPattern,
-                                    replacementExpr + " /* [REGEX_PATCH] */",
-                                    "Hunk " + (h + 1) + " fallback new GridRef(...) -> " + replacementExpr,
-                                    summaries,
-                                    ref replaceCount,
-                                    ref ordinalCursor,
-                                    true);
-                            }
-                        }
-                        else if (token.StartsWith("__CTOR__", StringComparison.Ordinal))
-                        {
-                            var ctorTypePattern = BuildConstructorLiteralPattern(token);
-                            if (!string.IsNullOrEmpty(ctorTypePattern))
-                            {
-                                rewrittenScope = TryApplyUniqueRegexRewrite(
-                                    rewrittenScope,
-                                    ctorTypePattern,
-                                    replacementExpr + " /* [REGEX_PATCH] */",
-                                    "Hunk " + (h + 1) + " ctor literal " + token + " -> " + replacementExpr,
-                                    summaries,
-                                    ref replaceCount,
-                                    ref ordinalCursor,
-                                    true);
-                            }
-                        }
-                        else if (Regex.IsMatch(token, @"^[A-Za-z_]\w*$"))
-                        {
-                            if (IsHighRiskRemovedToken(token))
-                            {
-                                summaries.Add("[Regex Rewrite] High-risk token left unchanged: " + token + " (Hunk " + (h + 1) + ")");
-                                continue;
-                            }
-
-                            // If we have removals, we replace. If we only have additions, we anchor.
-                            bool isReplacement = hunk.Removed != null && hunk.Removed.Count > 0;
-
-                            // Prefer replacing/anchoring entire object/property chains where possible.
-                            var chainPattern = @"\b[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*\s*\.\s*" + Regex.Escape(token) + @"\b";
-                            rewrittenScope = TryApplyUniqueRegexRewrite(
-                                rewrittenScope,
-                                chainPattern,
-                                replacementExpr + (isReplacement ? " /* [REGEX_PATCH] */" : " /* [INSERT_PATCH] */"),
-                                (isReplacement ? "Hunk " : "Anchor Hunk ") + (h + 1) + " chain ." + token + " -> " + replacementExpr,
-                                summaries,
-                                ref replaceCount,
-                                ref ordinalCursor,
-                                true,
-                                !isReplacement); // anchorOnly if not replacing
-
-                            if (replaceCount == before)
-                            {
-                                // Fallback: unique standalone symbol replacement.
-                                var symbolPattern = @"\b" + Regex.Escape(token) + @"\b";
-                                rewrittenScope = TryApplyUniqueRegexRewrite(
-                                    rewrittenScope,
-                                    symbolPattern,
-                                    replacementExpr + " /* [REGEX_PATCH] */",
-                                    "Hunk " + (h + 1) + " symbol " + token + " -> " + replacementExpr,
-                                    summaries,
-                                    ref replaceCount,
-                                    ref ordinalCursor,
-                                    false);
-                            }
-                        }
-                        else
-                        {
-                            // Phrase literal fallback for non-symbol tokens.
-                            var literalPattern = Regex.Escape(token);
-                            rewrittenScope = TryApplyUniqueRegexRewrite(
-                                rewrittenScope,
-                                literalPattern,
-                                replacementExpr + " /* [REGEX_PATCH] */",
-                                "Hunk " + (h + 1) + " literal " + token + " -> " + replacementExpr,
-                                summaries,
-                                ref replaceCount,
-                                ref ordinalCursor,
-                                true);
-                        }
-
-                        if (replaceCount > before)
-                        {
-                            appliedPairSet.Add(pairKey);
-                        }
-
-                        pairRewriteOrdinals[pairKey] = ordinalCursor;
-                    }
-                }
-            }
-
-            if (!anyCandidate)
-            {
-                summaries.Add("[Regex Rewrite] No usable IL hunk pairs found (added expression + removed token).");
-            }
-            else if (replaceCount == 0)
-            {
-                summaries.Add("[Regex Rewrite] 0 applied (patterns were ambiguous or absent in method body).");
-            }
-
-            return hasScopedBody ? scopePrefix + rewrittenScope + scopeSuffix : rewrittenScope;
-        }
-
-        private static string TryApplyUniqueRegexRewrite(
-            string source,
-            string pattern,
-            string replacement,
-            string description,
-            List<string> summaries,
-            ref int replaceCount,
-            ref int ordinalCursor,
-            bool allowOrdinalFallback,
-            bool anchorOnly = false)
-        {
-            if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(pattern)) return source;
-
-            var regex = new Regex(pattern, RegexOptions.Multiline);
-            var matches = regex.Matches(source);
-            var validMatches = new List<Match>();
-            for (var i = 0; i < matches.Count; i++)
-            {
-                var match = matches[i];
-                if (!match.Success) continue;
-                if (IsInsideCommentLine(source, match.Index)) continue;
-                validMatches.Add(match);
-            }
-
-            if (validMatches.Count == 1)
-            {
-                replaceCount++;
-                summaries.Add("[Regex Rewrite] Applied: " + description);
-                var m = validMatches[0];
-                ordinalCursor++;
-                
-                if (anchorOnly)
-                {
-                    // For pure insertions, we keep the anchor and insert our code before it.
-                    return source.Insert(m.Index, replacement + "\n" + GuessIndentationForAt(source, m.Index));
-                }
-                
-                return source.Substring(0, m.Index) + replacement + source.Substring(m.Index + m.Length);
-            }
-
-            if (validMatches.Count > 1)
-            {
-                // Controlled fallback: for low-ambiguity rewrite candidates, prefer a deterministic
-                // first-match replacement over dropping the rewrite entirely.
-                // This is especially useful for repeated literals in methods with multiple similar branches.
-                var allowBestGuess =
-                    description.IndexOf("literal", StringComparison.OrdinalIgnoreCase) >= 0;
-
-                if (allowOrdinalFallback)
-                {
-                    if (ordinalCursor >= 0 && ordinalCursor < validMatches.Count)
-                    {
-                        var m = validMatches[ordinalCursor];
-                        var lineNumber = 1;
-                        for (var i = 0; i < m.Index && i < source.Length; i++)
-                        {
-                            if (source[i] == '\n') lineNumber++;
-                        }
-
-                        replaceCount++;
-                        summaries.Add("[Regex Rewrite] Applied by occurrence (" + (ordinalCursor + 1) + "/" + validMatches.Count + ", @line " + lineNumber + "): " + description);
-                        ordinalCursor++;
-                        return source.Substring(0, m.Index) + replacement + source.Substring(m.Index + m.Length);
-                    }
-                }
-
-                if (allowBestGuess && validMatches.Count <= 4)
-                {
-                    var m = validMatches[0];
-                    var lineNumber = 1;
-                    for (var i = 0; i < m.Index && i < source.Length; i++)
-                    {
-                        if (source[i] == '\n') lineNumber++;
-                    }
-
-                    replaceCount++;
-                    summaries.Add("[Regex Rewrite] Best-guess applied (" + validMatches.Count + " matches, chose first @line " + lineNumber + "): " + description);
-                    ordinalCursor++;
-                    return source.Substring(0, m.Index) + replacement + source.Substring(m.Index + m.Length);
-                }
-
-                summaries.Add("[Regex Rewrite] Ambiguous pattern (" + validMatches.Count + " matches), left unchanged: " + description);
-            }
-            else if (matches.Count > 0 && validMatches.Count == 0)
-            {
-                summaries.Add("[Regex Rewrite] Comment-only match, left unchanged: " + description);
-            }
-
-            return source;
-        }
-
-        private static bool IsHighRiskRemovedToken(string token)
-        {
-            if (string.IsNullOrEmpty(token)) return true;
-
-            // These are common structural identifiers in decompiled output.
-            // Rewriting them tends to corrupt control/null-check semantics.
-            return
-                string.Equals(token, "instance", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(token, "current", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static int FindBestOverlayInsertLine(List<string> lines, List<SourcePreviewHunk> hunks, string methodName)
-        {
-            if (lines == null || lines.Count == 0)
-            {
-                return 0;
-            }
-
-            var methodStartLine = 0;
-            var methodEndLine = lines.Count - 1;
-            TryGetMethodBodyLineRange(lines, methodName, out methodStartLine, out methodEndLine);
-
-            // Highest-confidence anchor: a concrete regex rewrite mark in patched source.
-            for (var i = methodStartLine; i <= methodEndLine && i < lines.Count; i++)
-            {
-                var line = lines[i] ?? string.Empty;
-                if (line.IndexOf("[REGEX_PATCH]", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    return i;
-                }
-            }
-
-            // Fallback anchor: known Vector2 zero ctor pattern used by CreateMap patch.
-            if (hunks != null && HasVector2ZeroCtorHunk(hunks))
-            {
-                var vector2Zero = new Regex(@"new\s+Vector2\s*\(\s*0(?:\.0+)?f?\s*,\s*0(?:\.0+)?f?\s*\)", RegexOptions.Multiline);
-                for (var i = methodStartLine; i <= methodEndLine && i < lines.Count; i++)
-                {
-                    var line = lines[i] ?? string.Empty;
-                    if (vector2Zero.IsMatch(line))
-                    {
-                        return i;
-                    }
-                }
-            }
-
-            // Last fallback: selected method body start.
-            var methodBodyInsert = FindMethodBodyInsertLine(lines, methodName);
-            if (methodBodyInsert >= 0 && methodBodyInsert <= lines.Count)
-            {
-                return methodBodyInsert;
-            }
-
-            return FindMethodBodyInsertLine(lines);
-        }
-
-        private static bool HasVector2ZeroCtorHunk(List<SourcePreviewHunk> hunks)
-        {
-            if (hunks == null) return false;
-            for (var h = 0; h < hunks.Count; h++)
-            {
-                var removed = hunks[h] != null ? hunks[h].Removed : null;
-                if (removed == null || removed.Count == 0) continue;
-
-                var hasCtor = false;
-                var zeroLoads = 0;
-                for (var i = 0; i < removed.Count; i++)
-                {
-                    var line = removed[i] ?? string.Empty;
-                    if (line.IndexOf("Vector2::.ctor", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        hasCtor = true;
-                    }
-
-                    if (line.IndexOf("ldc.r4 0", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        zeroLoads++;
-                    }
-                }
-
-                if (hasCtor && zeroLoads >= 2)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool IsInsideCommentLine(string source, int index)
-        {
-            if (string.IsNullOrEmpty(source) || index < 0 || index >= source.Length) return false;
-
-            var lineStart = source.LastIndexOf('\n', index);
-            lineStart = lineStart < 0 ? 0 : lineStart + 1;
-            var lineEnd = source.IndexOf('\n', index);
-            if (lineEnd < 0) lineEnd = source.Length;
-
-            var line = source.Substring(lineStart, lineEnd - lineStart);
-            return line.TrimStart().StartsWith("//", StringComparison.Ordinal);
-        }
-
-        private static List<string> ExtractAddedExpressionsFromHunks(List<SourcePreviewHunk> hunks)
-        {
-            var result = new List<string>();
-            if (hunks == null) return result;
-
-            for (var h = 0; h < hunks.Count; h++)
-            {
-                var added = hunks[h].Added;
-                if (added == null) continue;
-                for (var i = 0; i < added.Count; i++)
-                {
-                    var expression = BuildSourceExpressionFromILLine(added[i]);
-                    if (!string.IsNullOrEmpty(expression) && !result.Contains(expression))
-                    {
-                        result.Add(expression);
-                    }
-                }
-            }
-
-            return result;
-        }
-
-        private static List<string> ExtractAddedExpressionsFromHunk(SourcePreviewHunk hunk)
-        {
-            var result = new List<string>();
-            if (hunk == null || hunk.Added == null) return result;
-
-            for (var i = 0; i < hunk.Added.Count; i++)
-            {
-                var expression = BuildSourceExpressionFromILLine(hunk.Added[i]);
-                if (!string.IsNullOrEmpty(expression) && !result.Contains(expression))
-                {
-                    result.Add(expression);
-                }
-            }
-
-            return result;
-        }
-
-        private static List<string> ExtractRemovedSourceTokensFromHunks(List<SourcePreviewHunk> hunks)
-        {
-            var tokens = new List<string>();
-            if (hunks == null) return tokens;
-
-            for (var h = 0; h < hunks.Count; h++)
-            {
-                var removed = hunks[h].Removed;
-                if (removed == null) continue;
-                for (var i = 0; i < removed.Count; i++)
-                {
-                    var line = removed[i] ?? string.Empty;
-
-                    var getterMatches = Regex.Matches(line, @"::get_([A-Za-z_]\w*)\(");
-                    for (var g = 0; g < getterMatches.Count; g++)
-                    {
-                        var token = getterMatches[g].Groups[1].Value;
-                        if (!string.IsNullOrEmpty(token) && !tokens.Contains(token))
-                        {
-                            tokens.Add(token);
-                        }
-                    }
-
-                    var callMatches = Regex.Matches(line, @"::([A-Za-z_]\w*)\(");
-                    for (var c = 0; c < callMatches.Count; c++)
-                    {
-                        var token = callMatches[c].Groups[1].Value;
-                        if (string.IsNullOrEmpty(token)) continue;
-                        if (token.StartsWith("get_", StringComparison.Ordinal) || token.StartsWith("set_", StringComparison.Ordinal)) continue;
-                        if (!tokens.Contains(token))
-                        {
-                            tokens.Add(token);
-                        }
-                    }
-                }
-            }
-
-            return tokens;
-        }
-
-        private static List<string> ExtractRemovedSourceTokensFromHunk(SourcePreviewHunk hunk)
-        {
-            var tokens = new List<string>();
-            if (hunk == null || hunk.Removed == null) return tokens;
-
-            // Capture literal constructor patterns used by Vector2-based transpiles.
-            var hasVector2Ctor = false;
-            var vector2ZeroLoads = 0;
-            var hasGridRefCtor = false;
-            var widthFieldLoads = 0;
-            var heightFieldLoads = 0;
-            var intDivOps = 0;
-            var removedCtorTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            for (var i = 0; i < hunk.Removed.Count; i++)
-            {
-                var line = hunk.Removed[i] ?? string.Empty;
-
-                if (line.IndexOf("Vector2::.ctor", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    hasVector2Ctor = true;
-                }
-                if (line.IndexOf("ldc.r4 0", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    vector2ZeroLoads++;
-                }
-                if (line.IndexOf("GridRef::.ctor", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    hasGridRefCtor = true;
-                }
-                TryCollectCtorToken(line, removedCtorTypes);
-                if (line.IndexOf("::width", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    widthFieldLoads++;
-                }
-                if (line.IndexOf("::height", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    heightFieldLoads++;
-                }
-                if (line.IndexOf(" div", StringComparison.OrdinalIgnoreCase) >= 0 || line.StartsWith("div", StringComparison.OrdinalIgnoreCase))
-                {
-                    intDivOps++;
-                }
-
-                var getterMatches = Regex.Matches(line, @"::get_([A-Za-z_]\w*)\(");
-                for (var g = 0; g < getterMatches.Count; g++)
-                {
-                    var token = getterMatches[g].Groups[1].Value;
-                    if (!string.IsNullOrEmpty(token) && !tokens.Contains(token))
-                    {
-                        tokens.Add(token);
-                    }
-                }
-
-                var callMatches = Regex.Matches(line, @"::([A-Za-z_]\w*)\(");
-                for (var c = 0; c < callMatches.Count; c++)
-                {
-                    var token = callMatches[c].Groups[1].Value;
-                    if (string.IsNullOrEmpty(token)) continue;
-                    if (token.StartsWith("get_", StringComparison.Ordinal) || token.StartsWith("set_", StringComparison.Ordinal)) continue;
-                    if (!tokens.Contains(token))
-                    {
-                        tokens.Add(token);
-                    }
-                }
-            }
-
-            if (hasVector2Ctor && !tokens.Contains("__VECTOR2_CTOR__"))
-            {
-                tokens.Add("__VECTOR2_CTOR__");
-            }
-
-            if (hasVector2Ctor && vector2ZeroLoads >= 2 && !tokens.Contains("__VECTOR2_ZERO_ZERO__"))
-            {
-                tokens.Add("__VECTOR2_ZERO_ZERO__");
-            }
-
-            if (hasGridRefCtor && widthFieldLoads > 0 && heightFieldLoads > 0 && intDivOps >= 2 && !tokens.Contains("__GRIDREF_HALF_COORDS__"))
-            {
-                tokens.Add("__GRIDREF_HALF_COORDS__");
-            }
-
-            foreach (var ctorType in removedCtorTypes)
-            {
-                var ctorToken = "__CTOR__" + ctorType;
-                if (!tokens.Contains(ctorToken))
-                {
-                    tokens.Add(ctorToken);
-                }
-            }
-
-            return tokens;
-        }
-
-        private static void TryCollectCtorToken(string ilLine, HashSet<string> ctorTypes)
-        {
-            if (string.IsNullOrEmpty(ilLine) || ctorTypes == null) return;
-
-            // Example IL:
-            // newobj System.Void ExpeditionMap/GridRef::.ctor(System.Int32 x, System.Int32 y)
-            var match = Regex.Match(ilLine, @"newobj\s+System\.Void\s+([^\s:]+)::\.ctor", RegexOptions.IgnoreCase);
-            if (!match.Success) return;
-
-            var rawType = match.Groups[1].Value ?? string.Empty;
-            if (string.IsNullOrEmpty(rawType)) return;
-
-            var normalized = rawType.Replace("/", ".").Replace("+", ".");
-            var tick = normalized.IndexOf('`');
-            if (tick > 0) normalized = normalized.Substring(0, tick);
-
-            var shortType = normalized;
-            var lastDot = normalized.LastIndexOf('.');
-            if (lastDot >= 0 && lastDot < normalized.Length - 1)
-            {
-                shortType = normalized.Substring(lastDot + 1);
-            }
-
-            if (string.IsNullOrEmpty(shortType)) return;
-            ctorTypes.Add(shortType);
-        }
-
-        private static string BuildConstructorLiteralPattern(string ctorToken)
-        {
-            if (string.IsNullOrEmpty(ctorToken) || !ctorToken.StartsWith("__CTOR__", StringComparison.Ordinal))
-            {
-                return string.Empty;
-            }
-
-            var typeName = ctorToken.Substring("__CTOR__".Length);
-            if (string.IsNullOrEmpty(typeName)) return string.Empty;
-
-            // Generic constructor-source anchor:
-            // new TypeName(...)
-            return @"new\s+" + Regex.Escape(typeName) + @"\s*\((?:[^()]|\([^()]*\))*\)";
-        }
-
-        private static string ExtractMethodNameFromSelectedId(string methodId)
-        {
-            if (string.IsNullOrEmpty(methodId)) return string.Empty;
-            var normalized = methodId.Trim();
-            var paren = normalized.IndexOf('(');
-            if (paren > 0) normalized = normalized.Substring(0, paren);
-            var dot = normalized.LastIndexOf('.');
-            if (dot >= 0 && dot < normalized.Length - 1)
-            {
-                return normalized.Substring(dot + 1);
-            }
-
-            return normalized;
-        }
-
-        private static bool TryFindMethodBodySpan(string source, string methodName, out int bodyStart, out int bodyLength)
-        {
-            bodyStart = 0;
-            bodyLength = 0;
-            if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(methodName)) return false;
-
-            // Prefer declaration-like signatures to avoid matching method call sites.
-            var declarationPattern = @"^\s*(?:public|private|protected|internal)\s+[^=\r\n;]*\b" + Regex.Escape(methodName) + @"\s*\(";
-            var signature = new Regex(declarationPattern, RegexOptions.Multiline);
-            var sigMatch = signature.Match(source);
-            if (!sigMatch.Success)
-            {
-                // Fallback to broader search only when declaration scan fails.
-                signature = new Regex(@"\b" + Regex.Escape(methodName) + @"\s*\(", RegexOptions.Multiline);
-                sigMatch = signature.Match(source);
-                if (!sigMatch.Success) return false;
-            }
-
-            var open = source.IndexOf('{', sigMatch.Index);
-            if (open < 0) return false;
-
-            var depth = 0;
-            for (var i = open; i < source.Length; i++)
-            {
-                var ch = source[i];
-                if (ch == '{') depth++;
-                else if (ch == '}')
-                {
-                    depth--;
-                    if (depth == 0)
-                    {
-                        bodyStart = open + 1;
-                        bodyLength = i - bodyStart;
-                        return bodyLength > 0;
-                    }
-                }
-            }
-
-            return false;
-        }
-
-        private static int FindMethodBodyInsertLine(List<string> lines, string methodName)
-        {
-            if (lines == null || lines.Count == 0 || string.IsNullOrEmpty(methodName))
-            {
-                return -1;
-            }
-
-            var declarationRegex = new Regex(@"^\s*(?:public|private|protected|internal)\s+[^=\r\n;]*\b" + Regex.Escape(methodName) + @"\s*\(");
-            var depth = 0;
-            var inMethod = false;
-            for (var i = 0; i < lines.Count; i++)
-            {
-                var line = lines[i] ?? string.Empty;
-                if (!inMethod)
-                {
-                    if (!declarationRegex.IsMatch(line))
-                    {
-                        continue;
-                    }
-                }
-
-                for (var c = 0; c < line.Length; c++)
-                {
-                    var ch = line[c];
-                    if (ch == '{')
-                    {
-                        depth++;
-                        if (!inMethod)
-                        {
-                            inMethod = true;
-                            return Math.Min(i + 1, lines.Count);
-                        }
-                    }
-                    else if (ch == '}')
-                    {
-                        if (depth > 0) depth--;
-                    }
-                }
-            }
-
-            return -1;
-        }
-
-        private static bool TryGetMethodBodyLineRange(List<string> lines, string methodName, out int startLine, out int endLine)
-        {
-            startLine = 0;
-            endLine = (lines != null && lines.Count > 0) ? lines.Count - 1 : 0;
-            if (lines == null || lines.Count == 0 || string.IsNullOrEmpty(methodName))
-            {
-                return false;
-            }
-
-            var declarationRegex = new Regex(@"^\s*(?:public|private|protected|internal)\s+[^=\r\n;]*\b" + Regex.Escape(methodName) + @"\s*\(");
-            var depth = 0;
-            var declarationSeen = false;
-            var bodyStarted = false;
-
-            for (var i = 0; i < lines.Count; i++)
-            {
-                var line = lines[i] ?? string.Empty;
-                if (!declarationSeen)
-                {
-                    if (!declarationRegex.IsMatch(line))
-                    {
-                        continue;
-                    }
-                    declarationSeen = true;
-                }
-
-                for (var c = 0; c < line.Length; c++)
-                {
-                    var ch = line[c];
-                    if (ch == '{')
-                    {
-                        depth++;
-                        if (!bodyStarted)
-                        {
-                            bodyStarted = true;
-                            startLine = Math.Min(i + 1, lines.Count - 1);
-                        }
-                    }
-                    else if (ch == '}')
-                    {
-                        if (depth > 0) depth--;
-                        if (bodyStarted && depth == 0)
-                        {
-                            endLine = Math.Max(startLine, i - 1);
-                            return true;
-                        }
-                    }
-                }
-            }
-
-            if (bodyStarted)
-            {
-                endLine = lines.Count - 1;
-                return true;
-            }
-
-            return false;
-        }
-
-        private static string GuessIndentationForAt(string source, int index)
-        {
-            if (string.IsNullOrEmpty(source) || index < 0 || index >= source.Length) return "    ";
-            var lineStart = source.LastIndexOf('\n', index);
-            lineStart = lineStart < 0 ? 0 : lineStart + 1;
-            var lineEnd = source.IndexOf('\n', lineStart);
-            if (lineEnd < 0) lineEnd = source.Length;
-            
-            var fullLine = source.Substring(lineStart, lineEnd - lineStart);
-            var trimmed = fullLine.TrimStart();
-            return fullLine.Substring(0, fullLine.Length - trimmed.Length);
-        }
-
-        private static List<string> ExtractTokensFromILLine(string line)
-        {
-            var tokens = new List<string>();
-            if (string.IsNullOrEmpty(line)) return tokens;
-
-            var getterMatches = Regex.Matches(line, @"::get_([A-Za-z_]\w*)\(");
-            for (var g = 0; g < getterMatches.Count; g++)
-            {
-                var token = getterMatches[g].Groups[1].Value;
-                if (!string.IsNullOrEmpty(token) && !tokens.Contains(token)) tokens.Add(token);
-            }
-
-            var callMatches = Regex.Matches(line, @"::([A-Za-z_]\w*)\(");
-            for (var c = 0; c < callMatches.Count; c++)
-            {
-                var token = callMatches[c].Groups[1].Value;
-                if (string.IsNullOrEmpty(token)) continue;
-                if (token.StartsWith("get_", StringComparison.Ordinal) || token.StartsWith("set_", StringComparison.Ordinal)) continue;
-                if (!tokens.Contains(token)) tokens.Add(token);
-            }
-            
-            var fieldMatches = Regex.Matches(line, @"::([A-Za-z_]\w*)\b");
-            for (var f = 0; f < fieldMatches.Count; f++)
-            {
-                var token = fieldMatches[f].Groups[1].Value;
-                if (string.IsNullOrEmpty(token)) continue;
-                if (token == ".ctor" || token == ".cctor") continue;
-                if (!tokens.Contains(token)) tokens.Add(token);
-            }
-
-            return tokens;
-        }
-
-        private static string BuildSourceExpressionFromILLine(string ilLine)
-        {
-            if (string.IsNullOrEmpty(ilLine)) return string.Empty;
-
-            var line = ilLine.Trim();
-            var match = Regex.Match(line, @"::([A-Za-z_]\w*)\(");
-            if (!match.Success) return string.Empty;
-
-            var methodName = match.Groups[1].Value;
-            var typeEnd = line.IndexOf("::", StringComparison.Ordinal);
-            if (typeEnd < 0) return string.Empty;
-
-            // We need the token right before "::" (the type name).
-            var left = line.Substring(0, typeEnd).Trim();
-            var space = left.LastIndexOf(' ');
-            var typeName = space >= 0 ? left.Substring(space + 1).Trim() : left;
-            if (string.IsNullOrEmpty(typeName)) return string.Empty;
-
-            if (methodName.StartsWith("get_", StringComparison.Ordinal))
-            {
-                return typeName + "." + methodName.Substring(4);
-            }
-
-            return typeName + "." + methodName + "()";
-        }
-
-        private List<SourcePreviewHunk> BuildSourcePreviewHunks(ModAPI.Harmony.TranspilerDebugger.Snapshot snap)
-        {
-            if (snap != null && snap.PatchEdits != null && snap.PatchEdits.Count > 0)
-            {
-                var manifestHunks = BuildSourcePreviewHunksFromPatchEdits(snap.PatchEdits);
-                if (manifestHunks.Count > 0)
-                {
-                    return manifestHunks;
-                }
-            }
-
-            var diff = _currentDiff ?? ComputeDiff(snap.BeforeInstructions, snap.Instructions);
-            var hunks = new List<SourcePreviewHunk>();
-            SourcePreviewHunk current = null;
-
-            for (var i = 0; i < diff.Count; i++)
-            {
-                var line = diff[i];
-                var isRemoved = line != null && line.LeftMarker == "-" && !string.IsNullOrEmpty(line.LeftContent);
-                var isAdded = line != null && line.RightMarker == "+" && !string.IsNullOrEmpty(line.RightContent);
-                var changed = isRemoved || isAdded;
-                if (!changed)
-                {
-                    if (current != null && (current.Removed.Count > 0 || current.Added.Count > 0))
-                    {
-                        hunks.Add(current);
-                    }
-                    current = null;
-                    continue;
-                }
-
-                if (current == null)
-                {
-                    current = new SourcePreviewHunk { StartIndexBefore = line.LeftIndex };
-                }
-
-                if (isRemoved)
-                {
-                    current.Removed.Add(FormatInstructionForSourcePreview(line.LeftContent));
-                }
-
-                if (isAdded)
-                {
-                    current.Added.Add(FormatInstructionForSourcePreview(line.RightContent));
-                }
-            }
-
-            if (current != null && (current.Removed.Count > 0 || current.Added.Count > 0))
-            {
-                hunks.Add(current);
-            }
-
-            return hunks;
-        }
-
-        private static List<SourcePreviewHunk> BuildSourcePreviewHunksFromPatchEdits(IList<ModAPI.Harmony.TranspilerDebugger.PatchEdit> patchEdits)
-        {
-            var hunks = new List<SourcePreviewHunk>();
-            if (patchEdits == null) return hunks;
-
-            for (var i = 0; i < patchEdits.Count; i++)
-            {
-                var edit = patchEdits[i];
-                if (edit == null) continue;
-
-                var removed = edit.RemovedInstructions ?? new List<string>();
-                var added = edit.AddedInstructions ?? new List<string>();
-                if (removed.Count == 0 && added.Count == 0) continue;
-
-                var hunk = new SourcePreviewHunk { StartIndexBefore = edit.StartIndexBefore };
-                for (var r = 0; r < removed.Count; r++)
-                {
-                    hunk.Removed.Add(FormatInstructionForSourcePreview(removed[r]));
-                }
-                for (var a = 0; a < added.Count; a++)
-                {
-                    hunk.Added.Add(FormatInstructionForSourcePreview(added[a]));
-                }
-
-                if (hunk.Removed.Count > 0 || hunk.Added.Count > 0)
-                {
-                    hunks.Add(hunk);
-                }
-            }
-
-            return hunks;
-        }
-
-        private static int FindMethodBodyInsertLine(List<string> lines)
-        {
-            if (lines == null || lines.Count == 0) return 0;
-
-            for (var i = 0; i < lines.Count; i++)
-            {
-                var line = lines[i];
-                if (line == null) continue;
-                if (line.IndexOf("{", StringComparison.Ordinal) >= 0)
-                {
-                    return Math.Min(i + 1, lines.Count);
-                }
-            }
-
-            return lines.Count;
-        }
-
-        private static string GuessIndentation(List<string> lines, int insertLine)
-        {
-            if (lines == null || lines.Count == 0) return "    ";
-            var probeStart = Math.Max(0, insertLine - 1);
-            var probeEnd = Math.Min(lines.Count - 1, insertLine + 3);
-
-            for (var i = probeStart; i <= probeEnd; i++)
-            {
-                var line = lines[i];
-                if (string.IsNullOrEmpty(line)) continue;
-
-                var trimmed = line.TrimStart();
-                if (trimmed.Length == 0) continue;
-                if (trimmed.StartsWith("}", StringComparison.Ordinal)) continue;
-
-                var indentLen = line.Length - trimmed.Length;
-                if (indentLen > 0)
-                {
-                    return line.Substring(0, indentLen);
-                }
-            }
-
-            return "    ";
-        }
-
-        private static List<string> RenderSourcePreviewOverlay(List<SourcePreviewHunk> hunks, string indent, List<string> regexSummaries, int regexRewriteCount)
-        {
-            var lines = new List<string>();
-            if (hunks == null || hunks.Count == 0) return lines;
-
-            lines.Add(indent + "// === TRANSPILE INJECTION PREVIEW (estimated from IL diff) ===");
-            lines.Add(indent + "// This shows likely runtime-injected operations next to original source.");
-            if (regexRewriteCount > 0)
-            {
-                lines.Add(indent + "// [Regex Rewrite] " + regexRewriteCount + " source replacements applied.");
-            }
-            else
-            {
-                lines.Add(indent + "// [Regex Rewrite] 0 source replacements applied.");
-            }
-            if (regexSummaries != null && regexSummaries.Count > 0)
-            {
-                var shown = Math.Min(4, regexSummaries.Count);
-                for (var i = 0; i < shown; i++)
-                {
-                    lines.Add(indent + "// " + regexSummaries[i]);
-                }
-                if (regexSummaries.Count > shown)
-                {
-                    lines.Add(indent + "// ... " + (regexSummaries.Count - shown) + " more rewrite notes");
-                }
-            }
-
-            const int maxHunks = 8;
-            const int maxLinesPerSide = 6;
-            var displayedHunks = Math.Min(maxHunks, hunks.Count);
-            for (var h = 0; h < displayedHunks; h++)
-            {
-                var hunk = hunks[h];
-                lines.Add(indent + "// Hunk " + (h + 1) + ":");
-
-                var removedCount = hunk.Removed != null ? hunk.Removed.Count : 0;
-                var addedCount = hunk.Added != null ? hunk.Added.Count : 0;
-                if (removedCount == 0 && addedCount == 0)
-                {
-                    lines.Add(indent + "//   (no delta lines)");
-                    continue;
-                }
-
-                if (removedCount > 0)
-                {
-                    var removedShown = Math.Min(maxLinesPerSide, removedCount);
-                    for (var i = 0; i < removedShown; i++)
-                    {
-                        lines.Add(indent + "//   - " + hunk.Removed[i]);
-                    }
-                    if (removedCount > removedShown)
-                    {
-                        lines.Add(indent + "//   - ... " + (removedCount - removedShown) + " more removed IL lines");
-                    }
-                }
-
-                if (addedCount > 0)
-                {
-                    var addedShown = Math.Min(maxLinesPerSide, addedCount);
-                    for (var i = 0; i < addedShown; i++)
-                    {
-                        lines.Add(indent + "//   + " + hunk.Added[i]);
-                    }
-                    if (addedCount > addedShown)
-                    {
-                        lines.Add(indent + "//   + ... " + (addedCount - addedShown) + " more added IL lines");
-                    }
-                }
-            }
-
-            if (hunks.Count > displayedHunks)
-            {
-                lines.Add(indent + "// ... " + (hunks.Count - displayedHunks) + " more IL diff hunks omitted");
-            }
-
-            lines.Add(indent + "// === END INJECTION PREVIEW ===");
-            lines.Add(string.Empty);
-            return lines;
-        }
-
-        private static string FormatInstructionForSourcePreview(string ilLine)
-        {
-            if (string.IsNullOrEmpty(ilLine)) return string.Empty;
-
-            var text = ilLine.Trim();
-            if (text.Length > 170)
-            {
-                text = text.Substring(0, 167) + "...";
-            }
-
-            return text;
-        }
-
-        private List<DiffLine> _currentDiff;
-
-        private class DiffLine
-        {
-            public string LeftContent;   // Original
-            public string RightContent;  // Patched
-            public int LeftIndex;        // Index in original list
-            public int RightIndex;       // Index in patched list
-            public string LeftMarker;    // "-" or empty
-            public string RightMarker;   // "+" or empty
-            public bool IsMatch;         // True if contents match
-        }
-
-        private sealed class SourcePreviewHunk
-        {
-            public List<string> Removed = new List<string>();
-            public List<string> Added = new List<string>();
-            public int StartIndexBefore;
-        }
+        private List<UIDebugDiffLine> _currentDiff;
 
         private void OnSnapshotSelected(ModAPI.Harmony.TranspilerDebugger.Snapshot snap)
         {
@@ -3177,7 +1584,7 @@ namespace ModAPI.UI
             _sourceStatus = string.Empty;
             
             // Compute Diff
-            _currentDiff = ComputeDiff(snap.BeforeInstructions, snap.Instructions);
+            _currentDiff = UIDebugSourcePreviewService.ComputeDiff(snap.BeforeInstructions, snap.Instructions);
 
             if (_preferSourceDiffDefault && !_isLiveMode)
             {
@@ -3188,96 +1595,6 @@ namespace ModAPI.UI
             {
                 LoadSourceForSelectedSnapshot();
             }
-        }
-
-        private List<DiffLine> ComputeDiff(List<string> before, List<string> after)
-        {
-            // Simple LCS-based diff for strings
-            // This allows us to align the "Before" (Left) and "After" (Right) scroll views visually.
-            
-            var A = before ?? new List<string>();
-            var B = after ?? new List<string>();
-            int m = A.Count;
-            int n = B.Count;
-
-            int[,] C = new int[m + 1, n + 1];
-
-            for (int i = 0; i <= m; i++)
-            {
-                for (int j = 0; j <= n; j++)
-                {
-                    if (i == 0 || j == 0)
-                        C[i, j] = 0;
-                    else if (A[i - 1] == B[j - 1])
-                        C[i, j] = C[i - 1, j - 1] + 1;
-                    else
-                        C[i, j] = Math.Max(C[i - 1, j], C[i, j - 1]);
-                }
-            }
-
-            var result = new List<DiffLine>();
-            int x = m, y = n;
-            
-            // Backtrack
-            var stack = new Stack<DiffLine>();
-            
-            while (x > 0 && y > 0)
-            {
-                if (A[x - 1] == B[y - 1])
-                {
-                    stack.Push(new DiffLine 
-                    { 
-                        LeftContent = A[x - 1], RightContent = B[y - 1],
-                        LeftIndex = x - 1, RightIndex = y - 1,
-                        LeftMarker = " ", RightMarker = " ", IsMatch = true
-                    });
-                    x--; y--;
-                }
-                else if (C[x - 1, y] >= C[x, y - 1])
-                {
-                    stack.Push(new DiffLine 
-                    { 
-                        LeftContent = A[x - 1], RightContent = null,
-                        LeftIndex = x - 1, RightIndex = -1,
-                        LeftMarker = "-", RightMarker = " ", IsMatch = false
-                    });
-                    x--;
-                }
-                else
-                {
-                    stack.Push(new DiffLine 
-                    { 
-                        LeftContent = null, RightContent = B[y - 1],
-                        LeftIndex = -1, RightIndex = y - 1,
-                        LeftMarker = " ", RightMarker = "+", IsMatch = false
-                    });
-                    y--;
-                }
-            }
-
-            while (x > 0)
-            {
-                stack.Push(new DiffLine 
-                { 
-                    LeftContent = A[x - 1], RightContent = null,
-                    LeftIndex = x - 1, RightIndex = -1,
-                    LeftMarker = "-", RightMarker = " ", IsMatch = false
-                });
-                x--;
-            }
-
-            while (y > 0)
-            {
-                stack.Push(new DiffLine 
-                { 
-                    LeftContent = null, RightContent = B[y - 1],
-                    LeftIndex = -1, RightIndex = y - 1,
-                    LeftMarker = " ", RightMarker = "+", IsMatch = false
-                });
-                y--;
-            }
-
-            return stack.ToList();
         }
 
         private void LoadSourceForSelectedSnapshot(bool forceReload = false)
@@ -3324,71 +1641,7 @@ namespace ModAPI.UI
 
         private MethodBase ResolveMethodFromSnapshot(ModAPI.Harmony.TranspilerDebugger.Snapshot snap)
         {
-            if (snap == null) return null;
-
-            MethodBase method;
-            if (TryResolveMethodIdentifier(snap.MethodName, snap.AssemblyName, out method))
-            {
-                return method;
-            }
-
-            if (TryResolveMethodIdentifier(snap.StepName, snap.AssemblyName, out method))
-            {
-                return method;
-            }
-
-            return null;
-        }
-
-        private static bool TryResolveMethodIdentifier(string methodIdentifier, string assemblyName, out MethodBase method)
-        {
-            method = null;
-            if (string.IsNullOrEmpty(methodIdentifier)) return false;
-
-            var normalized = methodIdentifier.Trim();
-            var paren = normalized.IndexOf('(');
-            if (paren > 0) normalized = normalized.Substring(0, paren);
-            var lastDot = normalized.LastIndexOf('.');
-            if (lastDot <= 0 || lastDot >= normalized.Length - 1) return false;
-
-            var typeName = normalized.Substring(0, lastDot);
-            var methodName = normalized.Substring(lastDot + 1);
-
-            Type type = null;
-            if (!string.IsNullOrEmpty(assemblyName))
-            {
-                var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-                for (var i = 0; i < assemblies.Length; i++)
-                {
-                    var asm = assemblies[i];
-                    if (!string.Equals(asm.GetName().Name, assemblyName, StringComparison.OrdinalIgnoreCase)) continue;
-                    type = asm.GetType(typeName, false);
-                    if (type != null) break;
-                }
-            }
-
-            if (type == null)
-            {
-                type = AccessTools.TypeByName(typeName);
-            }
-
-            if (type == null) return false;
-
-            method = AccessTools.Method(type, methodName);
-            if (method != null) return true;
-
-            var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
-            var methods = type.GetMethods(flags);
-            for (var i = 0; i < methods.Length; i++)
-            {
-                if (methods[i].Name == methodName)
-                {
-                    method = methods[i];
-                    return true;
-                }
-            }
-
-            return false;
+            return UIDebugSnapshotService.ResolveMethodFromSnapshot(snap);
         }
 
         private void DrawLiveDebugger(float x, float y, float topOffset, float w, float h)
@@ -3542,7 +1795,7 @@ namespace ModAPI.UI
                 var src = string.IsNullOrEmpty(e.Source) ? "Unknown" : e.Source;
                 var msg = string.IsNullOrEmpty(e.Message) ? "<empty>" : e.Message;
                 if (msg.Length > 240) msg = msg.Substring(0, 240) + "...";
-                GUILayout.Label("<color=" + color + ">[" + e.Timestamp.ToString("HH:mm:ss.fff") + "] [" + e.Level.ToString().ToUpper() + "] [" + EscapeRichText(src) + "] " + EscapeRichText(msg) + "</color>");
+                GUILayout.Label("<color=" + color + ">[" + e.Timestamp.ToString("HH:mm:ss.fff") + "] [" + e.Level.ToString().ToUpper() + "] [" + UIDebugSourcePreviewService.EscapeRichText(src) + "] " + UIDebugSourcePreviewService.EscapeRichText(msg) + "</color>");
             }
             GUILayout.EndScrollView();
             GUILayout.EndArea();
@@ -3616,7 +1869,7 @@ namespace ModAPI.UI
             AutoFollowLiveSourceLine(currentSourceLine);
             if (!string.IsNullOrEmpty(_liveSourceStatus))
             {
-                GUILayout.Label("<size=10>" + EscapeRichText(_liveSourceStatus) + "</size>");
+                GUILayout.Label("<size=10>" + UIDebugSourcePreviewService.EscapeRichText(_liveSourceStatus) + "</size>");
             }
             if (currentIlIndex >= 0)
             {
@@ -3631,7 +1884,7 @@ namespace ModAPI.UI
             _followLiveSourceLine = GUILayout.Toggle(_followLiveSourceLine, "Follow live line");
             GUILayout.Label("<size=10><b>Markers:</b> <color=#7CFC00>&gt;</color> latest live line, <color=#F6D365>*</color> selected line. If it stays fixed, recent frames are reporting the same IL or no new frames.</size>");
 
-            var sourceLines = SplitLines(string.IsNullOrEmpty(_liveSourceText) ? "// Source unavailable." : _liveSourceText);
+            var sourceLines = UIDebugSourcePreviewService.SplitLines(string.IsNullOrEmpty(_liveSourceText) ? "// Source unavailable." : _liveSourceText);
             _scrollLiveSource = GUILayout.BeginScrollView(_scrollLiveSource, GUI.skin.box, GUILayout.Height(Mathf.Max(140f, rect.height * 0.60f)));
             DrawLiveSourceLineList(sourceLines, currentSourceLine);
             GUILayout.EndScrollView();
@@ -3707,7 +1960,7 @@ namespace ModAPI.UI
                     linePrefix = "  " + linePrefix;
                 }
 
-                var display = linePrefix + FormatSourceLineForDisplay(displayLine, false);
+                var display = linePrefix + UIDebugSourcePreviewService.FormatSourceLineForDisplay(displayLine, false);
                 if (GUILayout.Button(display, _sourceLineStyle, GUILayout.ExpandWidth(true)))
                 {
                     var isDouble = Event.current != null && Event.current.clickCount >= 2;
