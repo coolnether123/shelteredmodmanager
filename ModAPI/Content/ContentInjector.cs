@@ -215,7 +215,9 @@ namespace ModAPI.Content
             foreach (var item in items)
             {
                 if (item?.Definition == null) continue;
-                var typeId = (ItemManager.ItemType)ContentRegistry.EnsureCustomTypeId(item.Definition);
+                // ContentRegistry.RegisterItem(...) already assigns and claims a custom type ID.
+                // Reusing that value here avoids double-claim collisions during later injection.
+                var typeId = (ItemManager.ItemType)(item.Definition.CustomTypeId ?? ContentRegistry.EnsureCustomTypeId(item.Definition));
                 ItemKeyToType[item.Definition.Id] = typeId;
                 ResolvedByType[typeId] = item;
                 MMLog.WriteDebug($"Mapped item: {item.Definition.Id} -> {typeId} ({(int)typeId})");
