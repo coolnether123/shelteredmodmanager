@@ -20,8 +20,11 @@ namespace ModAPI.Characters
             get
             {
                 if (State == CharacterState.InEncounter || State == CharacterState.SyntheticInEncounter) return CharacterLocation.Shelter;
-                if (State == CharacterState.SyntheticAbsent || State == CharacterState.TemporarilyAbsent) return CharacterLocation.Away;
-                return CharacterLocation.Shelter;
+                if (State == CharacterState.SyntheticAbsent
+                    || State == CharacterState.TemporarilyAbsent
+                    || State == CharacterState.SyntheticIdle)
+                    return CharacterLocation.Away;
+                return CharacterLocation.Away;
             }
         }
         public FamilyMember UnderlyingMember { get { return null; } }
@@ -42,9 +45,9 @@ namespace ModAPI.Characters
         internal SyntheticCharacterProxy(int id)
         {
             UniqueId = id;
-            State = CharacterState.SyntheticIdle;
+            State = CharacterState.SyntheticAbsent;
             IsActive = true;
-            IsLoadedOnShelterEntry = true;
+            IsLoadedOnShelterEntry = false;
         }
 
         internal void Unregister()

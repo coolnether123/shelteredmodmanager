@@ -1,4 +1,5 @@
 using HarmonyLib;
+using ModAPI.Actors;
 using ModAPI.Events;
 using System;
 using System.Collections.Generic;
@@ -13,6 +14,7 @@ namespace ModAPI.Characters.Internal
 {
     internal sealed class CharacterEffectSystemImpl : ICharacterEffectSystem, ICharacterFactory, ISaveable
     {
+        private const string ActorOwner = "shelteredapi";
         private readonly object _sync = new object();
         private readonly Dictionary<string, Type> _effectTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, LiveCharacterProxy> _liveFamily = new Dictionary<int, LiveCharacterProxy>();
@@ -125,6 +127,8 @@ namespace ModAPI.Characters.Internal
         public void UnregisterCharacter(ICharacterProxy character)
         {
             if (character == null) return;
+            ActorId actorId = null;
+            bool destroyActor = false;
             lock (_sync)
             {
                 if (character.Source == CharacterSource.Synthetic)
@@ -138,21 +142,31 @@ namespace ModAPI.Characters.Internal
                         synthetic.Unregister();
                         var evt = SyntheticCharacterUnloaded;
                         if (evt != null) evt(synthetic);
+                        actorId = ResolveActorId(synthetic);
+                        destroyActor = actorId != null;
                     }
-                    return;
                 }
+                else
+                {
+                    LiveCharacterProxy live = character as LiveCharacterProxy;
+                    if (live == null) return;
+                    _liveFamily.Remove(live.UniqueId);
+                    _liveVisitors.Remove(live.UniqueId);
+                    live.Unregister();
+                }
+            }
 
-                LiveCharacterProxy live = character as LiveCharacterProxy;
-                if (live == null) return;
-                _liveFamily.Remove(live.UniqueId);
-                _liveVisitors.Remove(live.UniqueId);
-                live.Unregister();
+            if (destroyActor)
+            {
+                try { ActorSystem.Instance.Destroy(actorId, ActorDestroyReason.Explicit); }
+                catch { }
             }
         }
 
         public ICharacterProxy CreateSyntheticCharacter(string firstName, string lastName, string persistenceKey, string sourceModId, bool isPersistent = true)
         {
             EnsureRegistered();
+            SyntheticCharacterProxy created = null;
             lock (_sync)
             {
                 if (!string.IsNullOrEmpty(persistenceKey))
@@ -176,8 +190,11 @@ namespace ModAPI.Characters.Internal
                 if (!isPersistent) _temporarySyntheticIds.Add(id);
                 var evt = SyntheticCharacterCreated;
                 if (evt != null) evt(p);
-                return p;
+                created = p;
             }
+
+            EnsureActorMirror(ActorSystem.Instance, created);
+            return created;
         }
 
         public ICharacterProxy CreateTemporaryCharacter(string firstName, string lastName, string sourceModId)
@@ -258,6 +275,7 @@ namespace ModAPI.Characters.Internal
                 first = split[0];
                 if (split.Length > 1) last = split[1];
             }
+            SyntheticCharacterProxy created = null;
             lock (_sync)
             {
                 int id = baseId.HasValue ? baseId.Value : NextSyntheticId();
@@ -272,8 +290,11 @@ namespace ModAPI.Characters.Internal
                 _syntheticByKey[key] = p;
                 var evt = SyntheticCharacterCreated;
                 if (evt != null) evt(p);
-                return p;
+                created = p;
             }
+
+            EnsureActorMirror(ActorSystem.Instance, created);
+            return created;
         }
 
         ICharacterProxy ICharacterFactory.CreateTemporaryCharacter(string name, string sourceModId)
@@ -284,6 +305,7 @@ namespace ModAPI.Characters.Internal
         public ICharacterProxy RestoreSyntheticCharacter(CharacterSaveData data)
         {
             if (data == null) return null;
+            SyntheticCharacterProxy restored = null;
             lock (_sync)
             {
                 SyntheticCharacterProxy existing;
@@ -306,12 +328,15 @@ namespace ModAPI.Characters.Internal
                 if (effects != null) effects.RestoreFromSaveData(data.Effects);
                 var attrs = p.Attributes as BasicCharacterAttributes;
                 if (attrs != null) attrs.RestoreFromSaveData(data.Attributes);
-                if (data.Source == CharacterSource.Synthetic) p.State = CharacterState.SyntheticIdle;
+                if (data.Source == CharacterSource.Synthetic) p.State = CharacterState.SyntheticAbsent;
                 _syntheticById[p.UniqueId] = p;
                 if (!string.IsNullOrEmpty(p.PersistenceKey)) _syntheticByKey[p.PersistenceKey] = p;
                 if (!data.IsPersistent) _temporarySyntheticIds.Add(p.UniqueId);
-                return p;
+                restored = p;
             }
+
+            EnsureActorMirror(ActorSystem.Instance, restored);
+            return restored;
         }
 
         internal bool TryCreateEffect(string effectId, out ICharacterEffect effect)
@@ -359,8 +384,8 @@ namespace ModAPI.Characters.Internal
             p.Data = data;
             p.Effects = new BasicCharacterEffects(p);
             p.Attributes = new BasicCharacterAttributes();
-            p.State = isPersistent ? CharacterState.SyntheticIdle : CharacterState.TemporarilyAbsent;
-            p.IsLoadedOnShelterEntry = true;
+            p.State = CharacterState.SyntheticAbsent;
+            p.IsLoadedOnShelterEntry = false;
             return p;
         }
 
@@ -411,6 +436,9 @@ namespace ModAPI.Characters.Internal
         {
             var evt = DataChanged;
             if (evt != null) evt(c, key, value);
+
+            try { EnsureActorMirror(ActorSystem.Instance, c); }
+            catch { }
         }
 
         public bool IsRelocationEnabled() { return true; }
@@ -554,10 +582,14 @@ namespace ModAPI.Characters.Internal
                 proxies = _liveFamily.Values.Concat(_liveVisitors.Values).ToList();
             }
             for (int i = 0; i < proxies.Count; i++) proxies[i].Tick(dt);
+            SynchronizeActors();
         }
 
         private void RefreshLiveCharacters()
         {
+            HashSet<int> seenFamily = new HashSet<int>();
+            HashSet<int> seenVisitors = new HashSet<int>();
+
             try
             {
                 var fm = FamilyManager.Instance;
@@ -569,7 +601,9 @@ namespace ModAPI.Characters.Internal
                         for (int i = 0; i < members.Count; i++)
                         {
                             var m = members[i];
-                            if (m != null) GetCharacter(m);
+                            if (m == null) continue;
+                            seenFamily.Add(m.GetId());
+                            GetCharacter(m);
                         }
                     }
                 }
@@ -584,11 +618,274 @@ namespace ModAPI.Characters.Internal
                     for (int i = 0; i < nvm.Visitors.Count; i++)
                     {
                         var v = nvm.Visitors[i];
-                        if (v != null) GetCharacter(v);
+                        if (v == null) continue;
+                        seenVisitors.Add(v.npcId);
+                        GetCharacter(v);
                     }
                 }
             }
             catch { }
+
+            lock (_sync)
+            {
+                List<int> familyIds = _liveFamily.Keys.ToList();
+                for (int i = 0; i < familyIds.Count; i++)
+                {
+                    LiveCharacterProxy proxy;
+                    if (!_liveFamily.TryGetValue(familyIds[i], out proxy) || proxy == null) continue;
+                    if (!seenFamily.Contains(familyIds[i])) proxy.ClearBinding();
+                }
+
+                List<int> visitorIds = _liveVisitors.Keys.ToList();
+                for (int i = 0; i < visitorIds.Count; i++)
+                {
+                    LiveCharacterProxy proxy;
+                    if (!_liveVisitors.TryGetValue(visitorIds[i], out proxy) || proxy == null) continue;
+                    if (!seenVisitors.Contains(visitorIds[i])) proxy.ClearBinding();
+                }
+            }
+        }
+
+        private void SynchronizeActors()
+        {
+            List<ICharacterProxy> characters = new List<ICharacterProxy>();
+            lock (_sync)
+            {
+                characters.AddRange(_liveFamily.Values.Cast<ICharacterProxy>());
+                characters.AddRange(_liveVisitors.Values.Cast<ICharacterProxy>());
+                characters.AddRange(_syntheticById.Values.Cast<ICharacterProxy>());
+            }
+
+            IActorSystem actors = ActorSystem.Instance;
+            if (actors == null) return;
+
+            for (int i = 0; i < characters.Count; i++)
+                EnsureActorMirror(actors, characters[i]);
+        }
+
+        private static void EnsureActorMirror(IActorSystem actors, ICharacterProxy character)
+        {
+            if (actors == null || character == null) return;
+
+            ActorId actorId = ResolveActorId(character);
+            if (actorId == null) return;
+
+             if (character.Source != CharacterSource.Synthetic)
+            {
+                EnsureVanillaActorBridge(actors, actorId, character);
+                return;
+            }
+
+            ActorLifecycleState lifecycle = ResolveActorLifecycle(character);
+            ActorPresenceState presence = ResolveActorPresence(character);
+            ActorFlags flags = ResolveActorFlags(character);
+
+            actors.Ensure(new ActorCreateRequest
+            {
+                Id = actorId,
+                Kind = actorId.Kind,
+                Domain = actorId.Domain,
+                LifecycleState = lifecycle,
+                PresenceState = presence,
+                Flags = flags,
+                Origin = BuildActorOrigin(character)
+            });
+
+            actors.Update(actorId, new ActorRecordMutation
+            {
+                LifecycleState = lifecycle,
+                PresenceState = presence,
+                Flags = flags,
+                Origin = BuildActorOrigin(character)
+            });
+
+            actors.Set(actorId, BuildActorProfile(character), ActorOwner);
+            BindCharacterActor(actors, actorId, character);
+        }
+
+        private static void EnsureVanillaActorBridge(IActorSystem actors, ActorId actorId, ICharacterProxy character)
+        {
+            if (actors == null || actorId == null || character == null) return;
+
+            if (actors.Get(actorId) == null)
+            {
+                actors.Ensure(new ActorCreateRequest
+                {
+                    Id = actorId,
+                    Kind = actorId.Kind,
+                    Domain = actorId.Domain,
+                    LifecycleState = ResolveActorLifecycle(character),
+                    PresenceState = ResolveActorPresence(character),
+                    Flags = ResolveActorFlags(character),
+                    Origin = BuildActorOrigin(character)
+                });
+            }
+
+            BindCharacterActor(actors, actorId, character);
+        }
+
+        private static ActorId ResolveActorId(ICharacterProxy character)
+        {
+            if (character == null) return null;
+
+            switch (character.Source)
+            {
+                case CharacterSource.RealFamily:
+                    return new ActorId(ActorKind.Player, character.UniqueId, string.Empty);
+                case CharacterSource.Visitor:
+                    return new ActorId(ActorKind.Visitor, character.UniqueId, string.Empty);
+                case CharacterSource.Synthetic:
+                    return new ActorId(ActorKind.Synthetic, character.UniqueId, NormalizeDomain(character.SourceMod));
+                default:
+                    return new ActorId(ActorKind.Custom, character.UniqueId, NormalizeDomain(character.SourceMod));
+            }
+        }
+
+        private static ActorLifecycleState ResolveActorLifecycle(ICharacterProxy character)
+        {
+            if (character == null || !character.IsActive) return ActorLifecycleState.Unloaded;
+            if (character.Source == CharacterSource.Synthetic && character.Location != CharacterLocation.Shelter)
+                return ActorLifecycleState.Unloaded;
+            return ActorLifecycleState.Active;
+        }
+
+        private static ActorPresenceState ResolveActorPresence(ICharacterProxy character)
+        {
+            if (character == null) return ActorPresenceState.Offscreen;
+
+            switch (character.State)
+            {
+                case CharacterState.OnExpedition:
+                    return ActorPresenceState.Expedition;
+                case CharacterState.InEncounter:
+                case CharacterState.SyntheticInEncounter:
+                    return ActorPresenceState.Encounter;
+                case CharacterState.TemporarilyAbsent:
+                case CharacterState.SyntheticAbsent:
+                    return ActorPresenceState.Offscreen;
+            }
+
+            switch (character.Location)
+            {
+                case CharacterLocation.Expedition:
+                    return ActorPresenceState.Expedition;
+                case CharacterLocation.Shelter:
+                    return ActorPresenceState.InShelter;
+                default:
+                    return character.IsActive ? ActorPresenceState.InShelter : ActorPresenceState.Offscreen;
+            }
+        }
+
+        private static ActorFlags ResolveActorFlags(ICharacterProxy character)
+        {
+            ActorFlags flags = ActorFlags.None;
+            if (character == null) return flags;
+            if (character.IsPersistent) flags |= ActorFlags.Persistent;
+            if (character.Source == CharacterSource.Synthetic) flags |= ActorFlags.Synthetic;
+            if (character.IsActive && (character.Source != CharacterSource.Synthetic || character.Location == CharacterLocation.Shelter))
+                flags |= ActorFlags.Loaded;
+            return flags;
+        }
+
+        private static ActorOrigin BuildActorOrigin(ICharacterProxy character)
+        {
+            if (character == null) return null;
+
+            switch (character.Source)
+            {
+                case CharacterSource.RealFamily:
+                    return ActorOrigin.Core("family");
+                case CharacterSource.Visitor:
+                    return ActorOrigin.Core("visitor");
+                default:
+                    return new ActorOrigin
+                    {
+                        SourceModId = NormalizeDomain(character.SourceMod),
+                        SourceKey = string.IsNullOrEmpty(character.PersistenceKey)
+                            ? "synthetic." + character.UniqueId
+                            : character.PersistenceKey,
+                        Generator = "character-system"
+                    };
+            }
+        }
+
+        private static ActorProfileComponent BuildActorProfile(ICharacterProxy character)
+        {
+            ActorProfileComponent profile = new ActorProfileComponent();
+            if (character == null || character.Data == null) return profile;
+
+            profile.FirstName = character.Data.FirstName;
+            profile.LastName = character.Data.LastName;
+            profile.IsMale = character.Data.IsMale;
+            profile.MeshId = character.Data.MeshId;
+            profile.SkinColor = character.Data.SkinColor;
+            profile.HairColor = character.Data.HairColor;
+            profile.StrengthLevel = character.Data.StrengthLevel;
+            profile.DexterityLevel = character.Data.DexterityLevel;
+            profile.IntelligenceLevel = character.Data.IntelligenceLevel;
+            profile.CharismaLevel = character.Data.CharismaLevel;
+            profile.PerceptionLevel = character.Data.PerceptionLevel;
+            profile.Health = character.Data.Health;
+            profile.MaxHealth = character.Data.MaxHealth;
+            return profile;
+        }
+
+        private static void BindCharacterActor(IActorSystem actors, ActorId actorId, ICharacterProxy character)
+        {
+            if (actors == null || actorId == null || character == null) return;
+
+            string characterKey = BuildCharacterBindingKey(character);
+            if (!string.IsNullOrEmpty(characterKey))
+                actors.Bind(actorId, CreateActorBinding("sheltered.character", characterKey, true), true);
+
+            if (!string.IsNullOrEmpty(character.PersistenceKey))
+                actors.Bind(actorId, CreateActorBinding("sheltered.character.persistence", character.PersistenceKey, true), true);
+
+            switch (character.Source)
+            {
+                case CharacterSource.RealFamily:
+                    actors.Bind(actorId, CreateActorBinding("sheltered.character.family", character.UniqueId.ToString(), true), true);
+                    break;
+                case CharacterSource.Visitor:
+                    actors.Bind(actorId, CreateActorBinding("sheltered.character.visitor", character.UniqueId.ToString(), true), true);
+                    break;
+                case CharacterSource.Synthetic:
+                    actors.Bind(actorId, CreateActorBinding("sheltered.character.synthetic", characterKey, true), true);
+                    break;
+            }
+        }
+
+        private static string BuildCharacterBindingKey(ICharacterProxy character)
+        {
+            if (character == null) return string.Empty;
+
+            switch (character.Source)
+            {
+                case CharacterSource.RealFamily:
+                    return "family:" + character.UniqueId;
+                case CharacterSource.Visitor:
+                    return "visitor:" + character.UniqueId;
+                case CharacterSource.Synthetic:
+                    return "synthetic:" + NormalizeDomain(character.SourceMod) + ":" + character.UniqueId;
+                default:
+                    return "character:" + NormalizeDomain(character.SourceMod) + ":" + character.UniqueId;
+            }
+        }
+
+        private static ActorBinding CreateActorBinding(string bindingType, string bindingKey, bool persistent)
+        {
+            return new ActorBinding
+            {
+                BindingType = bindingType ?? string.Empty,
+                BindingKey = bindingKey ?? string.Empty,
+                SourceModId = ActorOwner,
+                Persistent = persistent
+            };
+        }
+
+        private static string NormalizeDomain(string value)
+        {
+            return string.IsNullOrEmpty(value) ? "unknown" : value.Trim();
         }
 
         private static bool TrySetMember(object target, string name, object value)
