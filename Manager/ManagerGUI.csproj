@@ -163,7 +163,7 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>SET BASE=$(SolutionDir)
+    <PostBuildEvent>SET BASE=$(MSBuildProjectDirectory)\..\
 SET CONFIG=$(Configuration)
 SET SMM_DIR=%25BASE%25Dist\SMM
 SET BIN_DIR=%25SMM_DIR%25\bin

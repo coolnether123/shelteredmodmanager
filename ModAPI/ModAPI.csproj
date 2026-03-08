@@ -264,7 +264,7 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>SET BASE=$(SolutionDir)
+    <PostBuildEvent>SET BASE=$(MSBuildProjectDirectory)\..\
 SET BIN_DIR=%25BASE%25Dist\SMM\bin
 
 :: Ensure directories exist
