@@ -9,6 +9,7 @@ namespace ModAPI.Actors
         IActorRecord Get(ActorId id);
         bool TryGet(ActorId id, out IActorRecord actor);
         IActorRecord Create(ActorCreateRequest request);
+        IActorRecord Ensure(ActorCreateRequest request);
         bool Update(ActorId id, ActorRecordMutation mutation);
         bool Destroy(ActorId id, ActorDestroyReason reason);
         IReadOnlyList<IActorRecord> Enumerate(ActorQuery query);
@@ -34,6 +35,15 @@ namespace ModAPI.Actors
         IReadOnlyList<string> GetComponentIds(ActorId actorId);
     }
 
+    public interface IActorBindingStore
+    {
+        bool Bind(ActorId actorId, ActorBinding binding, bool replaceExisting);
+        bool Unbind(string bindingType, string bindingKey);
+        bool TryResolve(string bindingType, string bindingKey, out ActorId actorId);
+        IReadOnlyList<ActorBinding> GetBindings(ActorId actorId);
+        IReadOnlyList<ActorId> GetBoundActors(string bindingType);
+    }
+
     public interface IActorEvents
     {
         event Action<ActorEventEnvelope> EventPublished;
@@ -48,6 +58,31 @@ namespace ModAPI.Actors
         string SystemId { get; }
         int Priority { get; }
         void Tick(ActorSimulationContext context, int tickStep);
+    }
+
+    public interface IActorAdapter
+    {
+        string AdapterId { get; }
+        int Priority { get; }
+        void Synchronize(IActorSystem actors, long currentTick);
+    }
+
+    public interface IConditionalActorAdapter : IActorAdapter
+    {
+        bool ShouldSynchronize(ActorAdapterContext context);
+    }
+
+    public interface IActorAdapterRegistry
+    {
+        void RegisterAdapter(IActorAdapter adapter);
+        bool UnregisterAdapter(string adapterId);
+        IReadOnlyList<IActorAdapter> GetAdapters();
+    }
+
+    public interface IActorDiagnostics
+    {
+        ActorRuntimeSnapshot GetRuntimeSnapshot();
+        IReadOnlyList<ActorFailureRecord> GetFailureRecords();
     }
 
     public interface IActorSimulationScheduler
@@ -73,7 +108,10 @@ namespace ModAPI.Actors
     public interface IActorSystem :
         IActorRegistry,
         IActorComponentStore,
+        IActorBindingStore,
         IActorEvents,
+        IActorAdapterRegistry,
+        IActorDiagnostics,
         IActorSimulationScheduler,
         IActorSerializationService
     {

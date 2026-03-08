@@ -1,98 +1,50 @@
 # ModAPI Events Guide
-## ModAPI v1.2.2
-
-### Compatibility Matrix
-
-| Scope | Applies To | Status |
-|-------|------------|--------|
-| Event concepts and most examples | Current `ModAPI.dll` | Supported |
-| Header version label `v1.2.2` | Doc header only | Legacy label |
+## Current v1.3 Line
 
 Use `documentation/API_Signatures_Reference.md` for exact current signatures.
 
-**Last Updated:** 2026-01-27  
-**For:** Mod developers using the Sheltered ModAPI
+## Compatibility Matrix
 
-Canonical signatures: `documentation/API_Signatures_Reference.md`.
+| Scope | Applies To | Status |
+|-------|------------|--------|
+| Event concepts and examples | Current `ModAPI.dll` | Supported |
+| Scheduler trigger examples | Current `ModAPI.dll` | Supported |
+| Inter-mod communication examples | Current `ModAPI.dll` | Supported |
 
----
+## 1. Event Systems
 
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Event Systems](#event-systems)
-3. [Game Lifecycle Events](#game-lifecycle-events)
-4. [UI Events](#ui-events)
-5. [Custom Save Events](#custom-save-events)
-6. [Inter-Mod Communication](#inter-mod-communication)
-7. [Mod API Registry](#mod-api-registry)
-8. [Best Practices](#best-practices)
-9. [Performance Considerations](#performance-considerations)
-10. [Troubleshooting](#troubleshooting)
-
----
-
-## Overview
-
-The ModAPI provides **multiple event systems** to help mods react to game state changes without writing Harmony patches. Events are **synchronous** (handlers execute immediately) and **type-safe** (compile-time checking).
-
-### When to Use Events vs Harmony Patches
-
-**Use Events When:**
-- Reacting to common game actions (crafting, saves, UI changes)
-- Sharing data between your own mod components
-- Communicating with other mods
-- You want simpler, more maintainable code
-
-**Use Harmony Patches When:**
-- Modifying game logic (changing return values, cancelling actions)
-- Accessing private game state
-- No suitable event exists yet
-
----
-
-## Event Systems
-
-### Available Event Systems
+Available event systems:
 
 | System | Purpose | Location |
 |--------|---------|----------|
 | `GameEvents` | Core game lifecycle | `ModAPI.Events.GameEvents` |
+| `GameTimeTriggerHelper` | Deterministic time-trigger scheduler | `ModAPI.Events.GameTimeTriggerHelper` |
 | `UIEvents` | Panel open/close/resume/pause | `ModAPI.Events.UIEvents` |
 | `ModEventBus` | Inter-mod custom events | `ModAPI.Events.ModEventBus` |
-| `ModAPIRegistry` | Mod API service discovery | `ModAPI.Core.ModAPIRegistry` |
-| Save Events | Custom save system events | `ModAPI.Saves.Events` |
+| `ModAPIRegistry` | Service discovery | `ModAPI.Core.ModAPIRegistry` |
+| `ModAPI.Saves.Events` | Custom save lifecycle | `ModAPI.Saves.Events` |
 
----
+## 2. `GameEvents`
 
-## Game Lifecycle Events
+Use `GameEvents` when you want the compatibility event surface.
 
-**Namespace:** `ModAPI.Events.GameEvents`
-
-### Available Events
+Important events:
 
 ```csharp
-// Day/time events
 public static event Action<int> OnNewDay;
 public static event Action<TimeTriggerBatch> OnSixHourTick;
 public static event Action<TimeTriggerBatch> OnStaggeredTick;
-
-// Save/load events
 public static event Action<SaveData> OnBeforeSave;
 public static event Action<SaveData> OnAfterLoad;
-
-// Combat events
 public static event Action<EncounterCharacter, EncounterCharacter> OnCombatStarted;
-
-// Session events (v1.0.1)
 public static event Action OnSessionStarted;
 public static event Action OnNewGame;
-
-// Expedition events
 public static event Action<ExplorationParty> OnPartyReturned;
 ```
 
-### Example: Tracking Days Survived
+`OnSixHourTick` and `OnStaggeredTick` are forwarded from `GameTimeTriggerHelper`.
+
+Example:
 
 ```csharp
 using ModAPI.Core;
@@ -100,145 +52,69 @@ using ModAPI.Events;
 
 public class MyMod : IModPlugin
 {
-    private int daysTracked = 0;
-    private IModLogger _log;
-    
-    public void Initialize(IPluginContext ctx)
-    {
-        _log = ctx.Log;
-        _log.Info("MyMod initializing...");
-    }
-    
+    public void Initialize(IPluginContext ctx) { }
+
     public void Start(IPluginContext ctx)
     {
-        // Subscribe to new day event
-        GameEvents.OnNewDay += OnDayChanged;
-        _log.Info("Subscribed to OnNewDay event");
-    }
-    
-    private void OnDayChanged(int dayNumber)
-    {
-        daysTracked++;
-        MMLog.WriteInfo($"Day {dayNumber} - tracked {daysTracked} days total");
+        GameEvents.OnNewDay += day => ctx.Log.Info("Day " + day);
+        GameEvents.OnSixHourTick += batch => ctx.Log.Info("6h tick seq=" + batch.Sequence);
+        GameEvents.OnCombatStarted += (player, enemy) => ctx.Log.Info("Combat started");
     }
 }
 ```
 
-### Example: 6-Hour and Staggered Workloads
+## 3. `GameTimeTriggerHelper`
+
+Use `GameTimeTriggerHelper` when you want explicit named trigger registration and priority ordering.
+
+Typical APIs:
+
+```csharp
+GameTimeTriggerHelper.RegisterTrigger(string triggerId);
+GameTimeTriggerHelper.RegisterTrigger(string triggerId, int priority);
+GameTimeTriggerHelper.RegisterTrigger(string triggerId, int priority, TimeTriggerCadence cadence);
+GameTimeTriggerHelper.RegisterTrigger(string triggerId, int priority, TimeTriggerCadence cadence, Action<TimeTriggerBatch> callback);
+GameTimeTriggerHelper.UnregisterTrigger(string triggerId);
+GameTimeTriggerHelper.GetPriorityList(TimeTriggerCadence cadence);
+GameTimeTriggerHelper.ConfigureStaggeredRange(int minInclusive, int maxInclusive);
+```
+
+Example:
 
 ```csharp
 using ModAPI.Core;
 using ModAPI.Events;
 
-public class HeavyWorkMod : IModPlugin
+public class SchedulerMod : IModPlugin
 {
     public void Initialize(IPluginContext ctx) { }
 
     public void Start(IPluginContext ctx)
     {
-        GameEvents.OnSixHourTick += batch =>
-        {
-            ctx.Log.Info(string.Format("[6h] Day {0} Hour {1} Seq {2}", batch.Day, batch.Hour, batch.Sequence));
-            RunLightMaintenance();
-        };
-
-        GameEvents.OnStaggeredTick += batch =>
-        {
-            // Staggered cadence defaults to deterministic 4-6 in-game hours.
-            ctx.Log.Info(string.Format("[staggered] Day {0} Hour {1} Interval {2}h", batch.Day, batch.Hour, batch.IntervalHours));
-            RunHeavyCalculations();
-        };
-    }
-
-    private void RunLightMaintenance() { }
-    private void RunHeavyCalculations() { }
-}
-```
-
-### Example: Auto-Save Before Combat
-
-```csharp
-using ModAPI.Core;
-using ModAPI.Events;
-
-public class CombatSafetyMod : IModPlugin
-{
-    private IModLogger _log;
-    
-    public void Initialize(IPluginContext ctx)
-    {
-        _log = ctx.Log;
-    }
-    
-    public void Start(IPluginContext ctx)
-    {
-        GameEvents.OnCombatStarted += (player, enemy) =>
-        {
-            _log.Info($"Combat started! Player: {player.GetName()}, Enemy: {enemy.GetName()}");
-            
-            // Trigger auto-save
-            if (SaveManager.instance != null)
-            {
-                SaveManager.instance.SaveToCurrentSlot(false);
-                _log.Info("Auto-saved before combat");
-            }
-        };
+        GameTimeTriggerHelper.RegisterTrigger(
+            triggerId: "com.mymod.economy.tick",
+            priority: 50,
+            cadence: TimeTriggerCadence.SixHour,
+            callback: batch => ctx.Log.Info("Tick seq=" + batch.Sequence));
     }
 }
 ```
 
-### Example: Welcome Back After Load
+## 4. `UIEvents`
+
+Use `UIEvents` when you need panel lifecycle hooks without adding your own Harmony patches.
+
+Available events:
 
 ```csharp
-GameEvents.OnAfterLoad += (saveData) =>
-{
-    MMLog.WriteInfo("Game loaded successfully!");
-    
-    // Access save data
-    if (saveData != null)
-    {
-        MMLog.WriteInfo(string.Format("Loaded save version: {0}", saveData.GetVersion()));
-    }
-};
-```
-
-### Lifecycle Interface (v1.0.1)
-
-Alternatively, plugins can implement `IModSessionEvents` for cleaner state management of session transitions:
-
-```csharp
-public class MyMod : IModPlugin, IModSessionEvents
-{
-    public void OnSessionStarted() {
-        // Safe to re-initialize manager state here
-    }
-    
-    public void OnNewGame() {
-        // Reset persistent variables for a fresh save
-    }
-}
-```
-
----
-
-## UI Events
-
-**Namespace:** `ModAPI.Events.UIEvents`
-
-### Available Events
-
-```csharp
-// Panel lifecycle
 public static event Action<BasePanel> OnPanelOpened;
 public static event Action<BasePanel> OnPanelClosed;
 public static event Action<BasePanel> OnPanelResumed;
 public static event Action<BasePanel> OnPanelPaused;
-
-// Button clicks (optional, high-frequency)
 public static event Action<GameObject, string> OnButtonClicked;
 ```
 
-### Example: React to Crafting Panel Opening
+Example:
 
 ```csharp
 using ModAPI.Core;
@@ -246,560 +122,71 @@ using ModAPI.Events;
 
 public class CraftingHelperMod : IModPlugin
 {
-    private IModLogger _log;
-    
-    public void Initialize(IPluginContext ctx)
-    {
-        _log = ctx.Log;
-    }
-    
+    public void Initialize(IPluginContext ctx) { }
+
     public void Start(IPluginContext ctx)
     {
         UIEvents.OnPanelOpened += panel =>
         {
-            // Check panel type by name
-            string panelName = panel.GetType().Name;
-            
-            if (panelName == "CraftingPanel" || panelName == "WorkbenchPanel")
-            {
-                _log.Info("Crafting panel opened - showing helper UI");
-                ShowCraftingHelp();
-            }
-        };
-    }
-    
-    private void ShowCraftingHelp()
-    {
-        // Your custom UI logic here
-    }
-}
-```
-
-### Example: Track UI Navigation Flow
-
-```csharp
-using System.Collections.Generic;
-
-public class UITrackerMod : IModPlugin
-{
-    private Stack<string> panelHistory = new Stack<string>();
-    
-    public void Start(IPluginContext ctx)
-    {
-        UIEvents.OnPanelOpened += panel =>
-        {
-            string name = panel.GetType().Name;
-            panelHistory.Push(name);
-            ctx.Log.Info($"Panel opened: {name} (stack depth: {panelHistory.Count})");
-        };
-        
-        UIEvents.OnPanelClosed += panel =>
-        {
-            if (panelHistory.Count > 0)
-            {
-                string popped = panelHistory.Pop();
-                ctx.Log.Info($"Panel closed: {popped}");
-            }
+            if (panel.GetType().Name == "CraftingPanel")
+                ctx.Log.Info("Crafting panel opened");
         };
     }
 }
 ```
 
-### Example: Detect Main Menu Return
+## 5. Save Lifecycle Events
+
+The custom saves layer exposes additional save/load events under `ModAPI.Saves.Events`.
+
+Common ones:
+- `OnBeforeSave`
+- `OnAfterSave`
+- `OnBeforeLoad`
+- `OnAfterLoad`
+- `OnPageChanged`
+
+Use these when you are integrating with the expanded save-slot system rather than the base gameplay lifecycle.
+
+## 6. Inter-Mod Communication
+
+### `ModEventBus`
+
+Use `ModEventBus` for broadcast-style communication:
 
 ```csharp
-UIEvents.OnPanelOpened += panel =>
-{
-    if (panel.GetType().Name == "MainMenuPanel")
-    {
-        MMLog.WriteInfo("Player returned to main menu");
-        // Save state, clear caches, etc.
-    }
-};
+ModEventBus.Publish("Author.Quests.Completed", payload);
+ModEventBus.Subscribe<MyPayload>("Author.Quests.Completed", handler);
+ModEventBus.Unsubscribe<MyPayload>("Author.Quests.Completed", handler);
 ```
 
----
+### `ModAPIRegistry`
 
-## Custom Save Events
-
-**Namespace:** `ModAPI.Saves.Events`
-
-### Available Events
+Use `ModAPIRegistry` for service discovery:
 
 ```csharp
-public static event SaveEvent OnBeforeSave;
-public static event SaveEvent OnAfterSave;
-public static event LoadEvent OnBeforeLoad;
-public static event LoadEvent OnAfterLoad;
-public static event PageChangedEvent OnPageChanged;
-public static event ReservationChangedEvent OnReservationChanged;
-```
+ModAPIRegistry.RegisterAPI<IMyApi>("com.mymod.api", impl, "com.mymod");
 
-### Example: Persist Mod Data
-
-```csharp
-using ModAPI.Saves;
-using ModAPI.Util;
-
-public class DataPersistenceMod : IModPlugin
+IMyApi api;
+if (ModAPIRegistry.TryGetAPI<IMyApi>("com.mymod.api", out api))
 {
-    private MyModData modData = new MyModData();
-    
-    public void Start(IPluginContext ctx)
-    {
-        Events.OnBeforeSave += saveEntry =>
-        {
-            ctx.Log.Info($"Saving mod data for slot {saveEntry.id}");
-            // PersistentDataAPI is exposed as IPluginContext extensions
-            ctx.SaveData("MyMod.CustomData", modData);
-        };
-        
-        Events.OnAfterLoad += saveEntry =>
-        {
-            ctx.Log.Info($"Loading mod data from slot {saveEntry.id}");
-            if (ctx.LoadData("MyMod.CustomData", out MyModData loaded))
-            {
-                modData = loaded;
-            }
-        };
-    }
 }
 ```
 
----
-
-## Inter-Mod Communication
-
-**Namespace:** `ModAPI.Events.ModEventBus`
-
-The `ModEventBus` allows mods to publish and subscribe to **custom typed events** for inter-mod communication.
-
-### Naming Convention
-
-**Always use reverse-domain notation:**
-```
-com.authorname.modname.EventName
-```
-
-Examples:
-- `com.coolnether.craftingplus.RecipeDiscovered`
-- `com.myname.questmod.QuestCompleted`
-
-### Publishing Events
-
-```csharp
-using ModAPI.Events;
-
-public class QuestMod : IModPlugin
-{
-    public class QuestCompletedEventArgs
-    {
-        public string QuestId { get; set; }
-        public int Reward { get; set; }
-    }
-    
-    public void Start(IPluginContext ctx)
-    {
-        // When a quest completes, publish the event
-        var eventData = new QuestCompletedEventArgs
-        {
-            QuestId = "first_craft",
-            Reward = 100
-        };
-        
-        ModEventBus.Publish("com.myname.questmod.QuestCompleted", eventData);
-        ctx.Log.Info("Published quest completion event");
-    }
-}
-```
-
-### Subscribing to Events
-
-```csharp
-using ModAPI.Events;
-
-public class RewardMod : IModPlugin
-{
-    public void Start(IPluginContext ctx)
-    {
-        // Subscribe to another mod's events
-        ModEventBus.Subscribe<QuestCompletedEventArgs>(
-            "com.myname.questmod.QuestCompleted", 
-            OnQuestCompleted
-        );
-        
-        ctx.Log.Info("Subscribed to quest completion events");
-    }
-    
-    private void OnQuestCompleted(QuestCompletedEventArgs args)
-    {
-        MMLog.WriteInfo($"Quest {args.QuestId} completed! Reward: {args.Reward}");
-        // Give bonus reward
-        GiveBonusReward(args.Reward * 0.1f);
-    }
-}
-```
-
-### Checking for Subscribers
-
-```csharp
-// Only publish if someone is listening (performance optimization)
-if (ModEventBus.HasSubscribers("com.mymod.HeavyEvent"))
-{
-    var heavyData = GatherExpensiveData();
-    ModEventBus.Publish("com.mymod.HeavyEvent", heavyData);
-}
-```
-
-### Unsubscribing (Cleanup)
-
-```csharp
-public class MyMod : IModPlugin, IModShutdown
-{
-    private Action<MyEventArgs> handler;
-    
-    public void Start(IPluginContext ctx)
-    {
-        handler = OnMyEvent;
-        ModEventBus.Subscribe("com.mymod.Event", handler);
-    }
-    
-    public void Shutdown()
-    {
-        // Clean up subscriptions
-        ModEventBus.Unsubscribe("com.mymod.Event", handler);
-    }
-}
-```
-
----
-
-## Mod API Registry
-
-**Namespace:** `ModAPI.Core.ModAPIRegistry`
-
-The `ModAPIRegistry` allows mods to publish **shared APIs** that other mods can discover and use.
-
-### Define an API Interface
-
-```csharp
-// In your mod's assembly - make this public so other mods can reference it
-namespace MyCraftingMod.API
-{
-    public interface ICraftingAPI
-    {
-        void RegisterRecipe(string recipeId, ItemType result, ItemType[] ingredients);
-        IEnumerable<string> GetCustomRecipeIds();
-        bool IsCustomRecipe(string recipeId);
-    }
-}
-```
-
-### Publish Your API
-
-```csharp
-using ModAPI.Core;
-using MyCraftingMod.API;
-
-public class CraftingMod : IModPlugin
-{
-    private MyCraftingAPIImpl apiImpl;
-    
-    public void Start(IPluginContext ctx)
-    {
-        // Create implementation
-        apiImpl = new MyCraftingAPIImpl();
-        
-        // Register API for other mods to use
-        bool success = ModAPIRegistry.RegisterAPI<ICraftingAPI>(
-            "com.myname.CraftingAPI",
-            apiImpl,
-            ctx.Mod.Id
-        );
-        
-        if (success)
-        {
-            ctx.Log.Info("CraftingAPI registered successfully");
-        }
-        else
-        {
-            ctx.Log.Warn("Failed to register CraftingAPI - already registered?");
-        }
-    }
-}
-
-// Your API implementation
-internal class MyCraftingAPIImpl : ICraftingAPI
-{
-    public void RegisterRecipe(string recipeId, ItemType result, ItemType[] ingredients)
-    {
-        // Implementation
-    }
-    
-    // ... other methods
-}
-```
-
-### Consume Another Mod's API
-
-```csharp
-using ModAPI.Core;
-using MyCraftingMod.API; // Reference their mod's API interface
-
-public class RecipePackMod : IModPlugin
-{
-    public void Start(IPluginContext ctx)
-    {
-        // Try to get the CraftingAPI
-        if (ModAPIRegistry.TryGetAPI<ICraftingAPI>("com.myname.CraftingAPI", out var craftingAPI))
-        {
-            ctx.Log.Info("Found CraftingAPI - registering custom recipes");
-            
-            craftingAPI.RegisterRecipe(
-                "custom_sword",
-                ItemType.Custom_Sword,
-                new[] { ItemType.Metal, ItemType.Metal, ItemType.WoodPlank }
-            );
-        }
-        else
-        {
-            ctx.Log.Warn("CraftingAPI not found - is CraftingMod installed?");
-        }
-    }
-}
-```
-
-### Optional Dependencies
-
-Document in your `About.json`:
-
-```json
-{
-  "id": "com.myname.recipepack",
-  "name": "Custom Recipe Pack",
-  "version": "1.0.0",
-  "description": "Adds new recipes. Optional: requires CraftingMod for advanced recipes.",
-  "dependsOn": [],
-  "optionalDependencies": ["com.myname.craftingmod"]
-}
-```
-
----
-
-## Best Practices
-
-### 1. Always Handle Errors
-
-```csharp
-GameEvents.OnNewDay += day =>
-{
-    try
-    {
-        // Your logic here
-        ProcessDayChange(day);
-    }
-    catch (Exception ex)
-    {
-        MMLog.WriteWarning($"Error in OnNewDay handler: {ex.Message}");
-    }
-};
-```
-
-### 2. Unsubscribe When Done
-
-```csharp
-public class MyMod : IModPlugin, IModShutdown
-{
-    private Action<int> dayHandler;
-    
-    public void Start(IPluginContext ctx)
-    {
-        dayHandler = OnDayChanged;
-        GameEvents.OnNewDay += dayHandler;
-    }
-    
-    public void Shutdown()
-    {
-        GameEvents.OnNewDay -= dayHandler;
-    }
-    
-    private void OnDayChanged(int day) { /* ... */ }
-}
-```
-
-### 3. Keep Handlers Fast
-
-```csharp
-// BAD: Heavy processing in event handler
-UIEvents.OnPanelOpened += panel =>
-{
-    ProcessMassiveDataset(); // Blocks UI!
-};
-
-// GOOD: Defer heavy work
-UIEvents.OnPanelOpened += panel =>
-{
-    ctx.RunNextFrame(() => ProcessMassiveDataset());
-};
-```
-
-### 4. Use Descriptive Event Names
-
-```csharp
-// BAD
-ModEventBus.Publish("Data", myData);
-
-// GOOD
-ModEventBus.Publish("com.mymod.resourcepack.ResourceDiscovered", discoveryData);
-```
-
-### 5. Document Your Events
-
-```csharp
-/// <summary>
-/// Fired when a custom resource node is discovered on the map.
-/// Subscribe with: ModEventBus.Subscribe&lt;ResourceDiscoveredArgs&gt;("com.mymod.ResourceDiscovered", handler);
-/// </summary>
-public class ResourceDiscoveredArgs
-{
-    public Vector2 Location { get; set; }
-    public string ResourceType { get; set; }
-    public int Quantity { get; set; }
-}
-```
-
----
-
-## Performance Considerations
-
-### Event Handler Overhead
-
-- **Per-event cost:** ~100-500 nanoseconds
-- **Negligible** for most use cases
-- **High-frequency events** (e.g., OnButtonClicked) should be used carefully
-
-### Optimization Tips
-
-```csharp
-// 1. Filter early
-UIEvents.OnPanelOpened += panel =>
-{
-    // Quick type check
-    if (panel.GetType().Name != "CraftingPanel")
-        return; // Exit early
-    
-    // Heavy logic only for relevant panels
-    ProcessCraftingPanel(panel);
-};
-
-// 2. Cache delegates
-private Action<int> cachedHandler; // Reuse instead of creating new lambda each time
-
-public void Start(IPluginContext ctx)
-{
-    cachedHandler = OnDayChanged;
-    GameEvents.OnNewDay += cachedHandler;
-}
-
-// 3. Conditional publishing
-if (ModEventBus.HasSubscribers("com.mymod.RareEvent"))
-{
-    // Only gather data if someone is listening
-    var data = GatherExpensiveData();
-    ModEventBus.Publish("com.mymod.RareEvent", data);
-}
-```
-
----
-
-## Troubleshooting
-
-### Events Don't Fire
-
-**Check:**
-1. Is the event system initialized? (Harmony patches applied correctly?)
-2. Are you subscribing in `Start()` not `Initialize()`?
-3. Enable debug logging: `MMLog.WriteDebug` calls will show event firing
-
-```csharp
-// Check if event has subscribers
-int count = ModEventBus.GetSubscriberCount("com.mymod.Event");
-MMLog.WriteInfo($"Event has {count} subscribers");
-
-// Get diagnostics
-var diagnostics = ModEventBus.GetEventDiagnostics();
-foreach (var kvp in diagnostics)
-{
-    MMLog.WriteInfo($"Event: {kvp.Key}, Subscribers: {kvp.Value}");
-}
-```
-
-### Type Mismatch Errors
-
-```csharp
-// BAD: Wrong type
-ModEventBus.Subscribe<string>("com.mymod.Event", handler); // Expects string
-ModEventBus.Publish("com.mymod.Event", 123); // Sends int
-
-// GOOD: Matching types
-ModEventBus.Subscribe<int>("com.mymod.Event", handler); // Expects int
-ModEventBus.Publish("com.mymod.Event", 123); // Sends int
-```
-
-### Handler Exceptions
-
-The event system catches exceptions to prevent one mod from crashing others:
-
-```csharp
-GameEvents.OnNewDay += day =>
-{
-    throw new Exception("Oops!"); // Caught and logged, doesn't crash game
-};
-```
-
-Check `mod_manager.log` for error messages:
-```
-[ModEventBus] Handler error for com.mymod.Event: Oops!
-```
-
-### API Not Found
-
-```csharp
-// Check if API is registered
-if (ModAPIRegistry.IsAPIRegistered("com.other.API"))
-{
-    var api = ModAPIRegistry.GetAPI<IMyAPI>("com.other.API");
-} 
-else
-{
-    MMLog.WriteWarning("API not found - is the provider mod loaded?");
-}
-
-// Get all registered APIs
-var apis = ModAPIRegistry.GetRegisteredAPIs();
-MMLog.WriteInfo($"Found {apis.Count} registered APIs");
-foreach (var apiName in apis)
-{
-    MMLog.WriteInfo($"  - {apiName}");
-}
-```
-
----
-
-## Summary
-
-- **GameEvents**: Core game lifecycle (day, save, combat, expeditions)
-- **UIEvents**: Panel open/close/resume/pause tracking
-- **ModEventBus**: Custom inter-mod event communication
-- **ModAPIRegistry**: Mod API service discovery
-- **Save Events**: Custom save system lifecycle
-
-**Remember:**
-- Events are **simpler** than Harmony patches
-- Use **reverse-domain naming** for custom events/APIs
-- Always **handle errors** in event handlers
-- **Unsubscribe** when your mod shuts down
-- Keep handlers **fast** (defer heavy work)
-
-Happy modding!
-
+## 7. Best Practices
+
+- Subscribe in `Start(...)`, not constructors.
+- Unsubscribe in `Shutdown()` if your mod implements `IModShutdown`.
+- Keep handlers lightweight.
+- Use unique IDs for triggers and registry keys.
+- Prefer named callbacks over anonymous lambdas when you need clean unsubscription.
+- Use `ctx.SaveData(...)` and `ctx.LoadData(...)` or `ISaveSystem.RegisterModData(...)` for persisted state instead of static globals.
+
+## 8. Troubleshooting
+
+When events do not fire:
+1. confirm your plugin reached `Start(...)`
+2. confirm registration/subscription code executed
+3. search logs for exact event-helper signatures
+4. confirm the game state actually reached the expected lifecycle boundary
+5. if using triggers, inspect `GetPriorityList(...)` for your cadence

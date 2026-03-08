@@ -65,15 +65,28 @@
     <Compile Include="GameState\ManagerStateHelper.cs" />
     <Compile Include="Items\InventoryHelper.cs" />
     <Compile Include="Actors\Abstractions\IActorSystem.cs" />
+    <Compile Include="Actors\Abstractions\ActorAdapterBase.cs" />
     <Compile Include="Actors\Models\ActorModels.cs" />
     <Compile Include="Actors\Models\ActorComponents.cs" />
+    <Compile Include="Actors\Models\ActorRuntimeModels.cs" />
     <Compile Include="Characters\PartyHelper.cs" />
     <Compile Include="Characters\PartyPatches.cs" />
+    <Compile Include="Characters\Abstractions\ICharacterAttributes.cs" />
+    <Compile Include="Characters\Abstractions\ICharacterData.cs" />
+    <Compile Include="Characters\Abstractions\ICharacterEffect.cs" />
+    <Compile Include="Characters\Abstractions\ICharacterEffects.cs" />
+    <Compile Include="Characters\Abstractions\ICharacterEffectSystem.cs" />
+    <Compile Include="Characters\Abstractions\ICharacterProxy.cs" />
+    <Compile Include="Characters\Models\AttributeModifier.cs" />
+    <Compile Include="Characters\Models\CharacterQuery.cs" />
+    <Compile Include="Characters\Models\CharacterSaveData.cs" />
+    <Compile Include="Characters\Models\EffectInstance.cs" />
     <Compile Include="Core\IGameHelper.cs" />
     <Compile Include="Core\IPlugin.cs" />
     <Compile Include="Core\ModRegistry.cs" />
     <Compile Include="Core\ModLog.cs" />
     <Compile Include="Core\MMLog.cs" />
+    <Compile Include="Core\SaveRuntimeState.cs" />
     <Compile Include="Core\SaveExitTracer.cs" />
     <Compile Include="Core\LoggerExtensions.cs" />
     <Compile Include="Core\ContextExtensions.cs" />
@@ -86,9 +99,21 @@
     <Compile Include="UI\UIFontCache.cs" />
     <Compile Include="UI\UIUtil.cs" />
     <Compile Include="UI\UIHelper.cs" />
+    <Compile Include="UI\UIPatchCoordinator.cs" />
     <Compile Include="UI\TouchInputBridge.cs" />
     <Compile Include="UI\ScrollInputBridge.cs" />
     <Compile Include="UI\UIFactory.cs" />
+    <Compile Include="UI\Runtime\UIRuntimeServiceHelper.cs" />
+    <Compile Include="UI\Runtime\UIItemPanelRuntimeService.cs" />
+    <Compile Include="UI\Runtime\UIPanelLifecycleRuntimeService.cs" />
+    <Compile Include="UI\Runtime\ModUIHookRegistry.cs" />
+    <Compile Include="UI\Runtime\ModUIHookRuntimeService.cs" />
+    <Compile Include="UI\ModManager\ModManagerPanelScaffolding.cs" />
+    <Compile Include="UI\ModManager\ModManagerDescriptionScroller.cs" />
+    <Compile Include="UI\Settings\ModSettingsSearchController.cs" />
+    <Compile Include="UI\Settings\ModSettingsPresetController.cs" />
+    <Compile Include="UI\Settings\ModSettingsKeybindLayout.cs" />
+    <Compile Include="UI\Settings\ModSettingsKeybindRuntime.cs" />
     <Compile Include="UI\ModManagerPanel.cs" />
     <Compile Include="UI\ModSettingsPanel.cs" />
     <Compile Include="UI\ModTooltip.cs" />
@@ -98,6 +123,12 @@
     <Compile Include="UI\UIPatches.cs" />
     <Compile Include="UI\UIDebug.cs" />
     <Compile Include="UI\UIDebugInspector.cs" />
+    <Compile Include="UI\DebugInternal\UIDebugSourceModels.cs" />
+    <Compile Include="UI\DebugInternal\UIDebugSourceMethodLocator.cs" />
+    <Compile Include="UI\DebugInternal\UIDebugSourceDiffService.cs" />
+    <Compile Include="UI\DebugInternal\UIDebugSnapshotService.cs" />
+    <Compile Include="UI\DebugInternal\UIDebugSourceRewriteService.cs" />
+    <Compile Include="UI\DebugInternal\UIDebugSourcePreviewService.cs" />
     <Compile Include="UI\ContextMenuHelper.cs" />
     <Compile Include="UI\NGUIHelper.cs" />
     <Compile Include="UI\ModUIHooks.cs" />
@@ -121,9 +152,14 @@
     <Compile Include="Spine\SpineSettingsHelper.cs" />
     <Compile Include="Spine\UI\SpineWidgetFactory.cs" />
     <Compile Include="Spine\UI\KeybindCaptureListener.cs" />
+    <Compile Include="Spine\Internal\SpineWidgetRuntime.cs" />
+    <Compile Include="Spine\Internal\SpineScalarWidgetBuilder.cs" />
+    <Compile Include="Spine\Internal\SpineSelectionWidgetBuilder.cs" />
+    <Compile Include="Spine\Internal\SpineActionWidgetBuilder.cs" />
     <Compile Include="Harmony\HarmonyBootstrap.cs" />
     <Compile Include="Harmony\HarmonyUtil.cs" />
     <Compile Include="Harmony\HarmonyHelper.cs" />
+    <Compile Include="Harmony\PatchRegistry.cs" />
     <Compile Include="Harmony\MainMenuPatches.cs" />
     <Compile Include="Harmony\Transpilers\FluentTranspiler.cs" />
     <Compile Include="Harmony\Transpilers\FluentTranspiler_Features.cs" />
@@ -199,6 +235,7 @@
     <Compile Include="Custom Saves\SaveManager_SaveToCurrentSlot_Patch.cs" />
     <Compile Include="Custom Saves\paging\PagingManager.cs" />
     <Compile Include="Custom Saves\paging\CustomSavesWelcomeDialog.cs" />
+    <Compile Include="Custom Saves\paging\SlotSelectionPatchCoordinator.cs" />
     <Compile Include="Custom Saves\paging\SlotSelectionPatches.cs" />
     <Compile Include="Custom Saves\paging\SaveVerification.cs" />
     <Compile Include="Custom Saves\paging\SaveDetailsWindow.cs" />
@@ -231,6 +268,25 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent />
+    <PostBuildEvent>SET BASE=$(MSBuildProjectDirectory)\..\
+SET BIN_DIR=%25BASE%25Dist\SMM\bin
+
+:: Ensure directories exist
+if not exist "%25BIN_DIR%25" mkdir "%25BIN_DIR%25"
+if not exist "%25BIN_DIR%25\decompiler" mkdir "%25BIN_DIR%25\decompiler"
+
+:: Decompiler Tool (Isolated .NET 8 environment)
+for %%C in (Debug Release) do (
+    if exist "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.exe" (
+        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.dll" "%25BIN_DIR%25\decompiler\"
+        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.exe" "%25BIN_DIR%25\decompiler\"
+        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.runtimeconfig.json" "%25BIN_DIR%25\decompiler\"
+        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.deps.json" "%25BIN_DIR%25\decompiler\"
+        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\ICSharpCode.Decompiler.dll" "%25BIN_DIR%25\decompiler\"
+        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\System.CommandLine.dll" "%25BIN_DIR%25\decompiler\"
+    )
+ )
+exit /b 0
+</PostBuildEvent>
   </PropertyGroup>
 </Project>

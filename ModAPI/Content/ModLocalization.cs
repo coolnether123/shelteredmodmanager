@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using HarmonyLib;
+using ModAPI.Harmony;
 
 namespace ModAPI.Content
 {
@@ -37,6 +38,10 @@ namespace ModAPI.Content
         }
     }
 
+    [PatchPolicy(PatchDomain.Content, "ModLocalization",
+        TargetBehavior = "Localization key interception for ModAPI-managed entries",
+        FailureMode = "Literal mod localization falls back to vanilla key lookup and casing can be mangled.",
+        RollbackStrategy = "Disable the Content patch domain or remove the ModLocalization interception patch.")]
     [HarmonyPatch(typeof(Localization), "Get", new Type[] { typeof(string), typeof(bool) })]
     internal static class Localization_Get_ModApiPatch
     {

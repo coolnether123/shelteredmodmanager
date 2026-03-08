@@ -1,12 +1,17 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Core;
+using ModAPI.Harmony;
 
 namespace ModAPI.Persistence
 {
     /// <summary>
     /// Manages automatic persistence for mod data.
     /// </summary>
+    [PatchPolicy(PatchDomain.SaveFlow, "ModPersistenceRegistration",
+        TargetBehavior = "Automatic saveable registration when SaveManager starts",
+        FailureMode = "Registered mod persistence collections may not attach to the active SaveManager.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the ModPersistence registration hook.")]
     public static class ModPersistence
     {
         private static readonly List<ISaveable> _registeredCollections = new List<ISaveable>();

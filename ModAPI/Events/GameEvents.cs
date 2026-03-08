@@ -3,12 +3,17 @@ using System.Collections.Generic;
 using HarmonyLib;
 using System.Reflection;
 using UnityEngine;
+using ModAPI.Harmony;
 
 namespace ModAPI.Events
 {
     /// <summary>
     /// Central event bus so mods can subscribe instead of duplicating Harmony patches.
     /// </summary>
+    [PatchPolicy(PatchDomain.Events, "GameEvents",
+        TargetBehavior = "Session, save/load, combat, and party event bridges",
+        FailureMode = "Event callbacks stop firing and mods may fall back to their own Harmony patches.",
+        RollbackStrategy = "Disable the Events patch domain or remove the affected event bridge host.")]
     public static class GameEvents
     {
         public static event Action<int> OnNewDay;

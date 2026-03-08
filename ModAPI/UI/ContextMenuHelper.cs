@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
+using ModAPI.Harmony;
 using ModAPI.Reflection;
 using UnityEngine;
 
@@ -10,6 +11,10 @@ namespace ModAPI.UI
     /// <summary>
     /// Simplifies adding custom options to the right-click context menu.
     /// </summary>
+    [PatchPolicy(PatchDomain.UI, "ContextMenuAddons",
+        TargetBehavior = "Context menu addon injection and selection interception",
+        FailureMode = "Custom context-menu actions do not appear or do not execute correctly.",
+        RollbackStrategy = "Disable the UI patch domain or remove the context menu patch host.")]
     public static class ContextMenuHelper
     {
         private struct ContextMenuAddon

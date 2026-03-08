@@ -225,7 +225,11 @@ namespace ModAPI.Core
                 : GetType().FullName;
 
             _harmonyInstance = new HarmonyLib.Harmony(harmonyId);
-            HarmonyUtil.PatchAll(_harmonyInstance, GetType().Assembly, options ?? CreateDefaultPatchOptions());
+            var patchOptions = options ?? CreateDefaultPatchOptions();
+            var registryOptions = new PatchRegistryOptions();
+            registryOptions.PatchOptions = patchOptions;
+            registryOptions.SourceName = GetType().Assembly.GetName().Name;
+            PatchRegistry.ApplyAssembly(_harmonyInstance, GetType().Assembly, registryOptions);
         }
 
         private HarmonyUtil.PatchOptions CreateDefaultPatchOptions()
