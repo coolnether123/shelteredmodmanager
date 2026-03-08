@@ -23,7 +23,51 @@ namespace ModAPI.Actors.Internal
             }
 
             string resolvedStream = string.IsNullOrEmpty(streamName) ? "ShelteredAPI.Actors" : streamName;
-            ActorSimulationContext context = new ActorSimulationContext(this, this, this, ModRandom.GetStream(resolvedStream), tick);
+            RunSystems(systems, tick, tickStep, resolvedStream);
+        }
+
+        internal void Update()
+        {
+            EnsureRegistered();
+
+            long previousTick;
+            long currentTick;
+            bool tickAdvanced;
+            lock (_sync)
+            {
+                _updateSequence++;
+                previousTick = _currentTick;
+                tickAdvanced = AdvanceCurrentTickLocked(NowTick());
+                currentTick = _currentTick;
+            }
+
+            if (tickAdvanced)
+            {
+                int tickStep = currentTick > previousTick
+                    ? (int)Math.Min(int.MaxValue, currentTick - previousTick)
+                    : 1;
+                RunSystemsSnapshot(currentTick, tickStep, "ShelteredAPI.Actors");
+            }
+
+            bool liveActorChanges = RefreshLiveActors();
+            RunAdapters(liveActorChanges, tickAdvanced);
+        }
+
+        private void RunSystemsSnapshot(long currentTick, int tickStep, string streamName)
+        {
+            List<IActorSimulationSystem> systems;
+            lock (_sync)
+            {
+                systems = new List<IActorSimulationSystem>(_systems);
+            }
+
+            RunSystems(systems, currentTick, tickStep, streamName);
+        }
+
+        private void RunSystems(List<IActorSimulationSystem> systems, long currentTick, int tickStep, string streamName)
+        {
+            string resolvedStream = string.IsNullOrEmpty(streamName) ? "ShelteredAPI.Actors" : streamName;
+            ActorSimulationContext context = new ActorSimulationContext(this, this, this, ModRandom.GetStream(resolvedStream), currentTick);
 
             for (int i = 0; i < systems.Count; i++)
             {
@@ -51,21 +95,6 @@ namespace ModAPI.Actors.Internal
                         ex);
                 }
             }
-        }
-
-        internal void Update()
-        {
-            EnsureRegistered();
-
-            bool tickAdvanced;
-            lock (_sync)
-            {
-                _updateSequence++;
-                tickAdvanced = AdvanceCurrentTickLocked(NowTick());
-            }
-
-            bool liveActorChanges = RefreshLiveActors();
-            RunAdapters(liveActorChanges, tickAdvanced);
         }
 
         private void RunAdapters(bool liveActorChanges, bool tickAdvanced)

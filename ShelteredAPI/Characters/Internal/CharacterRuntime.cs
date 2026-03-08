@@ -113,6 +113,14 @@ namespace ModAPI.Characters.Internal
             RefreshState();
         }
 
+        internal void ClearBinding()
+        {
+            _member = null;
+            _npc = null;
+            IsActive = false;
+            RefreshState();
+        }
+
         internal void RefreshState()
         {
             if (_source == CharacterSource.RealFamily)

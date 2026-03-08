@@ -72,17 +72,17 @@ namespace ModAPI.Content
         {
             if (def == null) return RegistrationResult.Failed("ItemDefinition cannot be null");
             def.NormalizeLegacyFields();
+            if (def.OwnerAssembly == null)
+            {
+                try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
+            }
             if (string.IsNullOrEmpty(def.Id))
             {
                 TryAssignLegacyItemId(def);
             }
             if (string.IsNullOrEmpty(def.Id)) return RegistrationResult.Failed("Item ID is required");
             if (!def.HasDisplayNameValue()) return RegistrationResult.Failed("DisplayName is required (key or text)");
-
-            if (def.OwnerAssembly == null)
-            {
-                try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
-            }
+            if (IsItemIdAlreadyRegistered(def.Id)) return RegistrationResult.Failed("Item ID already registered: " + def.Id);
 
             try
             {
@@ -113,6 +113,7 @@ namespace ModAPI.Content
             {
                 try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
             }
+            if (IsItemIdAlreadyRegistered(def.Id)) return RegistrationResult.Failed("Item ID already registered: " + def.Id);
 
             try
             {
@@ -238,6 +239,24 @@ namespace ModAPI.Content
             var modId = ResolveModId(def.OwnerAssembly);
             def.Id = $"legacy.{SanitizeIdPart(modId)}.{SanitizeIdPart(legacyKey)}";
             MMLog.WriteWarning($"Item registration used legacy fields without an explicit Id. Generated '{def.Id}'.");
+        }
+
+        private static bool IsItemIdAlreadyRegistered(string id)
+        {
+            if (string.IsNullOrEmpty(id))
+                return false;
+
+            for (int i = 0; i < Items.Count; i++)
+            {
+                ItemDefinition existing = Items[i];
+                if (existing == null || string.IsNullOrEmpty(existing.Id))
+                    continue;
+
+                if (string.Equals(existing.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
 
         private static int ClaimCustomItemId(string modId, string itemId)
