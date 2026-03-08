@@ -9,6 +9,8 @@ namespace ShelteredAPI.Core
     /// </summary>
     public sealed class ShelteredKeybindPersistenceGuard : MonoBehaviour
     {
+        private static bool _flushed;
+
         private void OnApplicationQuit()
         {
             Flush("OnApplicationQuit");
@@ -22,9 +24,13 @@ namespace ShelteredAPI.Core
 
         private void Flush(string source)
         {
+            if (_flushed)
+                return;
+
             try
             {
                 ShelteredKeybindsProvider.Instance.Save();
+                _flushed = true;
                 MMLog.WriteInfo("[ShelteredKeybindPersistenceGuard] Keybinds flushed from " + source + ".");
             }
             catch (System.Exception ex)

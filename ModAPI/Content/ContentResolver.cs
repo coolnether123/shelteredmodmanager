@@ -19,8 +19,9 @@ namespace ModAPI.Content
             foreach (var def in ContentRegistry.Items)
             {
                 if (def == null) continue;
+                def.NormalizeLegacyFields();
                 var asm = def.OwnerAssembly ?? SafeCaller(def);
-                var icon = TryLoadSprite(asm, def.IconPath);
+                var icon = def.Icon ?? TryLoadSprite(asm, def.IconPath);
                 var prefab = TryLoadPrefab(asm, def.PrefabPath);
 
                 resolved.Add(new ResolvedItem

@@ -1,11 +1,16 @@
 using HarmonyLib;
 using ModAPI.Core;
+using ModAPI.Harmony;
 using ModAPI.Hooks;
 using ModAPI.Saves;
 using System;
 
 namespace ModAPI.Hooks
 {
+    [PatchPolicy(PatchDomain.SaveFlow, "PlatformSaveProxyInjection",
+        TargetBehavior = "SaveManager save-script replacement with PlatformSaveProxy",
+        FailureMode = "Custom save virtualization never activates and save flow falls back to vanilla only.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or bypass proxy injection.")]
     [HarmonyPatch(typeof(SaveManager), "Awake")]
     internal static class SaveManager_Injection_Patch
     {

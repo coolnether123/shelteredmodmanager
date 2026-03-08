@@ -73,7 +73,11 @@ namespace ModAPI.Harmony
                     }
                 };
 
-                ModAPI.Harmony.HarmonyUtil.PatchAll(harmony, asm, opts);
+                var registryOptions = PatchRegistry.CreateManagerOptions(
+                    opts,
+                    asm.GetName().Name,
+                    key => ReadManagerString(key, null));
+                PatchRegistry.ApplyAssembly(harmony, asm, registryOptions);
 
                 // Backward compatibility: patch ShelteredAPI too so Sheltered-specific
                 // implementations and adapters are activated alongside core ModAPI hooks.
@@ -85,7 +89,11 @@ namespace ModAPI.Harmony
                     MMLog.WriteInfo("HarmonyBootstrap: applying ShelteredAPI patches from "
                         + shelteredAssembly.GetName().Name + " v" + shelteredAssembly.GetName().Version
                         + " @" + location);
-                    ModAPI.Harmony.HarmonyUtil.PatchAll(harmony, shelteredAssembly, opts);
+                    var shelteredRegistryOptions = PatchRegistry.CreateManagerOptions(
+                        opts,
+                        shelteredAssembly.GetName().Name,
+                        key => ReadManagerString(key, null));
+                    PatchRegistry.ApplyAssembly(harmony, shelteredAssembly, shelteredRegistryOptions);
                     TryInitializeShelteredApiCore(shelteredAssembly);
                 }
                 else

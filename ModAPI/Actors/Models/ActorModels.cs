@@ -71,7 +71,13 @@ namespace ModAPI.Actors
         SerializationError = 7,
         SerializerRegistered = 8,
         ImportCompleted = 9,
-        ExportCompleted = 10
+        ExportCompleted = 10,
+        AdapterFailed = 11,
+        AdapterRecovered = 12,
+        SimulationFailed = 13,
+        SimulationRecovered = 14,
+        LiveSyncFailed = 15,
+        LiveSyncRecovered = 16
     }
 
     [Serializable]
@@ -161,6 +167,31 @@ namespace ModAPI.Actors
                 SourceKey = sourceKey ?? string.Empty,
                 Generator = "core"
             };
+        }
+    }
+
+    [Serializable]
+    public sealed class ActorBinding
+    {
+        public string BindingType;
+        public string BindingKey;
+        public string SourceModId;
+        public bool Persistent;
+
+        public ActorBinding Clone()
+        {
+            return new ActorBinding
+            {
+                BindingType = BindingType,
+                BindingKey = BindingKey,
+                SourceModId = SourceModId,
+                Persistent = Persistent
+            };
+        }
+
+        public override string ToString()
+        {
+            return (BindingType ?? string.Empty) + ":" + (BindingKey ?? string.Empty);
         }
     }
 
@@ -367,6 +398,7 @@ namespace ModAPI.Actors
     {
         public ActorRecord Record;
         public List<ActorComponentSaveEntry> Components;
+        public List<ActorBinding> Bindings;
     }
 
     [Serializable]

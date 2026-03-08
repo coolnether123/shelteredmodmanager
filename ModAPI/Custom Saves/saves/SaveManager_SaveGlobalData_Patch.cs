@@ -2,9 +2,14 @@ using HarmonyLib;
 using ModAPI.Saves;
 using System;
 using ModAPI.Core;
+using ModAPI.Harmony;
 
 namespace ModAPI.Hooks
 {
+    [PatchPolicy(PatchDomain.SaveFlow, "SaveGlobalDataCustomSession",
+        TargetBehavior = "Global-data save propagation into the active custom session",
+        FailureMode = "Custom save sessions miss global-data updates or drift from manifest state.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the custom global-data patch.")]
     [HarmonyPatch(typeof(SaveManager), "SaveGlobalData")]
     internal static class SaveManager_SaveGlobalData_Patch
     {
@@ -12,7 +17,7 @@ namespace ModAPI.Hooks
         {
             MMLog.Write("[SaveGlobalData_Patch] TRIGGERED.");
             // If we are currently in a custom save session
-            if (PlatformSaveProxy.ActiveCustomSave != null)
+            if (SaveRuntimeState.ActiveCustomSave != null)
             {
                 MMLog.Write("[SaveGlobalData_Patch] Intercepting in-game save for active custom save.");
                 try
@@ -33,10 +38,10 @@ namespace ModAPI.Hooks
                     byte[] bytes = saveData.GetBytes();
 
                     // Overwrite the active custom save with the new data
-                    var updatedEntry = ExpandedVanillaSaves.Instance.Overwrite(PlatformSaveProxy.ActiveCustomSave.id, null, bytes);
+                    var updatedEntry = ExpandedVanillaSaves.Instance.Overwrite(SaveRuntimeState.ActiveCustomSave.id, null, bytes);
                     if (updatedEntry != null)
                     {
-                        PlatformSaveProxy.ActiveCustomSave = updatedEntry;
+                        SaveRuntimeState.ActiveCustomSave = updatedEntry;
                         MMLog.Write("[SaveGlobalData_Patch] Successfully updated custom save file and manifest.");
                     }
                     else

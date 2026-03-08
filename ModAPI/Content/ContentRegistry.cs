@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Core;
+using UnityEngine;
 
 namespace ModAPI.Content
 {
@@ -70,13 +71,18 @@ namespace ModAPI.Content
         public static RegistrationResult RegisterItem(ItemDefinition def)
         {
             if (def == null) return RegistrationResult.Failed("ItemDefinition cannot be null");
-            if (string.IsNullOrEmpty(def.Id)) return RegistrationResult.Failed("Item ID is required");
-            if (!def.HasDisplayNameValue()) return RegistrationResult.Failed("DisplayName is required (key or text)");
-
+            def.NormalizeLegacyFields();
             if (def.OwnerAssembly == null)
             {
                 try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
             }
+            if (string.IsNullOrEmpty(def.Id))
+            {
+                TryAssignLegacyItemId(def);
+            }
+            if (string.IsNullOrEmpty(def.Id)) return RegistrationResult.Failed("Item ID is required");
+            if (!def.HasDisplayNameValue()) return RegistrationResult.Failed("DisplayName is required (key or text)");
+            if (IsItemIdAlreadyRegistered(def.Id)) return RegistrationResult.Failed("Item ID already registered: " + def.Id);
 
             try
             {
@@ -99,6 +105,7 @@ namespace ModAPI.Content
             if (def == null) return RegistrationResult.Failed("ItemDefinition cannot be null");
             if (string.IsNullOrEmpty(modId)) return RegistrationResult.Failed("Mod ID is required");
             if (string.IsNullOrEmpty(itemId)) return RegistrationResult.Failed("Item ID is required");
+            def.NormalizeLegacyFields();
             if (!def.HasDisplayNameValue()) return RegistrationResult.Failed("DisplayName is required (key or text)");
 
             def.Id = string.IsNullOrEmpty(def.Id) ? itemId : def.Id;
@@ -106,6 +113,7 @@ namespace ModAPI.Content
             {
                 try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
             }
+            if (IsItemIdAlreadyRegistered(def.Id)) return RegistrationResult.Failed("Item ID already registered: " + def.Id);
 
             try
             {
@@ -146,6 +154,7 @@ namespace ModAPI.Content
         public static void RegisterRecipe(RecipeDefinition def)
         {
             if (def == null) throw new ArgumentNullException(nameof(def));
+            def.NormalizeLegacyFields();
             
             if (string.IsNullOrEmpty(def.Id))
                 throw new ArgumentException("Recipe ID is required", nameof(def));
@@ -194,13 +203,60 @@ namespace ModAPI.Content
             {
                 try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
             }
-            if (def.CustomTypeId.HasValue) return def.CustomTypeId.Value;
+            if (def.CustomTypeId.HasValue)
+            {
+                ReserveExplicitCustomTypeId(def.CustomTypeId.Value, def.Id);
+                return def.CustomTypeId.Value;
+            }
 
             var modId = ResolveModId(def.OwnerAssembly);
             var itemKey = !string.IsNullOrEmpty(def.Id) ? def.Id : def.DisplayName ?? Guid.NewGuid().ToString("N");
             var id = ClaimCustomItemId(modId, itemKey);
             def.CustomTypeId = id;
             return id;
+        }
+
+        private static void ReserveExplicitCustomTypeId(int id, string itemId)
+        {
+            if (id < CustomItemTypeStart)
+                return;
+
+            if (_claimedIds.Add(id))
+                return;
+
+            throw new InvalidOperationException($"Custom item ID collision for '{itemId ?? "unknown"}' ({id}).");
+        }
+
+        private static void TryAssignLegacyItemId(ItemDefinition def)
+        {
+            if (def == null || !string.IsNullOrEmpty(def.Id))
+                return;
+
+            var legacyKey = !string.IsNullOrEmpty(def.Name) ? def.Name : def.DisplayName;
+            if (string.IsNullOrEmpty(legacyKey))
+                return;
+
+            var modId = ResolveModId(def.OwnerAssembly);
+            def.Id = $"legacy.{SanitizeIdPart(modId)}.{SanitizeIdPart(legacyKey)}";
+            MMLog.WriteWarning($"Item registration used legacy fields without an explicit Id. Generated '{def.Id}'.");
+        }
+
+        private static bool IsItemIdAlreadyRegistered(string id)
+        {
+            if (string.IsNullOrEmpty(id))
+                return false;
+
+            for (int i = 0; i < Items.Count; i++)
+            {
+                ItemDefinition existing = Items[i];
+                if (existing == null || string.IsNullOrEmpty(existing.Id))
+                    continue;
+
+                if (string.Equals(existing.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
 
         private static int ClaimCustomItemId(string modId, string itemId)
@@ -241,6 +297,26 @@ namespace ModAPI.Content
             }
             catch { }
             try { return asm != null ? asm.GetName().Name : "mod"; } catch { return "mod"; }
+        }
+
+        private static string SanitizeIdPart(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return "unknown";
+
+            var chars = value.ToCharArray();
+            for (var i = 0; i < chars.Length; i++)
+            {
+                var c = chars[i];
+                var ok = (c >= 'a' && c <= 'z') ||
+                         (c >= 'A' && c <= 'Z') ||
+                         (c >= '0' && c <= '9') ||
+                         c == '_' || c == '-' || c == '.';
+                if (!ok)
+                    chars[i] = '_';
+            }
+
+            return new string(chars).Trim('_').ToLowerInvariant();
         }
     }
 
@@ -364,11 +440,13 @@ namespace ModAPI.Content
         public string Id;                // unique key, e.g., com.mod.item.myhammer
         public string DisplayName;       // legacy: key-or-text (auto-detected)
         public string Description;       // legacy: key-or-text (auto-detected)
+        public string Name;              // legacy v1.0 alias for DisplayName
         public string DisplayNameKey;    // explicit localization key
         public string DescriptionKey;    // explicit localization key
         public string DisplayNameText;   // explicit literal text
         public string DescriptionText;   // explicit literal text
         public string IconPath;          // optional icon file path (use AssetPath helpers)
+        public Sprite Icon;              // legacy direct sprite assignment
         public string PrefabPath;        // optional prefab path for instantiation
         public ItemCategory Category = ItemCategory.Normal;
         public int StackSize = 64;
@@ -409,6 +487,10 @@ namespace ModAPI.Content
         public bool IsRawFood;
         /// <summary>Multiplier applied to RationValue when this food is cooked via a Stove.</summary>
         public float CookedHungerMultiplier = 1.1f;
+        /// <summary>Legacy v1.0 placeholder retained for binary compatibility. Use CookingRecipe in new code.</summary>
+        public ItemManager.ItemType CookingResult;
+        /// <summary>Legacy v1.0 placeholder retained for binary compatibility. Combat tuning still depends on game item defs.</summary>
+        public bool CanUseInCombat;
 
         /// <summary>Type of placeable object this item creates (requires matching level).</summary>
         public ObjectManager.ObjectType ObjectType = ObjectManager.ObjectType.Undefined;
@@ -471,7 +553,37 @@ namespace ModAPI.Content
         {
             return !string.IsNullOrEmpty(DisplayNameKey) ||
                    !string.IsNullOrEmpty(DisplayNameText) ||
-                   !string.IsNullOrEmpty(DisplayName);
+                   !string.IsNullOrEmpty(DisplayName) ||
+                   !string.IsNullOrEmpty(Name);
+        }
+
+        internal void NormalizeLegacyFields()
+        {
+            if (string.IsNullOrEmpty(DisplayName) && !string.IsNullOrEmpty(Name))
+                DisplayName = Name;
+
+            if (string.IsNullOrEmpty(DisplayNameText) &&
+                string.IsNullOrEmpty(DisplayNameKey) &&
+                !string.IsNullOrEmpty(Name))
+            {
+                DisplayNameText = Name;
+            }
+
+            if (string.IsNullOrEmpty(DisplayNameText) &&
+                string.IsNullOrEmpty(DisplayNameKey) &&
+                !string.IsNullOrEmpty(DisplayName) &&
+                !LooksLikeLocalizationKey(DisplayName))
+            {
+                DisplayNameText = DisplayName;
+            }
+
+            if (string.IsNullOrEmpty(DescriptionText) &&
+                string.IsNullOrEmpty(DescriptionKey) &&
+                !string.IsNullOrEmpty(Description) &&
+                !LooksLikeLocalizationKey(Description))
+            {
+                DescriptionText = Description;
+            }
         }
 
         internal static bool LooksLikeLocalizationKey(string value)
@@ -513,8 +625,10 @@ namespace ModAPI.Content
         public string ResultItemId;
         public List<RecipeIngredient> Ingredients = new List<RecipeIngredient>();
         public CraftStation Station = CraftStation.Workbench;
+        public ObjectManager.ObjectType CraftingStation = ObjectManager.ObjectType.Undefined;
         public int Level = 1;
         public float CraftTimeSeconds = 1f;
+        public int ResultCount = 1;
         public bool Unique = false;   // Only craftable once
         public bool Locked = false;   // Must be unlocked
         public string UnlockFlag;     // ACHIEVEMENT or Quest ID
@@ -525,6 +639,12 @@ namespace ModAPI.Content
         { 
             ResultItemId = itemId; 
             return this; 
+        }
+        public RecipeDefinition WithResultItem(string itemId, int count)
+        {
+            ResultItemId = itemId;
+            ResultCount = count;
+            return this;
         }
         public RecipeDefinition WithStation(CraftStation station) { Station = station; return this; }
         public RecipeDefinition WithLevel(int level) { Level = level; return this; }
@@ -545,6 +665,26 @@ namespace ModAPI.Content
         {
             if (!string.IsNullOrEmpty(key)) Metadata[key] = value;
             return this;
+        }
+
+        internal void NormalizeLegacyFields()
+        {
+            if (CraftingStation == ObjectManager.ObjectType.Undefined)
+                return;
+
+            switch (CraftingStation)
+            {
+                case ObjectManager.ObjectType.Laboratory:
+                    Station = CraftStation.Laboratory;
+                    break;
+                case ObjectManager.ObjectType.AmmoPress:
+                    Station = CraftStation.AmmoPress;
+                    break;
+                case ObjectManager.ObjectType.WorkBench:
+                default:
+                    Station = CraftStation.Workbench;
+                    break;
+            }
         }
     }
 

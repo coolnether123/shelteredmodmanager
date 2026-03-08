@@ -31,27 +31,12 @@ namespace ModAPI.Hooks
 
         public static bool NextSaveTargetExists()
         {
-            lock (_nextSaveLock)
-            {
-                return NextSave.Count > 0;
-            }
+            return SaveRuntimeState.HasAnyPendingSave();
         }
 
         public static KeyValuePair<SaveManager.SaveType, Target> GetNextSaveTargetAndClear()
         {
-            lock (_nextSaveLock)
-            {
-                if (NextSave.Count == 0)
-                {
-                    throw new InvalidOperationException("GetNextSaveTargetAndClear called with no pending save targets.");
-                }
-
-                var e = NextSave.GetEnumerator();
-                e.MoveNext();
-                var target = e.Current;
-                NextSave.Clear();
-                return target;
-            }
+            return SaveRuntimeState.GetNextSaveTargetAndClear();
         }
 
         public override bool IsSaving() => _inner.IsSaving();
@@ -99,57 +84,56 @@ namespace ModAPI.Hooks
                 }
 
                 // 1. CHECK FOR NEW GAME OR SLOT SWAP
-                lock (_nextSaveLock)
+                Target target;
+                if (SaveRuntimeState.TryGetPendingSave(type, out target) && target != null)
                 {
-                    if (NextSave.TryGetValue(type, out var target))
+                    if (PluginRunner.IsQuitting)
                     {
-                        if (PluginRunner.IsQuitting)
-                        {
-                            SaveExitTracker.Mark("PlatformSave.Redirect", "saveId=" + target.saveId);
-                        }
-                        
-                        // FORCE SYNC: ExpandedVanillaSaves.Instance.Overwrite uses File.WriteAllBytes (blocking).
-                        // This ensures the file is flushed to disk before we return.
-                        var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, new SaveOverwriteOptions(), data);
-                        
-                        // Create Manifest immediately for new saves
-                        if (entry != null)
-                        {
-                            var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
-                            registry.UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
-                        }
-
-                        // Set this as the active save for the rest of the session
-                        ActiveCustomSave = entry;
-                        
-                        // Clear the "Next" target so we don't get stuck
-                        NextSave.Remove(type); 
-                        
-                        if (entry != null)
-                            MMLog.WriteDebug($"Saved custom slot: {entry.id}");
-                        if (PluginRunner.IsQuitting)
-                        {
-                            SaveExitTracker.Mark("PlatformSave.Redirect.Done", entry != null ? ("entry=" + entry.id) : "entry=null");
-                        }
-
-                        if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
-                        
-                        // Regular log: Save complete
-                        MMLog.WriteInfo($"Save finished {slotName} (custom slot: {entry?.id ?? "unknown"})");
-                        return true; // We handled it
+                        SaveExitTracker.Mark("PlatformSave.Redirect", "saveId=" + target.saveId);
                     }
+
+                    // FORCE SYNC: ExpandedVanillaSaves.Instance.Overwrite uses File.WriteAllBytes (blocking).
+                    // This ensures the file is flushed to disk before we return.
+                    var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, new SaveOverwriteOptions(), data);
+
+                    // Create Manifest immediately for new saves
+                    if (entry != null)
+                    {
+                        var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
+                        registry.UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
+                    }
+
+                    // Set this as the active save for the rest of the session
+                    SaveRuntimeState.ActiveCustomSave = entry;
+
+                    // Clear the "Next" target so we don't get stuck
+                    SaveRuntimeState.ClearPendingSave(type);
+
+                    if (entry != null)
+                        MMLog.WriteDebug($"Saved custom slot: {entry.id}");
+                    if (PluginRunner.IsQuitting)
+                    {
+                        SaveExitTracker.Mark("PlatformSave.Redirect.Done", entry != null ? ("entry=" + entry.id) : "entry=null");
+                    }
+
+                    if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
+
+                    // Regular log: Save complete
+                    MMLog.WriteInfo($"Save finished {slotName} (custom slot: {entry?.id ?? "unknown"})");
+                    return true; // We handled it
                 }
 
                 // 2. CHECK FOR EXISTING LOADED CUSTOM GAME
-                if (ActiveCustomSave != null)
+                if (SaveRuntimeState.HasActiveCustomSave)
                 {
                     // Update the file and metadata
                     // FORCE SYNC: Uses File.WriteAllBytes
-                    var result = ExpandedVanillaSaves.Instance.Overwrite(ActiveCustomSave.id, new SaveOverwriteOptions(), data);
+                    var active = SaveRuntimeState.ActiveCustomSave;
+                    var result = ExpandedVanillaSaves.Instance.Overwrite(active.id, new SaveOverwriteOptions(), data);
                     
                     if (result != null)
                     {
-                        ActiveCustomSave = result;
+                        SaveRuntimeState.ActiveCustomSave = result;
                     }
                     if (PluginRunner.IsQuitting)
                     {
@@ -159,7 +143,7 @@ namespace ModAPI.Hooks
                     if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
                     
                     // Regular log: Save complete
-                    MMLog.WriteInfo($"Save finished {slotName} (custom slot: {ActiveCustomSave.id})");
+                    MMLog.WriteInfo($"Save finished {slotName} (custom slot: {SaveRuntimeState.ActiveCustomSave.id})");
                     return true; // We handled it
                 }
 
@@ -190,52 +174,50 @@ namespace ModAPI.Hooks
 
         public override bool PlatformLoad(SaveManager.SaveType type)
         {
-            lock (_nextLoadLock)
+            Target nextLoadTarget;
+            if (SaveRuntimeState.TryGetPendingLoad(type, out nextLoadTarget) && nextLoadTarget != null)
             {
-                if (NextLoad.TryGetValue(type, out var nextLoadTarget))
+                try
                 {
-                    try
+                    var scenarioId = nextLoadTarget.scenarioId;
+                    var saveId = nextLoadTarget.saveId;
+
+                    ISaveApi saveApi = ExpandedVanillaSaves.IsStandardScenario(scenarioId)
+                        ? ExpandedVanillaSaves.Instance
+                        : ScenarioSaves.GetRegistry(scenarioId);
+
+                    var entry = saveApi.Get(saveId);
+                    if (entry == null)
                     {
-                        var scenarioId = nextLoadTarget.scenarioId;
-                        var saveId = nextLoadTarget.saveId;
-
-                        ISaveApi saveApi = ExpandedVanillaSaves.IsStandardScenario(scenarioId)
-                            ? ExpandedVanillaSaves.Instance
-                            : ScenarioSaves.GetRegistry(scenarioId);
-
-                        var entry = saveApi.Get(saveId);
-                        if (entry == null)
-                        {
-                            MMLog.WriteWarning(string.Format("[PlatformLoad] Pending custom target missing: scenario={0}, saveId={1}. Clearing redirect for {2}.", scenarioId, saveId, type));
-                            ClearPendingLoad_NoLock(type);
-                            _customLoadedXml = null;
-                            ActiveCustomSave = null;
-                            return false;
-                        }
-
-                        var path = DirectoryProvider.EntryPath(scenarioId, entry.absoluteSlot);
-                        if (!File.Exists(path))
-                        {
-                            MMLog.WriteWarning(string.Format("[PlatformLoad] Pending custom save file missing: {0}. Clearing redirect for {1}.", path, type));
-                            ClearPendingLoad_NoLock(type);
-                            _customLoadedXml = null;
-                            ActiveCustomSave = null;
-                            return false;
-                        }
-
-                        _customLoadedXml = File.ReadAllText(path);
-                        ActiveCustomSave = entry;
-                        ClearPendingLoad_NoLock(type);
-                        return true;
-                    }
-                    catch (Exception ex)
-                    {
-                        MMLog.WriteError("custom load error: " + ex);
-                        ClearPendingLoad_NoLock(type);
+                        MMLog.WriteWarning(string.Format("[PlatformLoad] Pending custom target missing: scenario={0}, saveId={1}. Clearing redirect for {2}.", scenarioId, saveId, type));
+                        SaveRuntimeState.ClearPendingLoad(type);
                         _customLoadedXml = null;
-                        ActiveCustomSave = null;
+                        SaveRuntimeState.ActiveCustomSave = null;
                         return false;
                     }
+
+                    var path = DirectoryProvider.EntryPath(scenarioId, entry.absoluteSlot);
+                    if (!File.Exists(path))
+                    {
+                        MMLog.WriteWarning(string.Format("[PlatformLoad] Pending custom save file missing: {0}. Clearing redirect for {1}.", path, type));
+                        SaveRuntimeState.ClearPendingLoad(type);
+                        _customLoadedXml = null;
+                        SaveRuntimeState.ActiveCustomSave = null;
+                        return false;
+                    }
+
+                    _customLoadedXml = File.ReadAllText(path);
+                    SaveRuntimeState.ActiveCustomSave = entry;
+                    SaveRuntimeState.ClearPendingLoad(type);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError("custom load error: " + ex);
+                    SaveRuntimeState.ClearPendingLoad(type);
+                    _customLoadedXml = null;
+                    SaveRuntimeState.ActiveCustomSave = null;
+                    return false;
                 }
             }
 
@@ -244,7 +226,7 @@ namespace ModAPI.Hooks
             {
                 SaveExitTracker.Mark("PlatformLoad.FallbackVanilla", "type=" + type);
             }
-            ActiveCustomSave = null;
+            SaveRuntimeState.ActiveCustomSave = null;
             return _inner.PlatformLoad(type);
         }
 
@@ -264,28 +246,16 @@ namespace ModAPI.Hooks
             
             // Safety: Ensure proxy is injected before we register a pending load
             try { SaveManager_Injection_Patch.Inject(SaveManager.instance); } catch { }
-
-            lock (_nextLoadLock)
-            {
-                NextLoad[type] = new Target { scenarioId = scenarioId, saveId = saveId };
-            }
+            SaveRuntimeState.SetPendingLoad(type, scenarioId, saveId);
         }
 
         public static void SetNextSave(SaveManager.SaveType type, string scenarioId, string saveId)
         {
-            lock (_nextSaveLock)
-            {
-                NextSave[type] = new Target { scenarioId = scenarioId, saveId = saveId };
-            }
+            SaveRuntimeState.SetPendingSave(type, scenarioId, saveId);
         }
         public static void ResetStatus()
         {
             _quitSaveCompleted = false;
-        }
-
-        private static void ClearPendingLoad_NoLock(SaveManager.SaveType type)
-        {
-            NextLoad.Remove(type);
         }
     }
 }

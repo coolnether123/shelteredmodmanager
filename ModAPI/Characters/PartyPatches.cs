@@ -1,9 +1,14 @@
 using HarmonyLib;
 using ModAPI.Characters;
+using ModAPI.Harmony;
 using UnityEngine;
 
 namespace ModAPI.Characters.Internal
 {
+    [PatchPolicy(PatchDomain.Characters, "PartyEvents",
+        TargetBehavior = "Expedition party composition change notifications",
+        FailureMode = "Party helper callbacks stop tracking member changes accurately.",
+        RollbackStrategy = "Disable the Characters patch domain or remove the party event bridge.")]
     [HarmonyPatch]
     internal static class PartyPatches
     {

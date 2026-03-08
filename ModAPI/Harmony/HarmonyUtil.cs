@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -51,60 +52,67 @@ namespace ModAPI.Harmony
 
             foreach (var type in SafeTypes(asm))
             {
-                try
+                PatchType(h, type, options);
+            }
+        }
+
+        public static IList<MethodBase> PatchType(HarmonyLib.Harmony h, Type type, PatchOptions options)
+        {
+            if (h == null || type == null) return new MethodBase[0];
+            if (options == null) options = new PatchOptions();
+
+            try
+            {
+                if (!HasHarmonyPatchAttributes(type)) return new MethodBase[0];
+
+                if (!options.AllowDebugPatches && HasDebugAttribute(type))
                 {
-                    if (!HasHarmonyPatchAttributes(type)) continue;
+                    options.OnResult?.Invoke((object)type, "skipped: DebugPatch not enabled");
+                    return new MethodBase[0];
+                }
 
-                    if (!options.AllowDebugPatches && HasAttribute<DebugPatchAttribute>(type))
-                    {
-                        options.OnResult?.Invoke((object)type, "skipped: DebugPatch not enabled");
-                        continue;
-                    }
+                if (!options.AllowDangerousPatches && HasDangerousAttribute(type))
+                {
+                    options.OnResult?.Invoke((object)type, "skipped: Dangerous not enabled");
+                    return new MethodBase[0];
+                }
 
-                    if (!options.AllowDangerousPatches && HasAttribute<DangerousAttribute>(type))
+                var targets = GetPatchTargets(type);
+                if (targets != null)
+                {
+                    foreach (var m in targets)
                     {
-                        options.OnResult?.Invoke((object)type, "skipped: Dangerous not enabled");
-                        continue;
-                    }
-
-                    var targets = TryGetTargets(type);
-                    if (targets != null)
-                    {
-                        bool skip = false;
-                        foreach (var m in targets)
+                        var key = TargetKey(m);
+                        if (!options.AllowDangerousPatches && SensitiveDeny.Contains(key) && !HasDangerousAttribute(type))
                         {
-                            var key = TargetKey(m);
-                            if (!options.AllowDangerousPatches && SensitiveDeny.Contains(key) && !HasAttribute<DangerousAttribute>(type))
-                            {
-                                options.OnResult?.Invoke((object)m, "skipped: sensitive target requires [Dangerous]");
-                                skip = true; break;
-                            }
-                            if (!options.AllowStructReturns && IsStructReturn(m) && !HasAttribute<DangerousAttribute>(type))
-                            {
-                                options.OnResult?.Invoke((object)m, "skipped: struct-return target not allowed");
-                                skip = true; break;
-                            }
+                            options.OnResult?.Invoke((object)m, "skipped: sensitive target requires [Dangerous]");
+                            return new MethodBase[0];
                         }
-                        if (skip) continue;
-                    }
-
-                    var proc = new PatchClassProcessor(h, type);
-                    var patched = proc.Patch();
-
-                    if (patched != null && patched.Count > 0)
-                    {
-                        foreach (var m in patched)
-                            options.OnResult?.Invoke((object)m, "patched");
-                    }
-                    else
-                    {
-                        options.OnResult?.Invoke((object)type, "no methods patched");
+                        if (!options.AllowStructReturns && IsStructReturn(m) && !HasDangerousAttribute(type))
+                        {
+                            options.OnResult?.Invoke((object)m, "skipped: struct-return target not allowed");
+                            return new MethodBase[0];
+                        }
                     }
                 }
-                catch (Exception ex)
+
+                var proc = new PatchClassProcessor(h, type);
+                var patched = proc.Patch();
+
+                if (patched != null && patched.Count > 0)
                 {
-                    options.OnResult?.Invoke((object)type, "error: " + ex.Message);
+                    foreach (var m in patched)
+                        options.OnResult?.Invoke((object)m, "patched");
+                    return patched.Cast<MethodBase>().ToList();
                 }
+
+                options.OnResult?.Invoke((object)type, "no methods patched");
+                return new MethodBase[0];
+            }
+            catch (Exception ex)
+            {
+                options.OnResult?.Invoke((object)type, "error: " + ex.Message);
+                return new MethodBase[0];
             }
         }
 
@@ -154,30 +162,66 @@ namespace ModAPI.Harmony
             catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.TargetKey", "Error getting target key: " + ex.Message); return "<unknown>"; }
         }
 
-        private static IEnumerable<Type> SafeTypes(Assembly asm)
+        public static IEnumerable<Type> SafeTypes(Assembly asm)
         {
             try { return asm.GetTypes(); }
             catch (ReflectionTypeLoadException rtle) { return rtle.Types.Where(t => t != null); }
             catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.SafeTypes", "Error getting types from assembly: " + ex.Message); return Enumerable.Empty<Type>(); }
         }
 
-        private static bool HasHarmonyPatchAttributes(Type t)
+        public static bool HasHarmonyPatchAttributes(Type t)
         {
             try
             {
-                // Check class attributes
-                if (t.GetCustomAttributes(true).Any(a => a.GetType().FullName.StartsWith("HarmonyLib.Harmony")))
+                if (t == null)
+                    return false;
+
+                if (CustomAttributeData.GetCustomAttributes(t).Any(a => HasHarmonyAttributeName(GetAttributeTypeName(a))))
                     return true;
 
-                // Check static methods for attributes (standard for multi-patch classes)
                 var methods = t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                return methods.Any(m => m.GetCustomAttributes(true).Any(a => a.GetType().FullName.StartsWith("HarmonyLib.Harmony")));
+                return methods.Any(m => CustomAttributeData.GetCustomAttributes(m).Any(a => HasHarmonyAttributeName(GetAttributeTypeName(a))));
             }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("HarmonyUtil.HasHarmonyPatchAttributes", "Error checking for Harmony attributes: " + ex.Message);
+                if (!(ex is ReflectionTypeLoadException) && !(ex is TypeLoadException) && !(ex is FileNotFoundException))
+                    MMLog.WarnOnce("HarmonyUtil.HasHarmonyPatchAttributes", "Error checking for Harmony attributes: " + ex.Message);
                 return false;
             }
+        }
+
+        private static bool HasHarmonyAttributeName(string fullName)
+        {
+            return !string.IsNullOrEmpty(fullName) && fullName.StartsWith("HarmonyLib.Harmony", StringComparison.Ordinal);
+        }
+
+        private static string GetAttributeTypeName(CustomAttributeData attribute)
+        {
+            try
+            {
+                if (attribute == null)
+                    return null;
+
+                // .NET 3.5 does not expose CustomAttributeData.AttributeType.
+                // Constructor.DeclaringType is the compatible path for this target.
+                if (attribute.Constructor != null && attribute.Constructor.DeclaringType != null)
+                    return attribute.Constructor.DeclaringType.FullName;
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
+        public static bool HasDebugAttribute(Type t)
+        {
+            return HasAttribute<DebugPatchAttribute>(t);
+        }
+
+        public static bool HasDangerousAttribute(Type t)
+        {
+            return HasAttribute<DangerousAttribute>(t);
         }
 
         private static bool HasAttribute<T>(Type t) where T : Attribute
@@ -186,7 +230,7 @@ namespace ModAPI.Harmony
             catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.HasAttribute", "Error checking for attribute: " + ex.Message); return false; }
         }
 
-        private static IEnumerable<MethodBase> TryGetTargets(Type patchClass)
+        public static IEnumerable<MethodBase> GetPatchTargets(Type patchClass)
         {
             try
             {

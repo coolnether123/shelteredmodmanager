@@ -12,6 +12,13 @@ using UnityEngine.SceneManagement;
 
 namespace ModAPI.Debugging
 {
+    [HarmonyUtil.DebugPatch("SaveExitDiagnostics")]
+    [PatchPolicy(PatchDomain.Diagnostics, "CrashCorridorMapDiagnostics",
+        TargetBehavior = "Save-exit crash corridor instrumentation",
+        FailureMode = "Diagnostic breadcrumbs are unavailable during quit/load failures.",
+        RollbackStrategy = "Disable the Diagnostics patch domain or turn off debug patches.",
+        IsOptional = true,
+        DeveloperOnly = true)]
     internal static class CrashCorridorMapDiagnostics
     {
         private static readonly FieldInfo LoadingLevelLoadTimeField =

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
+using ModAPI.Harmony;
 using UnityEngine;
 
 namespace ModAPI.Events
@@ -85,6 +86,10 @@ namespace ModAPI.Events
     /// Six-hour ticks align to day quartiles (06:00, 12:00, 18:00, 24:00/new day).
     /// Mods can register named triggers with priority and receive ordered trigger batches.
     /// </summary>
+    [PatchPolicy(PatchDomain.Events, "GameTimeTriggerHelper",
+        TargetBehavior = "Time-based event scheduling driven from GameTime lifecycle ticks",
+        FailureMode = "Scheduled mod triggers stop firing or drift after load and session transitions.",
+        RollbackStrategy = "Disable the Events patch domain or remove the GameTime trigger helper patch host.")]
     public static class GameTimeTriggerHelper
     {
         public static event Action<TimeTriggerBatch> OnSixHourTick;
