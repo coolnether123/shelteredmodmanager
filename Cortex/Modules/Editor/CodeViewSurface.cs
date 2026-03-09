@@ -43,6 +43,7 @@ namespace Cortex.Modules.Editor
         private Rect _stickyHoverAnchorRect = new Rect(0f, 0f, 0f, 0f);
         private Rect _stickyHoverTooltipRect = new Rect(0f, 0f, 0f, 0f);
         private DateTime _stickyHoverKeepAliveUtc = DateTime.MinValue;
+        private string _lastVisibleHoverLogKey = string.Empty;
         private bool _contextMenuOpen;
         private Vector2 _contextMenuPosition = Vector2.zero;
         private CodeViewToken _contextToken;
@@ -628,6 +629,7 @@ namespace Cortex.Modules.Editor
             var tooltipRect = BuildTooltipRect(localMouse, hoveredToken, hoverKey, viewportSize, Mathf.Min(220f, size + 14f));
             _stickyHoverTooltipRect = tooltipRect;
             SetVisibleHover(state, hoverKey, response);
+            LogVisibleHover(hoverKey, response, hoveredToken);
             GUI.Box(tooltipRect, GUIContent.none, _tooltipStyle);
             GUI.Label(new Rect(tooltipRect.x + 8f, tooltipRect.y + 7f, tooltipRect.width - 16f, tooltipRect.height - 14f), tooltipText, _tooltipStyle);
         }
@@ -738,7 +740,22 @@ namespace Cortex.Modules.Editor
             _stickyHoverAnchorRect = new Rect(0f, 0f, 0f, 0f);
             _stickyHoverTooltipRect = new Rect(0f, 0f, 0f, 0f);
             _stickyHoverKeepAliveUtc = DateTime.MinValue;
+            _lastVisibleHoverLogKey = string.Empty;
             ClearVisibleHover(state);
+        }
+
+        private void LogVisibleHover(string hoverKey, LanguageServiceHoverResponse response, CodeViewToken hoveredToken)
+        {
+            if (string.IsNullOrEmpty(hoverKey) || string.Equals(_lastVisibleHoverLogKey, hoverKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _lastVisibleHoverLogKey = hoverKey;
+            MMLog.WriteInfo("[Cortex.HoverUI] Displayed hover tooltip for " +
+                (!string.IsNullOrEmpty(response != null ? response.SymbolDisplay : string.Empty)
+                    ? response.SymbolDisplay
+                    : (hoveredToken != null ? hoveredToken.RawText.Trim() : string.Empty)) + ".");
         }
 
         private static void SetVisibleHover(CortexShellState state, string hoverKey, LanguageServiceHoverResponse response)
@@ -1074,7 +1091,7 @@ namespace Cortex.Modules.Editor
         private static bool CanHoverToken(CodeViewToken token)
         {
             return IsInteractiveToken(token) &&
-                IsHoverClassification(token.Classification, token.RawText);
+                IsHoverCandidateToken(token);
         }
 
         private static bool CanNavigateToDefinition(CodeViewToken token)
@@ -1087,6 +1104,36 @@ namespace Cortex.Modules.Editor
             var key = (token.Classification ?? string.Empty).Trim().ToLowerInvariant();
             return key.IndexOf("local", StringComparison.OrdinalIgnoreCase) < 0 &&
                 key.IndexOf("parameter", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
+        private static bool IsHoverCandidateToken(CodeViewToken token)
+        {
+            if (!IsInteractiveToken(token))
+            {
+                return false;
+            }
+
+            var rawText = token.RawText != null ? token.RawText.Trim() : string.Empty;
+            if (string.IsNullOrEmpty(rawText))
+            {
+                return false;
+            }
+
+            if (IsHoverClassification(token.Classification, rawText))
+            {
+                return true;
+            }
+
+            for (var i = 0; i < rawText.Length; i++)
+            {
+                var current = rawText[i];
+                if (char.IsLetter(current) || current == '_')
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool IsHoverClassification(string classification, string rawText)
