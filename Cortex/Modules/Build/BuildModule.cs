@@ -1,6 +1,7 @@
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
+using Cortex.Services;
 using UnityEngine;
 
 namespace Cortex.Modules.Build
@@ -10,7 +11,7 @@ namespace Cortex.Modules.Build
         private Vector2 _scroll = Vector2.zero;
         private string _configuration = string.Empty;
 
-        public void Draw(IBuildCommandResolver resolver, IBuildExecutor executor, IRestartCoordinator restartCoordinator, ISourcePathResolver sourcePathResolver, IDocumentService documentService, CortexShellState state)
+        public void Draw(IBuildCommandResolver resolver, IBuildExecutor executor, IRestartCoordinator restartCoordinator, ISourcePathResolver sourcePathResolver, CortexNavigationService navigationService, CortexShellState state)
         {
             if (state.SelectedProject == null)
             {
@@ -74,9 +75,10 @@ namespace Cortex.Modules.Build
                         var path = sourcePathResolver != null ? sourcePathResolver.ResolveCandidatePath(state.SelectedProject, state.Settings, item.FilePath) : string.Empty;
                         if (!string.IsNullOrEmpty(path))
                         {
-                            CortexModuleUtil.OpenDocument(documentService, state, path, item.Line);
-                            state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
-                            state.StatusMessage = "Opened " + path + " from build diagnostics.";
+                            if (navigationService != null)
+                            {
+                                navigationService.OpenDocument(state, path, item.Line, "Opened " + path + " from build diagnostics.", "Could not open build diagnostic source.");
+                            }
                         }
                     }
                 }
@@ -92,9 +94,10 @@ namespace Cortex.Modules.Build
                     var location = sourcePathResolver != null ? sourcePathResolver.ResolveTextLocation(line, state.SelectedProject, state.Settings) : null;
                     if (location != null && location.Success)
                     {
-                        CortexModuleUtil.OpenDocument(documentService, state, location.ResolvedPath, location.LineNumber);
-                        state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
-                        state.StatusMessage = "Opened " + location.ResolvedPath + " from build output.";
+                        if (navigationService != null)
+                        {
+                            navigationService.OpenDocument(state, location.ResolvedPath, location.LineNumber, "Opened " + location.ResolvedPath + " from build output.", "Could not open build output location.");
+                        }
                     }
                 }
             }

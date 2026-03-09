@@ -4,6 +4,7 @@ using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
+using Cortex.Services;
 using UnityEngine;
 
 namespace Cortex.Modules.Reference
@@ -34,19 +35,19 @@ namespace Cortex.Modules.Reference
             _xmlDocStyle.normal.textColor = new Color(0.92f, 0.92f, 0.94f, 1f);
         }
 
-        public void Draw(ISourceReferenceService sourceReferenceService, IReferenceCatalogService referenceCatalogService, IDocumentService documentService, CortexShellState state)
+        public void Draw(IReferenceCatalogService referenceCatalogService, CortexNavigationService navigationService, CortexShellState state)
         {
             GUILayout.BeginVertical();
             EnsureAssembliesLoaded(referenceCatalogService, state);
             CortexIdeLayout.DrawTwoPane(
                 420f,
                 340f,
-                delegate { DrawBrowserPane(sourceReferenceService, referenceCatalogService, state); },
-                delegate { DrawPreviewPane(documentService, state); });
+                delegate { DrawBrowserPane(navigationService, referenceCatalogService, state); },
+                delegate { DrawPreviewPane(navigationService, state); });
             GUILayout.EndVertical();
         }
 
-        private void DrawBrowserPane(ISourceReferenceService sourceReferenceService, IReferenceCatalogService referenceCatalogService, CortexShellState state)
+        private void DrawBrowserPane(CortexNavigationService navigationService, IReferenceCatalogService referenceCatalogService, CortexShellState state)
         {
             GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandHeight(true));
             CortexIdeLayout.DrawGroup("Assemblies", delegate
@@ -116,7 +117,7 @@ namespace Cortex.Modules.Reference
                 GUILayout.EndHorizontal();
                 if (_selectedType != null && GUILayout.Button("Decompile Full Type", GUILayout.Width(160f)))
                 {
-                    DecompileType(sourceReferenceService, state, _selectedType);
+                    DecompileType(navigationService, state, _selectedType);
                 }
                 _methodScroll = GUILayout.BeginScrollView(_methodScroll, GUI.skin.box, GUILayout.ExpandHeight(true));
                 for (var i = 0; i < _members.Count; i++)
@@ -129,7 +130,7 @@ namespace Cortex.Modules.Reference
 
                     if (GUILayout.Button(member.DisplayName, GUILayout.ExpandWidth(true)))
                     {
-                        DecompileMethod(sourceReferenceService, state, member);
+                        DecompileMethod(navigationService, state, member);
                     }
                 }
                 GUILayout.EndScrollView();
@@ -137,7 +138,7 @@ namespace Cortex.Modules.Reference
             GUILayout.EndVertical();
         }
 
-        private void DrawPreviewPane(IDocumentService documentService, CortexShellState state)
+        private void DrawPreviewPane(CortexNavigationService navigationService, CortexShellState state)
         {
             GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandHeight(true));
             GUILayout.Label("Decompiler Preview");
@@ -176,8 +177,10 @@ namespace Cortex.Modules.Reference
                 if (!string.IsNullOrEmpty(state.LastReferenceResult.CachePath) && File.Exists(state.LastReferenceResult.CachePath) &&
                     GUILayout.Button("Open Decompiled Source", GUILayout.Width(180f)))
                 {
-                    CortexModuleUtil.OpenDecompilerResult(documentService, state, state.LastReferenceResult);
-                    state.StatusMessage = "Opened decompiled cache file.";
+                    if (navigationService != null)
+                    {
+                        navigationService.OpenDecompilerResult(state, state.LastReferenceResult, "Opened decompiled cache file.", "Could not open decompiled cache file.");
+                    }
                 }
                 if (GUILayout.Button("Clear", GUILayout.Width(80f)))
                 {
@@ -262,25 +265,25 @@ namespace Cortex.Modules.Reference
             }
         }
 
-        private void DecompileMethod(ISourceReferenceService sourceReferenceService, CortexShellState state, ReferenceMemberDescriptor member)
+        private void DecompileMethod(CortexNavigationService navigationService, CortexShellState state, ReferenceMemberDescriptor member)
         {
-            if (member == null || sourceReferenceService == null)
+            if (member == null || navigationService == null)
             {
                 return;
             }
 
-            CortexModuleUtil.RequestDecompilerSource(sourceReferenceService, state, member.AssemblyPath, member.MetadataToken, DecompilerEntityKind.Method, _ignoreCache);
+            navigationService.RequestDecompilerSource(state, member.AssemblyPath, member.MetadataToken, DecompilerEntityKind.Method, _ignoreCache);
             state.StatusMessage = "Decompiled " + member.DeclaringTypeName + "." + member.DisplayName;
         }
 
-        private void DecompileType(ISourceReferenceService sourceReferenceService, CortexShellState state, ReferenceTypeDescriptor type)
+        private void DecompileType(CortexNavigationService navigationService, CortexShellState state, ReferenceTypeDescriptor type)
         {
-            if (type == null || sourceReferenceService == null)
+            if (type == null || navigationService == null)
             {
                 return;
             }
 
-            CortexModuleUtil.RequestDecompilerSource(sourceReferenceService, state, type.AssemblyPath, type.MetadataToken, DecompilerEntityKind.Type, _ignoreCache);
+            navigationService.RequestDecompilerSource(state, type.AssemblyPath, type.MetadataToken, DecompilerEntityKind.Type, _ignoreCache);
             state.StatusMessage = "Decompiled type " + type.DisplayName;
         }
 

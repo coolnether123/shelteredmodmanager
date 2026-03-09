@@ -4,6 +4,7 @@ using System.Text;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
+using Cortex.Services;
 using ModAPI.Core;
 using UnityEngine;
 
@@ -13,9 +14,8 @@ namespace Cortex.Modules.Logs
     /// VS-style log output panel. Renders a compact, clickable log list at the top and an
     /// inline detail strip below (rather than a side-by-side pane). Clicking any entry
     /// attempts to navigate directly to the originating source file/line. If the source
-    /// file is not found among mapped project sources, the decompiler is invoked via
-    /// <see cref="IRuntimeSourceNavigationService"/> and the decompiled output is
-    /// opened in the editor.
+    /// file is not found among mapped project sources, Cortex falls back to runtime
+    /// navigation/decompiled output and opens the resolved target in the editor.
     /// </summary>
     public sealed class LogsModule
     {
@@ -65,9 +65,8 @@ namespace Cortex.Modules.Logs
 
         public void Draw(
             IRuntimeLogFeed logFeed,
-            IRuntimeSourceNavigationService navigationService,
             ISourcePathResolver sourcePathResolver,
-            IDocumentService documentService,
+            CortexNavigationService navigationService,
             CortexShellState state,
             bool detachedWindow)
         {
@@ -86,22 +85,21 @@ namespace Cortex.Modules.Logs
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             DrawToolbar(allEntries, visibleEntries, settings, state, detachedWindow);
-            DrawLogSurface(visibleEntries, navigationService, sourcePathResolver, documentService, state);
+            DrawLogSurface(visibleEntries, navigationService, sourcePathResolver, state);
             GUILayout.EndVertical();
         }
 
         private void DrawLogSurface(
             IList<RuntimeLogEntry> visibleEntries,
-            IRuntimeSourceNavigationService navigationService,
             ISourcePathResolver sourcePathResolver,
-            IDocumentService documentService,
+            CortexNavigationService navigationService,
             CortexShellState state)
         {
             if (state.Logs.SelectedEntry == null)
             {
                 CortexIdeLayout.DrawGroup("Log Stream", delegate
                 {
-                    DrawLogList(visibleEntries, navigationService, sourcePathResolver, documentService, state);
+                    DrawLogList(visibleEntries, navigationService, sourcePathResolver, state);
                 }, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
                 return;
             }
@@ -109,12 +107,12 @@ namespace Cortex.Modules.Logs
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             CortexIdeLayout.DrawGroup("Log Stream", delegate
             {
-                DrawLogList(visibleEntries, navigationService, sourcePathResolver, documentService, state);
+                DrawLogList(visibleEntries, navigationService, sourcePathResolver, state);
             }, GUILayout.ExpandWidth(true), GUILayout.MinHeight(120f), GUILayout.Height(180f));
             GUILayout.Space(6f);
             CortexIdeLayout.DrawGroup("Entry Details", delegate
             {
-                DrawDetailStrip(navigationService, sourcePathResolver, documentService, state);
+                DrawDetailStrip(navigationService, sourcePathResolver, state);
             }, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.EndVertical();
         }
@@ -173,9 +171,8 @@ namespace Cortex.Modules.Logs
 
         private void DrawLogList(
             IList<RuntimeLogEntry> visibleEntries,
-            IRuntimeSourceNavigationService navigationService,
             ISourcePathResolver sourcePathResolver,
-            IDocumentService documentService,
+            CortexNavigationService navigationService,
             CortexShellState state)
         {
             var viewRect = GUILayoutUtility.GetRect(0f, 0f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true), GUILayout.MinHeight(80f));
@@ -198,7 +195,6 @@ namespace Cortex.Modules.Logs
                         visibleEntries[i],
                         navigationService,
                         sourcePathResolver,
-                        documentService,
                         state);
                 }
             }
@@ -209,9 +205,8 @@ namespace Cortex.Modules.Logs
         private void DrawEntryRow(
             Rect rowRect,
             RuntimeLogEntry entry,
-            IRuntimeSourceNavigationService navigationService,
             ISourcePathResolver sourcePathResolver,
-            IDocumentService documentService,
+            CortexNavigationService navigationService,
             CortexShellState state)
         {
             var isSelected = IsSameEntry(state.Logs.SelectedEntry, entry);
@@ -259,7 +254,7 @@ namespace Cortex.Modules.Logs
                 {
                     MMLog.WriteInfo("[Cortex.Logs] Double-activate navigation requested for log entry '" +
                         (entry.Source ?? "Unknown") + "'.");
-                    NavigateToEntry(entry, navigationService, sourcePathResolver, documentService, state);
+                    NavigateToEntry(entry, navigationService, sourcePathResolver, state);
                 }
 
                 current.Use();
@@ -272,9 +267,8 @@ namespace Cortex.Modules.Logs
         // ── Inline detail strip ───────────────────────────────────────────────────────
 
         private void DrawDetailStrip(
-            IRuntimeSourceNavigationService navigationService,
             ISourcePathResolver sourcePathResolver,
-            IDocumentService documentService,
+            CortexNavigationService navigationService,
             CortexShellState state)
         {
             var entry = state.Logs.SelectedEntry;
@@ -309,14 +303,14 @@ namespace Cortex.Modules.Logs
             {
                 if (GUILayout.Button("▶ Source", _actionButtonActiveStyle ?? GUI.skin.button, GUILayout.Width(78f)))
                 {
-                    NavigateToLocation(documentService, state, location.ResolvedPath, location.LineNumber);
+                    NavigateToLocation(navigationService, state, location.ResolvedPath, location.LineNumber);
                 }
             }
             else if (entry.StackFrames != null && entry.StackFrames.Count > 0)
             {
                 if (GUILayout.Button("▶ Frame", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(70f)))
                 {
-                    TryNavigateFirstFrame(navigationService, documentService, state, entry);
+                    TryNavigateFirstFrame(navigationService, state, entry);
                 }
             }
 
@@ -349,8 +343,7 @@ namespace Cortex.Modules.Logs
         }
 
         private void DrawStackFrameList(
-            IRuntimeSourceNavigationService navigationService,
-            IDocumentService documentService,
+            CortexNavigationService navigationService,
             CortexShellState state,
             RuntimeLogEntry entry)
         {
@@ -371,7 +364,7 @@ namespace Cortex.Modules.Logs
                 if (GUILayout.Button("→", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(26f)))
                 {
                     state.Logs.SelectedFrameIndex = i;
-                    OpenOrDecompileFrame(navigationService, documentService, state, entry, i);
+                    OpenOrDecompileFrame(navigationService, state, entry, i);
                 }
                 GUILayout.EndHorizontal();
             }
@@ -384,37 +377,35 @@ namespace Cortex.Modules.Logs
 
         // ── Navigation ────────────────────────────────────────────────────────────────
 
-        private void NavigateToLocation(IDocumentService documentService, CortexShellState state, string filePath, int line)
+        private void NavigateToLocation(CortexNavigationService navigationService, CortexShellState state, string filePath, int line)
         {
-            var opened = CortexModuleUtil.OpenDocument(documentService, state, filePath, line);
+            var opened = navigationService != null
+                ? navigationService.OpenDocument(state, filePath, line, "Opened " + System.IO.Path.GetFileName(filePath) + " @ line " + line, "Could not open resolved source file.")
+                : null;
             if (opened != null)
             {
-                state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
-                state.StatusMessage = "Opened " + System.IO.Path.GetFileName(filePath) + " @ line " + line;
                 MMLog.WriteInfo("[Cortex.Logs] Opened source from log entry -> " + filePath + ":" + line);
             }
             else
             {
-                state.StatusMessage = "Could not open resolved source file.";
                 MMLog.WriteWarning("[Cortex.Logs] Failed to open resolved source from log entry -> " + filePath + ":" + line);
             }
         }
 
-        private void TryNavigateFirstFrame(IRuntimeSourceNavigationService navigationService, IDocumentService documentService, CortexShellState state, RuntimeLogEntry entry)
+        private void TryNavigateFirstFrame(CortexNavigationService navigationService, CortexShellState state, RuntimeLogEntry entry)
         {
             if (entry == null || entry.StackFrames == null || entry.StackFrames.Count == 0)
             {
                 return;
             }
 
-            OpenOrDecompileFrame(navigationService, documentService, state, entry, 0);
+            OpenOrDecompileFrame(navigationService, state, entry, 0);
         }
 
         private void NavigateToEntry(
             RuntimeLogEntry entry,
-            IRuntimeSourceNavigationService navigationService,
             ISourcePathResolver sourcePathResolver,
-            IDocumentService documentService,
+            CortexNavigationService navigationService,
             CortexShellState state)
         {
             if (entry == null)
@@ -430,7 +421,7 @@ namespace Cortex.Modules.Logs
             {
                 MMLog.WriteInfo("[Cortex.Logs] Resolved source marker for log entry '" +
                     (entry.Source ?? "Unknown") + "' -> " + location.ResolvedPath + ":" + location.LineNumber);
-                NavigateToLocation(documentService, state, location.ResolvedPath, location.LineNumber);
+                NavigateToLocation(navigationService, state, location.ResolvedPath, location.LineNumber);
                 return;
             }
 
@@ -438,7 +429,7 @@ namespace Cortex.Modules.Logs
             {
                 MMLog.WriteInfo("[Cortex.Logs] Falling back to runtime stack frame navigation for log entry '" +
                     (entry.Source ?? "Unknown") + "'.");
-                OpenOrDecompileFrame(navigationService, documentService, state, entry, 0);
+                OpenOrDecompileFrame(navigationService, state, entry, 0);
                 return;
             }
 
@@ -448,8 +439,7 @@ namespace Cortex.Modules.Logs
         }
 
         private void OpenOrDecompileFrame(
-            IRuntimeSourceNavigationService navigationService,
-            IDocumentService documentService,
+            CortexNavigationService navigationService,
             CortexShellState state,
             RuntimeLogEntry entry,
             int frameIndex)
@@ -460,11 +450,7 @@ namespace Cortex.Modules.Logs
                 return;
             }
 
-            var target = navigationService.Resolve(
-                entry,
-                frameIndex,
-                state.SelectedProject,
-                state.Settings);
+            var target = navigationService.ResolveRuntimeTarget(entry, frameIndex, state);
 
             if (target == null || !target.Success || string.IsNullOrEmpty(target.FilePath))
             {
@@ -476,16 +462,12 @@ namespace Cortex.Modules.Logs
                 return;
             }
 
-            var opened = CortexModuleUtil.OpenDocument(documentService, state, target.FilePath, target.LineNumber);
-            if (opened == null)
+            if (!navigationService.OpenRuntimeTarget(state, target, target.StatusMessage, "Could not open resolved or decompiled file."))
             {
-                state.StatusMessage = "Could not open resolved or decompiled file.";
                 MMLog.WriteWarning("[Cortex.Logs] Failed to open runtime navigation target -> " + (target.FilePath ?? string.Empty));
                 return;
             }
 
-            state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
-            state.StatusMessage = target.StatusMessage;
             MMLog.WriteInfo("[Cortex.Logs] Opened runtime navigation target -> " + target.FilePath + ":" + target.LineNumber);
         }
 
