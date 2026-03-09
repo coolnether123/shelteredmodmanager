@@ -214,6 +214,7 @@ namespace Cortex.Modules.Editor
         private CodeViewLayout BuildLayout(DocumentSession session, float gutterWidth)
         {
             var layout = new CodeViewLayout();
+            var documentIdentity = session != null ? session.FilePath ?? string.Empty : string.Empty;
             var text = session.Text ?? string.Empty;
             var spans = NormalizeSpans(text.Length, session.LanguageAnalysis != null ? session.LanguageAnalysis.Classifications : null);
             var cursor = 0;
@@ -225,16 +226,16 @@ namespace Cortex.Modules.Editor
                 var span = spans[i];
                 if (span.Start > cursor)
                 {
-                    AppendSegment(layout, text, cursor, span.Start - cursor, string.Empty);
+                    AppendSegment(layout, documentIdentity, text, cursor, span.Start - cursor, string.Empty);
                 }
 
-                AppendSegment(layout, text, span.Start, span.Length, span.Classification);
+                AppendSegment(layout, documentIdentity, text, span.Start, span.Length, span.Classification);
                 cursor = span.Start + span.Length;
             }
 
             if (cursor < text.Length)
             {
-                AppendSegment(layout, text, cursor, text.Length - cursor, string.Empty);
+                AppendSegment(layout, documentIdentity, text, cursor, text.Length - cursor, string.Empty);
             }
 
             BuildFoldRegions(session, layout);
@@ -242,7 +243,7 @@ namespace Cortex.Modules.Editor
             return layout;
         }
 
-        private void AppendSegment(CodeViewLayout layout, string text, int start, int length, string classification)
+        private void AppendSegment(CodeViewLayout layout, string documentIdentity, string text, int start, int length, string classification)
         {
             if (layout == null || string.IsNullOrEmpty(text) || length <= 0)
             {
@@ -269,7 +270,7 @@ namespace Cortex.Modules.Editor
                 if (segmentLength > 0)
                 {
                     var raw = text.Substring(index, segmentLength);
-                    AddTokenRuns(currentLine, index, raw, classification ?? string.Empty);
+                    AddTokenRuns(currentLine, documentIdentity, index, raw, classification ?? string.Empty);
                 }
 
                 index += segmentLength;
@@ -585,6 +586,9 @@ namespace Cortex.Modules.Editor
             state.Editor.RequestedHoverLine = hoveredToken.LineNumber;
             state.Editor.RequestedHoverColumn = hoveredToken.Column;
             state.Editor.RequestedHoverTokenText = hoveredToken.RawText.Trim();
+            MMLog.WriteInfo("[Cortex.HoverUI] Queued hover request for " +
+                state.Editor.RequestedHoverTokenText +
+                " @ " + state.Editor.RequestedHoverLine + ":" + state.Editor.RequestedHoverColumn + ".");
         }
 
         private void RequestDefinition(CortexShellState state, DocumentSession session, CodeViewToken token)
@@ -871,7 +875,7 @@ namespace Cortex.Modules.Editor
             return line != null ? line.FoldRegion : null;
         }
 
-        private void AddTokenRuns(CodeViewLine line, int absoluteStart, string raw, string classification)
+        private void AddTokenRuns(CodeViewLine line, string documentIdentity, int absoluteStart, string raw, string classification)
         {
             if (line == null || string.IsNullOrEmpty(raw))
             {
@@ -880,7 +884,7 @@ namespace Cortex.Modules.Editor
 
             if (!string.IsNullOrEmpty(classification))
             {
-                AddToken(line, absoluteStart, raw, classification);
+                AddToken(line, documentIdentity, absoluteStart, raw, classification);
                 return;
             }
 
@@ -897,12 +901,12 @@ namespace Cortex.Modules.Editor
                     }
                 }
 
-                AddToken(line, absoluteStart + offset, raw.Substring(offset, runLength), string.Empty);
+                AddToken(line, documentIdentity, absoluteStart + offset, raw.Substring(offset, runLength), string.Empty);
                 offset += runLength;
             }
         }
 
-        private void AddToken(CodeViewLine line, int absoluteStart, string raw, string classification)
+        private void AddToken(CodeViewLine line, string documentIdentity, int absoluteStart, string raw, string classification)
         {
             if (line == null || string.IsNullOrEmpty(raw))
             {
@@ -913,7 +917,7 @@ namespace Cortex.Modules.Editor
 
             var token = new CodeViewToken
             {
-                Key = BuildTokenKey(absoluteStart, raw.Length),
+                Key = BuildTokenKey(documentIdentity, absoluteStart, raw.Length),
                 Start = absoluteStart,
                 Length = raw.Length,
                 Classification = classification ?? string.Empty,
@@ -1500,9 +1504,9 @@ namespace Cortex.Modules.Editor
                    gutterWidth.ToString("F2");
         }
 
-        private static string BuildTokenKey(int start, int length)
+        private static string BuildTokenKey(string documentIdentity, int start, int length)
         {
-            return start + ":" + length;
+            return (documentIdentity ?? string.Empty).ToLowerInvariant() + "|" + start + ":" + length;
         }
 
         private static Texture2D MakeFill(Color color)
