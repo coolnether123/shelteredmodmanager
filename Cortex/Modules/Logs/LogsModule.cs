@@ -26,9 +26,6 @@ namespace Cortex.Modules.Logs
         private bool _warningsVisible = true;
         private bool _infoVisible = true;
         private int _lastEntryCount;
-        private string _lastActivatedEntryId = string.Empty;
-        private long _lastActivatedSequence = -1;
-        private DateTime _lastActivatedUtc = DateTime.MinValue;
 
         // ── selection state ───────────────────────────────────────────────────────────
         private Vector2 _listScroll = Vector2.zero;
@@ -247,17 +244,25 @@ namespace Cortex.Modules.Logs
 
             GUI.contentColor = RuntimeLogVisuals.GetEntryTextColor(entry.Level, isSelected);
 
-            if (GUI.Button(rowRect, BuildRowLabel(entry), rowStyle))
+            GUI.Box(rowRect, BuildRowLabel(entry), rowStyle);
+
+            var current = Event.current;
+            if (current != null &&
+                current.type == EventType.MouseDown &&
+                current.button == 0 &&
+                rowRect.Contains(current.mousePosition))
             {
                 state.Logs.SelectedEntry = entry;
                 state.Logs.SelectedFrameIndex = -1;
 
-                if (IsEntryDoubleActivated(entry))
+                if (current.clickCount >= 2)
                 {
                     MMLog.WriteInfo("[Cortex.Logs] Double-activate navigation requested for log entry '" +
                         (entry.Source ?? "Unknown") + "'.");
                     NavigateToEntry(entry, navigationService, sourcePathResolver, documentService, state);
                 }
+
+                current.Use();
             }
 
             GUI.backgroundColor = previousBg;
@@ -311,7 +316,7 @@ namespace Cortex.Modules.Logs
             {
                 if (GUILayout.Button("▶ Frame", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(70f)))
                 {
-                    TryNavigateFirstFrame(navigationService, documentService, state);
+                    TryNavigateFirstFrame(navigationService, documentService, state, entry);
                 }
             }
 
@@ -366,7 +371,7 @@ namespace Cortex.Modules.Logs
                 if (GUILayout.Button("→", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(26f)))
                 {
                     state.Logs.SelectedFrameIndex = i;
-                    OpenOrDecompileFrame(navigationService, documentService, state, i);
+                    OpenOrDecompileFrame(navigationService, documentService, state, entry, i);
                 }
                 GUILayout.EndHorizontal();
             }
@@ -395,14 +400,14 @@ namespace Cortex.Modules.Logs
             }
         }
 
-        private void TryNavigateFirstFrame(IRuntimeSourceNavigationService navigationService, IDocumentService documentService, CortexShellState state)
+        private void TryNavigateFirstFrame(IRuntimeSourceNavigationService navigationService, IDocumentService documentService, CortexShellState state, RuntimeLogEntry entry)
         {
-            if (state.Logs.SelectedEntry == null || state.Logs.SelectedEntry.StackFrames == null || state.Logs.SelectedEntry.StackFrames.Count == 0)
+            if (entry == null || entry.StackFrames == null || entry.StackFrames.Count == 0)
             {
                 return;
             }
 
-            OpenOrDecompileFrame(navigationService, documentService, state, 0);
+            OpenOrDecompileFrame(navigationService, documentService, state, entry, 0);
         }
 
         private void NavigateToEntry(
@@ -423,23 +428,30 @@ namespace Cortex.Modules.Logs
 
             if (location.Success && !string.IsNullOrEmpty(location.ResolvedPath))
             {
+                MMLog.WriteInfo("[Cortex.Logs] Resolved source marker for log entry '" +
+                    (entry.Source ?? "Unknown") + "' -> " + location.ResolvedPath + ":" + location.LineNumber);
                 NavigateToLocation(documentService, state, location.ResolvedPath, location.LineNumber);
                 return;
             }
 
             if (entry.StackFrames != null && entry.StackFrames.Count > 0)
             {
-                OpenOrDecompileFrame(navigationService, documentService, state, 0);
+                MMLog.WriteInfo("[Cortex.Logs] Falling back to runtime stack frame navigation for log entry '" +
+                    (entry.Source ?? "Unknown") + "'.");
+                OpenOrDecompileFrame(navigationService, documentService, state, entry, 0);
                 return;
             }
 
             state.StatusMessage = BuildNavigationNote(location, entry);
+            MMLog.WriteWarning("[Cortex.Logs] No source marker or stack frame navigation target was available for log entry '" +
+                (entry.Source ?? "Unknown") + "'.");
         }
 
         private void OpenOrDecompileFrame(
             IRuntimeSourceNavigationService navigationService,
             IDocumentService documentService,
             CortexShellState state,
+            RuntimeLogEntry entry,
             int frameIndex)
         {
             if (navigationService == null)
@@ -449,7 +461,7 @@ namespace Cortex.Modules.Logs
             }
 
             var target = navigationService.Resolve(
-                state.Logs.SelectedEntry,
+                entry,
                 frameIndex,
                 state.SelectedProject,
                 state.Settings);
@@ -459,6 +471,8 @@ namespace Cortex.Modules.Logs
                 state.StatusMessage = target != null
                     ? target.StatusMessage
                     : "Navigation failed — no source or decompiled output available for this frame.";
+                MMLog.WriteWarning("[Cortex.Logs] Runtime frame navigation failed for log entry '" +
+                    (entry != null ? (entry.Source ?? "Unknown") : "Unknown") + "': " + state.StatusMessage);
                 return;
             }
 
@@ -630,31 +644,6 @@ namespace Cortex.Modules.Logs
             }
 
             return left.Sequence == right.Sequence && left.Timestamp == right.Timestamp;
-        }
-
-        private bool IsEntryDoubleActivated(RuntimeLogEntry entry)
-        {
-            var isSameEntry = false;
-            if (entry != null)
-            {
-                if (!string.IsNullOrEmpty(entry.EntryId) && !string.IsNullOrEmpty(_lastActivatedEntryId))
-                {
-                    isSameEntry = string.Equals(entry.EntryId, _lastActivatedEntryId, StringComparison.Ordinal);
-                }
-                else
-                {
-                    isSameEntry = entry.Sequence == _lastActivatedSequence;
-                }
-            }
-
-            var nowUtc = DateTime.UtcNow;
-            var isDoubleActivate = isSameEntry &&
-                (nowUtc - _lastActivatedUtc).TotalMilliseconds <= 420d;
-
-            _lastActivatedEntryId = entry != null ? entry.EntryId ?? string.Empty : string.Empty;
-            _lastActivatedSequence = entry != null ? entry.Sequence : -1;
-            _lastActivatedUtc = nowUtc;
-            return isDoubleActivate;
         }
 
         private static string FirstLine(string text)

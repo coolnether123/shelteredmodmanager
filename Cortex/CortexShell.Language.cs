@@ -250,10 +250,17 @@ namespace Cortex
             var requestDocumentPath = request.DocumentPath ?? string.Empty;
             var requestDocumentVersion = request.DocumentVersion;
             _languageHoverInFlight = true;
+            MMLog.WriteInfo("[Cortex.Roslyn] Queueing hover for " +
+                (_state.Editor.RequestedHoverTokenText ?? string.Empty) +
+                " @ " + _state.Editor.RequestedHoverLine + ":" + _state.Editor.RequestedHoverColumn +
+                " in " + Path.GetFileName(requestDocumentPath) + ".");
             var requestId = client != null ? client.QueueHover(request) : string.Empty;
             if (string.IsNullOrEmpty(requestId))
             {
                 _languageHoverInFlight = false;
+                MMLog.WriteWarning("[Cortex.Roslyn] Failed to queue hover for " +
+                    (_state.Editor.RequestedHoverTokenText ?? string.Empty) +
+                    ": " + (_languageServiceClient != null ? _languageServiceClient.LastError : "Roslyn client was not available."));
                 return;
             }
 
@@ -503,7 +510,12 @@ namespace Cortex
             if (response.Success)
             {
                 MMLog.WriteInfo("[Cortex.Roslyn] Hover resolved for " + (_state.Editor.RequestedHoverTokenText ?? string.Empty) + ".");
+                return;
             }
+
+            MMLog.WriteWarning("[Cortex.Roslyn] Hover failed for " +
+                (_state.Editor.RequestedHoverTokenText ?? string.Empty) +
+                ": " + (response.StatusMessage ?? "Unknown Roslyn hover failure."));
         }
 
         private void HandleLanguageDefinitionResponse(LanguageServiceEnvelope envelope, PendingLanguageDefinitionRequest pending)
@@ -514,49 +526,58 @@ namespace Cortex
                 return;
             }
 
-            var liveSession = FindOpenDocument(pending.DocumentPath);
-            if (liveSession != null &&
-                pending.DocumentVersion > 0 &&
-                liveSession.TextVersion > 0 &&
-                liveSession.TextVersion != pending.DocumentVersion)
+            try
             {
-                MMLog.WriteInfo("[Cortex.Roslyn] Ignored stale definition response for " +
-                    (pending.TokenText ?? string.Empty) +
-                    ". ResponseVersion=" + pending.DocumentVersion +
-                    ", LiveVersion=" + liveSession.TextVersion);
-                return;
-            }
-
-            var response = DeserializeEnvelopePayload<LanguageServiceDefinitionResponse>(envelope);
-            if (response == null || !response.Success)
-            {
-                _state.StatusMessage = response != null && !string.IsNullOrEmpty(response.StatusMessage)
-                    ? response.StatusMessage
-                    : (envelope != null && !string.IsNullOrEmpty(envelope.ErrorMessage) ? envelope.ErrorMessage : "Definition was not found.");
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(response.DocumentPath) && File.Exists(response.DocumentPath))
-            {
-                var opened = CortexModuleUtil.OpenDocument(_documentService, _state, response.DocumentPath, response.Range != null ? response.Range.StartLine : 1);
-                if (opened != null)
+                var liveSession = FindOpenDocument(pending.DocumentPath);
+                if (liveSession != null &&
+                    pending.DocumentVersion > 0 &&
+                    liveSession.TextVersion > 0 &&
+                    liveSession.TextVersion != pending.DocumentVersion)
                 {
-                    opened.HighlightedLine = response.Range != null ? response.Range.StartLine : 1;
+                    MMLog.WriteInfo("[Cortex.Roslyn] Ignored stale definition response for " +
+                        (pending.TokenText ?? string.Empty) +
+                        ". ResponseVersion=" + pending.DocumentVersion +
+                        ", LiveVersion=" + liveSession.TextVersion);
+                    return;
                 }
 
-                _state.StatusMessage = "Opened definition: " + (response.SymbolDisplay ?? Path.GetFileName(response.DocumentPath));
-                MMLog.WriteInfo("[Cortex.Roslyn] Opened definition for " + (pending.TokenText ?? string.Empty) + " -> " + response.DocumentPath);
-                return;
-            }
+                var response = DeserializeEnvelopePayload<LanguageServiceDefinitionResponse>(envelope);
+                if (response == null || !response.Success)
+                {
+                    _state.StatusMessage = response != null && !string.IsNullOrEmpty(response.StatusMessage)
+                        ? response.StatusMessage
+                        : (envelope != null && !string.IsNullOrEmpty(envelope.ErrorMessage) ? envelope.ErrorMessage : "Definition was not found.");
+                    return;
+                }
 
-            if (TryOpenMetadataDefinition(response))
+                if (!string.IsNullOrEmpty(response.DocumentPath) && File.Exists(response.DocumentPath))
+                {
+                    var opened = CortexModuleUtil.OpenDocument(_documentService, _state, response.DocumentPath, response.Range != null ? response.Range.StartLine : 1);
+                    if (opened != null)
+                    {
+                        opened.HighlightedLine = response.Range != null ? response.Range.StartLine : 1;
+                    }
+
+                    _state.StatusMessage = "Opened definition: " + (response.SymbolDisplay ?? Path.GetFileName(response.DocumentPath));
+                    MMLog.WriteInfo("[Cortex.Roslyn] Opened definition for " + (pending.TokenText ?? string.Empty) + " -> " + response.DocumentPath);
+                    return;
+                }
+
+                if (TryOpenMetadataDefinition(response))
+                {
+                    return;
+                }
+
+                _state.StatusMessage = !string.IsNullOrEmpty(response.StatusMessage)
+                    ? response.StatusMessage
+                    : "Definition was not found.";
+            }
+            catch (Exception ex)
             {
-                return;
+                _state.StatusMessage = "Definition lookup failed.";
+                MMLog.WriteError("[Cortex.Roslyn] Definition response handling crashed for '" +
+                    (pending.TokenText ?? string.Empty) + "': " + ex);
             }
-
-            _state.StatusMessage = !string.IsNullOrEmpty(response.StatusMessage)
-                ? response.StatusMessage
-                : "Definition was not found.";
         }
 
         private static TResponse DeserializeEnvelopePayload<TResponse>(LanguageServiceEnvelope envelope)
@@ -590,50 +611,80 @@ namespace Cortex
 
         private bool TryOpenMetadataDefinition(LanguageServiceDefinitionResponse response)
         {
-            if (response == null || _sourceReferenceService == null || _documentService == null)
+            try
             {
-                MMLog.WriteWarning("[Cortex.Roslyn] Metadata definition fallback was unavailable because a required Cortex service was null.");
+                if (response == null || _sourceReferenceService == null || _documentService == null)
+                {
+                    MMLog.WriteWarning("[Cortex.Roslyn] Metadata definition fallback was unavailable because a required Cortex service was null.");
+                    return false;
+                }
+
+                MMLog.WriteInfo("[Cortex.Roslyn] Metadata definition fallback starting for '" +
+                    (_state.Editor.RequestedDefinitionTokenText ?? response.SymbolDisplay ?? response.MetadataName ?? string.Empty) +
+                    "' in assembly '" + (response.ContainingAssemblyName ?? string.Empty) + "'.");
+
+                string assemblyPath;
+                if (!TryResolveAssemblyPath(response.ContainingAssemblyName, out assemblyPath))
+                {
+                    MMLog.WriteWarning("[Cortex.Roslyn] Metadata definition fallback could not resolve assembly '" + (response.ContainingAssemblyName ?? string.Empty) + "'.");
+                    return false;
+                }
+
+                MMLog.WriteInfo("[Cortex.Roslyn] Metadata definition fallback resolved assembly path: " + assemblyPath);
+
+                int metadataToken;
+                DecompilerEntityKind entityKind;
+                if (!TryResolveMetadataTarget(response, assemblyPath, out metadataToken, out entityKind))
+                {
+                    MMLog.WriteWarning("[Cortex.Roslyn] Metadata definition fallback could not resolve token for '" +
+                        (response.SymbolDisplay ?? response.MetadataName ?? string.Empty) +
+                        "' in " + assemblyPath + ".");
+                    return false;
+                }
+
+                MMLog.WriteInfo("[Cortex.Roslyn] Metadata definition fallback resolved token 0x" +
+                    metadataToken.ToString("X8") + " (" + entityKind + ").");
+
+                var decompiled = CortexModuleUtil.RequestDecompilerSource(
+                    _sourceReferenceService,
+                    _state,
+                    assemblyPath,
+                    metadataToken,
+                    entityKind,
+                    false);
+
+                if (decompiled == null)
+                {
+                    MMLog.WriteWarning("[Cortex.Roslyn] Metadata definition fallback decompiler request returned null for '" +
+                        (response.SymbolDisplay ?? response.MetadataName ?? string.Empty) + "'.");
+                    return false;
+                }
+
+                MMLog.WriteInfo("[Cortex.Roslyn] Metadata definition fallback decompiler returned cache path: " +
+                    (decompiled.CachePath ?? string.Empty));
+
+                if (!CortexModuleUtil.OpenDecompilerResult(_documentService, _state, decompiled))
+                {
+                    MMLog.WriteWarning("[Cortex.Roslyn] Metadata definition fallback could not open decompiled output for '" +
+                        (response.SymbolDisplay ?? response.MetadataName ?? string.Empty) +
+                        "' from " + assemblyPath + ".");
+                    return false;
+                }
+
+                _state.StatusMessage = "Opened decompiled definition: " + (response.SymbolDisplay ?? response.MetadataName ?? Path.GetFileName(assemblyPath));
+                MMLog.WriteInfo("[Cortex.Roslyn] Opened metadata definition for " +
+                    (_state.Editor.RequestedDefinitionTokenText ?? string.Empty) +
+                    " -> " + assemblyPath + " token 0x" + metadataToken.ToString("X8"));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                var symbolText = _state.Editor.RequestedDefinitionTokenText ?? (response != null ? (response.SymbolDisplay ?? response.MetadataName ?? string.Empty) : string.Empty);
+                MMLog.WriteError("[Cortex.Roslyn] Metadata definition fallback crashed for '" +
+                    symbolText +
+                    "': " + ex);
                 return false;
             }
-
-            string assemblyPath;
-            if (!TryResolveAssemblyPath(response.ContainingAssemblyName, out assemblyPath))
-            {
-                MMLog.WriteWarning("[Cortex.Roslyn] Metadata definition fallback could not resolve assembly '" + (response.ContainingAssemblyName ?? string.Empty) + "'.");
-                return false;
-            }
-
-            int metadataToken;
-            DecompilerEntityKind entityKind;
-            if (!TryResolveMetadataTarget(response, assemblyPath, out metadataToken, out entityKind))
-            {
-                MMLog.WriteWarning("[Cortex.Roslyn] Metadata definition fallback could not resolve token for '" +
-                    (response.SymbolDisplay ?? response.MetadataName ?? string.Empty) +
-                    "' in " + assemblyPath + ".");
-                return false;
-            }
-
-            var decompiled = CortexModuleUtil.RequestDecompilerSource(
-                _sourceReferenceService,
-                _state,
-                assemblyPath,
-                metadataToken,
-                entityKind,
-                false);
-
-            if (decompiled == null || !CortexModuleUtil.OpenDecompilerResult(_documentService, _state, decompiled))
-            {
-                MMLog.WriteWarning("[Cortex.Roslyn] Metadata definition fallback could not open decompiled output for '" +
-                    (response.SymbolDisplay ?? response.MetadataName ?? string.Empty) +
-                    "' from " + assemblyPath + ".");
-                return false;
-            }
-
-            _state.StatusMessage = "Opened decompiled definition: " + (response.SymbolDisplay ?? response.MetadataName ?? Path.GetFileName(assemblyPath));
-            MMLog.WriteInfo("[Cortex.Roslyn] Opened metadata definition for " +
-                (_state.Editor.RequestedDefinitionTokenText ?? string.Empty) +
-                " -> " + assemblyPath + " token 0x" + metadataToken.ToString("X8"));
-            return true;
         }
 
         private bool TryResolveAssemblyPath(string assemblyName, out string assemblyPath)
