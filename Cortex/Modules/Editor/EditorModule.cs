@@ -32,6 +32,7 @@ namespace Cortex.Modules.Editor
         private GUIStyle _emptyStateStyle;
         private GUIStyle _toolbarButtonStyle;
         private GUIStyle _editingToggleStyle;
+        private GUIStyle _tabCloseButtonStyle;
         private Texture2D _tabBg;
         private Texture2D _activeTabBg;
         private Texture2D _dirtyTabBg;
@@ -109,8 +110,23 @@ namespace Cortex.Modules.Editor
                 var isDirty = session.IsDirty;
 
                 var style = isActive ? _activeTabStyle : (isDirty ? _dirtyTabStyle : _tabStyle);
+                var tabRect = GUILayoutUtility.GetRect(TabWidth, TabWidth, TabHeight, TabHeight);
+                var current = Event.current;
+                var isHovered = current != null && tabRect.Contains(current.mousePosition);
+                var closeRect = new Rect(tabRect.xMax - 18f, tabRect.y + 5f, 14f, Mathf.Max(12f, tabRect.height - 10f));
 
-                if (GUILayout.Toggle(isActive, displayName, style ?? GUI.skin.button, GUILayout.Width(TabWidth), GUILayout.Height(TabHeight)))
+                if ((isHovered || isActive) &&
+                    current != null &&
+                    current.type == EventType.MouseDown &&
+                    current.button == 0 &&
+                    closeRect.Contains(current.mousePosition))
+                {
+                    CortexModuleUtil.CloseDocument(state, session.FilePath);
+                    current.Use();
+                    break;
+                }
+
+                if (GUI.Toggle(tabRect, isActive, displayName, style ?? GUI.skin.button))
                 {
                     if (!isActive)
                     {
@@ -119,13 +135,15 @@ namespace Cortex.Modules.Editor
                     }
                 }
 
-                // Middle-click close (Unity: check mouse event on the last laid-out rect)
-                var tabRect = GUILayoutUtility.GetLastRect();
-                var ev = Event.current;
-                if (ev != null && ev.type == EventType.MouseDown && ev.button == 2 && tabRect.Contains(ev.mousePosition))
+                if (isHovered || isActive)
+                {
+                    GUI.Box(closeRect, "x", _tabCloseButtonStyle ?? GUI.skin.button);
+                }
+
+                if (current != null && current.type == EventType.MouseDown && current.button == 2 && tabRect.Contains(current.mousePosition))
                 {
                     CortexModuleUtil.CloseDocument(state, session.FilePath);
-                    ev.Use();
+                    current.Use();
                     break;
                 }
             }
@@ -145,6 +163,8 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
+            var allowSaving = state.Settings != null && state.Settings.EnableFileSaving;
+
             GUILayout.BeginHorizontal(_pathBarStyle ?? GUI.skin.box, GUILayout.Height(PathBarHeight));
 
             // Compact path display
@@ -162,16 +182,25 @@ namespace Cortex.Modules.Editor
             }
 
             // Action buttons - compact, VS-style labels
+            var saveButtonsEnabled = GUI.enabled;
+            GUI.enabled = allowSaving;
             if (GUILayout.Button("Save", _toolbarButtonStyle ?? GUI.skin.button, GUILayout.Width(52f)))
             {
-                documentService.Save(active);
-                state.StatusMessage = "Saved " + System.IO.Path.GetFileName(active.FilePath);
+                if (documentService.Save(active))
+                {
+                    state.StatusMessage = "Saved " + System.IO.Path.GetFileName(active.FilePath);
+                }
+                else
+                {
+                    state.StatusMessage = "Save blocked: file changed outside the current snapshot.";
+                }
             }
             if (GUILayout.Button("Reload", _toolbarButtonStyle ?? GUI.skin.button, GUILayout.Width(56f)))
             {
                 documentService.Reload(active);
                 state.StatusMessage = "Reloaded from disk.";
             }
+            GUI.enabled = saveButtonsEnabled;
             if (GUILayout.Button("✕", _toolbarButtonStyle ?? GUI.skin.button, GUILayout.Width(26f)))
             {
                 var closingPath = active.FilePath;
@@ -194,6 +223,7 @@ namespace Cortex.Modules.Editor
             }
 
             documentService.HasExternalChanges(active);
+            var editingAllowed = state.Settings != null && state.Settings.EnableFileEditing;
 
             _editorScroll = GUILayout.BeginScrollView(
                 _editorScroll,
@@ -212,7 +242,7 @@ namespace Cortex.Modules.Editor
 
             // Editor content
             var previousEnabled = GUI.enabled;
-            GUI.enabled = state.Documents.EditorUnlocked;
+            GUI.enabled = editingAllowed && state.Documents.EditorUnlocked;
             var updated = GUILayout.TextArea(
                 active.Text ?? string.Empty,
                 _editorAreaStyle ?? GUI.skin.textArea,
@@ -223,7 +253,7 @@ namespace Cortex.Modules.Editor
             GUILayout.EndHorizontal();
             GUILayout.EndScrollView();
 
-            if (state.Documents.EditorUnlocked && !string.Equals(updated, active.Text, StringComparison.Ordinal))
+            if (editingAllowed && state.Documents.EditorUnlocked && !string.Equals(updated, active.Text, StringComparison.Ordinal))
             {
                 active.Text = updated;
                 active.IsDirty = true;
@@ -242,6 +272,8 @@ namespace Cortex.Modules.Editor
 
             var lineCount = CortexModuleUtil.SplitLines(active.Text).Length;
             var editLabel = state.Documents.EditorUnlocked ? "EDIT" : "READ";
+            var editingAllowed = state.Settings != null && state.Settings.EnableFileEditing;
+            var savingAllowed = state.Settings != null && state.Settings.EnableFileSaving;
             var dirtyLabel = active.IsDirty ? " ●" : string.Empty;
 
             GUILayout.BeginHorizontal(_statusBarStyle ?? GUI.skin.box, GUILayout.Height(StatusBarHeight));
@@ -249,18 +281,21 @@ namespace Cortex.Modules.Editor
             GUILayout.FlexibleSpace();
 
             // Editing toggle on the right like VS's "Edit" toggle in status bar
-            var wasUnlocked = state.Documents.EditorUnlocked;
+            var previousEnabled = GUI.enabled;
+            GUI.enabled = editingAllowed;
             state.Documents.EditorUnlocked = GUILayout.Toggle(
                 state.Documents.EditorUnlocked,
                 state.Documents.EditorUnlocked ? "🔓 Editing" : "🔒 Read Only",
                 _editingToggleStyle ?? GUI.skin.toggle,
-                GUILayout.Width(100f));
+                GUILayout.Width(156f));
 
+            GUI.enabled = savingAllowed;
             if (GUILayout.Button("Save All", _toolbarButtonStyle ?? GUI.skin.button, GUILayout.Width(70f)))
             {
                 // Signal handled by shell — we just flip the dirty flag hint via status
                 state.StatusMessage = "Save All requested.";
             }
+            GUI.enabled = previousEnabled;
             GUILayout.EndHorizontal();
         }
 
@@ -398,6 +433,14 @@ namespace Cortex.Modules.Editor
             GuiStyleUtil.ApplyTextColorToAllStates(_editingToggleStyle, mutedColor);
             _editingToggleStyle.fontSize = 10;
             _editingToggleStyle.padding = new RectOffset(18, 4, 2, 2);
+
+            _tabCloseButtonStyle = new GUIStyle(GUI.skin.button);
+            _tabCloseButtonStyle.alignment = TextAnchor.MiddleCenter;
+            _tabCloseButtonStyle.fontSize = 10;
+            _tabCloseButtonStyle.padding = new RectOffset(0, 0, 0, 0);
+            _tabCloseButtonStyle.margin = new RectOffset(0, 0, 0, 0);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_tabCloseButtonStyle, MakeTex(CortexIdeLayout.Blend(headerColor, bgColor, 0.45f)));
+            GuiStyleUtil.ApplyTextColorToAllStates(_tabCloseButtonStyle, textColor);
 
             // Empty state
             _emptyStateStyle = new GUIStyle(GUI.skin.label);

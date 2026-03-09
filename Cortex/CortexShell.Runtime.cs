@@ -4,6 +4,7 @@ using System.IO;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
 using Cortex.Presentation.Models;
+using UnityEngine;
 
 namespace Cortex
 {
@@ -68,7 +69,7 @@ namespace Cortex
                 delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
                 {
                     if (_fileExplorerModule == null) return;
-                    _fileExplorerModule.Draw(_documentService, _workspaceBrowserService, _state);
+                    _fileExplorerModule.Draw(_documentService, _workspaceBrowserService, _decompilerExplorerService, _sourceReferenceService, _state);
                 });
 
             RegisterModuleBinding(
@@ -128,7 +129,7 @@ namespace Cortex
                 delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
                 {
                     if (_settingsModule == null) return;
-                    _settingsModule.Draw(_settingsStore, snapshot, _workbenchRuntime != null ? _workbenchRuntime.ThemeState : null, _state);
+                    _settingsModule.Draw(_settingsStore, _projectCatalog, _projectWorkspaceService, _loadedModCatalog, snapshot, _workbenchRuntime != null ? _workbenchRuntime.ThemeState : null, _state);
                 });
         }
 
@@ -198,17 +199,35 @@ namespace Cortex
                 "cortex.file.saveAll",
                 delegate(CommandExecutionContext context)
                 {
+                    if (_state.Settings == null || !_state.Settings.EnableFileSaving)
+                    {
+                        _state.StatusMessage = "Enable file saving in Settings before saving source files.";
+                        return;
+                    }
+
                     var saved = 0;
+                    var blocked = 0;
                     for (var i = 0; i < _state.Documents.OpenDocuments.Count; i++)
                     {
                         var doc = _state.Documents.OpenDocuments[i];
-                        if (doc != null && doc.IsDirty && _documentService != null && _documentService.Save(doc))
+                        if (doc == null || !doc.IsDirty || _documentService == null)
+                        {
+                            continue;
+                        }
+
+                        if (_documentService.Save(doc))
                         {
                             saved++;
                         }
+                        else
+                        {
+                            blocked++;
+                        }
                     }
 
-                    _state.StatusMessage = "Saved " + saved + " file(s).";
+                    _state.StatusMessage = blocked > 0
+                        ? "Saved " + saved + " file(s); " + blocked + " blocked by snapshot conflicts."
+                        : "Saved " + saved + " file(s).";
                 },
                 delegate(CommandExecutionContext context) { return _visible; });
 
@@ -226,13 +245,22 @@ namespace Cortex
                 delegate(CommandExecutionContext context) { return _visible && _state.Documents.ActiveDocument != null; });
 
             _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.file.settings",
+                delegate(CommandExecutionContext context)
+                {
+                    OpenSettingsWindow();
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
                 "cortex.view.fileExplorer",
                 delegate(CommandExecutionContext context)
                 {
-                    var isVisible = string.Equals(_state.Workbench.SideContainerId, CortexWorkbenchIds.FileExplorerContainer, System.StringComparison.OrdinalIgnoreCase);
+                    var isVisible = !_state.Workbench.IsHidden(CortexWorkbenchIds.FileExplorerContainer) &&
+                        ResolveHostLocation(CortexWorkbenchIds.FileExplorerContainer) == WorkbenchHostLocation.SecondarySideHost;
                     if (isVisible)
                     {
-                        _state.Workbench.SideContainerId = string.Empty;
+                        HideContainer(CortexWorkbenchIds.FileExplorerContainer);
                         _state.StatusMessage = "File Explorer hidden.";
                     }
                     else
@@ -240,6 +268,68 @@ namespace Cortex
                         ActivateContainer(CortexWorkbenchIds.FileExplorerContainer);
                         _state.StatusMessage = "File Explorer shown.";
                     }
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.window.explorer",
+                delegate(CommandExecutionContext context)
+                {
+                    ActivateContainer(CortexWorkbenchIds.FileExplorerContainer);
+                    _state.StatusMessage = "Explorer window shown.";
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.window.projects",
+                delegate(CommandExecutionContext context)
+                {
+                    ActivateContainer(CortexWorkbenchIds.ProjectsContainer);
+                    _state.StatusMessage = "Projects window shown.";
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.window.references",
+                delegate(CommandExecutionContext context)
+                {
+                    ActivateContainer(CortexWorkbenchIds.ReferenceContainer);
+                    _state.StatusMessage = "References window shown.";
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.window.logs",
+                delegate(CommandExecutionContext context)
+                {
+                    ActivateContainer(CortexWorkbenchIds.LogsContainer);
+                    _state.StatusMessage = "Logs window shown.";
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.window.build",
+                delegate(CommandExecutionContext context)
+                {
+                    ActivateContainer(CortexWorkbenchIds.BuildContainer);
+                    _state.StatusMessage = "Build window shown.";
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.window.runtime",
+                delegate(CommandExecutionContext context)
+                {
+                    ActivateContainer(CortexWorkbenchIds.RuntimeContainer);
+                    _state.StatusMessage = "Runtime window shown.";
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.window.settings",
+                delegate(CommandExecutionContext context)
+                {
+                    OpenSettingsWindow();
                 },
                 delegate(CommandExecutionContext context) { return _visible; });
 
@@ -314,8 +404,8 @@ namespace Cortex
             var persisted = _workbenchPersistenceService.Load(DefaultWorkspaceId) ?? new PersistedWorkbenchState();
             _state.Workbench.FocusedContainerId = NormalizeContainerId(persisted.FocusedContainerId, CortexWorkbenchIds.EditorContainer);
             // Default the primary side host to the file explorer on fresh sessions
-            _state.Workbench.SideContainerId = NormalizeContainerId(persisted.SideContainerId, CortexWorkbenchIds.FileExplorerContainer);
-            _state.Workbench.SecondarySideContainerId = NormalizeContainerId(persisted.SecondarySideContainerId, CortexWorkbenchIds.ProjectsContainer);
+            _state.Workbench.SideContainerId = NormalizeWorkspaceContainer(persisted.SideContainerId, string.Empty);
+            _state.Workbench.SecondarySideContainerId = NormalizeWorkspaceContainer(persisted.SecondarySideContainerId, CortexWorkbenchIds.FileExplorerContainer);
             _state.Workbench.EditorContainerId = NormalizeContainerId(persisted.EditorContainerId, CortexWorkbenchIds.EditorContainer);
             _state.Workbench.PanelContainerId = NormalizeContainerId(persisted.PanelContainerId, CortexWorkbenchIds.LogsContainer);
             _state.Logs.ShowDetachedWindow = persisted.ShowDetachedLogWindow;
@@ -330,6 +420,30 @@ namespace Cortex
                 }
 
                 _state.Workbench.AssignHost(assignment.ContainerId, assignment.HostLocation);
+            }
+
+            var hiddenContainerIds = persisted.HiddenContainerIds ?? new string[0];
+            for (var i = 0; i < hiddenContainerIds.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(hiddenContainerIds[i]))
+                {
+                    _state.Workbench.HiddenContainerIds.Add(hiddenContainerIds[i]);
+                }
+            }
+
+            if (_state.Workbench.IsHidden(_state.Workbench.SideContainerId))
+            {
+                _state.Workbench.SideContainerId = string.Empty;
+            }
+
+            if (_state.Workbench.IsHidden(_state.Workbench.SecondarySideContainerId))
+            {
+                _state.Workbench.SecondarySideContainerId = string.Empty;
+            }
+
+            if (_state.Workbench.IsHidden(_state.Workbench.PanelContainerId))
+            {
+                _state.Workbench.PanelContainerId = string.Empty;
             }
 
             var restoredDocuments = persisted.OpenDocumentPaths ?? new string[0];
@@ -397,13 +511,35 @@ namespace Cortex
                 EditorUnlocked = _state.Documents.EditorUnlocked,
                 ActiveDocumentPath = _state.Documents.ActiveDocumentPath ?? string.Empty,
                 OpenDocumentPaths = openPaths.ToArray(),
-                ContainerHostAssignments = assignments.ToArray()
+                ContainerHostAssignments = assignments.ToArray(),
+                HiddenContainerIds = new List<string>(_state.Workbench.HiddenContainerIds).ToArray()
             });
         }
 
         private static string NormalizeContainerId(string containerId, string fallback)
         {
             return string.IsNullOrEmpty(containerId) ? fallback : containerId;
+        }
+
+        private void OpenSettingsWindow()
+        {
+            _showSettingsWindow = true;
+            _settingsWindowRect.width = Mathf.Max(1180f, _windowRect.width - 40f);
+            _settingsWindowRect.height = Mathf.Max(760f, _windowRect.height - 20f);
+            _settingsWindowRect.x = Mathf.Clamp(_windowRect.x + 20f, 0f, Mathf.Max(0f, Screen.width - _settingsWindowRect.width));
+            _settingsWindowRect.y = Mathf.Clamp(_windowRect.y + 20f, 0f, Mathf.Max(0f, Screen.height - _settingsWindowRect.height));
+            _state.StatusMessage = "Settings window opened.";
+        }
+
+        private static string NormalizeWorkspaceContainer(string containerId, string fallback)
+        {
+            if (string.IsNullOrEmpty(containerId) ||
+                string.Equals(containerId, CortexWorkbenchIds.SettingsContainer, StringComparison.OrdinalIgnoreCase))
+            {
+                return fallback;
+            }
+
+            return containerId;
         }
 
         private bool CanActivateContainer(string containerId)

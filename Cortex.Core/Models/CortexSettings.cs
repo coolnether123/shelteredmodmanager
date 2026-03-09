@@ -19,6 +19,8 @@ namespace Cortex.Core.Models
         public int MaxRecentLogs;
         public bool AutoScrollLogs;
         public bool ShowLogBacklog;
+        public bool EnableFileEditing;
+        public bool EnableFileSaving;
         public float LogsPaneWidth;
         public float ProjectsPaneWidth;
         public float EditorFilePaneWidth;
@@ -43,9 +45,11 @@ namespace Cortex.Core.Models
             MaxRecentLogs = 300;
             AutoScrollLogs = true;
             ShowLogBacklog = false;
+            EnableFileEditing = false;
+            EnableFileSaving = false;
             LogsPaneWidth = 520f;
             ProjectsPaneWidth = 360f;
-            EditorFilePaneWidth = 320f;
+            EditorFilePaneWidth = 420f;
             WindowX = 70f;
             WindowY = 70f;
             WindowWidth = 1180f;

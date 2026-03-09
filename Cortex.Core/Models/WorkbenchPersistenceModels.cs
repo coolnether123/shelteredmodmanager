@@ -28,6 +28,7 @@ namespace Cortex.Core.Models
         public string ActiveDocumentPath;
         public string[] OpenDocumentPaths;
         public ContainerHostAssignment[] ContainerHostAssignments;
+        public string[] HiddenContainerIds;
 
         public PersistedWorkbenchState()
         {
@@ -41,6 +42,7 @@ namespace Cortex.Core.Models
             ActiveDocumentPath = string.Empty;
             OpenDocumentPaths = new string[0];
             ContainerHostAssignments = new ContainerHostAssignment[0];
+            HiddenContainerIds = new string[0];
         }
     }
 }

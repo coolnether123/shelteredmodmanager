@@ -29,6 +29,7 @@ namespace Cortex
         public int RequestedTabIndex = -1;
         public CortexLayoutNode LayoutRoot;
         public readonly Dictionary<string, WorkbenchHostLocation> HostOverrides = new Dictionary<string, WorkbenchHostLocation>(StringComparer.OrdinalIgnoreCase);
+        public readonly HashSet<string> HiddenContainerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public WorkbenchHostLocation GetAssignedHost(string containerId, WorkbenchHostLocation fallback)
         {
@@ -46,6 +47,11 @@ namespace Cortex
             }
 
             HostOverrides[containerId] = hostLocation;
+        }
+
+        public bool IsHidden(string containerId)
+        {
+            return !string.IsNullOrEmpty(containerId) && HiddenContainerIds.Contains(containerId);
         }
     }
 

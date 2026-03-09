@@ -32,8 +32,8 @@ namespace Cortex.Modules.Projects
 
         private void DrawProjectList(IProjectCatalog catalog, CortexShellState state)
         {
-            GUILayout.BeginVertical(GUILayout.Width(360f));
-            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandHeight(true));
             GUILayout.Label("Configured Projects");
             GUILayout.BeginHorizontal();
             GUILayout.Label("Search", GUILayout.Width(46f));
@@ -43,7 +43,7 @@ namespace Cortex.Modules.Projects
 
             var projects = catalog.GetProjects();
             GUILayout.Label("Projects: " + projects.Count);
-            _projectScroll = GUILayout.BeginScrollView(_projectScroll, GUI.skin.box, GUILayout.Height(540f));
+            _projectScroll = GUILayout.BeginScrollView(_projectScroll, GUI.skin.box, GUILayout.ExpandHeight(true));
             for (var i = 0; i < projects.Count; i++)
             {
                 var project = projects[i];

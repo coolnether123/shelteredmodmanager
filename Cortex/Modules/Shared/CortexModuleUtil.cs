@@ -101,6 +101,41 @@ namespace Cortex.Modules.Shared
             return session.IsDirty ? name + "*" : name;
         }
 
+        public static DecompilerResponse RequestDecompilerSource(
+            ISourceReferenceService sourceReferenceService,
+            CortexShellState state,
+            string assemblyPath,
+            int metadataToken,
+            DecompilerEntityKind entityKind,
+            bool ignoreCache)
+        {
+            if (sourceReferenceService == null || state == null || string.IsNullOrEmpty(assemblyPath) || metadataToken <= 0)
+            {
+                return null;
+            }
+
+            state.LastReferenceResult = sourceReferenceService.GetSource(new DecompilerRequest
+            {
+                AssemblyPath = assemblyPath,
+                MetadataToken = metadataToken,
+                IgnoreCache = ignoreCache,
+                EntityKind = entityKind
+            });
+            return state.LastReferenceResult;
+        }
+
+        public static bool OpenDecompilerResult(IDocumentService documentService, CortexShellState state, DecompilerResponse response)
+        {
+            if (documentService == null || state == null || response == null || string.IsNullOrEmpty(response.CachePath) || !File.Exists(response.CachePath))
+            {
+                return false;
+            }
+
+            OpenDocument(documentService, state, response.CachePath, 1);
+            state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
+            return true;
+        }
+
         public static bool TryResolveSourceLocation(string text, CortexProjectDefinition project, CortexSettings settings, out string filePath, out int lineNumber)
         {
             filePath = string.Empty;

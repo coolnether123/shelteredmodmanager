@@ -6,6 +6,7 @@ namespace Cortex.Core.Models
     {
         public string FilePath;
         public string Text;
+        public string OriginalTextSnapshot;
         public bool IsDirty;
         public DateTime LastKnownWriteUtc;
         public bool HasExternalChanges;

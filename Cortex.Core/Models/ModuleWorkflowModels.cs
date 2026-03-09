@@ -39,12 +39,30 @@ namespace Cortex.Core.Models
         DecompiledCache = 1
     }
 
+    public enum WorkspaceTreeNodeKind
+    {
+        Folder = 0,
+        File = 1,
+        DecompilerRoot = 2,
+        Assembly = 3,
+        Type = 4,
+        Member = 5
+    }
+
     public sealed class WorkspaceTreeNode
     {
         public string Name;
         public string FullPath;
         public string RelativePath;
         public bool IsDirectory;
+        public bool HasChildren;
+        public bool ChildrenLoaded;
+        public bool IsVirtual;
+        public WorkspaceTreeNodeKind NodeKind;
+        public string AssemblyPath;
+        public string TypeName;
+        public int MetadataToken;
+        public DecompilerEntityKind EntityKind;
         public readonly List<WorkspaceTreeNode> Children = new List<WorkspaceTreeNode>();
     }
 

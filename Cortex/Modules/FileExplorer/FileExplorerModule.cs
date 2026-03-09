@@ -9,195 +9,309 @@ using UnityEngine;
 namespace Cortex.Modules.FileExplorer
 {
     /// <summary>
-    /// Standalone file-hierarchy explorer module, analogous to Visual Studio's Solution Explorer.
-    /// Displays the active project's source tree and the decompiled cache tree in a compact,
-    /// VS-style hierarchy. Selecting a file opens it in the code editor. Decoupled entirely from
-    /// <see cref="Editor.EditorModule"/> so each honours the Single Responsibility Principle.
+    /// Standalone VS-style explorer. Renders physical source files and logical
+    /// decompiler symbols in one navigation surface, while leaving document and
+    /// decompilation work to dedicated services.
     /// </summary>
     public sealed class FileExplorerModule
     {
-        // ── layout state ──────────────────────────────────────────────────────────────
         private Vector2 _scroll = Vector2.zero;
         private string _filterText = string.Empty;
         private string _cachedSourceRoot = string.Empty;
-        private string _cachedDecompilerRoot = string.Empty;
+        private string _cachedManagedAssemblyRoot = string.Empty;
         private readonly Dictionary<string, bool> _expandedNodes = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
-        // ── styles (created lazily once, reset on theme change) ───────────────────────
         private string _appliedTheme = string.Empty;
         private GUIStyle _folderLabelStyle;
-        private GUIStyle _fileLabelStyle;
         private GUIStyle _fileButtonStyle;
         private GUIStyle _activeFileButtonStyle;
         private GUIStyle _filterBoxStyle;
         private GUIStyle _sectionHeaderStyle;
+        private GUIStyle _treeHeaderStyle;
         private Texture2D _selectedFileBg;
         private Texture2D _fileHoverBg;
         private Texture2D _filterBg;
         private Texture2D _sectionHeaderBg;
 
-        // ── tree data ─────────────────────────────────────────────────────────────────
         private WorkspaceTreeNode _sourceTree;
-        private WorkspaceTreeNode _decompiledTree;
+        private WorkspaceTreeNode _decompilerTree;
 
-        // ── UI constants ─────────────────────────────────────────────────────────────
         private const float IndentWidth = 16f;
         private const float RowHeight = 20f;
-        private const float FolderIconWidth = 14f;
 
         public void Draw(
             IDocumentService documentService,
             IWorkspaceBrowserService browserService,
+            IDecompilerExplorerService decompilerExplorerService,
+            ISourceReferenceService sourceReferenceService,
             CortexShellState state)
         {
             EnsureStyles(state);
-            RefreshIfNeeded(browserService, state);
+            RefreshIfNeeded(browserService, decompilerExplorerService, state);
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(true));
             DrawFilterBar();
             GUILayout.Space(2f);
             _scroll = GUILayout.BeginScrollView(_scroll, false, true, GUILayout.ExpandHeight(true));
-            DrawSection("Source", _sourceTree, documentService, state);
+            DrawSection("Workspace", _sourceTree, documentService, decompilerExplorerService, sourceReferenceService, state);
             GUILayout.Space(6f);
-            DrawSection("Decompiled Cache", _decompiledTree, documentService, state);
+            DrawSection("Decompiler", _decompilerTree, documentService, decompilerExplorerService, sourceReferenceService, state);
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
         }
 
-        // ── Refresh ───────────────────────────────────────────────────────────────────
-
-        private void RefreshIfNeeded(IWorkspaceBrowserService browserService, CortexShellState state)
+        private void RefreshIfNeeded(IWorkspaceBrowserService browserService, IDecompilerExplorerService decompilerExplorerService, CortexShellState state)
         {
             var sourceRoot = state.SelectedProject != null
                 ? state.SelectedProject.SourceRootPath ?? string.Empty
                 : string.Empty;
-            var decompilerRoot = state.Settings != null
-                ? state.Settings.DecompilerCachePath ?? string.Empty
+            var managedAssemblyRoot = state.Settings != null
+                ? state.Settings.ManagedAssemblyRootPath ?? string.Empty
                 : string.Empty;
 
             if (string.Equals(_cachedSourceRoot, sourceRoot, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(_cachedDecompilerRoot, decompilerRoot, StringComparison.OrdinalIgnoreCase))
+                string.Equals(_cachedManagedAssemblyRoot, managedAssemblyRoot, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
             _cachedSourceRoot = sourceRoot;
-            _cachedDecompilerRoot = decompilerRoot;
+            _cachedManagedAssemblyRoot = managedAssemblyRoot;
             _sourceTree = browserService != null
                 ? browserService.BuildTree(_cachedSourceRoot, WorkspaceTreeKind.ProjectSource)
                 : null;
-            _decompiledTree = browserService != null
-                ? browserService.BuildTree(_cachedDecompilerRoot, WorkspaceTreeKind.DecompiledCache)
+            _decompilerTree = decompilerExplorerService != null
+                ? decompilerExplorerService.BuildTree(_cachedManagedAssemblyRoot)
                 : null;
         }
-
-        // ── Filter bar ────────────────────────────────────────────────────────────────
 
         private void DrawFilterBar()
         {
             GUILayout.BeginHorizontal(_filterBoxStyle ?? GUI.skin.box, GUILayout.Height(26f));
-            GUILayout.Label("\u25CA", GUILayout.Width(14f)); // small diamond as search icon
+            GUILayout.Label("F", GUILayout.Width(14f));
             _filterText = GUILayout.TextField(_filterText ?? string.Empty, _filterBoxStyle ?? GUI.skin.textField, GUILayout.ExpandWidth(true));
-            if (!string.IsNullOrEmpty(_filterText) && GUILayout.Button("×", GUILayout.Width(18f), GUILayout.Height(20f)))
+            if (!string.IsNullOrEmpty(_filterText) && GUILayout.Button("x", GUILayout.Width(18f), GUILayout.Height(20f)))
             {
                 _filterText = string.Empty;
             }
             GUILayout.EndHorizontal();
         }
 
-        // ── Section ───────────────────────────────────────────────────────────────────
-
-        private void DrawSection(string title, WorkspaceTreeNode root, IDocumentService documentService, CortexShellState state)
+        private void DrawSection(
+            string title,
+            WorkspaceTreeNode root,
+            IDocumentService documentService,
+            IDecompilerExplorerService decompilerExplorerService,
+            ISourceReferenceService sourceReferenceService,
+            CortexShellState state)
         {
             GUILayout.Label(title.ToUpperInvariant(), _sectionHeaderStyle ?? GUI.skin.label);
-            if (root == null)
+            if (root == null || (!root.HasChildren && root.NodeKind == WorkspaceTreeNodeKind.DecompilerRoot))
             {
-                var msg = title == "Source"
+                var message = title == "Workspace"
                     ? (state.SelectedProject == null ? "No project selected." : "Source root not mapped.")
-                    : "No decompiled cache found.";
-                GUILayout.Label(msg, GUI.skin.label);
+                    : "No managed assemblies were discovered for decompilation.";
+                GUILayout.Label(message, GUI.skin.label);
                 return;
             }
 
-            DrawTreeNode(root, documentService, state, 0);
+            DrawTreeNode(root, documentService, decompilerExplorerService, sourceReferenceService, state, 0, true);
         }
 
-        // ── Tree rendering ────────────────────────────────────────────────────────────
-
-        private void DrawTreeNode(WorkspaceTreeNode node, IDocumentService documentService, CortexShellState state, int depth)
+        private void DrawTreeNode(
+            WorkspaceTreeNode node,
+            IDocumentService documentService,
+            IDecompilerExplorerService decompilerExplorerService,
+            ISourceReferenceService sourceReferenceService,
+            CortexShellState state,
+            int depth,
+            bool drawSelf)
         {
             if (node == null)
             {
                 return;
             }
 
-            for (var i = 0; i < node.Children.Count; i++)
+            if (drawSelf)
             {
-                var child = node.Children[i];
-                if (!MatchesFilter(child))
+                if (!MatchesFilter(node, decompilerExplorerService))
                 {
-                    continue;
+                    return;
                 }
 
-                if (child.IsDirectory)
+                if (node.HasChildren)
                 {
-                    DrawFolderRow(child, documentService, state, depth);
+                    DrawExpandableNode(node, documentService, decompilerExplorerService, sourceReferenceService, state, depth);
                 }
                 else
                 {
-                    DrawFileRow(child, documentService, state, depth);
+                    DrawLeafNode(node, documentService, sourceReferenceService, state, depth);
                 }
+
+                return;
+            }
+
+            for (var i = 0; i < node.Children.Count; i++)
+            {
+                DrawTreeNode(node.Children[i], documentService, decompilerExplorerService, sourceReferenceService, state, depth, true);
             }
         }
 
-        private void DrawFolderRow(WorkspaceTreeNode node, IDocumentService documentService, CortexShellState state, int depth)
+        private void DrawExpandableNode(
+            WorkspaceTreeNode node,
+            IDocumentService documentService,
+            IDecompilerExplorerService decompilerExplorerService,
+            ISourceReferenceService sourceReferenceService,
+            CortexShellState state,
+            int depth)
         {
-            var key = node.FullPath ?? node.Name;
-            bool expanded;
-            if (!_expandedNodes.TryGetValue(key, out expanded))
+            var key = BuildNodeKey(node);
+            var expanded = GetExpandedState(node, key, depth);
+            var autoExpandedByFilter = false;
+            if (!string.IsNullOrEmpty(_filterText))
             {
-                // Default: expand top-level folders that contain matching children when filter is active
-                expanded = string.IsNullOrEmpty(_filterText);
-                _expandedNodes[key] = expanded;
+                expanded = true;
+                autoExpandedByFilter = true;
+                _expandedNodes[key] = true;
+            }
+
+            if (expanded && (!autoExpandedByFilter || node.ChildrenLoaded || !node.IsVirtual))
+            {
+                EnsureChildrenLoaded(node, decompilerExplorerService);
             }
 
             GUILayout.BeginHorizontal(GUILayout.Height(RowHeight));
             GUILayout.Space(depth * IndentWidth);
-            var arrow = expanded ? "\u25BC" : "\u25B6";
-            if (GUILayout.Button(arrow + " " + (node.Name ?? "Folder"), _folderLabelStyle ?? GUI.skin.label, GUILayout.ExpandWidth(true), GUILayout.Height(RowHeight)))
+            var arrow = expanded ? "v" : ">";
+            if (GUILayout.Button(arrow, _treeHeaderStyle ?? GUI.skin.button, GUILayout.Width(18f), GUILayout.Height(RowHeight)))
             {
-                _expandedNodes[key] = !expanded;
                 expanded = !expanded;
+                _expandedNodes[key] = expanded;
+                if (expanded)
+                {
+                    EnsureChildrenLoaded(node, decompilerExplorerService);
+                }
             }
+
+            if (GUILayout.Button(node.Name ?? "Node", _folderLabelStyle ?? GUI.skin.button, GUILayout.ExpandWidth(true), GUILayout.Height(RowHeight)))
+            {
+                HandleExpandableNodeAction(node, documentService, sourceReferenceService, state, ref expanded);
+                _expandedNodes[key] = expanded;
+            }
+
             GUILayout.EndHorizontal();
 
-            if (expanded)
+            if (!expanded)
             {
-                DrawTreeNode(node, documentService, state, depth + 1);
+                return;
+            }
+
+            for (var i = 0; i < node.Children.Count; i++)
+            {
+                DrawTreeNode(node.Children[i], documentService, decompilerExplorerService, sourceReferenceService, state, depth + 1, true);
             }
         }
 
-        private void DrawFileRow(WorkspaceTreeNode node, IDocumentService documentService, CortexShellState state, int depth)
+        private void DrawLeafNode(
+            WorkspaceTreeNode node,
+            IDocumentService documentService,
+            ISourceReferenceService sourceReferenceService,
+            CortexShellState state,
+            int depth)
         {
-            var isActive = state.Documents.ActiveDocument != null &&
+            var isActiveFile = node.NodeKind == WorkspaceTreeNodeKind.File &&
+                state.Documents.ActiveDocument != null &&
                 string.Equals(state.Documents.ActiveDocument.FilePath, node.FullPath, StringComparison.OrdinalIgnoreCase);
 
             GUILayout.BeginHorizontal(GUILayout.Height(RowHeight));
-            GUILayout.Space(depth * IndentWidth + FolderIconWidth);
-            var style = isActive ? (_activeFileButtonStyle ?? GUI.skin.button) : (_fileButtonStyle ?? GUI.skin.button);
-            var displayName = node.Name ?? Path.GetFileName(node.FullPath);
-            if (GUILayout.Button(displayName, style, GUILayout.ExpandWidth(true), GUILayout.Height(RowHeight)))
+            GUILayout.Space(depth * IndentWidth + 18f);
+            var style = isActiveFile ? (_activeFileButtonStyle ?? GUI.skin.button) : (_fileButtonStyle ?? GUI.skin.button);
+            if (GUILayout.Button(node.Name ?? "Item", style, GUILayout.ExpandWidth(true), GUILayout.Height(RowHeight)))
+            {
+                ActivateLeafNode(node, documentService, sourceReferenceService, state);
+            }
+
+            GUILayout.EndHorizontal();
+        }
+
+        private void HandleExpandableNodeAction(
+            WorkspaceTreeNode node,
+            IDocumentService documentService,
+            ISourceReferenceService sourceReferenceService,
+            CortexShellState state,
+            ref bool expanded)
+        {
+            if (node == null)
+            {
+                return;
+            }
+
+            if (node.NodeKind == WorkspaceTreeNodeKind.Type)
+            {
+                OpenDecompilerNode(node, documentService, sourceReferenceService, state);
+                return;
+            }
+
+            expanded = !expanded;
+        }
+
+        private void ActivateLeafNode(
+            WorkspaceTreeNode node,
+            IDocumentService documentService,
+            ISourceReferenceService sourceReferenceService,
+            CortexShellState state)
+        {
+            if (node == null)
+            {
+                return;
+            }
+
+            if (node.NodeKind == WorkspaceTreeNodeKind.File)
             {
                 CortexModuleUtil.OpenDocument(documentService, state, node.FullPath, 0);
                 state.StatusMessage = "Opened " + (node.Name ?? node.FullPath);
                 state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
+                return;
             }
-            GUILayout.EndHorizontal();
+
+            OpenDecompilerNode(node, documentService, sourceReferenceService, state);
         }
 
-        // ── Filter ────────────────────────────────────────────────────────────────────
+        private void OpenDecompilerNode(
+            WorkspaceTreeNode node,
+            IDocumentService documentService,
+            ISourceReferenceService sourceReferenceService,
+            CortexShellState state)
+        {
+            if (node == null || string.IsNullOrEmpty(node.AssemblyPath) || node.MetadataToken <= 0)
+            {
+                return;
+            }
 
-        private bool MatchesFilter(WorkspaceTreeNode node)
+            var response = CortexModuleUtil.RequestDecompilerSource(
+                sourceReferenceService,
+                state,
+                node.AssemblyPath,
+                node.MetadataToken,
+                node.EntityKind,
+                false);
+
+            if (response == null)
+            {
+                state.StatusMessage = "Decompiler request failed.";
+                return;
+            }
+
+            if (CortexModuleUtil.OpenDecompilerResult(documentService, state, response))
+            {
+                state.StatusMessage = "Opened " + (node.Name ?? "decompiled source") + ".";
+                return;
+            }
+
+            state.StatusMessage = response.StatusMessage ?? ("Generated decompiled source for " + (node.Name ?? "symbol") + ".");
+        }
+
+        private bool MatchesFilter(WorkspaceTreeNode node, IDecompilerExplorerService decompilerExplorerService)
         {
             if (node == null)
             {
@@ -211,19 +325,26 @@ namespace Cortex.Modules.FileExplorer
 
             var filter = _filterText;
             if ((node.Name ?? string.Empty).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                (node.RelativePath ?? string.Empty).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0)
+                (node.RelativePath ?? string.Empty).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                (node.AssemblyPath ?? string.Empty).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                (node.TypeName ?? string.Empty).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return true;
             }
 
-            if (!node.IsDirectory)
+            if (!node.HasChildren)
+            {
+                return false;
+            }
+
+            if (!node.ChildrenLoaded)
             {
                 return false;
             }
 
             for (var i = 0; i < node.Children.Count; i++)
             {
-                if (MatchesFilter(node.Children[i]))
+                if (MatchesFilter(node.Children[i], decompilerExplorerService))
                 {
                     return true;
                 }
@@ -232,7 +353,43 @@ namespace Cortex.Modules.FileExplorer
             return false;
         }
 
-        // ── Style management ──────────────────────────────────────────────────────────
+        private void EnsureChildrenLoaded(WorkspaceTreeNode node, IDecompilerExplorerService decompilerExplorerService)
+        {
+            if (node == null || node.ChildrenLoaded || !node.IsVirtual || decompilerExplorerService == null)
+            {
+                return;
+            }
+
+            decompilerExplorerService.EnsureChildren(node);
+        }
+
+        private bool GetExpandedState(WorkspaceTreeNode node, string key, int depth)
+        {
+            bool expanded;
+            if (_expandedNodes.TryGetValue(key, out expanded))
+            {
+                return expanded;
+            }
+
+            expanded = depth == 0 || node.NodeKind == WorkspaceTreeNodeKind.DecompilerRoot;
+            _expandedNodes[key] = expanded;
+            return expanded;
+        }
+
+        private static string BuildNodeKey(WorkspaceTreeNode node)
+        {
+            if (node == null)
+            {
+                return string.Empty;
+            }
+
+            if (!string.IsNullOrEmpty(node.FullPath))
+            {
+                return node.FullPath;
+            }
+
+            return (node.Name ?? string.Empty) + ":" + node.NodeKind;
+        }
 
         private void EnsureStyles(CortexShellState state)
         {
@@ -256,56 +413,58 @@ namespace Cortex.Modules.FileExplorer
             var borderColor = CortexIdeLayout.GetBorderColor();
             var bgColor = CortexIdeLayout.GetBackgroundColor();
 
-            // Folder row - looks like a label but acts as a toggle button
-            _folderLabelStyle = new GUIStyle(GUI.skin.label);
+            _folderLabelStyle = new GUIStyle(GUI.skin.button);
             _folderLabelStyle.alignment = TextAnchor.MiddleLeft;
             _folderLabelStyle.fontSize = 11;
-            _folderLabelStyle.padding = new RectOffset(2, 2, 1, 1);
+            _folderLabelStyle.padding = new RectOffset(4, 6, 1, 1);
             _folderLabelStyle.margin = new RectOffset(0, 0, 0, 0);
-            GuiStyleUtil.ApplyTextColorToAllStates(_folderLabelStyle, mutedColor);
-            _folderLabelStyle.fontStyle = FontStyle.Normal;
+            GuiStyleUtil.ApplyBackgroundToAllStates(_folderLabelStyle, MakeTex(surfaceColor));
+            GuiStyleUtil.ApplyTextColorToAllStates(_folderLabelStyle, textColor);
 
-            // File row - subtle button style
-            _fileHoverBg = MakeTex(CortexIdeLayout.Blend(surfaceColor, accentColor, 0.08f));
-            _fileButtonStyle = new GUIStyle(GUI.skin.label);
+            _fileButtonStyle = new GUIStyle(GUI.skin.button);
             _fileButtonStyle.alignment = TextAnchor.MiddleLeft;
             _fileButtonStyle.fontSize = 11;
-            _fileButtonStyle.padding = new RectOffset(4, 4, 1, 1);
+            _fileButtonStyle.padding = new RectOffset(6, 6, 1, 1);
             _fileButtonStyle.margin = new RectOffset(0, 0, 0, 0);
-            GuiStyleUtil.ApplyTextColorToAllStates(_fileButtonStyle, textColor);
+            _selectedFileBg = MakeTex(CortexIdeLayout.Blend(accentColor, surfaceColor, 0.72f));
+            _fileHoverBg = MakeTex(CortexIdeLayout.Blend(bgColor, surfaceColor, 0.32f));
+            GuiStyleUtil.ApplyBackgroundToAllStates(_fileButtonStyle, MakeTex(surfaceColor));
+            GuiStyleUtil.ApplyTextColorToAllStates(_fileButtonStyle, mutedColor);
             _fileButtonStyle.hover.background = _fileHoverBg;
-            GuiStyleUtil.ApplyTextColorToAllStates(_fileButtonStyle, textColor);
+            _fileButtonStyle.hover.textColor = textColor;
 
-            // Active file row
-            _selectedFileBg = MakeTex(CortexIdeLayout.Blend(headerColor, accentColor, 0.3f));
             _activeFileButtonStyle = new GUIStyle(_fileButtonStyle);
-            _activeFileButtonStyle.fontStyle = FontStyle.Bold;
             GuiStyleUtil.ApplyBackgroundToAllStates(_activeFileButtonStyle, _selectedFileBg);
             GuiStyleUtil.ApplyTextColorToAllStates(_activeFileButtonStyle, Color.white);
+            _activeFileButtonStyle.fontStyle = FontStyle.Bold;
 
-            // Filter input bar
-            _filterBg = MakeTex(CortexIdeLayout.Blend(bgColor, surfaceColor, 0.5f));
+            _filterBg = MakeTex(CortexIdeLayout.Blend(surfaceColor, bgColor, 0.5f));
             _filterBoxStyle = new GUIStyle(GUI.skin.textField);
             GuiStyleUtil.ApplyBackgroundToAllStates(_filterBoxStyle, _filterBg);
             GuiStyleUtil.ApplyTextColorToAllStates(_filterBoxStyle, textColor);
-            _filterBoxStyle.border = new RectOffset(1, 1, 1, 1);
-            _filterBoxStyle.padding = new RectOffset(6, 4, 2, 2);
             _filterBoxStyle.margin = new RectOffset(0, 0, 0, 0);
+            _filterBoxStyle.padding = new RectOffset(6, 6, 4, 4);
 
-            // Section header
-            _sectionHeaderBg = MakeTex(CortexIdeLayout.Blend(headerColor, bgColor, 0.4f));
+            _sectionHeaderBg = MakeTex(headerColor);
             _sectionHeaderStyle = new GUIStyle(GUI.skin.label);
             GuiStyleUtil.ApplyBackgroundToAllStates(_sectionHeaderStyle, _sectionHeaderBg);
-            GuiStyleUtil.ApplyTextColorToAllStates(_sectionHeaderStyle, mutedColor);
+            GuiStyleUtil.ApplyTextColorToAllStates(_sectionHeaderStyle, textColor);
             _sectionHeaderStyle.fontSize = 10;
             _sectionHeaderStyle.fontStyle = FontStyle.Bold;
-            _sectionHeaderStyle.padding = new RectOffset(6, 6, 3, 3);
-            _sectionHeaderStyle.margin = new RectOffset(0, 0, 2, 2);
+            _sectionHeaderStyle.padding = new RectOffset(6, 6, 4, 4);
+            _sectionHeaderStyle.margin = new RectOffset(0, 0, 0, 2);
+
+            _treeHeaderStyle = new GUIStyle(GUI.skin.button);
+            _treeHeaderStyle.alignment = TextAnchor.MiddleCenter;
+            _treeHeaderStyle.padding = new RectOffset(0, 0, 0, 0);
+            _treeHeaderStyle.margin = new RectOffset(0, 0, 0, 0);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_treeHeaderStyle, MakeTex(CortexIdeLayout.Blend(headerColor, bgColor, 0.35f)));
+            GuiStyleUtil.ApplyTextColorToAllStates(_treeHeaderStyle, borderColor);
         }
 
         private static Texture2D MakeTex(Color color)
         {
-            var tex = new Texture2D(1, 1);
+            var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false);
             tex.SetPixel(0, 0, color);
             tex.Apply();
             return tex;
