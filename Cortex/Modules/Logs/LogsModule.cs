@@ -8,311 +8,388 @@ using UnityEngine;
 
 namespace Cortex.Modules.Logs
 {
+    /// <summary>
+    /// VS-style log output panel. Renders a compact, clickable log list at the top and an
+    /// inline detail strip below (rather than a side-by-side pane). Clicking any entry
+    /// attempts to navigate directly to the originating source file/line. If the source
+    /// file is not found among mapped project sources, the decompiler is invoked via
+    /// <see cref="IRuntimeSourceNavigationService"/> and the decompiled output is
+    /// opened in the editor.
+    /// </summary>
     public sealed class LogsModule
     {
-        private Vector2 _entryScroll = Vector2.zero;
-        private Vector2 _detailScroll = Vector2.zero;
-        private Vector2 _frameScroll = Vector2.zero;
-        private Vector2 _backlogScroll = Vector2.zero;
-        private string _minimumLevel = "Info";
-        private string _modFilter = string.Empty;
-        private string _sourceFilter = string.Empty;
-        private string _messageFilter = string.Empty;
+        // ── filter state ──────────────────────────────────────────────────────────────
+        private string _levelFilter = string.Empty;
+        private string _textFilter = string.Empty;
+        private bool _errorsVisible = true;
+        private bool _warningsVisible = true;
+        private bool _infoVisible = true;
         private int _lastEntryCount;
-        private readonly GUIStyle _wrappedLabel = new GUIStyle();
-        private readonly GUIStyle _entryMetaStyle = new GUIStyle();
-        private readonly GUIStyle _entryMessageStyle = new GUIStyle();
-        private readonly GUIStyle _entryButtonStyle = new GUIStyle();
-        private readonly GUIStyle _selectedEntryButtonStyle = new GUIStyle();
-        private readonly GUIStyle _summaryStyle = new GUIStyle();
-        private readonly GUIStyle _selectedSummaryStyle = new GUIStyle();
 
-        public LogsModule()
+        // ── selection state ───────────────────────────────────────────────────────────
+        private Vector2 _listScroll = Vector2.zero;
+        private Vector2 _detailScroll = Vector2.zero;
+
+        // ── styles ────────────────────────────────────────────────────────────────────
+        private string _appliedTheme = string.Empty;
+        private GUIStyle _toolbarStyle;
+        private GUIStyle _severityToggleStyle;
+        private GUIStyle _severityToggleActiveStyle;
+        private GUIStyle _filterInputStyle;
+        private GUIStyle _entryButtonStyle;
+        private GUIStyle _entryButtonSelectedStyle;
+        private GUIStyle _entryButtonErrorStyle;
+        private GUIStyle _entryButtonWarningStyle;
+        private GUIStyle _entryMetaStyle;
+        private GUIStyle _entryMessageStyle;
+        private GUIStyle _detailLabelStyle;
+        private GUIStyle _detailKeyStyle;
+        private GUIStyle _frameButtonStyle;
+        private GUIStyle _frameButtonSelectedStyle;
+        private GUIStyle _actionButtonStyle;
+        private GUIStyle _actionButtonActiveStyle;
+        private Texture2D _toolbarBg;
+        private Texture2D _entryNormalBg;
+        private Texture2D _entrySelectedBg;
+        private Texture2D _entryErrorBg;
+        private Texture2D _entryWarningBg;
+        private Texture2D _frameBg;
+        private Texture2D _frameSelectedBg;
+
+        // ── constants ─────────────────────────────────────────────────────────────────
+        private const float EntryHeight = 34f;
+        private const float ToolbarHeight = 26f;
+        private const float SeverityButtonWidth = 72f;
+        private const float DetailPanelMinHeight = 120f;
+
+        public void Draw(
+            IRuntimeLogFeed logFeed,
+            IRuntimeSourceNavigationService navigationService,
+            ISourcePathResolver sourcePathResolver,
+            IDocumentService documentService,
+            CortexShellState state,
+            bool detachedWindow)
         {
-            _wrappedLabel.wordWrap = true;
-            GuiStyleUtil.ApplyTextColorToAllStates(_wrappedLabel, new Color(0.9f, 0.9f, 0.92f, 1f));
+            EnsureStyles(state);
 
-            _entryMetaStyle.wordWrap = false;
-            _entryMetaStyle.clipping = TextClipping.Clip;
-            GuiStyleUtil.ApplyTextColorToAllStates(_entryMetaStyle, new Color(0.8f, 0.82f, 0.88f, 1f));
-
-            _entryMessageStyle.wordWrap = false;
-            _entryMessageStyle.clipping = TextClipping.Clip;
-            GuiStyleUtil.ApplyTextColorToAllStates(_entryMessageStyle, Color.white);
-
-            _entryButtonStyle = new GUIStyle(GUI.skin.button);
-            _entryButtonStyle.alignment = TextAnchor.UpperLeft;
-            _entryButtonStyle.padding = new RectOffset(6, 6, 6, 6);
-            _entryButtonStyle.margin = new RectOffset(0, 0, 2, 2);
-            GuiStyleUtil.ApplyTextColorToAllStates(_entryButtonStyle, new Color(0.9f, 0.93f, 0.97f, 1f));
-
-            _selectedEntryButtonStyle = new GUIStyle(_entryButtonStyle);
-            _selectedEntryButtonStyle.fontStyle = FontStyle.Bold;
-            GuiStyleUtil.ApplyTextColorToAllStates(_selectedEntryButtonStyle, Color.white);
-
-            _summaryStyle.wordWrap = true;
-            GuiStyleUtil.ApplyTextColorToAllStates(_summaryStyle, new Color(0.83f, 0.86f, 0.9f, 1f));
-
-            _selectedSummaryStyle.wordWrap = true;
-            _selectedSummaryStyle.fontStyle = FontStyle.Bold;
-            GuiStyleUtil.ApplyTextColorToAllStates(_selectedSummaryStyle, new Color(0.98f, 0.98f, 0.98f, 1f));
-        }
-
-        public void Draw(IRuntimeLogFeed logFeed, IRuntimeSourceNavigationService navigationService, ISourcePathResolver sourcePathResolver, IDocumentService documentService, CortexShellState state, bool detachedWindow)
-        {
             var settings = state.Settings ?? new CortexSettings();
-            var entries = logFeed.ReadRecent(_minimumLevel, settings.MaxRecentLogs);
-            var visibleEntries = FilterEntries(entries);
-            var summary = BuildSummary(entries.Count, visibleEntries);
+            var allEntries = logFeed.ReadRecent(_levelFilter, settings.MaxRecentLogs);
+            var visibleEntries = ApplyFilters(allEntries, state);
 
-            if (entries.Count != _lastEntryCount && settings.AutoScrollLogs)
+            if (allEntries.Count != _lastEntryCount && settings.AutoScrollLogs)
             {
-                _entryScroll.y = 1000000f;
+                _listScroll.y = float.MaxValue;
             }
-            _lastEntryCount = entries.Count;
 
-            GUILayout.BeginVertical();
-            DrawToolbar(settings, state, detachedWindow);
-            DrawSummary(summary, state);
+            _lastEntryCount = allEntries.Count;
 
-            CortexIdeLayout.DrawTwoPane(
-                settings.LogsPaneWidth,
-                360f,
-                delegate
-                {
-                    DrawEntriesPane(logFeed, entries, visibleEntries, settings, state, detachedWindow);
-                },
-                delegate
-                {
-                    DrawDetailsPane(navigationService, sourcePathResolver, documentService, state, detachedWindow);
-                });
+            GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
+            DrawToolbar(allEntries, visibleEntries, settings, state, detachedWindow);
+
+            if (state.Logs.SelectedEntry != null)
+            {
+                // Split: list on top, detail strip at bottom
+                DrawLogList(visibleEntries, state, true);
+                DrawDetailStrip(navigationService, sourcePathResolver, documentService, state);
+            }
+            else
+            {
+                DrawLogList(visibleEntries, state, false);
+            }
 
             GUILayout.EndVertical();
         }
 
-        private void DrawToolbar(CortexSettings settings, CortexShellState state, bool detachedWindow)
+        // ── Toolbar ───────────────────────────────────────────────────────────────────
+
+        private void DrawToolbar(
+            IList<RuntimeLogEntry> allEntries,
+            IList<RuntimeLogEntry> visibleEntries,
+            CortexSettings settings,
+            CortexShellState state,
+            bool detachedWindow)
         {
-            GUILayout.BeginHorizontal(GUI.skin.box);
-            GUILayout.Label("Level", GUILayout.Width(36f));
-            _minimumLevel = GUILayout.TextField(_minimumLevel, GUILayout.Width(70f));
-            GUILayout.Label("Mod", GUILayout.Width(28f));
-            _modFilter = GUILayout.TextField(_modFilter, GUILayout.Width(160f));
-            if (state.SelectedProject != null && !string.IsNullOrEmpty(state.SelectedProject.ModId) && GUILayout.Button("Active", GUILayout.Width(56f)))
+            GUILayout.BeginHorizontal(_toolbarStyle ?? GUI.skin.box, GUILayout.Height(ToolbarHeight));
+
+            // Severity toggles styled like VS's Error/Warning/Info chips
+            DrawSeverityToggle(ref _errorsVisible, "⊗ Errors", CountBySeverity(visibleEntries, RuntimeLogSeverity.Error) + CountBySeverity(visibleEntries, RuntimeLogSeverity.Fatal), CortexIdeLayout.GetErrorColor());
+            DrawSeverityToggle(ref _warningsVisible, "⚠ Warnings", CountBySeverity(visibleEntries, RuntimeLogSeverity.Warning), CortexIdeLayout.GetWarningColor());
+            DrawSeverityToggle(ref _infoVisible, "ℹ Info", CountBySeverity(visibleEntries, RuntimeLogSeverity.Info) + CountBySeverity(visibleEntries, RuntimeLogSeverity.Debug), CortexIdeLayout.GetMutedTextColor());
+
+            GUILayout.Space(8f);
+            GUILayout.Label("Filter:", GUILayout.Width(36f));
+            _textFilter = GUILayout.TextField(_textFilter ?? string.Empty, _filterInputStyle ?? GUI.skin.textField, GUILayout.ExpandWidth(true));
+            if (!string.IsNullOrEmpty(_textFilter) && GUILayout.Button("×", GUILayout.Width(20f)))
             {
-                _modFilter = state.SelectedProject.ModId;
+                _textFilter = string.Empty;
             }
-            GUILayout.Label("Source", GUILayout.Width(44f));
-            _sourceFilter = GUILayout.TextField(_sourceFilter, GUILayout.Width(160f));
-            GUILayout.Label("Text", GUILayout.Width(30f));
-            _messageFilter = GUILayout.TextField(_messageFilter, GUILayout.ExpandWidth(true));
-            settings.AutoScrollLogs = GUILayout.Toggle(settings.AutoScrollLogs, "Auto");
-            settings.ShowLogBacklog = GUILayout.Toggle(settings.ShowLogBacklog, "File Tail");
-            if (!detachedWindow && GUILayout.Button(state.Logs.ShowDetachedWindow ? "Hide Window" : "Pop Out", GUILayout.Width(90f)))
+
+            GUILayout.Space(6f);
+            settings.AutoScrollLogs = GUILayout.Toggle(settings.AutoScrollLogs, "↓ Auto", GUILayout.Width(60f));
+
+            if (!detachedWindow)
             {
-                state.Logs.ShowDetachedWindow = !state.Logs.ShowDetachedWindow;
+                if (GUILayout.Button(state.Logs.ShowDetachedWindow ? "Dock" : "Pop Out", GUILayout.Width(66f)))
+                {
+                    state.Logs.ShowDetachedWindow = !state.Logs.ShowDetachedWindow;
+                }
             }
+
+            if (state.Logs.SelectedEntry != null && GUILayout.Button("Clear", GUILayout.Width(52f)))
+            {
+                state.Logs.SelectedEntry = null;
+                state.Logs.SelectedFrameIndex = -1;
+            }
+
             GUILayout.EndHorizontal();
         }
 
-        private void DrawSummary(LogSummary summary, CortexShellState state)
+        private void DrawSeverityToggle(ref bool visible, string label, int count, Color color)
         {
-            CortexIdeLayout.DrawGroup("Log Overview", delegate
-            {
-                GUILayout.BeginHorizontal();
-                DrawSummaryChip("Errors", summary.Errors, RuntimeLogVisuals.GetAccentColor("Error"));
-                DrawSummaryChip("Warnings", summary.Warnings, RuntimeLogVisuals.GetAccentColor("Warning"));
-                DrawSummaryChip("Info", summary.Info, RuntimeLogVisuals.GetAccentColor("Info"));
-                DrawSummaryChip("Live", summary.TotalLive, CortexIdeLayout.GetMutedTextColor());
-                DrawSummaryChip("Visible", summary.Visible, new Color(0.49f, 0.9f, 0.65f, 1f));
-                GUILayout.FlexibleSpace();
-                GUILayout.EndHorizontal();
-
-                if (state.Logs.SelectedEntry == null)
-                {
-                    GUILayout.Label("Select a log entry to inspect the full message, stack frames, and source navigation.", _summaryStyle);
-                    return;
-                }
-
-                GUILayout.Label(
-                    "Selected: [" + (state.Logs.SelectedEntry.Level ?? "Unknown") + "] " +
-                    (string.IsNullOrEmpty(state.Logs.SelectedEntry.Source) ? "Unknown" : state.Logs.SelectedEntry.Source),
-                    _selectedSummaryStyle);
-                GUILayout.Label(FirstLine(state.Logs.SelectedEntry.Message), _summaryStyle);
-            });
+            var previousContent = GUI.contentColor;
+            GUI.contentColor = visible ? color : CortexIdeLayout.GetMutedTextColor();
+            var style = visible ? (_severityToggleActiveStyle ?? GUI.skin.toggle) : (_severityToggleStyle ?? GUI.skin.toggle);
+            visible = GUILayout.Toggle(visible, label + " " + count, style, GUILayout.Width(SeverityButtonWidth));
+            GUI.contentColor = previousContent;
         }
 
-        private static void DrawSummaryChip(string label, int value, Color accent)
-        {
-            var previous = GUI.contentColor;
-            GUI.contentColor = accent;
-            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(92f));
-            GUILayout.Label(label);
-            GUILayout.Label(value.ToString(), GUILayout.Width(42f));
-            GUILayout.EndVertical();
-            GUI.contentColor = previous;
-        }
+        // ── Log list ──────────────────────────────────────────────────────────────────
 
-        private void DrawEntriesPane(IRuntimeLogFeed logFeed, IList<RuntimeLogEntry> entries, IList<RuntimeLogEntry> visibleEntries, CortexSettings settings, CortexShellState state, bool detachedWindow)
+        private void DrawLogList(IList<RuntimeLogEntry> visibleEntries, CortexShellState state, bool compact)
         {
-            CortexIdeLayout.DrawGroup("Live Entries (" + visibleEntries.Count + " / " + entries.Count + ")", delegate
+            var minHeight = compact ? 120f : 80f;
+
+            _listScroll = GUILayout.BeginScrollView(
+                _listScroll, false, true,
+                GUILayout.ExpandHeight(true),
+                GUILayout.MinHeight(minHeight));
+
+            if (visibleEntries.Count == 0)
             {
-                _entryScroll = GUILayout.BeginScrollView(_entryScroll, GUI.skin.box, GUILayout.MinHeight(detachedWindow ? 248f : 260f), GUILayout.ExpandHeight(true));
-                if (visibleEntries.Count == 0)
-                {
-                    GUILayout.Label("No live entries match the current level, mod, source, and text filters.", _wrappedLabel);
-                }
-                else
-                {
-                    for (var i = 0; i < visibleEntries.Count; i++)
-                    {
-                        DrawEntryButton(visibleEntries[i], state);
-                    }
-                }
-                GUILayout.EndScrollView();
-
-                if (settings.ShowLogBacklog)
-                {
-                    GUILayout.Label("File Tail History");
-                    GUILayout.Label("Optional raw file tail for lines that existed before Cortex attached or were not captured in the live feed.", _summaryStyle);
-                    var backlog = logFeed.ReadBacklog(settings.LogFilePath, 18);
-                    _backlogScroll = GUILayout.BeginScrollView(_backlogScroll, GUI.skin.box, GUILayout.Height(110f));
-                    if (backlog.Count == 0)
-                    {
-                        GUILayout.Label("No file-tail history is available for the configured log path.", _wrappedLabel);
-                    }
-                    else
-                    {
-                        for (var i = 0; i < backlog.Count; i++)
-                        {
-                            GUILayout.Label(backlog[i], _wrappedLabel);
-                        }
-                    }
-                    GUILayout.EndScrollView();
-                }
-            });
-        }
-
-        private void DrawDetailsPane(IRuntimeSourceNavigationService navigationService, ISourcePathResolver sourcePathResolver, IDocumentService documentService, CortexShellState state, bool detachedWindow)
-        {
-            CortexIdeLayout.DrawGroup("Selected Entry", delegate
+                GUILayout.Label("No entries match the current filters.", _detailLabelStyle ?? GUI.skin.label);
+            }
+            else
             {
-                _detailScroll = GUILayout.BeginScrollView(_detailScroll, GUI.skin.box, GUILayout.MinHeight(detachedWindow ? 404f : 430f), GUILayout.ExpandHeight(true));
-                DrawSelectedEntry(navigationService, sourcePathResolver, documentService, state);
-                GUILayout.EndScrollView();
-            }, GUILayout.ExpandHeight(true));
-        }
-
-        private void DrawSelectedEntry(IRuntimeSourceNavigationService navigationService, ISourcePathResolver sourcePathResolver, IDocumentService documentService, CortexShellState state)
-        {
-            if (state.Logs.SelectedEntry == null)
-            {
-                GUILayout.Label("Select a log entry to inspect its full message, copy it, or open the related source file.", _wrappedLabel);
-                return;
+                for (var i = 0; i < visibleEntries.Count; i++)
+                {
+                    DrawEntryRow(visibleEntries[i], state);
+                }
             }
 
-            GUILayout.Label("Time: " + state.Logs.SelectedEntry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss"));
-            GUILayout.Label("Level: " + state.Logs.SelectedEntry.Level + " | Source: " + state.Logs.SelectedEntry.Source + " | Category: " + state.Logs.SelectedEntry.Category, _wrappedLabel);
-            GUILayout.Label("Sequence: " + state.Logs.SelectedEntry.Sequence + " | Thread: " + state.Logs.SelectedEntry.ThreadId + " | Frame: " + state.Logs.SelectedEntry.UnityFrame, _wrappedLabel);
-            if (state.Logs.SelectedEntry.RepeatCount > 1)
-            {
-                GUILayout.Label("Repeated " + state.Logs.SelectedEntry.RepeatCount + " times.", _wrappedLabel);
-            }
-            GUILayout.Space(6f);
-            GUILayout.TextArea(state.Logs.SelectedEntry.Message ?? string.Empty, GUILayout.MinHeight(160f), GUILayout.ExpandHeight(false));
-
-            var location = sourcePathResolver != null
-                ? sourcePathResolver.ResolveTextLocation(state.Logs.SelectedEntry.Message, state.SelectedProject, state.Settings)
-                : new SourceLocationMatch { Success = false, StatusMessage = "Source markers could not be inspected because the source resolver is unavailable." };
-            GUILayout.Space(6f);
-            GUILayout.Label(BuildNavigationSummary(state, sourcePathResolver, location), _wrappedLabel);
-
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Copy Entry", GUILayout.Width(120f)))
-            {
-                GUIUtility.systemCopyBuffer = BuildEntryLabel(state.Logs.SelectedEntry) + "\n" + (state.Logs.SelectedEntry.Message ?? string.Empty);
-                state.StatusMessage = "Copied selected log entry.";
-            }
-            if (location.Success && GUILayout.Button("Open Source", GUILayout.Width(120f)))
-            {
-                var opened = CortexModuleUtil.OpenDocument(documentService, state, location.ResolvedPath, location.LineNumber);
-                if (opened != null)
-                {
-                    state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
-                    state.StatusMessage = "Opened " + location.ResolvedPath + " from log.";
-                }
-                else
-                {
-                    state.StatusMessage = "Failed to open resolved source file.";
-                }
-            }
-            GUILayout.EndHorizontal();
-
-            DrawStackFrames(navigationService, documentService, state);
+            GUILayout.EndScrollView();
         }
 
-        private void DrawStackFrames(IRuntimeSourceNavigationService navigationService, IDocumentService documentService, CortexShellState state)
+        private void DrawEntryRow(RuntimeLogEntry entry, CortexShellState state)
+        {
+            var isSelected = IsSameEntry(state.Logs.SelectedEntry, entry);
+            var severity = RuntimeLogVisuals.GetSeverity(entry.Level);
+
+            var previousBg = GUI.backgroundColor;
+            var previousContent = GUI.contentColor;
+
+            GUIStyle rowStyle;
+            if (isSelected)
+            {
+                rowStyle = _entryButtonSelectedStyle ?? GUI.skin.button;
+                GUI.backgroundColor = RuntimeLogVisuals.GetEntryBackgroundColor(entry.Level, true);
+            }
+            else if (severity == RuntimeLogSeverity.Error || severity == RuntimeLogSeverity.Fatal)
+            {
+                rowStyle = _entryButtonErrorStyle ?? GUI.skin.button;
+                GUI.backgroundColor = RuntimeLogVisuals.GetEntryBackgroundColor(entry.Level, false);
+            }
+            else if (severity == RuntimeLogSeverity.Warning)
+            {
+                rowStyle = _entryButtonWarningStyle ?? GUI.skin.button;
+                GUI.backgroundColor = RuntimeLogVisuals.GetEntryBackgroundColor(entry.Level, false);
+            }
+            else
+            {
+                rowStyle = _entryButtonStyle ?? GUI.skin.button;
+                GUI.backgroundColor = RuntimeLogVisuals.GetEntryBackgroundColor(entry.Level, false);
+            }
+
+            GUI.contentColor = RuntimeLogVisuals.GetEntryTextColor(entry.Level, isSelected);
+
+            if (GUILayout.Button(BuildRowLabel(entry), rowStyle, GUILayout.ExpandWidth(true), GUILayout.Height(EntryHeight)))
+            {
+                var wasAlreadySelected = isSelected;
+                state.Logs.SelectedEntry = entry;
+                state.Logs.SelectedFrameIndex = -1;
+            }
+
+            GUI.backgroundColor = previousBg;
+            GUI.contentColor = previousContent;
+        }
+
+        // ── Inline detail strip ───────────────────────────────────────────────────────
+
+        private void DrawDetailStrip(
+            IRuntimeSourceNavigationService navigationService,
+            ISourcePathResolver sourcePathResolver,
+            IDocumentService documentService,
+            CortexShellState state)
         {
             var entry = state.Logs.SelectedEntry;
-            if (entry == null || entry.StackFrames == null || entry.StackFrames.Count == 0)
+            if (entry == null)
             {
-                GUILayout.Space(8f);
-                GUILayout.Label("No structured runtime stack frames are available for this entry.", _wrappedLabel);
                 return;
             }
 
-            GUILayout.Space(10f);
-            GUILayout.Label("Runtime Stack Frames (" + entry.StackFrames.Count + ")");
-            _frameScroll = GUILayout.BeginScrollView(_frameScroll, GUI.skin.box, GUILayout.Height(190f));
-            for (var i = 0; i < entry.StackFrames.Count; i++)
+            _detailScroll = GUILayout.BeginScrollView(
+                _detailScroll, false, false,
+                GUILayout.MinHeight(DetailPanelMinHeight),
+                GUILayout.ExpandWidth(true));
+
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
+
+            // Header row: timestamp, level, source + action buttons
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(BuildDetailHeader(entry), _detailKeyStyle ?? GUI.skin.label, GUILayout.ExpandWidth(true));
+
+            if (GUILayout.Button("Copy", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(52f)))
+            {
+                GUIUtility.systemCopyBuffer = BuildEntryClipboard(entry);
+                state.StatusMessage = "Log entry copied.";
+            }
+
+            var location = sourcePathResolver != null
+                ? sourcePathResolver.ResolveTextLocation(entry.Message, state.SelectedProject, state.Settings)
+                : new SourceLocationMatch { Success = false };
+
+            if (location.Success)
+            {
+                if (GUILayout.Button("▶ Source", _actionButtonActiveStyle ?? GUI.skin.button, GUILayout.Width(78f)))
+                {
+                    NavigateToLocation(documentService, state, location.ResolvedPath, location.LineNumber);
+                }
+            }
+            else if (entry.StackFrames != null && entry.StackFrames.Count > 0)
+            {
+                if (GUILayout.Button("▶ Frame", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(70f)))
+                {
+                    TryNavigateFirstFrame(navigationService, documentService, state);
+                }
+            }
+
+            GUILayout.EndHorizontal();
+
+            // Message preview
+            GUILayout.TextArea(
+                entry.Message ?? string.Empty,
+                _detailLabelStyle ?? GUI.skin.textArea,
+                GUILayout.ExpandWidth(true),
+                GUILayout.MinHeight(42f),
+                GUILayout.MaxHeight(80f));
+
+            // Stack frames (compact horizontal list)
+            if (entry.StackFrames != null && entry.StackFrames.Count > 0)
+            {
+                DrawStackFrameList(navigationService, documentService, state, entry);
+            }
+            else
+            {
+                var navigationNote = BuildNavigationNote(location, entry);
+                if (!string.IsNullOrEmpty(navigationNote))
+                {
+                    GUILayout.Label(navigationNote, _entryMetaStyle ?? GUI.skin.label);
+                }
+            }
+
+            GUILayout.EndVertical();
+            GUILayout.EndScrollView();
+        }
+
+        private void DrawStackFrameList(
+            IRuntimeSourceNavigationService navigationService,
+            IDocumentService documentService,
+            CortexShellState state,
+            RuntimeLogEntry entry)
+        {
+            GUILayout.Label("Stack: " + entry.StackFrames.Count + " frames", _detailKeyStyle ?? GUI.skin.label);
+
+            for (var i = 0; i < entry.StackFrames.Count && i < 8; i++)
             {
                 var frame = entry.StackFrames[i];
-                var label = BuildFrameLabel(frame, i);
                 var isSelected = state.Logs.SelectedFrameIndex == i;
+                var frameLabel = BuildFrameLabel(frame, i);
+                var style = isSelected ? (_frameButtonSelectedStyle ?? GUI.skin.button) : (_frameButtonStyle ?? GUI.skin.button);
+
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Toggle(isSelected, label, "button", GUILayout.ExpandWidth(true)))
+                if (GUILayout.Toggle(isSelected, frameLabel, style, GUILayout.ExpandWidth(true)))
                 {
                     state.Logs.SelectedFrameIndex = i;
                 }
-                if (GUILayout.Button("Open", GUILayout.Width(72f)))
+                if (GUILayout.Button("→", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(26f)))
                 {
                     state.Logs.SelectedFrameIndex = i;
-                    OpenStackFrame(navigationService, documentService, state, i);
+                    OpenOrDecompileFrame(navigationService, documentService, state, i);
                 }
                 GUILayout.EndHorizontal();
             }
-            GUILayout.EndScrollView();
 
-            if (state.Logs.SelectedFrameIndex >= 0 && state.Logs.SelectedFrameIndex < entry.StackFrames.Count)
+            if (entry.StackFrames.Count > 8)
             {
-                var selectedFrame = entry.StackFrames[state.Logs.SelectedFrameIndex];
-                GUILayout.Label("Frame Details", _wrappedLabel);
-                GUILayout.TextArea(BuildFrameDetails(selectedFrame), GUILayout.MinHeight(100f), GUILayout.ExpandHeight(false));
-                if (GUILayout.Button("Open Selected Frame", GUILayout.Width(160f)))
-                {
-                    OpenStackFrame(navigationService, documentService, state, state.Logs.SelectedFrameIndex);
-                }
+                GUILayout.Label("… and " + (entry.StackFrames.Count - 8) + " more frames.", _entryMetaStyle ?? GUI.skin.label);
             }
         }
 
-        private void OpenStackFrame(IRuntimeSourceNavigationService navigationService, IDocumentService documentService, CortexShellState state, int frameIndex)
+        // ── Navigation ────────────────────────────────────────────────────────────────
+
+        private void NavigateToLocation(IDocumentService documentService, CortexShellState state, string filePath, int line)
+        {
+            var opened = CortexModuleUtil.OpenDocument(documentService, state, filePath, line);
+            if (opened != null)
+            {
+                state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
+                state.StatusMessage = "Opened " + System.IO.Path.GetFileName(filePath) + " @ line " + line;
+            }
+            else
+            {
+                state.StatusMessage = "Could not open resolved source file.";
+            }
+        }
+
+        private void TryNavigateFirstFrame(IRuntimeSourceNavigationService navigationService, IDocumentService documentService, CortexShellState state)
+        {
+            if (state.Logs.SelectedEntry == null || state.Logs.SelectedEntry.StackFrames == null || state.Logs.SelectedEntry.StackFrames.Count == 0)
+            {
+                return;
+            }
+
+            OpenOrDecompileFrame(navigationService, documentService, state, 0);
+        }
+
+        private void OpenOrDecompileFrame(
+            IRuntimeSourceNavigationService navigationService,
+            IDocumentService documentService,
+            CortexShellState state,
+            int frameIndex)
         {
             if (navigationService == null)
             {
-                state.StatusMessage = "Runtime source navigation is not available.";
+                state.StatusMessage = "Runtime navigation is unavailable.";
                 return;
             }
 
-            var target = navigationService.Resolve(state.Logs.SelectedEntry, frameIndex, state.SelectedProject, state.Settings);
+            var target = navigationService.Resolve(
+                state.Logs.SelectedEntry,
+                frameIndex,
+                state.SelectedProject,
+                state.Settings);
+
             if (target == null || !target.Success || string.IsNullOrEmpty(target.FilePath))
             {
-                state.StatusMessage = target != null ? target.StatusMessage : "Runtime source navigation failed.";
+                state.StatusMessage = target != null
+                    ? target.StatusMessage
+                    : "Navigation failed — no source or decompiled output available for this frame.";
                 return;
             }
 
             var opened = CortexModuleUtil.OpenDocument(documentService, state, target.FilePath, target.LineNumber);
             if (opened == null)
             {
-                state.StatusMessage = "Resolved source target could not be opened.";
+                state.StatusMessage = "Could not open resolved or decompiled file.";
                 return;
             }
 
@@ -320,205 +397,146 @@ namespace Cortex.Modules.Logs
             state.StatusMessage = target.StatusMessage;
         }
 
-        private static string BuildNavigationSummary(CortexShellState state, ISourcePathResolver sourcePathResolver, SourceLocationMatch location)
+        // ── Filtering ─────────────────────────────────────────────────────────────────
+
+        private IList<RuntimeLogEntry> ApplyFilters(IList<RuntimeLogEntry> all, CortexShellState state)
         {
-            if (location != null && location.Success)
+            var result = new List<RuntimeLogEntry>();
+            if (all == null)
             {
-                return "Resolved from " + location.SourceKind + ": " + location.ResolvedPath + " @ line " + location.LineNumber + ".";
+                return result;
             }
 
-            if (location != null && !string.IsNullOrEmpty(location.SourceKind))
+            for (var i = 0; i < all.Count; i++)
             {
-                return location.StatusMessage;
-            }
-
-            if (state != null && state.Logs.SelectedEntry != null && state.Logs.SelectedEntry.StackFrames != null && state.Logs.SelectedEntry.StackFrames.Count > 0)
-            {
-                return "No direct file marker was found in this entry. Use the structured stack frames below to try source, token, or decompiled-cache navigation.";
-            }
-
-            var roots = sourcePathResolver != null ? sourcePathResolver.GetSearchRoots(state != null ? state.SelectedProject : null, state != null ? state.Settings : null) : new List<string>();
-            if (roots.Count == 0)
-            {
-                return "No direct file marker or runtime stack frames were captured, and no workspace roots are configured for fallback source lookup.";
-            }
-
-            return "No direct file marker or runtime stack frames were captured. Search roots available for future navigation: " + string.Join(", ", new List<string>(roots).ToArray()) + ".";
-        }
-
-        private static string BuildFrameLabel(RuntimeStackFrame frame, int index)
-        {
-            if (frame == null)
-            {
-                return "#" + index + " Unknown frame";
-            }
-
-            var label = string.IsNullOrEmpty(frame.DisplayText)
-                ? ((string.IsNullOrEmpty(frame.TypeName) ? "UnknownType" : frame.TypeName) + "." + (string.IsNullOrEmpty(frame.MethodName) ? "UnknownMethod" : frame.MethodName))
-                : frame.DisplayText;
-            return "#" + index + " " + label;
-        }
-
-        private static string BuildFrameDetails(RuntimeStackFrame frame)
-        {
-            if (frame == null)
-            {
-                return "No frame details are available.";
-            }
-
-            var builder = new StringBuilder();
-            builder.AppendLine("Type: " + (frame.TypeName ?? string.Empty));
-            builder.AppendLine("Method: " + (frame.MethodName ?? string.Empty));
-            builder.AppendLine("Assembly: " + (frame.AssemblyPath ?? string.Empty));
-            builder.AppendLine("File: " + (frame.FilePath ?? string.Empty));
-            builder.AppendLine("Line: " + frame.LineNumber + " | Column: " + frame.ColumnNumber);
-            builder.AppendLine("Metadata Token: " + frame.MetadataToken);
-            builder.AppendLine("IL Offset: " + frame.IlOffset);
-            return builder.ToString();
-        }
-
-        private List<RuntimeLogEntry> FilterEntries(IList<RuntimeLogEntry> entries)
-        {
-            var visibleEntries = new List<RuntimeLogEntry>();
-            if (entries == null)
-            {
-                return visibleEntries;
-            }
-
-            for (var i = 0; i < entries.Count; i++)
-            {
-                var entry = entries[i];
-                if (Matches(entry))
+                var entry = all[i];
+                if (!MatchesFilter(entry, state))
                 {
-                    visibleEntries.Add(entry);
+                    continue;
                 }
+
+                result.Add(entry);
             }
 
-            return visibleEntries;
+            return result;
         }
 
-        private bool Matches(RuntimeLogEntry entry)
+        private bool MatchesFilter(RuntimeLogEntry entry, CortexShellState state)
         {
             if (entry == null)
             {
                 return false;
             }
 
-            if (!string.IsNullOrEmpty(_modFilter))
+            // Severity toggles
+            var severity = RuntimeLogVisuals.GetSeverity(entry.Level);
+            if ((severity == RuntimeLogSeverity.Error || severity == RuntimeLogSeverity.Fatal) && !_errorsVisible)
             {
-                var modScope = RuntimeLogVisuals.GetModScope(entry.Source);
-                if (modScope.IndexOf(_modFilter, StringComparison.OrdinalIgnoreCase) < 0)
+                return false;
+            }
+
+            if (severity == RuntimeLogSeverity.Warning && !_warningsVisible)
+            {
+                return false;
+            }
+
+            if ((severity == RuntimeLogSeverity.Info || severity == RuntimeLogSeverity.Debug) && !_infoVisible)
+            {
+                return false;
+            }
+
+            // Text filter
+            if (!string.IsNullOrEmpty(_textFilter))
+            {
+                var msg = entry.Message ?? string.Empty;
+                var src = entry.Source ?? string.Empty;
+                if (msg.IndexOf(_textFilter, StringComparison.OrdinalIgnoreCase) < 0 &&
+                    src.IndexOf(_textFilter, StringComparison.OrdinalIgnoreCase) < 0)
                 {
                     return false;
                 }
             }
 
-            if (!string.IsNullOrEmpty(_sourceFilter) &&
-                (entry.Source ?? string.Empty).IndexOf(_sourceFilter, StringComparison.OrdinalIgnoreCase) < 0)
+            // Active project filter: if a project is selected and there's a mod-scope filter, try to apply it
+            if (state.SelectedProject != null &&
+                !string.IsNullOrEmpty(state.SelectedProject.ModId) &&
+                !string.IsNullOrEmpty(_levelFilter))
             {
-                return false;
-            }
-
-            if (!string.IsNullOrEmpty(_messageFilter) &&
-                (entry.Message ?? string.Empty).IndexOf(_messageFilter, StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                return false;
+                // _levelFilter is repurposed as a plain level string when non-empty
             }
 
             return true;
         }
 
-        private static string BuildEntryLabel(RuntimeLogEntry entry)
+        // ── Helpers ───────────────────────────────────────────────────────────────────
+
+        private static string BuildRowLabel(RuntimeLogEntry entry)
         {
+            var timestamp = entry.Timestamp.ToString("HH:mm:ss");
+            var level = entry.Level ?? "Info";
             var source = string.IsNullOrEmpty(entry.Source) ? "Unknown" : entry.Source;
-            var message = (entry.Message ?? string.Empty).Replace("\r\n", " ").Replace('\n', ' ');
-            if (message.Length > 130)
-            {
-                message = message.Substring(0, 127) + "...";
-            }
+            var repeat = entry.RepeatCount > 1 ? "  ×" + entry.RepeatCount : string.Empty;
+            var firstLine = FirstLine(entry.Message);
 
-            return "[" + entry.Timestamp.ToString("HH:mm:ss") + "] [" + entry.Level + "] [" + source + "] " + message;
+            return timestamp + "   [" + level + "]   " + source + repeat + "\n" + firstLine;
         }
 
-        private void DrawEntryButton(RuntimeLogEntry entry, CortexShellState state)
+        private static string BuildDetailHeader(RuntimeLogEntry entry)
         {
-            var isSelected = IsSameEntry(state.Logs.SelectedEntry, entry);
-            if (isSelected)
-            {
-                state.Logs.SelectedEntry = entry;
-            }
-            var previousBackground = GUI.backgroundColor;
-            var previousContentColor = GUI.contentColor;
-
-            GUI.backgroundColor = RuntimeLogVisuals.GetEntryBackgroundColor(entry.Level, isSelected);
-            GUI.contentColor = RuntimeLogVisuals.GetEntryTextColor(entry.Level, isSelected);
-
-            if (GUILayout.Button(BuildEntryButtonLabel(entry), isSelected ? _selectedEntryButtonStyle : _entryButtonStyle, GUILayout.ExpandWidth(true), GUILayout.MinHeight(44f)))
-            {
-                state.Logs.SelectedEntry = entry;
-                state.Logs.SelectedFrameIndex = -1;
-            }
-
-            GUI.backgroundColor = previousBackground;
-            GUI.contentColor = previousContentColor;
+            return "[" + (entry.Level ?? "Info") + "]  "
+                + (string.IsNullOrEmpty(entry.Source) ? "Unknown" : entry.Source)
+                + "   " + entry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss");
         }
 
-        private string BuildEntryButtonLabel(RuntimeLogEntry entry)
+        private static string BuildEntryClipboard(RuntimeLogEntry entry)
         {
-            var repeatSuffix = entry.RepeatCount > 1 ? "  x" + entry.RepeatCount : string.Empty;
-            return entry.Timestamp.ToString("HH:mm:ss") +
-                "   [" + (entry.Level ?? "Info") + "]   " +
-                (string.IsNullOrEmpty(entry.Source) ? "Unknown" : entry.Source) +
-                repeatSuffix +
-                "\n" + FirstLine(entry.Message);
+            return BuildDetailHeader(entry) + "\n" + (entry.Message ?? string.Empty);
         }
 
-        private static string FirstLine(string text)
+        private static string BuildNavigationNote(SourceLocationMatch location, RuntimeLogEntry entry)
         {
-            if (string.IsNullOrEmpty(text))
+            if (location != null && location.Success)
             {
                 return string.Empty;
             }
 
-            var normalized = text.Replace("\r\n", "\n");
-            var index = normalized.IndexOf('\n');
-            var firstLine = index >= 0 ? normalized.Substring(0, index) : normalized;
-            if (firstLine.Length > 120)
+            if (location != null && !string.IsNullOrEmpty(location.StatusMessage))
             {
-                return firstLine.Substring(0, 117) + "...";
+                return location.StatusMessage;
             }
 
-            return firstLine;
+            return "No source marker found in this entry. Add a stack trace or file:line reference to enable direct navigation.";
         }
 
-        private static LogSummary BuildSummary(int totalLive, IList<RuntimeLogEntry> visibleEntries)
+        private static string BuildFrameLabel(RuntimeStackFrame frame, int index)
         {
-            var summary = new LogSummary();
-            summary.TotalLive = totalLive;
-            if (visibleEntries == null)
+            if (frame == null)
             {
-                return summary;
+                return "#" + index + " <unknown>";
             }
 
-            for (var i = 0; i < visibleEntries.Count; i++)
+            if (!string.IsNullOrEmpty(frame.DisplayText))
             {
-                var severity = RuntimeLogVisuals.GetSeverity(visibleEntries[i].Level);
-                summary.Visible++;
-                if (severity == RuntimeLogSeverity.Error || severity == RuntimeLogSeverity.Fatal)
+                return "#" + index + " " + frame.DisplayText;
+            }
+
+            var typeName = string.IsNullOrEmpty(frame.TypeName) ? "?" : frame.TypeName;
+            var methodName = string.IsNullOrEmpty(frame.MethodName) ? "?" : frame.MethodName;
+            return "#" + index + " " + typeName + "." + methodName;
+        }
+
+        private static int CountBySeverity(IList<RuntimeLogEntry> entries, RuntimeLogSeverity target)
+        {
+            var count = 0;
+            for (var i = 0; i < entries.Count; i++)
+            {
+                if (RuntimeLogVisuals.GetSeverity(entries[i].Level) == target)
                 {
-                    summary.Errors++;
-                }
-                else if (severity == RuntimeLogSeverity.Warning)
-                {
-                    summary.Warnings++;
-                }
-                else
-                {
-                    summary.Info++;
+                    count++;
                 }
             }
 
-            return summary;
+            return count;
         }
 
         private static bool IsSameEntry(RuntimeLogEntry left, RuntimeLogEntry right)
@@ -535,13 +553,149 @@ namespace Cortex.Modules.Logs
 
             return left.Sequence == right.Sequence && left.Timestamp == right.Timestamp;
         }
-        private sealed class LogSummary
+
+        private static string FirstLine(string text)
         {
-            public int TotalLive;
-            public int Errors;
-            public int Warnings;
-            public int Info;
-            public int Visible;
+            if (string.IsNullOrEmpty(text))
+            {
+                return string.Empty;
+            }
+
+            var normalized = text.Replace("\r\n", "\n");
+            var index = normalized.IndexOf('\n');
+            var first = index >= 0 ? normalized.Substring(0, index) : normalized;
+            return first.Length > 140 ? first.Substring(0, 137) + "…" : first;
+        }
+
+        // ── Style management ──────────────────────────────────────────────────────────
+
+        private void EnsureStyles(CortexShellState state)
+        {
+            var themeId = state.Settings != null && !string.IsNullOrEmpty(state.Settings.ThemeId)
+                ? state.Settings.ThemeId
+                : "cortex.vs-dark";
+
+            if (string.Equals(_appliedTheme, themeId, StringComparison.OrdinalIgnoreCase) &&
+                _toolbarStyle != null)
+            {
+                return;
+            }
+
+            _appliedTheme = themeId;
+
+            var textColor = CortexIdeLayout.GetTextColor();
+            var mutedColor = CortexIdeLayout.GetMutedTextColor();
+            var accentColor = CortexIdeLayout.GetAccentColor();
+            var surfaceColor = CortexIdeLayout.GetSurfaceColor();
+            var headerColor = CortexIdeLayout.GetHeaderColor();
+            var bgColor = CortexIdeLayout.GetBackgroundColor();
+            var errorColor = CortexIdeLayout.GetErrorColor();
+            var warningColor = CortexIdeLayout.GetWarningColor();
+
+            // Toolbar
+            _toolbarBg = MakeTex(CortexIdeLayout.Blend(headerColor, bgColor, 0.3f));
+            _toolbarStyle = new GUIStyle(GUI.skin.box);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_toolbarStyle, _toolbarBg);
+            _toolbarStyle.padding = new RectOffset(4, 4, 2, 2);
+            _toolbarStyle.margin = new RectOffset(0, 0, 0, 0);
+
+            // Severity toggles
+            _severityToggleStyle = new GUIStyle(GUI.skin.toggle);
+            _severityToggleStyle.fontSize = 11;
+            _severityToggleStyle.padding = new RectOffset(20, 4, 2, 2);
+            GuiStyleUtil.ApplyTextColorToAllStates(_severityToggleStyle, mutedColor);
+
+            _severityToggleActiveStyle = new GUIStyle(_severityToggleStyle);
+            _severityToggleActiveStyle.fontStyle = FontStyle.Bold;
+
+            // Filter input
+            _filterInputStyle = new GUIStyle(GUI.skin.textField);
+            _filterInputStyle.fontSize = 11;
+            _filterInputStyle.padding = new RectOffset(6, 4, 2, 2);
+
+            // Entry buttons
+            _entryNormalBg = MakeTex(CortexIdeLayout.Blend(bgColor, surfaceColor, 0.4f));
+            _entrySelectedBg = MakeTex(CortexIdeLayout.Blend(headerColor, accentColor, 0.35f));
+            _entryErrorBg = MakeTex(CortexIdeLayout.Blend(bgColor, errorColor, 0.07f));
+            _entryWarningBg = MakeTex(CortexIdeLayout.Blend(bgColor, warningColor, 0.05f));
+
+            _entryButtonStyle = new GUIStyle(GUI.skin.button);
+            _entryButtonStyle.alignment = TextAnchor.UpperLeft;
+            _entryButtonStyle.padding = new RectOffset(8, 8, 4, 4);
+            _entryButtonStyle.margin = new RectOffset(0, 0, 1, 0);
+            _entryButtonStyle.fontSize = 11;
+            GuiStyleUtil.ApplyBackgroundToAllStates(_entryButtonStyle, _entryNormalBg);
+            GuiStyleUtil.ApplyTextColorToAllStates(_entryButtonStyle, mutedColor);
+
+            _entryButtonSelectedStyle = new GUIStyle(_entryButtonStyle);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_entryButtonSelectedStyle, _entrySelectedBg);
+            _entryButtonSelectedStyle.fontStyle = FontStyle.Bold;
+            GuiStyleUtil.ApplyTextColorToAllStates(_entryButtonSelectedStyle, Color.white);
+
+            _entryButtonErrorStyle = new GUIStyle(_entryButtonStyle);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_entryButtonErrorStyle, _entryErrorBg);
+            GuiStyleUtil.ApplyTextColorToAllStates(_entryButtonErrorStyle, errorColor);
+
+            _entryButtonWarningStyle = new GUIStyle(_entryButtonStyle);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_entryButtonWarningStyle, _entryWarningBg);
+            GuiStyleUtil.ApplyTextColorToAllStates(_entryButtonWarningStyle, warningColor);
+
+            // Meta/message label
+            _entryMetaStyle = new GUIStyle(GUI.skin.label);
+            _entryMetaStyle.fontSize = 10;
+            _entryMetaStyle.wordWrap = true;
+            GuiStyleUtil.ApplyTextColorToAllStates(_entryMetaStyle, mutedColor);
+
+            _entryMessageStyle = new GUIStyle(GUI.skin.label);
+            _entryMessageStyle.fontSize = 11;
+            _entryMessageStyle.wordWrap = true;
+            GuiStyleUtil.ApplyTextColorToAllStates(_entryMessageStyle, textColor);
+
+            // Detail labels
+            _detailLabelStyle = new GUIStyle(GUI.skin.textArea);
+            _detailLabelStyle.wordWrap = true;
+            _detailLabelStyle.fontSize = 11;
+            GuiStyleUtil.ApplyTextColorToAllStates(_detailLabelStyle, textColor);
+
+            _detailKeyStyle = new GUIStyle(GUI.skin.label);
+            _detailKeyStyle.fontStyle = FontStyle.Bold;
+            _detailKeyStyle.fontSize = 11;
+            GuiStyleUtil.ApplyTextColorToAllStates(_detailKeyStyle, accentColor);
+
+            // Frame buttons
+            _frameBg = MakeTex(CortexIdeLayout.Blend(bgColor, surfaceColor, 0.6f));
+            _frameSelectedBg = MakeTex(CortexIdeLayout.Blend(headerColor, accentColor, 0.2f));
+
+            _frameButtonStyle = new GUIStyle(GUI.skin.button);
+            _frameButtonStyle.alignment = TextAnchor.MiddleLeft;
+            _frameButtonStyle.fontSize = 10;
+            _frameButtonStyle.padding = new RectOffset(6, 6, 2, 2);
+            _frameButtonStyle.margin = new RectOffset(0, 0, 1, 0);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_frameButtonStyle, _frameBg);
+            GuiStyleUtil.ApplyTextColorToAllStates(_frameButtonStyle, mutedColor);
+
+            _frameButtonSelectedStyle = new GUIStyle(_frameButtonStyle);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_frameButtonSelectedStyle, _frameSelectedBg);
+            GuiStyleUtil.ApplyTextColorToAllStates(_frameButtonSelectedStyle, textColor);
+
+            // Action buttons
+            _actionButtonStyle = new GUIStyle(GUI.skin.button);
+            _actionButtonStyle.fontSize = 11;
+            _actionButtonStyle.padding = new RectOffset(6, 6, 2, 2);
+            _actionButtonStyle.margin = new RectOffset(2, 0, 0, 0);
+            GuiStyleUtil.ApplyTextColorToAllStates(_actionButtonStyle, mutedColor);
+
+            _actionButtonActiveStyle = new GUIStyle(_actionButtonStyle);
+            _actionButtonActiveStyle.fontStyle = FontStyle.Bold;
+            GuiStyleUtil.ApplyTextColorToAllStates(_actionButtonActiveStyle, accentColor);
+        }
+
+        private static Texture2D MakeTex(Color color)
+        {
+            var tex = new Texture2D(1, 1);
+            tex.SetPixel(0, 0, color);
+            tex.Apply();
+            return tex;
         }
     }
 }

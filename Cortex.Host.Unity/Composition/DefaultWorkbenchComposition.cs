@@ -10,21 +10,42 @@ namespace Cortex.Host.Unity.Composition
             IContributionRegistry contributionRegistry,
             string rendererDisplayName)
         {
+            // ── View containers (determines which host each module lives in) ─────────
+            // Explorer always on the left primary side — mirrors Visual Studio's Solution Explorer.
+            RegisterContainer(contributionRegistry, CortexWorkbenchIds.FileExplorerContainer, "Explorer", WorkbenchHostLocation.PrimarySideHost, 0, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.FileExplorerContainer);
+            // Logs live in the bottom panel; Build output is a sibling tab.
             RegisterContainer(contributionRegistry, CortexWorkbenchIds.LogsContainer, "Logs", WorkbenchHostLocation.PanelHost, 0, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.LogsContainer);
-            RegisterContainer(contributionRegistry, CortexWorkbenchIds.ProjectsContainer, "Projects", WorkbenchHostLocation.SecondarySideHost, 10, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.ProjectsContainer);
-            RegisterContainer(contributionRegistry, CortexWorkbenchIds.ReferenceContainer, "References", WorkbenchHostLocation.SecondarySideHost, 20, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.ReferenceContainer);
-            RegisterContainer(contributionRegistry, CortexWorkbenchIds.EditorContainer, "Editor", WorkbenchHostLocation.DocumentHost, 20, ModuleActivationKind.OnDocumentRestore, CortexWorkbenchIds.EditorContainer);
-            RegisterContainer(contributionRegistry, CortexWorkbenchIds.BuildContainer, "Build", WorkbenchHostLocation.PanelHost, 30, ModuleActivationKind.OnCommand, "cortex.build.execute");
-            RegisterContainer(contributionRegistry, CortexWorkbenchIds.RuntimeContainer, "Runtime", WorkbenchHostLocation.PanelHost, 40, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.RuntimeContainer);
-            RegisterContainer(contributionRegistry, CortexWorkbenchIds.SettingsContainer, "Settings", WorkbenchHostLocation.SecondarySideHost, 60, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.SettingsContainer);
+            RegisterContainer(contributionRegistry, CortexWorkbenchIds.BuildContainer, "Build", WorkbenchHostLocation.PanelHost, 10, ModuleActivationKind.OnCommand, "cortex.build.execute");
+            RegisterContainer(contributionRegistry, CortexWorkbenchIds.RuntimeContainer, "Runtime", WorkbenchHostLocation.PanelHost, 20, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.RuntimeContainer);
+            // Secondary right side: project management, references, settings.
+            RegisterContainer(contributionRegistry, CortexWorkbenchIds.ProjectsContainer, "Projects", WorkbenchHostLocation.SecondarySideHost, 0, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.ProjectsContainer);
+            RegisterContainer(contributionRegistry, CortexWorkbenchIds.ReferenceContainer, "References", WorkbenchHostLocation.SecondarySideHost, 10, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.ReferenceContainer);
+            RegisterContainer(contributionRegistry, CortexWorkbenchIds.SettingsContainer, "Settings", WorkbenchHostLocation.SecondarySideHost, 20, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.SettingsContainer);
+            // Editor is the central document host.
+            RegisterContainer(contributionRegistry, CortexWorkbenchIds.EditorContainer, "Editor", WorkbenchHostLocation.DocumentHost, 0, ModuleActivationKind.OnDocumentRestore, CortexWorkbenchIds.EditorContainer);
 
+            // ── Commands ──────────────────────────────────────────────────────────────
             RegisterCommand(commandRegistry, "cortex.shell.toggle", "Toggle Cortex", "Workbench", "Show or hide the Cortex shell.", "F8", 0, true);
-            RegisterCommand(commandRegistry, "cortex.logs.toggleWindow", "Toggle Detached Logs", "Logs", "Show or hide the detached log window.", string.Empty, 10, false);
-            RegisterCommand(commandRegistry, "cortex.shell.fitWindow", "Fit Workbench To Screen", "Workbench", "Resize the shell to fill most of the game view.", string.Empty, 20, false);
-            RegisterCommand(commandRegistry, "cortex.build.execute", "Open Build Panel", "Build", "Focus the build panel and activate build tooling.", string.Empty, 30, false);
-            RegisterMenu(contributionRegistry, "cortex.logs.toggleWindow", MenuProjectionLocation.Toolbar, "Window", 10);
-            RegisterMenu(contributionRegistry, "cortex.shell.fitWindow", MenuProjectionLocation.Toolbar, "Window", 20);
-            RegisterMenu(contributionRegistry, "cortex.build.execute", MenuProjectionLocation.Toolbar, "Build", 30);
+            RegisterCommand(commandRegistry, "cortex.shell.fitWindow", "Fit Workbench To Screen", "View", "Resize the shell to fill most of the game view.", string.Empty, 10, false);
+            RegisterCommand(commandRegistry, "cortex.logs.toggleWindow", "Detached Logs Window", "View", "Show or hide the detached log window.", string.Empty, 20, false);
+            RegisterCommand(commandRegistry, "cortex.build.execute", "Build Project", "Build", "Focus the build panel and trigger a build.", string.Empty, 0, false);
+            RegisterCommand(commandRegistry, "cortex.file.saveAll", "Save All", "File", "Save all open documents.", string.Empty, 0, false);
+            RegisterCommand(commandRegistry, "cortex.file.closeActive", "Close", "File", "Close the active document.", string.Empty, 10, false);
+            RegisterCommand(commandRegistry, "cortex.view.fileExplorer", "Toggle File Explorer", "View", "Show or hide the file explorer pane.", string.Empty, 0, false);
+            RegisterCommand(commandRegistry, "cortex.view.zoomIn", "Increase Font Size", "View", "Increase the editor font size.", string.Empty, 10, false);
+            RegisterCommand(commandRegistry, "cortex.view.zoomOut", "Decrease Font Size", "View", "Decrease the editor font size.", string.Empty, 20, false);
+            RegisterCommand(commandRegistry, "cortex.win.theme", "Switch Theme", "View", "Cycle through registered themes.", string.Empty, 30, false);
+
+            // ── Menu projections (File / Edit / View / Build / Window) ────────────────
+            RegisterMenu(contributionRegistry, "cortex.file.saveAll", MenuProjectionLocation.MainMenu, "File", 0);
+            RegisterMenu(contributionRegistry, "cortex.file.closeActive", MenuProjectionLocation.MainMenu, "File", 10);
+            RegisterMenu(contributionRegistry, "cortex.view.fileExplorer", MenuProjectionLocation.MainMenu, "View", 0);
+            RegisterMenu(contributionRegistry, "cortex.view.zoomIn", MenuProjectionLocation.MainMenu, "View", 10);
+            RegisterMenu(contributionRegistry, "cortex.view.zoomOut", MenuProjectionLocation.MainMenu, "View", 20);
+            RegisterMenu(contributionRegistry, "cortex.win.theme", MenuProjectionLocation.MainMenu, "View", 30);
+            RegisterMenu(contributionRegistry, "cortex.logs.toggleWindow", MenuProjectionLocation.MainMenu, "View", 40);
+            RegisterMenu(contributionRegistry, "cortex.shell.fitWindow", MenuProjectionLocation.MainMenu, "Window", 0);
+            RegisterMenu(contributionRegistry, "cortex.build.execute", MenuProjectionLocation.MainMenu, "Build", 0);
 
             RegisterTheme(
                 contributionRegistry,
@@ -91,6 +112,7 @@ namespace Cortex.Host.Unity.Composition
                 "terminal",
                 20);
 
+            RegisterIcon(contributionRegistry, CortexWorkbenchIds.FileExplorerContainer, "EX");
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.LogsContainer, "LG");
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.ProjectsContainer, "PJ");
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.ReferenceContainer, "RF");
