@@ -214,6 +214,11 @@ namespace Cortex.LanguageService.Protocol
         public string DocumentText;
 
         /// <summary>
+        /// Monotonic Cortex-side version for the current text snapshot.
+        /// </summary>
+        public int DocumentVersion;
+
+        /// <summary>
         /// Indicates whether compiler diagnostics should be returned.
         /// </summary>
         public bool IncludeDiagnostics;
@@ -255,6 +260,11 @@ namespace Cortex.LanguageService.Protocol
         public string DocumentText;
 
         /// <summary>
+        /// Monotonic Cortex-side version for the current text snapshot.
+        /// </summary>
+        public int DocumentVersion;
+
+        /// <summary>
         /// One-based line number for the hover position.
         /// </summary>
         public int Line;
@@ -294,6 +304,11 @@ namespace Cortex.LanguageService.Protocol
         /// Current text snapshot to inspect.
         /// </summary>
         public string DocumentText;
+
+        /// <summary>
+        /// Monotonic Cortex-side version for the current text snapshot.
+        /// </summary>
+        public int DocumentVersion;
 
         /// <summary>
         /// One-based line number for the lookup position.
@@ -354,6 +369,7 @@ namespace Cortex.LanguageService.Protocol
     {
         public string DocumentPath;
         public string ProjectFilePath;
+        public int DocumentVersion;
         public LanguageServiceDiagnostic[] Diagnostics;
         public LanguageServiceClassifiedSpan[] Classifications;
     }
@@ -365,6 +381,7 @@ namespace Cortex.LanguageService.Protocol
     {
         public string DocumentPath;
         public string ProjectFilePath;
+        public int DocumentVersion;
         public string SymbolDisplay;
         public string SymbolKind;
         public string MetadataName;
@@ -383,6 +400,7 @@ namespace Cortex.LanguageService.Protocol
     {
         public string DocumentPath;
         public string ProjectFilePath;
+        public int DocumentVersion;
         public string SymbolDisplay;
         public string SymbolKind;
         public string MetadataName;

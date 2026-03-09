@@ -1,7 +1,6 @@
 using System;
 using System.IO;
-using System.Linq;
-using System.Xml.Linq;
+using System.Xml;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 
@@ -72,15 +71,15 @@ namespace Cortex.Core.Services
 
             try
             {
-                var doc = XDocument.Load(project.ProjectFilePath);
-                XNamespace ns = doc.Root.Name.Namespace;
-                var assemblyName = GetElementValue(doc, ns, "AssemblyName");
+                var doc = new XmlDocument();
+                doc.Load(project.ProjectFilePath);
+                var assemblyName = GetElementValue(doc, "AssemblyName");
                 if (string.IsNullOrEmpty(assemblyName))
                 {
                     assemblyName = Path.GetFileNameWithoutExtension(project.ProjectFilePath);
                 }
 
-                var outputPath = GetOutputPath(doc, ns, configuration ?? "Debug");
+                var outputPath = GetOutputPath(doc, configuration ?? "Debug");
                 if (string.IsNullOrEmpty(outputPath))
                 {
                     outputPath = Path.Combine("bin", configuration ?? "Debug");
@@ -95,31 +94,76 @@ namespace Cortex.Core.Services
             }
         }
 
-        private static string GetOutputPath(XDocument doc, XNamespace ns, string configuration)
+        private static string GetOutputPath(XmlDocument doc, string configuration)
         {
-            foreach (var group in doc.Descendants(ns + "PropertyGroup"))
+            var propertyGroups = doc != null ? doc.GetElementsByTagName("*") : null;
+            if (propertyGroups == null)
             {
-                var condition = (string)group.Attribute("Condition");
+                return string.Empty;
+            }
+
+            for (var i = 0; i < propertyGroups.Count; i++)
+            {
+                var group = propertyGroups[i] as XmlElement;
+                if (group == null || !string.Equals(group.LocalName, "PropertyGroup", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var condition = group.HasAttribute("Condition") ? group.GetAttribute("Condition") : string.Empty;
                 if (!string.IsNullOrEmpty(condition) &&
                     condition.IndexOf(configuration, StringComparison.OrdinalIgnoreCase) < 0)
                 {
                     continue;
                 }
 
-                var outputPath = group.Element(ns + "OutputPath");
-                if (outputPath != null && !string.IsNullOrEmpty(outputPath.Value))
+                var outputPath = GetChildElementValue(group, "OutputPath");
+                if (!string.IsNullOrEmpty(outputPath))
                 {
-                    return outputPath.Value.Trim();
+                    return outputPath;
                 }
             }
 
             return string.Empty;
         }
 
-        private static string GetElementValue(XDocument doc, XNamespace ns, string name)
+        private static string GetElementValue(XmlDocument doc, string name)
         {
-            var element = doc.Root.Descendants(ns + name).FirstOrDefault();
-            return element != null ? element.Value.Trim() : string.Empty;
+            var elements = doc != null ? doc.GetElementsByTagName("*") : null;
+            if (elements == null)
+            {
+                return string.Empty;
+            }
+
+            for (var i = 0; i < elements.Count; i++)
+            {
+                var element = elements[i] as XmlElement;
+                if (element != null && string.Equals(element.LocalName, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (element.InnerText ?? string.Empty).Trim();
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static string GetChildElementValue(XmlElement parent, string name)
+        {
+            if (parent == null || string.IsNullOrEmpty(name))
+            {
+                return string.Empty;
+            }
+
+            for (var i = 0; i < parent.ChildNodes.Count; i++)
+            {
+                var child = parent.ChildNodes[i] as XmlElement;
+                if (child != null && string.Equals(child.LocalName, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (child.InnerText ?? string.Empty).Trim();
+                }
+            }
+
+            return string.Empty;
         }
 
         private static bool IsSdkStyleProject(string projectFilePath)

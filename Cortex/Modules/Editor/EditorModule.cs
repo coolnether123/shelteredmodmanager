@@ -261,6 +261,8 @@ namespace Cortex.Modules.Editor
                 {
                     active.Text = updated;
                     active.IsDirty = true;
+                    active.TextVersion++;
+                    active.LastTextMutationUtc = DateTime.UtcNow;
                     _codeViewSurface.Invalidate();
                 }
 

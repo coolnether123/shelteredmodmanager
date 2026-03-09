@@ -9,7 +9,10 @@ namespace Cortex.Core.Models
         public string Text;
         public string OriginalTextSnapshot;
         public bool IsDirty;
+        public int TextVersion;
+        public int LastLanguageAnalysisVersion;
         public DateTime LastKnownWriteUtc;
+        public DateTime LastTextMutationUtc;
         public bool HasExternalChanges;
         public int HighlightedLine;
         public LanguageServiceAnalysisResponse LanguageAnalysis;

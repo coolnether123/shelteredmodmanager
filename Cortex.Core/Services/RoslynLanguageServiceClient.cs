@@ -14,12 +14,16 @@ namespace Cortex.Core.Services
         private readonly string _workerPath;
         private readonly int _timeoutMs;
         private readonly object _sync = new object();
-        private readonly Queue<LanguageServiceEnvelope> _responses = new Queue<LanguageServiceEnvelope>();
-        private readonly AutoResetEvent _responseArrived = new AutoResetEvent(false);
+        private readonly Queue<PendingRequest> _outgoing = new Queue<PendingRequest>();
+        private readonly Queue<LanguageServiceEnvelope> _completed = new Queue<LanguageServiceEnvelope>();
+        private readonly Dictionary<string, PendingRequest> _pendingById = new Dictionary<string, PendingRequest>(StringComparer.OrdinalIgnoreCase);
+        private readonly AutoResetEvent _outgoingSignal = new AutoResetEvent(false);
         private Process _process;
         private Thread _readerThread;
+        private Thread _writerThread;
         private string _lastError;
         private int _nextRequestId;
+        private bool _shutdownRequested;
 
         public RoslynLanguageServiceClient(string workerPath, int timeoutMs)
         {
@@ -34,7 +38,13 @@ namespace Cortex.Core.Services
 
         public bool IsRunning
         {
-            get { return _process != null && !_process.HasExited; }
+            get
+            {
+                lock (_sync)
+                {
+                    return _process != null && !_process.HasExited;
+                }
+            }
         }
 
         public string LastError
@@ -42,142 +52,213 @@ namespace Cortex.Core.Services
             get { return _lastError ?? string.Empty; }
         }
 
+        public string QueueInitialize(LanguageServiceInitializeRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.Initialize, request);
+        }
+
+        public string QueueStatus()
+        {
+            return QueueRequest(LanguageServiceCommands.Status, new LanguageServiceStatusRequest());
+        }
+
+        public string QueueAnalyzeDocument(LanguageServiceDocumentRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.AnalyzeDocument, request);
+        }
+
+        public string QueueHover(LanguageServiceHoverRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.Hover, request);
+        }
+
+        public string QueueGoToDefinition(LanguageServiceDefinitionRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.GoToDefinition, request);
+        }
+
+        public bool TryDequeueResponse(out LanguageServiceEnvelope envelope)
+        {
+            lock (_sync)
+            {
+                PumpTimeouts_NoLock();
+                if (_completed.Count == 0)
+                {
+                    envelope = null;
+                    return false;
+                }
+
+                envelope = _completed.Dequeue();
+                return true;
+            }
+        }
+
         public LanguageServiceInitializeResponse Initialize(LanguageServiceInitializeRequest request)
         {
-            return SendRequest<LanguageServiceInitializeRequest, LanguageServiceInitializeResponse>(LanguageServiceCommands.Initialize, request);
+            return SendRequest<LanguageServiceInitializeResponse>(LanguageServiceCommands.Initialize, request);
         }
 
         public LanguageServiceStatusResponse GetStatus()
         {
-            return SendRequest<LanguageServiceStatusRequest, LanguageServiceStatusResponse>(LanguageServiceCommands.Status, new LanguageServiceStatusRequest());
+            return SendRequest<LanguageServiceStatusResponse>(LanguageServiceCommands.Status, new LanguageServiceStatusRequest());
         }
 
         public LanguageServiceAnalysisResponse AnalyzeDocument(LanguageServiceDocumentRequest request)
         {
-            return SendRequest<LanguageServiceDocumentRequest, LanguageServiceAnalysisResponse>(LanguageServiceCommands.AnalyzeDocument, request);
+            return SendRequest<LanguageServiceAnalysisResponse>(LanguageServiceCommands.AnalyzeDocument, request);
         }
 
         public LanguageServiceHoverResponse GetHover(LanguageServiceHoverRequest request)
         {
-            return SendRequest<LanguageServiceHoverRequest, LanguageServiceHoverResponse>(LanguageServiceCommands.Hover, request);
+            return SendRequest<LanguageServiceHoverResponse>(LanguageServiceCommands.Hover, request);
         }
 
         public LanguageServiceDefinitionResponse GoToDefinition(LanguageServiceDefinitionRequest request)
         {
-            return SendRequest<LanguageServiceDefinitionRequest, LanguageServiceDefinitionResponse>(LanguageServiceCommands.GoToDefinition, request);
+            return SendRequest<LanguageServiceDefinitionResponse>(LanguageServiceCommands.GoToDefinition, request);
         }
 
         public void Shutdown()
         {
             lock (_sync)
             {
-                try
-                {
-                    if (IsRunning)
-                    {
-                        SendRequest<object, LanguageServiceOperationResponse>(LanguageServiceCommands.Shutdown, new object());
-                    }
-                }
-                catch
-                {
-                }
-
-                DisposeProcess();
+                _shutdownRequested = true;
+                _outgoingSignal.Set();
+                DisposeProcess_NoLock();
             }
         }
 
         public void Dispose()
         {
             Shutdown();
-            _responseArrived.Close();
+            _outgoingSignal.Close();
         }
 
-        private TResponse SendRequest<TRequest, TResponse>(string command, TRequest payload)
-            where TResponse : LanguageServiceOperationResponse, new()
+        private string QueueRequest<TRequest>(string command, TRequest payload)
         {
-            var failure = new TResponse
-            {
-                Success = false,
-                StatusMessage = string.Empty
-            };
-
             lock (_sync)
             {
                 if (!IsEnabled)
                 {
-                    failure.StatusMessage = "Roslyn language service is not configured.";
-                    return failure;
+                    _lastError = "Roslyn language service is not configured.";
+                    return string.Empty;
                 }
 
-                try
-                {
-                    EnsureProcessStarted();
-                    var envelope = new LanguageServiceEnvelope
-                    {
-                        RequestId = "req-" + Interlocked.Increment(ref _nextRequestId),
-                        Command = command ?? string.Empty,
-                        Success = true,
-                        PayloadJson = ManualJson.Serialize(payload),
-                        ErrorMessage = string.Empty
-                    };
-
-                    _process.StandardInput.WriteLine(ManualJson.Serialize(envelope));
-                    _process.StandardInput.Flush();
-
-                    var response = WaitForResponse(envelope.RequestId);
-                    if (response == null)
-                    {
-                        failure.StatusMessage = string.IsNullOrEmpty(_lastError)
-                            ? "Roslyn worker did not respond."
-                            : _lastError;
-                        return failure;
-                    }
-
-                    if (!response.Success)
-                    {
-                        failure.StatusMessage = string.IsNullOrEmpty(response.ErrorMessage)
-                            ? "Roslyn worker returned an error."
-                            : response.ErrorMessage;
-                        _lastError = failure.StatusMessage;
-                        return failure;
-                    }
-
-                    if (string.IsNullOrEmpty(response.PayloadJson))
-                    {
-                        return new TResponse
-                        {
-                            Success = true,
-                            StatusMessage = string.Empty
-                        };
-                    }
-
-                    var typed = ManualJson.Deserialize<TResponse>(response.PayloadJson);
-                    if (typed == null)
-                    {
-                        failure.StatusMessage = "Roslyn worker returned an unreadable payload.";
-                        return failure;
-                    }
-
-                    return typed;
-                }
-                catch (Exception ex)
-                {
-                    _lastError = ex.Message;
-                    failure.StatusMessage = ex.Message;
-                    DisposeProcess();
-                    return failure;
-                }
+                EnsureProcessStarted_NoLock();
+                var pending = CreatePendingRequest(command, payload, false);
+                _outgoing.Enqueue(pending);
+                _pendingById[pending.Envelope.RequestId] = pending;
+                _outgoingSignal.Set();
+                return pending.Envelope.RequestId;
             }
         }
 
-        private void EnsureProcessStarted()
+        private TResponse SendRequest<TResponse>(string command, object payload)
+            where TResponse : LanguageServiceOperationResponse, new()
         {
-            if (IsRunning)
+            PendingRequest pending;
+            lock (_sync)
+            {
+                if (!IsEnabled)
+                {
+                    return new TResponse
+                    {
+                        Success = false,
+                        StatusMessage = "Roslyn language service is not configured."
+                    };
+                }
+
+                EnsureProcessStarted_NoLock();
+                pending = CreatePendingRequest(command, payload, true);
+                _outgoing.Enqueue(pending);
+                _pendingById[pending.Envelope.RequestId] = pending;
+                _outgoingSignal.Set();
+            }
+
+            var timeoutAt = DateTime.UtcNow.AddMilliseconds(_timeoutMs);
+            while (DateTime.UtcNow <= timeoutAt)
+            {
+                if (pending.WaitHandle != null && pending.WaitHandle.WaitOne(50, false))
+                {
+                    break;
+                }
+
+                lock (_sync)
+                {
+                    PumpTimeouts_NoLock();
+                    if (_process == null || _process.HasExited)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            var response = pending.Response;
+            if (response == null)
+            {
+                return new TResponse
+                {
+                    Success = false,
+                    StatusMessage = string.IsNullOrEmpty(_lastError)
+                        ? "Roslyn worker did not respond."
+                        : _lastError
+                };
+            }
+
+            if (!response.Success)
+            {
+                return new TResponse
+                {
+                    Success = false,
+                    StatusMessage = string.IsNullOrEmpty(response.ErrorMessage)
+                        ? "Roslyn worker returned an error."
+                        : response.ErrorMessage
+                };
+            }
+
+            if (string.IsNullOrEmpty(response.PayloadJson))
+            {
+                return new TResponse
+                {
+                    Success = true,
+                    StatusMessage = string.Empty
+                };
+            }
+
+            var typed = ManualJson.Deserialize<TResponse>(response.PayloadJson);
+            return typed ?? new TResponse
+            {
+                Success = false,
+                StatusMessage = "Roslyn worker returned an unreadable payload."
+            };
+        }
+
+        private PendingRequest CreatePendingRequest<TRequest>(string command, TRequest payload, bool waitForCompletion)
+        {
+            return new PendingRequest
+            {
+                Envelope = new LanguageServiceEnvelope
+                {
+                    RequestId = "req-" + Interlocked.Increment(ref _nextRequestId),
+                    Command = command ?? string.Empty,
+                    Success = true,
+                    PayloadJson = ManualJson.Serialize(payload),
+                    ErrorMessage = string.Empty
+                },
+                QueuedUtc = DateTime.UtcNow,
+                WaitHandle = waitForCompletion ? new ManualResetEvent(false) : null
+            };
+        }
+
+        private void EnsureProcessStarted_NoLock()
+        {
+            if (_process != null && !_process.HasExited)
             {
                 return;
             }
 
-            DisposeProcess();
+            DisposeProcess_NoLock();
+            _shutdownRequested = false;
 
             if (!File.Exists(_workerPath))
             {
@@ -195,9 +276,14 @@ namespace Cortex.Core.Services
             _process.BeginErrorReadLine();
 
             _readerThread = new Thread(ReadOutputLoop);
-            _readerThread.Name = "Cortex.RoslynLanguageServiceClient";
+            _readerThread.Name = "Cortex.RoslynLanguageServiceClient.Reader";
             _readerThread.IsBackground = true;
             _readerThread.Start();
+
+            _writerThread = new Thread(WriteInputLoop);
+            _writerThread.Name = "Cortex.RoslynLanguageServiceClient.Writer";
+            _writerThread.IsBackground = true;
+            _writerThread.Start();
             _lastError = string.Empty;
         }
 
@@ -225,88 +311,182 @@ namespace Cortex.Core.Services
             return startInfo;
         }
 
+        private void WriteInputLoop()
+        {
+            while (true)
+            {
+                PendingRequest pending = null;
+                lock (_sync)
+                {
+                    if (_shutdownRequested)
+                    {
+                        return;
+                    }
+
+                    PumpTimeouts_NoLock();
+                    if (_outgoing.Count > 0)
+                    {
+                        pending = _outgoing.Dequeue();
+                    }
+                }
+
+                if (pending == null)
+                {
+                    _outgoingSignal.WaitOne(50, false);
+                    continue;
+                }
+
+                try
+                {
+                    lock (_sync)
+                    {
+                        if (_process == null || _process.HasExited)
+                        {
+                            FailPending_NoLock(pending.Envelope.RequestId, "Roslyn worker is not running.");
+                            continue;
+                        }
+
+                        _process.StandardInput.WriteLine(ManualJson.Serialize(pending.Envelope));
+                        _process.StandardInput.Flush();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lock (_sync)
+                    {
+                        _lastError = ex.Message;
+                        FailPending_NoLock(pending.Envelope.RequestId, ex.Message);
+                        DisposeProcess_NoLock();
+                    }
+                }
+            }
+        }
+
         private void ReadOutputLoop()
         {
             try
             {
-                while (_process != null && !_process.HasExited)
+                while (true)
                 {
-                    var line = _process.StandardOutput.ReadLine();
+                    Process process;
+                    lock (_sync)
+                    {
+                        process = _process;
+                        if (_shutdownRequested || process == null || process.HasExited)
+                        {
+                            return;
+                        }
+                    }
+
+                    var line = process.StandardOutput.ReadLine();
                     if (string.IsNullOrEmpty(line))
                     {
-                        if (_process.HasExited)
+                        lock (_sync)
                         {
-                            break;
+                            if (_process == null || _process.HasExited)
+                            {
+                                return;
+                            }
                         }
 
                         continue;
                     }
 
                     var envelope = ManualJson.Deserialize<LanguageServiceEnvelope>(line);
-                    if (envelope == null)
+                    lock (_sync)
                     {
-                        _lastError = "Roslyn worker produced an unreadable response.";
-                        continue;
-                    }
+                        if (envelope == null)
+                        {
+                            _lastError = "Roslyn worker produced an unreadable response.";
+                            continue;
+                        }
 
-                    lock (_responses)
-                    {
-                        _responses.Enqueue(envelope);
-                    }
+                        PendingRequest pending;
+                        if (_pendingById.TryGetValue(envelope.RequestId ?? string.Empty, out pending))
+                        {
+                            _pendingById.Remove(envelope.RequestId ?? string.Empty);
+                            pending.Response = envelope;
+                            if (pending.WaitHandle != null)
+                            {
+                                pending.WaitHandle.Set();
+                            }
+                        }
 
-                    _responseArrived.Set();
+                        _completed.Enqueue(envelope);
+                    }
                 }
             }
             catch (Exception ex)
             {
-                _lastError = ex.Message;
-                _responseArrived.Set();
+                lock (_sync)
+                {
+                    _lastError = ex.Message;
+                    FailAllPending_NoLock(ex.Message);
+                }
             }
         }
 
-        private LanguageServiceEnvelope WaitForResponse(string requestId)
+        private void PumpTimeouts_NoLock()
         {
-            var timeoutAt = DateTime.UtcNow.AddMilliseconds(_timeoutMs);
-            while (DateTime.UtcNow <= timeoutAt)
+            if (_pendingById.Count == 0)
             {
-                LanguageServiceEnvelope envelope = null;
-                lock (_responses)
-                {
-                    if (_responses.Count > 0)
-                    {
-                        envelope = _responses.Dequeue();
-                    }
-                }
-
-                if (envelope != null)
-                {
-                    if (string.Equals(envelope.RequestId, requestId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return envelope;
-                    }
-
-                    continue;
-                }
-
-                if (_process == null || _process.HasExited)
-                {
-                    return null;
-                }
-
-                var remaining = timeoutAt - DateTime.UtcNow;
-                if (remaining <= TimeSpan.Zero)
-                {
-                    break;
-                }
-
-                _responseArrived.WaitOne(remaining);
+                return;
             }
 
-            _lastError = "Roslyn worker timed out after " + _timeoutMs + " ms.";
-            return null;
+            var now = DateTime.UtcNow;
+            var expiredIds = new List<string>();
+            foreach (var pair in _pendingById)
+            {
+                if ((now - pair.Value.QueuedUtc).TotalMilliseconds > _timeoutMs)
+                {
+                    expiredIds.Add(pair.Key);
+                }
+            }
+
+            for (var i = 0; i < expiredIds.Count; i++)
+            {
+                var requestId = expiredIds[i];
+                _lastError = "Roslyn worker timed out after " + _timeoutMs + " ms.";
+                FailPending_NoLock(requestId, _lastError);
+            }
         }
 
-        private void DisposeProcess()
+        private void FailPending_NoLock(string requestId, string message)
+        {
+            PendingRequest pending;
+            if (!_pendingById.TryGetValue(requestId ?? string.Empty, out pending))
+            {
+                return;
+            }
+
+            _pendingById.Remove(requestId ?? string.Empty);
+            var envelope = new LanguageServiceEnvelope
+            {
+                RequestId = requestId ?? string.Empty,
+                Command = pending.Envelope != null ? pending.Envelope.Command : string.Empty,
+                Success = false,
+                PayloadJson = string.Empty,
+                ErrorMessage = message ?? "Roslyn worker failed."
+            };
+            pending.Response = envelope;
+            if (pending.WaitHandle != null)
+            {
+                pending.WaitHandle.Set();
+            }
+
+            _completed.Enqueue(envelope);
+        }
+
+        private void FailAllPending_NoLock(string message)
+        {
+            var pendingIds = new List<string>(_pendingById.Keys);
+            for (var i = 0; i < pendingIds.Count; i++)
+            {
+                FailPending_NoLock(pendingIds[i], message);
+            }
+        }
+
+        private void DisposeProcess_NoLock()
         {
             try
             {
@@ -335,10 +515,9 @@ namespace Cortex.Core.Services
             {
                 _process = null;
                 _readerThread = null;
-                lock (_responses)
-                {
-                    _responses.Clear();
-                }
+                _writerThread = null;
+                FailAllPending_NoLock(string.IsNullOrEmpty(_lastError) ? "Roslyn worker stopped." : _lastError);
+                _outgoing.Clear();
             }
         }
 
@@ -348,6 +527,14 @@ namespace Cortex.Core.Services
             {
                 _lastError = e.Data;
             }
+        }
+
+        private sealed class PendingRequest
+        {
+            public LanguageServiceEnvelope Envelope;
+            public DateTime QueuedUtc;
+            public ManualResetEvent WaitHandle;
+            public LanguageServiceEnvelope Response;
         }
     }
 }

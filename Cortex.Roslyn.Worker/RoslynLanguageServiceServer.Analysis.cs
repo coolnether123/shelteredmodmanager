@@ -19,6 +19,7 @@ namespace Cortex.Roslyn.Worker
     {
         private readonly Dictionary<string, Project> _projectCache = new Dictionary<string, Project>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, MSBuildWorkspace> _workspaceCache = new Dictionary<string, MSBuildWorkspace>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, CachedDocumentContext> _documentContextCache = new Dictionary<string, CachedDocumentContext>(StringComparer.OrdinalIgnoreCase);
 
         private LanguageServiceAnalysisResponse AnalyzeDocument(LanguageServiceDocumentRequest request)
         {
@@ -27,7 +28,8 @@ namespace Cortex.Roslyn.Worker
                 request.ProjectFilePath,
                 request.WorkspaceRootPath,
                 request.SourceRoots,
-                request.DocumentText);
+                request.DocumentText,
+                request.DocumentVersion);
 
             if (documentContext.Document == null)
             {
@@ -37,6 +39,7 @@ namespace Cortex.Roslyn.Worker
                     StatusMessage = "Roslyn could not resolve a document for analysis.",
                     DocumentPath = string.Empty,
                     ProjectFilePath = request.ProjectFilePath ?? string.Empty,
+                    DocumentVersion = request.DocumentVersion,
                     Diagnostics = new LanguageServiceDiagnostic[0],
                     Classifications = new LanguageServiceClassifiedSpan[0]
                 };
@@ -49,6 +52,7 @@ namespace Cortex.Roslyn.Worker
                 StatusMessage = "Roslyn analysis completed.",
                 DocumentPath = documentContext.Document.FilePath ?? request.DocumentPath ?? string.Empty,
                 ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
+                DocumentVersion = request.DocumentVersion,
                 Diagnostics = request.IncludeDiagnostics
                     ? CollectDiagnostics(documentContext.Document)
                     : new LanguageServiceDiagnostic[0],
@@ -65,7 +69,8 @@ namespace Cortex.Roslyn.Worker
                 request.ProjectFilePath,
                 request.WorkspaceRootPath,
                 request.SourceRoots,
-                request.DocumentText);
+                request.DocumentText,
+                request.DocumentVersion);
 
             if (documentContext.Document == null)
             {
@@ -75,6 +80,7 @@ namespace Cortex.Roslyn.Worker
                     StatusMessage = "Roslyn could not resolve a document for hover info.",
                     DocumentPath = request.DocumentPath ?? string.Empty,
                     ProjectFilePath = request.ProjectFilePath ?? string.Empty,
+                    DocumentVersion = request.DocumentVersion,
                     SymbolDisplay = string.Empty,
                     SymbolKind = string.Empty,
                     DocumentationXml = string.Empty,
@@ -92,6 +98,7 @@ namespace Cortex.Roslyn.Worker
                     StatusMessage = "Hover position is outside the document.",
                     DocumentPath = documentContext.Document.FilePath ?? request.DocumentPath ?? string.Empty,
                     ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
+                    DocumentVersion = request.DocumentVersion,
                     SymbolDisplay = string.Empty,
                     SymbolKind = string.Empty,
                     DocumentationXml = string.Empty,
@@ -109,6 +116,7 @@ namespace Cortex.Roslyn.Worker
                     StatusMessage = "No Roslyn symbol was found at that position.",
                     DocumentPath = documentContext.Document.FilePath ?? request.DocumentPath ?? string.Empty,
                     ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
+                    DocumentVersion = request.DocumentVersion,
                     SymbolDisplay = string.Empty,
                     SymbolKind = string.Empty,
                     DocumentationXml = string.Empty,
@@ -129,6 +137,7 @@ namespace Cortex.Roslyn.Worker
                 StatusMessage = "Hover info resolved.",
                 DocumentPath = documentContext.Document.FilePath ?? request.DocumentPath ?? string.Empty,
                 ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
+                DocumentVersion = request.DocumentVersion,
                 SymbolDisplay = symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
                 SymbolKind = symbol.Kind.ToString(),
                 MetadataName = symbol.MetadataName ?? string.Empty,
@@ -148,7 +157,8 @@ namespace Cortex.Roslyn.Worker
                 request.ProjectFilePath,
                 request.WorkspaceRootPath,
                 request.SourceRoots,
-                request.DocumentText);
+                request.DocumentText,
+                request.DocumentVersion);
 
             if (documentContext.Document == null)
             {
@@ -158,6 +168,7 @@ namespace Cortex.Roslyn.Worker
                     StatusMessage = "Roslyn could not resolve a document for definition lookup.",
                     DocumentPath = request.DocumentPath ?? string.Empty,
                     ProjectFilePath = request.ProjectFilePath ?? string.Empty,
+                    DocumentVersion = request.DocumentVersion,
                     SymbolDisplay = string.Empty,
                     Range = new LanguageServiceRange()
                 };
@@ -173,6 +184,7 @@ namespace Cortex.Roslyn.Worker
                     StatusMessage = "Definition lookup position is outside the document.",
                     DocumentPath = request.DocumentPath ?? string.Empty,
                     ProjectFilePath = request.ProjectFilePath ?? string.Empty,
+                    DocumentVersion = request.DocumentVersion,
                     SymbolDisplay = string.Empty,
                     Range = new LanguageServiceRange()
                 };
@@ -187,6 +199,7 @@ namespace Cortex.Roslyn.Worker
                     StatusMessage = "No Roslyn symbol was found at that position.",
                     DocumentPath = request.DocumentPath ?? string.Empty,
                     ProjectFilePath = request.ProjectFilePath ?? string.Empty,
+                    DocumentVersion = request.DocumentVersion,
                     SymbolDisplay = string.Empty,
                     Range = new LanguageServiceRange()
                 };
@@ -201,6 +214,7 @@ namespace Cortex.Roslyn.Worker
                     StatusMessage = "Metadata definition resolved.",
                     DocumentPath = string.Empty,
                     ProjectFilePath = request.ProjectFilePath ?? string.Empty,
+                    DocumentVersion = request.DocumentVersion,
                     SymbolDisplay = symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
                     SymbolKind = symbol.Kind.ToString(),
                     MetadataName = symbol.MetadataName ?? string.Empty,
@@ -221,6 +235,7 @@ namespace Cortex.Roslyn.Worker
                 StatusMessage = "Definition resolved.",
                 DocumentPath = sourceLocation.SourceTree != null ? sourceLocation.SourceTree.FilePath ?? string.Empty : request.DocumentPath ?? string.Empty,
                 ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
+                DocumentVersion = request.DocumentVersion,
                 SymbolDisplay = symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
                 SymbolKind = symbol.Kind.ToString(),
                 MetadataName = symbol.MetadataName ?? string.Empty,
@@ -250,9 +265,19 @@ namespace Cortex.Roslyn.Worker
                 : string.Empty;
         }
 
-        private DocumentContext ResolveDocument(string documentPath, string projectPath, string workspaceRootPath, string[] sourceRoots, string documentText)
+        private DocumentContext ResolveDocument(string documentPath, string projectPath, string workspaceRootPath, string[] sourceRoots, string documentText, int documentVersion)
         {
             var effectivePath = NormalizePath(documentPath);
+            var cacheKey = BuildDocumentCacheKey(effectivePath, documentVersion);
+            if (!string.IsNullOrEmpty(cacheKey))
+            {
+                CachedDocumentContext cachedContext;
+                if (_documentContextCache.TryGetValue(cacheKey, out cachedContext) && cachedContext != null && cachedContext.Context != null)
+                {
+                    return cachedContext.Context;
+                }
+            }
+
             var project = ResolveProject(effectivePath, projectPath, workspaceRootPath, sourceRoots);
             Document document = null;
             if (project != null)
@@ -270,7 +295,13 @@ namespace Cortex.Roslyn.Worker
                 document = solution.GetDocument(document.Id);
             }
 
-            return new DocumentContext(document, project != null ? project.FilePath : NormalizePath(projectPath));
+            var context = new DocumentContext(document, project != null ? project.FilePath : NormalizePath(projectPath));
+            if (!string.IsNullOrEmpty(cacheKey))
+            {
+                _documentContextCache[cacheKey] = new CachedDocumentContext(context);
+            }
+
+            return context;
         }
 
         private Project ResolveProject(string documentPath, string projectPath, string workspaceRootPath, string[] sourceRoots)
@@ -409,6 +440,19 @@ namespace Cortex.Roslyn.Worker
             {
                 Console.Error.WriteLine("Project load failed for " + normalized + ": " + ex.Message);
                 return null;
+            }
+        }
+
+        private void WarmProjectCache(IEnumerable<string> projectPaths)
+        {
+            if (projectPaths == null)
+            {
+                return;
+            }
+
+            foreach (var projectPath in projectPaths)
+            {
+                LoadProject(projectPath);
             }
         }
 
@@ -631,6 +675,16 @@ namespace Cortex.Roslyn.Worker
             }
         }
 
+        private static string BuildDocumentCacheKey(string documentPath, int documentVersion)
+        {
+            if (string.IsNullOrEmpty(documentPath) || documentVersion <= 0)
+            {
+                return string.Empty;
+            }
+
+            return documentPath + "|" + documentVersion;
+        }
+
         private int GetCachedProjectCount()
         {
             return _projectCache.Count;
@@ -708,6 +762,16 @@ namespace Cortex.Roslyn.Worker
 
             public Document Document;
             public string ProjectPath;
+        }
+
+        private sealed class CachedDocumentContext
+        {
+            public CachedDocumentContext(DocumentContext context)
+            {
+                Context = context;
+            }
+
+            public DocumentContext Context;
         }
     }
 }

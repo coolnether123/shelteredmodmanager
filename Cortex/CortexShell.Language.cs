@@ -9,6 +9,7 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
+using GameModding.Shared.Serialization;
 using ModAPI.Core;
 
 namespace Cortex
@@ -24,8 +25,14 @@ namespace Cortex
         private bool _languageAnalysisInFlight;
         private bool _languageHoverInFlight;
         private bool _languageDefinitionInFlight;
+        private string _languageInitializeRequestId = string.Empty;
+        private string _languageStatusRequestId = string.Empty;
+        private PendingLanguageAnalysisRequest _pendingLanguageAnalysis;
+        private PendingLanguageHoverRequest _pendingLanguageHover;
+        private PendingLanguageDefinitionRequest _pendingLanguageDefinition;
         private int _languageServiceGeneration;
         private DateTime _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
+        private const double LanguageAnalysisDebounceMs = 280d;
 
         private void InitializeLanguageService(string smmBin, CortexSettings settings)
         {
@@ -68,6 +75,11 @@ namespace Cortex
             _languageAnalysisInFlight = false;
             _languageHoverInFlight = false;
             _languageDefinitionInFlight = false;
+            _languageInitializeRequestId = string.Empty;
+            _languageStatusRequestId = string.Empty;
+            _pendingLanguageAnalysis = null;
+            _pendingLanguageHover = null;
+            _pendingLanguageDefinition = null;
             _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
             Interlocked.Increment(ref _languageServiceGeneration);
 
@@ -104,88 +116,20 @@ namespace Cortex
                 Capabilities = new string[0],
                 LoadedProjectPaths = new string[0]
             };
-
-            var client = _languageServiceClient;
-            var initializeRequest = _languageServiceInitializeRequest ?? BuildLanguageInitializeRequest();
-            ModThreads.RunAsync(
-                delegate
+            _languageInitializeRequestId = _languageServiceClient.QueueInitialize(_languageServiceInitializeRequest ?? BuildLanguageInitializeRequest());
+            if (string.IsNullOrEmpty(_languageInitializeRequestId))
+            {
+                _languageServiceInitializing = false;
+                _state.LanguageServiceStatus = new LanguageServiceStatusResponse
                 {
-                    var result = new LanguageServiceInitializationResult();
-                    result.InitializeResponse = client != null ? client.Initialize(initializeRequest) : new LanguageServiceInitializeResponse
-                    {
-                        Success = false,
-                        StatusMessage = "Roslyn client was not available."
-                    };
-                    result.StatusResponse = client != null ? client.GetStatus() : new LanguageServiceStatusResponse
-                    {
-                        Success = false,
-                        StatusMessage = "Roslyn client was not available.",
-                        IsRunning = false,
-                        Capabilities = new string[0],
-                        LoadedProjectPaths = new string[0]
-                    };
-                    return result;
-                },
-                delegate(LanguageServiceInitializationResult result)
-                {
-                    if (generation != _languageServiceGeneration)
-                    {
-                        return;
-                    }
-
-                    _languageServiceInitializing = false;
-                    _languageServiceReady = result != null &&
-                        result.InitializeResponse != null &&
-                        result.InitializeResponse.Success;
-                    _state.LanguageServiceStatus = result != null && result.StatusResponse != null
-                        ? result.StatusResponse
-                        : new LanguageServiceStatusResponse
-                        {
-                            Success = _languageServiceReady,
-                            StatusMessage = _languageServiceReady ? "ready" : "failed",
-                            IsRunning = _languageServiceReady,
-                            Capabilities = new string[0],
-                            LoadedProjectPaths = new string[0]
-                        };
-
-                    if (!_languageServiceReady)
-                    {
-                        var message = result != null && result.InitializeResponse != null
-                            ? result.InitializeResponse.StatusMessage
-                            : "Roslyn worker failed to initialize.";
-                        _state.Diagnostics.Add("Roslyn worker failed to initialize: " + message);
-                        return;
-                    }
-
-                    _state.Diagnostics.Add("Roslyn worker ready: " +
-                        (result.InitializeResponse.WorkerVersion ?? string.Empty) +
-                        " on " +
-                        (result.InitializeResponse.RuntimeVersion ?? string.Empty) +
-                        ".");
-                    MMLog.WriteInfo("[Cortex.Roslyn] Worker ready. CachedProjects=" +
-                        (_state.LanguageServiceStatus != null ? _state.LanguageServiceStatus.CachedProjectCount.ToString() : "0") +
-                        ", Capabilities=" + BuildCapabilitySummary(_state.LanguageServiceStatus));
-                },
-                delegate(Exception ex)
-                {
-                    if (generation != _languageServiceGeneration)
-                    {
-                        return;
-                    }
-
-                    _languageServiceInitializing = false;
-                    _languageServiceReady = false;
-                    _state.LanguageServiceStatus = new LanguageServiceStatusResponse
-                    {
-                        Success = false,
-                        StatusMessage = "startup failed",
-                        IsRunning = false,
-                        Capabilities = new string[0],
-                        LoadedProjectPaths = new string[0]
-                    };
-                    _state.Diagnostics.Add("Roslyn worker failed to initialize: " + ex.Message);
-                    MMLog.WriteError("[Cortex.Roslyn] Worker initialization failed: " + ex);
-                });
+                    Success = false,
+                    StatusMessage = string.IsNullOrEmpty(_languageServiceClient.LastError) ? "startup failed" : _languageServiceClient.LastError,
+                    IsRunning = false,
+                    Capabilities = new string[0],
+                    LoadedProjectPaths = new string[0]
+                };
+                _state.Diagnostics.Add("Roslyn worker failed to queue initialization: " + _state.LanguageServiceStatus.StatusMessage);
+            }
         }
 
         private void ShutdownLanguageService()
@@ -206,12 +150,18 @@ namespace Cortex
             _languageAnalysisInFlight = false;
             _languageHoverInFlight = false;
             _languageDefinitionInFlight = false;
+            _languageInitializeRequestId = string.Empty;
+            _languageStatusRequestId = string.Empty;
+            _pendingLanguageAnalysis = null;
+            _pendingLanguageHover = null;
+            _pendingLanguageDefinition = null;
             _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
         }
 
         private void UpdateLanguageService()
         {
             EnsureLanguageServiceStarted();
+            ProcessLanguageResponses();
             if (_languageServiceClient == null)
             {
                 return;
@@ -233,11 +183,6 @@ namespace Cortex
                 return;
             }
 
-            if (active.IsDirty)
-            {
-                return;
-            }
-
             var fingerprint = BuildLanguageFingerprint(active);
             if (string.Equals(fingerprint, _lastAnalyzedDocumentFingerprint, StringComparison.Ordinal))
             {
@@ -249,7 +194,8 @@ namespace Cortex
                 return;
             }
 
-            if ((DateTime.UtcNow - _lastLanguageAnalysisRequestUtc).TotalMilliseconds < 200d)
+            if ((DateTime.UtcNow - active.LastTextMutationUtc).TotalMilliseconds < LanguageAnalysisDebounceMs ||
+                (DateTime.UtcNow - _lastLanguageAnalysisRequestUtc).TotalMilliseconds < 100d)
             {
                 return;
             }
@@ -260,84 +206,22 @@ namespace Cortex
             _languageAnalysisInFlight = true;
             _pendingLanguageAnalysisFingerprint = fingerprint;
             _lastLanguageAnalysisRequestUtc = DateTime.UtcNow;
+            var requestId = client != null ? client.QueueAnalyzeDocument(request) : string.Empty;
+            if (string.IsNullOrEmpty(requestId))
+            {
+                _languageAnalysisInFlight = false;
+                _pendingLanguageAnalysisFingerprint = string.Empty;
+                return;
+            }
 
-            ModThreads.RunAsync(
-                delegate
-                {
-                    var result = new LanguageServiceAnalysisResult();
-                    result.Fingerprint = fingerprint;
-                    result.DocumentPath = request.DocumentPath ?? string.Empty;
-                    result.AnalysisResponse = client != null ? client.AnalyzeDocument(request) : new LanguageServiceAnalysisResponse
-                    {
-                        Success = false,
-                        StatusMessage = "Roslyn client was not available.",
-                        DocumentPath = request.DocumentPath ?? string.Empty,
-                        ProjectFilePath = request.ProjectFilePath ?? string.Empty,
-                        Diagnostics = new LanguageServiceDiagnostic[0],
-                        Classifications = new LanguageServiceClassifiedSpan[0]
-                    };
-                    result.StatusResponse = client != null ? client.GetStatus() : new LanguageServiceStatusResponse
-                    {
-                        Success = false,
-                        StatusMessage = "Roslyn client was not available.",
-                        IsRunning = false,
-                        Capabilities = new string[0],
-                        LoadedProjectPaths = new string[0]
-                    };
-                    return result;
-                },
-                delegate(LanguageServiceAnalysisResult result)
-                {
-                    if (generation != _languageServiceGeneration)
-                    {
-                        return;
-                    }
-
-                    _languageAnalysisInFlight = false;
-                    _pendingLanguageAnalysisFingerprint = string.Empty;
-                    _state.LanguageServiceStatus = result != null && result.StatusResponse != null
-                        ? result.StatusResponse
-                        : _state.LanguageServiceStatus;
-
-                    var target = FindOpenDocument(result != null ? result.DocumentPath : string.Empty);
-                    if (target == null && active != null && string.Equals(active.FilePath, result != null ? result.DocumentPath : string.Empty, StringComparison.OrdinalIgnoreCase))
-                    {
-                        target = active;
-                    }
-
-                    if (target == null || result == null || result.AnalysisResponse == null)
-                    {
-                        return;
-                    }
-
-                    target.LanguageAnalysis = result.AnalysisResponse;
-                    target.LastLanguageAnalysisUtc = DateTime.UtcNow;
-                    _lastAnalyzedDocumentFingerprint = result.Fingerprint ?? string.Empty;
-                    MMLog.WriteInfo("[Cortex.Roslyn] Analysis complete for " +
-                        Path.GetFileName(target.FilePath) +
-                        ". Diagnostics=" + CountDiagnostics(result.AnalysisResponse) +
-                        ", Classifications=" + CountClassifications(result.AnalysisResponse) +
-                        ", Summary=" + BuildClassificationSummary(result.AnalysisResponse));
-
-                    if (!result.AnalysisResponse.Success)
-                    {
-                        _state.Diagnostics.Add("Roslyn analysis failed for " + Path.GetFileName(target.FilePath) + ": " + result.AnalysisResponse.StatusMessage);
-                        MMLog.WriteWarning("[Cortex.Roslyn] Analysis failed for " + Path.GetFileName(target.FilePath) + ": " + result.AnalysisResponse.StatusMessage);
-                    }
-                },
-                delegate(Exception ex)
-                {
-                    if (generation != _languageServiceGeneration)
-                    {
-                        return;
-                    }
-
-                    _languageAnalysisInFlight = false;
-                    _lastAnalyzedDocumentFingerprint = fingerprint;
-                    _pendingLanguageAnalysisFingerprint = string.Empty;
-                    _state.Diagnostics.Add("Roslyn analysis failed for " + Path.GetFileName(active.FilePath) + ": " + ex.Message);
-                    MMLog.WriteError("[Cortex.Roslyn] Analysis threw for " + Path.GetFileName(active.FilePath) + ": " + ex);
-                });
+            _pendingLanguageAnalysis = new PendingLanguageAnalysisRequest
+            {
+                RequestId = requestId,
+                Generation = generation,
+                Fingerprint = fingerprint,
+                DocumentPath = request.DocumentPath ?? string.Empty,
+                DocumentVersion = request.DocumentVersion
+            };
         }
 
         private void UpdateLanguageHover()
@@ -363,48 +247,24 @@ namespace Cortex
             var client = _languageServiceClient;
             var generation = _languageServiceGeneration;
             var hoverKey = requestKey;
+            var requestDocumentPath = request.DocumentPath ?? string.Empty;
+            var requestDocumentVersion = request.DocumentVersion;
             _languageHoverInFlight = true;
+            var requestId = client != null ? client.QueueHover(request) : string.Empty;
+            if (string.IsNullOrEmpty(requestId))
+            {
+                _languageHoverInFlight = false;
+                return;
+            }
 
-            ModThreads.RunAsync(
-                delegate
-                {
-                    return client != null ? client.GetHover(request) : new LanguageServiceHoverResponse
-                    {
-                        Success = false,
-                        StatusMessage = "Roslyn client was not available."
-                    };
-                },
-                delegate(LanguageServiceHoverResponse response)
-                {
-                    if (generation != _languageServiceGeneration)
-                    {
-                        return;
-                    }
-
-                    _languageHoverInFlight = false;
-                    _state.Editor.ActiveHoverKey = hoverKey;
-                    _state.Editor.ActiveHoverResponse = response;
-                    if (response != null && response.Success)
-                    {
-                        MMLog.WriteInfo("[Cortex.Roslyn] Hover resolved for " + (_state.Editor.RequestedHoverTokenText ?? string.Empty) + ".");
-                    }
-                },
-                delegate(Exception ex)
-                {
-                    if (generation != _languageServiceGeneration)
-                    {
-                        return;
-                    }
-
-                    _languageHoverInFlight = false;
-                    _state.Editor.ActiveHoverKey = hoverKey;
-                    _state.Editor.ActiveHoverResponse = new LanguageServiceHoverResponse
-                    {
-                        Success = false,
-                        StatusMessage = ex.Message
-                    };
-                    MMLog.WriteError("[Cortex.Roslyn] Hover request failed: " + ex);
-                });
+            _pendingLanguageHover = new PendingLanguageHoverRequest
+            {
+                RequestId = requestId,
+                Generation = generation,
+                HoverKey = hoverKey,
+                DocumentPath = requestDocumentPath,
+                DocumentVersion = requestDocumentVersion
+            };
         }
 
         private void UpdateLanguageDefinition()
@@ -429,67 +289,303 @@ namespace Cortex
             var request = BuildLanguageDefinitionRequest(session, _state.Editor.RequestedDefinitionLine, _state.Editor.RequestedDefinitionColumn);
             var client = _languageServiceClient;
             var generation = _languageServiceGeneration;
+            var requestDocumentPath = request.DocumentPath ?? string.Empty;
+            var requestDocumentVersion = request.DocumentVersion;
             _languageDefinitionInFlight = true;
             _state.Editor.RequestedDefinitionKey = string.Empty;
+            var requestId = client != null ? client.QueueGoToDefinition(request) : string.Empty;
+            if (string.IsNullOrEmpty(requestId))
+            {
+                _languageDefinitionInFlight = false;
+                _state.StatusMessage = "Definition lookup failed: " + (_languageServiceClient != null ? _languageServiceClient.LastError : "Roslyn client was not available.");
+                return;
+            }
 
-            ModThreads.RunAsync<LanguageServiceDefinitionResponse>(
-                delegate
+            _pendingLanguageDefinition = new PendingLanguageDefinitionRequest
+            {
+                RequestId = requestId,
+                Generation = generation,
+                DocumentPath = requestDocumentPath,
+                DocumentVersion = requestDocumentVersion,
+                TokenText = _state.Editor.RequestedDefinitionTokenText ?? string.Empty
+            };
+        }
+
+        private void ProcessLanguageResponses()
+        {
+            if (_languageServiceClient == null)
+            {
+                return;
+            }
+
+            LanguageServiceEnvelope envelope;
+            while (_languageServiceClient.TryDequeueResponse(out envelope))
+            {
+                if (envelope == null || string.IsNullOrEmpty(envelope.RequestId))
                 {
-                    return client != null ? client.GoToDefinition(request) : new LanguageServiceDefinitionResponse
-                    {
-                        Success = false,
-                        StatusMessage = "Roslyn client was not available."
-                    };
-                },
-                delegate(LanguageServiceDefinitionResponse response)
+                    continue;
+                }
+
+                if (string.Equals(envelope.RequestId, _languageInitializeRequestId, StringComparison.Ordinal))
                 {
-                    if (generation != _languageServiceGeneration)
-                    {
-                        return;
-                    }
+                    HandleLanguageInitializeResponse(envelope);
+                    continue;
+                }
 
-                    _languageDefinitionInFlight = false;
-                    if (response == null || !response.Success)
-                    {
-                        _state.StatusMessage = response != null && !string.IsNullOrEmpty(response.StatusMessage)
-                            ? response.StatusMessage
-                            : "Definition was not found.";
-                        return;
-                    }
-
-                    if (!string.IsNullOrEmpty(response.DocumentPath) && File.Exists(response.DocumentPath))
-                    {
-                        var opened = CortexModuleUtil.OpenDocument(_documentService, _state, response.DocumentPath, response.Range != null ? response.Range.StartLine : 1);
-                        if (opened != null)
-                        {
-                            opened.HighlightedLine = response.Range != null ? response.Range.StartLine : 1;
-                        }
-
-                        _state.StatusMessage = "Opened definition: " + (response.SymbolDisplay ?? Path.GetFileName(response.DocumentPath));
-                        MMLog.WriteInfo("[Cortex.Roslyn] Opened definition for " + (_state.Editor.RequestedDefinitionTokenText ?? string.Empty) + " -> " + response.DocumentPath);
-                        return;
-                    }
-
-                    if (TryOpenMetadataDefinition(response))
-                    {
-                        return;
-                    }
-
-                    _state.StatusMessage = !string.IsNullOrEmpty(response.StatusMessage)
-                        ? response.StatusMessage
-                        : "Definition was not found.";
-                },
-                delegate(Exception ex)
+                if (string.Equals(envelope.RequestId, _languageStatusRequestId, StringComparison.Ordinal))
                 {
-                    if (generation != _languageServiceGeneration)
-                    {
-                        return;
-                    }
+                    HandleLanguageStatusResponse(envelope);
+                    continue;
+                }
 
-                    _languageDefinitionInFlight = false;
-                    _state.StatusMessage = "Definition lookup failed: " + ex.Message;
-                    MMLog.WriteError("[Cortex.Roslyn] Definition request failed: " + ex);
-                });
+                if (_pendingLanguageAnalysis != null &&
+                    string.Equals(envelope.RequestId, _pendingLanguageAnalysis.RequestId, StringComparison.Ordinal))
+                {
+                    HandleLanguageAnalysisResponse(envelope, _pendingLanguageAnalysis);
+                    _pendingLanguageAnalysis = null;
+                    continue;
+                }
+
+                if (_pendingLanguageHover != null &&
+                    string.Equals(envelope.RequestId, _pendingLanguageHover.RequestId, StringComparison.Ordinal))
+                {
+                    HandleLanguageHoverResponse(envelope, _pendingLanguageHover);
+                    _pendingLanguageHover = null;
+                    continue;
+                }
+
+                if (_pendingLanguageDefinition != null &&
+                    string.Equals(envelope.RequestId, _pendingLanguageDefinition.RequestId, StringComparison.Ordinal))
+                {
+                    HandleLanguageDefinitionResponse(envelope, _pendingLanguageDefinition);
+                    _pendingLanguageDefinition = null;
+                }
+            }
+        }
+
+        private void HandleLanguageInitializeResponse(LanguageServiceEnvelope envelope)
+        {
+            _languageInitializeRequestId = string.Empty;
+            _languageServiceInitializing = false;
+            if (envelope == null || !envelope.Success)
+            {
+                _languageServiceReady = false;
+                _state.LanguageServiceStatus = new LanguageServiceStatusResponse
+                {
+                    Success = false,
+                    StatusMessage = envelope != null ? envelope.ErrorMessage ?? "startup failed" : "startup failed",
+                    IsRunning = false,
+                    Capabilities = new string[0],
+                    LoadedProjectPaths = new string[0]
+                };
+                _state.Diagnostics.Add("Roslyn worker failed to initialize: " + _state.LanguageServiceStatus.StatusMessage);
+                return;
+            }
+
+            var response = DeserializeEnvelopePayload<LanguageServiceInitializeResponse>(envelope);
+            _languageServiceReady = response != null && response.Success;
+            if (!_languageServiceReady)
+            {
+                var message = response != null ? response.StatusMessage : "Roslyn worker failed to initialize.";
+                _state.Diagnostics.Add("Roslyn worker failed to initialize: " + message);
+                return;
+            }
+
+            _state.Diagnostics.Add("Roslyn worker ready: " +
+                (response.WorkerVersion ?? string.Empty) +
+                " on " +
+                (response.RuntimeVersion ?? string.Empty) +
+                ".");
+            _languageStatusRequestId = _languageServiceClient.QueueStatus();
+        }
+
+        private void HandleLanguageStatusResponse(LanguageServiceEnvelope envelope)
+        {
+            _languageStatusRequestId = string.Empty;
+            if (envelope == null || !envelope.Success)
+            {
+                return;
+            }
+
+            var response = DeserializeEnvelopePayload<LanguageServiceStatusResponse>(envelope);
+            if (response == null)
+            {
+                return;
+            }
+
+            _state.LanguageServiceStatus = response;
+            MMLog.WriteInfo("[Cortex.Roslyn] Worker ready. CachedProjects=" +
+                (_state.LanguageServiceStatus != null ? _state.LanguageServiceStatus.CachedProjectCount.ToString() : "0") +
+                ", Capabilities=" + BuildCapabilitySummary(_state.LanguageServiceStatus));
+        }
+
+        private void HandleLanguageAnalysisResponse(LanguageServiceEnvelope envelope, PendingLanguageAnalysisRequest pending)
+        {
+            _languageAnalysisInFlight = false;
+            _pendingLanguageAnalysisFingerprint = string.Empty;
+            if (pending == null || pending.Generation != _languageServiceGeneration)
+            {
+                return;
+            }
+
+            var response = DeserializeEnvelopePayload<LanguageServiceAnalysisResponse>(envelope);
+            var target = FindOpenDocument(response != null ? response.DocumentPath : pending.DocumentPath);
+            if (target == null)
+            {
+                return;
+            }
+
+            if (response == null)
+            {
+                _state.Diagnostics.Add("Roslyn analysis failed for " + Path.GetFileName(target.FilePath) + ": unreadable payload.");
+                return;
+            }
+
+            if (response.DocumentVersion > 0 &&
+                target.TextVersion > 0 &&
+                response.DocumentVersion != target.TextVersion)
+            {
+                MMLog.WriteInfo("[Cortex.Roslyn] Ignored stale analysis for " + Path.GetFileName(target.FilePath) +
+                    ". ResponseVersion=" + response.DocumentVersion +
+                    ", LiveVersion=" + target.TextVersion);
+                return;
+            }
+
+            target.LanguageAnalysis = response;
+            target.LastLanguageAnalysisUtc = DateTime.UtcNow;
+            target.LastLanguageAnalysisVersion = response.DocumentVersion;
+            _lastAnalyzedDocumentFingerprint = pending.Fingerprint ?? string.Empty;
+            MMLog.WriteInfo("[Cortex.Roslyn] Analysis complete for " +
+                Path.GetFileName(target.FilePath) +
+                ". Diagnostics=" + CountDiagnostics(response) +
+                ", Classifications=" + CountClassifications(response) +
+                ", Summary=" + BuildClassificationSummary(response));
+
+            if (!response.Success)
+            {
+                _state.Diagnostics.Add("Roslyn analysis failed for " + Path.GetFileName(target.FilePath) + ": " + response.StatusMessage);
+                MMLog.WriteWarning("[Cortex.Roslyn] Analysis failed for " + Path.GetFileName(target.FilePath) + ": " + response.StatusMessage);
+            }
+        }
+
+        private void HandleLanguageHoverResponse(LanguageServiceEnvelope envelope, PendingLanguageHoverRequest pending)
+        {
+            _languageHoverInFlight = false;
+            if (pending == null || pending.Generation != _languageServiceGeneration)
+            {
+                return;
+            }
+
+            var liveSession = FindOpenDocument(pending.DocumentPath);
+            if (!string.Equals(_state.Editor.RequestedHoverKey, pending.HoverKey, StringComparison.Ordinal) ||
+                (liveSession != null &&
+                 pending.DocumentVersion > 0 &&
+                 liveSession.TextVersion > 0 &&
+                 liveSession.TextVersion != pending.DocumentVersion))
+            {
+                return;
+            }
+
+            var response = DeserializeEnvelopePayload<LanguageServiceHoverResponse>(envelope);
+            if (response == null)
+            {
+                response = new LanguageServiceHoverResponse
+                {
+                    Success = false,
+                    StatusMessage = envelope != null && !envelope.Success
+                        ? envelope.ErrorMessage
+                        : "Roslyn hover payload was unreadable."
+                };
+            }
+
+            _state.Editor.ActiveHoverKey = pending.HoverKey;
+            _state.Editor.ActiveHoverResponse = response;
+            if (response.Success)
+            {
+                MMLog.WriteInfo("[Cortex.Roslyn] Hover resolved for " + (_state.Editor.RequestedHoverTokenText ?? string.Empty) + ".");
+            }
+        }
+
+        private void HandleLanguageDefinitionResponse(LanguageServiceEnvelope envelope, PendingLanguageDefinitionRequest pending)
+        {
+            _languageDefinitionInFlight = false;
+            if (pending == null || pending.Generation != _languageServiceGeneration)
+            {
+                return;
+            }
+
+            var liveSession = FindOpenDocument(pending.DocumentPath);
+            if (liveSession != null &&
+                pending.DocumentVersion > 0 &&
+                liveSession.TextVersion > 0 &&
+                liveSession.TextVersion != pending.DocumentVersion)
+            {
+                MMLog.WriteInfo("[Cortex.Roslyn] Ignored stale definition response for " +
+                    (pending.TokenText ?? string.Empty) +
+                    ". ResponseVersion=" + pending.DocumentVersion +
+                    ", LiveVersion=" + liveSession.TextVersion);
+                return;
+            }
+
+            var response = DeserializeEnvelopePayload<LanguageServiceDefinitionResponse>(envelope);
+            if (response == null || !response.Success)
+            {
+                _state.StatusMessage = response != null && !string.IsNullOrEmpty(response.StatusMessage)
+                    ? response.StatusMessage
+                    : (envelope != null && !string.IsNullOrEmpty(envelope.ErrorMessage) ? envelope.ErrorMessage : "Definition was not found.");
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(response.DocumentPath) && File.Exists(response.DocumentPath))
+            {
+                var opened = CortexModuleUtil.OpenDocument(_documentService, _state, response.DocumentPath, response.Range != null ? response.Range.StartLine : 1);
+                if (opened != null)
+                {
+                    opened.HighlightedLine = response.Range != null ? response.Range.StartLine : 1;
+                }
+
+                _state.StatusMessage = "Opened definition: " + (response.SymbolDisplay ?? Path.GetFileName(response.DocumentPath));
+                MMLog.WriteInfo("[Cortex.Roslyn] Opened definition for " + (pending.TokenText ?? string.Empty) + " -> " + response.DocumentPath);
+                return;
+            }
+
+            if (TryOpenMetadataDefinition(response))
+            {
+                return;
+            }
+
+            _state.StatusMessage = !string.IsNullOrEmpty(response.StatusMessage)
+                ? response.StatusMessage
+                : "Definition was not found.";
+        }
+
+        private static TResponse DeserializeEnvelopePayload<TResponse>(LanguageServiceEnvelope envelope)
+            where TResponse : LanguageServiceOperationResponse, new()
+        {
+            if (envelope == null)
+            {
+                return null;
+            }
+
+            if (!envelope.Success)
+            {
+                return new TResponse
+                {
+                    Success = false,
+                    StatusMessage = envelope.ErrorMessage ?? string.Empty
+                };
+            }
+
+            if (string.IsNullOrEmpty(envelope.PayloadJson))
+            {
+                return new TResponse
+                {
+                    Success = true,
+                    StatusMessage = string.Empty
+                };
+            }
+
+            return ManualJson.Deserialize<TResponse>(envelope.PayloadJson);
         }
 
         private bool TryOpenMetadataDefinition(LanguageServiceDefinitionResponse response)
@@ -962,6 +1058,7 @@ namespace Cortex
                 WorkspaceRootPath = _state.Settings != null ? _state.Settings.WorkspaceRootPath : string.Empty,
                 SourceRoots = BuildLanguageSourceRoots(_state.Settings, project),
                 DocumentText = session != null ? session.Text : string.Empty,
+                DocumentVersion = session != null ? session.TextVersion : 0,
                 IncludeDiagnostics = includeDiagnostics,
                 IncludeClassifications = includeClassifications
             };
@@ -977,6 +1074,7 @@ namespace Cortex
                 WorkspaceRootPath = _state.Settings != null ? _state.Settings.WorkspaceRootPath : string.Empty,
                 SourceRoots = BuildLanguageSourceRoots(_state.Settings, project),
                 DocumentText = session != null ? session.Text : string.Empty,
+                DocumentVersion = session != null ? session.TextVersion : 0,
                 Line = line,
                 Column = column
             };
@@ -992,6 +1090,7 @@ namespace Cortex
                 WorkspaceRootPath = _state.Settings != null ? _state.Settings.WorkspaceRootPath : string.Empty,
                 SourceRoots = BuildLanguageSourceRoots(_state.Settings, project),
                 DocumentText = session != null ? session.Text : string.Empty,
+                DocumentVersion = session != null ? session.TextVersion : 0,
                 Line = line,
                 Column = column
             };
@@ -1119,7 +1218,7 @@ namespace Cortex
                 return string.Empty;
             }
 
-            return (session.FilePath ?? string.Empty) + "|" + session.LastKnownWriteUtc.Ticks + "|" + (session.Text != null ? session.Text.Length.ToString() : "0");
+            return (session.FilePath ?? string.Empty) + "|" + session.TextVersion;
         }
 
         private static int CountDiagnostics(LanguageServiceAnalysisResponse response)
@@ -1178,18 +1277,31 @@ namespace Cortex
             return string.Join("; ", parts.ToArray());
         }
 
-        private sealed class LanguageServiceInitializationResult
+        private sealed class PendingLanguageAnalysisRequest
         {
-            public LanguageServiceInitializeResponse InitializeResponse;
-            public LanguageServiceStatusResponse StatusResponse;
-        }
-
-        private sealed class LanguageServiceAnalysisResult
-        {
+            public string RequestId;
+            public int Generation;
             public string Fingerprint;
             public string DocumentPath;
-            public LanguageServiceAnalysisResponse AnalysisResponse;
-            public LanguageServiceStatusResponse StatusResponse;
+            public int DocumentVersion;
+        }
+
+        private sealed class PendingLanguageHoverRequest
+        {
+            public string RequestId;
+            public int Generation;
+            public string DocumentPath;
+            public int DocumentVersion;
+            public string HoverKey;
+        }
+
+        private sealed class PendingLanguageDefinitionRequest
+        {
+            public string RequestId;
+            public int Generation;
+            public string DocumentPath;
+            public int DocumentVersion;
+            public string TokenText;
         }
     }
 }
