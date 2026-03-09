@@ -12,8 +12,10 @@ namespace Cortex.Host.Unity.Composition
         {
             RegisterContainer(contributionRegistry, CortexWorkbenchIds.LogsContainer, "Logs", WorkbenchHostLocation.PanelHost, 0, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.LogsContainer);
             RegisterContainer(contributionRegistry, CortexWorkbenchIds.ProjectsContainer, "Projects", WorkbenchHostLocation.SecondarySideHost, 10, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.ProjectsContainer);
+            RegisterContainer(contributionRegistry, CortexWorkbenchIds.ReferenceContainer, "References", WorkbenchHostLocation.SecondarySideHost, 20, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.ReferenceContainer);
             RegisterContainer(contributionRegistry, CortexWorkbenchIds.EditorContainer, "Editor", WorkbenchHostLocation.DocumentHost, 20, ModuleActivationKind.OnDocumentRestore, CortexWorkbenchIds.EditorContainer);
             RegisterContainer(contributionRegistry, CortexWorkbenchIds.BuildContainer, "Build", WorkbenchHostLocation.PanelHost, 30, ModuleActivationKind.OnCommand, "cortex.build.execute");
+            RegisterContainer(contributionRegistry, CortexWorkbenchIds.RuntimeContainer, "Runtime", WorkbenchHostLocation.PanelHost, 40, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.RuntimeContainer);
             RegisterContainer(contributionRegistry, CortexWorkbenchIds.SettingsContainer, "Settings", WorkbenchHostLocation.SecondarySideHost, 60, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.SettingsContainer);
 
             RegisterCommand(commandRegistry, "cortex.shell.toggle", "Toggle Cortex", "Workbench", "Show or hide the Cortex shell.", "F8", 0, true);
@@ -26,20 +28,36 @@ namespace Cortex.Host.Unity.Composition
 
             RegisterTheme(
                 contributionRegistry,
-                "cortex.default",
-                "Cortex Default",
-                "Current Cortex shell styling with the existing dark steel palette.",
-                "#0c0c11",
-                "#181922",
-                "#252835",
-                "#303545",
-                "#4db3ff",
-                "#f2f4f8",
-                "#c0c6d4",
-                "#f2c14e",
-                "#ff6b6b",
+                "cortex.vs-dark",
+                "Visual Studio Dark",
+                "A clean, dark theme matching Visual Studio 2022.",
+                "#1E1E1E",
+                "#252526",
+                "#2D2D30",
+                "#3F3F46",
+                "#007ACC",
+                "#D4D4D4",
+                "#858585",
+                "#C8A155",
+                "#F48771",
                 "compact-mono",
                 0);
+            RegisterTheme(
+                contributionRegistry,
+                "cortex.default",
+                "Cortex Default",
+                "Alias of the Visual Studio Dark workbench theme.",
+                "#1E1E1E",
+                "#252526",
+                "#2D2D30",
+                "#3F3F46",
+                "#007ACC",
+                "#D4D4D4",
+                "#858585",
+                "#C8A155",
+                "#F48771",
+                "compact-mono",
+                1);
             RegisterTheme(
                 contributionRegistry,
                 "cortex.classic",
@@ -75,8 +93,10 @@ namespace Cortex.Host.Unity.Composition
 
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.LogsContainer, "LG");
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.ProjectsContainer, "PJ");
+            RegisterIcon(contributionRegistry, CortexWorkbenchIds.ReferenceContainer, "RF");
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.EditorContainer, "ED");
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.BuildContainer, "BL");
+            RegisterIcon(contributionRegistry, CortexWorkbenchIds.RuntimeContainer, "RT");
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.SettingsContainer, "ST");
 
             RegisterEditor(contributionRegistry, "cortex.editor.code", "Code Editor", ".cs", "text/x-csharp", 0);
@@ -100,7 +120,7 @@ namespace Cortex.Host.Unity.Composition
             RegisterSetting(contributionRegistry, nameof(CortexSettings.DefaultBuildConfiguration), "Default Build Config", "Default build configuration used by build tooling.", "Build", "Debug", SettingValueKind.String, 0);
             RegisterSetting(contributionRegistry, nameof(CortexSettings.BuildTimeoutMs), "Build Timeout (ms)", "Maximum time allowed for build execution before timing out.", "Build", "300000", SettingValueKind.Integer, 10);
 
-            RegisterSetting(contributionRegistry, nameof(CortexSettings.ThemeId), "Theme", "Active workbench theme identifier.", "Appearance", "cortex.default", SettingValueKind.String, 0);
+            RegisterSetting(contributionRegistry, nameof(CortexSettings.ThemeId), "Theme", "Active workbench theme identifier.", "Appearance", "cortex.vs-dark", SettingValueKind.String, 0);
             RegisterSetting(contributionRegistry, nameof(CortexSettings.LogsPaneWidth), "Logs Pane Width", "Preferred width for the logs/details split.", "Layout", "520", SettingValueKind.Float, 0);
             RegisterSetting(contributionRegistry, nameof(CortexSettings.ProjectsPaneWidth), "Projects Pane Width", "Preferred width for the side host.", "Layout", "360", SettingValueKind.Float, 10);
             RegisterSetting(contributionRegistry, nameof(CortexSettings.EditorFilePaneWidth), "Explorer Width", "Preferred width for the editor explorer pane.", "Layout", "320", SettingValueKind.Float, 20);

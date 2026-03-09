@@ -27,6 +27,7 @@ namespace Cortex
         public string PanelContainerId = CortexWorkbenchIds.LogsContainer;
         public string RequestedContainerId = string.Empty;
         public int RequestedTabIndex = -1;
+        public CortexLayoutNode LayoutRoot;
         public readonly Dictionary<string, WorkbenchHostLocation> HostOverrides = new Dictionary<string, WorkbenchHostLocation>(StringComparer.OrdinalIgnoreCase);
 
         public WorkbenchHostLocation GetAssignedHost(string containerId, WorkbenchHostLocation fallback)
@@ -45,6 +46,34 @@ namespace Cortex
             }
 
             HostOverrides[containerId] = hostLocation;
+        }
+    }
+
+    public enum CortexLayoutSplitDirection
+    {
+        None,
+        Horizontal,
+        Vertical
+    }
+
+    public sealed class CortexLayoutNode
+    {
+        public string NodeId;
+        public CortexLayoutSplitDirection Split;
+        public float SplitRatio;
+        public WorkbenchHostLocation HostLocation;
+        public CortexLayoutNode ChildA;
+        public CortexLayoutNode ChildB;
+        public string ActiveModuleId;
+        public readonly List<string> ContainedModuleIds = new List<string>();
+
+        public CortexLayoutNode()
+        {
+            NodeId = string.Empty;
+            Split = CortexLayoutSplitDirection.None;
+            SplitRatio = 0.5f;
+            HostLocation = WorkbenchHostLocation.DocumentHost;
+            ActiveModuleId = string.Empty;
         }
     }
 

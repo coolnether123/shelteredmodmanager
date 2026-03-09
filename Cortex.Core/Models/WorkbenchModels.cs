@@ -146,8 +146,8 @@ namespace Cortex.Core.Models
 
         public ThemeState()
         {
-            ThemeId = "cortex.default";
-            IconThemeId = "cortex.default";
+            ThemeId = "cortex.vs-dark";
+            IconThemeId = "cortex.vs-dark";
             DensityProfileId = "compact";
         }
     }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
+using Cortex.Presentation.Models;
 
 namespace Cortex
 {
@@ -12,37 +13,122 @@ namespace Cortex
 
         private void EnsureModuleActivated(string containerId)
         {
+            EnsureModuleBindingsInitialized();
             if (string.IsNullOrEmpty(containerId) || _activatedContainers.Contains(containerId) || !CanActivateContainer(containerId))
             {
                 return;
             }
 
-            switch (containerId)
+            Action activator;
+            if (_moduleActivators.TryGetValue(containerId, out activator) && activator != null)
             {
-                case CortexWorkbenchIds.LogsContainer:
-                    if (_logsModule == null) _logsModule = new Modules.Logs.LogsModule();
-                    break;
-                case CortexWorkbenchIds.ProjectsContainer:
-                    if (_projectsModule == null) _projectsModule = new Modules.Projects.ProjectsModule();
-                    break;
-                case CortexWorkbenchIds.EditorContainer:
-                    if (_editorModule == null) _editorModule = new Modules.Editor.EditorModule();
-                    break;
-                case CortexWorkbenchIds.BuildContainer:
-                    if (_buildModule == null) _buildModule = new Modules.Build.BuildModule();
-                    break;
-                case CortexWorkbenchIds.ReferenceContainer:
-                    if (_referenceModule == null) _referenceModule = new Modules.Reference.ReferenceModule();
-                    break;
-                case CortexWorkbenchIds.RuntimeContainer:
-                    if (_runtimeToolsModule == null) _runtimeToolsModule = new Modules.Runtime.RuntimeToolsModule();
-                    break;
-                case CortexWorkbenchIds.SettingsContainer:
-                    if (_settingsModule == null) _settingsModule = new Modules.Settings.SettingsModule();
-                    break;
+                activator();
             }
 
             _activatedContainers.Add(containerId);
+        }
+
+        private void EnsureModuleBindingsInitialized()
+        {
+            if (_moduleActivators.Count > 0)
+            {
+                return;
+            }
+
+            RegisterModuleBinding(
+                CortexWorkbenchIds.LogsContainer,
+                delegate
+                {
+                    if (_logsModule == null) _logsModule = new Modules.Logs.LogsModule();
+                },
+                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+                {
+                    if (_logsModule == null) return;
+                    _logsModule.Draw(_runtimeLogFeed, _runtimeSourceNavigationService, _sourcePathResolver, _documentService, _state, detachedWindow);
+                });
+
+            RegisterModuleBinding(
+                CortexWorkbenchIds.ProjectsContainer,
+                delegate
+                {
+                    if (_projectsModule == null) _projectsModule = new Modules.Projects.ProjectsModule();
+                },
+                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+                {
+                    if (_projectsModule == null) return;
+                    _projectsModule.Draw(_projectCatalog, _projectWorkspaceService, _loadedModCatalog, _state);
+                });
+
+            RegisterModuleBinding(
+                CortexWorkbenchIds.EditorContainer,
+                delegate
+                {
+                    if (_editorModule == null) _editorModule = new Modules.Editor.EditorModule();
+                },
+                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+                {
+                    if (_editorModule == null) return;
+                    _editorModule.Draw(_documentService, _workspaceBrowserService, _projectWorkspaceService, _loadedModCatalog, _state);
+                });
+
+            RegisterModuleBinding(
+                CortexWorkbenchIds.BuildContainer,
+                delegate
+                {
+                    if (_buildModule == null) _buildModule = new Modules.Build.BuildModule();
+                },
+                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+                {
+                    if (_buildModule == null) return;
+                    _buildModule.Draw(_buildCommandResolver, _buildExecutor, _restartCoordinator, _sourcePathResolver, _documentService, _state);
+                });
+
+            RegisterModuleBinding(
+                CortexWorkbenchIds.ReferenceContainer,
+                delegate
+                {
+                    if (_referenceModule == null) _referenceModule = new Modules.Reference.ReferenceModule();
+                },
+                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+                {
+                    if (_referenceModule == null) return;
+                    _referenceModule.Draw(_sourceReferenceService, _referenceCatalogService, _documentService, _state);
+                });
+
+            RegisterModuleBinding(
+                CortexWorkbenchIds.RuntimeContainer,
+                delegate
+                {
+                    if (_runtimeToolsModule == null) _runtimeToolsModule = new Modules.Runtime.RuntimeToolsModule();
+                },
+                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+                {
+                    if (_runtimeToolsModule == null) return;
+                    _runtimeToolsModule.Draw(_runtimeToolBridge, _state);
+                });
+
+            RegisterModuleBinding(
+                CortexWorkbenchIds.SettingsContainer,
+                delegate
+                {
+                    if (_settingsModule == null) _settingsModule = new Modules.Settings.SettingsModule();
+                },
+                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+                {
+                    if (_settingsModule == null) return;
+                    _settingsModule.Draw(_settingsStore, snapshot, _workbenchRuntime != null ? _workbenchRuntime.ThemeState : null, _state);
+                });
+        }
+
+        private void RegisterModuleBinding(string containerId, Action activator, Action<WorkbenchPresentationSnapshot, bool> renderer)
+        {
+            if (string.IsNullOrEmpty(containerId) || activator == null || renderer == null)
+            {
+                return;
+            }
+
+            _moduleActivators[containerId] = activator;
+            _moduleRenderers[containerId] = renderer;
         }
 
         private void RegisterCommandHandlers()
@@ -128,7 +214,7 @@ namespace Cortex
             var persisted = _workbenchPersistenceService.Load(DefaultWorkspaceId) ?? new PersistedWorkbenchState();
             _state.Workbench.FocusedContainerId = NormalizeContainerId(persisted.FocusedContainerId, CortexWorkbenchIds.EditorContainer);
             _state.Workbench.SideContainerId = NormalizeContainerId(persisted.SideContainerId, string.Empty);
-            _state.Workbench.SecondarySideContainerId = persisted.SecondarySideContainerId ?? string.Empty;
+            _state.Workbench.SecondarySideContainerId = NormalizeContainerId(persisted.SecondarySideContainerId, CortexWorkbenchIds.ProjectsContainer);
             _state.Workbench.EditorContainerId = NormalizeContainerId(persisted.EditorContainerId, CortexWorkbenchIds.EditorContainer);
             _state.Workbench.PanelContainerId = NormalizeContainerId(persisted.PanelContainerId, CortexWorkbenchIds.LogsContainer);
             _state.Logs.ShowDetachedWindow = persisted.ShowDetachedLogWindow;
