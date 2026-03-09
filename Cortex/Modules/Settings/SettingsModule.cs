@@ -107,7 +107,7 @@ namespace Cortex.Modules.Settings
                 ? settings.ThemeId
                 : themeState != null && !string.IsNullOrEmpty(themeState.ThemeId)
                     ? themeState.ThemeId
-                    : "cortex.default";
+                    : "cortex.vs-dark";
             _loaded = true;
         }
 
@@ -193,10 +193,10 @@ namespace Cortex.Modules.Settings
 
             var isSelected = string.Equals(_selectedThemeId, theme.ThemeId, StringComparison.OrdinalIgnoreCase);
             GUILayout.BeginVertical(GUI.skin.box);
-            var label = theme.DisplayName + "  [" + theme.ThemeId + "]" + (string.Equals(theme.ThemeId, "cortex.default", StringComparison.OrdinalIgnoreCase) ? "  Default" : string.Empty);
+            var label = theme.DisplayName + "  [" + theme.ThemeId + "]" + (string.Equals(theme.ThemeId, "cortex.vs-dark", StringComparison.OrdinalIgnoreCase) ? "  Default" : string.Empty);
             if (GUILayout.Toggle(isSelected, label, "button", GUILayout.Height(24f)))
             {
-                _selectedThemeId = string.IsNullOrEmpty(theme.ThemeId) ? "cortex.default" : theme.ThemeId;
+                _selectedThemeId = string.IsNullOrEmpty(theme.ThemeId) ? "cortex.vs-dark" : theme.ThemeId;
                 if (themeState != null)
                 {
                     themeState.ThemeId = _selectedThemeId;
@@ -297,7 +297,7 @@ namespace Cortex.Modules.Settings
                 }
             }
 
-            state.Settings.ThemeId = string.IsNullOrEmpty(_selectedThemeId) ? "cortex.default" : _selectedThemeId;
+            state.Settings.ThemeId = string.IsNullOrEmpty(_selectedThemeId) ? "cortex.vs-dark" : _selectedThemeId;
             if (themeState != null)
             {
                 themeState.ThemeId = state.Settings.ThemeId;

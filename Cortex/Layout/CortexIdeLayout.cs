@@ -11,6 +11,12 @@ namespace Cortex
         private static GUIStyle _headerStyle;
         private static Texture2D _groupBackground;
         private static Texture2D _headerBackground;
+        private static GUISkin _workbenchSkin;
+        private static GUISkin _sourceSkin;
+        private static Texture2D _boxTexture;
+        private static Texture2D _buttonTexture;
+        private static Texture2D _buttonActiveTexture;
+        private static Texture2D _inputTexture;
         private static string _appliedThemeId = string.Empty;
         private static readonly ThemeTokenSet _themeTokens = new ThemeTokenSet();
 
@@ -57,13 +63,13 @@ namespace Cortex
             switch (hostLocation)
             {
                 case WorkbenchHostLocation.PrimarySideHost:
-                    return "Side";
+                    return "Explorer";
                 case WorkbenchHostLocation.DocumentHost:
-                    return "Editors";
+                    return "Editor";
                 case WorkbenchHostLocation.PanelHost:
-                    return "Panels";
+                    return "Output";
                 case WorkbenchHostLocation.SecondarySideHost:
-                    return "Aux";
+                    return "Solution";
                 case WorkbenchHostLocation.ToolRail:
                     return "Rail";
                 case WorkbenchHostLocation.StatusStrip:
@@ -172,7 +178,7 @@ namespace Cortex
 
         public static void ApplyTheme(ThemeTokenSet tokens, string themeId)
         {
-            var effectiveThemeId = string.IsNullOrEmpty(themeId) ? "cortex.default" : themeId;
+            var effectiveThemeId = string.IsNullOrEmpty(themeId) ? "cortex.vs-dark" : themeId;
             if (tokens == null || string.Equals(_appliedThemeId, effectiveThemeId, StringComparison.OrdinalIgnoreCase))
             {
                 return;
@@ -192,7 +198,33 @@ namespace Cortex
             _headerStyle = null;
             _groupBackground = null;
             _headerBackground = null;
+            _workbenchSkin = null;
+            _sourceSkin = null;
+            _boxTexture = null;
+            _buttonTexture = null;
+            _buttonActiveTexture = null;
+            _inputTexture = null;
             _appliedThemeId = effectiveThemeId;
+        }
+
+        public static GUISkin GetWorkbenchSkin(GUISkin sourceSkin)
+        {
+            if (sourceSkin == null)
+            {
+                return GUI.skin;
+            }
+
+            if (_workbenchSkin == null || _sourceSkin != sourceSkin)
+            {
+                _sourceSkin = sourceSkin;
+                _workbenchSkin = UnityEngine.Object.Instantiate(sourceSkin) as GUISkin;
+                if (_workbenchSkin != null)
+                {
+                    ApplyWorkbenchSkin(_workbenchSkin);
+                }
+            }
+
+            return _workbenchSkin ?? sourceSkin;
         }
 
         public static Color ParseColor(string hex, Color fallback)
@@ -210,29 +242,131 @@ namespace Cortex
         {
             if (_groupStyle == null)
             {
-                _groupBackground = MakeTex(GetSurfaceColor());
+                _groupBackground = MakeBorderedTex(4, 4, GetSurfaceColor(), GetBorderColor());
                 _groupStyle = new GUIStyle(GUI.skin.box);
                 GuiStyleUtil.ApplyBackgroundToAllStates(_groupStyle, _groupBackground);
-                _groupStyle.padding = new RectOffset(10, 10, 10, 10);
-                _groupStyle.margin = new RectOffset(4, 4, 4, 4);
+                _groupStyle.border = new RectOffset(1, 1, 1, 1);
+                _groupStyle.padding = new RectOffset(8, 8, 8, 8);
+                _groupStyle.margin = new RectOffset(0, 0, 0, 0);
             }
 
             if (_headerStyle == null)
             {
-                _headerBackground = MakeTex(GetHeaderColor());
+                _headerBackground = MakeBorderedTex(4, 4, GetHeaderColor(), GetBorderColor());
                 _headerStyle = new GUIStyle(GUI.skin.label);
                 GuiStyleUtil.ApplyBackgroundToAllStates(_headerStyle, _headerBackground);
                 GuiStyleUtil.ApplyTextColorToAllStates(_headerStyle, GetTextColor());
                 _headerStyle.fontStyle = FontStyle.Bold;
-                _headerStyle.padding = new RectOffset(8, 8, 4, 4);
-                _headerStyle.margin = new RectOffset(0, 0, 0, 8);
+                _headerStyle.border = new RectOffset(1, 1, 1, 1);
+                _headerStyle.padding = new RectOffset(8, 8, 5, 5);
+                _headerStyle.margin = new RectOffset(0, 0, 0, 6);
             }
+        }
+
+        private static void ApplyWorkbenchSkin(GUISkin skin)
+        {
+            if (skin == null)
+            {
+                return;
+            }
+
+            _boxTexture = MakeBorderedTex(4, 4, GetSurfaceColor(), GetBorderColor());
+            _buttonTexture = MakeBorderedTex(4, 4, Blend(GetSurfaceColor(), GetHeaderColor(), 0.6f), GetBorderColor());
+            _buttonActiveTexture = MakeBorderedTex(4, 4, Blend(GetHeaderColor(), GetAccentColor(), 0.2f), GetAccentColor());
+            _inputTexture = MakeBorderedTex(4, 4, GetBackgroundColor(), GetBorderColor());
+
+            ConfigurePanelStyle(skin.box, _boxTexture, GetTextColor());
+            ConfigureButtonStyle(skin.button, _buttonTexture, _buttonActiveTexture, GetTextColor());
+            ConfigureButtonStyle(skin.toggle, _buttonTexture, _buttonActiveTexture, GetTextColor());
+            ConfigureInputStyle(skin.textField);
+            ConfigureInputStyle(skin.textArea);
+            ConfigurePanelStyle(skin.window, _boxTexture, GetTextColor());
+            ConfigureScrollbarStyle(skin.horizontalScrollbar);
+            ConfigureScrollbarStyle(skin.verticalScrollbar);
+            ConfigureButtonStyle(skin.horizontalScrollbarThumb, _buttonTexture, _buttonActiveTexture, GetTextColor());
+            ConfigureButtonStyle(skin.verticalScrollbarThumb, _buttonTexture, _buttonActiveTexture, GetTextColor());
+            GuiStyleUtil.ApplyTextColorToAllStates(skin.label, GetTextColor());
+        }
+
+        private static void ConfigurePanelStyle(GUIStyle style, Texture2D background, Color textColor)
+        {
+            if (style == null)
+            {
+                return;
+            }
+
+            GuiStyleUtil.ApplyBackgroundToAllStates(style, background);
+            GuiStyleUtil.ApplyTextColorToAllStates(style, textColor);
+            style.border = new RectOffset(1, 1, 1, 1);
+            style.padding = new RectOffset(6, 6, 6, 6);
+            style.margin = new RectOffset(0, 0, 0, 0);
+        }
+
+        private static void ConfigureButtonStyle(GUIStyle style, Texture2D background, Texture2D activeBackground, Color textColor)
+        {
+            if (style == null)
+            {
+                return;
+            }
+
+            GuiStyleUtil.ApplyBackgroundToAllStates(style, background);
+            style.onNormal.background = activeBackground;
+            style.onHover.background = activeBackground;
+            style.onActive.background = activeBackground;
+            style.onFocused.background = activeBackground;
+            GuiStyleUtil.ApplyTextColorToAllStates(style, textColor);
+            style.border = new RectOffset(1, 1, 1, 1);
+            style.padding = new RectOffset(8, 8, 4, 4);
+            style.margin = new RectOffset(0, 2, 0, 0);
+        }
+
+        private static void ConfigureInputStyle(GUIStyle style)
+        {
+            if (style == null)
+            {
+                return;
+            }
+
+            GuiStyleUtil.ApplyBackgroundToAllStates(style, _inputTexture);
+            GuiStyleUtil.ApplyTextColorToAllStates(style, GetTextColor());
+            style.border = new RectOffset(1, 1, 1, 1);
+            style.padding = new RectOffset(6, 6, 4, 4);
+            style.margin = new RectOffset(0, 0, 0, 0);
+        }
+
+        private static void ConfigureScrollbarStyle(GUIStyle style)
+        {
+            if (style == null)
+            {
+                return;
+            }
+
+            GuiStyleUtil.ApplyBackgroundToAllStates(style, _boxTexture);
+            style.border = new RectOffset(1, 1, 1, 1);
+            style.padding = new RectOffset(0, 0, 0, 0);
+            style.margin = new RectOffset(0, 0, 0, 0);
         }
 
         private static Texture2D MakeTex(Color color)
         {
             var texture = new Texture2D(1, 1);
             texture.SetPixel(0, 0, color);
+            texture.Apply();
+            return texture;
+        }
+
+        private static Texture2D MakeBorderedTex(int width, int height, Color fillColor, Color borderColor)
+        {
+            var texture = new Texture2D(width, height);
+            for (var x = 0; x < width; x++)
+            {
+                for (var y = 0; y < height; y++)
+                {
+                    var isBorder = x == 0 || y == 0 || x == width - 1 || y == height - 1;
+                    texture.SetPixel(x, y, isBorder ? borderColor : fillColor);
+                }
+            }
+
             texture.Apply();
             return texture;
         }

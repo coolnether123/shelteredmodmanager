@@ -55,6 +55,8 @@ namespace Cortex
         private readonly HashSet<string> _activatedContainers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         private readonly CortexShellState _state = new CortexShellState();
+        private readonly Dictionary<string, Action> _moduleActivators = new Dictionary<string, Action>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Action<WorkbenchPresentationSnapshot, bool>> _moduleRenderers = new Dictionary<string, Action<WorkbenchPresentationSnapshot, bool>>(StringComparer.OrdinalIgnoreCase);
         private LogsModule _logsModule;
         private ProjectsModule _projectsModule;
         private EditorModule _editorModule;
@@ -64,6 +66,7 @@ namespace Cortex
         private SettingsModule _settingsModule;
 
         private GUIStyle _titleStyle;
+        private GUIStyle _menuStyle;
         private GUIStyle _statusStyle;
         private GUIStyle _captionStyle;
         private GUIStyle _sectionStyle;
@@ -139,6 +142,8 @@ namespace Cortex
             _frameSnapshot = _workbenchRuntime != null ? _workbenchRuntime.CreateSnapshot() : new WorkbenchPresentationSnapshot();
             CortexIdeLayout.ApplyTheme(_frameSnapshot.ThemeTokens, _frameSnapshot.ActiveThemeId);
             EnsureStyles(_frameSnapshot.ThemeTokens, _frameSnapshot.ActiveThemeId);
+            var previousSkin = GUI.skin;
+            GUI.skin = CortexIdeLayout.GetWorkbenchSkin(previousSkin);
             ClampWindowsToScreen();
             if (_state.Chrome.Main.IsCollapsed)
             {
@@ -164,20 +169,34 @@ namespace Cortex
             }
 
             _frameSnapshot = null;
+            GUI.skin = previousSkin;
         }
 
         private void DrawWindow(int windowId)
         {
             var snapshot = _frameSnapshot ?? (_workbenchRuntime != null ? _workbenchRuntime.CreateSnapshot() : new WorkbenchPresentationSnapshot());
-            GUILayout.BeginVertical();
-            _windowScroll = GUILayout.BeginScrollView(_windowScroll, false, true, GUIStyle.none, GUI.skin.verticalScrollbar);
+            var headerHeight = 72f;
+            var statusHeight = 38f;
+            var contentRect = new Rect(6f, 24f, Mathf.Max(0f, _windowRect.width - 12f), Mathf.Max(0f, _windowRect.height - 30f));
+            var headerRect = new Rect(contentRect.x, contentRect.y, contentRect.width, headerHeight);
+            var statusRect = new Rect(contentRect.x, Mathf.Max(contentRect.y + headerHeight + 8f, contentRect.yMax - statusHeight), contentRect.width, statusHeight);
+            var workbenchRect = new Rect(
+                contentRect.x,
+                headerRect.yMax + 4f,
+                contentRect.width,
+                Mathf.Max(0f, statusRect.y - headerRect.yMax - 8f));
+
+            GUILayout.BeginArea(headerRect);
             DrawHeader(snapshot);
-            GUILayout.Space(6f);
-            DrawWorkbenchSurface(snapshot);
-            GUILayout.Space(6f);
+            GUILayout.EndArea();
+
+            GUILayout.BeginArea(workbenchRect);
+            DrawWorkbenchSurface(snapshot, new Rect(0f, 0f, workbenchRect.width, workbenchRect.height));
+            GUILayout.EndArea();
+
+            GUILayout.BeginArea(statusRect);
             DrawStatusStrip(snapshot);
-            GUILayout.EndScrollView();
-            GUILayout.EndVertical();
+            GUILayout.EndArea();
             ApplyWindowResize(windowId, ref _windowRect, 920f, 580f);
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 28f));
         }
@@ -204,34 +223,16 @@ namespace Cortex
             }
 
             EnsureModuleActivated(containerId);
-
-            switch (containerId)
+            Action<WorkbenchPresentationSnapshot, bool> renderer;
+            if (_moduleRenderers.TryGetValue(containerId, out renderer) && renderer != null)
             {
-                case CortexWorkbenchIds.LogsContainer:
-                    _logsModule.Draw(_runtimeLogFeed, _runtimeSourceNavigationService, _sourcePathResolver, _documentService, _state, detachedWindow);
-                    break;
-                case CortexWorkbenchIds.ProjectsContainer:
-                    _projectsModule.Draw(_projectCatalog, _projectWorkspaceService, _loadedModCatalog, _state);
-                    break;
-                case CortexWorkbenchIds.EditorContainer:
-                    _editorModule.Draw(_documentService, _workspaceBrowserService, _projectWorkspaceService, _loadedModCatalog, _state);
-                    break;
-                case CortexWorkbenchIds.BuildContainer:
-                    _buildModule.Draw(_buildCommandResolver, _buildExecutor, _restartCoordinator, _sourcePathResolver, _documentService, _state);
-                    break;
-                case CortexWorkbenchIds.ReferenceContainer:
-                    _referenceModule.Draw(_sourceReferenceService, _referenceCatalogService, _documentService, _state);
-                    break;
-                case CortexWorkbenchIds.RuntimeContainer:
-                    _runtimeToolsModule.Draw(_runtimeToolBridge, _state);
-                    break;
-                case CortexWorkbenchIds.SettingsContainer:
-                    _settingsModule.Draw(_settingsStore, snapshot, _workbenchRuntime != null ? _workbenchRuntime.ThemeState : null, _state);
-                    break;
-                default:
-                    _projectsModule.Draw(_projectCatalog, _projectWorkspaceService, _loadedModCatalog, _state);
-                    break;
+                renderer(snapshot, detachedWindow);
+                return;
             }
+
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandHeight(true));
+            GUILayout.Label("No renderer is registered for " + containerId + ".");
+            GUILayout.EndVertical();
         }
 
         private void InitializeSettingsAndServices()
@@ -514,10 +515,11 @@ namespace Cortex
 
         private void EnsureStyles(ThemeTokenSet themeTokens, string themeId)
         {
-            var effectiveThemeId = string.IsNullOrEmpty(themeId) ? "cortex.default" : themeId;
+            var effectiveThemeId = string.IsNullOrEmpty(themeId) ? "cortex.vs-dark" : themeId;
             if (!string.Equals(_appliedThemeId, effectiveThemeId, StringComparison.OrdinalIgnoreCase))
             {
                 _titleStyle = null;
+                _menuStyle = null;
                 _statusStyle = null;
                 _captionStyle = null;
                 _sectionStyle = null;
@@ -543,9 +545,18 @@ namespace Cortex
             if (_titleStyle == null)
             {
                 _titleStyle = new GUIStyle(GUI.skin.label);
-                _titleStyle.fontSize = 16;
+                _titleStyle.fontSize = 13;
                 _titleStyle.fontStyle = FontStyle.Bold;
                 GuiStyleUtil.ApplyTextColorToAllStates(_titleStyle, textColor);
+            }
+
+            if (_menuStyle == null)
+            {
+                _menuStyle = new GUIStyle(GUI.skin.label);
+                _menuStyle.fontSize = 12;
+                _menuStyle.fontStyle = FontStyle.Normal;
+                _menuStyle.padding = new RectOffset(6, 6, 3, 3);
+                GuiStyleUtil.ApplyTextColorToAllStates(_menuStyle, textColor);
             }
 
             if (_statusStyle == null)
@@ -567,17 +578,18 @@ namespace Cortex
                 _sectionStyle = new GUIStyle(GUI.skin.box);
                 _sectionBackground = MakeTex(surfaceColor);
                 GuiStyleUtil.ApplyBackgroundToAllStates(_sectionStyle, _sectionBackground);
-                _sectionStyle.padding = new RectOffset(10, 10, 8, 8);
-                _sectionStyle.margin = new RectOffset(4, 4, 4, 4);
+                _sectionStyle.padding = new RectOffset(8, 8, 6, 6);
+                _sectionStyle.margin = new RectOffset(0, 0, 0, 0);
             }
 
             if (_windowStyle == null)
             {
-                _windowBackground = MakeTex(backgroundColor);
+                _windowBackground = MakeTex(surfaceColor);
                 _windowStyle = new GUIStyle(GUI.skin.window);
                 GuiStyleUtil.ApplyBackgroundToAllStates(_windowStyle, _windowBackground);
                 GuiStyleUtil.ApplyTextColorToAllStates(_windowStyle, textColor);
-                _windowStyle.padding = new RectOffset(8, 8, 24, 8);
+                _windowStyle.padding = new RectOffset(6, 6, 24, 6);
+                _windowStyle.margin = new RectOffset(0, 0, 0, 0);
             }
 
             if (_tabStyle == null)
@@ -587,8 +599,8 @@ namespace Cortex
                 GuiStyleUtil.ApplyBackgroundToAllStates(_tabStyle, _tabBackground);
                 GuiStyleUtil.ApplyTextColorToAllStates(_tabStyle, mutedTextColor);
                 _tabStyle.alignment = TextAnchor.MiddleCenter;
-                _tabStyle.padding = new RectOffset(10, 10, 4, 4);
-                _tabStyle.margin = new RectOffset(0, 4, 0, 0);
+                _tabStyle.padding = new RectOffset(10, 10, 5, 5);
+                _tabStyle.margin = new RectOffset(0, 2, 0, 0);
             }
 
             if (_activeTabStyle == null)

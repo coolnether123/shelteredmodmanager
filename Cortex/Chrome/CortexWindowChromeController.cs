@@ -93,6 +93,11 @@ namespace Cortex.Chrome
         public static float DrawVerticalSplitter(int splitterId, float currentSize, float minSize, float maxSize, float thickness, bool invertDelta)
         {
             var rect = GUILayoutUtility.GetRect(thickness, 1f, GUILayout.Width(thickness), GUILayout.ExpandHeight(true));
+            return DrawVerticalSplitter(splitterId, rect, currentSize, minSize, maxSize, invertDelta);
+        }
+
+        public static float DrawVerticalSplitter(int splitterId, Rect rect, float currentSize, float minSize, float maxSize, bool invertDelta)
+        {
             GUI.Box(rect, string.Empty);
             var current = Event.current;
             if (current == null)
@@ -122,6 +127,11 @@ namespace Cortex.Chrome
         public static float DrawHorizontalSplitter(int splitterId, float currentSize, float minSize, float maxSize, float thickness)
         {
             var rect = GUILayoutUtility.GetRect(1f, thickness, GUILayout.Height(thickness), GUILayout.ExpandWidth(true));
+            return DrawHorizontalSplitter(splitterId, rect, currentSize, minSize, maxSize);
+        }
+
+        public static float DrawHorizontalSplitter(int splitterId, Rect rect, float currentSize, float minSize, float maxSize)
+        {
             GUI.Box(rect, string.Empty);
             var current = Event.current;
             if (current == null)

@@ -30,7 +30,7 @@ namespace Cortex.Presentation.Services
 
             if (themeState != null)
             {
-                snapshot.ActiveThemeId = themeState.ThemeId ?? "cortex.default";
+                snapshot.ActiveThemeId = themeState.ThemeId ?? "cortex.vs-dark";
             }
 
             PopulateThemeTokens(snapshot, contributionRegistry);

@@ -32,8 +32,8 @@ namespace Cortex.Core.Models
         public PersistedWorkbenchState()
         {
             FocusedContainerId = CortexWorkbenchIds.EditorContainer;
-            SideContainerId = CortexWorkbenchIds.ProjectsContainer;
-            SecondarySideContainerId = string.Empty;
+            SideContainerId = string.Empty;
+            SecondarySideContainerId = CortexWorkbenchIds.ProjectsContainer;
             EditorContainerId = CortexWorkbenchIds.EditorContainer;
             PanelContainerId = CortexWorkbenchIds.LogsContainer;
             ShowDetachedLogWindow = false;

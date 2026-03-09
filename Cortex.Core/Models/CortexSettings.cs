@@ -37,7 +37,7 @@ namespace Cortex.Core.Models
             ProjectCatalogPath = string.Empty;
             DecompilerPathOverride = string.Empty;
             DecompilerCachePath = string.Empty;
-            ThemeId = "cortex.default";
+            ThemeId = "cortex.vs-dark";
             DefaultBuildConfiguration = "Debug";
             BuildTimeoutMs = 300000;
             MaxRecentLogs = 300;

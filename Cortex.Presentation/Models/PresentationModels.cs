@@ -34,15 +34,15 @@ namespace Cortex.Presentation.Models
 
         public ThemeTokenSet()
         {
-            BackgroundColor = "#0c0c11";
-            SurfaceColor = "#181922";
-            HeaderColor = "#252835";
-            BorderColor = "#303545";
-            AccentColor = "#4db3ff";
-            TextColor = "#f2f4f8";
-            MutedTextColor = "#c0c6d4";
-            WarningColor = "#f2c14e";
-            ErrorColor = "#ff6b6b";
+            BackgroundColor = "#1E1E1E";
+            SurfaceColor = "#252526";
+            HeaderColor = "#2D2D30";
+            BorderColor = "#3F3F46";
+            AccentColor = "#007ACC";
+            TextColor = "#D4D4D4";
+            MutedTextColor = "#858585";
+            WarningColor = "#C8A155";
+            ErrorColor = "#F48771";
             FontRole = "compact-mono";
         }
     }
@@ -98,7 +98,7 @@ namespace Cortex.Presentation.Models
             ThemeTokens = new ThemeTokenSet();
             ActiveContainerId = string.Empty;
             FocusedRegionId = string.Empty;
-            ActiveThemeId = "cortex.default";
+            ActiveThemeId = "cortex.vs-dark";
             RendererSummary = string.Empty;
         }
     }
