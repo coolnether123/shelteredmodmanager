@@ -101,6 +101,28 @@ namespace Cortex.Modules.Shared
             return Lerp(NeutralText, GetAccentColor(level), 0.35f, 1f);
         }
 
+        public static string GetModScope(string source)
+        {
+            if (string.IsNullOrEmpty(source))
+            {
+                return string.Empty;
+            }
+
+            var normalized = source.Trim();
+            if (normalized.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            var segments = normalized.Split(new[] { '.' }, StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length >= 2)
+            {
+                return segments[0] + "." + segments[1];
+            }
+
+            return normalized;
+        }
+
         private static Color MultiplyRgb(Color color, float factor, float alpha)
         {
             return new Color(color.r * factor, color.g * factor, color.b * factor, alpha);

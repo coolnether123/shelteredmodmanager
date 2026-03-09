@@ -22,6 +22,7 @@ namespace Cortex.Modules.Editor
         private Vector2 _tabScroll = Vector2.zero;
         private Vector2 _editorScroll = Vector2.zero;
         private Vector2 _navigatorScroll = Vector2.zero;
+        private Vector2 _diagnosticScroll = Vector2.zero;
 
         public void Draw(IDocumentService documentService, CortexShellState state)
         {
@@ -43,7 +44,7 @@ namespace Cortex.Modules.Editor
         private void DrawToolbar(IDocumentService documentService, CortexShellState state)
         {
             GUILayout.BeginHorizontal(GUI.skin.box);
-            GUILayout.Label("Open", GUILayout.Width(36f));
+            GUILayout.Label("Open File", GUILayout.Width(58f));
             _openPath = GUILayout.TextField(_openPath, GUILayout.ExpandWidth(true));
             if (GUILayout.Button("Open", GUILayout.Width(80f)))
             {
@@ -52,9 +53,14 @@ namespace Cortex.Modules.Editor
                     CortexModuleUtil.OpenDocument(documentService, state, _openPath, 0);
                     state.StatusMessage = "Opened " + _openPath;
                 }
+                else if (Directory.Exists(_openPath))
+                {
+                    ApplySourceFolder(state, _openPath);
+                }
                 else
                 {
-                    state.StatusMessage = "File not found: " + _openPath;
+                    state.StatusMessage = "File or source folder not found: " + _openPath;
+                    state.Diagnostics.Add(state.StatusMessage);
                 }
             }
             state.Documents.EditorUnlocked = GUILayout.Toggle(state.Documents.EditorUnlocked, "Allow Editing", GUILayout.Width(110f));
@@ -78,14 +84,24 @@ namespace Cortex.Modules.Editor
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
+            GUILayout.Label("Source Root", GUILayout.Width(74f));
+            GUILayout.TextField(state.SelectedProject != null ? state.SelectedProject.SourceRootPath ?? string.Empty : string.Empty, GUILayout.ExpandWidth(true));
+            if (GUILayout.Button("Projects", GUILayout.Width(90f)))
+            {
+                state.Workbench.RequestedContainerId = CortexWorkbenchIds.ProjectsContainer;
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
             GUILayout.Label("Filter", GUILayout.Width(34f));
             _fileSearch = GUILayout.TextField(_fileSearch, GUILayout.ExpandWidth(true));
             GUILayout.EndHorizontal();
-            GUILayout.Label("Browse configured mod source and generated decompiled files. Use Projects to map a loaded mod to its source root.", GUI.skin.label);
+            GUILayout.Label("Browse the selected mod source tree and generated decompiled files. Paste a source folder into 'Open File' to auto-map it.", GUI.skin.label);
 
             RefreshProjectFilesIfNeeded(state);
             _navigatorScroll = GUILayout.BeginScrollView(_navigatorScroll, GUI.skin.box, GUILayout.ExpandHeight(true));
             DrawSourceStatus(state);
+            GUILayout.Space(6f);
+            DrawWorkflowDiagnostics(state);
             GUILayout.Space(6f);
             DrawTreeGroup("Mod Source", state.SelectedProject != null ? state.SelectedProject.SourceRootPath : string.Empty, documentService, state);
             GUILayout.Space(6f);
@@ -249,7 +265,7 @@ namespace Cortex.Modules.Editor
             {
                 if (project == null)
                 {
-                    GUILayout.Label("No Cortex project is selected. Open Projects and choose or create a mapping for the loaded mod you want to edit.");
+                    GUILayout.Label("No source folder is mapped yet. Open Projects and paste your mod's project-tree root, or paste that folder into 'Open File' above.");
                     if (GUILayout.Button("Open Projects Setup", GUILayout.Width(160f)))
                     {
                         state.Workbench.RequestedContainerId = CortexWorkbenchIds.ProjectsContainer;
@@ -260,7 +276,7 @@ namespace Cortex.Modules.Editor
                 GUILayout.Label("Project: " + project.GetDisplayName());
                 if (hasConfiguredSource)
                 {
-                    GUILayout.Label("Configured source root: " + project.SourceRootPath);
+                    GUILayout.Label("Mapped source folder: " + project.SourceRootPath);
                     return;
                 }
 
@@ -284,6 +300,61 @@ namespace Cortex.Modules.Editor
                     state.Workbench.RequestedContainerId = CortexWorkbenchIds.SettingsContainer;
                 }
                 GUILayout.EndHorizontal();
+            });
+        }
+
+        private static void ApplySourceFolder(CortexShellState state, string sourceFolder)
+        {
+            if (state == null || string.IsNullOrEmpty(sourceFolder))
+            {
+                return;
+            }
+
+            string normalizedRoot;
+            try
+            {
+                normalizedRoot = Path.GetFullPath(sourceFolder.Trim());
+            }
+            catch (Exception ex)
+            {
+                state.StatusMessage = "Invalid source folder: " + ex.Message;
+                state.Diagnostics.Add(state.StatusMessage);
+                return;
+            }
+
+            var project = state.SelectedProject ?? new CortexProjectDefinition();
+            project.SourceRootPath = normalizedRoot;
+            if (string.IsNullOrEmpty(project.ModId))
+            {
+                project.ModId = Path.GetFileName(normalizedRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            }
+
+            project.ProjectFilePath = DetectProjectFile(normalizedRoot);
+            state.SelectedProject = project;
+            state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
+            state.StatusMessage = "Mapped source folder: " + normalizedRoot;
+            state.Diagnostics.Add("Editor mapped source folder " + normalizedRoot + ".");
+            state.Diagnostics.Add(string.IsNullOrEmpty(project.ProjectFilePath)
+                ? "No .csproj detected from the editor source-folder action."
+                : "Detected project file from editor source-folder action: " + project.ProjectFilePath);
+        }
+
+        private void DrawWorkflowDiagnostics(CortexShellState state)
+        {
+            CortexIdeLayout.DrawGroup("Workflow Diagnostics", delegate
+            {
+                if (state == null || state.Diagnostics.Entries.Count == 0)
+                {
+                    GUILayout.Label("No Cortex workflow diagnostics yet.");
+                    return;
+                }
+
+                _diagnosticScroll = GUILayout.BeginScrollView(_diagnosticScroll, GUI.skin.box, GUILayout.Height(108f));
+                for (var i = state.Diagnostics.Entries.Count - 1; i >= 0; i--)
+                {
+                    GUILayout.Label(state.Diagnostics.Entries[i]);
+                }
+                GUILayout.EndScrollView();
             });
         }
 
@@ -518,6 +589,38 @@ namespace Cortex.Modules.Editor
 
                 CollectProjectFiles(directories[i], results);
             }
+        }
+
+        private static string DetectProjectFile(string rootPath)
+        {
+            if (string.IsNullOrEmpty(rootPath) || !Directory.Exists(rootPath))
+            {
+                return string.Empty;
+            }
+
+            string[] files;
+            try
+            {
+                files = Directory.GetFiles(rootPath, "*.csproj", SearchOption.AllDirectories);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+
+            for (var i = 0; i < files.Length; i++)
+            {
+                var file = files[i];
+                if (file.IndexOf("\\bin\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    file.IndexOf("\\obj\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    continue;
+                }
+
+                return file;
+            }
+
+            return string.Empty;
         }
     }
 }

@@ -38,7 +38,7 @@ namespace Cortex.Host.Unity.Runtime
 
         public WorkbenchPresentationSnapshot CreateSnapshot()
         {
-            var snapshot = Presenter.BuildSnapshot(WorkbenchState, LayoutState, StatusState, ThemeState, FocusState, ContributionRegistry);
+            var snapshot = Presenter.BuildSnapshot(WorkbenchState, LayoutState, StatusState, ThemeState, FocusState, CommandRegistry, ContributionRegistry);
             snapshot.RendererSummary = Renderer.DisplayName + " | Capabilities v" + Renderer.Capabilities.CapabilityVersion;
             return snapshot;
         }

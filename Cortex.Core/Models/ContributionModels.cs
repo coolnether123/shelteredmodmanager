@@ -25,6 +25,14 @@ namespace Cortex.Core.Models
         Right
     }
 
+    public enum SettingValueKind
+    {
+        String,
+        Integer,
+        Float,
+        Boolean
+    }
+
     public sealed class ViewContainerContribution
     {
         public string ContainerId;
@@ -79,6 +87,18 @@ namespace Cortex.Core.Models
     {
         public string ThemeId;
         public string DisplayName;
+        public string Description;
+        public string BackgroundColor;
+        public string SurfaceColor;
+        public string HeaderColor;
+        public string BorderColor;
+        public string AccentColor;
+        public string TextColor;
+        public string MutedTextColor;
+        public string WarningColor;
+        public string ErrorColor;
+        public string FontRole;
+        public int SortOrder;
     }
 
     public sealed class IconContribution
@@ -94,5 +114,7 @@ namespace Cortex.Core.Models
         public string Description;
         public string Scope;
         public string DefaultValue;
+        public SettingValueKind ValueKind;
+        public int SortOrder;
     }
 }

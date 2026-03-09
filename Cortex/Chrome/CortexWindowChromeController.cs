@@ -8,7 +8,9 @@ namespace Cortex.Chrome
     {
         public string ActionId;
         public string Label;
+        public string ToolTip;
         public float Width;
+        public float Height;
         public Action Execute;
     }
 
@@ -18,6 +20,7 @@ namespace Cortex.Chrome
         private static int _resizingWindowId = -1;
         private static Rect _resizeStartRect = new Rect(0f, 0f, 0f, 0f);
         private static Vector2 _resizeStartMouse = Vector2.zero;
+        private static int _draggingSplitterId = -1;
 
         public static Rect BuildCollapsedRect(Rect expandedRect, float width, float height)
         {
@@ -87,6 +90,64 @@ namespace Cortex.Chrome
             return GUI.Button(rect, label, style);
         }
 
+        public static float DrawVerticalSplitter(int splitterId, float currentSize, float minSize, float maxSize, float thickness, bool invertDelta)
+        {
+            var rect = GUILayoutUtility.GetRect(thickness, 1f, GUILayout.Width(thickness), GUILayout.ExpandHeight(true));
+            GUI.Box(rect, string.Empty);
+            var current = Event.current;
+            if (current == null)
+            {
+                return currentSize;
+            }
+
+            if (current.type == EventType.MouseDown && rect.Contains(current.mousePosition))
+            {
+                _draggingSplitterId = splitterId;
+                current.Use();
+            }
+            else if (_draggingSplitterId == splitterId && current.type == EventType.MouseDrag)
+            {
+                currentSize = Mathf.Clamp(currentSize + (invertDelta ? -current.delta.x : current.delta.x), minSize, maxSize);
+                current.Use();
+            }
+            else if (_draggingSplitterId == splitterId && (current.type == EventType.MouseUp || current.rawType == EventType.MouseUp))
+            {
+                _draggingSplitterId = -1;
+                current.Use();
+            }
+
+            return currentSize;
+        }
+
+        public static float DrawHorizontalSplitter(int splitterId, float currentSize, float minSize, float maxSize, float thickness)
+        {
+            var rect = GUILayoutUtility.GetRect(1f, thickness, GUILayout.Height(thickness), GUILayout.ExpandWidth(true));
+            GUI.Box(rect, string.Empty);
+            var current = Event.current;
+            if (current == null)
+            {
+                return currentSize;
+            }
+
+            if (current.type == EventType.MouseDown && rect.Contains(current.mousePosition))
+            {
+                _draggingSplitterId = splitterId;
+                current.Use();
+            }
+            else if (_draggingSplitterId == splitterId && current.type == EventType.MouseDrag)
+            {
+                currentSize = Mathf.Clamp(currentSize - current.delta.y, minSize, maxSize);
+                current.Use();
+            }
+            else if (_draggingSplitterId == splitterId && (current.type == EventType.MouseUp || current.rawType == EventType.MouseUp))
+            {
+                _draggingSplitterId = -1;
+                current.Use();
+            }
+
+            return currentSize;
+        }
+
         public static void DrawActions(IList<CortexWindowAction> actions)
         {
             if (actions == null || actions.Count == 0)
@@ -103,7 +164,8 @@ namespace Cortex.Chrome
                 }
 
                 var width = action.Width > 0f ? action.Width : 80f;
-                if (GUILayout.Button(action.Label ?? action.ActionId ?? "Action", GUILayout.Width(width)))
+                var height = action.Height > 0f ? action.Height : 22f;
+                if (GUILayout.Button(new GUIContent(action.Label ?? action.ActionId ?? "Action", action.ToolTip ?? string.Empty), GUILayout.Width(width), GUILayout.Height(height)))
                 {
                     action.Execute();
                 }

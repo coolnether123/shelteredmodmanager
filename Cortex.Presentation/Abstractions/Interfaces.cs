@@ -12,6 +12,7 @@ namespace Cortex.Presentation.Abstractions
             StatusState statusState,
             ThemeState themeState,
             FocusState focusState,
+            ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry);
     }
 }

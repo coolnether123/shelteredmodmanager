@@ -15,6 +15,7 @@ namespace Cortex.Modules.Logs
         private Vector2 _frameScroll = Vector2.zero;
         private Vector2 _backlogScroll = Vector2.zero;
         private string _minimumLevel = "Info";
+        private string _modFilter = string.Empty;
         private string _sourceFilter = string.Empty;
         private string _messageFilter = string.Empty;
         private int _lastEntryCount;
@@ -61,7 +62,8 @@ namespace Cortex.Modules.Logs
         {
             var settings = state.Settings ?? new CortexSettings();
             var entries = logFeed.ReadRecent(_minimumLevel, settings.MaxRecentLogs);
-            var summary = BuildSummary(entries);
+            var visibleEntries = FilterEntries(entries);
+            var summary = BuildSummary(entries.Count, visibleEntries);
 
             if (entries.Count != _lastEntryCount && settings.AutoScrollLogs)
             {
@@ -78,7 +80,7 @@ namespace Cortex.Modules.Logs
                 360f,
                 delegate
                 {
-                    DrawEntriesPane(logFeed, entries, settings, state, detachedWindow);
+                    DrawEntriesPane(logFeed, entries, visibleEntries, settings, state, detachedWindow);
                 },
                 delegate
                 {
@@ -93,12 +95,18 @@ namespace Cortex.Modules.Logs
             GUILayout.BeginHorizontal(GUI.skin.box);
             GUILayout.Label("Level", GUILayout.Width(36f));
             _minimumLevel = GUILayout.TextField(_minimumLevel, GUILayout.Width(70f));
+            GUILayout.Label("Mod", GUILayout.Width(28f));
+            _modFilter = GUILayout.TextField(_modFilter, GUILayout.Width(160f));
+            if (state.SelectedProject != null && !string.IsNullOrEmpty(state.SelectedProject.ModId) && GUILayout.Button("Active", GUILayout.Width(56f)))
+            {
+                _modFilter = state.SelectedProject.ModId;
+            }
             GUILayout.Label("Source", GUILayout.Width(44f));
             _sourceFilter = GUILayout.TextField(_sourceFilter, GUILayout.Width(160f));
             GUILayout.Label("Text", GUILayout.Width(30f));
             _messageFilter = GUILayout.TextField(_messageFilter, GUILayout.ExpandWidth(true));
             settings.AutoScrollLogs = GUILayout.Toggle(settings.AutoScrollLogs, "Auto");
-            settings.ShowLogBacklog = GUILayout.Toggle(settings.ShowLogBacklog, "Backlog");
+            settings.ShowLogBacklog = GUILayout.Toggle(settings.ShowLogBacklog, "File Tail");
             if (!detachedWindow && GUILayout.Button(state.Logs.ShowDetachedWindow ? "Hide Window" : "Pop Out", GUILayout.Width(90f)))
             {
                 state.Logs.ShowDetachedWindow = !state.Logs.ShowDetachedWindow;
@@ -114,6 +122,7 @@ namespace Cortex.Modules.Logs
                 DrawSummaryChip("Errors", summary.Errors, RuntimeLogVisuals.GetAccentColor("Error"));
                 DrawSummaryChip("Warnings", summary.Warnings, RuntimeLogVisuals.GetAccentColor("Warning"));
                 DrawSummaryChip("Info", summary.Info, RuntimeLogVisuals.GetAccentColor("Info"));
+                DrawSummaryChip("Live", summary.TotalLive, CortexIdeLayout.GetMutedTextColor());
                 DrawSummaryChip("Visible", summary.Visible, new Color(0.49f, 0.9f, 0.65f, 1f));
                 GUILayout.FlexibleSpace();
                 GUILayout.EndHorizontal();
@@ -143,31 +152,40 @@ namespace Cortex.Modules.Logs
             GUI.contentColor = previous;
         }
 
-        private void DrawEntriesPane(IRuntimeLogFeed logFeed, IList<RuntimeLogEntry> entries, CortexSettings settings, CortexShellState state, bool detachedWindow)
+        private void DrawEntriesPane(IRuntimeLogFeed logFeed, IList<RuntimeLogEntry> entries, IList<RuntimeLogEntry> visibleEntries, CortexSettings settings, CortexShellState state, bool detachedWindow)
         {
-            CortexIdeLayout.DrawGroup("Live Entries (" + entries.Count + ")", delegate
+            CortexIdeLayout.DrawGroup("Live Entries (" + visibleEntries.Count + " / " + entries.Count + ")", delegate
             {
                 _entryScroll = GUILayout.BeginScrollView(_entryScroll, GUI.skin.box, GUILayout.MinHeight(detachedWindow ? 248f : 260f), GUILayout.ExpandHeight(true));
-                for (var i = 0; i < entries.Count; i++)
+                if (visibleEntries.Count == 0)
                 {
-                    var entry = entries[i];
-                    if (!Matches(entry))
+                    GUILayout.Label("No live entries match the current level, mod, source, and text filters.", _wrappedLabel);
+                }
+                else
+                {
+                    for (var i = 0; i < visibleEntries.Count; i++)
                     {
-                        continue;
+                        DrawEntryButton(visibleEntries[i], state);
                     }
-
-                    DrawEntryButton(entry, state);
                 }
                 GUILayout.EndScrollView();
 
                 if (settings.ShowLogBacklog)
                 {
-                    GUILayout.Label("Recent File Backlog");
+                    GUILayout.Label("File Tail History");
+                    GUILayout.Label("Optional raw file tail for lines that existed before Cortex attached or were not captured in the live feed.", _summaryStyle);
                     var backlog = logFeed.ReadBacklog(settings.LogFilePath, 18);
                     _backlogScroll = GUILayout.BeginScrollView(_backlogScroll, GUI.skin.box, GUILayout.Height(110f));
-                    for (var i = 0; i < backlog.Count; i++)
+                    if (backlog.Count == 0)
                     {
-                        GUILayout.Label(backlog[i], _wrappedLabel);
+                        GUILayout.Label("No file-tail history is available for the configured log path.", _wrappedLabel);
+                    }
+                    else
+                    {
+                        for (var i = 0; i < backlog.Count; i++)
+                        {
+                            GUILayout.Label(backlog[i], _wrappedLabel);
+                        }
                     }
                     GUILayout.EndScrollView();
                 }
@@ -206,10 +224,7 @@ namespace Cortex.Modules.Logs
             int lineNumber;
             var hasSource = CortexModuleUtil.TryResolveSourceLocation(state.Logs.SelectedEntry.Message, state.SelectedProject, state.Settings, out filePath, out lineNumber);
             GUILayout.Space(6f);
-            GUILayout.Label(hasSource
-                ? "Resolved source: " + filePath + " @ line " + lineNumber
-                : "No source mapping was found in this entry. Stack traces and compiler-style file markers are supported.",
-                _wrappedLabel);
+            GUILayout.Label(CortexModuleUtil.BuildSourceResolutionExplanation(state.Logs.SelectedEntry, state.SelectedProject, state.Settings), _wrappedLabel);
 
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Copy Entry", GUILayout.Width(120f)))
@@ -336,8 +351,42 @@ namespace Cortex.Modules.Logs
             return builder.ToString();
         }
 
+        private List<RuntimeLogEntry> FilterEntries(IList<RuntimeLogEntry> entries)
+        {
+            var visibleEntries = new List<RuntimeLogEntry>();
+            if (entries == null)
+            {
+                return visibleEntries;
+            }
+
+            for (var i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                if (Matches(entry))
+                {
+                    visibleEntries.Add(entry);
+                }
+            }
+
+            return visibleEntries;
+        }
+
         private bool Matches(RuntimeLogEntry entry)
         {
+            if (entry == null)
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(_modFilter))
+            {
+                var modScope = RuntimeLogVisuals.GetModScope(entry.Source);
+                if (modScope.IndexOf(_modFilter, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    return false;
+                }
+            }
+
             if (!string.IsNullOrEmpty(_sourceFilter) &&
                 (entry.Source ?? string.Empty).IndexOf(_sourceFilter, StringComparison.OrdinalIgnoreCase) < 0)
             {
@@ -416,12 +465,18 @@ namespace Cortex.Modules.Logs
             return firstLine;
         }
 
-        private static LogSummary BuildSummary(IList<RuntimeLogEntry> entries)
+        private static LogSummary BuildSummary(int totalLive, IList<RuntimeLogEntry> visibleEntries)
         {
             var summary = new LogSummary();
-            for (var i = 0; i < entries.Count; i++)
+            summary.TotalLive = totalLive;
+            if (visibleEntries == null)
             {
-                var severity = RuntimeLogVisuals.GetSeverity(entries[i].Level);
+                return summary;
+            }
+
+            for (var i = 0; i < visibleEntries.Count; i++)
+            {
+                var severity = RuntimeLogVisuals.GetSeverity(visibleEntries[i].Level);
                 summary.Visible++;
                 if (severity == RuntimeLogSeverity.Error || severity == RuntimeLogSeverity.Fatal)
                 {
@@ -456,6 +511,7 @@ namespace Cortex.Modules.Logs
         }
         private sealed class LogSummary
         {
+            public int TotalLive;
             public int Errors;
             public int Warnings;
             public int Info;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
@@ -126,6 +127,52 @@ namespace Cortex.Modules.Shared
             }
 
             return false;
+        }
+
+        public static string BuildSourceResolutionExplanation(RuntimeLogEntry entry, CortexProjectDefinition project, CortexSettings settings)
+        {
+            if (entry == null)
+            {
+                return "No log entry is selected.";
+            }
+
+            string filePath;
+            int lineNumber;
+            if (TryResolveSourceLocation(entry.Message, project, settings, out filePath, out lineNumber))
+            {
+                return "Resolved source from an embedded file marker: " + filePath + " @ line " + lineNumber + ".";
+            }
+
+            if (entry.StackFrames != null && entry.StackFrames.Count > 0)
+            {
+                return "No file marker was embedded in the log message. Cortex did capture runtime stack frames for this entry, so use the frame list below to inspect likely methods and open the best match.";
+            }
+
+            var builder = new StringBuilder();
+            builder.Append("Cortex could not resolve an exact function from this entry. ");
+            if (!string.IsNullOrEmpty(entry.Source))
+            {
+                builder.Append("The source label '");
+                builder.Append(entry.Source);
+                builder.Append("' is only a logger/channel name here, not a file or method signature. ");
+            }
+
+            builder.Append("The message does not contain a compiler-style file marker or stack-trace path, and no structured runtime frames were captured. ");
+
+            var roots = BuildSearchRoots(project, settings);
+            if (roots.Count > 0)
+            {
+                builder.Append("Search roots checked: ");
+                builder.Append(string.Join(", ", roots.ToArray()));
+                builder.Append(". ");
+            }
+            else
+            {
+                builder.Append("No source search roots are configured yet. ");
+            }
+
+            builder.Append("For exact navigation, include a stack trace or a file:line marker in the log message.");
+            return builder.ToString();
         }
 
         public static string ResolveCandidatePath(CortexProjectDefinition project, CortexSettings settings, string rawPath)
