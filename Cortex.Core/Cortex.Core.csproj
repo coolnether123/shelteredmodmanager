@@ -70,7 +70,9 @@
     <Compile Include="Services\ReferenceCatalogService.cs" />
     <Compile Include="Services\RoslynLanguageServiceClient.cs" />
     <Compile Include="Services\RuntimeSourceNavigationService.cs" />
+    <Compile Include="Services\SourceLookupIndexService.cs" />
     <Compile Include="Services\SourcePathResolver.cs" />
+    <Compile Include="Services\SourceRootSetBuilder.cs" />
     <Compile Include="Services\SourceReferenceService.cs" />
     <Compile Include="Services\WorkspaceBrowserService.cs" />
     <Compile Include="Services\WorkspaceLocator.cs" />

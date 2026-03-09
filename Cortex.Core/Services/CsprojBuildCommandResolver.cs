@@ -27,7 +27,15 @@ namespace Cortex.Core.Services
 
             if (isSdkStyle)
             {
-                command.Arguments = (clean ? "clean " : "build ") + Quote(project.ProjectFilePath) + " --configuration " + (configuration ?? "Debug");
+                if (clean)
+                {
+                    command.Steps.Add(CreateStep("dotnet", "clean " + Quote(project.ProjectFilePath) + " --configuration " + (configuration ?? "Debug"), command.WorkingDirectory));
+                }
+
+                command.Steps.Add(CreateStep("dotnet", "build " + Quote(project.ProjectFilePath) + " --configuration " + (configuration ?? "Debug"), command.WorkingDirectory));
+                var lastStep = command.Steps[command.Steps.Count - 1];
+                command.FileName = lastStep.FileName;
+                command.Arguments = lastStep.Arguments;
             }
             else
             {
@@ -175,6 +183,16 @@ namespace Cortex.Core.Services
         private static string Quote(string text)
         {
             return "\"" + (text ?? string.Empty).Replace("\"", "\\\"") + "\"";
+        }
+
+        private static BuildCommandStep CreateStep(string fileName, string arguments, string workingDirectory)
+        {
+            return new BuildCommandStep
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                WorkingDirectory = workingDirectory
+            };
         }
     }
 }

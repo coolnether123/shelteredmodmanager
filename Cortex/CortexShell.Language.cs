@@ -678,15 +678,10 @@ namespace Cortex
             AddSearchRoot(searchRoots, Path.Combine(smmBinRoot, "decompiler"));
             if (_state.Settings != null)
             {
-                AddSearchRoot(searchRoots, _state.Settings.WorkspaceRootPath);
-                if (!string.IsNullOrEmpty(_state.Settings.ManagedAssemblyRootPath))
+                var configuredRoots = SourceRootSetBuilder.Build(_state.SelectedProject, _state.Settings, SourceRootSetBuilder.LanguageServiceRoots);
+                for (var i = 0; i < configuredRoots.Count; i++)
                 {
-                    AddSearchRoot(searchRoots, _state.Settings.ManagedAssemblyRootPath);
-                }
-
-                if (!string.IsNullOrEmpty(_state.Settings.ModsRootPath))
-                {
-                    AddSearchRoot(searchRoots, _state.Settings.ModsRootPath);
+                    AddSearchRoot(searchRoots, configuredRoots[i]);
                 }
 
                 if (!string.IsNullOrEmpty(_state.Settings.DecompilerCachePath))
@@ -695,30 +690,12 @@ namespace Cortex
                 }
             }
 
-            for (var i = 0; i < searchRoots.Count; i++)
+            assemblyPath = _sourceLookupIndex != null
+                ? _sourceLookupIndex.ResolveAssemblyPath(searchRoots, assemblyName)
+                : string.Empty;
+            if (!string.IsNullOrEmpty(assemblyPath))
             {
-                var candidate = Path.Combine(searchRoots[i], assemblyName + ".dll");
-                if (File.Exists(candidate))
-                {
-                    assemblyPath = candidate;
-                    return true;
-                }
-            }
-
-            for (var i = 0; i < searchRoots.Count; i++)
-            {
-                try
-                {
-                    var matches = Directory.GetFiles(searchRoots[i], assemblyName + ".dll", SearchOption.AllDirectories);
-                    if (matches.Length > 0)
-                    {
-                        assemblyPath = matches[0];
-                        return true;
-                    }
-                }
-                catch
-                {
-                }
+                return true;
             }
 
             return false;
@@ -734,7 +711,7 @@ namespace Cortex
             try
             {
                 var fullPath = Path.GetFullPath(root);
-                if (!Directory.Exists(fullPath))
+                if (!Directory.Exists(fullPath) && !File.Exists(fullPath))
                 {
                     return;
                 }
@@ -1124,43 +1101,7 @@ namespace Cortex
 
         private static string[] BuildLanguageSourceRoots(CortexSettings settings, CortexProjectDefinition project)
         {
-            var roots = new List<string>();
-            AddLanguageRoot(roots, project != null ? project.SourceRootPath : string.Empty);
-            AddLanguageRoot(roots, settings != null ? settings.WorkspaceRootPath : string.Empty);
-            AddLanguageRoot(roots, settings != null ? settings.ModsRootPath : string.Empty);
-            AddLanguageRoot(roots, settings != null ? settings.ManagedAssemblyRootPath : string.Empty);
-
-            var additional = settings != null ? settings.AdditionalSourceRoots : string.Empty;
-            if (!string.IsNullOrEmpty(additional))
-            {
-                var segments = additional.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                for (var i = 0; i < segments.Length; i++)
-                {
-                    AddLanguageRoot(roots, segments[i]);
-                }
-            }
-
-            return roots.ToArray();
-        }
-
-        private static void AddLanguageRoot(List<string> roots, string path)
-        {
-            if (roots == null || string.IsNullOrEmpty(path))
-            {
-                return;
-            }
-
-            try
-            {
-                var fullPath = Path.GetFullPath(path.Trim());
-                if ((Directory.Exists(fullPath) || File.Exists(fullPath)) && !roots.Contains(fullPath))
-                {
-                    roots.Add(fullPath);
-                }
-            }
-            catch
-            {
-            }
+            return SourceRootSetBuilder.Build(project, settings, SourceRootSetBuilder.LanguageServiceRoots).ToArray();
         }
 
         private static bool IsPathWithinRoot(string filePath, string rootPath)
