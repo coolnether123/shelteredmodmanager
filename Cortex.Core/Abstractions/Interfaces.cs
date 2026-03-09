@@ -12,6 +12,12 @@ namespace Cortex.Core.Abstractions
         void Remove(string modId);
     }
 
+    public interface ILoadedModCatalog
+    {
+        IList<LoadedModInfo> GetLoadedMods();
+        LoadedModInfo GetMod(string modId);
+    }
+
     public interface IProjectConfigurationStore
     {
         IList<CortexProjectDefinition> LoadProjects();
@@ -29,12 +35,32 @@ namespace Cortex.Core.Abstractions
         CortexWorkspacePaths GetWorkspace(CortexProjectDefinition project);
     }
 
+    public interface IProjectWorkspaceService
+    {
+        ProjectWorkspaceAnalysis AnalyzeSourceRoot(string sourceRoot, string preferredModId);
+        ProjectWorkspaceImportResult DiscoverWorkspaceProjects(string workspaceRoot);
+        ProjectValidationResult Validate(CortexProjectDefinition definition);
+        string FindLikelySourceRoot(string modRootPath);
+    }
+
+    public interface IWorkspaceBrowserService
+    {
+        WorkspaceTreeNode BuildTree(string rootPath, WorkspaceTreeKind kind);
+    }
+
     public interface IDocumentService
     {
         DocumentSession Open(string filePath);
         bool Save(DocumentSession session);
         bool Reload(DocumentSession session);
         bool HasExternalChanges(DocumentSession session);
+    }
+
+    public interface ISourcePathResolver
+    {
+        string ResolveCandidatePath(CortexProjectDefinition project, CortexSettings settings, string rawPath);
+        SourceLocationMatch ResolveTextLocation(string text, CortexProjectDefinition project, CortexSettings settings);
+        IList<string> GetSearchRoots(CortexProjectDefinition project, CortexSettings settings);
     }
 
     public interface IBuildCommandResolver
@@ -64,6 +90,13 @@ namespace Cortex.Core.Abstractions
         int MapOffsetToSourceLine(string mapText, int ilOffset);
     }
 
+    public interface IReferenceCatalogService
+    {
+        IList<ReferenceAssemblyDescriptor> GetAssemblies(string preferredRootPath);
+        IList<ReferenceTypeDescriptor> GetTypes(string assemblyPath);
+        IList<ReferenceMemberDescriptor> GetMembers(string assemblyPath, string typeName);
+    }
+
     public interface IRuntimeLogFeed
     {
         IList<RuntimeLogEntry> ReadRecent(string minimumLevel, int maxCount);
@@ -82,6 +115,8 @@ namespace Cortex.Core.Abstractions
 
     public interface IRuntimeToolBridge
     {
+        IList<RuntimeToolStatus> GetTools();
+        bool Execute(string toolId, out string statusMessage);
         void ToggleRuntimeInspector();
         void ToggleIlInspector();
         void ToggleUiDebugger();

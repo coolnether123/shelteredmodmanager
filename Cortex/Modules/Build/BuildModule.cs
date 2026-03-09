@@ -10,7 +10,7 @@ namespace Cortex.Modules.Build
         private Vector2 _scroll = Vector2.zero;
         private string _configuration = string.Empty;
 
-        public void Draw(IBuildCommandResolver resolver, IBuildExecutor executor, IRestartCoordinator restartCoordinator, IDocumentService documentService, CortexShellState state)
+        public void Draw(IBuildCommandResolver resolver, IBuildExecutor executor, IRestartCoordinator restartCoordinator, ISourcePathResolver sourcePathResolver, IDocumentService documentService, CortexShellState state)
         {
             if (state.SelectedProject == null)
             {
@@ -71,7 +71,7 @@ namespace Cortex.Modules.Build
                     var label = item.Severity + ": " + item.FilePath + "(" + item.Line + "," + item.Column + ") " + item.Code + " " + item.Message;
                     if (GUILayout.Button(label, GUILayout.ExpandWidth(true)))
                     {
-                        var path = CortexModuleUtil.ResolveCandidatePath(state.SelectedProject, state.Settings, item.FilePath);
+                        var path = sourcePathResolver != null ? sourcePathResolver.ResolveCandidatePath(state.SelectedProject, state.Settings, item.FilePath) : string.Empty;
                         if (!string.IsNullOrEmpty(path))
                         {
                             CortexModuleUtil.OpenDocument(documentService, state, path, item.Line);
@@ -89,13 +89,12 @@ namespace Cortex.Modules.Build
                 var line = result.OutputLines[i] ?? string.Empty;
                 if (GUILayout.Button(line, GUILayout.ExpandWidth(true)))
                 {
-                    string filePath;
-                    int lineNumber;
-                    if (CortexModuleUtil.TryResolveSourceLocation(line, state.SelectedProject, state.Settings, out filePath, out lineNumber))
+                    var location = sourcePathResolver != null ? sourcePathResolver.ResolveTextLocation(line, state.SelectedProject, state.Settings) : null;
+                    if (location != null && location.Success)
                     {
-                        CortexModuleUtil.OpenDocument(documentService, state, filePath, lineNumber);
+                        CortexModuleUtil.OpenDocument(documentService, state, location.ResolvedPath, location.LineNumber);
                         state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
-                        state.StatusMessage = "Opened " + filePath + " from build output.";
+                        state.StatusMessage = "Opened " + location.ResolvedPath + " from build output.";
                     }
                 }
             }

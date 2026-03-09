@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
-using System.Text;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
@@ -12,12 +10,6 @@ namespace Cortex.Modules.Reference
 {
     public sealed class ReferenceModule
     {
-        private sealed class MethodItem
-        {
-            public string Label;
-            public MethodBase Method;
-        }
-
         private string _assemblyFilter = string.Empty;
         private string _typeName = string.Empty;
         private string _methodName = string.Empty;
@@ -26,11 +18,11 @@ namespace Cortex.Modules.Reference
         private Vector2 _typeScroll = Vector2.zero;
         private Vector2 _methodScroll = Vector2.zero;
         private Vector2 _previewScroll = Vector2.zero;
-        private readonly List<Assembly> _assemblies = new List<Assembly>();
-        private readonly List<Type> _types = new List<Type>();
-        private readonly List<MethodItem> _methods = new List<MethodItem>();
-        private string _selectedAssemblyPath = string.Empty;
-        private string _selectedTypeName = string.Empty;
+        private readonly List<ReferenceAssemblyDescriptor> _assemblies = new List<ReferenceAssemblyDescriptor>();
+        private readonly List<ReferenceTypeDescriptor> _types = new List<ReferenceTypeDescriptor>();
+        private readonly List<ReferenceMemberDescriptor> _members = new List<ReferenceMemberDescriptor>();
+        private ReferenceAssemblyDescriptor _selectedAssembly;
+        private ReferenceTypeDescriptor _selectedType;
         private readonly GUIStyle _pathStyle = new GUIStyle();
         private readonly GUIStyle _xmlDocStyle = new GUIStyle();
 
@@ -42,19 +34,19 @@ namespace Cortex.Modules.Reference
             _xmlDocStyle.normal.textColor = new Color(0.92f, 0.92f, 0.94f, 1f);
         }
 
-        public void Draw(ISourceReferenceService sourceReferenceService, IDocumentService documentService, CortexShellState state)
+        public void Draw(ISourceReferenceService sourceReferenceService, IReferenceCatalogService referenceCatalogService, IDocumentService documentService, CortexShellState state)
         {
             GUILayout.BeginVertical();
-            EnsureAssembliesLoaded(state);
+            EnsureAssembliesLoaded(referenceCatalogService, state);
             CortexIdeLayout.DrawTwoPane(
                 420f,
                 340f,
-                delegate { DrawBrowserPane(sourceReferenceService, state); },
+                delegate { DrawBrowserPane(sourceReferenceService, referenceCatalogService, state); },
                 delegate { DrawPreviewPane(documentService, state); });
             GUILayout.EndVertical();
         }
 
-        private void DrawBrowserPane(ISourceReferenceService sourceReferenceService, CortexShellState state)
+        private void DrawBrowserPane(ISourceReferenceService sourceReferenceService, IReferenceCatalogService referenceCatalogService, CortexShellState state)
         {
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.BeginHorizontal();
@@ -62,15 +54,14 @@ namespace Cortex.Modules.Reference
             _assemblyFilter = GUILayout.TextField(_assemblyFilter, GUILayout.ExpandWidth(true));
             if (GUILayout.Button("Refresh", GUILayout.Width(80f)))
             {
-                ReloadAssemblies(state);
+                ReloadAssemblies(referenceCatalogService, state);
             }
             GUILayout.EndHorizontal();
             _assemblyScroll = GUILayout.BeginScrollView(_assemblyScroll, GUI.skin.box, GUILayout.Height(160f));
             for (var i = 0; i < _assemblies.Count; i++)
             {
                 var assembly = _assemblies[i];
-                var path = SafeAssemblyPath(assembly);
-                var label = assembly.GetName().Name + "\n" + path;
+                var label = assembly.DisplayName + "\n" + assembly.AssemblyPath;
                 if (!MatchesText(label, _assemblyFilter))
                 {
                     continue;
@@ -78,9 +69,10 @@ namespace Cortex.Modules.Reference
 
                 if (GUILayout.Button(label, GUILayout.MinHeight(38f)))
                 {
-                    _selectedAssemblyPath = path;
-                    LoadTypes(assembly);
-                    state.StatusMessage = "Selected assembly " + assembly.GetName().Name;
+                    _selectedAssembly = assembly;
+                    _selectedType = null;
+                    LoadTypes(referenceCatalogService, assembly);
+                    state.StatusMessage = "Selected assembly " + assembly.DisplayName;
                 }
             }
             GUILayout.EndScrollView();
@@ -93,16 +85,16 @@ namespace Cortex.Modules.Reference
             for (var i = 0; i < _types.Count; i++)
             {
                 var type = _types[i];
-                if (!MatchesText(type.FullName ?? type.Name, _typeName))
+                if (!MatchesText(type.FullName, _typeName))
                 {
                     continue;
                 }
 
-                if (GUILayout.Button(type.FullName ?? type.Name, GUILayout.ExpandWidth(true)))
+                if (GUILayout.Button(type.DisplayName, GUILayout.ExpandWidth(true)))
                 {
-                    _selectedTypeName = type.FullName ?? type.Name;
-                    LoadMethods(type);
-                    state.StatusMessage = "Selected type " + _selectedTypeName;
+                    _selectedType = type;
+                    LoadMembers(referenceCatalogService, type);
+                    state.StatusMessage = "Selected type " + type.DisplayName;
                 }
             }
             GUILayout.EndScrollView();
@@ -112,26 +104,22 @@ namespace Cortex.Modules.Reference
             _methodName = GUILayout.TextField(_methodName, GUILayout.ExpandWidth(true));
             _ignoreCache = GUILayout.Toggle(_ignoreCache, "Ignore Cache", GUILayout.Width(110f));
             GUILayout.EndHorizontal();
-            if (!string.IsNullOrEmpty(_selectedTypeName) && GUILayout.Button("Decompile Full Type", GUILayout.Width(160f)))
+            if (_selectedType != null && GUILayout.Button("Decompile Full Type", GUILayout.Width(160f)))
             {
-                var type = FindSelectedType();
-                if (type != null)
-                {
-                    DecompileType(sourceReferenceService, state, type);
-                }
+                DecompileType(sourceReferenceService, state, _selectedType);
             }
             _methodScroll = GUILayout.BeginScrollView(_methodScroll, GUI.skin.box, GUILayout.ExpandHeight(true));
-            for (var i = 0; i < _methods.Count; i++)
+            for (var i = 0; i < _members.Count; i++)
             {
-                var item = _methods[i];
-                if (!MatchesText(item.Label, _methodName))
+                var member = _members[i];
+                if (!MatchesText(member.DisplayName, _methodName))
                 {
                     continue;
                 }
 
-                if (GUILayout.Button(item.Label, GUILayout.ExpandWidth(true)))
+                if (GUILayout.Button(member.DisplayName, GUILayout.ExpandWidth(true)))
                 {
-                    DecompileMethod(sourceReferenceService, state, item.Method);
+                    DecompileMethod(sourceReferenceService, state, member);
                 }
             }
             GUILayout.EndScrollView();
@@ -151,9 +139,9 @@ namespace Cortex.Modules.Reference
 
             GUILayout.Label(state.LastReferenceResult.StatusMessage ?? string.Empty);
             GUILayout.Label("Assembly:", GUILayout.Width(70f));
-            GUILayout.Label(_selectedAssemblyPath, _pathStyle);
+            GUILayout.Label(_selectedAssembly != null ? _selectedAssembly.AssemblyPath : string.Empty, _pathStyle);
             GUILayout.Label("Type:", GUILayout.Width(70f));
-            GUILayout.Label(_selectedTypeName, _pathStyle);
+            GUILayout.Label(_selectedType != null ? _selectedType.DisplayName : string.Empty, _pathStyle);
             if (!string.IsNullOrEmpty(state.LastReferenceResult.ResolvedMemberDisplayName))
             {
                 GUILayout.Label("Member:", GUILayout.Width(70f));
@@ -164,6 +152,7 @@ namespace Cortex.Modules.Reference
                 GUILayout.Label("XML:", GUILayout.Width(70f));
                 GUILayout.Label(state.LastReferenceResult.XmlDocumentationPath, _pathStyle);
             }
+            GUILayout.Label("Generated Source: " + (!string.IsNullOrEmpty(state.LastReferenceResult.CachePath) ? "Yes" : "No"));
             GUILayout.BeginHorizontal();
             if (!string.IsNullOrEmpty(state.LastReferenceResult.CachePath) && File.Exists(state.LastReferenceResult.CachePath) &&
                 GUILayout.Button("Open Cached Source", GUILayout.Width(150f)))
@@ -190,178 +179,98 @@ namespace Cortex.Modules.Reference
             GUILayout.EndVertical();
         }
 
-        private void EnsureAssembliesLoaded(CortexShellState state)
+        private void EnsureAssembliesLoaded(IReferenceCatalogService referenceCatalogService, CortexShellState state)
         {
             if (_assemblies.Count == 0)
             {
-                ReloadAssemblies(state);
+                ReloadAssemblies(referenceCatalogService, state);
             }
         }
 
-        private void ReloadAssemblies(CortexShellState state)
+        private void ReloadAssemblies(IReferenceCatalogService referenceCatalogService, CortexShellState state)
         {
             _assemblies.Clear();
             _types.Clear();
-            _methods.Clear();
-            _selectedAssemblyPath = string.Empty;
-            _selectedTypeName = string.Empty;
+            _members.Clear();
+            _selectedAssembly = null;
+            _selectedType = null;
 
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-            var managedRoot = state.Settings != null ? state.Settings.ManagedAssemblyRootPath : string.Empty;
-            for (var i = 0; i < assemblies.Length; i++)
+            var assemblies = referenceCatalogService != null ? referenceCatalogService.GetAssemblies(state.Settings != null ? state.Settings.ManagedAssemblyRootPath : string.Empty) : new List<ReferenceAssemblyDescriptor>();
+            for (var i = 0; i < assemblies.Count; i++)
             {
-                var assembly = assemblies[i];
-                var path = SafeAssemblyPath(assembly);
-                if (string.IsNullOrEmpty(path) || !File.Exists(path))
-                {
-                    continue;
-                }
-
-                if (!string.IsNullOrEmpty(managedRoot) &&
-                    path.StartsWith(managedRoot, StringComparison.OrdinalIgnoreCase))
-                {
-                    _assemblies.Insert(0, assembly);
-                    continue;
-                }
-
-                _assemblies.Add(assembly);
+                _assemblies.Add(assemblies[i]);
             }
-
-            _assemblies.Sort(delegate(Assembly left, Assembly right)
-            {
-                return string.Compare(left.GetName().Name, right.GetName().Name, StringComparison.OrdinalIgnoreCase);
-            });
         }
 
-        private void LoadTypes(Assembly assembly)
+        private void LoadTypes(IReferenceCatalogService referenceCatalogService, ReferenceAssemblyDescriptor assembly)
         {
             _types.Clear();
-            _methods.Clear();
-            _selectedTypeName = string.Empty;
-            if (assembly == null)
+            _members.Clear();
+            _selectedType = null;
+            if (assembly == null || referenceCatalogService == null)
             {
                 return;
             }
 
-            try
+            var types = referenceCatalogService.GetTypes(assembly.AssemblyPath);
+            for (var i = 0; i < types.Count; i++)
             {
-                var types = assembly.GetTypes();
-                for (var i = 0; i < types.Length; i++)
-                {
-                    if (!types[i].IsNested)
-                    {
-                        _types.Add(types[i]);
-                    }
-                }
-            }
-            catch
-            {
+                _types.Add(types[i]);
             }
         }
 
-        private void LoadMethods(Type type)
+        private void LoadMembers(IReferenceCatalogService referenceCatalogService, ReferenceTypeDescriptor type)
         {
-            _methods.Clear();
-            if (type == null)
+            _members.Clear();
+            if (type == null || referenceCatalogService == null)
             {
                 return;
             }
 
-            var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-            for (var i = 0; i < methods.Length; i++)
+            var members = referenceCatalogService.GetMembers(type.AssemblyPath, type.FullName);
+            for (var i = 0; i < members.Count; i++)
             {
-                _methods.Add(new MethodItem
-                {
-                    Method = methods[i],
-                    Label = BuildMethodLabel(methods[i])
-                });
+                _members.Add(members[i]);
             }
         }
 
-        private void DecompileMethod(ISourceReferenceService sourceReferenceService, CortexShellState state, MethodBase method)
+        private void DecompileMethod(ISourceReferenceService sourceReferenceService, CortexShellState state, ReferenceMemberDescriptor member)
         {
-            if (method == null)
+            if (member == null || sourceReferenceService == null)
             {
                 return;
             }
 
             state.LastReferenceResult = sourceReferenceService.GetSource(new DecompilerRequest
             {
-                AssemblyPath = method.Module.Assembly.Location,
-                MetadataToken = method.MetadataToken,
+                AssemblyPath = member.AssemblyPath,
+                MetadataToken = member.MetadataToken,
                 IgnoreCache = _ignoreCache,
                 EntityKind = DecompilerEntityKind.Method
             });
-            state.StatusMessage = "Decompiled " + method.DeclaringType.FullName + "." + method.Name;
+            state.StatusMessage = "Decompiled " + member.DeclaringTypeName + "." + member.DisplayName;
         }
 
-        private void DecompileType(ISourceReferenceService sourceReferenceService, CortexShellState state, Type type)
+        private void DecompileType(ISourceReferenceService sourceReferenceService, CortexShellState state, ReferenceTypeDescriptor type)
         {
+            if (type == null || sourceReferenceService == null)
+            {
+                return;
+            }
+
             state.LastReferenceResult = sourceReferenceService.GetSource(new DecompilerRequest
             {
-                AssemblyPath = type.Assembly.Location,
+                AssemblyPath = type.AssemblyPath,
                 MetadataToken = type.MetadataToken,
                 IgnoreCache = _ignoreCache,
                 EntityKind = DecompilerEntityKind.Type
             });
-            state.StatusMessage = "Decompiled type " + (type.FullName ?? type.Name);
-        }
-
-        private Type FindSelectedType()
-        {
-            for (var i = 0; i < _types.Count; i++)
-            {
-                var type = _types[i];
-                if (string.Equals(type.FullName ?? type.Name, _selectedTypeName, StringComparison.Ordinal))
-                {
-                    return type;
-                }
-            }
-
-            return null;
+            state.StatusMessage = "Decompiled type " + type.DisplayName;
         }
 
         private static bool MatchesText(string value, string filter)
         {
             return string.IsNullOrEmpty(filter) || (value ?? string.Empty).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private static string SafeAssemblyPath(Assembly assembly)
-        {
-            try
-            {
-                return assembly != null ? assembly.Location : string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private static string BuildMethodLabel(MethodBase method)
-        {
-            if (method == null)
-            {
-                return "Unknown";
-            }
-
-            var parameters = method.GetParameters();
-            var builder = new StringBuilder();
-            builder.Append(method.Name);
-            builder.Append('(');
-            for (var i = 0; i < parameters.Length; i++)
-            {
-                if (i > 0)
-                {
-                    builder.Append(", ");
-                }
-
-                builder.Append(parameters[i].ParameterType.Name);
-                builder.Append(' ');
-                builder.Append(parameters[i].Name);
-            }
-            builder.Append(')');
-            return builder.ToString();
         }
     }
 }
