@@ -471,6 +471,8 @@ namespace Cortex
                     }
                 }
             }
+
+            RestoreSelectedProject(persisted);
         }
 
         private void PersistWorkbenchSession()
@@ -509,11 +511,159 @@ namespace Cortex
                 PanelContainerId = _state.Workbench.PanelContainerId,
                 ShowDetachedLogWindow = _state.Logs.ShowDetachedWindow,
                 EditorUnlocked = _state.Documents.EditorUnlocked,
+                SelectedProjectModId = _state.SelectedProject != null ? (_state.SelectedProject.ModId ?? string.Empty) : string.Empty,
+                SelectedProjectSourceRoot = _state.SelectedProject != null ? (_state.SelectedProject.SourceRootPath ?? string.Empty) : string.Empty,
                 ActiveDocumentPath = _state.Documents.ActiveDocumentPath ?? string.Empty,
                 OpenDocumentPaths = openPaths.ToArray(),
                 ContainerHostAssignments = assignments.ToArray(),
                 HiddenContainerIds = new List<string>(_state.Workbench.HiddenContainerIds).ToArray()
             });
+        }
+
+        private void RestoreSelectedProject(PersistedWorkbenchState persisted)
+        {
+            _state.SelectedProject = ResolvePersistedProject(persisted);
+            if (_state.SelectedProject != null)
+            {
+                return;
+            }
+
+            var activeDocumentPath = _state.Documents.ActiveDocument != null
+                ? _state.Documents.ActiveDocument.FilePath
+                : _state.Documents.ActiveDocumentPath;
+            _state.SelectedProject = ResolveProjectFromPath(activeDocumentPath);
+            if (_state.SelectedProject != null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < _state.Documents.OpenDocuments.Count; i++)
+            {
+                var session = _state.Documents.OpenDocuments[i];
+                var project = ResolveProjectFromPath(session != null ? session.FilePath : string.Empty);
+                if (project != null)
+                {
+                    _state.SelectedProject = project;
+                    return;
+                }
+            }
+
+            var loadedMods = _loadedModCatalog != null ? _loadedModCatalog.GetLoadedMods() : null;
+            if (loadedMods == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < loadedMods.Count; i++)
+            {
+                var mod = loadedMods[i];
+                if (mod == null || string.IsNullOrEmpty(mod.ModId))
+                {
+                    continue;
+                }
+
+                var project = _projectCatalog != null ? _projectCatalog.GetProject(mod.ModId) : null;
+                if (project != null)
+                {
+                    _state.SelectedProject = project;
+                    return;
+                }
+            }
+        }
+
+        private CortexProjectDefinition ResolvePersistedProject(PersistedWorkbenchState persisted)
+        {
+            if (persisted == null || _projectCatalog == null)
+            {
+                return null;
+            }
+
+            if (!string.IsNullOrEmpty(persisted.SelectedProjectModId))
+            {
+                var byId = _projectCatalog.GetProject(persisted.SelectedProjectModId);
+                if (byId != null)
+                {
+                    return byId;
+                }
+            }
+
+            if (string.IsNullOrEmpty(persisted.SelectedProjectSourceRoot))
+            {
+                return null;
+            }
+
+            var persistedRoot = SafeNormalizeDirectory(persisted.SelectedProjectSourceRoot);
+            var projects = _projectCatalog.GetProjects();
+            for (var i = 0; i < projects.Count; i++)
+            {
+                var project = projects[i];
+                if (project == null)
+                {
+                    continue;
+                }
+
+                if (string.Equals(SafeNormalizeDirectory(project.SourceRootPath), persistedRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    return project;
+                }
+            }
+
+            return null;
+        }
+
+        private CortexProjectDefinition ResolveProjectFromPath(string filePath)
+        {
+            if (_projectCatalog == null || string.IsNullOrEmpty(filePath))
+            {
+                return null;
+            }
+
+            string normalizedFilePath;
+            try
+            {
+                normalizedFilePath = Path.GetFullPath(filePath);
+            }
+            catch
+            {
+                return null;
+            }
+
+            var projects = _projectCatalog.GetProjects();
+            for (var i = 0; i < projects.Count; i++)
+            {
+                var project = projects[i];
+                var normalizedRoot = SafeNormalizeDirectory(project != null ? project.SourceRootPath : string.Empty);
+                if (string.IsNullOrEmpty(normalizedRoot))
+                {
+                    continue;
+                }
+
+                if (normalizedFilePath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    return project;
+                }
+            }
+
+            return null;
+        }
+
+        private static string SafeNormalizeDirectory(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                return Path.GetFullPath(path)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                    Path.DirectorySeparatorChar;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private static string NormalizeContainerId(string containerId, string fallback)

@@ -33,6 +33,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Plugins", "Plugins", "{401E
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cortex.Plugins.Abstractions", "Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj", "{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cortex.Roslyn.Worker", "Cortex.Roslyn.Worker\Cortex.Roslyn.Worker.csproj", "{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -127,6 +129,18 @@ Global
 		{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1}.Release|x64.Build.0 = Release|Any CPU
 		{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1}.Release|x86.ActiveCfg = Release|Any CPU
 		{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1}.Release|x86.Build.0 = Release|Any CPU
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}.Debug|x64.Build.0 = Debug|Any CPU
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}.Debug|x86.Build.0 = Debug|Any CPU
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}.Release|x64.ActiveCfg = Release|Any CPU
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}.Release|x64.Build.0 = Release|Any CPU
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}.Release|x86.ActiveCfg = Release|Any CPU
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -146,5 +160,6 @@ Global
 		{7A570620-E51D-499E-A28E-13A1D8156417} = {B9F3EFD9-8792-DBB5-53D5-5D013E0311F9}
 		{401E6CF6-6FDB-819D-B348-2A4162B7B24D} = {955B2011-13A4-7B01-12D5-DA05E5CA489E}
 		{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1} = {401E6CF6-6FDB-819D-B348-2A4162B7B24D}
+		{D0D5FEE2-4679-4C00-BAA0-D8915C484AEF} = {E66E5429-9C06-480C-1490-3AE9C343C7B4}
 	EndGlobalSection
 EndGlobal

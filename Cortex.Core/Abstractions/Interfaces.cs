@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Cortex.Core.Models;
+using Cortex.LanguageService.Protocol;
 using GameModding.Shared.Restart;
 
 namespace Cortex.Core.Abstractions
@@ -60,6 +61,19 @@ namespace Cortex.Core.Abstractions
         bool Save(DocumentSession session);
         bool Reload(DocumentSession session);
         bool HasExternalChanges(DocumentSession session);
+    }
+
+    public interface ILanguageServiceClient : System.IDisposable
+    {
+        bool IsEnabled { get; }
+        bool IsRunning { get; }
+        string LastError { get; }
+        LanguageServiceInitializeResponse Initialize(LanguageServiceInitializeRequest request);
+        LanguageServiceStatusResponse GetStatus();
+        LanguageServiceAnalysisResponse AnalyzeDocument(LanguageServiceDocumentRequest request);
+        LanguageServiceHoverResponse GetHover(LanguageServiceHoverRequest request);
+        LanguageServiceDefinitionResponse GoToDefinition(LanguageServiceDefinitionRequest request);
+        void Shutdown();
     }
 
     public interface ISourcePathResolver

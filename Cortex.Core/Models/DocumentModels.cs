@@ -1,4 +1,5 @@
 using System;
+using Cortex.LanguageService.Protocol;
 
 namespace Cortex.Core.Models
 {
@@ -11,5 +12,7 @@ namespace Cortex.Core.Models
         public DateTime LastKnownWriteUtc;
         public bool HasExternalChanges;
         public int HighlightedLine;
+        public LanguageServiceAnalysisResponse LanguageAnalysis;
+        public DateTime LastLanguageAnalysisUtc;
     }
 }

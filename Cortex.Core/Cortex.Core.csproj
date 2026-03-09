@@ -45,6 +45,9 @@
     <Compile Include="Models\CortexSettings.cs" />
     <Compile Include="Models\CortexProjectDefinition.cs" />
     <Compile Include="Models\DocumentModels.cs" />
+    <Compile Include="..\Cortex.LanguageService.Protocol\LanguageServiceProtocol.cs">
+      <Link>Protocol\LanguageServiceProtocol.cs</Link>
+    </Compile>
     <Compile Include="Models\ModuleWorkflowModels.cs" />
     <Compile Include="Models\NavigationModels.cs" />
     <Compile Include="Models\RuntimeLogEntry.cs" />
@@ -66,6 +69,7 @@
     <Compile Include="Services\ProjectCatalog.cs" />
     <Compile Include="Services\ProjectWorkspaceService.cs" />
     <Compile Include="Services\ReferenceCatalogService.cs" />
+    <Compile Include="Services\RoslynLanguageServiceClient.cs" />
     <Compile Include="Services\RuntimeSourceNavigationService.cs" />
     <Compile Include="Services\SourcePathResolver.cs" />
     <Compile Include="Services\SourceReferenceService.cs" />
