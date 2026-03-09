@@ -1,11 +1,8 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
-using ModAPI.Core;
 using UnityEngine;
 
 namespace Cortex.Modules.Editor
@@ -16,46 +13,45 @@ namespace Cortex.Modules.Editor
         private string _fileSearch = string.Empty;
         private string _cachedSourceRoot = string.Empty;
         private string _cachedDecompilerRoot = string.Empty;
-        private string[] _cachedFiles = new string[0];
-        private string[] _cachedDecompilerFiles = new string[0];
-        private readonly Dictionary<string, bool> _folderExpanded = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        private WorkspaceTreeNode _sourceTree;
+        private WorkspaceTreeNode _decompiledTree;
         private Vector2 _tabScroll = Vector2.zero;
         private Vector2 _editorScroll = Vector2.zero;
         private Vector2 _navigatorScroll = Vector2.zero;
         private Vector2 _diagnosticScroll = Vector2.zero;
 
-        public void Draw(IDocumentService documentService, CortexShellState state)
+        public void Draw(IDocumentService documentService, IWorkspaceBrowserService browserService, IProjectWorkspaceService workspaceService, ILoadedModCatalog loadedModCatalog, CortexShellState state)
         {
             var settings = state.Settings ?? new CortexSettings();
             GUILayout.BeginVertical();
-            DrawToolbar(documentService, state);
+            DrawToolbar(documentService, workspaceService, state);
             GUILayout.Space(4f);
             GUILayout.BeginHorizontal();
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
             DrawEditorArea(documentService, state);
             GUILayout.EndVertical();
             GUILayout.BeginVertical(GUILayout.Width(Mathf.Max(280f, settings.EditorFilePaneWidth)));
-            DrawNavigatorPane(documentService, state);
+            DrawNavigatorPane(documentService, browserService, loadedModCatalog, state);
             GUILayout.EndVertical();
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
         }
 
-        private void DrawToolbar(IDocumentService documentService, CortexShellState state)
+        private void DrawToolbar(IDocumentService documentService, IProjectWorkspaceService workspaceService, CortexShellState state)
         {
             GUILayout.BeginHorizontal(GUI.skin.box);
             GUILayout.Label("Open File", GUILayout.Width(58f));
             _openPath = GUILayout.TextField(_openPath, GUILayout.ExpandWidth(true));
             if (GUILayout.Button("Open", GUILayout.Width(80f)))
             {
-                if (File.Exists(_openPath))
+                if (System.IO.File.Exists(_openPath))
                 {
                     CortexModuleUtil.OpenDocument(documentService, state, _openPath, 0);
                     state.StatusMessage = "Opened " + _openPath;
                 }
-                else if (Directory.Exists(_openPath))
+                else if (System.IO.Directory.Exists(_openPath))
                 {
-                    ApplySourceFolder(state, _openPath);
+                    ApplySourceFolder(workspaceService, state, _openPath);
                 }
                 else
                 {
@@ -71,7 +67,7 @@ namespace Cortex.Modules.Editor
             GUILayout.EndHorizontal();
         }
 
-        private void DrawNavigatorPane(IDocumentService documentService, CortexShellState state)
+        private void DrawNavigatorPane(IDocumentService documentService, IWorkspaceBrowserService browserService, ILoadedModCatalog loadedModCatalog, CortexShellState state)
         {
             GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandHeight(true));
             GUILayout.BeginHorizontal();
@@ -79,7 +75,7 @@ namespace Cortex.Modules.Editor
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Refresh", GUILayout.Width(80f)))
             {
-                RefreshProjectFiles(state);
+                RefreshProjectFiles(browserService, state);
             }
             GUILayout.EndHorizontal();
 
@@ -97,15 +93,15 @@ namespace Cortex.Modules.Editor
             GUILayout.EndHorizontal();
             GUILayout.Label("Browse the selected mod source tree and generated decompiled files. Paste a source folder into 'Open File' to auto-map it.", GUI.skin.label);
 
-            RefreshProjectFilesIfNeeded(state);
+            RefreshProjectFilesIfNeeded(browserService, state);
             _navigatorScroll = GUILayout.BeginScrollView(_navigatorScroll, GUI.skin.box, GUILayout.ExpandHeight(true));
-            DrawSourceStatus(state);
+            DrawSourceStatus(loadedModCatalog, state);
             GUILayout.Space(6f);
             DrawWorkflowDiagnostics(state);
             GUILayout.Space(6f);
-            DrawTreeGroup("Mod Source", state.SelectedProject != null ? state.SelectedProject.SourceRootPath : string.Empty, documentService, state);
+            DrawTreeGroup("Mod Source", _sourceTree, documentService, state);
             GUILayout.Space(6f);
-            DrawTreeGroup("Decompiled Cache", state.Settings != null ? state.Settings.DecompilerCachePath : string.Empty, documentService, state);
+            DrawTreeGroup("Decompiled Cache", _decompiledTree, documentService, state);
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
         }
@@ -219,47 +215,47 @@ namespace Cortex.Modules.Editor
             state.StatusMessage = "Saved " + saved + " open document(s).";
         }
 
-        private void RefreshProjectFilesIfNeeded(CortexShellState state)
+        private void RefreshProjectFilesIfNeeded(IWorkspaceBrowserService browserService, CortexShellState state)
         {
             var sourceRoot = state.SelectedProject != null ? state.SelectedProject.SourceRootPath ?? string.Empty : string.Empty;
             var decompilerRoot = state.Settings != null ? state.Settings.DecompilerCachePath ?? string.Empty : string.Empty;
             if (!string.Equals(_cachedSourceRoot, sourceRoot, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(_cachedDecompilerRoot, decompilerRoot, StringComparison.OrdinalIgnoreCase))
             {
-                RefreshProjectFiles(state);
+                RefreshProjectFiles(browserService, state);
             }
         }
 
-        private void RefreshProjectFiles(CortexShellState state)
+        private void RefreshProjectFiles(IWorkspaceBrowserService browserService, CortexShellState state)
         {
             _cachedSourceRoot = state.SelectedProject != null ? state.SelectedProject.SourceRootPath ?? string.Empty : string.Empty;
             _cachedDecompilerRoot = state.Settings != null ? state.Settings.DecompilerCachePath ?? string.Empty : string.Empty;
-            _cachedFiles = GetProjectFiles(state.SelectedProject);
-            _cachedDecompilerFiles = GetDecompiledFiles(_cachedDecompilerRoot);
+            _sourceTree = browserService != null ? browserService.BuildTree(_cachedSourceRoot, WorkspaceTreeKind.ProjectSource) : null;
+            _decompiledTree = browserService != null ? browserService.BuildTree(_cachedDecompilerRoot, WorkspaceTreeKind.DecompiledCache) : null;
         }
 
-        private void DrawTreeGroup(string title, string rootPath, IDocumentService documentService, CortexShellState state)
+        private void DrawTreeGroup(string title, WorkspaceTreeNode rootNode, IDocumentService documentService, CortexShellState state)
         {
             CortexIdeLayout.DrawGroup(title, delegate
             {
-                if (string.IsNullOrEmpty(rootPath) || !Directory.Exists(rootPath))
+                if (rootNode == null)
                 {
                     GUILayout.Label("Path not available.");
                     return;
                 }
 
-                GUILayout.Label(rootPath, GUI.skin.label);
-                DrawDirectoryNode(rootPath, rootPath, documentService, state, 0);
+                GUILayout.Label(rootNode.FullPath, GUI.skin.label);
+                DrawTreeNode(rootNode, documentService, state, 0);
             });
         }
 
-        private void DrawSourceStatus(CortexShellState state)
+        private void DrawSourceStatus(ILoadedModCatalog loadedModCatalog, CortexShellState state)
         {
             var project = state.SelectedProject;
             var hasConfiguredSource = project != null &&
                 !string.IsNullOrEmpty(project.SourceRootPath) &&
-                Directory.Exists(project.SourceRootPath);
-            var loadedMod = ResolveLoadedMod(project);
+                System.IO.Directory.Exists(project.SourceRootPath);
+            var loadedMod = ResolveLoadedMod(loadedModCatalog, project);
 
             CortexIdeLayout.DrawGroup("Source Mapping", delegate
             {
@@ -283,7 +279,7 @@ namespace Cortex.Modules.Editor
                 GUILayout.Label("This project does not have a valid source root configured.");
                 if (loadedMod != null)
                 {
-                    GUILayout.Label("Loaded mod detected: " + loadedMod.Id + " @ " + loadedMod.RootPath);
+                    GUILayout.Label("Loaded mod detected: " + loadedMod.ModId + " @ " + loadedMod.RootPath);
                 }
                 else
                 {
@@ -303,40 +299,34 @@ namespace Cortex.Modules.Editor
             });
         }
 
-        private static void ApplySourceFolder(CortexShellState state, string sourceFolder)
+        private static void ApplySourceFolder(IProjectWorkspaceService workspaceService, CortexShellState state, string sourceFolder)
         {
             if (state == null || string.IsNullOrEmpty(sourceFolder))
             {
                 return;
             }
 
-            string normalizedRoot;
-            try
+            var analysis = workspaceService != null ? workspaceService.AnalyzeSourceRoot(sourceFolder, state.SelectedProject != null ? state.SelectedProject.ModId : string.Empty) : null;
+            if (analysis == null || !analysis.Success || analysis.Definition == null)
             {
-                normalizedRoot = Path.GetFullPath(sourceFolder.Trim());
-            }
-            catch (Exception ex)
-            {
-                state.StatusMessage = "Invalid source folder: " + ex.Message;
-                state.Diagnostics.Add(state.StatusMessage);
+                state.StatusMessage = analysis != null ? analysis.StatusMessage : "Source mapping analysis failed.";
+                if (analysis != null)
+                {
+                    for (var i = 0; i < analysis.Diagnostics.Count; i++)
+                    {
+                        state.Diagnostics.Add(analysis.Diagnostics[i]);
+                    }
+                }
                 return;
             }
 
-            var project = state.SelectedProject ?? new CortexProjectDefinition();
-            project.SourceRootPath = normalizedRoot;
-            if (string.IsNullOrEmpty(project.ModId))
-            {
-                project.ModId = Path.GetFileName(normalizedRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            }
-
-            project.ProjectFilePath = DetectProjectFile(normalizedRoot);
-            state.SelectedProject = project;
+            state.SelectedProject = analysis.Definition;
             state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
-            state.StatusMessage = "Mapped source folder: " + normalizedRoot;
-            state.Diagnostics.Add("Editor mapped source folder " + normalizedRoot + ".");
-            state.Diagnostics.Add(string.IsNullOrEmpty(project.ProjectFilePath)
-                ? "No .csproj detected from the editor source-folder action."
-                : "Detected project file from editor source-folder action: " + project.ProjectFilePath);
+            state.StatusMessage = "Mapped source folder: " + analysis.Definition.SourceRootPath;
+            for (var i = 0; i < analysis.Diagnostics.Count; i++)
+            {
+                state.Diagnostics.Add(analysis.Diagnostics[i]);
+            }
         }
 
         private void DrawWorkflowDiagnostics(CortexShellState state)
@@ -358,106 +348,90 @@ namespace Cortex.Modules.Editor
             });
         }
 
-        private static ModEntry ResolveLoadedMod(CortexProjectDefinition project)
+        private static LoadedModInfo ResolveLoadedMod(ILoadedModCatalog loadedModCatalog, CortexProjectDefinition project)
         {
-            if (project == null || string.IsNullOrEmpty(project.ModId))
+            if (loadedModCatalog == null || project == null || string.IsNullOrEmpty(project.ModId))
             {
                 return null;
             }
 
-            return ModRegistry.GetMod(project.ModId);
+            return loadedModCatalog.GetMod(project.ModId);
         }
 
-        private void DrawDirectoryNode(string rootPath, string currentPath, IDocumentService documentService, CortexShellState state, int depth)
+        private void DrawTreeNode(WorkspaceTreeNode node, IDocumentService documentService, CortexShellState state, int depth)
         {
-            string[] directories;
-            try
+            if (node == null)
             {
-                directories = Directory.GetDirectories(currentPath);
-            }
-            catch
-            {
-                directories = new string[0];
+                return;
             }
 
-            Array.Sort(directories, StringComparer.OrdinalIgnoreCase);
-            for (var i = 0; i < directories.Length; i++)
+            for (var i = 0; i < node.Children.Count; i++)
             {
-                var directory = directories[i];
-                if (!DirectoryMatchesFilter(directory))
+                var child = node.Children[i];
+                if (child.IsDirectory)
                 {
+                    if (!MatchesNode(child))
+                    {
+                        continue;
+                    }
+
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Space(depth * 14f);
+                    GUILayout.Label(child.Name, GUILayout.ExpandWidth(true));
+                    GUILayout.EndHorizontal();
+                    DrawTreeNode(child, documentService, state, depth + 1);
                     continue;
                 }
 
-                var key = directory;
-                bool expanded;
-                if (!_folderExpanded.TryGetValue(key, out expanded))
-                {
-                    expanded = depth <= 0;
-                    _folderExpanded[key] = expanded;
-                }
-
-                GUILayout.BeginHorizontal();
-                GUILayout.Space(depth * 14f);
-                var label = (expanded ? "[-] " : "[+] ") + Path.GetFileName(directory);
-                if (GUILayout.Button(label, GUILayout.ExpandWidth(true)))
-                {
-                    _folderExpanded[key] = !expanded;
-                }
-                GUILayout.EndHorizontal();
-
-                if (_folderExpanded[key])
-                {
-                    DrawDirectoryNode(rootPath, directory, documentService, state, depth + 1);
-                }
-            }
-
-            var files = GetBrowsableFiles(currentPath);
-            for (var i = 0; i < files.Length; i++)
-            {
-                var file = files[i];
-                if (!MatchesFilter(file))
+                if (!MatchesNode(child))
                 {
                     continue;
                 }
 
                 GUILayout.BeginHorizontal();
                 GUILayout.Space(depth * 14f + 14f);
-                var label = BuildRelativePath(rootPath, file);
-                if (GUILayout.Button(label, GUILayout.ExpandWidth(true)))
+                if (GUILayout.Button(child.RelativePath.Replace("\\", " / "), GUILayout.ExpandWidth(true)))
                 {
-                    CortexModuleUtil.OpenDocument(documentService, state, file, 0);
-                    _openPath = file;
-                    state.StatusMessage = "Opened " + file;
+                    CortexModuleUtil.OpenDocument(documentService, state, child.FullPath, 0);
+                    _openPath = child.FullPath;
+                    state.StatusMessage = "Opened " + child.FullPath;
                 }
                 GUILayout.EndHorizontal();
             }
         }
 
-        private bool DirectoryMatchesFilter(string directoryPath)
+        private bool MatchesNode(WorkspaceTreeNode node)
         {
+            if (node == null)
+            {
+                return false;
+            }
+
             if (string.IsNullOrEmpty(_fileSearch))
             {
                 return true;
             }
 
-            return directoryPath.IndexOf(_fileSearch, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private bool MatchesFilter(string path)
-        {
-            return string.IsNullOrEmpty(_fileSearch) || path.IndexOf(_fileSearch, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private static string BuildRelativePath(string rootPath, string filePath)
-        {
-            if (string.IsNullOrEmpty(rootPath))
+            if ((node.Name ?? string.Empty).IndexOf(_fileSearch, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                (node.RelativePath ?? string.Empty).IndexOf(_fileSearch, StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return filePath;
+                return true;
             }
 
-            var relative = filePath.Replace(rootPath.TrimEnd('\\') + "\\", string.Empty);
-            return relative.Replace("\\", " / ");
+            if (!node.IsDirectory)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < node.Children.Count; i++)
+            {
+                if (MatchesNode(node.Children[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static string BuildLineNumberGutter(DocumentSession session)
@@ -473,154 +447,6 @@ namespace Cortex.Modules.Editor
             }
 
             return builder.ToString();
-        }
-
-        private static string[] GetProjectFiles(CortexProjectDefinition project)
-        {
-            if (project == null || string.IsNullOrEmpty(project.SourceRootPath) || !Directory.Exists(project.SourceRootPath))
-            {
-                return new string[0];
-            }
-
-            var results = new List<string>();
-            CollectProjectFiles(project.SourceRootPath, results);
-            results.Sort(StringComparer.OrdinalIgnoreCase);
-            return results.ToArray();
-        }
-
-        private static string[] GetDecompiledFiles(string rootPath)
-        {
-            if (string.IsNullOrEmpty(rootPath) || !Directory.Exists(rootPath))
-            {
-                return new string[0];
-            }
-
-            var results = new List<string>();
-            CollectBrowsableFiles(rootPath, results, true);
-            results.Sort(StringComparer.OrdinalIgnoreCase);
-            return results.ToArray();
-        }
-
-        private static string[] GetBrowsableFiles(string rootPath)
-        {
-            var results = new List<string>();
-            CollectBrowsableFiles(rootPath, results, false);
-            results.Sort(StringComparer.OrdinalIgnoreCase);
-            return results.ToArray();
-        }
-
-        private static void CollectBrowsableFiles(string rootPath, List<string> results, bool decompiledOnly)
-        {
-            string[] files;
-            try
-            {
-                files = Directory.GetFiles(rootPath);
-            }
-            catch
-            {
-                return;
-            }
-
-            for (var i = 0; i < files.Length; i++)
-            {
-                var extension = Path.GetExtension(files[i]) ?? string.Empty;
-                var include = string.Equals(extension, ".cs", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(extension, ".json", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(extension, ".xml", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(extension, ".txt", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(extension, ".map", StringComparison.OrdinalIgnoreCase);
-                if (!include)
-                {
-                    continue;
-                }
-
-                if (decompiledOnly && !string.Equals(extension, ".cs", StringComparison.OrdinalIgnoreCase) && !string.Equals(extension, ".map", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                results.Add(files[i]);
-            }
-        }
-
-        private static void CollectProjectFiles(string root, List<string> results)
-        {
-            string[] files;
-            try
-            {
-                files = Directory.GetFiles(root);
-            }
-            catch
-            {
-                return;
-            }
-
-            for (var i = 0; i < files.Length; i++)
-            {
-                var extension = Path.GetExtension(files[i]) ?? string.Empty;
-                if (string.Equals(extension, ".cs", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(extension, ".json", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(extension, ".xml", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(extension, ".txt", StringComparison.OrdinalIgnoreCase))
-                {
-                    results.Add(files[i]);
-                }
-            }
-
-            string[] directories;
-            try
-            {
-                directories = Directory.GetDirectories(root);
-            }
-            catch
-            {
-                return;
-            }
-
-            for (var i = 0; i < directories.Length; i++)
-            {
-                var name = Path.GetFileName(directories[i]) ?? string.Empty;
-                if (string.Equals(name, "bin", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(name, "obj", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(name, ".git", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                CollectProjectFiles(directories[i], results);
-            }
-        }
-
-        private static string DetectProjectFile(string rootPath)
-        {
-            if (string.IsNullOrEmpty(rootPath) || !Directory.Exists(rootPath))
-            {
-                return string.Empty;
-            }
-
-            string[] files;
-            try
-            {
-                files = Directory.GetFiles(rootPath, "*.csproj", SearchOption.AllDirectories);
-            }
-            catch
-            {
-                return string.Empty;
-            }
-
-            for (var i = 0; i < files.Length; i++)
-            {
-                var file = files[i];
-                if (file.IndexOf("\\bin\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    file.IndexOf("\\obj\\", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    continue;
-                }
-
-                return file;
-            }
-
-            return string.Empty;
         }
     }
 }

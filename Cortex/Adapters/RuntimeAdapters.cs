@@ -274,6 +274,13 @@ namespace Cortex.Adapters
 
     public sealed class ModApiRuntimeSymbolResolver : IRuntimeSymbolResolver
     {
+        private readonly ISourcePathResolver _sourcePathResolver;
+
+        public ModApiRuntimeSymbolResolver(ISourcePathResolver sourcePathResolver)
+        {
+            _sourcePathResolver = sourcePathResolver;
+        }
+
         public SourceNavigationTarget Resolve(RuntimeStackFrame frame, CortexProjectDefinition project, CortexSettings settings)
         {
             if (frame == null)
@@ -281,7 +288,9 @@ namespace Cortex.Adapters
                 return Failure("The runtime stack frame is missing.");
             }
 
-            var directPath = ResolveCandidatePath(project, settings, frame.FilePath);
+            var directPath = _sourcePathResolver != null
+                ? _sourcePathResolver.ResolveCandidatePath(project, settings, frame.FilePath)
+                : string.Empty;
             if (!string.IsNullOrEmpty(directPath))
             {
                 return Success(directPath, frame.LineNumber, frame.ColumnNumber, false, "Resolved runtime frame via PDB source path.");
@@ -473,112 +482,6 @@ namespace Cortex.Adapters
             return null;
         }
 
-        private static string ResolveCandidatePath(CortexProjectDefinition project, CortexSettings settings, string rawPath)
-        {
-            if (string.IsNullOrEmpty(rawPath))
-            {
-                return string.Empty;
-            }
-
-            rawPath = rawPath.Trim().Trim('"');
-            if (Path.IsPathRooted(rawPath) && File.Exists(rawPath))
-            {
-                return Path.GetFullPath(rawPath);
-            }
-
-            if (File.Exists(rawPath))
-            {
-                return Path.GetFullPath(rawPath);
-            }
-
-            var searchRoots = BuildSearchRoots(project, settings);
-            for (var i = 0; i < searchRoots.Count; i++)
-            {
-                var sourceRoot = searchRoots[i];
-                var combined = Path.Combine(sourceRoot, rawPath);
-                if (File.Exists(combined))
-                {
-                    return Path.GetFullPath(combined);
-                }
-
-                try
-                {
-                    var fileName = Path.GetFileName(rawPath);
-                    if (!string.IsNullOrEmpty(fileName))
-                    {
-                        var matches = Directory.GetFiles(sourceRoot, fileName, SearchOption.AllDirectories);
-                        if (matches.Length > 0)
-                        {
-                            return matches[0];
-                        }
-                    }
-                }
-                catch
-                {
-                }
-            }
-
-            return string.Empty;
-        }
-
-        private static List<string> BuildSearchRoots(CortexProjectDefinition project, CortexSettings settings)
-        {
-            var roots = new List<string>();
-            AddRoot(roots, project != null ? project.SourceRootPath : string.Empty);
-            AddRoot(roots, project != null ? Path.GetDirectoryName(project.ProjectFilePath) : string.Empty);
-            AddRoot(roots, settings != null ? settings.WorkspaceRootPath : string.Empty);
-            AddRoot(roots, settings != null ? settings.ModsRootPath : string.Empty);
-
-            var rawRoots = settings != null ? settings.AdditionalSourceRoots : string.Empty;
-            if (!string.IsNullOrEmpty(rawRoots))
-            {
-                var segments = rawRoots.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                for (var i = 0; i < segments.Length; i++)
-                {
-                    AddRoot(roots, segments[i]);
-                }
-            }
-
-            return roots;
-        }
-
-        private static void AddRoot(List<string> roots, string root)
-        {
-            if (roots == null || string.IsNullOrEmpty(root))
-            {
-                return;
-            }
-
-            try
-            {
-                var fullPath = Path.GetFullPath(root.Trim());
-                if (Directory.Exists(fullPath) && !roots.Contains(fullPath))
-                {
-                    roots.Add(fullPath);
-                }
-            }
-            catch
-            {
-            }
-        }
-
-        private static string BuildFrameName(RuntimeStackFrame frame)
-        {
-            if (frame == null)
-            {
-                return "unknown-frame";
-            }
-
-            if (!string.IsNullOrEmpty(frame.DisplayText))
-            {
-                return frame.DisplayText;
-            }
-
-            var typeName = string.IsNullOrEmpty(frame.TypeName) ? "UnknownType" : frame.TypeName;
-            var methodName = string.IsNullOrEmpty(frame.MethodName) ? "UnknownMethod" : frame.MethodName;
-            return typeName + "." + methodName;
-        }
-
         private static SourceNavigationTarget Success(string filePath, int lineNumber, int columnNumber, bool isDecompiledSource, string statusMessage)
         {
             return new SourceNavigationTarget
@@ -602,6 +505,58 @@ namespace Cortex.Adapters
                 ColumnNumber = 0,
                 IsDecompiledSource = false,
                 StatusMessage = statusMessage ?? string.Empty
+            };
+        }
+    }
+
+    public sealed class ModApiLoadedModCatalog : ILoadedModCatalog
+    {
+        public IList<LoadedModInfo> GetLoadedMods()
+        {
+            var results = new List<LoadedModInfo>();
+            var loadedMods = ModRegistry.GetLoadedMods();
+            if (loadedMods == null)
+            {
+                return results;
+            }
+
+            for (var i = 0; i < loadedMods.Count; i++)
+            {
+                var mod = loadedMods[i];
+                if (mod == null || string.IsNullOrEmpty(mod.Id))
+                {
+                    continue;
+                }
+
+                results.Add(new LoadedModInfo
+                {
+                    ModId = mod.Id,
+                    DisplayName = mod.Id,
+                    RootPath = mod.RootPath ?? string.Empty
+                });
+            }
+
+            return results;
+        }
+
+        public LoadedModInfo GetMod(string modId)
+        {
+            if (string.IsNullOrEmpty(modId))
+            {
+                return null;
+            }
+
+            var mod = ModRegistry.GetMod(modId);
+            if (mod == null)
+            {
+                return null;
+            }
+
+            return new LoadedModInfo
+            {
+                ModId = mod.Id,
+                DisplayName = mod.Id,
+                RootPath = mod.RootPath ?? string.Empty
             };
         }
     }
@@ -642,6 +597,78 @@ namespace Cortex.Adapters
 
     public sealed class ModApiRuntimeToolBridge : IRuntimeToolBridge
     {
+        private readonly List<RuntimeToolStatus> _cachedTools = new List<RuntimeToolStatus>();
+        private float _nextRefreshTime;
+
+        public IList<RuntimeToolStatus> GetTools()
+        {
+            if (_cachedTools.Count == 0 || Time.realtimeSinceStartup >= _nextRefreshTime)
+            {
+                RefreshTools();
+            }
+
+            return CloneTools();
+        }
+
+        public bool Execute(string toolId, out string statusMessage)
+        {
+            statusMessage = string.Empty;
+            if (string.IsNullOrEmpty(toolId))
+            {
+                statusMessage = "No runtime tool was selected.";
+                return false;
+            }
+
+            RuntimeToolStatus tool = null;
+            var tools = GetTools();
+            for (var i = 0; i < tools.Count; i++)
+            {
+                if (string.Equals(tools[i].ToolId, toolId, StringComparison.OrdinalIgnoreCase))
+                {
+                    tool = tools[i];
+                    break;
+                }
+            }
+
+            if (tool == null)
+            {
+                statusMessage = "The selected runtime tool is not registered.";
+                return false;
+            }
+
+            if (!tool.IsAvailable)
+            {
+                statusMessage = string.IsNullOrEmpty(tool.UnavailableReason) ? "This runtime tool is not available in the current host." : tool.UnavailableReason;
+                return false;
+            }
+
+            if (string.Equals(toolId, "runtime.inspector", StringComparison.OrdinalIgnoreCase))
+            {
+                ToggleRuntimeInspector();
+            }
+            else if (string.Equals(toolId, "runtime.il", StringComparison.OrdinalIgnoreCase))
+            {
+                ToggleIlInspector();
+            }
+            else if (string.Equals(toolId, "runtime.ui", StringComparison.OrdinalIgnoreCase))
+            {
+                ToggleUiDebugger();
+            }
+            else if (string.Equals(toolId, "runtime.debugger", StringComparison.OrdinalIgnoreCase))
+            {
+                ToggleRuntimeDebugger();
+            }
+            else
+            {
+                statusMessage = "The selected runtime tool does not have an execution handler.";
+                return false;
+            }
+
+            _nextRefreshTime = 0f;
+            statusMessage = tool.DisplayName + " toggled.";
+            return true;
+        }
+
         public void ToggleRuntimeInspector()
         {
             ToggleComponentState("ModAPI.Inspector.RuntimeInspector", "_visible");
@@ -662,28 +689,97 @@ namespace Cortex.Adapters
             ToggleComponentState("ModAPI.Inspector.RuntimeDebuggerUI", "_active");
         }
 
+        private void RefreshTools()
+        {
+            _cachedTools.Clear();
+            _cachedTools.Add(BuildTool("runtime.inspector", "Legacy Runtime Inspector", "Inspect live objects and scene hierarchies inside the current host.", "F9", "ModAPI.Inspector.RuntimeInspector", "_visible"));
+            _cachedTools.Add(BuildTool("runtime.il", "IL Inspector", "Inspect IL and generated runtime source mappings when the ModAPI IL inspector is present.", "F10", "ModAPI.Inspector.RuntimeILInspector", "_visible"));
+            _cachedTools.Add(BuildTool("runtime.ui", "UI Debugger", "Open the UI debugger when the host exposes the ModAPI UI inspection surface.", "F11", "ModAPI.UI.UIDebugInspector", "_active"));
+            _cachedTools.Add(BuildTool("runtime.debugger", "Runtime Debugger", "Toggle the legacy runtime debugger overlay if the current title ships it.", "F7", "ModAPI.Inspector.RuntimeDebuggerUI", "_active"));
+            _nextRefreshTime = Time.realtimeSinceStartup + 0.5f;
+        }
+
+        private IList<RuntimeToolStatus> CloneTools()
+        {
+            var results = new List<RuntimeToolStatus>();
+            for (var i = 0; i < _cachedTools.Count; i++)
+            {
+                var tool = _cachedTools[i];
+                results.Add(new RuntimeToolStatus
+                {
+                    ToolId = tool.ToolId,
+                    DisplayName = tool.DisplayName,
+                    Description = tool.Description,
+                    ShortcutHint = tool.ShortcutHint,
+                    IsAvailable = tool.IsAvailable,
+                    IsActive = tool.IsActive,
+                    UnavailableReason = tool.UnavailableReason
+                });
+            }
+
+            return results;
+        }
+
+        private static RuntimeToolStatus BuildTool(string toolId, string displayName, string description, string shortcutHint, string typeName, string fieldName)
+        {
+            MonoBehaviour component;
+            var available = TryFindComponent(typeName, out component);
+            var active = available && ReadToolState(component, fieldName);
+
+            return new RuntimeToolStatus
+            {
+                ToolId = toolId,
+                DisplayName = displayName,
+                Description = description,
+                ShortcutHint = shortcutHint,
+                IsAvailable = available,
+                IsActive = active,
+                UnavailableReason = available ? string.Empty : "The current host did not expose " + displayName + "."
+            };
+        }
+
         private static void ToggleComponentState(string typeName, string fieldName)
         {
-            var components = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>();
-            for (var i = 0; i < components.Length; i++)
+            MonoBehaviour component;
+            if (!TryFindComponent(typeName, out component))
             {
-                var component = components[i];
-                if (component == null || component.GetType().FullName != typeName)
-                {
-                    continue;
-                }
-
-                var field = component.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-                if (field != null && field.FieldType == typeof(bool))
-                {
-                    var current = (bool)field.GetValue(component);
-                    field.SetValue(component, !current);
-                }
-
+                MMLog.WriteWarning("Cortex could not find runtime tool: " + typeName);
                 return;
             }
 
-            MMLog.WriteWarning("Cortex could not find runtime tool: " + typeName);
+            var field = component.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            if (field != null && field.FieldType == typeof(bool))
+            {
+                var current = (bool)field.GetValue(component);
+                field.SetValue(component, !current);
+            }
+        }
+
+        private static bool TryFindComponent(string typeName, out MonoBehaviour component)
+        {
+            component = null;
+            var components = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>();
+            for (var i = 0; i < components.Length; i++)
+            {
+                if (components[i] != null && components[i].GetType().FullName == typeName)
+                {
+                    component = components[i];
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ReadToolState(MonoBehaviour component, string fieldName)
+        {
+            if (component == null)
+            {
+                return false;
+            }
+
+            var field = component.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            return field != null && field.FieldType == typeof(bool) && (bool)field.GetValue(component);
         }
     }
 }

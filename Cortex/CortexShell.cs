@@ -38,9 +38,14 @@ namespace Cortex
         private ICortexSettingsStore _settingsStore;
         private IWorkbenchPersistenceService _workbenchPersistenceService;
         private IProjectCatalog _projectCatalog;
+        private ILoadedModCatalog _loadedModCatalog;
+        private IProjectWorkspaceService _projectWorkspaceService;
+        private IWorkspaceBrowserService _workspaceBrowserService;
         private IDocumentService _documentService;
         private IBuildCommandResolver _buildCommandResolver;
         private IBuildExecutor _buildExecutor;
+        private IReferenceCatalogService _referenceCatalogService;
+        private ISourcePathResolver _sourcePathResolver;
         private ISourceReferenceService _sourceReferenceService;
         private IRuntimeLogFeed _runtimeLogFeed;
         private IRuntimeSourceNavigationService _runtimeSourceNavigationService;
@@ -203,28 +208,28 @@ namespace Cortex
             switch (containerId)
             {
                 case CortexWorkbenchIds.LogsContainer:
-                    _logsModule.Draw(_runtimeLogFeed, _runtimeSourceNavigationService, _documentService, _state, detachedWindow);
+                    _logsModule.Draw(_runtimeLogFeed, _runtimeSourceNavigationService, _sourcePathResolver, _documentService, _state, detachedWindow);
                     break;
                 case CortexWorkbenchIds.ProjectsContainer:
-                    _projectsModule.Draw(_projectCatalog, _state);
+                    _projectsModule.Draw(_projectCatalog, _projectWorkspaceService, _loadedModCatalog, _state);
                     break;
                 case CortexWorkbenchIds.EditorContainer:
-                    _editorModule.Draw(_documentService, _state);
+                    _editorModule.Draw(_documentService, _workspaceBrowserService, _projectWorkspaceService, _loadedModCatalog, _state);
                     break;
                 case CortexWorkbenchIds.BuildContainer:
-                    _buildModule.Draw(_buildCommandResolver, _buildExecutor, _restartCoordinator, _documentService, _state);
+                    _buildModule.Draw(_buildCommandResolver, _buildExecutor, _restartCoordinator, _sourcePathResolver, _documentService, _state);
                     break;
                 case CortexWorkbenchIds.ReferenceContainer:
-                    _referenceModule.Draw(_sourceReferenceService, _documentService, _state);
+                    _referenceModule.Draw(_sourceReferenceService, _referenceCatalogService, _documentService, _state);
                     break;
                 case CortexWorkbenchIds.RuntimeContainer:
-                    _runtimeToolsModule.Draw(_runtimeToolBridge);
+                    _runtimeToolsModule.Draw(_runtimeToolBridge, _state);
                     break;
                 case CortexWorkbenchIds.SettingsContainer:
                     _settingsModule.Draw(_settingsStore, snapshot, _workbenchRuntime != null ? _workbenchRuntime.ThemeState : null, _state);
                     break;
                 default:
-                    _projectsModule.Draw(_projectCatalog, _state);
+                    _projectsModule.Draw(_projectCatalog, _projectWorkspaceService, _loadedModCatalog, _state);
                     break;
             }
         }
@@ -288,14 +293,19 @@ namespace Cortex
                 : settings.DecompilerPathOverride;
 
             _projectCatalog = new ProjectCatalog(new JsonProjectConfigurationStore(projectCatalogPath));
+            _loadedModCatalog = new ModApiLoadedModCatalog();
+            _projectWorkspaceService = new ProjectWorkspaceService();
+            _workspaceBrowserService = new WorkspaceBrowserService();
             _documentService = new FileDocumentService();
             _buildCommandResolver = new CsprojBuildCommandResolver();
             _buildExecutor = new ProcessBuildExecutor();
+            _referenceCatalogService = new ReferenceCatalogService();
+            _sourcePathResolver = new SourcePathResolver();
             _sourceReferenceService = new SourceReferenceService(new DecompilerCliClient(decompilerPath, settings.DecompilerCachePath, 15000));
             var runtimeLogFeed = new MmLogRuntimeLogFeed();
             runtimeLogFeed.Attach();
             _runtimeLogFeed = runtimeLogFeed;
-            _runtimeSourceNavigationService = new RuntimeSourceNavigationService(new ModApiRuntimeSymbolResolver());
+            _runtimeSourceNavigationService = new RuntimeSourceNavigationService(new ModApiRuntimeSymbolResolver(_sourcePathResolver), _sourcePathResolver);
             _runtimeToolBridge = new ModApiRuntimeToolBridge();
             _restartCoordinator = new ModApiRestartCoordinator(new RestartRequestWriter());
             EnableMmLogRuntimeIntegration();

@@ -58,7 +58,7 @@ namespace Cortex.Modules.Logs
             GuiStyleUtil.ApplyTextColorToAllStates(_selectedSummaryStyle, new Color(0.98f, 0.98f, 0.98f, 1f));
         }
 
-        public void Draw(IRuntimeLogFeed logFeed, IRuntimeSourceNavigationService navigationService, IDocumentService documentService, CortexShellState state, bool detachedWindow)
+        public void Draw(IRuntimeLogFeed logFeed, IRuntimeSourceNavigationService navigationService, ISourcePathResolver sourcePathResolver, IDocumentService documentService, CortexShellState state, bool detachedWindow)
         {
             var settings = state.Settings ?? new CortexSettings();
             var entries = logFeed.ReadRecent(_minimumLevel, settings.MaxRecentLogs);
@@ -84,7 +84,7 @@ namespace Cortex.Modules.Logs
                 },
                 delegate
                 {
-                    DrawDetailsPane(navigationService, documentService, state, detachedWindow);
+                    DrawDetailsPane(navigationService, sourcePathResolver, documentService, state, detachedWindow);
                 });
 
             GUILayout.EndVertical();
@@ -192,17 +192,17 @@ namespace Cortex.Modules.Logs
             });
         }
 
-        private void DrawDetailsPane(IRuntimeSourceNavigationService navigationService, IDocumentService documentService, CortexShellState state, bool detachedWindow)
+        private void DrawDetailsPane(IRuntimeSourceNavigationService navigationService, ISourcePathResolver sourcePathResolver, IDocumentService documentService, CortexShellState state, bool detachedWindow)
         {
             CortexIdeLayout.DrawGroup("Selected Entry", delegate
             {
                 _detailScroll = GUILayout.BeginScrollView(_detailScroll, GUI.skin.box, GUILayout.MinHeight(detachedWindow ? 404f : 430f), GUILayout.ExpandHeight(true));
-                DrawSelectedEntry(navigationService, documentService, state);
+                DrawSelectedEntry(navigationService, sourcePathResolver, documentService, state);
                 GUILayout.EndScrollView();
             }, GUILayout.ExpandHeight(true));
         }
 
-        private void DrawSelectedEntry(IRuntimeSourceNavigationService navigationService, IDocumentService documentService, CortexShellState state)
+        private void DrawSelectedEntry(IRuntimeSourceNavigationService navigationService, ISourcePathResolver sourcePathResolver, IDocumentService documentService, CortexShellState state)
         {
             if (state.Logs.SelectedEntry == null)
             {
@@ -220,11 +220,11 @@ namespace Cortex.Modules.Logs
             GUILayout.Space(6f);
             GUILayout.TextArea(state.Logs.SelectedEntry.Message ?? string.Empty, GUILayout.MinHeight(160f), GUILayout.ExpandHeight(false));
 
-            string filePath;
-            int lineNumber;
-            var hasSource = CortexModuleUtil.TryResolveSourceLocation(state.Logs.SelectedEntry.Message, state.SelectedProject, state.Settings, out filePath, out lineNumber);
+            var location = sourcePathResolver != null
+                ? sourcePathResolver.ResolveTextLocation(state.Logs.SelectedEntry.Message, state.SelectedProject, state.Settings)
+                : new SourceLocationMatch { Success = false, StatusMessage = "Source markers could not be inspected because the source resolver is unavailable." };
             GUILayout.Space(6f);
-            GUILayout.Label(CortexModuleUtil.BuildSourceResolutionExplanation(state.Logs.SelectedEntry, state.SelectedProject, state.Settings), _wrappedLabel);
+            GUILayout.Label(BuildNavigationSummary(state, sourcePathResolver, location), _wrappedLabel);
 
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Copy Entry", GUILayout.Width(120f)))
@@ -232,13 +232,13 @@ namespace Cortex.Modules.Logs
                 GUIUtility.systemCopyBuffer = BuildEntryLabel(state.Logs.SelectedEntry) + "\n" + (state.Logs.SelectedEntry.Message ?? string.Empty);
                 state.StatusMessage = "Copied selected log entry.";
             }
-            if (hasSource && GUILayout.Button("Open Source", GUILayout.Width(120f)))
+            if (location.Success && GUILayout.Button("Open Source", GUILayout.Width(120f)))
             {
-                var opened = CortexModuleUtil.OpenDocument(documentService, state, filePath, lineNumber);
+                var opened = CortexModuleUtil.OpenDocument(documentService, state, location.ResolvedPath, location.LineNumber);
                 if (opened != null)
                 {
                     state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
-                    state.StatusMessage = "Opened " + filePath + " from log.";
+                    state.StatusMessage = "Opened " + location.ResolvedPath + " from log.";
                 }
                 else
                 {
@@ -318,6 +318,32 @@ namespace Cortex.Modules.Logs
 
             state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
             state.StatusMessage = target.StatusMessage;
+        }
+
+        private static string BuildNavigationSummary(CortexShellState state, ISourcePathResolver sourcePathResolver, SourceLocationMatch location)
+        {
+            if (location != null && location.Success)
+            {
+                return "Resolved from " + location.SourceKind + ": " + location.ResolvedPath + " @ line " + location.LineNumber + ".";
+            }
+
+            if (location != null && !string.IsNullOrEmpty(location.SourceKind))
+            {
+                return location.StatusMessage;
+            }
+
+            if (state != null && state.Logs.SelectedEntry != null && state.Logs.SelectedEntry.StackFrames != null && state.Logs.SelectedEntry.StackFrames.Count > 0)
+            {
+                return "No direct file marker was found in this entry. Use the structured stack frames below to try source, token, or decompiled-cache navigation.";
+            }
+
+            var roots = sourcePathResolver != null ? sourcePathResolver.GetSearchRoots(state != null ? state.SelectedProject : null, state != null ? state.Settings : null) : new List<string>();
+            if (roots.Count == 0)
+            {
+                return "No direct file marker or runtime stack frames were captured, and no workspace roots are configured for fallback source lookup.";
+            }
+
+            return "No direct file marker or runtime stack frames were captured. Search roots available for future navigation: " + string.Join(", ", new List<string>(roots).ToArray()) + ".";
         }
 
         private static string BuildFrameLabel(RuntimeStackFrame frame, int index)

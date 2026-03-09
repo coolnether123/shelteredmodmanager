@@ -45,6 +45,7 @@
     <Compile Include="Models\CortexSettings.cs" />
     <Compile Include="Models\CortexProjectDefinition.cs" />
     <Compile Include="Models\DocumentModels.cs" />
+    <Compile Include="Models\ModuleWorkflowModels.cs" />
     <Compile Include="Models\NavigationModels.cs" />
     <Compile Include="Models\RuntimeLogEntry.cs" />
     <Compile Include="Models\SourceReferenceModels.cs" />
@@ -62,8 +63,12 @@
     <Compile Include="Services\JsonWorkbenchPersistenceService.cs" />
     <Compile Include="Services\ProcessBuildExecutor.cs" />
     <Compile Include="Services\ProjectCatalog.cs" />
+    <Compile Include="Services\ProjectWorkspaceService.cs" />
+    <Compile Include="Services\ReferenceCatalogService.cs" />
     <Compile Include="Services\RuntimeSourceNavigationService.cs" />
+    <Compile Include="Services\SourcePathResolver.cs" />
     <Compile Include="Services\SourceReferenceService.cs" />
+    <Compile Include="Services\WorkspaceBrowserService.cs" />
     <Compile Include="Services\WorkspaceLocator.cs" />
   </ItemGroup>
   <ItemGroup>
