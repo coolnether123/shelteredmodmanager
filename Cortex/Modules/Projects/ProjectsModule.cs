@@ -20,6 +20,8 @@ namespace Cortex.Modules.Projects
         private string _searchText = string.Empty;
         private string _validationMessage = string.Empty;
         private Vector2 _projectScroll = Vector2.zero;
+        private Vector2 _diagnosticScroll = Vector2.zero;
+        private bool _showAdvanced;
 
         public void Draw(IProjectCatalog catalog, CortexShellState state)
         {
@@ -78,29 +80,42 @@ namespace Cortex.Modules.Projects
         {
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
             DrawLoadedModAssistant(catalog, state);
+            DrawSourceMappingGuide(state);
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("Project Setup");
-            DrawField("Mod ID", ref _modId);
-            DrawField("Source Root", ref _sourceRoot);
-            DrawField("Project File", ref _projectFile);
-            DrawField("Build Override", ref _buildOverride);
-            DrawField("Output DLL", ref _outputAssembly);
-            DrawField("Output PDB", ref _outputPdb);
+            GUILayout.Label("Enter the root folder for your mod project. Cortex will infer the project id and .csproj automatically.");
+            DrawField("Mod Source Folder", ref _sourceRoot);
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Auto Detect .csproj", GUILayout.Width(140f)))
+            if (GUILayout.Button("Apply Source Folder", GUILayout.Width(160f)))
             {
-                AutoDetectProjectFile();
-            }
-            if (GUILayout.Button("Use Defaults", GUILayout.Width(120f)))
-            {
-                ApplyDefaultsFromProjectPath();
+                ApplySourceFolder(catalog, state, true);
             }
             if (GUILayout.Button("Validate", GUILayout.Width(90f)))
             {
                 _validationMessage = BuildValidation(CreateDefinition());
             }
+            if (state.SelectedProject != null && GUILayout.Button("Use Selected Mapping", GUILayout.Width(160f)))
+            {
+                Load(state.SelectedProject);
+                state.Diagnostics.Add("Loaded selected mapping for " + state.SelectedProject.GetDisplayName() + " into project setup.");
+            }
             GUILayout.EndHorizontal();
+
+            GUILayout.Space(4f);
+            GUILayout.Label("Detected Mod ID: " + (string.IsNullOrEmpty(_modId) ? "Not detected yet" : _modId));
+            GUILayout.Label("Detected Project File: " + (string.IsNullOrEmpty(_projectFile) ? "Not found yet" : _projectFile));
+            GUILayout.Label("Selected source folder is used by the editor file tree once the project is saved and selected.");
+
+            _showAdvanced = GUILayout.Toggle(_showAdvanced, "Show Advanced Build Fields");
+            if (_showAdvanced)
+            {
+                DrawField("Mod ID", ref _modId);
+                DrawField("Project File", ref _projectFile);
+                DrawField("Build Override", ref _buildOverride);
+                DrawField("Output DLL", ref _outputAssembly);
+                DrawField("Output PDB", ref _outputPdb);
+            }
 
             GUILayout.Space(6f);
             GUILayout.BeginHorizontal();
@@ -111,6 +126,7 @@ namespace Cortex.Modules.Projects
                 state.SelectedProject = catalog.GetProject(definition.ModId) ?? definition;
                 _validationMessage = BuildValidation(definition);
                 state.StatusMessage = "Saved project " + definition.GetDisplayName();
+                state.Diagnostics.Add("Saved project mapping for " + definition.GetDisplayName() + " using source folder " + (definition.SourceRootPath ?? string.Empty) + ".");
             }
 
             if (state.SelectedProject != null && GUILayout.Button("Delete Selected", GUILayout.Width(120f)))
@@ -120,6 +136,7 @@ namespace Cortex.Modules.Projects
                 _validationMessage = string.Empty;
                 ClearFields();
                 state.StatusMessage = "Deleted selected project.";
+                state.Diagnostics.Add("Deleted the selected project mapping.");
             }
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
@@ -128,6 +145,58 @@ namespace Cortex.Modules.Projects
             GUILayout.Label("Validation");
             GUILayout.TextArea(string.IsNullOrEmpty(_validationMessage) ? "Validate the project to confirm the source root, .csproj path, and build output paths." : _validationMessage, GUILayout.ExpandHeight(true));
             GUILayout.EndVertical();
+            DrawDiagnostics(state);
+            GUILayout.EndVertical();
+        }
+
+        private void DrawSourceMappingGuide(CortexShellState state)
+        {
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("Source Mapping Guide");
+            GUILayout.Label("Put your mod's project-tree root in 'Mod Source Folder'. Example: D:\\Projects\\Sheltered Modding\\Faction-Overhaul\\Faction Overhaul");
+            GUILayout.Label("This should be the folder that contains the mod's .cs files and usually the .csproj. Cortex will infer the rest.");
+            GUILayout.Label("Workspace root: " + ((state.Settings != null && !string.IsNullOrEmpty(state.Settings.WorkspaceRootPath)) ? state.Settings.WorkspaceRootPath : "Not configured"));
+            GUILayout.Label("Loaded mods root: " + ((state.Settings != null && !string.IsNullOrEmpty(state.Settings.ModsRootPath)) ? state.Settings.ModsRootPath : "Not configured"));
+
+            GUILayout.BeginHorizontal();
+            if (state.SelectedProject != null && !string.IsNullOrEmpty(state.SelectedProject.SourceRootPath) && GUILayout.Button("Use Selected Source", GUILayout.Width(140f)))
+            {
+                _sourceRoot = state.SelectedProject.SourceRootPath;
+                _projectFile = state.SelectedProject.ProjectFilePath ?? _projectFile;
+                state.StatusMessage = "Loaded the selected project's source mapping into the editor.";
+                state.Diagnostics.Add("Prepared the selected project's source folder for editing.");
+            }
+            if (GUILayout.Button("Use Workspace Root", GUILayout.Width(140f)))
+            {
+                _sourceRoot = state.Settings != null ? state.Settings.WorkspaceRootPath ?? string.Empty : string.Empty;
+                AutoDetectProjectFile();
+                ApplyDefaultsFromProjectPath();
+                state.StatusMessage = string.IsNullOrEmpty(_sourceRoot)
+                    ? "Workspace root is not configured."
+                    : "Prepared the workspace root as the source folder.";
+                state.Diagnostics.Add(state.StatusMessage);
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+        }
+
+        private void DrawDiagnostics(CortexShellState state)
+        {
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Height(132f));
+            GUILayout.Label("Cortex Workflow Diagnostics");
+            _diagnosticScroll = GUILayout.BeginScrollView(_diagnosticScroll, GUI.skin.box, GUILayout.ExpandHeight(true));
+            if (state == null || state.Diagnostics.Entries.Count == 0)
+            {
+                GUILayout.Label("No workflow diagnostics yet. Apply a source folder to see detection results.");
+            }
+            else
+            {
+                for (var i = state.Diagnostics.Entries.Count - 1; i >= 0; i--)
+                {
+                    GUILayout.Label(state.Diagnostics.Entries[i]);
+                }
+            }
+            GUILayout.EndScrollView();
             GUILayout.EndVertical();
         }
 
@@ -165,7 +234,7 @@ namespace Cortex.Modules.Projects
                 GUILayout.Label(mod.Id + "  |  " + mod.RootPath);
                 GUILayout.Label(string.IsNullOrEmpty(inferredSourceRoot)
                     ? "No obvious source root found. Start from the mod root or set a custom workspace path."
-                    : "Suggested source root: " + inferredSourceRoot);
+                    : "Suggested mod source folder: " + inferredSourceRoot);
 
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Insert Mapping", GUILayout.Width(120f)))
@@ -183,6 +252,7 @@ namespace Cortex.Modules.Projects
                     Load(state.SelectedProject);
                     _validationMessage = BuildValidation(state.SelectedProject);
                     state.StatusMessage = "Inserted source mapping for loaded mod " + mod.Id + ".";
+                    state.Diagnostics.Add("Inserted mapping for loaded mod " + mod.Id + ".");
                 }
 
                 if (!string.IsNullOrEmpty(inferredSourceRoot) && GUILayout.Button("Use In Editor", GUILayout.Width(110f)))
@@ -192,6 +262,7 @@ namespace Cortex.Modules.Projects
                     _projectFile = inferredProjectFile;
                     _validationMessage = BuildValidation(CreateDefinition());
                     state.StatusMessage = "Prepared source mapping fields for " + mod.Id + ".";
+                    state.Diagnostics.Add("Prepared inferred source folder for loaded mod " + mod.Id + ".");
                 }
                 GUILayout.EndHorizontal();
                 GUILayout.EndVertical();
@@ -217,6 +288,7 @@ namespace Cortex.Modules.Projects
             if (string.IsNullOrEmpty(root) || !Directory.Exists(root))
             {
                 state.StatusMessage = "Workspace root is not configured.";
+                state.Diagnostics.Add(state.StatusMessage);
                 return;
             }
 
@@ -228,6 +300,7 @@ namespace Cortex.Modules.Projects
             catch (Exception ex)
             {
                 state.StatusMessage = "Workspace import failed: " + ex.Message;
+                state.Diagnostics.Add(state.StatusMessage);
                 return;
             }
 
@@ -253,6 +326,60 @@ namespace Cortex.Modules.Projects
             }
 
             state.StatusMessage = "Imported " + imported + " project definitions from workspace root.";
+            state.Diagnostics.Add(state.StatusMessage);
+        }
+
+        private void ApplySourceFolder(IProjectCatalog catalog, CortexShellState state, bool saveProject)
+        {
+            if (string.IsNullOrEmpty(_sourceRoot))
+            {
+                state.StatusMessage = "Set a mod source folder first.";
+                state.Diagnostics.Add(state.StatusMessage);
+                return;
+            }
+
+            string normalizedRoot;
+            try
+            {
+                normalizedRoot = Path.GetFullPath(_sourceRoot.Trim());
+            }
+            catch (Exception ex)
+            {
+                state.StatusMessage = "Invalid source folder: " + ex.Message;
+                state.Diagnostics.Add(state.StatusMessage);
+                return;
+            }
+
+            if (!Directory.Exists(normalizedRoot))
+            {
+                state.StatusMessage = "Source folder not found: " + normalizedRoot;
+                state.Diagnostics.Add(state.StatusMessage);
+                return;
+            }
+
+            _sourceRoot = normalizedRoot;
+            AutoDetectProjectFile();
+            ApplyDefaultsFromProjectPath();
+            if (string.IsNullOrEmpty(_modId))
+            {
+                _modId = Path.GetFileName(normalizedRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            }
+
+            var definition = CreateDefinition();
+            _validationMessage = BuildValidation(definition);
+
+            if (saveProject && catalog != null)
+            {
+                catalog.Upsert(definition);
+                state.SelectedProject = catalog.GetProject(definition.ModId) ?? definition;
+            }
+
+            state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
+            state.StatusMessage = "Applied source folder for " + definition.GetDisplayName() + ".";
+            state.Diagnostics.Add("Applied source folder " + normalizedRoot + " and detected mod id '" + (definition.ModId ?? string.Empty) + "'.");
+            state.Diagnostics.Add(string.IsNullOrEmpty(_projectFile)
+                ? "No .csproj was detected under the source folder. Cortex will still browse source files."
+                : "Detected project file: " + _projectFile);
         }
 
         private void AutoDetectProjectFile()
@@ -345,7 +472,7 @@ namespace Cortex.Modules.Projects
         private static void DrawField(string label, ref string value)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label(label, GUILayout.Width(100f));
+            GUILayout.Label(label, GUILayout.Width(130f));
             value = GUILayout.TextField(value ?? string.Empty, GUILayout.ExpandWidth(true));
             GUILayout.EndHorizontal();
         }

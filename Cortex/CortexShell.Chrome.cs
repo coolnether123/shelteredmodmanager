@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Cortex.Chrome;
 using Cortex.Core.Models;
+using Cortex.Modules.Shared;
 using Cortex.Presentation.Models;
 using UnityEngine;
 
@@ -21,44 +22,45 @@ namespace Cortex
             }
             GUILayout.Space(8f);
             var actions = new List<CortexWindowAction>();
-            actions.Add(new CortexWindowAction
-            {
-                ActionId = "shell.collapse",
-                Label = "_",
-                Width = 28f,
-                Execute = delegate
+            actions.Add(BuildGlyphWindowAction(
+                "shell.collapse",
+                "_",
+                "Minimize Cortex",
+                delegate
                 {
                     _windowRect = CortexWindowChromeController.ToggleCollapsed(_state.Chrome.Main, _windowRect, 126f, 28f);
-                }
-            });
+                }));
             actions.Add(new CortexWindowAction
             {
                 ActionId = "shell.logs",
-                Label = _state.Logs.ShowDetachedWindow ? "Hide Logs Window" : "Show Logs Window",
-                Width = 140f,
+                Label = _windowRect.width < 1220f ? "Logs" : (_state.Logs.ShowDetachedWindow ? "Hide Logs" : "Show Logs"),
+                ToolTip = _state.Logs.ShowDetachedWindow ? "Hide detached logs window" : "Show detached logs window",
+                Width = _windowRect.width < 1220f ? 64f : 104f,
+                Height = 22f,
                 Execute = delegate { ExecuteCommand("cortex.logs.toggleWindow", null); }
             });
             actions.Add(new CortexWindowAction
             {
                 ActionId = "shell.fit",
-                Label = "Fit Screen",
-                Width = 90f,
+                Label = _windowRect.width < 1220f ? "Fit" : "Fit Screen",
+                ToolTip = "Fit Cortex to the current game view",
+                Width = _windowRect.width < 1220f ? 48f : 84f,
+                Height = 22f,
                 Execute = delegate { ExecuteCommand("cortex.shell.fitWindow", null); }
             });
-            actions.Add(new CortexWindowAction
-            {
-                ActionId = "shell.close",
-                Label = "Close",
-                Width = 80f,
-                Execute = delegate
+            actions.Add(BuildGlyphWindowAction(
+                "shell.close",
+                "X",
+                "Close Cortex",
+                delegate
                 {
                     PersistWorkbenchSession();
                     PersistWindowSettings();
                     _visible = false;
-                }
-            });
+                }));
             CortexWindowChromeController.DrawActions(actions);
             GUILayout.EndHorizontal();
+            DrawContributionToolbar(snapshot);
             GUILayout.Space(4f);
             GUILayout.Label("Toggle: F8 | Side tools, editors, and bottom panels stay separated so logs remain visible while you work.", _captionStyle);
             if (snapshot != null && !string.IsNullOrEmpty(snapshot.RendererSummary))
@@ -68,170 +70,405 @@ namespace Cortex
             GUILayout.EndVertical();
         }
 
-        private void DrawWorkbenchSelectors(WorkbenchPresentationSnapshot snapshot)
-        {
-            DrawHostSelector(snapshot, WorkbenchHostLocation.PrimarySideHost, "Side Host", "Projects, references, runtime tools, and settings.");
-            DrawDocumentHostSummary(snapshot);
-        }
-
-        private void DrawHostSelector(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation, string title, string description)
-        {
-            if (snapshot == null)
-            {
-                return;
-            }
-
-            var items = snapshot.ToolRailItems;
-            var hasItems = false;
-            for (var i = 0; i < items.Count; i++)
-            {
-                if (items[i].HostLocation == hostLocation)
-                {
-                    hasItems = true;
-                    break;
-                }
-            }
-
-            if (!hasItems)
-            {
-                return;
-            }
-
-            GUILayout.BeginVertical(_sectionStyle);
-            var previousContentColor = GUI.contentColor;
-            GUI.contentColor = CortexIdeLayout.GetHostAccentColor(hostLocation);
-            GUILayout.Label(title + " | " + CortexIdeLayout.GetHostDisplayName(hostLocation), _statusStyle);
-            GUI.contentColor = previousContentColor;
-            GUILayout.Label(description, _captionStyle);
-            GUILayout.BeginHorizontal();
-            for (var i = 0; i < items.Count; i++)
-            {
-                if (items[i].HostLocation != hostLocation)
-                {
-                    continue;
-                }
-
-                DrawTabButton(items[i].ContainerId, items[i].Title, false);
-            }
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
-            GUILayout.EndVertical();
-        }
-
-        private void DrawTabButton(string containerId, string label, bool panelButton)
-        {
-            var hostLocation = ResolveHostLocation(containerId);
-            var isSelected = panelButton
-                ? string.Equals(_state.Workbench.PanelContainerId, containerId, StringComparison.OrdinalIgnoreCase)
-                : hostLocation == WorkbenchHostLocation.DocumentHost
-                    ? string.Equals(_state.Workbench.EditorContainerId, containerId, StringComparison.OrdinalIgnoreCase)
-                    : string.Equals(_state.Workbench.SideContainerId, containerId, StringComparison.OrdinalIgnoreCase);
-            var previousBackground = GUI.backgroundColor;
-            var previousContent = GUI.contentColor;
-            var accent = CortexIdeLayout.GetHostAccentColor(hostLocation);
-            GUI.backgroundColor = isSelected ? new Color(accent.r * 0.45f, accent.g * 0.45f, accent.b * 0.45f, 1f) : new Color(0.16f, 0.17f, 0.2f, 1f);
-            GUI.contentColor = isSelected ? Color.white : new Color(0.86f, 0.88f, 0.92f, 1f);
-            if (GUILayout.Toggle(isSelected, label, isSelected ? _activeTabStyle : _tabStyle, GUILayout.Width(110f), GUILayout.Height(24f)))
-            {
-                ActivateContainer(containerId);
-            }
-            GUI.backgroundColor = previousBackground;
-            GUI.contentColor = previousContent;
-        }
-
-        private void DrawDocumentHostSummary(WorkbenchPresentationSnapshot snapshot)
-        {
-            CortexIdeLayout.DrawGroup("Document Host | " + GetContainerTitle(snapshot, _state.Workbench.EditorContainerId), delegate
-            {
-                GUILayout.Label("The editor host stays mounted while you switch tools on the left.", _captionStyle);
-                GUILayout.Label("Open docs: " + _state.Documents.OpenDocuments.Count + " | Active: " + (_state.Documents.ActiveDocument != null ? _state.Documents.ActiveDocument.FilePath : "None"), _captionStyle);
-            });
-        }
-
         private void DrawWorkbenchSurface(WorkbenchPresentationSnapshot snapshot)
         {
-            var sideWidth = _workbenchRuntime != null ? _workbenchRuntime.LayoutState.PrimarySideWidth : 360f;
-            CortexIdeLayout.DrawTwoPane(
-                sideWidth,
-                300f,
-                delegate
+            var isDragging = !string.IsNullOrEmpty(_draggingContainerId);
+            var leftVisible = HasHostItems(snapshot, WorkbenchHostLocation.PrimarySideHost) || isDragging;
+            var rightVisible = HasHostItems(snapshot, WorkbenchHostLocation.SecondarySideHost) || isDragging;
+            var panelVisible = HasHostItems(snapshot, WorkbenchHostLocation.PanelHost) || isDragging;
+
+            if (_workbenchRuntime != null)
+            {
+                _workbenchRuntime.WorkbenchState.PrimarySideHostVisible = leftVisible;
+                _workbenchRuntime.WorkbenchState.SecondarySideHostVisible = rightVisible;
+                _workbenchRuntime.WorkbenchState.PanelHostVisible = panelVisible;
+            }
+
+            GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            if (leftVisible)
+            {
+                DrawDockHost(snapshot, WorkbenchHostLocation.PrimarySideHost, Mathf.Clamp(_workbenchRuntime != null ? _workbenchRuntime.LayoutState.PrimarySideWidth : 320f, 240f, 460f));
+                if (_workbenchRuntime != null)
                 {
-                    DrawSideHost(snapshot);
-                },
-                delegate
+                    _workbenchRuntime.LayoutState.PrimarySideWidth = CortexWindowChromeController.DrawVerticalSplitter(0xC101, _workbenchRuntime.LayoutState.PrimarySideWidth, 240f, 460f, 6f, false);
+                }
+            }
+
+            if (leftVisible)
+            {
+                GUILayout.Space(4f);
+            }
+            DrawCentralWorkbench(snapshot, panelVisible);
+
+            if (rightVisible)
+            {
+                GUILayout.Space(4f);
+                if (_workbenchRuntime != null)
                 {
-                    DrawEditorHost(snapshot);
-                });
+                    _workbenchRuntime.LayoutState.SecondarySideWidth = CortexWindowChromeController.DrawVerticalSplitter(0xC102, _workbenchRuntime.LayoutState.SecondarySideWidth, 240f, 460f, 6f, true);
+                }
+                DrawDockHost(snapshot, WorkbenchHostLocation.SecondarySideHost, Mathf.Clamp(_workbenchRuntime != null ? _workbenchRuntime.LayoutState.SecondarySideWidth : 300f, 240f, 460f));
+            }
+
+            GUILayout.EndHorizontal();
         }
 
-        private void DrawSideHost(WorkbenchPresentationSnapshot snapshot)
+        private void DrawDockHost(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation, float width)
         {
-            CortexIdeLayout.DrawGroup("Side Host | " + GetContainerTitle(snapshot, _state.Workbench.SideContainerId), delegate
+            var activeContainerId = GetActiveContainerForHost(snapshot, hostLocation);
+            CortexIdeLayout.DrawGroup(GetHostTitle(snapshot, hostLocation, activeContainerId), delegate
             {
+                DrawHostDropTarget(hostLocation);
+                GUILayout.BeginHorizontal();
+                var items = GetHostItems(snapshot, hostLocation);
+                for (var i = 0; i < items.Count; i++)
+                {
+                    DrawDockTabButton(items[i], hostLocation);
+                }
+                GUILayout.FlexibleSpace();
+                GUILayout.EndHorizontal();
+                GUILayout.Space(4f);
+
+                if (string.IsNullOrEmpty(activeContainerId))
+                {
+                    GUILayout.Label(GetHostDescription(hostLocation), _captionStyle);
+                    return;
+                }
+
                 var previousContentColor = GUI.contentColor;
-                GUI.contentColor = CortexIdeLayout.GetHostAccentColor(WorkbenchHostLocation.PrimarySideHost);
-                GUILayout.Label("Active side module: " + GetContainerTitle(snapshot, _state.Workbench.SideContainerId), _statusStyle);
+                GUI.contentColor = CortexIdeLayout.GetHostAccentColor(hostLocation);
+                GUILayout.Label(GetHostDescription(hostLocation), _statusStyle);
                 GUI.contentColor = previousContentColor;
-                DrawActiveModule(_state.Workbench.SideContainerId, false);
-            }, GUILayout.Width(Mathf.Max(300f, _workbenchRuntime != null ? _workbenchRuntime.LayoutState.PrimarySideWidth : 360f)));
+                DrawActiveModule(snapshot, activeContainerId, false);
+            }, GUILayout.Width(width), GUILayout.ExpandHeight(true));
+        }
+
+        private void DrawCentralWorkbench(WorkbenchPresentationSnapshot snapshot, bool panelVisible)
+        {
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            DrawEditorHost(snapshot);
+            if (panelVisible)
+            {
+                GUILayout.Space(4f);
+                if (_workbenchRuntime != null)
+                {
+                    _workbenchRuntime.LayoutState.PanelSize = CortexWindowChromeController.DrawHorizontalSplitter(0xC103, _workbenchRuntime.LayoutState.PanelSize, 180f, 360f, 6f);
+                }
+                GUILayout.Space(4f);
+                DrawPanelHost(snapshot);
+            }
+            GUILayout.EndVertical();
         }
 
         private void DrawEditorHost(WorkbenchPresentationSnapshot snapshot)
         {
-            CortexIdeLayout.DrawGroup("Editor Host | " + GetContainerTitle(snapshot, _state.Workbench.EditorContainerId), delegate
+            CortexIdeLayout.DrawGroup("Editor | " + GetContainerTitle(snapshot, _state.Workbench.EditorContainerId), delegate
             {
-                var previousContentColor = GUI.contentColor;
-                GUI.contentColor = CortexIdeLayout.GetHostAccentColor(WorkbenchHostLocation.DocumentHost);
-                GUILayout.Label("Editors remain visible while side tools and bottom panels change.", _statusStyle);
-                GUI.contentColor = previousContentColor;
-                DrawActiveModule(_state.Workbench.EditorContainerId, false);
+                DrawHostDropTarget(WorkbenchHostLocation.DocumentHost);
+                GUILayout.Label("Open docs: " + _state.Documents.OpenDocuments.Count + " | Active: " + (_state.Documents.ActiveDocument != null ? _state.Documents.ActiveDocument.FilePath : "None"), _captionStyle);
+                GUILayout.Space(4f);
+                DrawActiveModule(snapshot, _state.Workbench.EditorContainerId, false);
             }, GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(true));
         }
 
         private void DrawPanelHost(WorkbenchPresentationSnapshot snapshot)
         {
+            var panelHeight = Mathf.Clamp(_workbenchRuntime != null ? _workbenchRuntime.LayoutState.PanelSize : 260f, 180f, 360f);
+            var activeContainerId = GetActiveContainerForHost(snapshot, WorkbenchHostLocation.PanelHost);
+            CortexIdeLayout.DrawGroup("Panel | " + GetContainerTitle(snapshot, _state.Workbench.PanelContainerId), delegate
+            {
+                DrawHostDropTarget(WorkbenchHostLocation.PanelHost);
+                GUILayout.BeginHorizontal();
+                var items = GetHostItems(snapshot, WorkbenchHostLocation.PanelHost);
+                for (var i = 0; i < items.Count; i++)
+                {
+                    DrawDockTabButton(items[i], WorkbenchHostLocation.PanelHost);
+                }
+                GUILayout.FlexibleSpace();
+                GUILayout.EndHorizontal();
+                GUILayout.Space(4f);
+                if (string.IsNullOrEmpty(activeContainerId))
+                {
+                    GUILayout.Label(GetHostDescription(WorkbenchHostLocation.PanelHost), _captionStyle);
+                    return;
+                }
+
+                DrawActiveModule(snapshot, activeContainerId, false);
+            }, GUILayout.Height(panelHeight), GUILayout.ExpandWidth(true));
+        }
+
+        private void DrawDockTabButton(ToolRailItem item, WorkbenchHostLocation hostLocation)
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            var activeContainerId = GetActiveContainerForHost(null, hostLocation);
+            var isSelected = string.Equals(activeContainerId, item.ContainerId, StringComparison.OrdinalIgnoreCase);
+            var previousBackground = GUI.backgroundColor;
+            var previousContent = GUI.contentColor;
+            GUI.backgroundColor = CortexIdeLayout.GetInteractiveFillColor(isSelected, hostLocation);
+            GUI.contentColor = CortexIdeLayout.GetInteractiveTextColor(isSelected);
+            if (GUILayout.Toggle(isSelected, BuildTabLabel(item), isSelected ? _activeTabStyle : _tabStyle, GUILayout.Width(116f), GUILayout.Height(24f)))
+            {
+                ActivateContainer(item.ContainerId);
+            }
+            var rect = GUILayoutUtility.GetLastRect();
+            HandleTabDrag(item.ContainerId, hostLocation, rect);
+            GUI.backgroundColor = previousBackground;
+            GUI.contentColor = previousContent;
+        }
+
+        private void HandleTabDrag(string containerId, WorkbenchHostLocation hostLocation, Rect rect)
+        {
+            var current = Event.current;
+            if (current == null || string.IsNullOrEmpty(containerId))
+            {
+                return;
+            }
+
+            if (current.type == EventType.MouseDrag && rect.Contains(current.mousePosition))
+            {
+                _draggingContainerId = containerId;
+                _draggingContainerSourceHost = hostLocation;
+                current.Use();
+            }
+            else if (!string.IsNullOrEmpty(_draggingContainerId) &&
+                (current.type == EventType.MouseUp || current.rawType == EventType.MouseUp) &&
+                string.Equals(_draggingContainerId, containerId, StringComparison.OrdinalIgnoreCase))
+            {
+                _draggingContainerId = string.Empty;
+            }
+        }
+
+        private void DrawHostDropTarget(WorkbenchHostLocation hostLocation)
+        {
+            var isDragging = !string.IsNullOrEmpty(_draggingContainerId) && hostLocation != WorkbenchHostLocation.DocumentHost;
+            var label = hostLocation == WorkbenchHostLocation.DocumentHost
+                ? "Editor workspace"
+                : isDragging
+                    ? "Release here to dock into " + CortexIdeLayout.GetHostDisplayName(hostLocation).ToLowerInvariant() + "."
+                    : "Drag a tab here to dock it.";
+            GUILayout.Box(label, GUILayout.ExpandWidth(true), GUILayout.Height(20f));
+            var rect = GUILayoutUtility.GetLastRect();
+            HandleDockDropTarget(hostLocation, rect);
+        }
+
+        private void HandleDockDropTarget(WorkbenchHostLocation hostLocation, Rect rect)
+        {
+            var current = Event.current;
+            if (current == null || string.IsNullOrEmpty(_draggingContainerId))
+            {
+                return;
+            }
+
+            if ((current.type == EventType.MouseUp || current.rawType == EventType.MouseUp) && rect.Contains(current.mousePosition))
+            {
+                DockContainer(_draggingContainerId, hostLocation);
+                _draggingContainerId = string.Empty;
+                current.Use();
+            }
+            else if (current.type == EventType.MouseUp || current.rawType == EventType.MouseUp)
+            {
+                _draggingContainerId = string.Empty;
+            }
+        }
+
+        private bool HasHostItems(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation)
+        {
+            return GetHostItems(snapshot, hostLocation).Count > 0;
+        }
+
+        private List<ToolRailItem> GetHostItems(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation)
+        {
+            var items = new List<ToolRailItem>();
+            if (snapshot == null)
+            {
+                return items;
+            }
+
+            for (var i = 0; i < snapshot.ToolRailItems.Count; i++)
+            {
+                var item = snapshot.ToolRailItems[i];
+                if (item != null && ResolveHostLocation(item.ContainerId) == hostLocation)
+                {
+                    items.Add(item);
+                }
+            }
+
+            return items;
+        }
+
+        private string GetActiveContainerForHost(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation)
+        {
+            switch (hostLocation)
+            {
+                case WorkbenchHostLocation.PanelHost:
+                    return !string.IsNullOrEmpty(_state.Workbench.PanelContainerId)
+                        ? _state.Workbench.PanelContainerId
+                        : FindFirstHostItem(snapshot, hostLocation);
+                case WorkbenchHostLocation.SecondarySideHost:
+                    return !string.IsNullOrEmpty(_state.Workbench.SecondarySideContainerId)
+                        ? _state.Workbench.SecondarySideContainerId
+                        : FindFirstHostItem(snapshot, hostLocation);
+                case WorkbenchHostLocation.DocumentHost:
+                    return _state.Workbench.EditorContainerId;
+                case WorkbenchHostLocation.PrimarySideHost:
+                default:
+                    return !string.IsNullOrEmpty(_state.Workbench.SideContainerId)
+                        ? _state.Workbench.SideContainerId
+                        : FindFirstHostItem(snapshot, hostLocation);
+            }
+        }
+
+        private string FindFirstHostItem(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation)
+        {
+            var items = GetHostItems(snapshot, hostLocation);
+            return items.Count > 0 && items[0] != null ? items[0].ContainerId : string.Empty;
+        }
+
+        private string GetHostTitle(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation, string activeContainerId)
+        {
+            return CortexIdeLayout.GetHostDisplayName(hostLocation) + " | " + GetContainerTitle(snapshot, activeContainerId);
+        }
+
+        private static string GetHostDescription(WorkbenchHostLocation hostLocation)
+        {
+            switch (hostLocation)
+            {
+                case WorkbenchHostLocation.PrimarySideHost:
+                    return "Primary sidebar for explorer-style tools and references.";
+                case WorkbenchHostLocation.SecondarySideHost:
+                    return "Secondary sidebar for companion tools docked on the right.";
+                case WorkbenchHostLocation.PanelHost:
+                    return "Bottom panel for logs, build output, and transient tool panes.";
+                case WorkbenchHostLocation.DocumentHost:
+                default:
+                    return "Central editor workspace with persistent documents.";
+            }
+        }
+
+        private void DrawContributionToolbar(WorkbenchPresentationSnapshot snapshot)
+        {
             if (snapshot == null)
             {
                 return;
             }
 
-            var hasPanelItems = false;
-            for (var i = 0; i < snapshot.ToolRailItems.Count; i++)
-            {
-                if (snapshot.ToolRailItems[i].HostLocation == WorkbenchHostLocation.PanelHost)
-                {
-                    hasPanelItems = true;
-                    break;
-                }
-            }
+            DrawMenuProjectionRow(snapshot.MainMenuItems, "Menu");
+            DrawMenuProjectionRow(snapshot.ToolbarItems, "Quick");
+        }
 
-            if (!hasPanelItems)
+        private void DrawMenuProjectionRow(IList<MenuItemProjection> items, string fallbackGroup)
+        {
+            if (items == null || items.Count == 0)
             {
                 return;
             }
 
-            CortexIdeLayout.DrawGroup("Bottom Panels | " + GetContainerTitle(snapshot, _state.Workbench.PanelContainerId), delegate
+            GUILayout.Space(6f);
+            GUILayout.BeginHorizontal();
+            var currentGroup = string.Empty;
+            for (var i = 0; i < items.Count; i++)
             {
-                var previousContentColor = GUI.contentColor;
-                GUI.contentColor = CortexIdeLayout.GetHostAccentColor(WorkbenchHostLocation.PanelHost);
-                GUILayout.Label("Panels stay docked so logs and build output remain visible.", _statusStyle);
-                GUI.contentColor = previousContentColor;
-
-                GUILayout.BeginHorizontal();
-                for (var i = 0; i < snapshot.ToolRailItems.Count; i++)
+                var item = items[i];
+                if (!string.Equals(currentGroup, item.Group, StringComparison.OrdinalIgnoreCase))
                 {
-                    if (snapshot.ToolRailItems[i].HostLocation != WorkbenchHostLocation.PanelHost)
+                    if (!string.IsNullOrEmpty(currentGroup))
                     {
-                        continue;
+                        GUILayout.Space(10f);
                     }
 
-                    DrawTabButton(snapshot.ToolRailItems[i].ContainerId, snapshot.ToolRailItems[i].Title, true);
+                    currentGroup = string.IsNullOrEmpty(item.Group) ? fallbackGroup : item.Group;
+                    if (!string.IsNullOrEmpty(currentGroup))
+                    {
+                        GUILayout.Label(currentGroup + ":", _captionStyle);
+                    }
                 }
-                GUILayout.FlexibleSpace();
-                GUILayout.EndHorizontal();
-                GUILayout.Space(4f);
-                DrawActiveModule(_state.Workbench.PanelContainerId, false);
-            }, GUILayout.Height(Mathf.Clamp(_workbenchRuntime != null ? _workbenchRuntime.LayoutState.PanelSize : 320f, 240f, 460f)));
+
+                var label = BuildMenuLabel(item);
+                if (GUILayout.Button(label, GUILayout.Width(Mathf.Max(96f, label.Length * 7f))))
+                {
+                    ExecuteCommand(item.CommandId, null);
+                }
+            }
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawStatusStrip(WorkbenchPresentationSnapshot snapshot)
+        {
+            GUILayout.BeginVertical(_sectionStyle);
+            GUILayout.BeginHorizontal();
+            DrawStatusItems(snapshot != null ? snapshot.LeftStatusItems : null);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label(string.IsNullOrEmpty(_state.StatusMessage) ? "Status: Ready" : "Status: " + _state.StatusMessage, _statusStyle);
+            GUILayout.FlexibleSpace();
+            DrawStatusItems(snapshot != null ? snapshot.RightStatusItems : null);
+            GUILayout.EndHorizontal();
+            GUILayout.Label(BuildStatusLine(snapshot), _captionStyle);
+            GUILayout.EndVertical();
+        }
+
+        private void DrawStatusItems(IList<StatusItemContribution> items)
+        {
+            if (items == null || items.Count == 0)
+            {
+                return;
+            }
+
+            for (var i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                var previousContentColor = GUI.contentColor;
+                GUI.contentColor = GetStatusItemColor(item.Severity);
+                var label = item.Text ?? item.ItemId ?? "Status";
+                if (!string.IsNullOrEmpty(item.CommandId) && GUILayout.Button(label, GUILayout.Width(Mathf.Max(90f, label.Length * 7f))))
+                {
+                    ExecuteCommand(item.CommandId, null);
+                }
+                else
+                {
+                    GUILayout.Label(label, _captionStyle);
+                }
+                GUI.contentColor = previousContentColor;
+                GUILayout.Space(6f);
+            }
+        }
+
+        private static string BuildTabLabel(ToolRailItem item)
+        {
+            if (item == null)
+            {
+                return "Item";
+            }
+
+            return string.IsNullOrEmpty(item.IconAlias)
+                ? item.Title
+                : item.IconAlias + " " + item.Title;
+        }
+
+        private static string BuildMenuLabel(MenuItemProjection item)
+        {
+            if (item == null)
+            {
+                return "Command";
+            }
+
+            return string.IsNullOrEmpty(item.IconAlias)
+                ? item.DisplayName
+                : item.IconAlias + " " + item.DisplayName;
+        }
+
+        private static Color GetStatusItemColor(string severity)
+        {
+            return RuntimeLogVisuals.GetAccentColor(string.IsNullOrEmpty(severity) ? "Info" : severity);
         }
 
         private static string GetContainerTitle(WorkbenchPresentationSnapshot snapshot, string containerId)
@@ -256,6 +493,7 @@ namespace Cortex
             return "Side: " + GetContainerTitle(snapshot, _state.Workbench.SideContainerId) +
                 " | Editor: " + GetContainerTitle(snapshot, _state.Workbench.EditorContainerId) +
                 " | Panel: " + (_state.Logs.ShowDetachedWindow ? "Detached Logs" : GetContainerTitle(snapshot, _state.Workbench.PanelContainerId)) +
+                " | Theme: " + (snapshot != null && !string.IsNullOrEmpty(snapshot.ActiveThemeId) ? snapshot.ActiveThemeId : "cortex.default") +
                 " | Open docs: " + _state.Documents.OpenDocuments.Count +
                 " | Projects: " + _projectCatalog.GetProjects().Count +
                 " | Logs window: " + (_state.Logs.ShowDetachedWindow ? "Open" : "Docked") +

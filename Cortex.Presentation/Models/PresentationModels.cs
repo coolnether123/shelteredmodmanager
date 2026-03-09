@@ -52,28 +52,53 @@ namespace Cortex.Presentation.Models
         public string ContainerId;
         public string Title;
         public string IconId;
+        public string IconAlias;
         public WorkbenchHostLocation HostLocation;
         public bool Active;
+    }
+
+    public sealed class MenuItemProjection
+    {
+        public string CommandId;
+        public string DisplayName;
+        public string Description;
+        public string DefaultGesture;
+        public string Group;
+        public string IconAlias;
+        public MenuProjectionLocation Location;
+        public int SortOrder;
     }
 
     public sealed class WorkbenchPresentationSnapshot
     {
         public readonly List<ToolRailItem> ToolRailItems;
+        public readonly List<MenuItemProjection> MainMenuItems;
+        public readonly List<MenuItemProjection> ToolbarItems;
         public readonly List<StatusItemContribution> LeftStatusItems;
         public readonly List<StatusItemContribution> RightStatusItems;
+        public readonly List<ThemeContribution> Themes;
+        public readonly List<EditorContribution> Editors;
+        public readonly List<SettingContribution> Settings;
         public readonly ThemeTokenSet ThemeTokens;
         public string ActiveContainerId;
         public string FocusedRegionId;
+        public string ActiveThemeId;
         public string RendererSummary;
 
         public WorkbenchPresentationSnapshot()
         {
             ToolRailItems = new List<ToolRailItem>();
+            MainMenuItems = new List<MenuItemProjection>();
+            ToolbarItems = new List<MenuItemProjection>();
             LeftStatusItems = new List<StatusItemContribution>();
             RightStatusItems = new List<StatusItemContribution>();
+            Themes = new List<ThemeContribution>();
+            Editors = new List<EditorContribution>();
+            Settings = new List<SettingContribution>();
             ThemeTokens = new ThemeTokenSet();
             ActiveContainerId = string.Empty;
             FocusedRegionId = string.Empty;
+            ActiveThemeId = "cortex.default";
             RendererSummary = string.Empty;
         }
     }

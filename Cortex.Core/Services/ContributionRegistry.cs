@@ -173,7 +173,27 @@ namespace Cortex.Core.Services
 
         public IList<MenuContribution> GetMenus()
         {
-            return new List<MenuContribution>(_menus);
+            var results = new List<MenuContribution>(_menus);
+            results.Sort(delegate(MenuContribution left, MenuContribution right)
+            {
+                var order = left.Location.CompareTo(right.Location);
+                if (order != 0)
+                {
+                    return order;
+                }
+
+                order = string.Compare(left.Group, right.Group, StringComparison.OrdinalIgnoreCase);
+                if (order != 0)
+                {
+                    return order;
+                }
+
+                order = left.SortOrder.CompareTo(right.SortOrder);
+                return order != 0
+                    ? order
+                    : string.Compare(left.CommandId, right.CommandId, StringComparison.OrdinalIgnoreCase);
+            });
+            return results;
         }
 
         public IList<StatusItemContribution> GetStatusItems()
@@ -197,17 +217,47 @@ namespace Cortex.Core.Services
 
         public IList<ThemeContribution> GetThemes()
         {
-            return new List<ThemeContribution>(_themes.Values);
+            var results = new List<ThemeContribution>(_themes.Values);
+            results.Sort(delegate(ThemeContribution left, ThemeContribution right)
+            {
+                var order = left.SortOrder.CompareTo(right.SortOrder);
+                return order != 0
+                    ? order
+                    : string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
+            });
+            return results;
         }
 
         public IList<IconContribution> GetIcons()
         {
-            return new List<IconContribution>(_icons.Values);
+            var results = new List<IconContribution>(_icons.Values);
+            results.Sort(delegate(IconContribution left, IconContribution right)
+            {
+                var order = string.Compare(left.Alias, right.Alias, StringComparison.OrdinalIgnoreCase);
+                return order != 0
+                    ? order
+                    : string.Compare(left.IconId, right.IconId, StringComparison.OrdinalIgnoreCase);
+            });
+            return results;
         }
 
         public IList<SettingContribution> GetSettings()
         {
-            return new List<SettingContribution>(_settings.Values);
+            var results = new List<SettingContribution>(_settings.Values);
+            results.Sort(delegate(SettingContribution left, SettingContribution right)
+            {
+                var order = string.Compare(left.Scope, right.Scope, StringComparison.OrdinalIgnoreCase);
+                if (order != 0)
+                {
+                    return order;
+                }
+
+                order = left.SortOrder.CompareTo(right.SortOrder);
+                return order != 0
+                    ? order
+                    : string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
+            });
+            return results;
         }
     }
 }

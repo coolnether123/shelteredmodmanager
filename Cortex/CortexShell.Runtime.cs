@@ -128,10 +128,22 @@ namespace Cortex
             var persisted = _workbenchPersistenceService.Load(DefaultWorkspaceId) ?? new PersistedWorkbenchState();
             _state.Workbench.FocusedContainerId = NormalizeContainerId(persisted.FocusedContainerId, CortexWorkbenchIds.EditorContainer);
             _state.Workbench.SideContainerId = NormalizeContainerId(persisted.SideContainerId, CortexWorkbenchIds.ProjectsContainer);
+            _state.Workbench.SecondarySideContainerId = persisted.SecondarySideContainerId ?? string.Empty;
             _state.Workbench.EditorContainerId = NormalizeContainerId(persisted.EditorContainerId, CortexWorkbenchIds.EditorContainer);
             _state.Workbench.PanelContainerId = NormalizeContainerId(persisted.PanelContainerId, CortexWorkbenchIds.LogsContainer);
             _state.Logs.ShowDetachedWindow = persisted.ShowDetachedLogWindow;
             _state.Documents.EditorUnlocked = persisted.EditorUnlocked;
+            var assignments = persisted.ContainerHostAssignments ?? new ContainerHostAssignment[0];
+            for (var i = 0; i < assignments.Length; i++)
+            {
+                var assignment = assignments[i];
+                if (assignment == null || string.IsNullOrEmpty(assignment.ContainerId))
+                {
+                    continue;
+                }
+
+                _state.Workbench.AssignHost(assignment.ContainerId, assignment.HostLocation);
+            }
 
             var restoredDocuments = persisted.OpenDocumentPaths ?? new string[0];
             for (var i = 0; i < restoredDocuments.Length; i++)
@@ -177,16 +189,28 @@ namespace Cortex
                 }
             }
 
+            var assignments = new List<ContainerHostAssignment>();
+            foreach (var pair in _state.Workbench.HostOverrides)
+            {
+                assignments.Add(new ContainerHostAssignment
+                {
+                    ContainerId = pair.Key,
+                    HostLocation = pair.Value
+                });
+            }
+
             _workbenchPersistenceService.Save(DefaultWorkspaceId, new PersistedWorkbenchState
             {
                 FocusedContainerId = _state.Workbench.FocusedContainerId,
                 SideContainerId = _state.Workbench.SideContainerId,
+                SecondarySideContainerId = _state.Workbench.SecondarySideContainerId,
                 EditorContainerId = _state.Workbench.EditorContainerId,
                 PanelContainerId = _state.Workbench.PanelContainerId,
                 ShowDetachedLogWindow = _state.Logs.ShowDetachedWindow,
                 EditorUnlocked = _state.Documents.EditorUnlocked,
                 ActiveDocumentPath = _state.Documents.ActiveDocumentPath ?? string.Empty,
-                OpenDocumentPaths = openPaths.ToArray()
+                OpenDocumentPaths = openPaths.ToArray(),
+                ContainerHostAssignments = assignments.ToArray()
             });
         }
 

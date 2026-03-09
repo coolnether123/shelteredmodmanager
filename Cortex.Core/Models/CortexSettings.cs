@@ -13,6 +13,7 @@ namespace Cortex.Core.Models
         public string ProjectCatalogPath;
         public string DecompilerPathOverride;
         public string DecompilerCachePath;
+        public string ThemeId;
         public string DefaultBuildConfiguration;
         public int BuildTimeoutMs;
         public int MaxRecentLogs;
@@ -36,11 +37,12 @@ namespace Cortex.Core.Models
             ProjectCatalogPath = string.Empty;
             DecompilerPathOverride = string.Empty;
             DecompilerCachePath = string.Empty;
+            ThemeId = "cortex.default";
             DefaultBuildConfiguration = "Debug";
             BuildTimeoutMs = 300000;
             MaxRecentLogs = 300;
             AutoScrollLogs = true;
-            ShowLogBacklog = true;
+            ShowLogBacklog = false;
             LogsPaneWidth = 520f;
             ProjectsPaneWidth = 360f;
             EditorFilePaneWidth = 320f;
