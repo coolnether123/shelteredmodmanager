@@ -954,6 +954,8 @@ namespace ModAPI.Core
 
             switch (level)
             {
+                case LogLevel.Info:
+                    return options.CaptureInfoStackFrames;
                 case LogLevel.Warning:
                     return options.CaptureWarningStackFrames;
                 case LogLevel.Error:
