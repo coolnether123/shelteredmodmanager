@@ -552,13 +552,18 @@ namespace Cortex
 
                 if (!string.IsNullOrEmpty(response.DocumentPath) && File.Exists(response.DocumentPath))
                 {
-                    var opened = CortexModuleUtil.OpenDocument(_documentService, _state, response.DocumentPath, response.Range != null ? response.Range.StartLine : 1);
+                    var opened = _navigationService != null
+                        ? _navigationService.OpenDocument(
+                            _state,
+                            response.DocumentPath,
+                            response.Range != null ? response.Range.StartLine : 1,
+                            "Opened definition: " + (response.SymbolDisplay ?? Path.GetFileName(response.DocumentPath)),
+                            "Could not open definition source file.")
+                        : null;
                     if (opened != null)
                     {
                         opened.HighlightedLine = response.Range != null ? response.Range.StartLine : 1;
                     }
-
-                    _state.StatusMessage = "Opened definition: " + (response.SymbolDisplay ?? Path.GetFileName(response.DocumentPath));
                     MMLog.WriteInfo("[Cortex.Roslyn] Opened definition for " + (pending.TokenText ?? string.Empty) + " -> " + response.DocumentPath);
                     return;
                 }
@@ -613,7 +618,7 @@ namespace Cortex
         {
             try
             {
-                if (response == null || _sourceReferenceService == null || _documentService == null)
+                if (response == null || _navigationService == null)
                 {
                     MMLog.WriteWarning("[Cortex.Roslyn] Metadata definition fallback was unavailable because a required Cortex service was null.");
                     return false;
@@ -645,8 +650,7 @@ namespace Cortex
                 MMLog.WriteInfo("[Cortex.Roslyn] Metadata definition fallback resolved token 0x" +
                     metadataToken.ToString("X8") + " (" + entityKind + ").");
 
-                var decompiled = CortexModuleUtil.RequestDecompilerSource(
-                    _sourceReferenceService,
+                var decompiled = _navigationService.RequestDecompilerSource(
                     _state,
                     assemblyPath,
                     metadataToken,
@@ -663,15 +667,17 @@ namespace Cortex
                 MMLog.WriteInfo("[Cortex.Roslyn] Metadata definition fallback decompiler returned cache path: " +
                     (decompiled.CachePath ?? string.Empty));
 
-                if (!CortexModuleUtil.OpenDecompilerResult(_documentService, _state, decompiled))
+                if (!_navigationService.OpenDecompilerResult(
+                    _state,
+                    decompiled,
+                    "Opened decompiled definition: " + (response.SymbolDisplay ?? response.MetadataName ?? Path.GetFileName(assemblyPath)),
+                    string.Empty))
                 {
                     MMLog.WriteWarning("[Cortex.Roslyn] Metadata definition fallback could not open decompiled output for '" +
                         (response.SymbolDisplay ?? response.MetadataName ?? string.Empty) +
                         "' from " + assemblyPath + ".");
                     return false;
                 }
-
-                _state.StatusMessage = "Opened decompiled definition: " + (response.SymbolDisplay ?? response.MetadataName ?? Path.GetFileName(assemblyPath));
                 MMLog.WriteInfo("[Cortex.Roslyn] Opened metadata definition for " +
                     (_state.Editor.RequestedDefinitionTokenText ?? string.Empty) +
                     " -> " + assemblyPath + " token 0x" + metadataToken.ToString("X8"));

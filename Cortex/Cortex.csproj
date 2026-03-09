@@ -61,6 +61,7 @@
     <Compile Include="Modules\Shared\CortexModuleUtil.cs" />
     <Compile Include="Modules\Shared\RuntimeLogVisuals.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Services\CortexNavigationService.cs" />
     <Compile Include="State\CortexShellState.cs" />
   </ItemGroup>
   <ItemGroup>

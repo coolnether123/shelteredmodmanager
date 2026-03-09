@@ -4,6 +4,7 @@ using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
+using Cortex.Services;
 using UnityEngine;
 
 namespace Cortex.Modules.FileExplorer
@@ -42,10 +43,9 @@ namespace Cortex.Modules.FileExplorer
         private const float RowHeight = 20f;
 
         public void Draw(
-            IDocumentService documentService,
             IWorkspaceBrowserService browserService,
             IDecompilerExplorerService decompilerExplorerService,
-            ISourceReferenceService sourceReferenceService,
+            CortexNavigationService navigationService,
             CortexShellState state)
         {
             EnsureStyles(state);
@@ -55,9 +55,9 @@ namespace Cortex.Modules.FileExplorer
             DrawFilterBar(browserService, decompilerExplorerService, state);
             GUILayout.Space(2f);
             _scroll = GUILayout.BeginScrollView(_scroll, false, true, GUILayout.ExpandHeight(true));
-            DrawSection("Workspace", _sourceTree, documentService, decompilerExplorerService, sourceReferenceService, state);
+            DrawSection("Workspace", _sourceTree, decompilerExplorerService, navigationService, state);
             GUILayout.Space(6f);
-            DrawSection("Decompiler", _decompilerTree, documentService, decompilerExplorerService, sourceReferenceService, state);
+            DrawSection("Decompiler", _decompilerTree, decompilerExplorerService, navigationService, state);
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
         }
@@ -119,9 +119,8 @@ namespace Cortex.Modules.FileExplorer
         private void DrawSection(
             string title,
             WorkspaceTreeNode root,
-            IDocumentService documentService,
             IDecompilerExplorerService decompilerExplorerService,
-            ISourceReferenceService sourceReferenceService,
+            CortexNavigationService navigationService,
             CortexShellState state)
         {
             GUILayout.Label(title.ToUpperInvariant(), _sectionHeaderStyle ?? GUI.skin.label);
@@ -137,14 +136,13 @@ namespace Cortex.Modules.FileExplorer
             var hoverHighlightPath = string.Equals(title, "Workspace", StringComparison.Ordinal)
                 ? ResolveVisibleHoverTargetPath(root, GetVisibleHoverDefinitionPath(state), 0)
                 : string.Empty;
-            DrawTreeNode(root, documentService, decompilerExplorerService, sourceReferenceService, state, hoverHighlightPath, 0, true);
+            DrawTreeNode(root, decompilerExplorerService, navigationService, state, hoverHighlightPath, 0, true);
         }
 
         private void DrawTreeNode(
             WorkspaceTreeNode node,
-            IDocumentService documentService,
             IDecompilerExplorerService decompilerExplorerService,
-            ISourceReferenceService sourceReferenceService,
+            CortexNavigationService navigationService,
             CortexShellState state,
             string hoverHighlightPath,
             int depth,
@@ -164,11 +162,11 @@ namespace Cortex.Modules.FileExplorer
 
                 if (node.HasChildren)
                 {
-                    DrawExpandableNode(node, documentService, decompilerExplorerService, sourceReferenceService, state, hoverHighlightPath, depth);
+                    DrawExpandableNode(node, decompilerExplorerService, navigationService, state, hoverHighlightPath, depth);
                 }
                 else
                 {
-                    DrawLeafNode(node, documentService, sourceReferenceService, state, hoverHighlightPath, depth);
+                    DrawLeafNode(node, navigationService, state, hoverHighlightPath, depth);
                 }
 
                 return;
@@ -176,15 +174,14 @@ namespace Cortex.Modules.FileExplorer
 
             for (var i = 0; i < node.Children.Count; i++)
             {
-                DrawTreeNode(node.Children[i], documentService, decompilerExplorerService, sourceReferenceService, state, hoverHighlightPath, depth, true);
+                DrawTreeNode(node.Children[i], decompilerExplorerService, navigationService, state, hoverHighlightPath, depth, true);
             }
         }
 
         private void DrawExpandableNode(
             WorkspaceTreeNode node,
-            IDocumentService documentService,
             IDecompilerExplorerService decompilerExplorerService,
-            ISourceReferenceService sourceReferenceService,
+            CortexNavigationService navigationService,
             CortexShellState state,
             string hoverHighlightPath,
             int depth)
@@ -223,7 +220,7 @@ namespace Cortex.Modules.FileExplorer
 
             if (GUILayout.Button(node.Name ?? "Node", folderStyle, GUILayout.ExpandWidth(true), GUILayout.Height(RowHeight)))
             {
-                HandleExpandableNodeAction(node, documentService, sourceReferenceService, state, ref expanded);
+                HandleExpandableNodeAction(node, navigationService, state, ref expanded);
                 _expandedNodes[key] = expanded;
             }
 
@@ -236,14 +233,13 @@ namespace Cortex.Modules.FileExplorer
 
             for (var i = 0; i < node.Children.Count; i++)
             {
-                DrawTreeNode(node.Children[i], documentService, decompilerExplorerService, sourceReferenceService, state, hoverHighlightPath, depth + 1, true);
+                DrawTreeNode(node.Children[i], decompilerExplorerService, navigationService, state, hoverHighlightPath, depth + 1, true);
             }
         }
 
         private void DrawLeafNode(
             WorkspaceTreeNode node,
-            IDocumentService documentService,
-            ISourceReferenceService sourceReferenceService,
+            CortexNavigationService navigationService,
             CortexShellState state,
             string hoverHighlightPath,
             int depth)
@@ -260,7 +256,7 @@ namespace Cortex.Modules.FileExplorer
                 : (isHoverTarget ? (_hoverFileButtonStyle ?? _fileButtonStyle ?? GUI.skin.button) : (_fileButtonStyle ?? GUI.skin.button));
             if (GUILayout.Button(node.Name ?? "Item", style, GUILayout.ExpandWidth(true), GUILayout.Height(RowHeight)))
             {
-                ActivateLeafNode(node, documentService, sourceReferenceService, state);
+                ActivateLeafNode(node, navigationService, state);
             }
 
             GUILayout.EndHorizontal();
@@ -268,8 +264,7 @@ namespace Cortex.Modules.FileExplorer
 
         private void HandleExpandableNodeAction(
             WorkspaceTreeNode node,
-            IDocumentService documentService,
-            ISourceReferenceService sourceReferenceService,
+            CortexNavigationService navigationService,
             CortexShellState state,
             ref bool expanded)
         {
@@ -280,7 +275,7 @@ namespace Cortex.Modules.FileExplorer
 
             if (node.NodeKind == WorkspaceTreeNodeKind.Type)
             {
-                OpenDecompilerNode(node, documentService, sourceReferenceService, state);
+                OpenDecompilerNode(node, navigationService, state);
                 return;
             }
 
@@ -289,8 +284,7 @@ namespace Cortex.Modules.FileExplorer
 
         private void ActivateLeafNode(
             WorkspaceTreeNode node,
-            IDocumentService documentService,
-            ISourceReferenceService sourceReferenceService,
+            CortexNavigationService navigationService,
             CortexShellState state)
         {
             if (node == null)
@@ -300,19 +294,19 @@ namespace Cortex.Modules.FileExplorer
 
             if (node.NodeKind == WorkspaceTreeNodeKind.File)
             {
-                CortexModuleUtil.OpenDocument(documentService, state, node.FullPath, 0);
-                state.StatusMessage = "Opened " + (node.Name ?? node.FullPath);
-                state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
+                if (navigationService != null)
+                {
+                    navigationService.OpenDocument(state, node.FullPath, 0, "Opened " + (node.Name ?? node.FullPath), "Could not open " + (node.Name ?? node.FullPath) + ".");
+                }
                 return;
             }
 
-            OpenDecompilerNode(node, documentService, sourceReferenceService, state);
+            OpenDecompilerNode(node, navigationService, state);
         }
 
         private void OpenDecompilerNode(
             WorkspaceTreeNode node,
-            IDocumentService documentService,
-            ISourceReferenceService sourceReferenceService,
+            CortexNavigationService navigationService,
             CortexShellState state)
         {
             if (node == null || string.IsNullOrEmpty(node.AssemblyPath) || node.MetadataToken <= 0)
@@ -320,13 +314,9 @@ namespace Cortex.Modules.FileExplorer
                 return;
             }
 
-            var response = CortexModuleUtil.RequestDecompilerSource(
-                sourceReferenceService,
-                state,
-                node.AssemblyPath,
-                node.MetadataToken,
-                node.EntityKind,
-                false);
+            var response = navigationService != null
+                ? navigationService.RequestDecompilerSource(state, node.AssemblyPath, node.MetadataToken, node.EntityKind, false)
+                : null;
 
             if (response == null)
             {
@@ -334,9 +324,13 @@ namespace Cortex.Modules.FileExplorer
                 return;
             }
 
-            if (CortexModuleUtil.OpenDecompilerResult(documentService, state, response))
+            if (navigationService != null &&
+                navigationService.OpenDecompilerResult(
+                    state,
+                    response,
+                    "Opened " + (node.Name ?? "decompiled source") + ".",
+                    response.StatusMessage ?? ("Generated decompiled source for " + (node.Name ?? "symbol") + ".")))
             {
-                state.StatusMessage = "Opened " + (node.Name ?? "decompiled source") + ".";
                 return;
             }
 

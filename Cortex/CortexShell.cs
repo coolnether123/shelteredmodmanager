@@ -17,6 +17,7 @@ using Cortex.Modules.Reference;
 using Cortex.Modules.Runtime;
 using Cortex.Modules.Settings;
 using Cortex.Presentation.Models;
+using Cortex.Services;
 using ModAPI.Core;
 using ModAPI.InputActions;
 using UnityEngine;
@@ -58,6 +59,7 @@ namespace Cortex
         private IRuntimeSourceNavigationService _runtimeSourceNavigationService;
         private IRuntimeToolBridge _runtimeToolBridge;
         private IRestartCoordinator _restartCoordinator;
+        private CortexNavigationService _navigationService;
         private UnityWorkbenchRuntime _workbenchRuntime;
         private readonly HashSet<string> _activatedContainers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -229,7 +231,7 @@ namespace Cortex
             EnsureModuleActivated(CortexWorkbenchIds.LogsContainer);
             GUILayout.BeginVertical();
             DrawLogsWindowHeaderActions();
-            _logsModule.Draw(_runtimeLogFeed, _runtimeSourceNavigationService, _sourcePathResolver, _documentService, _state, true);
+            _logsModule.Draw(_runtimeLogFeed, _sourcePathResolver, _navigationService, _state, true);
             GUILayout.EndVertical();
             ApplyWindowResize(windowId, ref _logWindowRect, 760f, 420f);
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));
@@ -386,6 +388,7 @@ namespace Cortex
             _runtimeSourceNavigationService = new RuntimeSourceNavigationService(new ModApiRuntimeSymbolResolver(_sourcePathResolver), _sourcePathResolver);
             _runtimeToolBridge = new ModApiRuntimeToolBridge();
             _restartCoordinator = new ModApiRestartCoordinator(new RestartRequestWriter());
+            _navigationService = new CortexNavigationService(_documentService, _sourceReferenceService, _runtimeSourceNavigationService);
             InitializeLanguageService(smmBin, settings);
             EnableMmLogRuntimeIntegration();
         }

@@ -45,7 +45,7 @@ namespace Cortex
                 delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
                 {
                     if (_logsModule == null) return;
-                    _logsModule.Draw(_runtimeLogFeed, _runtimeSourceNavigationService, _sourcePathResolver, _documentService, _state, detachedWindow);
+                    _logsModule.Draw(_runtimeLogFeed, _sourcePathResolver, _navigationService, _state, detachedWindow);
                 });
 
             RegisterModuleBinding(
@@ -69,7 +69,7 @@ namespace Cortex
                 delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
                 {
                     if (_fileExplorerModule == null) return;
-                    _fileExplorerModule.Draw(_documentService, _workspaceBrowserService, _decompilerExplorerService, _sourceReferenceService, _state);
+                    _fileExplorerModule.Draw(_workspaceBrowserService, _decompilerExplorerService, _navigationService, _state);
                 });
 
             RegisterModuleBinding(
@@ -93,7 +93,7 @@ namespace Cortex
                 delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
                 {
                     if (_buildModule == null) return;
-                    _buildModule.Draw(_buildCommandResolver, _buildExecutor, _restartCoordinator, _sourcePathResolver, _documentService, _state);
+                    _buildModule.Draw(_buildCommandResolver, _buildExecutor, _restartCoordinator, _sourcePathResolver, _navigationService, _state);
                 });
 
             RegisterModuleBinding(
@@ -105,7 +105,7 @@ namespace Cortex
                 delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
                 {
                     if (_referenceModule == null) return;
-                    _referenceModule.Draw(_sourceReferenceService, _referenceCatalogService, _documentService, _state);
+                    _referenceModule.Draw(_referenceCatalogService, _navigationService, _state);
                 });
 
             RegisterModuleBinding(
@@ -455,7 +455,10 @@ namespace Cortex
                     continue;
                 }
 
-                CortexModuleUtil.OpenDocument(_documentService, _state, path, 0);
+                if (_navigationService != null)
+                {
+                    _navigationService.OpenDocument(_state, path, 0, string.Empty, string.Empty);
+                }
             }
 
             if (!string.IsNullOrEmpty(persisted.ActiveDocumentPath))
