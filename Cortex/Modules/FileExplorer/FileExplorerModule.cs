@@ -50,7 +50,7 @@ namespace Cortex.Modules.FileExplorer
             RefreshIfNeeded(browserService, decompilerExplorerService, state);
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(true));
-            DrawFilterBar();
+            DrawFilterBar(browserService, decompilerExplorerService, state);
             GUILayout.Space(2f);
             _scroll = GUILayout.BeginScrollView(_scroll, false, true, GUILayout.ExpandHeight(true));
             DrawSection("Workspace", _sourceTree, documentService, decompilerExplorerService, sourceReferenceService, state);
@@ -77,15 +77,10 @@ namespace Cortex.Modules.FileExplorer
 
             _cachedSourceRoot = sourceRoot;
             _cachedManagedAssemblyRoot = managedAssemblyRoot;
-            _sourceTree = browserService != null
-                ? browserService.BuildTree(_cachedSourceRoot, WorkspaceTreeKind.ProjectSource)
-                : null;
-            _decompilerTree = decompilerExplorerService != null
-                ? decompilerExplorerService.BuildTree(_cachedManagedAssemblyRoot)
-                : null;
+            RefreshTrees(browserService, decompilerExplorerService);
         }
 
-        private void DrawFilterBar()
+        private void DrawFilterBar(IWorkspaceBrowserService browserService, IDecompilerExplorerService decompilerExplorerService, CortexShellState state)
         {
             GUILayout.BeginHorizontal(_filterBoxStyle ?? GUI.skin.box, GUILayout.Height(26f));
             GUILayout.Label("F", GUILayout.Width(14f));
@@ -94,7 +89,29 @@ namespace Cortex.Modules.FileExplorer
             {
                 _filterText = string.Empty;
             }
+            if (GUILayout.Button("Refresh", GUILayout.Width(64f), GUILayout.Height(20f)))
+            {
+                RefreshTrees(browserService, decompilerExplorerService);
+                state.StatusMessage = "Explorer refreshed.";
+            }
             GUILayout.EndHorizontal();
+        }
+
+        private void RefreshTrees(IWorkspaceBrowserService browserService, IDecompilerExplorerService decompilerExplorerService)
+        {
+            if (browserService != null && !string.IsNullOrEmpty(_cachedSourceRoot))
+            {
+                browserService.Refresh(_cachedSourceRoot, WorkspaceTreeKind.ProjectSource);
+                _sourceTree = browserService.BuildTree(_cachedSourceRoot, WorkspaceTreeKind.ProjectSource);
+            }
+            else
+            {
+                _sourceTree = null;
+            }
+
+            _decompilerTree = decompilerExplorerService != null && !string.IsNullOrEmpty(_cachedManagedAssemblyRoot)
+                ? decompilerExplorerService.BuildTree(_cachedManagedAssemblyRoot)
+                : null;
         }
 
         private void DrawSection(

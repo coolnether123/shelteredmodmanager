@@ -389,7 +389,7 @@ namespace Cortex
 
         private void DrawHostDropTarget(WorkbenchHostLocation hostLocation)
         {
-            var isDragging = !string.IsNullOrEmpty(_draggingContainerId) && hostLocation != WorkbenchHostLocation.DocumentHost;
+            var isDragging = !string.IsNullOrEmpty(_draggingContainerId);
             if (!isDragging)
             {
                 GUILayout.Space(2f);

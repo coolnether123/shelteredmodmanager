@@ -11,6 +11,13 @@ namespace Cortex.Core.Services
     {
         private static readonly Regex StackTraceLocationRegex = new Regex(@" in (?<path>.*):line (?<line>\d+)", RegexOptions.IgnoreCase);
         private static readonly Regex CompilerLocationRegex = new Regex(@"^(?<path>.*)\((?<line>\d+)(,(?<column>\d+))?\):", RegexOptions.IgnoreCase);
+        private readonly ISourceLookupIndex _lookupIndex;
+        private readonly Dictionary<string, IList<string>> _searchRootCache = new Dictionary<string, IList<string>>(StringComparer.OrdinalIgnoreCase);
+
+        public SourcePathResolver(ISourceLookupIndex lookupIndex)
+        {
+            _lookupIndex = lookupIndex;
+        }
 
         public string ResolveCandidatePath(CortexProjectDefinition project, CortexSettings settings, string rawPath)
         {
@@ -19,44 +26,25 @@ namespace Cortex.Core.Services
                 return string.Empty;
             }
 
-            rawPath = rawPath.Trim().Trim('"');
-            if (Path.IsPathRooted(rawPath) && File.Exists(rawPath))
+            if (_lookupIndex != null)
             {
-                return Path.GetFullPath(rawPath);
+                return _lookupIndex.ResolvePath(GetSearchRoots(project, settings), rawPath);
             }
 
-            if (File.Exists(rawPath))
+            try
             {
-                return Path.GetFullPath(rawPath);
+                if (Path.IsPathRooted(rawPath) && File.Exists(rawPath))
+                {
+                    return Path.GetFullPath(rawPath);
+                }
+
+                if (File.Exists(rawPath))
+                {
+                    return Path.GetFullPath(rawPath);
+                }
             }
-
-            IList<string> searchRoots = GetSearchRoots(project, settings);
-            for (var i = 0; i < searchRoots.Count; i++)
+            catch
             {
-                var sourceRoot = searchRoots[i];
-                var combined = Path.Combine(sourceRoot, rawPath);
-                if (File.Exists(combined))
-                {
-                    return Path.GetFullPath(combined);
-                }
-
-                var fileName = Path.GetFileName(rawPath);
-                if (string.IsNullOrEmpty(fileName))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    var files = Directory.GetFiles(sourceRoot, fileName, SearchOption.AllDirectories);
-                    if (files.Length > 0)
-                    {
-                        return files[0];
-                    }
-                }
-                catch
-                {
-                }
             }
 
             return string.Empty;
@@ -92,23 +80,16 @@ namespace Cortex.Core.Services
 
         public IList<string> GetSearchRoots(CortexProjectDefinition project, CortexSettings settings)
         {
-            var roots = new List<string>();
-            AddRoot(roots, project != null ? project.SourceRootPath : string.Empty);
-            AddRoot(roots, project != null ? Path.GetDirectoryName(project.ProjectFilePath) : string.Empty);
-            AddRoot(roots, settings != null ? settings.WorkspaceRootPath : string.Empty);
-            AddRoot(roots, settings != null ? settings.ModsRootPath : string.Empty);
-
-            var rawRoots = settings != null ? settings.AdditionalSourceRoots : string.Empty;
-            if (!string.IsNullOrEmpty(rawRoots))
+            var cacheKey = SourceRootSetBuilder.BuildCacheKey(project, settings, SourceRootSetBuilder.DefaultNavigationRoots);
+            IList<string> cached;
+            if (_searchRootCache.TryGetValue(cacheKey, out cached))
             {
-                var segments = rawRoots.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                for (var i = 0; i < segments.Length; i++)
-                {
-                    AddRoot(roots, segments[i]);
-                }
+                return new List<string>(cached);
             }
 
-            return roots;
+            var roots = SourceRootSetBuilder.Build(project, settings, SourceRootSetBuilder.DefaultNavigationRoots);
+            _searchRootCache[cacheKey] = roots;
+            return new List<string>(roots);
         }
 
         private SourceLocationMatch BuildMatch(string sourceKind, string rawPath, int lineNumber, int columnNumber, CortexProjectDefinition project, CortexSettings settings)
@@ -152,26 +133,6 @@ namespace Cortex.Core.Services
                 ColumnNumber = 0,
                 StatusMessage = message ?? string.Empty
             };
-        }
-
-        private static void AddRoot(List<string> roots, string root)
-        {
-            if (roots == null || string.IsNullOrEmpty(root))
-            {
-                return;
-            }
-
-            try
-            {
-                var fullPath = Path.GetFullPath(root.Trim());
-                if (Directory.Exists(fullPath) && !roots.Contains(fullPath))
-                {
-                    roots.Add(fullPath);
-                }
-            }
-            catch
-            {
-            }
         }
 
         private static int ParseInt(string raw)

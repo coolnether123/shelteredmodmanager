@@ -20,8 +20,16 @@ namespace Cortex.Core.Services
 
         public DecompilerResponse GetSource(DecompilerRequest request)
         {
-            var response = _decompilerClient.Decompile(request);
-            PopulateXmlDocumentation(request, response);
+            var resolvedType = request != null && request.EntityKind == DecompilerEntityKind.Type
+                ? ResolveType(request.AssemblyPath, request.MetadataToken)
+                : null;
+            var resolvedMethod = request != null && request.EntityKind == DecompilerEntityKind.Method
+                ? ResolveMethod(request.AssemblyPath, request.MetadataToken)
+                : null;
+            var effectiveRequest = BuildEffectiveRequest(request, resolvedType, resolvedMethod);
+            var response = _decompilerClient.Decompile(effectiveRequest);
+            PopulateResolvedDisplayName(response, resolvedType, resolvedMethod);
+            PopulateXmlDocumentation(effectiveRequest, response, resolvedType, resolvedMethod);
             return response;
         }
 
@@ -100,7 +108,43 @@ namespace Cortex.Core.Services
             return map;
         }
 
-        private static void PopulateXmlDocumentation(DecompilerRequest request, DecompilerResponse response)
+        private static void PopulateResolvedDisplayName(DecompilerResponse response, Type resolvedType, MethodBase resolvedMethod)
+        {
+            if (response == null)
+            {
+                return;
+            }
+
+            if (resolvedType != null)
+            {
+                response.ResolvedMemberDisplayName = resolvedType.FullName;
+                return;
+            }
+
+            if (resolvedMethod != null)
+            {
+                response.ResolvedMemberDisplayName = BuildMethodDisplayName(resolvedMethod);
+            }
+        }
+
+        private static DecompilerRequest BuildEffectiveRequest(DecompilerRequest request, Type resolvedType, MethodBase resolvedMethod)
+        {
+            if (request == null)
+            {
+                return null;
+            }
+
+            return new DecompilerRequest
+            {
+                AssemblyPath = request.AssemblyPath,
+                MetadataToken = request.MetadataToken,
+                IgnoreCache = request.IgnoreCache,
+                EntityKind = request.EntityKind,
+                CacheRelativePathStem = BuildCacheRelativePathStem(request, resolvedType, resolvedMethod)
+            };
+        }
+
+        private static void PopulateXmlDocumentation(DecompilerRequest request, DecompilerResponse response, Type resolvedType, MethodBase resolvedMethod)
         {
             if (request == null || response == null || string.IsNullOrEmpty(request.AssemblyPath) || request.MetadataToken <= 0)
             {
@@ -122,7 +166,7 @@ namespace Cortex.Core.Services
 
                 if (request.EntityKind == DecompilerEntityKind.Type)
                 {
-                    var type = ResolveType(request.AssemblyPath, request.MetadataToken);
+                    var type = resolvedType ?? ResolveType(request.AssemblyPath, request.MetadataToken);
                     if (type == null)
                     {
                         return;
@@ -134,7 +178,7 @@ namespace Cortex.Core.Services
                     return;
                 }
 
-                var method = ResolveMethod(request.AssemblyPath, request.MetadataToken);
+                var method = resolvedMethod ?? ResolveMethod(request.AssemblyPath, request.MetadataToken);
                 if (method == null)
                 {
                     return;
@@ -151,6 +195,79 @@ namespace Cortex.Core.Services
             {
                 response.XmlDocumentationText = string.Empty;
             }
+        }
+
+        private static string BuildCacheRelativePathStem(DecompilerRequest request, Type resolvedType, MethodBase resolvedMethod)
+        {
+            if (request == null || string.IsNullOrEmpty(request.AssemblyPath))
+            {
+                return string.Empty;
+            }
+
+            var assemblySegment = SanitizePathSegment(Path.GetFileNameWithoutExtension(request.AssemblyPath));
+            if (string.IsNullOrEmpty(assemblySegment))
+            {
+                assemblySegment = "UnknownAssembly";
+            }
+
+            if (resolvedType != null)
+            {
+                return Path.Combine(assemblySegment, BuildTypeRelativePath(resolvedType));
+            }
+
+            if (resolvedMethod != null)
+            {
+                return Path.Combine(assemblySegment, BuildMethodRelativePath(resolvedMethod, request.MetadataToken));
+            }
+
+            var entityPrefix = request.EntityKind == DecompilerEntityKind.Type ? "type" : "method";
+            return Path.Combine(assemblySegment, entityPrefix + "_0x" + request.MetadataToken.ToString("X8"));
+        }
+
+        private static string BuildTypeRelativePath(Type type)
+        {
+            var normalized = NormalizeTypeName(type);
+            if (string.IsNullOrEmpty(normalized))
+            {
+                return "UnknownType";
+            }
+
+            var segments = normalized.Split(new[] { '.' }, StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length == 0)
+            {
+                return "UnknownType";
+            }
+
+            if (segments.Length == 1)
+            {
+                return SanitizeFileStem(segments[0]);
+            }
+
+            var path = SanitizePathSegment(segments[0]);
+            for (var i = 1; i < segments.Length - 1; i++)
+            {
+                path = Path.Combine(path, SanitizePathSegment(segments[i]));
+            }
+
+            return Path.Combine(path, SanitizeFileStem(segments[segments.Length - 1]));
+        }
+
+        private static string BuildMethodRelativePath(MethodBase method, int metadataToken)
+        {
+            var declaringType = method != null ? method.DeclaringType : null;
+            var typePath = BuildTypeRelativePath(declaringType);
+            var typeDirectory = Path.GetDirectoryName(typePath) ?? string.Empty;
+            var typeName = Path.GetFileName(typePath);
+            if (string.IsNullOrEmpty(typeName))
+            {
+                typeName = "UnknownType";
+            }
+
+            var methodName = SanitizeFileStem(method != null ? method.Name : "Method");
+            var fileName = typeName + "." + methodName + "_0x" + metadataToken.ToString("X8");
+            return string.IsNullOrEmpty(typeDirectory)
+                ? fileName
+                : Path.Combine(typeDirectory, fileName);
         }
 
         private static Type ResolveType(string assemblyPath, int metadataToken)
@@ -414,6 +531,43 @@ namespace Cortex.Core.Services
             }
 
             return (type.FullName ?? type.Name).Replace('+', '.');
+        }
+
+        private static string NormalizeTypeName(Type type)
+        {
+            return type == null
+                ? string.Empty
+                : (type.FullName ?? type.Name ?? string.Empty).Replace('+', '.');
+        }
+
+        private static string SanitizeFileStem(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return "Unknown";
+            }
+
+            var invalid = Path.GetInvalidFileNameChars();
+            var builder = new StringBuilder(value.Length);
+            for (var i = 0; i < value.Length; i++)
+            {
+                var current = value[i];
+                if (current == '`')
+                {
+                    builder.Append('_');
+                    continue;
+                }
+
+                builder.Append(Array.IndexOf(invalid, current) >= 0 ? '_' : current);
+            }
+
+            return builder.ToString().Trim('.', ' ');
+        }
+
+        private static string SanitizePathSegment(string value)
+        {
+            var sanitized = SanitizeFileStem(value);
+            return string.IsNullOrEmpty(sanitized) ? "Unknown" : sanitized;
         }
     }
 }

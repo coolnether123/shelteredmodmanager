@@ -18,6 +18,15 @@ namespace Cortex.Core.Models
         public string OutputAssemblyPath;
         public string OutputPdbPath;
         public int TimeoutMs;
+        public readonly List<BuildCommandStep> Steps = new List<BuildCommandStep>();
+    }
+
+    public sealed class BuildCommandStep
+    {
+        public string FileName;
+        public string Arguments;
+        public string WorkingDirectory;
+        public int TimeoutMs;
     }
 
     public sealed class BuildRequest

@@ -51,6 +51,7 @@ namespace Cortex
         private IBuildCommandResolver _buildCommandResolver;
         private IBuildExecutor _buildExecutor;
         private IReferenceCatalogService _referenceCatalogService;
+        private ISourceLookupIndex _sourceLookupIndex;
         private ISourcePathResolver _sourcePathResolver;
         private ISourceReferenceService _sourceReferenceService;
         private IRuntimeLogFeed _runtimeLogFeed;
@@ -369,14 +370,15 @@ namespace Cortex
 
             _projectCatalog = new ProjectCatalog(new JsonProjectConfigurationStore(projectCatalogPath));
             _loadedModCatalog = new ModApiLoadedModCatalog();
-            _projectWorkspaceService = new ProjectWorkspaceService();
-            _workspaceBrowserService = new WorkspaceBrowserService();
+            _sourceLookupIndex = new SourceLookupIndexService();
+            _projectWorkspaceService = new ProjectWorkspaceService(_sourceLookupIndex);
+            _workspaceBrowserService = new WorkspaceBrowserService(_sourceLookupIndex);
             _referenceCatalogService = new ReferenceCatalogService();
             _decompilerExplorerService = new DecompilerExplorerService(_referenceCatalogService);
             _documentService = new FileDocumentService();
             _buildCommandResolver = new CsprojBuildCommandResolver();
             _buildExecutor = new ProcessBuildExecutor();
-            _sourcePathResolver = new SourcePathResolver();
+            _sourcePathResolver = new SourcePathResolver(_sourceLookupIndex);
             _sourceReferenceService = new SourceReferenceService(new DecompilerCliClient(decompilerPath, settings.DecompilerCachePath, 15000));
             var runtimeLogFeed = new MmLogRuntimeLogFeed();
             runtimeLogFeed.Attach();
@@ -912,14 +914,18 @@ namespace Cortex
 
         private void DockContainer(string containerId, WorkbenchHostLocation hostLocation)
         {
-            if (string.IsNullOrEmpty(containerId) || hostLocation == WorkbenchHostLocation.DocumentHost || hostLocation == WorkbenchHostLocation.ToolRail)
+            if (string.IsNullOrEmpty(containerId) || hostLocation == WorkbenchHostLocation.ToolRail)
             {
                 return;
             }
 
             _state.Workbench.HiddenContainerIds.Remove(containerId);
             _state.Workbench.AssignHost(containerId, hostLocation);
-            if (hostLocation == WorkbenchHostLocation.PanelHost)
+            if (hostLocation == WorkbenchHostLocation.DocumentHost)
+            {
+                _state.Workbench.EditorContainerId = containerId;
+            }
+            else if (hostLocation == WorkbenchHostLocation.PanelHost)
             {
                 _state.Workbench.PanelContainerId = containerId;
             }
@@ -936,6 +942,12 @@ namespace Cortex
                 hostLocation != WorkbenchHostLocation.SecondarySideHost)
             {
                 _state.Workbench.SecondarySideContainerId = FindFirstContainerForHost(WorkbenchHostLocation.SecondarySideHost, containerId);
+            }
+
+            if (string.Equals(_state.Workbench.EditorContainerId, containerId, StringComparison.OrdinalIgnoreCase) &&
+                hostLocation != WorkbenchHostLocation.DocumentHost)
+            {
+                _state.Workbench.EditorContainerId = FindFirstContainerForHost(WorkbenchHostLocation.DocumentHost, containerId);
             }
 
             if (string.Equals(_state.Workbench.PanelContainerId, containerId, StringComparison.OrdinalIgnoreCase) &&

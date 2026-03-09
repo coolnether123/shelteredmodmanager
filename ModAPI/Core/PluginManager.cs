@@ -20,6 +20,8 @@ namespace ModAPI.Core
     public class PluginManager
     {
         private static PluginManager instance;
+        private static readonly object AssemblyResolveSync = new object();
+        private static bool _assemblyResolveInstalled;
 
         private readonly List<IModPlugin> _plugins;
         private readonly List<IModUpdate> _updates;
@@ -108,18 +110,7 @@ namespace ModAPI.Core
             // This resolver ensures they link back to the ALREADY LOADED ModAPI instance,
             // preventing duplicate assembly loads and fixing IsAssignableFrom failures.
             // It also keeps ShelteredAPI resolution deterministic when mods reference both APIs.
-            AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
-            {
-                string name = new AssemblyName(args.Name).Name;
-                if (name == "ModAPI" || name == "ModAPI.Core") return Assembly.GetExecutingAssembly();
-                if (name == "ShelteredAPI")
-                {
-                    var shelteredType = Type.GetType("ShelteredAPI.Core.ShelteredModManagerBase, ShelteredAPI", false);
-                    if (shelteredType != null) return shelteredType.Assembly;
-                    try { return Assembly.Load("ShelteredAPI"); } catch { return null; }
-                }
-                return null;
-            };
+            EnsureAssemblyResolveInstalled();
 
             _gameRoot = Directory.GetParent(Application.dataPath).FullName;
             _modsRoot = Path.Combine(_gameRoot, "mods");
@@ -602,37 +593,36 @@ namespace ModAPI.Core
 
                         MMLog.WriteDebug($"Found IModPlugin: {type.FullName}");
 
+                        GameObject pluginRoot = null;
                         try
                         {
                             var plugin = (IModPlugin)Activator.CreateInstance(type);
-                            var pluginRoot = new GameObject($"Mod-{SafeModIdFor(type)}");
+                            pluginRoot = new GameObject($"Mod-{SafeModIdFor(type)}");
                             pluginRoot.transform.SetParent(_loaderRoot.transform, false);
 
                             var ctx = BuildContextFor(type, pluginRoot);
-                            _plugins.Add(plugin);
-
-                            var u = plugin as IModUpdate; if (u != null) _updates.Add(u);
-                            var s = plugin as IModShutdown; if (s != null) _shutdown.Add(s);
-                            var se = plugin as IModSceneEvents; if (se != null) _sceneEvents.Add(se);
-                            var ss = plugin as IModSessionEvents; if (ss != null) _sessionEvents.Add(ss);
-                            
-                            // Register the settings provider if the plugin implements it
                             MMLog.WriteDebug($"Initializing plugin: {type.FullName}");
                             plugin.Initialize(ctx);
 
-                            // If the plugin didn't set a provider during Initialize, check if it implements it directly
+                            MMLog.WriteDebug($"Starting plugin: {type.FullName}");
+                            plugin.Start(ctx);
+
                             ModAPI.Spine.ISettingsProvider sp = plugin as ModAPI.Spine.ISettingsProvider;
                             if (entry != null && entry.SettingsProvider == null && sp != null)
                             {
                                 entry.SettingsProvider = sp;
                             }
 
-                            MMLog.WriteDebug($"Starting plugin: {type.FullName}");
-                            plugin.Start(ctx);
+                            RegisterPlugin(plugin);
                             ctx.Log.Info("Started.");
                         }
                         catch (Exception ex)
                         {
+                            if (pluginRoot != null)
+                            {
+                                UnityEngine.Object.Destroy(pluginRoot);
+                            }
+
                             MMLog.WritePluginError(type.FullName, "startup", ex);
                             MMLog.WriteError($"error starting plugin '{type.FullName}': {ex.Message}");
                             _loadErrors++;
@@ -642,6 +632,67 @@ namespace ModAPI.Core
             }
 
             MMLog.Write(string.Format("LoadAndInitializePlugins complete. Total plugins loaded: {0}", _plugins.Count));
+        }
+
+        private static void EnsureAssemblyResolveInstalled()
+        {
+            lock (AssemblyResolveSync)
+            {
+                if (_assemblyResolveInstalled)
+                {
+                    return;
+                }
+
+                AppDomain.CurrentDomain.AssemblyResolve += ResolveLoaderAssembly;
+                _assemblyResolveInstalled = true;
+            }
+        }
+
+        private static Assembly ResolveLoaderAssembly(object sender, ResolveEventArgs args)
+        {
+            string name = new AssemblyName(args.Name).Name;
+            if (name == "ModAPI" || name == "ModAPI.Core") return Assembly.GetExecutingAssembly();
+            if (name == "ShelteredAPI")
+            {
+                var shelteredType = Type.GetType("ShelteredAPI.Core.ShelteredModManagerBase, ShelteredAPI", false);
+                if (shelteredType != null) return shelteredType.Assembly;
+                try { return Assembly.Load("ShelteredAPI"); } catch { return null; }
+            }
+            return null;
+        }
+
+        private void RegisterPlugin(IModPlugin plugin)
+        {
+            if (plugin == null)
+            {
+                return;
+            }
+
+            _plugins.Add(plugin);
+
+            var update = plugin as IModUpdate;
+            if (update != null)
+            {
+                _updates.Add(update);
+            }
+
+            var shutdown = plugin as IModShutdown;
+            if (shutdown != null)
+            {
+                _shutdown.Add(shutdown);
+            }
+
+            var sceneEvents = plugin as IModSceneEvents;
+            if (sceneEvents != null)
+            {
+                _sceneEvents.Add(sceneEvents);
+            }
+
+            var sessionEvents = plugin as IModSessionEvents;
+            if (sessionEvents != null)
+            {
+                _sessionEvents.Add(sessionEvents);
+            }
         }
 
         /// <summary>

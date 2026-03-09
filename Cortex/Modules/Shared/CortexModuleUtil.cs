@@ -1,8 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Text;
-using System.Text.RegularExpressions;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 
@@ -10,9 +7,6 @@ namespace Cortex.Modules.Shared
 {
     internal static class CortexModuleUtil
     {
-        private static readonly Regex StackTraceLocationRegex = new Regex(@" in (?<path>.*):line (?<line>\d+)", RegexOptions.IgnoreCase);
-        private static readonly Regex CompilerLocationRegex = new Regex(@"^(?<path>.*)\((?<line>\d+)(,(?<column>\d+))?\):", RegexOptions.IgnoreCase);
-
         public static DocumentSession OpenDocument(IDocumentService documentService, CortexShellState state, string filePath, int highlightedLine)
         {
             if (documentService == null || state == null || string.IsNullOrEmpty(filePath))
@@ -136,35 +130,27 @@ namespace Cortex.Modules.Shared
             return true;
         }
 
-        public static bool TryResolveSourceLocation(string text, CortexProjectDefinition project, CortexSettings settings, out string filePath, out int lineNumber)
+        public static bool TryResolveSourceLocation(ISourcePathResolver sourcePathResolver, string text, CortexProjectDefinition project, CortexSettings settings, out string filePath, out int lineNumber)
         {
             filePath = string.Empty;
             lineNumber = 0;
-            if (string.IsNullOrEmpty(text))
+            if (sourcePathResolver == null || string.IsNullOrEmpty(text))
             {
                 return false;
             }
 
-            var match = StackTraceLocationRegex.Match(text);
-            if (match.Success)
+            var location = sourcePathResolver.ResolveTextLocation(text, project, settings);
+            if (location != null && location.Success)
             {
-                lineNumber = ParseInt(match.Groups["line"].Value);
-                filePath = ResolveCandidatePath(project, settings, match.Groups["path"].Value);
-                return !string.IsNullOrEmpty(filePath);
-            }
-
-            match = CompilerLocationRegex.Match(text);
-            if (match.Success)
-            {
-                lineNumber = ParseInt(match.Groups["line"].Value);
-                filePath = ResolveCandidatePath(project, settings, match.Groups["path"].Value);
+                filePath = location.ResolvedPath ?? string.Empty;
+                lineNumber = location.LineNumber;
                 return !string.IsNullOrEmpty(filePath);
             }
 
             return false;
         }
 
-        public static string BuildSourceResolutionExplanation(RuntimeLogEntry entry, CortexProjectDefinition project, CortexSettings settings)
+        public static string BuildSourceResolutionExplanation(ISourcePathResolver sourcePathResolver, RuntimeLogEntry entry, CortexProjectDefinition project, CortexSettings settings)
         {
             if (entry == null)
             {
@@ -173,7 +159,7 @@ namespace Cortex.Modules.Shared
 
             string filePath;
             int lineNumber;
-            if (TryResolveSourceLocation(entry.Message, project, settings, out filePath, out lineNumber))
+            if (TryResolveSourceLocation(sourcePathResolver, entry.Message, project, settings, out filePath, out lineNumber))
             {
                 return "Resolved source from an embedded file marker: " + filePath + " @ line " + lineNumber + ".";
             }
@@ -183,7 +169,7 @@ namespace Cortex.Modules.Shared
                 return "No file marker was embedded in the log message. Cortex did capture runtime stack frames for this entry, so use the frame list below to inspect likely methods and open the best match.";
             }
 
-            var builder = new StringBuilder();
+            var builder = new System.Text.StringBuilder();
             builder.Append("Cortex could not resolve an exact function from this entry. ");
             if (!string.IsNullOrEmpty(entry.Source))
             {
@@ -194,11 +180,13 @@ namespace Cortex.Modules.Shared
 
             builder.Append("The message does not contain a compiler-style file marker or stack-trace path, and no structured runtime frames were captured. ");
 
-            var roots = BuildSearchRoots(project, settings);
+            System.Collections.Generic.IList<string> roots = sourcePathResolver != null
+                ? sourcePathResolver.GetSearchRoots(project, settings)
+                : new System.Collections.Generic.List<string>();
             if (roots.Count > 0)
             {
                 builder.Append("Search roots checked: ");
-                builder.Append(string.Join(", ", roots.ToArray()));
+                builder.Append(string.Join(", ", new System.Collections.Generic.List<string>(roots).ToArray()));
                 builder.Append(". ");
             }
             else
@@ -208,104 +196,6 @@ namespace Cortex.Modules.Shared
 
             builder.Append("For exact navigation, include a stack trace or a file:line marker in the log message.");
             return builder.ToString();
-        }
-
-        public static string ResolveCandidatePath(CortexProjectDefinition project, CortexSettings settings, string rawPath)
-        {
-            if (string.IsNullOrEmpty(rawPath))
-            {
-                return string.Empty;
-            }
-
-            rawPath = rawPath.Trim().Trim('"');
-            if (Path.IsPathRooted(rawPath) && File.Exists(rawPath))
-            {
-                return Path.GetFullPath(rawPath);
-            }
-
-            if (File.Exists(rawPath))
-            {
-                return Path.GetFullPath(rawPath);
-            }
-
-            var searchRoots = BuildSearchRoots(project, settings);
-            for (var i = 0; i < searchRoots.Count; i++)
-            {
-                var sourceRoot = searchRoots[i];
-                var combined = Path.Combine(sourceRoot, rawPath);
-                if (File.Exists(combined))
-                {
-                    return Path.GetFullPath(combined);
-                }
-
-                var fileName = Path.GetFileName(rawPath);
-                if (!string.IsNullOrEmpty(fileName))
-                {
-                    var files = FindFilesSafe(sourceRoot, fileName);
-                    if (files.Length > 0)
-                    {
-                        return files[0];
-                    }
-                }
-            }
-
-            return string.Empty;
-        }
-
-        private static List<string> BuildSearchRoots(CortexProjectDefinition project, CortexSettings settings)
-        {
-            var roots = new List<string>();
-            AddRoot(roots, project != null ? project.SourceRootPath : string.Empty);
-
-            var rawRoots = settings != null ? settings.AdditionalSourceRoots : string.Empty;
-            if (!string.IsNullOrEmpty(rawRoots))
-            {
-                var segments = rawRoots.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                for (var i = 0; i < segments.Length; i++)
-                {
-                    AddRoot(roots, segments[i]);
-                }
-            }
-
-            AddRoot(roots, settings != null ? settings.WorkspaceRootPath : string.Empty);
-            AddRoot(roots, settings != null ? settings.ModsRootPath : string.Empty);
-            return roots;
-        }
-
-        private static void AddRoot(List<string> roots, string root)
-        {
-            if (roots == null || string.IsNullOrEmpty(root))
-            {
-                return;
-            }
-
-            try
-            {
-                var fullPath = Path.GetFullPath(root.Trim());
-                if (Directory.Exists(fullPath) && !roots.Contains(fullPath))
-                {
-                    roots.Add(fullPath);
-                }
-            }
-            catch
-            {
-            }
-        }
-
-        public static string[] FindFilesSafe(string rootPath, string pattern)
-        {
-            try
-            {
-                if (!string.IsNullOrEmpty(rootPath) && Directory.Exists(rootPath))
-                {
-                    return Directory.GetFiles(rootPath, pattern, SearchOption.AllDirectories);
-                }
-            }
-            catch
-            {
-            }
-
-            return new string[0];
         }
 
         public static int ParseInt(string raw)

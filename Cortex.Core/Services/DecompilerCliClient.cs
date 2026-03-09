@@ -34,9 +34,18 @@ namespace Cortex.Core.Services
             }
 
             var entityPrefix = request.EntityKind == DecompilerEntityKind.Type ? "type" : "method";
-            var fileKey = Path.GetFileNameWithoutExtension(request.AssemblyPath) + "_" + entityPrefix + "_0x" + request.MetadataToken.ToString("X8");
-            response.CachePath = Path.Combine(_cacheRoot, fileKey + ".cs");
-            response.MapPath = Path.Combine(_cacheRoot, fileKey + ".map");
+            var legacyFileKey = Path.GetFileNameWithoutExtension(request.AssemblyPath) + "_" + entityPrefix + "_0x" + request.MetadataToken.ToString("X8");
+            var cachePathStem = !string.IsNullOrEmpty(request.CacheRelativePathStem)
+                ? request.CacheRelativePathStem
+                : legacyFileKey;
+            response.CachePath = Path.Combine(_cacheRoot, cachePathStem + ".cs");
+            response.MapPath = Path.Combine(_cacheRoot, cachePathStem + ".map");
+
+            var cacheDirectory = Path.GetDirectoryName(response.CachePath);
+            if (!string.IsNullOrEmpty(cacheDirectory) && !Directory.Exists(cacheDirectory))
+            {
+                Directory.CreateDirectory(cacheDirectory);
+            }
 
             if (!request.IgnoreCache && File.Exists(response.CachePath) && File.Exists(response.MapPath))
             {
@@ -48,6 +57,27 @@ namespace Cortex.Core.Services
                     response.MapText = File.ReadAllText(response.MapPath);
                     response.FromCache = true;
                     response.StatusMessage = "Loaded from cache.";
+                    return response;
+                }
+            }
+
+            var legacyCachePath = Path.Combine(_cacheRoot, legacyFileKey + ".cs");
+            var legacyMapPath = Path.Combine(_cacheRoot, legacyFileKey + ".map");
+            if (!request.IgnoreCache &&
+                !string.Equals(response.CachePath, legacyCachePath, StringComparison.OrdinalIgnoreCase) &&
+                File.Exists(legacyCachePath) &&
+                File.Exists(legacyMapPath))
+            {
+                var assemblyWrite = File.GetLastWriteTimeUtc(request.AssemblyPath);
+                var legacyCacheWrite = File.GetLastWriteTimeUtc(legacyCachePath);
+                if (legacyCacheWrite >= assemblyWrite)
+                {
+                    File.Copy(legacyCachePath, response.CachePath, true);
+                    File.Copy(legacyMapPath, response.MapPath, true);
+                    response.SourceText = File.ReadAllText(response.CachePath);
+                    response.MapText = File.ReadAllText(response.MapPath);
+                    response.FromCache = true;
+                    response.StatusMessage = "Loaded from legacy cache and migrated.";
                     return response;
                 }
             }

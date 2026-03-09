@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
@@ -7,6 +8,13 @@ namespace Cortex.Core.Services
 {
     public sealed class ProjectWorkspaceService : IProjectWorkspaceService
     {
+        private readonly ISourceLookupIndex _lookupIndex;
+
+        public ProjectWorkspaceService(ISourceLookupIndex lookupIndex)
+        {
+            _lookupIndex = lookupIndex;
+        }
+
         public ProjectWorkspaceAnalysis AnalyzeSourceRoot(string sourceRoot, string preferredModId)
         {
             var result = new ProjectWorkspaceAnalysis();
@@ -36,6 +44,7 @@ namespace Cortex.Core.Services
                 return result;
             }
 
+            RefreshRoot(normalizedRoot);
             var projectFile = FindProjectFile(normalizedRoot);
             var modId = !string.IsNullOrEmpty(preferredModId)
                 ? preferredModId
@@ -74,25 +83,14 @@ namespace Cortex.Core.Services
                 return result;
             }
 
-            string[] projectFiles;
-            try
-            {
-                projectFiles = Directory.GetFiles(workspaceRoot, "*.csproj", SearchOption.AllDirectories);
-            }
-            catch (Exception ex)
-            {
-                result.StatusMessage = "Workspace import failed: " + ex.Message;
-                result.Diagnostics.Add(result.StatusMessage);
-                return result;
-            }
+            RefreshRoot(workspaceRoot);
+            var projectFiles = _lookupIndex != null
+                ? _lookupIndex.GetProjectFiles(workspaceRoot)
+                : new List<string>();
 
-            for (var i = 0; i < projectFiles.Length; i++)
+            for (var i = 0; i < projectFiles.Count; i++)
             {
                 var projectFile = projectFiles[i];
-                if (IsBuildArtifact(projectFile))
-                {
-                    continue;
-                }
 
                 result.Definitions.Add(new CortexProjectDefinition
                 {
@@ -165,38 +163,33 @@ namespace Cortex.Core.Services
             return string.Empty;
         }
 
-        private static string FindProjectFile(string sourceRoot)
+        private string FindProjectFile(string sourceRoot)
         {
             if (string.IsNullOrEmpty(sourceRoot) || !Directory.Exists(sourceRoot))
             {
                 return string.Empty;
             }
 
-            string[] projectFiles;
-            try
+            if (_lookupIndex != null)
             {
-                projectFiles = Directory.GetFiles(sourceRoot, "*.csproj", SearchOption.AllDirectories);
-            }
-            catch
-            {
-                return string.Empty;
-            }
-
-            for (var i = 0; i < projectFiles.Length; i++)
-            {
-                if (!IsBuildArtifact(projectFiles[i]))
+                var projectFiles = _lookupIndex.GetProjectFiles(sourceRoot);
+                for (var i = 0; i < projectFiles.Count; i++)
                 {
                     return projectFiles[i];
                 }
+
+                return string.Empty;
             }
 
             return string.Empty;
         }
 
-        private static bool IsBuildArtifact(string path)
+        private void RefreshRoot(string rootPath)
         {
-            return path.IndexOf("\\bin\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                path.IndexOf("\\obj\\", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (_lookupIndex != null)
+            {
+                _lookupIndex.RefreshRoot(rootPath);
+            }
         }
     }
 }

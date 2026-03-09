@@ -15,6 +15,7 @@ namespace Cortex.Adapters
     {
         private readonly object _sync = new object();
         private readonly List<RuntimeLogEntry> _recentEntries = new List<RuntimeLogEntry>();
+        private readonly Dictionary<string, BacklogSnapshot> _backlogSnapshots = new Dictionary<string, BacklogSnapshot>(StringComparer.OrdinalIgnoreCase);
         private bool _attached;
         private int _bufferSize = 600;
 
@@ -94,11 +95,19 @@ namespace Cortex.Adapters
                 return lines;
             }
 
-            var allLines = File.ReadAllLines(logPath);
-            var start = Math.Max(0, allLines.Length - maxCount);
-            for (var i = start; i < allLines.Length; i++)
+            lock (_sync)
             {
-                lines.Add(allLines[i]);
+                var snapshot = GetOrCreateBacklogSnapshot_NoLock(logPath, Math.Max(1, maxCount));
+                if (snapshot == null || snapshot.Lines.Count == 0)
+                {
+                    return lines;
+                }
+
+                var start = Math.Max(0, snapshot.Lines.Count - Math.Max(1, maxCount));
+                for (var i = start; i < snapshot.Lines.Count; i++)
+                {
+                    lines.Add(snapshot.Lines[i]);
+                }
             }
 
             return lines;
@@ -269,6 +278,171 @@ namespace Cortex.Adapters
             }
 
             return frames;
+        }
+
+        private BacklogSnapshot GetOrCreateBacklogSnapshot_NoLock(string logPath, int maxCount)
+        {
+            BacklogSnapshot snapshot;
+            if (!_backlogSnapshots.TryGetValue(logPath, out snapshot))
+            {
+                snapshot = new BacklogSnapshot();
+                _backlogSnapshots[logPath] = snapshot;
+            }
+
+            if (!snapshot.Initialized || snapshot.MaxCount < maxCount)
+            {
+                snapshot.MaxCount = Math.Max(snapshot.MaxCount, maxCount);
+                InitializeBacklogSnapshot_NoLock(snapshot, logPath);
+                return snapshot;
+            }
+
+            UpdateBacklogSnapshot_NoLock(snapshot, logPath);
+            TrimBacklog_NoLock(snapshot);
+            return snapshot;
+        }
+
+        private static void InitializeBacklogSnapshot_NoLock(BacklogSnapshot snapshot, string logPath)
+        {
+            snapshot.Initialized = true;
+            snapshot.PendingPartialLine = string.Empty;
+            snapshot.Lines.Clear();
+
+            try
+            {
+                using (var stream = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    var startPosition = FindTailStartPosition(stream, Math.Max(1, snapshot.MaxCount));
+                    stream.Seek(startPosition, SeekOrigin.Begin);
+                    using (var reader = new StreamReader(stream))
+                    {
+                        AppendText_NoLock(snapshot, reader.ReadToEnd());
+                        snapshot.Position = stream.Length;
+                        snapshot.FileLength = stream.Length;
+                    }
+                }
+            }
+            catch
+            {
+                snapshot.Position = 0L;
+                snapshot.FileLength = 0L;
+                snapshot.PendingPartialLine = string.Empty;
+                snapshot.Lines.Clear();
+            }
+
+            TrimBacklog_NoLock(snapshot);
+        }
+
+        private static void UpdateBacklogSnapshot_NoLock(BacklogSnapshot snapshot, string logPath)
+        {
+            try
+            {
+                using (var stream = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    if (stream.Length < snapshot.Position)
+                    {
+                        InitializeBacklogSnapshot_NoLock(snapshot, logPath);
+                        return;
+                    }
+
+                    if (stream.Length == snapshot.Position)
+                    {
+                        snapshot.FileLength = stream.Length;
+                        return;
+                    }
+
+                    stream.Seek(snapshot.Position, SeekOrigin.Begin);
+                    using (var reader = new StreamReader(stream))
+                    {
+                        AppendText_NoLock(snapshot, reader.ReadToEnd());
+                        snapshot.Position = stream.Length;
+                        snapshot.FileLength = stream.Length;
+                    }
+                }
+            }
+            catch
+            {
+                InitializeBacklogSnapshot_NoLock(snapshot, logPath);
+            }
+        }
+
+        private static void AppendText_NoLock(BacklogSnapshot snapshot, string text)
+        {
+            if (snapshot == null || string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            var combined = (snapshot.PendingPartialLine ?? string.Empty) + text.Replace("\r\n", "\n");
+            var endsWithNewLine = combined.EndsWith("\n", StringComparison.Ordinal);
+            var parts = combined.Split('\n');
+            var limit = endsWithNewLine ? parts.Length : parts.Length - 1;
+            for (var i = 0; i < limit; i++)
+            {
+                snapshot.Lines.Add(parts[i]);
+            }
+
+            snapshot.PendingPartialLine = endsWithNewLine || parts.Length == 0
+                ? string.Empty
+                : parts[parts.Length - 1];
+        }
+
+        private static void TrimBacklog_NoLock(BacklogSnapshot snapshot)
+        {
+            if (snapshot == null)
+            {
+                return;
+            }
+
+            while (snapshot.Lines.Count > snapshot.MaxCount)
+            {
+                snapshot.Lines.RemoveAt(0);
+            }
+        }
+
+        private static long FindTailStartPosition(FileStream stream, int lineCount)
+        {
+            if (stream == null || !stream.CanSeek)
+            {
+                return 0L;
+            }
+
+            var buffer = new byte[4096];
+            var newlineCount = 0;
+            var position = stream.Length;
+
+            while (position > 0)
+            {
+                var readSize = (int)Math.Min(buffer.Length, position);
+                position -= readSize;
+                stream.Seek(position, SeekOrigin.Begin);
+                stream.Read(buffer, 0, readSize);
+
+                for (var i = readSize - 1; i >= 0; i--)
+                {
+                    if (buffer[i] != '\n')
+                    {
+                        continue;
+                    }
+
+                    newlineCount++;
+                    if (newlineCount > lineCount)
+                    {
+                        return position + i + 1;
+                    }
+                }
+            }
+
+            return 0L;
+        }
+
+        private sealed class BacklogSnapshot
+        {
+            public readonly List<string> Lines = new List<string>();
+            public bool Initialized;
+            public long Position;
+            public long FileLength;
+            public int MaxCount;
+            public string PendingPartialLine = string.Empty;
         }
     }
 

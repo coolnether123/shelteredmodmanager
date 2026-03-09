@@ -47,6 +47,7 @@ namespace Cortex.Core.Abstractions
     public interface IWorkspaceBrowserService
     {
         WorkspaceTreeNode BuildTree(string rootPath, WorkspaceTreeKind kind);
+        void Refresh(string rootPath, WorkspaceTreeKind kind);
     }
 
     public interface IDecompilerExplorerService
@@ -87,6 +88,16 @@ namespace Cortex.Core.Abstractions
         string ResolveCandidatePath(CortexProjectDefinition project, CortexSettings settings, string rawPath);
         SourceLocationMatch ResolveTextLocation(string text, CortexProjectDefinition project, CortexSettings settings);
         IList<string> GetSearchRoots(CortexProjectDefinition project, CortexSettings settings);
+    }
+
+    public interface ISourceLookupIndex
+    {
+        void RefreshRoot(string rootPath);
+        void RefreshRoots(IList<string> rootPaths);
+        string ResolvePath(IList<string> searchRoots, string rawPath);
+        string ResolveAssemblyPath(IList<string> searchRoots, string assemblyName);
+        IList<string> GetProjectFiles(string rootPath);
+        WorkspaceTreeNode BuildTree(string rootPath, WorkspaceTreeKind kind);
     }
 
     public interface IBuildCommandResolver

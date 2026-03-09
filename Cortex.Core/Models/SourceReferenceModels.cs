@@ -12,6 +12,7 @@ namespace Cortex.Core.Models
         public int MetadataToken;
         public bool IgnoreCache;
         public DecompilerEntityKind EntityKind;
+        public string CacheRelativePathStem;
     }
 
     public sealed class DecompilerResponse
