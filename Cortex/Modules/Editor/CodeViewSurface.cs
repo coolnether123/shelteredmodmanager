@@ -83,7 +83,7 @@ namespace Cortex.Modules.Editor
                 var hoveredFoldRegion = hasMouse ? FindFoldRegionAt(contentMouse) : null;
                 var hoveredToken = hoveredFoldRegion == null && hasMouse ? FindTokenAt(contentMouse, gutterWidth) : null;
                 hoveredToken = CanHoverToken(hoveredToken) ? hoveredToken : null;
-                UpdateHoverRequest(session, state, hoveredToken);
+                UpdateHoverRequest(session, state, hoveredToken, hasMouse);
                 HandlePointerInput(session, state, hoveredToken, hoveredFoldRegion, hasMouse, current, localMouse, rect.size);
 
                 GUI.BeginGroup(rect);
@@ -556,9 +556,21 @@ namespace Cortex.Modules.Editor
             GUI.Label(glyphRect, glyph, _foldGlyphStyle);
         }
 
-        private void UpdateHoverRequest(DocumentSession session, CortexShellState state, CodeViewToken hoveredToken)
+        private void UpdateHoverRequest(DocumentSession session, CortexShellState state, CodeViewToken hoveredToken, bool hasMouse)
         {
+            if (!hasMouse)
+            {
+                return;
+            }
+
             var hoverKey = hoveredToken != null ? hoveredToken.Key : string.Empty;
+            if (string.IsNullOrEmpty(hoverKey))
+            {
+                _hoverCandidateKey = string.Empty;
+                _hoverCandidateUtc = DateTime.MinValue;
+                return;
+            }
+
             if (!string.Equals(_hoverCandidateKey, hoverKey, StringComparison.Ordinal))
             {
                 _hoverCandidateKey = hoverKey;

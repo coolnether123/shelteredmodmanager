@@ -9,6 +9,7 @@ namespace ModAPI.Core
 
     public sealed class MMLogRuntimeOptions
     {
+        public bool CaptureInfoStackFrames;
         public bool CaptureWarningStackFrames;
         public bool CaptureErrorStackFrames;
         public bool CaptureFatalStackFrames;
@@ -18,6 +19,7 @@ namespace ModAPI.Core
         {
             return new MMLogRuntimeOptions
             {
+                CaptureInfoStackFrames = false,
                 CaptureWarningStackFrames = false,
                 CaptureErrorStackFrames = false,
                 CaptureFatalStackFrames = false,
@@ -29,10 +31,11 @@ namespace ModAPI.Core
         {
             return new MMLogRuntimeOptions
             {
+                CaptureInfoStackFrames = true,
                 CaptureWarningStackFrames = false,
                 CaptureErrorStackFrames = true,
                 CaptureFatalStackFrames = true,
-                MaxCapturedFrames = 14
+                MaxCapturedFrames = 8
             };
         }
     }
