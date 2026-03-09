@@ -127,7 +127,7 @@ namespace Cortex
 
             var persisted = _workbenchPersistenceService.Load(DefaultWorkspaceId) ?? new PersistedWorkbenchState();
             _state.Workbench.FocusedContainerId = NormalizeContainerId(persisted.FocusedContainerId, CortexWorkbenchIds.EditorContainer);
-            _state.Workbench.SideContainerId = NormalizeContainerId(persisted.SideContainerId, CortexWorkbenchIds.ProjectsContainer);
+            _state.Workbench.SideContainerId = NormalizeContainerId(persisted.SideContainerId, string.Empty);
             _state.Workbench.SecondarySideContainerId = persisted.SecondarySideContainerId ?? string.Empty;
             _state.Workbench.EditorContainerId = NormalizeContainerId(persisted.EditorContainerId, CortexWorkbenchIds.EditorContainer);
             _state.Workbench.PanelContainerId = NormalizeContainerId(persisted.PanelContainerId, CortexWorkbenchIds.LogsContainer);

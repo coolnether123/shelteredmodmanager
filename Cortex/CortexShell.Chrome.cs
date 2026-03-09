@@ -356,7 +356,6 @@ namespace Cortex
                 return;
             }
 
-            DrawMenuProjectionRow(snapshot.MainMenuItems, "Menu");
             DrawMenuProjectionRow(snapshot.ToolbarItems, "Quick");
         }
 
