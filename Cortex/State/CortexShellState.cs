@@ -101,6 +101,8 @@ namespace Cortex
         public string RequestedHoverTokenText = string.Empty;
         public string ActiveHoverKey = string.Empty;
         public LanguageServiceHoverResponse ActiveHoverResponse;
+        public string VisibleHoverKey = string.Empty;
+        public string VisibleHoverDefinitionDocumentPath = string.Empty;
         public string RequestedDefinitionKey = string.Empty;
         public string RequestedDefinitionDocumentPath = string.Empty;
         public int RequestedDefinitionLine;

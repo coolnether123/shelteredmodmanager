@@ -100,7 +100,7 @@ namespace Cortex.Modules.Logs
             {
                 CortexIdeLayout.DrawGroup("Log Stream", delegate
                 {
-                    DrawLogList(visibleEntries, state);
+                    DrawLogList(visibleEntries, navigationService, sourcePathResolver, documentService, state);
                 }, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
                 return;
             }
@@ -108,7 +108,7 @@ namespace Cortex.Modules.Logs
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             CortexIdeLayout.DrawGroup("Log Stream", delegate
             {
-                DrawLogList(visibleEntries, state);
+                DrawLogList(visibleEntries, navigationService, sourcePathResolver, documentService, state);
             }, GUILayout.ExpandWidth(true), GUILayout.MinHeight(120f), GUILayout.Height(180f));
             GUILayout.Space(6f);
             CortexIdeLayout.DrawGroup("Entry Details", delegate
@@ -170,7 +170,12 @@ namespace Cortex.Modules.Logs
 
         // ── Log list ──────────────────────────────────────────────────────────────────
 
-        private void DrawLogList(IList<RuntimeLogEntry> visibleEntries, CortexShellState state)
+        private void DrawLogList(
+            IList<RuntimeLogEntry> visibleEntries,
+            IRuntimeSourceNavigationService navigationService,
+            ISourcePathResolver sourcePathResolver,
+            IDocumentService documentService,
+            CortexShellState state)
         {
             var viewRect = GUILayoutUtility.GetRect(0f, 0f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true), GUILayout.MinHeight(80f));
             var rowCount = visibleEntries != null ? visibleEntries.Count : 0;
@@ -187,14 +192,26 @@ namespace Cortex.Modules.Logs
             {
                 for (var i = 0; i < rowCount; i++)
                 {
-                    DrawEntryRow(new Rect(0f, rowStartY + (i * EntryHeight), contentRect.width, EntryHeight), visibleEntries[i], state);
+                    DrawEntryRow(
+                        new Rect(0f, rowStartY + (i * EntryHeight), contentRect.width, EntryHeight),
+                        visibleEntries[i],
+                        navigationService,
+                        sourcePathResolver,
+                        documentService,
+                        state);
                 }
             }
 
             GUI.EndScrollView();
         }
 
-        private void DrawEntryRow(Rect rowRect, RuntimeLogEntry entry, CortexShellState state)
+        private void DrawEntryRow(
+            Rect rowRect,
+            RuntimeLogEntry entry,
+            IRuntimeSourceNavigationService navigationService,
+            ISourcePathResolver sourcePathResolver,
+            IDocumentService documentService,
+            CortexShellState state)
         {
             var isSelected = IsSameEntry(state.Logs.SelectedEntry, entry);
             var severity = RuntimeLogVisuals.GetSeverity(entry.Level);
@@ -230,6 +247,11 @@ namespace Cortex.Modules.Logs
             {
                 state.Logs.SelectedEntry = entry;
                 state.Logs.SelectedFrameIndex = -1;
+
+                if (IsPrimaryDoubleClick(Event.current))
+                {
+                    NavigateToEntry(entry, navigationService, sourcePathResolver, documentService, state);
+                }
             }
 
             GUI.backgroundColor = previousBg;
@@ -373,6 +395,37 @@ namespace Cortex.Modules.Logs
             }
 
             OpenOrDecompileFrame(navigationService, documentService, state, 0);
+        }
+
+        private void NavigateToEntry(
+            RuntimeLogEntry entry,
+            IRuntimeSourceNavigationService navigationService,
+            ISourcePathResolver sourcePathResolver,
+            IDocumentService documentService,
+            CortexShellState state)
+        {
+            if (entry == null)
+            {
+                return;
+            }
+
+            var location = sourcePathResolver != null
+                ? sourcePathResolver.ResolveTextLocation(entry.Message, state.SelectedProject, state.Settings)
+                : new SourceLocationMatch { Success = false };
+
+            if (location.Success && !string.IsNullOrEmpty(location.ResolvedPath))
+            {
+                NavigateToLocation(documentService, state, location.ResolvedPath, location.LineNumber);
+                return;
+            }
+
+            if (entry.StackFrames != null && entry.StackFrames.Count > 0)
+            {
+                OpenOrDecompileFrame(navigationService, documentService, state, 0);
+                return;
+            }
+
+            state.StatusMessage = BuildNavigationNote(location, entry);
         }
 
         private void OpenOrDecompileFrame(
@@ -567,6 +620,13 @@ namespace Cortex.Modules.Logs
             }
 
             return left.Sequence == right.Sequence && left.Timestamp == right.Timestamp;
+        }
+
+        private static bool IsPrimaryDoubleClick(Event current)
+        {
+            return current != null &&
+                current.button == 0 &&
+                current.clickCount >= 2;
         }
 
         private static string FirstLine(string text)
