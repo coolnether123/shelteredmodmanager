@@ -48,6 +48,12 @@ namespace Cortex.Core.Abstractions
         WorkspaceTreeNode BuildTree(string rootPath, WorkspaceTreeKind kind);
     }
 
+    public interface IDecompilerExplorerService
+    {
+        WorkspaceTreeNode BuildTree(string preferredRootPath);
+        void EnsureChildren(WorkspaceTreeNode node);
+    }
+
     public interface IDocumentService
     {
         DocumentSession Open(string filePath);

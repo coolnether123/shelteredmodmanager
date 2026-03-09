@@ -333,11 +333,33 @@ namespace Cortex
             var previousContent = GUI.contentColor;
             GUI.backgroundColor = CortexIdeLayout.GetInteractiveFillColor(isSelected, hostLocation);
             GUI.contentColor = CortexIdeLayout.GetInteractiveTextColor(isSelected);
-            if (GUILayout.Toggle(isSelected, BuildTabLabel(item), isSelected ? _activeTabStyle : _tabStyle, GUILayout.Width(116f), GUILayout.Height(24f)))
+            var rect = GUILayoutUtility.GetRect(116f, 116f, 24f, 24f);
+            var current = Event.current;
+            var isHovered = current != null && rect.Contains(current.mousePosition);
+            var closeRect = new Rect(rect.xMax - 18f, rect.y + 4f, 14f, Mathf.Max(12f, rect.height - 8f));
+            if ((isHovered || isSelected) &&
+                current != null &&
+                current.type == EventType.MouseDown &&
+                current.button == 0 &&
+                closeRect.Contains(current.mousePosition))
+            {
+                HideContainer(item.ContainerId);
+                _state.StatusMessage = GetContainerTitle(null, item.ContainerId) + " hidden.";
+                current.Use();
+                GUI.backgroundColor = previousBackground;
+                GUI.contentColor = previousContent;
+                return;
+            }
+
+            if (GUI.Toggle(rect, isSelected, BuildTabLabel(item), isSelected ? _activeTabStyle : _tabStyle))
             {
                 ActivateContainer(item.ContainerId);
             }
-            var rect = GUILayoutUtility.GetLastRect();
+
+            if ((isHovered || isSelected) && !string.Equals(item.ContainerId, CortexWorkbenchIds.EditorContainer, StringComparison.OrdinalIgnoreCase))
+            {
+                GUI.Box(closeRect, "x", _tabCloseButtonStyle ?? GUI.skin.button);
+            }
             HandleTabDrag(item.ContainerId, hostLocation, rect);
             GUI.backgroundColor = previousBackground;
             GUI.contentColor = previousContent;
@@ -368,12 +390,16 @@ namespace Cortex
         private void DrawHostDropTarget(WorkbenchHostLocation hostLocation)
         {
             var isDragging = !string.IsNullOrEmpty(_draggingContainerId) && hostLocation != WorkbenchHostLocation.DocumentHost;
+            if (!isDragging)
+            {
+                GUILayout.Space(2f);
+                return;
+            }
+
             var label = hostLocation == WorkbenchHostLocation.DocumentHost
                 ? "Editor workspace"
-                : isDragging
-                    ? "Release here to dock into " + CortexIdeLayout.GetHostDisplayName(hostLocation).ToLowerInvariant() + "."
-                    : "Drag a tab here to dock it.";
-            GUILayout.Box(label, GUILayout.ExpandWidth(true), GUILayout.Height(20f));
+                : "Release here to dock into " + CortexIdeLayout.GetHostDisplayName(hostLocation).ToLowerInvariant() + ".";
+            GUILayout.Box(label, GUILayout.ExpandWidth(true), GUILayout.Height(18f));
             var rect = GUILayoutUtility.GetLastRect();
             HandleDockDropTarget(hostLocation, rect);
         }
@@ -414,7 +440,9 @@ namespace Cortex
             for (var i = 0; i < snapshot.ToolRailItems.Count; i++)
             {
                 var item = snapshot.ToolRailItems[i];
-                if (item != null && ResolveHostLocation(item.ContainerId) == hostLocation)
+                if (item != null &&
+                    !_state.Workbench.IsHidden(item.ContainerId) &&
+                    ResolveHostLocation(item.ContainerId) == hostLocation)
                 {
                     items.Add(item);
                 }
@@ -485,24 +513,19 @@ namespace Cortex
         }
 
         /// <summary>
-        /// A single-row menu bar where each menu group name is a button.
-        /// Clicking a group shows its items inline for this frame (a simple, one-level drop-down
-        /// model that works in Unity's immediate-mode GUI without popup windows).
+        /// A single-row menu bar with anchored popup menus for each group.
         /// </summary>
         private void DrawMenuBar(WorkbenchPresentationSnapshot snapshot)
         {
-            // Groups come from MainMenu contributions
             var menuItems = snapshot != null && snapshot.MainMenuItems != null
                 ? snapshot.MainMenuItems
                 : null;
 
-            // Fallback static groups when no contributions are loaded
             var staticGroups = new[] { "File", "Edit", "View", "Build", "Window" };
             var hasContributions = menuItems != null && menuItems.Count > 0;
 
             if (!hasContributions)
             {
-                // Render static, command-driving buttons while contributions load
                 foreach (var group in staticGroups)
                 {
                     DrawStaticMenuGroup(group);
@@ -525,20 +548,12 @@ namespace Cortex
             foreach (var group in seenGroups)
             {
                 var isOpen = string.Equals(_openMenuGroup, group, StringComparison.OrdinalIgnoreCase);
-                if (GUILayout.Toggle(isOpen, group, _menuStyle, GUILayout.ExpandWidth(false)))
+                if (GUILayout.Button(group, _menuStyle, GUILayout.ExpandWidth(false)))
                 {
                     _openMenuGroup = isOpen ? string.Empty : group;
                 }
-            }
 
-            // Dismiss on click outside menus
-            if (!string.IsNullOrEmpty(_openMenuGroup))
-            {
-                var ev = Event.current;
-                if (ev != null && (ev.type == EventType.MouseDown || ev.type == EventType.KeyDown))
-                {
-                    // Items are drawn in DrawOpenMenuPanel(), called after this
-                }
+                _menuGroupRects[group] = GUILayoutUtility.GetLastRect();
             }
         }
 
@@ -546,71 +561,164 @@ namespace Cortex
         /// Draws the open menu's item list immediately below the menu bar, overlapping the workspace.
         /// Rendered last (after everything else in the header horizontal) so it floats over content.
         /// </summary>
-        private void DrawOpenMenuPanel(WorkbenchPresentationSnapshot snapshot)
+        private void DrawOpenMenuPanel(WorkbenchPresentationSnapshot snapshot, Rect headerRect)
         {
             if (string.IsNullOrEmpty(_openMenuGroup))
             {
                 return;
             }
 
-            var menuItems = snapshot != null && snapshot.MainMenuItems != null
-                ? snapshot.MainMenuItems
-                : null;
-
-            if (menuItems == null || menuItems.Count == 0)
+            Rect anchorRect;
+            if (!_menuGroupRects.TryGetValue(_openMenuGroup, out anchorRect))
             {
                 _openMenuGroup = string.Empty;
                 return;
             }
 
-            GUILayout.BeginHorizontal();
-            var drewAny = false;
-            for (var i = 0; i < menuItems.Count; i++)
+            var items = BuildMenuItemsForGroup(snapshot, _openMenuGroup);
+            if (items.Count == 0)
             {
-                var item = menuItems[i];
-                if (!string.Equals(item.Group, _openMenuGroup, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
+                _openMenuGroup = string.Empty;
+                return;
+            }
 
-                if (GUILayout.Button(item.DisplayName ?? item.CommandId, GUILayout.ExpandWidth(false)))
+            var popupWidth = 220f;
+            var popupHeight = 8f + (items.Count * 26f) + 8f;
+            var popupX = Mathf.Clamp(headerRect.x + anchorRect.x, 0f, Mathf.Max(0f, _windowRect.width - popupWidth - 8f));
+            var popupY = headerRect.y + anchorRect.yMax + 2f;
+            var popupRect = new Rect(popupX, popupY, popupWidth, popupHeight);
+
+            GUILayout.BeginArea(popupRect, _sectionStyle);
+            for (var i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (GUILayout.Button(item.DisplayName ?? item.CommandId, GUILayout.Height(22f), GUILayout.ExpandWidth(true)))
                 {
                     ExecuteCommand(item.CommandId, null);
                     _openMenuGroup = string.Empty;
                 }
+            }
+            GUILayout.EndArea();
 
-                drewAny = true;
+            var ev = Event.current;
+            if (ev == null)
+            {
+                return;
             }
 
-            if (!drewAny)
+            if (ev.type == EventType.MouseDown)
+            {
+                var overGroup = false;
+                foreach (var rect in _menuGroupRects.Values)
+                {
+                    if (new Rect(headerRect.x + rect.x, headerRect.y + rect.y, rect.width, rect.height).Contains(ev.mousePosition))
+                    {
+                        overGroup = true;
+                        break;
+                    }
+                }
+
+                if (!popupRect.Contains(ev.mousePosition) && !overGroup)
+                {
+                    _openMenuGroup = string.Empty;
+                }
+            }
+            else if (ev.type == EventType.KeyDown && ev.keyCode == KeyCode.Escape)
             {
                 _openMenuGroup = string.Empty;
+                ev.Use();
             }
-
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
         }
 
         private void DrawStaticMenuGroup(string group)
         {
-            var commands = GetStaticCommandsForGroup(group);
             var isOpen = string.Equals(_openMenuGroup, group, StringComparison.OrdinalIgnoreCase);
-            if (GUILayout.Toggle(isOpen, group, _menuStyle, GUILayout.ExpandWidth(false)))
+            if (GUILayout.Button(group, _menuStyle, GUILayout.ExpandWidth(false)))
             {
                 _openMenuGroup = isOpen ? string.Empty : group;
             }
+
+            _menuGroupRects[group] = GUILayoutUtility.GetLastRect();
+        }
+
+        private List<MenuItemProjection> BuildMenuItemsForGroup(WorkbenchPresentationSnapshot snapshot, string group)
+        {
+            var items = new List<MenuItemProjection>();
+            var menuItems = snapshot != null && snapshot.MainMenuItems != null
+                ? snapshot.MainMenuItems
+                : null;
+
+            if (menuItems != null && menuItems.Count > 0)
+            {
+                for (var i = 0; i < menuItems.Count; i++)
+                {
+                    var item = menuItems[i];
+                    if (item != null && string.Equals(item.Group, group, StringComparison.OrdinalIgnoreCase))
+                    {
+                        items.Add(item);
+                    }
+                }
+
+                return items;
+            }
+
+            var commands = GetStaticCommandsForGroup(group);
+            for (var i = 0; i < commands.Length; i++)
+            {
+                items.Add(new MenuItemProjection
+                {
+                    CommandId = commands[i],
+                    DisplayName = GetStaticCommandDisplayName(commands[i]),
+                    Group = group
+                });
+            }
+
+            return items;
         }
 
         private static string[] GetStaticCommandsForGroup(string group)
         {
             switch (group)
             {
-                case "File": return new[] { "cortex.file.saveAll", "cortex.file.closeActive" };
+                case "File": return new[] { "cortex.file.saveAll", "cortex.file.closeActive", "cortex.file.settings" };
                 case "Edit": return new string[0];
                 case "View": return new[] { "cortex.view.fileExplorer", "cortex.win.theme", "cortex.logs.toggleWindow", "cortex.shell.fitWindow" };
                 case "Build": return new[] { "cortex.build.execute" };
-                case "Window": return new[] { "cortex.shell.fitWindow" };
+                case "Window": return new[]
+                {
+                    "cortex.window.explorer",
+                    "cortex.window.projects",
+                    "cortex.window.references",
+                    "cortex.window.logs",
+                    "cortex.window.build",
+                    "cortex.window.runtime",
+                    "cortex.window.settings",
+                    "cortex.shell.fitWindow"
+                };
                 default: return new string[0];
+            }
+        }
+
+        private static string GetStaticCommandDisplayName(string commandId)
+        {
+            switch (commandId)
+            {
+                case "cortex.file.saveAll": return "Save All";
+                case "cortex.file.closeActive": return "Close";
+                case "cortex.file.settings": return "Settings";
+                case "cortex.view.fileExplorer": return "Toggle File Explorer";
+                case "cortex.win.theme": return "Switch Theme";
+                case "cortex.logs.toggleWindow": return "Detached Logs Window";
+                case "cortex.shell.fitWindow": return "Fit Workbench To Screen";
+                case "cortex.build.execute": return "Build Project";
+                case "cortex.window.explorer": return "Explorer";
+                case "cortex.window.projects": return "Projects";
+                case "cortex.window.references": return "References";
+                case "cortex.window.logs": return "Logs";
+                case "cortex.window.build": return "Build";
+                case "cortex.window.runtime": return "Runtime";
+                case "cortex.window.settings": return "Settings";
+                default: return commandId;
             }
         }
 

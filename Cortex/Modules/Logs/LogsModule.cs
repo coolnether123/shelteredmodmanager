@@ -60,7 +60,7 @@ namespace Cortex.Modules.Logs
         private const float EntryHeight = 34f;
         private const float ToolbarHeight = 26f;
         private const float SeverityButtonWidth = 72f;
-        private const float DetailPanelMinHeight = 120f;
+        private const float DetailPanelMinHeight = 180f;
 
         public void Draw(
             IRuntimeLogFeed logFeed,
@@ -85,18 +85,36 @@ namespace Cortex.Modules.Logs
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             DrawToolbar(allEntries, visibleEntries, settings, state, detachedWindow);
+            DrawLogSurface(visibleEntries, navigationService, sourcePathResolver, documentService, state);
+            GUILayout.EndVertical();
+        }
 
-            if (state.Logs.SelectedEntry != null)
+        private void DrawLogSurface(
+            IList<RuntimeLogEntry> visibleEntries,
+            IRuntimeSourceNavigationService navigationService,
+            ISourcePathResolver sourcePathResolver,
+            IDocumentService documentService,
+            CortexShellState state)
+        {
+            if (state.Logs.SelectedEntry == null)
             {
-                // Split: list on top, detail strip at bottom
-                DrawLogList(visibleEntries, state, true);
+                CortexIdeLayout.DrawGroup("Log Stream", delegate
+                {
+                    DrawLogList(visibleEntries, state);
+                }, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+                return;
+            }
+
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            CortexIdeLayout.DrawGroup("Log Stream", delegate
+            {
+                DrawLogList(visibleEntries, state);
+            }, GUILayout.ExpandWidth(true), GUILayout.MinHeight(120f), GUILayout.Height(180f));
+            GUILayout.Space(6f);
+            CortexIdeLayout.DrawGroup("Entry Details", delegate
+            {
                 DrawDetailStrip(navigationService, sourcePathResolver, documentService, state);
-            }
-            else
-            {
-                DrawLogList(visibleEntries, state, false);
-            }
-
+            }, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.EndVertical();
         }
 
@@ -155,14 +173,12 @@ namespace Cortex.Modules.Logs
 
         // ── Log list ──────────────────────────────────────────────────────────────────
 
-        private void DrawLogList(IList<RuntimeLogEntry> visibleEntries, CortexShellState state, bool compact)
+        private void DrawLogList(IList<RuntimeLogEntry> visibleEntries, CortexShellState state)
         {
-            var minHeight = compact ? 120f : 80f;
-
             _listScroll = GUILayout.BeginScrollView(
                 _listScroll, false, true,
                 GUILayout.ExpandHeight(true),
-                GUILayout.MinHeight(minHeight));
+                GUILayout.MinHeight(80f));
 
             if (visibleEntries.Count == 0)
             {
@@ -239,6 +255,7 @@ namespace Cortex.Modules.Logs
             _detailScroll = GUILayout.BeginScrollView(
                 _detailScroll, false, false,
                 GUILayout.MinHeight(DetailPanelMinHeight),
+                GUILayout.ExpandHeight(true),
                 GUILayout.ExpandWidth(true));
 
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true));

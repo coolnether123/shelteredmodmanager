@@ -28,10 +28,13 @@ namespace Cortex
         private const KeyCode ToggleKey = KeyCode.F8;
         private const int MainWindowId = 0xC07E;
         private const int LogsWindowId = 0xC07F;
+        private const int SettingsWindowId = 0xC080;
 
         private Rect _windowRect = new Rect(70f, 70f, 1180f, 760f);
         private Rect _logWindowRect = new Rect(100f, 100f, 980f, 620f);
+        private Rect _settingsWindowRect = new Rect(80f, 60f, 1320f, 860f);
         private bool _visible;
+        private bool _showSettingsWindow;
         private Vector2 _windowScroll = Vector2.zero;
         private string _draggingContainerId = string.Empty;
         private WorkbenchHostLocation _draggingContainerSourceHost = WorkbenchHostLocation.PrimarySideHost;
@@ -42,6 +45,7 @@ namespace Cortex
         private ILoadedModCatalog _loadedModCatalog;
         private IProjectWorkspaceService _projectWorkspaceService;
         private IWorkspaceBrowserService _workspaceBrowserService;
+        private IDecompilerExplorerService _decompilerExplorerService;
         private IDocumentService _documentService;
         private IBuildCommandResolver _buildCommandResolver;
         private IBuildExecutor _buildExecutor;
@@ -75,6 +79,7 @@ namespace Cortex
         private GUIStyle _windowStyle;
         private GUIStyle _tabStyle;
         private GUIStyle _activeTabStyle;
+        private GUIStyle _tabCloseButtonStyle;
         private GUIStyle _collapsedWindowStyle;
         private Texture2D _windowBackground;
         private Texture2D _sectionBackground;
@@ -83,6 +88,7 @@ namespace Cortex
         private Texture2D _collapsedWindowBackground;
         private string _appliedThemeId = string.Empty;
         private WorkbenchPresentationSnapshot _frameSnapshot;
+        private readonly Dictionary<string, Rect> _menuGroupRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
 
         private void Awake()
         {
@@ -170,6 +176,12 @@ namespace Cortex
                 }
             }
 
+            if (_showSettingsWindow)
+            {
+                _settingsWindowRect = ClampRectToScreen(_settingsWindowRect, 1120f, 720f);
+                _settingsWindowRect = GUI.Window(SettingsWindowId, _settingsWindowRect, DrawSettingsWindow, "Cortex Settings", _windowStyle);
+            }
+
             _frameSnapshot = null;
             GUI.skin = previousSkin;
         }
@@ -177,33 +189,22 @@ namespace Cortex
         private void DrawWindow(int windowId)
         {
             var snapshot = _frameSnapshot ?? (_workbenchRuntime != null ? _workbenchRuntime.CreateSnapshot() : new WorkbenchPresentationSnapshot());
-            // VS-style: slim 30px header (menu bar) + slim 24px status bar at bottom.
             const float headerHeight = 30f;
             const float statusHeight = 24f;
-            // Optional open-menu dropdown band (0 when no menu is open)
-            var hasOpenMenu = !string.IsNullOrEmpty(_openMenuGroup);
-            const float openMenuBandHeight = 28f;
             var contentRect = new Rect(6f, 24f, Mathf.Max(0f, _windowRect.width - 12f), Mathf.Max(0f, _windowRect.height - 30f));
             var headerRect = new Rect(contentRect.x, contentRect.y, contentRect.width, headerHeight);
-            var menuPanelRect = new Rect(contentRect.x, headerRect.yMax, contentRect.width, hasOpenMenu ? openMenuBandHeight : 0f);
             var statusRect = new Rect(contentRect.x, Mathf.Max(contentRect.y + headerHeight + 8f, contentRect.yMax - statusHeight), contentRect.width, statusHeight);
-            var workbenchTop = headerRect.yMax + (hasOpenMenu ? openMenuBandHeight : 0f) + 2f;
+            var workbenchTop = headerRect.yMax + 2f;
             var workbenchRect = new Rect(
                 contentRect.x,
                 workbenchTop,
                 contentRect.width,
                 Mathf.Max(0f, statusRect.y - workbenchTop - 3f));
 
+            _menuGroupRects.Clear();
             GUILayout.BeginArea(headerRect);
             DrawHeader(snapshot);
             GUILayout.EndArea();
-
-            if (hasOpenMenu)
-            {
-                GUILayout.BeginArea(menuPanelRect);
-                DrawOpenMenuPanel(snapshot);
-                GUILayout.EndArea();
-            }
 
             GUILayout.BeginArea(workbenchRect);
             DrawWorkbenchSurface(snapshot, new Rect(0f, 0f, workbenchRect.width, workbenchRect.height));
@@ -212,6 +213,7 @@ namespace Cortex
             GUILayout.BeginArea(statusRect);
             DrawStatusStrip(snapshot);
             GUILayout.EndArea();
+            DrawOpenMenuPanel(snapshot, headerRect);
             ApplyWindowResize(windowId, ref _windowRect, 920f, 580f);
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 28f));
         }
@@ -224,6 +226,21 @@ namespace Cortex
             _logsModule.Draw(_runtimeLogFeed, _runtimeSourceNavigationService, _sourcePathResolver, _documentService, _state, true);
             GUILayout.EndVertical();
             ApplyWindowResize(windowId, ref _logWindowRect, 760f, 420f);
+            GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));
+        }
+
+        private void DrawSettingsWindow(int windowId)
+        {
+            EnsureModuleActivated(CortexWorkbenchIds.SettingsContainer);
+            GUILayout.BeginVertical();
+            DrawSettingsWindowHeaderActions();
+            if (_settingsModule != null)
+            {
+                var snapshot = _frameSnapshot ?? (_workbenchRuntime != null ? _workbenchRuntime.CreateSnapshot() : new WorkbenchPresentationSnapshot());
+                _settingsModule.Draw(_settingsStore, _projectCatalog, _projectWorkspaceService, _loadedModCatalog, snapshot, _workbenchRuntime != null ? _workbenchRuntime.ThemeState : null, _state);
+            }
+            GUILayout.EndVertical();
+            ApplyWindowResize(windowId, ref _settingsWindowRect, 1120f, 720f);
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));
         }
 
@@ -312,10 +329,11 @@ namespace Cortex
             _loadedModCatalog = new ModApiLoadedModCatalog();
             _projectWorkspaceService = new ProjectWorkspaceService();
             _workspaceBrowserService = new WorkspaceBrowserService();
+            _referenceCatalogService = new ReferenceCatalogService();
+            _decompilerExplorerService = new DecompilerExplorerService(_referenceCatalogService);
             _documentService = new FileDocumentService();
             _buildCommandResolver = new CsprojBuildCommandResolver();
             _buildExecutor = new ProcessBuildExecutor();
-            _referenceCatalogService = new ReferenceCatalogService();
             _sourcePathResolver = new SourcePathResolver();
             _sourceReferenceService = new SourceReferenceService(new DecompilerCliClient(decompilerPath, settings.DecompilerCachePath, 15000));
             var runtimeLogFeed = new MmLogRuntimeLogFeed();
@@ -440,7 +458,7 @@ namespace Cortex
 
             if (effective.EditorFilePaneWidth < 240f)
             {
-                effective.EditorFilePaneWidth = 320f;
+                effective.EditorFilePaneWidth = 420f;
             }
 
             if (effective.WindowWidth < 980f || effective.WindowHeight < 620f)
@@ -481,6 +499,7 @@ namespace Cortex
         {
             _windowRect = ClampRectToScreen(_windowRect, 920f, 580f);
             _logWindowRect = ClampRectToScreen(_logWindowRect, 760f, 420f);
+            _settingsWindowRect = ClampRectToScreen(_settingsWindowRect, 1120f, 720f);
             _state.Chrome.Main.ExpandedRect = ClampRectToScreen(_state.Chrome.Main.ExpandedRect.width > 0f ? _state.Chrome.Main.ExpandedRect : _windowRect, 920f, 580f);
             _state.Chrome.Logs.ExpandedRect = ClampRectToScreen(_state.Chrome.Logs.ExpandedRect.width > 0f ? _state.Chrome.Logs.ExpandedRect : _logWindowRect, 760f, 420f);
             _state.Chrome.Main.CollapsedRect = ClampRectToScreen(
@@ -541,6 +560,7 @@ namespace Cortex
                 _windowStyle = null;
                 _tabStyle = null;
                 _activeTabStyle = null;
+                _tabCloseButtonStyle = null;
                 _collapsedWindowStyle = null;
                 _windowBackground = null;
                 _sectionBackground = null;
@@ -627,6 +647,17 @@ namespace Cortex
                 _activeTabStyle.fontStyle = FontStyle.Bold;
             }
 
+            if (_tabCloseButtonStyle == null)
+            {
+                _tabCloseButtonStyle = new GUIStyle(GUI.skin.button);
+                _tabCloseButtonStyle.alignment = TextAnchor.MiddleCenter;
+                _tabCloseButtonStyle.fontSize = 10;
+                _tabCloseButtonStyle.padding = new RectOffset(0, 0, 0, 0);
+                _tabCloseButtonStyle.margin = new RectOffset(0, 0, 0, 0);
+                GuiStyleUtil.ApplyBackgroundToAllStates(_tabCloseButtonStyle, MakeTex(CortexIdeLayout.Blend(headerColor, backgroundColor, 0.45f)));
+                GuiStyleUtil.ApplyTextColorToAllStates(_tabCloseButtonStyle, textColor);
+            }
+
             if (_collapsedWindowStyle == null)
             {
                 _collapsedWindowBackground = MakeTex(CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.HeaderColor : string.Empty, new Color(0.09f, 0.11f, 0.15f, 0.98f)));
@@ -673,6 +704,23 @@ namespace Cortex
                 {
                     _state.Logs.ShowDetachedWindow = false;
                     _state.Chrome.Logs.IsCollapsed = false;
+                }));
+            CortexWindowChromeController.DrawActions(actions);
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawSettingsWindowHeaderActions()
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            var actions = new List<CortexWindowAction>();
+            actions.Add(BuildGlyphWindowAction(
+                "settings.close",
+                "X",
+                "Close settings window",
+                delegate
+                {
+                    _showSettingsWindow = false;
                 }));
             CortexWindowChromeController.DrawActions(actions);
             GUILayout.EndHorizontal();
@@ -733,6 +781,7 @@ namespace Cortex
                 return;
             }
 
+            _state.Workbench.HiddenContainerIds.Remove(containerId);
             var hostLocation = ResolveHostLocation(containerId);
             _state.Workbench.FocusedContainerId = containerId;
             if (hostLocation == WorkbenchHostLocation.PanelHost)
@@ -815,6 +864,7 @@ namespace Cortex
                 return;
             }
 
+            _state.Workbench.HiddenContainerIds.Remove(containerId);
             _state.Workbench.AssignHost(containerId, hostLocation);
             if (hostLocation == WorkbenchHostLocation.PanelHost)
             {
@@ -850,6 +900,44 @@ namespace Cortex
             ActivateContainer(containerId);
         }
 
+        private void HideContainer(string containerId)
+        {
+            if (string.IsNullOrEmpty(containerId) || string.Equals(containerId, CortexWorkbenchIds.EditorContainer, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _state.Workbench.HiddenContainerIds.Add(containerId);
+            if (string.Equals(_state.Workbench.PanelContainerId, containerId, StringComparison.OrdinalIgnoreCase))
+            {
+                _state.Workbench.PanelContainerId = FindFirstContainerForHost(WorkbenchHostLocation.PanelHost, containerId);
+            }
+
+            if (string.Equals(_state.Workbench.SecondarySideContainerId, containerId, StringComparison.OrdinalIgnoreCase))
+            {
+                _state.Workbench.SecondarySideContainerId = FindFirstContainerForHost(WorkbenchHostLocation.SecondarySideHost, containerId);
+            }
+
+            if (string.Equals(_state.Workbench.SideContainerId, containerId, StringComparison.OrdinalIgnoreCase))
+            {
+                _state.Workbench.SideContainerId = FindFirstContainerForHost(WorkbenchHostLocation.PrimarySideHost, containerId);
+            }
+
+            if (string.Equals(_state.Workbench.FocusedContainerId, containerId, StringComparison.OrdinalIgnoreCase))
+            {
+                _state.Workbench.FocusedContainerId = !string.IsNullOrEmpty(_state.Workbench.EditorContainerId)
+                    ? _state.Workbench.EditorContainerId
+                    : string.Empty;
+            }
+
+            if (_workbenchRuntime != null)
+            {
+                _workbenchRuntime.WorkbenchState.PrimarySideHostVisible = !string.IsNullOrEmpty(_state.Workbench.SideContainerId);
+                _workbenchRuntime.WorkbenchState.PanelHostVisible = !string.IsNullOrEmpty(_state.Workbench.PanelContainerId);
+                _workbenchRuntime.WorkbenchState.SecondarySideHostVisible = !string.IsNullOrEmpty(_state.Workbench.SecondarySideContainerId);
+            }
+        }
+
         private string FindFirstContainerForHost(WorkbenchHostLocation hostLocation, string excludedContainerId)
         {
             if (_workbenchRuntime == null || _workbenchRuntime.ContributionRegistry == null)
@@ -862,6 +950,11 @@ namespace Cortex
             {
                 var containerId = containers[i].ContainerId;
                 if (string.Equals(containerId, excludedContainerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (_state.Workbench.IsHidden(containerId))
                 {
                     continue;
                 }
@@ -885,7 +978,7 @@ namespace Cortex
                 case 3: return CortexWorkbenchIds.BuildContainer;
                 case 4: return CortexWorkbenchIds.ReferenceContainer;
                 case 5: return CortexWorkbenchIds.RuntimeContainer;
-                case 6: return CortexWorkbenchIds.SettingsContainer;
+                case 6: return CortexWorkbenchIds.ProjectsContainer;
                 default: return CortexWorkbenchIds.LogsContainer;
             }
         }

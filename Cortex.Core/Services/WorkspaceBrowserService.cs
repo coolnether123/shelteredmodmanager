@@ -28,7 +28,10 @@ namespace Cortex.Core.Services
                 Name = Path.GetFileName(rootPath),
                 FullPath = rootPath,
                 RelativePath = string.Empty,
-                IsDirectory = true
+                IsDirectory = true,
+                HasChildren = true,
+                ChildrenLoaded = true,
+                NodeKind = WorkspaceTreeNodeKind.Folder
             };
 
             PopulateDirectory(root, rootPath, kind);
@@ -61,7 +64,10 @@ namespace Cortex.Core.Services
                     Name = Path.GetFileName(directory),
                     FullPath = directory,
                     RelativePath = BuildRelativePath(rootPath, directory),
-                    IsDirectory = true
+                    IsDirectory = true,
+                    HasChildren = true,
+                    ChildrenLoaded = true,
+                    NodeKind = WorkspaceTreeNodeKind.Folder
                 };
 
                 PopulateDirectory(child, rootPath, kind);
@@ -94,7 +100,10 @@ namespace Cortex.Core.Services
                     Name = Path.GetFileName(files[i]),
                     FullPath = files[i],
                     RelativePath = BuildRelativePath(rootPath, files[i]),
-                    IsDirectory = false
+                    IsDirectory = false,
+                    HasChildren = false,
+                    ChildrenLoaded = true,
+                    NodeKind = WorkspaceTreeNodeKind.File
                 });
             }
         }
