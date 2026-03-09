@@ -187,7 +187,7 @@ namespace Cortex
             EnsureModuleActivated(CortexWorkbenchIds.LogsContainer);
             GUILayout.BeginVertical();
             DrawLogsWindowHeaderActions();
-            _logsModule.Draw(_runtimeLogFeed, _runtimeSourceNavigationService, _documentService, _state, true);
+            _logsModule.Draw(_runtimeLogFeed, _runtimeSourceNavigationService, _sourcePathResolver, _documentService, _state, true);
             GUILayout.EndVertical();
             ApplyWindowResize(windowId, ref _logWindowRect, 760f, 420f);
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));

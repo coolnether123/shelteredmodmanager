@@ -21,7 +21,7 @@ namespace Cortex
     public sealed class CortexWorkbenchSelectionState
     {
         public string FocusedContainerId = CortexWorkbenchIds.EditorContainer;
-        public string SideContainerId = CortexWorkbenchIds.ProjectsContainer;
+        public string SideContainerId = string.Empty;
         public string SecondarySideContainerId = string.Empty;
         public string EditorContainerId = CortexWorkbenchIds.EditorContainer;
         public string PanelContainerId = CortexWorkbenchIds.LogsContainer;

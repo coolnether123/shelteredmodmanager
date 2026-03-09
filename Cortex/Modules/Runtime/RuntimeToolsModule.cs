@@ -43,7 +43,7 @@ namespace Cortex.Modules.Runtime
             GUILayout.Label("Status: " + (tool.IsActive ? "Active" : "Inactive"));
             if (GUILayout.Button(tool.IsActive ? "Disable" : "Enable", GUILayout.Width(120f)))
             {
-                string statusMessage;
+                var statusMessage = string.Empty;
                 if (toolBridge != null && toolBridge.Execute(tool.ToolId, out statusMessage))
                 {
                     state.StatusMessage = statusMessage;
