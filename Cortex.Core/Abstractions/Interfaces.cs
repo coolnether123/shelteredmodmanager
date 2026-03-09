@@ -72,12 +72,12 @@ namespace Cortex.Core.Abstractions
 
     public interface IRuntimeSymbolResolver
     {
-        SourceNavigationTarget Resolve(RuntimeStackFrame frame, CortexProjectDefinition project);
+        SourceNavigationTarget Resolve(RuntimeStackFrame frame, CortexProjectDefinition project, CortexSettings settings);
     }
 
     public interface IRuntimeSourceNavigationService
     {
-        SourceNavigationTarget Resolve(RuntimeLogEntry entry, int frameIndex, CortexProjectDefinition project);
+        SourceNavigationTarget Resolve(RuntimeLogEntry entry, int frameIndex, CortexProjectDefinition project, CortexSettings settings);
     }
 
     public interface IRuntimeToolBridge

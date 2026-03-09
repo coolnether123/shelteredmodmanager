@@ -11,10 +11,46 @@ using UnityEngine;
 
 namespace Cortex.Adapters
 {
-    public sealed class MmLogRuntimeLogFeed : IRuntimeLogFeed
+    public sealed class MmLogRuntimeLogFeed : IRuntimeLogFeed, IMMLogRuntimeSink
     {
+        private readonly object _sync = new object();
+        private readonly List<RuntimeLogEntry> _recentEntries = new List<RuntimeLogEntry>();
+        private bool _attached;
+        private int _bufferSize = 600;
+
+        public void Attach()
+        {
+            lock (_sync)
+            {
+                if (_attached)
+                {
+                    return;
+                }
+
+                MMLog.RegisterRuntimeSink(this);
+                _attached = true;
+                RebuildSnapshot_NoLock(_bufferSize);
+            }
+        }
+
+        public void Detach()
+        {
+            lock (_sync)
+            {
+                if (!_attached)
+                {
+                    return;
+                }
+
+                MMLog.UnregisterRuntimeSink(this);
+                _attached = false;
+            }
+        }
+
         public IList<RuntimeLogEntry> ReadRecent(string minimumLevel, int maxCount)
         {
+            EnsureAttached();
+
             MMLog.LogLevel level;
             try
             {
@@ -25,23 +61,29 @@ namespace Cortex.Adapters
                 level = MMLog.LogLevel.Info;
             }
 
-            var raw = MMLog.GetRecentEntries(level, maxCount);
-            var entries = new List<RuntimeLogEntry>(raw.Count);
-            for (var i = 0; i < raw.Count; i++)
+            lock (_sync)
             {
-                var item = raw[i];
-                entries.Add(new RuntimeLogEntry
+                if (maxCount > _bufferSize)
                 {
-                    Timestamp = item.Timestamp,
-                    Level = item.Level.ToString(),
-                    Category = item.Category.ToString(),
-                    Source = item.Source,
-                    Message = item.Message,
-                    StackFrames = MapStackFrames(item.StackFrames)
-                });
-            }
+                    _bufferSize = maxCount;
+                    RebuildSnapshot_NoLock(_bufferSize);
+                }
 
-            return entries;
+                var entries = new List<RuntimeLogEntry>();
+                var required = Math.Max(1, maxCount);
+                for (var i = _recentEntries.Count - 1; i >= 0 && entries.Count < required; i--)
+                {
+                    var item = _recentEntries[i];
+                    if (item == null || !MatchesLevel(item.Level, level))
+                    {
+                        continue;
+                    }
+
+                    entries.Insert(0, CloneEntry(item));
+                }
+
+                return entries;
+            }
         }
 
         public IList<string> ReadBacklog(string logPath, int maxCount)
@@ -60,6 +102,140 @@ namespace Cortex.Adapters
             }
 
             return lines;
+        }
+
+        public void OnLogEntry(MMLog.LogEntry entry)
+        {
+            if (entry == null)
+            {
+                return;
+            }
+
+            lock (_sync)
+            {
+                _recentEntries.Add(MapEntry(entry));
+                TrimBuffer_NoLock();
+            }
+        }
+
+        private void EnsureAttached()
+        {
+            if (_attached)
+            {
+                return;
+            }
+
+            Attach();
+        }
+
+        private void RebuildSnapshot_NoLock(int maxCount)
+        {
+            _recentEntries.Clear();
+
+            var raw = MMLog.GetRecentEntries(MMLog.LogLevel.Debug, Math.Max(1, maxCount));
+            for (var i = 0; i < raw.Count; i++)
+            {
+                _recentEntries.Add(MapEntry(raw[i]));
+            }
+
+            TrimBuffer_NoLock();
+        }
+
+        private void TrimBuffer_NoLock()
+        {
+            while (_recentEntries.Count > _bufferSize)
+            {
+                _recentEntries.RemoveAt(0);
+            }
+        }
+
+        private static bool MatchesLevel(string levelName, MMLog.LogLevel minimumLevel)
+        {
+            MMLog.LogLevel level;
+            try
+            {
+                level = (MMLog.LogLevel)Enum.Parse(typeof(MMLog.LogLevel), levelName ?? "Info", true);
+            }
+            catch
+            {
+                level = MMLog.LogLevel.Info;
+            }
+
+            return level >= minimumLevel;
+        }
+
+        private static RuntimeLogEntry MapEntry(MMLog.LogEntry item)
+        {
+            return new RuntimeLogEntry
+            {
+                Sequence = item != null ? item.Sequence : 0,
+                EntryId = item != null ? item.EntryId : string.Empty,
+                Timestamp = item != null ? item.Timestamp : DateTime.MinValue,
+                Level = item != null ? item.Level.ToString() : string.Empty,
+                Category = item != null ? item.Category.ToString() : string.Empty,
+                Source = item != null ? item.Source : string.Empty,
+                Message = item != null ? item.Message : string.Empty,
+                ThreadId = item != null ? item.ThreadId : 0,
+                UnityFrame = item != null ? item.UnityFrame : -1,
+                RepeatCount = item != null ? item.RepeatCount : 1,
+                StackFrames = item != null ? MapStackFrames(item.StackFrames) : new List<RuntimeStackFrame>()
+            };
+        }
+
+        private static RuntimeLogEntry CloneEntry(RuntimeLogEntry item)
+        {
+            if (item == null)
+            {
+                return new RuntimeLogEntry();
+            }
+
+            return new RuntimeLogEntry
+            {
+                Sequence = item.Sequence,
+                EntryId = item.EntryId,
+                Timestamp = item.Timestamp,
+                Level = item.Level,
+                Category = item.Category,
+                Source = item.Source,
+                Message = item.Message,
+                ThreadId = item.ThreadId,
+                UnityFrame = item.UnityFrame,
+                RepeatCount = item.RepeatCount,
+                StackFrames = CloneStackFrames(item.StackFrames)
+            };
+        }
+
+        private static List<RuntimeStackFrame> CloneStackFrames(List<RuntimeStackFrame> stackFrames)
+        {
+            var frames = new List<RuntimeStackFrame>();
+            if (stackFrames == null || stackFrames.Count == 0)
+            {
+                return frames;
+            }
+
+            for (var i = 0; i < stackFrames.Count; i++)
+            {
+                var frame = stackFrames[i];
+                if (frame == null)
+                {
+                    continue;
+                }
+
+                frames.Add(new RuntimeStackFrame
+                {
+                    AssemblyPath = frame.AssemblyPath,
+                    TypeName = frame.TypeName,
+                    MethodName = frame.MethodName,
+                    MetadataToken = frame.MetadataToken,
+                    IlOffset = frame.IlOffset,
+                    FilePath = frame.FilePath,
+                    LineNumber = frame.LineNumber,
+                    ColumnNumber = frame.ColumnNumber,
+                    DisplayText = frame.DisplayText
+                });
+            }
+
+            return frames;
         }
 
         private static List<RuntimeStackFrame> MapStackFrames(List<MMLog.RuntimeStackFrameInfo> stackFrames)
@@ -98,24 +274,22 @@ namespace Cortex.Adapters
 
     public sealed class ModApiRuntimeSymbolResolver : IRuntimeSymbolResolver
     {
-        public SourceNavigationTarget Resolve(RuntimeStackFrame frame, CortexProjectDefinition project)
+        public SourceNavigationTarget Resolve(RuntimeStackFrame frame, CortexProjectDefinition project, CortexSettings settings)
         {
             if (frame == null)
             {
                 return Failure("The runtime stack frame is missing.");
             }
 
-            var directPath = ResolveCandidatePath(project, frame.FilePath);
+            var directPath = ResolveCandidatePath(project, settings, frame.FilePath);
             if (!string.IsNullOrEmpty(directPath))
             {
-                MMLog.WriteDebug("Cortex resolved runtime frame via PDB path: " + directPath, MMLog.LogCategory.UI);
                 return Success(directPath, frame.LineNumber, frame.ColumnNumber, false, "Resolved runtime frame via PDB source path.");
             }
 
             MethodBase method;
             if (!TryResolveMethod(frame, project, out method))
             {
-                MMLog.WriteWarning("Cortex could not resolve runtime frame method for " + BuildFrameName(frame), MMLog.LogCategory.UI);
                 return Failure("Cortex could not resolve the runtime method for this stack frame.");
             }
 
@@ -123,8 +297,6 @@ namespace Cortex.Adapters
             var cachePath = SourceCacheManager.GetCachePath(method);
             if (!File.Exists(cachePath))
             {
-                var methodOwner = method.DeclaringType != null ? method.DeclaringType.FullName : (method.Name ?? "UnknownMethod");
-                MMLog.WriteWarning("Cortex could not locate cached source for " + methodOwner + "." + method.Name, MMLog.LogCategory.UI);
                 return Failure(string.IsNullOrEmpty(SourceCacheManager.LastError) ? "No cached source is available for this frame." : SourceCacheManager.LastError);
             }
 
@@ -134,7 +306,6 @@ namespace Cortex.Adapters
                 sourceLine = 1;
             }
 
-            MMLog.WriteDebug("Cortex resolved runtime frame via cached source: " + cachePath, MMLog.LogCategory.UI);
             return Success(cachePath, sourceLine, frame.ColumnNumber, true, "Resolved runtime frame via generated source cache.");
         }
 
@@ -302,7 +473,7 @@ namespace Cortex.Adapters
             return null;
         }
 
-        private static string ResolveCandidatePath(CortexProjectDefinition project, string rawPath)
+        private static string ResolveCandidatePath(CortexProjectDefinition project, CortexSettings settings, string rawPath)
         {
             if (string.IsNullOrEmpty(rawPath))
             {
@@ -320,35 +491,75 @@ namespace Cortex.Adapters
                 return Path.GetFullPath(rawPath);
             }
 
-            var sourceRoot = project != null ? project.SourceRootPath : string.Empty;
-            if (string.IsNullOrEmpty(sourceRoot) || !Directory.Exists(sourceRoot))
+            var searchRoots = BuildSearchRoots(project, settings);
+            for (var i = 0; i < searchRoots.Count; i++)
             {
-                return string.Empty;
+                var sourceRoot = searchRoots[i];
+                var combined = Path.Combine(sourceRoot, rawPath);
+                if (File.Exists(combined))
+                {
+                    return Path.GetFullPath(combined);
+                }
+
+                try
+                {
+                    var fileName = Path.GetFileName(rawPath);
+                    if (!string.IsNullOrEmpty(fileName))
+                    {
+                        var matches = Directory.GetFiles(sourceRoot, fileName, SearchOption.AllDirectories);
+                        if (matches.Length > 0)
+                        {
+                            return matches[0];
+                        }
+                    }
+                }
+                catch
+                {
+                }
             }
 
-            var combined = Path.Combine(sourceRoot, rawPath);
-            if (File.Exists(combined))
+            return string.Empty;
+        }
+
+        private static List<string> BuildSearchRoots(CortexProjectDefinition project, CortexSettings settings)
+        {
+            var roots = new List<string>();
+            AddRoot(roots, project != null ? project.SourceRootPath : string.Empty);
+            AddRoot(roots, project != null ? Path.GetDirectoryName(project.ProjectFilePath) : string.Empty);
+            AddRoot(roots, settings != null ? settings.WorkspaceRootPath : string.Empty);
+            AddRoot(roots, settings != null ? settings.ModsRootPath : string.Empty);
+
+            var rawRoots = settings != null ? settings.AdditionalSourceRoots : string.Empty;
+            if (!string.IsNullOrEmpty(rawRoots))
             {
-                return Path.GetFullPath(combined);
+                var segments = rawRoots.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                for (var i = 0; i < segments.Length; i++)
+                {
+                    AddRoot(roots, segments[i]);
+                }
+            }
+
+            return roots;
+        }
+
+        private static void AddRoot(List<string> roots, string root)
+        {
+            if (roots == null || string.IsNullOrEmpty(root))
+            {
+                return;
             }
 
             try
             {
-                var fileName = Path.GetFileName(rawPath);
-                if (!string.IsNullOrEmpty(fileName))
+                var fullPath = Path.GetFullPath(root.Trim());
+                if (Directory.Exists(fullPath) && !roots.Contains(fullPath))
                 {
-                    var matches = Directory.GetFiles(sourceRoot, fileName, SearchOption.AllDirectories);
-                    if (matches.Length > 0)
-                    {
-                        return matches[0];
-                    }
+                    roots.Add(fullPath);
                 }
             }
             catch
             {
             }
-
-            return string.Empty;
         }
 
         private static string BuildFrameName(RuntimeStackFrame frame)

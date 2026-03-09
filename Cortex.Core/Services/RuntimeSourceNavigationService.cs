@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
@@ -14,7 +15,7 @@ namespace Cortex.Core.Services
             _symbolResolver = symbolResolver;
         }
 
-        public SourceNavigationTarget Resolve(RuntimeLogEntry entry, int frameIndex, CortexProjectDefinition project)
+        public SourceNavigationTarget Resolve(RuntimeLogEntry entry, int frameIndex, CortexProjectDefinition project, CortexSettings settings)
         {
             if (entry == null || entry.StackFrames == null || entry.StackFrames.Count == 0)
             {
@@ -27,7 +28,7 @@ namespace Cortex.Core.Services
             }
 
             var frame = entry.StackFrames[frameIndex];
-            var directPath = ResolveCandidatePath(project, frame != null ? frame.FilePath : null);
+            var directPath = ResolveCandidatePath(project, settings, frame != null ? frame.FilePath : null);
             if (!string.IsNullOrEmpty(directPath))
             {
                 var lineNumber = frame != null && frame.LineNumber > 0 ? frame.LineNumber : 1;
@@ -46,7 +47,7 @@ namespace Cortex.Core.Services
                 return Failure("No runtime symbol resolver is available.");
             }
 
-            return _symbolResolver.Resolve(frame, project) ?? Failure("Runtime symbol resolution failed.");
+            return _symbolResolver.Resolve(frame, project, settings) ?? Failure("Runtime symbol resolution failed.");
         }
 
         private static SourceNavigationTarget Failure(string message)
@@ -61,7 +62,7 @@ namespace Cortex.Core.Services
             };
         }
 
-        private static string ResolveCandidatePath(CortexProjectDefinition project, string rawPath)
+        private static string ResolveCandidatePath(CortexProjectDefinition project, CortexSettings settings, string rawPath)
         {
             if (string.IsNullOrEmpty(rawPath))
             {
@@ -79,37 +80,77 @@ namespace Cortex.Core.Services
                 return Path.GetFullPath(rawPath);
             }
 
-            var sourceRoot = project != null ? project.SourceRootPath : string.Empty;
-            if (string.IsNullOrEmpty(sourceRoot) || !Directory.Exists(sourceRoot))
+            var searchRoots = BuildSearchRoots(project, settings);
+            for (var i = 0; i < searchRoots.Count; i++)
             {
-                return string.Empty;
+                var sourceRoot = searchRoots[i];
+                var combined = Path.Combine(sourceRoot, rawPath);
+                if (File.Exists(combined))
+                {
+                    return Path.GetFullPath(combined);
+                }
+
+                var fileName = Path.GetFileName(rawPath);
+                if (string.IsNullOrEmpty(fileName))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var files = Directory.GetFiles(sourceRoot, fileName, SearchOption.AllDirectories);
+                    if (files.Length > 0)
+                    {
+                        return files[0];
+                    }
+                }
+                catch
+                {
+                }
             }
 
-            var combined = Path.Combine(sourceRoot, rawPath);
-            if (File.Exists(combined))
+            return string.Empty;
+        }
+
+        private static List<string> BuildSearchRoots(CortexProjectDefinition project, CortexSettings settings)
+        {
+            var roots = new List<string>();
+            AddRoot(roots, project != null ? project.SourceRootPath : string.Empty);
+            AddRoot(roots, project != null ? Path.GetDirectoryName(project.ProjectFilePath) : string.Empty);
+            AddRoot(roots, settings != null ? settings.WorkspaceRootPath : string.Empty);
+            AddRoot(roots, settings != null ? settings.ModsRootPath : string.Empty);
+
+            var rawRoots = settings != null ? settings.AdditionalSourceRoots : string.Empty;
+            if (!string.IsNullOrEmpty(rawRoots))
             {
-                return Path.GetFullPath(combined);
+                var segments = rawRoots.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                for (var i = 0; i < segments.Length; i++)
+                {
+                    AddRoot(roots, segments[i]);
+                }
             }
 
-            var fileName = Path.GetFileName(rawPath);
-            if (string.IsNullOrEmpty(fileName))
+            return roots;
+        }
+
+        private static void AddRoot(List<string> roots, string root)
+        {
+            if (roots == null || string.IsNullOrEmpty(root))
             {
-                return string.Empty;
+                return;
             }
 
             try
             {
-                var files = Directory.GetFiles(sourceRoot, fileName, SearchOption.AllDirectories);
-                if (files.Length > 0)
+                var fullPath = Path.GetFullPath(root.Trim());
+                if (Directory.Exists(fullPath) && !roots.Contains(fullPath))
                 {
-                    return files[0];
+                    roots.Add(fullPath);
                 }
             }
             catch
             {
             }
-
-            return string.Empty;
         }
     }
 }

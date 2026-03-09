@@ -38,6 +38,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Abstractions\Interfaces.cs" />
+    <Compile Include="Abstractions\WorkbenchInterfaces.cs" />
+    <Compile Include="Models\CommandModels.cs" />
+    <Compile Include="Models\ContributionModels.cs" />
     <Compile Include="Models\BuildModels.cs" />
     <Compile Include="Models\CortexSettings.cs" />
     <Compile Include="Models\CortexProjectDefinition.cs" />
@@ -45,12 +48,18 @@
     <Compile Include="Models\NavigationModels.cs" />
     <Compile Include="Models\RuntimeLogEntry.cs" />
     <Compile Include="Models\SourceReferenceModels.cs" />
+    <Compile Include="Models\WorkbenchIds.cs" />
+    <Compile Include="Models\WorkbenchPersistenceModels.cs" />
+    <Compile Include="Models\WorkbenchModels.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Services\CommandRegistry.cs" />
+    <Compile Include="Services\ContributionRegistry.cs" />
     <Compile Include="Services\CsprojBuildCommandResolver.cs" />
     <Compile Include="Services\DecompilerCliClient.cs" />
     <Compile Include="Services\FileDocumentService.cs" />
     <Compile Include="Services\JsonCortexSettingsStore.cs" />
     <Compile Include="Services\JsonProjectConfigurationStore.cs" />
+    <Compile Include="Services\JsonWorkbenchPersistenceService.cs" />
     <Compile Include="Services\ProcessBuildExecutor.cs" />
     <Compile Include="Services\ProjectCatalog.cs" />
     <Compile Include="Services\RuntimeSourceNavigationService.cs" />
