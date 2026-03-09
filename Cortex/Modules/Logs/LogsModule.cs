@@ -4,6 +4,7 @@ using System.Text;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
+using ModAPI.Core;
 using UnityEngine;
 
 namespace Cortex.Modules.Logs
@@ -25,6 +26,9 @@ namespace Cortex.Modules.Logs
         private bool _warningsVisible = true;
         private bool _infoVisible = true;
         private int _lastEntryCount;
+        private string _lastActivatedEntryId = string.Empty;
+        private long _lastActivatedSequence = -1;
+        private DateTime _lastActivatedUtc = DateTime.MinValue;
 
         // ── selection state ───────────────────────────────────────────────────────────
         private Vector2 _listScroll = Vector2.zero;
@@ -248,8 +252,10 @@ namespace Cortex.Modules.Logs
                 state.Logs.SelectedEntry = entry;
                 state.Logs.SelectedFrameIndex = -1;
 
-                if (IsPrimaryDoubleClick(Event.current))
+                if (IsEntryDoubleActivated(entry))
                 {
+                    MMLog.WriteInfo("[Cortex.Logs] Double-activate navigation requested for log entry '" +
+                        (entry.Source ?? "Unknown") + "'.");
                     NavigateToEntry(entry, navigationService, sourcePathResolver, documentService, state);
                 }
             }
@@ -380,10 +386,12 @@ namespace Cortex.Modules.Logs
             {
                 state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
                 state.StatusMessage = "Opened " + System.IO.Path.GetFileName(filePath) + " @ line " + line;
+                MMLog.WriteInfo("[Cortex.Logs] Opened source from log entry -> " + filePath + ":" + line);
             }
             else
             {
                 state.StatusMessage = "Could not open resolved source file.";
+                MMLog.WriteWarning("[Cortex.Logs] Failed to open resolved source from log entry -> " + filePath + ":" + line);
             }
         }
 
@@ -458,11 +466,13 @@ namespace Cortex.Modules.Logs
             if (opened == null)
             {
                 state.StatusMessage = "Could not open resolved or decompiled file.";
+                MMLog.WriteWarning("[Cortex.Logs] Failed to open runtime navigation target -> " + (target.FilePath ?? string.Empty));
                 return;
             }
 
             state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
             state.StatusMessage = target.StatusMessage;
+            MMLog.WriteInfo("[Cortex.Logs] Opened runtime navigation target -> " + target.FilePath + ":" + target.LineNumber);
         }
 
         // ── Filtering ─────────────────────────────────────────────────────────────────
@@ -622,11 +632,29 @@ namespace Cortex.Modules.Logs
             return left.Sequence == right.Sequence && left.Timestamp == right.Timestamp;
         }
 
-        private static bool IsPrimaryDoubleClick(Event current)
+        private bool IsEntryDoubleActivated(RuntimeLogEntry entry)
         {
-            return current != null &&
-                current.button == 0 &&
-                current.clickCount >= 2;
+            var isSameEntry = false;
+            if (entry != null)
+            {
+                if (!string.IsNullOrEmpty(entry.EntryId) && !string.IsNullOrEmpty(_lastActivatedEntryId))
+                {
+                    isSameEntry = string.Equals(entry.EntryId, _lastActivatedEntryId, StringComparison.Ordinal);
+                }
+                else
+                {
+                    isSameEntry = entry.Sequence == _lastActivatedSequence;
+                }
+            }
+
+            var nowUtc = DateTime.UtcNow;
+            var isDoubleActivate = isSameEntry &&
+                (nowUtc - _lastActivatedUtc).TotalMilliseconds <= 420d;
+
+            _lastActivatedEntryId = entry != null ? entry.EntryId ?? string.Empty : string.Empty;
+            _lastActivatedSequence = entry != null ? entry.Sequence : -1;
+            _lastActivatedUtc = nowUtc;
+            return isDoubleActivate;
         }
 
         private static string FirstLine(string text)
