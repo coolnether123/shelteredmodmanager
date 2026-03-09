@@ -128,7 +128,11 @@ namespace Cortex.Roslyn.Worker
             var sourceLocation = symbol.Locations.FirstOrDefault(location =>
                 location.IsInSource &&
                 location.SourceTree == syntaxTree);
+            var definitionLocation = symbol.Locations.FirstOrDefault(location => location.IsInSource);
             var span = sourceLocation != null ? sourceLocation.SourceSpan : default(TextSpan);
+            var definitionText = definitionLocation != null && definitionLocation.SourceTree != null
+                ? definitionLocation.SourceTree.GetText()
+                : null;
             var documentationXml = symbol.GetDocumentationCommentXml();
 
             return new LanguageServiceHoverResponse
@@ -146,7 +150,11 @@ namespace Cortex.Roslyn.Worker
                 DocumentationCommentId = symbol.GetDocumentationCommentId() ?? string.Empty,
                 DocumentationXml = documentationXml ?? string.Empty,
                 DocumentationText = FlattenDocumentation(documentationXml),
-                Range = BuildRange(text, span)
+                Range = BuildRange(text, span),
+                DefinitionDocumentPath = definitionLocation != null && definitionLocation.SourceTree != null
+                    ? definitionLocation.SourceTree.FilePath ?? string.Empty
+                    : string.Empty,
+                DefinitionRange = BuildRange(definitionText, definitionLocation != null ? definitionLocation.SourceSpan : default(TextSpan))
             };
         }
 

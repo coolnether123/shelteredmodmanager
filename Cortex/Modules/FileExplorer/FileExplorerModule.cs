@@ -23,7 +23,9 @@ namespace Cortex.Modules.FileExplorer
 
         private string _appliedTheme = string.Empty;
         private GUIStyle _folderLabelStyle;
+        private GUIStyle _hoverFolderLabelStyle;
         private GUIStyle _fileButtonStyle;
+        private GUIStyle _hoverFileButtonStyle;
         private GUIStyle _activeFileButtonStyle;
         private GUIStyle _filterBoxStyle;
         private GUIStyle _sectionHeaderStyle;
@@ -132,7 +134,10 @@ namespace Cortex.Modules.FileExplorer
                 return;
             }
 
-            DrawTreeNode(root, documentService, decompilerExplorerService, sourceReferenceService, state, 0, true);
+            var hoverHighlightPath = string.Equals(title, "Workspace", StringComparison.Ordinal)
+                ? ResolveVisibleHoverTargetPath(root, GetVisibleHoverDefinitionPath(state), 0)
+                : string.Empty;
+            DrawTreeNode(root, documentService, decompilerExplorerService, sourceReferenceService, state, hoverHighlightPath, 0, true);
         }
 
         private void DrawTreeNode(
@@ -141,6 +146,7 @@ namespace Cortex.Modules.FileExplorer
             IDecompilerExplorerService decompilerExplorerService,
             ISourceReferenceService sourceReferenceService,
             CortexShellState state,
+            string hoverHighlightPath,
             int depth,
             bool drawSelf)
         {
@@ -158,11 +164,11 @@ namespace Cortex.Modules.FileExplorer
 
                 if (node.HasChildren)
                 {
-                    DrawExpandableNode(node, documentService, decompilerExplorerService, sourceReferenceService, state, depth);
+                    DrawExpandableNode(node, documentService, decompilerExplorerService, sourceReferenceService, state, hoverHighlightPath, depth);
                 }
                 else
                 {
-                    DrawLeafNode(node, documentService, sourceReferenceService, state, depth);
+                    DrawLeafNode(node, documentService, sourceReferenceService, state, hoverHighlightPath, depth);
                 }
 
                 return;
@@ -170,7 +176,7 @@ namespace Cortex.Modules.FileExplorer
 
             for (var i = 0; i < node.Children.Count; i++)
             {
-                DrawTreeNode(node.Children[i], documentService, decompilerExplorerService, sourceReferenceService, state, depth, true);
+                DrawTreeNode(node.Children[i], documentService, decompilerExplorerService, sourceReferenceService, state, hoverHighlightPath, depth, true);
             }
         }
 
@@ -180,6 +186,7 @@ namespace Cortex.Modules.FileExplorer
             IDecompilerExplorerService decompilerExplorerService,
             ISourceReferenceService sourceReferenceService,
             CortexShellState state,
+            string hoverHighlightPath,
             int depth)
         {
             var key = BuildNodeKey(node);
@@ -197,6 +204,10 @@ namespace Cortex.Modules.FileExplorer
                 EnsureChildrenLoaded(node, decompilerExplorerService);
             }
 
+            var folderStyle = IsHighlightedNode(node, hoverHighlightPath)
+                ? (_hoverFolderLabelStyle ?? _folderLabelStyle ?? GUI.skin.button)
+                : (_folderLabelStyle ?? GUI.skin.button);
+
             GUILayout.BeginHorizontal(GUILayout.Height(RowHeight));
             GUILayout.Space(depth * IndentWidth);
             var arrow = expanded ? "v" : ">";
@@ -210,7 +221,7 @@ namespace Cortex.Modules.FileExplorer
                 }
             }
 
-            if (GUILayout.Button(node.Name ?? "Node", _folderLabelStyle ?? GUI.skin.button, GUILayout.ExpandWidth(true), GUILayout.Height(RowHeight)))
+            if (GUILayout.Button(node.Name ?? "Node", folderStyle, GUILayout.ExpandWidth(true), GUILayout.Height(RowHeight)))
             {
                 HandleExpandableNodeAction(node, documentService, sourceReferenceService, state, ref expanded);
                 _expandedNodes[key] = expanded;
@@ -225,7 +236,7 @@ namespace Cortex.Modules.FileExplorer
 
             for (var i = 0; i < node.Children.Count; i++)
             {
-                DrawTreeNode(node.Children[i], documentService, decompilerExplorerService, sourceReferenceService, state, depth + 1, true);
+                DrawTreeNode(node.Children[i], documentService, decompilerExplorerService, sourceReferenceService, state, hoverHighlightPath, depth + 1, true);
             }
         }
 
@@ -234,15 +245,19 @@ namespace Cortex.Modules.FileExplorer
             IDocumentService documentService,
             ISourceReferenceService sourceReferenceService,
             CortexShellState state,
+            string hoverHighlightPath,
             int depth)
         {
             var isActiveFile = node.NodeKind == WorkspaceTreeNodeKind.File &&
                 state.Documents.ActiveDocument != null &&
                 string.Equals(state.Documents.ActiveDocument.FilePath, node.FullPath, StringComparison.OrdinalIgnoreCase);
+            var isHoverTarget = IsHighlightedNode(node, hoverHighlightPath);
 
             GUILayout.BeginHorizontal(GUILayout.Height(RowHeight));
             GUILayout.Space(depth * IndentWidth + 18f);
-            var style = isActiveFile ? (_activeFileButtonStyle ?? GUI.skin.button) : (_fileButtonStyle ?? GUI.skin.button);
+            var style = isActiveFile
+                ? (_activeFileButtonStyle ?? GUI.skin.button)
+                : (isHoverTarget ? (_hoverFileButtonStyle ?? _fileButtonStyle ?? GUI.skin.button) : (_fileButtonStyle ?? GUI.skin.button));
             if (GUILayout.Button(node.Name ?? "Item", style, GUILayout.ExpandWidth(true), GUILayout.Height(RowHeight)))
             {
                 ActivateLeafNode(node, documentService, sourceReferenceService, state);
@@ -408,6 +423,101 @@ namespace Cortex.Modules.FileExplorer
             return (node.Name ?? string.Empty) + ":" + node.NodeKind;
         }
 
+        private static string GetVisibleHoverDefinitionPath(CortexShellState state)
+        {
+            return state != null && state.Editor != null
+                ? state.Editor.VisibleHoverDefinitionDocumentPath ?? string.Empty
+                : string.Empty;
+        }
+
+        private string ResolveVisibleHoverTargetPath(WorkspaceTreeNode node, string hoverDefinitionPath, int depth)
+        {
+            if (node == null || string.IsNullOrEmpty(hoverDefinitionPath))
+            {
+                return string.Empty;
+            }
+
+            if (node.NodeKind == WorkspaceTreeNodeKind.File)
+            {
+                return string.Equals(node.FullPath, hoverDefinitionPath, StringComparison.OrdinalIgnoreCase)
+                    ? node.FullPath ?? string.Empty
+                    : string.Empty;
+            }
+
+            if (!NodeContainsHoverPath(node, hoverDefinitionPath))
+            {
+                return string.Empty;
+            }
+
+            var key = BuildNodeKey(node);
+            var expanded = GetExpandedState(node, key, depth);
+            if (!string.IsNullOrEmpty(_filterText))
+            {
+                expanded = true;
+            }
+
+            if (!expanded)
+            {
+                return node.FullPath ?? string.Empty;
+            }
+
+            for (var i = 0; i < node.Children.Count; i++)
+            {
+                var child = node.Children[i];
+                if (!NodeContainsHoverPath(child, hoverDefinitionPath))
+                {
+                    continue;
+                }
+
+                var childTarget = ResolveVisibleHoverTargetPath(child, hoverDefinitionPath, depth + 1);
+                if (!string.IsNullOrEmpty(childTarget))
+                {
+                    return childTarget;
+                }
+            }
+
+            return node.FullPath ?? string.Empty;
+        }
+
+        private static bool NodeContainsHoverPath(WorkspaceTreeNode node, string hoverDefinitionPath)
+        {
+            if (node == null || string.IsNullOrEmpty(hoverDefinitionPath))
+            {
+                return false;
+            }
+
+            if (node.NodeKind == WorkspaceTreeNodeKind.File)
+            {
+                return string.Equals(node.FullPath, hoverDefinitionPath, StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (string.IsNullOrEmpty(node.FullPath))
+            {
+                return false;
+            }
+
+            var normalizedFolder = NormalizeDirectoryPath(node.FullPath);
+            return hoverDefinitionPath.StartsWith(normalizedFolder, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsHighlightedNode(WorkspaceTreeNode node, string hoverHighlightPath)
+        {
+            return node != null &&
+                !string.IsNullOrEmpty(node.FullPath) &&
+                !string.IsNullOrEmpty(hoverHighlightPath) &&
+                string.Equals(node.FullPath, hoverHighlightPath, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeDirectoryPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return string.Empty;
+            }
+
+            return path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        }
+
         private void EnsureStyles(CortexShellState state)
         {
             var themeId = state.Settings != null && !string.IsNullOrEmpty(state.Settings.ThemeId)
@@ -438,6 +548,11 @@ namespace Cortex.Modules.FileExplorer
             GuiStyleUtil.ApplyBackgroundToAllStates(_folderLabelStyle, MakeTex(surfaceColor));
             GuiStyleUtil.ApplyTextColorToAllStates(_folderLabelStyle, textColor);
 
+            _hoverFolderLabelStyle = new GUIStyle(_folderLabelStyle);
+            GuiStyleUtil.ApplyTextColorToAllStates(
+                _hoverFolderLabelStyle,
+                CortexIdeLayout.Blend(textColor, CortexIdeLayout.ParseColor("#DCDCAA", textColor), 0.35f));
+
             _fileButtonStyle = new GUIStyle(GUI.skin.button);
             _fileButtonStyle.alignment = TextAnchor.MiddleLeft;
             _fileButtonStyle.fontSize = 11;
@@ -449,6 +564,11 @@ namespace Cortex.Modules.FileExplorer
             GuiStyleUtil.ApplyTextColorToAllStates(_fileButtonStyle, mutedColor);
             _fileButtonStyle.hover.background = _fileHoverBg;
             _fileButtonStyle.hover.textColor = textColor;
+
+            _hoverFileButtonStyle = new GUIStyle(_fileButtonStyle);
+            GuiStyleUtil.ApplyTextColorToAllStates(
+                _hoverFileButtonStyle,
+                CortexIdeLayout.Blend(mutedColor, CortexIdeLayout.ParseColor("#DCDCAA", textColor), 0.4f));
 
             _activeFileButtonStyle = new GUIStyle(_fileButtonStyle);
             GuiStyleUtil.ApplyBackgroundToAllStates(_activeFileButtonStyle, _selectedFileBg);

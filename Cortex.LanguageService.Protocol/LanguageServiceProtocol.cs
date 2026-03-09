@@ -391,6 +391,8 @@ namespace Cortex.LanguageService.Protocol
         public string DocumentationXml;
         public string DocumentationText;
         public LanguageServiceRange Range;
+        public string DefinitionDocumentPath;
+        public LanguageServiceRange DefinitionRange;
     }
 
     /// <summary>

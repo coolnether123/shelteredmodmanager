@@ -15,6 +15,7 @@ namespace Cortex.Modules.Editor
         private const float TooltipWidth = 420f;
         private const float FoldGlyphWidth = 14f;
         private const int TabSize = 4;
+        private const double StickyHoverGraceMs = 220d;
 
         private readonly Dictionary<string, GUIStyle> _classificationStyles = new Dictionary<string, GUIStyle>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, HashSet<string>> _collapsedRegionKeys = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
@@ -37,6 +38,11 @@ namespace Cortex.Modules.Editor
         private string _hoverCandidateKey = string.Empty;
         private DateTime _hoverCandidateUtc = DateTime.MinValue;
         private string _selectedTokenKey = string.Empty;
+        private string _stickyHoverKey = string.Empty;
+        private string _stickyHoverDocumentPath = string.Empty;
+        private Rect _stickyHoverAnchorRect = new Rect(0f, 0f, 0f, 0f);
+        private Rect _stickyHoverTooltipRect = new Rect(0f, 0f, 0f, 0f);
+        private DateTime _stickyHoverKeepAliveUtc = DateTime.MinValue;
         private bool _contextMenuOpen;
         private Vector2 _contextMenuPosition = Vector2.zero;
         private CodeViewToken _contextToken;
@@ -48,11 +54,13 @@ namespace Cortex.Modules.Editor
         {
             if (session == null)
             {
+                ClearStickyHover(state);
                 return scroll;
             }
 
             if (rect.width <= 0f || rect.height <= 0f || GUI.skin == null || GUI.skin.label == null || GUI.skin.button == null || GUI.skin.box == null)
             {
+                ClearStickyHover(state);
                 return scroll;
             }
 
@@ -91,7 +99,7 @@ namespace Cortex.Modules.Editor
                         GUI.EndScrollView();
                     }
 
-                    DrawTooltip(localMouse, hoveredToken, state, rect.size);
+                    DrawTooltip(session, localMouse, hoveredToken, state, rect.size, hasMouse);
                     DrawContextMenu(state, session, current, localMouse, rect.size);
                 }
                 finally
@@ -106,6 +114,7 @@ namespace Cortex.Modules.Editor
                 LogDrawFailure(session, ex);
                 _contextMenuOpen = false;
                 _contextToken = null;
+                ClearStickyHover(state);
                 Invalidate();
                 return scroll;
             }
@@ -596,21 +605,13 @@ namespace Cortex.Modules.Editor
             state.Editor.RequestedDefinitionTokenText = token.RawText.Trim();
         }
 
-        private void DrawTooltip(Vector2 localMouse, CodeViewToken hoveredToken, CortexShellState state, Vector2 viewportSize)
+        private void DrawTooltip(DocumentSession session, Vector2 localMouse, CodeViewToken hoveredToken, CortexShellState state, Vector2 viewportSize, bool hasMouse)
         {
-            if (hoveredToken == null || state == null || state.Editor == null)
+            LanguageServiceHoverResponse response;
+            string hoverKey;
+            if (!TryResolveVisibleHover(session, hoveredToken, state, hasMouse, localMouse, out response, out hoverKey))
             {
-                return;
-            }
-
-            if (!string.Equals(state.Editor.ActiveHoverKey, hoveredToken.Key, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            var response = state.Editor.ActiveHoverResponse;
-            if (response == null || !response.Success)
-            {
+                ClearVisibleHover(state);
                 return;
             }
 
@@ -619,15 +620,149 @@ namespace Cortex.Modules.Editor
             var tooltipText = string.IsNullOrEmpty(docs) ? label : label + "\n\n" + docs;
             if (string.IsNullOrEmpty(tooltipText))
             {
+                ClearStickyHover(state);
                 return;
             }
 
             var size = _tooltipStyle.CalcHeight(new GUIContent(tooltipText), TooltipWidth - 18f);
-            var tooltipRect = new Rect(localMouse.x + 18f, localMouse.y + 18f, TooltipWidth, Mathf.Min(220f, size + 14f));
-            tooltipRect.x = Mathf.Min(tooltipRect.x, Mathf.Max(8f, viewportSize.x - tooltipRect.width - 12f));
-            tooltipRect.y = Mathf.Min(tooltipRect.y, Mathf.Max(8f, viewportSize.y - tooltipRect.height - 12f));
+            var tooltipRect = BuildTooltipRect(localMouse, hoveredToken, hoverKey, viewportSize, Mathf.Min(220f, size + 14f));
+            _stickyHoverTooltipRect = tooltipRect;
+            SetVisibleHover(state, hoverKey, response);
             GUI.Box(tooltipRect, GUIContent.none, _tooltipStyle);
             GUI.Label(new Rect(tooltipRect.x + 8f, tooltipRect.y + 7f, tooltipRect.width - 16f, tooltipRect.height - 14f), tooltipText, _tooltipStyle);
+        }
+
+        private bool TryResolveVisibleHover(
+            DocumentSession session,
+            CodeViewToken hoveredToken,
+            CortexShellState state,
+            bool hasMouse,
+            Vector2 localMouse,
+            out LanguageServiceHoverResponse response,
+            out string hoverKey)
+        {
+            response = null;
+            hoverKey = string.Empty;
+            if (state == null || state.Editor == null)
+            {
+                return false;
+            }
+
+            response = state.Editor.ActiveHoverResponse;
+            hoverKey = state.Editor.ActiveHoverKey ?? string.Empty;
+            if (response == null || !response.Success || string.IsNullOrEmpty(hoverKey))
+            {
+                ClearStickyHover(state);
+                return false;
+            }
+
+            var documentPath = session != null ? session.FilePath ?? string.Empty : string.Empty;
+            if (hoveredToken != null && string.Equals(hoverKey, hoveredToken.Key, StringComparison.Ordinal))
+            {
+                _stickyHoverKey = hoverKey;
+                _stickyHoverDocumentPath = documentPath;
+                _stickyHoverAnchorRect = hoveredToken.LastRect;
+                RefreshStickyHoverKeepAlive();
+                return true;
+            }
+
+            if (hoveredToken != null)
+            {
+                ClearStickyHover(state);
+                return false;
+            }
+
+            if (!string.Equals(_stickyHoverKey, hoverKey, StringComparison.Ordinal) ||
+                !string.Equals(_stickyHoverDocumentPath, documentPath, StringComparison.OrdinalIgnoreCase))
+            {
+                ClearStickyHover(state);
+                return false;
+            }
+
+            if (hasMouse && IsPointerWithinHoverSurface(localMouse))
+            {
+                RefreshStickyHoverKeepAlive();
+                return true;
+            }
+
+            if (DateTime.UtcNow <= _stickyHoverKeepAliveUtc)
+            {
+                return true;
+            }
+
+            ClearStickyHover(state);
+            return false;
+        }
+
+        private Rect BuildTooltipRect(Vector2 localMouse, CodeViewToken hoveredToken, string hoverKey, Vector2 viewportSize, float height)
+        {
+            if (hoveredToken != null && string.Equals(hoverKey, hoveredToken.Key, StringComparison.Ordinal))
+            {
+                var tooltipRect = new Rect(localMouse.x + 18f, localMouse.y + 18f, TooltipWidth, height);
+                tooltipRect.x = Mathf.Min(tooltipRect.x, Mathf.Max(8f, viewportSize.x - tooltipRect.width - 12f));
+                tooltipRect.y = Mathf.Min(tooltipRect.y, Mathf.Max(8f, viewportSize.y - tooltipRect.height - 12f));
+                return tooltipRect;
+            }
+
+            if (_stickyHoverTooltipRect.width > 0f && _stickyHoverTooltipRect.height > 0f)
+            {
+                var tooltipRect = _stickyHoverTooltipRect;
+                tooltipRect.width = TooltipWidth;
+                tooltipRect.height = height;
+                tooltipRect.x = Mathf.Min(tooltipRect.x, Mathf.Max(8f, viewportSize.x - tooltipRect.width - 12f));
+                tooltipRect.y = Mathf.Min(tooltipRect.y, Mathf.Max(8f, viewportSize.y - tooltipRect.height - 12f));
+                return tooltipRect;
+            }
+
+            var fallbackRect = new Rect(localMouse.x + 18f, localMouse.y + 18f, TooltipWidth, height);
+            fallbackRect.x = Mathf.Min(fallbackRect.x, Mathf.Max(8f, viewportSize.x - fallbackRect.width - 12f));
+            fallbackRect.y = Mathf.Min(fallbackRect.y, Mathf.Max(8f, viewportSize.y - fallbackRect.height - 12f));
+            return fallbackRect;
+        }
+
+        private bool IsPointerWithinHoverSurface(Vector2 localMouse)
+        {
+            return (_stickyHoverAnchorRect.width > 0f && _stickyHoverAnchorRect.height > 0f && _stickyHoverAnchorRect.Contains(localMouse)) ||
+                (_stickyHoverTooltipRect.width > 0f && _stickyHoverTooltipRect.height > 0f && _stickyHoverTooltipRect.Contains(localMouse));
+        }
+
+        private void RefreshStickyHoverKeepAlive()
+        {
+            _stickyHoverKeepAliveUtc = DateTime.UtcNow.AddMilliseconds(StickyHoverGraceMs);
+        }
+
+        private void ClearStickyHover(CortexShellState state)
+        {
+            _stickyHoverKey = string.Empty;
+            _stickyHoverDocumentPath = string.Empty;
+            _stickyHoverAnchorRect = new Rect(0f, 0f, 0f, 0f);
+            _stickyHoverTooltipRect = new Rect(0f, 0f, 0f, 0f);
+            _stickyHoverKeepAliveUtc = DateTime.MinValue;
+            ClearVisibleHover(state);
+        }
+
+        private static void SetVisibleHover(CortexShellState state, string hoverKey, LanguageServiceHoverResponse response)
+        {
+            if (state == null || state.Editor == null)
+            {
+                return;
+            }
+
+            state.Editor.VisibleHoverKey = hoverKey ?? string.Empty;
+            state.Editor.VisibleHoverDefinitionDocumentPath = response != null
+                ? response.DefinitionDocumentPath ?? string.Empty
+                : string.Empty;
+        }
+
+        private static void ClearVisibleHover(CortexShellState state)
+        {
+            if (state == null || state.Editor == null)
+            {
+                return;
+            }
+
+            state.Editor.VisibleHoverKey = string.Empty;
+            state.Editor.VisibleHoverDefinitionDocumentPath = string.Empty;
         }
 
         private void DrawContextMenu(CortexShellState state, DocumentSession session, Event current, Vector2 localMouse, Vector2 viewportSize)
@@ -938,12 +1073,13 @@ namespace Cortex.Modules.Editor
 
         private static bool CanHoverToken(CodeViewToken token)
         {
-            return IsInteractiveToken(token) && IsSymbolClassification(token.Classification);
+            return IsInteractiveToken(token) &&
+                IsHoverClassification(token.Classification, token.RawText);
         }
 
         private static bool CanNavigateToDefinition(CodeViewToken token)
         {
-            if (!IsInteractiveToken(token) || !IsSymbolClassification(token.Classification))
+            if (!IsInteractiveToken(token) || !IsDefinitionClassification(token.Classification))
             {
                 return false;
             }
@@ -953,9 +1089,53 @@ namespace Cortex.Modules.Editor
                 key.IndexOf("parameter", StringComparison.OrdinalIgnoreCase) < 0;
         }
 
-        private static bool IsSymbolClassification(string classification)
+        private static bool IsHoverClassification(string classification, string rawText)
         {
-            var key = (classification ?? string.Empty).Trim().ToLowerInvariant();
+            var key = NormalizeClassification(classification);
+            if (string.IsNullOrEmpty(key))
+            {
+                return false;
+            }
+
+            if (key.Contains("operator") ||
+                key.Contains("punctuation") ||
+                key.Contains("comment") ||
+                key.Contains("xml") ||
+                key.Contains("preprocessor") ||
+                key.Contains("string") ||
+                key.Contains("char") ||
+                key.Contains("numeric") ||
+                key.Contains("number"))
+            {
+                return false;
+            }
+
+            if (key.Contains("keyword"))
+            {
+                return IsPredefinedTypeKeyword(rawText);
+            }
+
+            return key.Contains("class") ||
+                key.Contains("struct") ||
+                key.Contains("interface") ||
+                key.Contains("enum") ||
+                key.Contains("delegate") ||
+                key.Contains("record") ||
+                key.Contains("namespace") ||
+                key.Contains("method") ||
+                key.Contains("property") ||
+                key.Contains("event") ||
+                key.Contains("field") ||
+                key.Contains("constant") ||
+                key.Contains("enum member") ||
+                key.Contains("typeparameter") ||
+                key.Contains("local") ||
+                key.Contains("parameter");
+        }
+
+        private static bool IsDefinitionClassification(string classification)
+        {
+            var key = NormalizeClassification(classification);
             if (string.IsNullOrEmpty(key))
             {
                 return false;
@@ -991,9 +1171,49 @@ namespace Cortex.Modules.Editor
                 key.Contains("typeparameter");
         }
 
+        private static string NormalizeClassification(string classification)
+        {
+            return (classification ?? string.Empty).Trim().ToLowerInvariant();
+        }
+
+        private static bool IsPredefinedTypeKeyword(string rawText)
+        {
+            var token = (rawText ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(token))
+            {
+                return false;
+            }
+
+            switch (token)
+            {
+                case "bool":
+                case "byte":
+                case "sbyte":
+                case "short":
+                case "ushort":
+                case "int":
+                case "uint":
+                case "long":
+                case "ulong":
+                case "nint":
+                case "nuint":
+                case "float":
+                case "double":
+                case "decimal":
+                case "char":
+                case "string":
+                case "object":
+                case "dynamic":
+                case "void":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         private static Color GetClassificationColor(string classification)
         {
-            var key = (classification ?? string.Empty).Trim().ToLowerInvariant();
+            var key = NormalizeClassification(classification);
             if (key.Contains("comment"))
             {
                 return CortexIdeLayout.ParseColor("#6A9955", CortexIdeLayout.GetMutedTextColor());
