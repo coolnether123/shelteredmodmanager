@@ -116,6 +116,9 @@ namespace Cortex.Core.Services
 
             try
             {
+                var xmlDocument = XDocument.Load(xmlPath);
+                var xmlTextBuilder = new StringBuilder();
+
                 if (request.EntityKind == DecompilerEntityKind.Type)
                 {
                     var type = ResolveType(request.AssemblyPath, request.MetadataToken);
@@ -125,10 +128,8 @@ namespace Cortex.Core.Services
                     }
 
                     response.ResolvedMemberDisplayName = type.FullName;
-                    var document = XDocument.Load(xmlPath);
-                    var builder = new StringBuilder();
-                    AppendMemberDocumentation(document, BuildTypeMemberName(type), "Type", builder);
-                    response.XmlDocumentationText = builder.ToString().Trim();
+                    AppendMemberDocumentation(xmlDocument, BuildTypeMemberName(type), "Type", xmlTextBuilder);
+                    response.XmlDocumentationText = xmlTextBuilder.ToString().Trim();
                     return;
                 }
 
@@ -139,13 +140,11 @@ namespace Cortex.Core.Services
                 }
 
                 response.ResolvedMemberDisplayName = BuildMethodDisplayName(method);
-                var document = XDocument.Load(xmlPath);
-                var builder = new StringBuilder();
 
-                AppendMemberDocumentation(document, BuildTypeMemberName(method.DeclaringType), "Type", builder);
-                AppendMemberDocumentation(document, BuildMethodMemberName(method), "Method", builder);
+                AppendMemberDocumentation(xmlDocument, BuildTypeMemberName(method.DeclaringType), "Type", xmlTextBuilder);
+                AppendMemberDocumentation(xmlDocument, BuildMethodMemberName(method), "Method", xmlTextBuilder);
 
-                response.XmlDocumentationText = builder.ToString().Trim();
+                response.XmlDocumentationText = xmlTextBuilder.ToString().Trim();
             }
             catch
             {

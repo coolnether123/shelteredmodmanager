@@ -86,6 +86,7 @@
     <Compile Include="Core\ModRegistry.cs" />
     <Compile Include="Core\ModLog.cs" />
     <Compile Include="Core\MMLog.cs" />
+    <Compile Include="Core\MMLogRuntimeIntegration.cs" />
     <Compile Include="Core\SaveRuntimeState.cs" />
     <Compile Include="Core\SaveExitTracer.cs" />
     <Compile Include="Core\LoggerExtensions.cs" />

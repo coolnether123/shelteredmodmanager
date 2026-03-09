@@ -523,11 +523,8 @@ namespace ModAPI.Core
                     cortexPath = Path.Combine(modApiDir, "Cortex.dll");
                 }
 
-                MMLog.WriteDebug("AttachCortexShell: probing Cortex at '" + cortexPath + "'.");
-
                 if (!File.Exists(cortexPath))
                 {
-                    MMLog.WriteDebug("Cortex.dll not found. Cortex IDE shell disabled.");
                     return;
                 }
 
@@ -535,18 +532,13 @@ namespace ModAPI.Core
                 var shellType = cortexAssembly.GetType("Cortex.CortexShell", false);
                 if (shellType == null || !typeof(MonoBehaviour).IsAssignableFrom(shellType))
                 {
-                    MMLog.WriteWarning("Cortex shell type was not found in Cortex.dll.");
+                    MMLog.WarnOnce("PluginManager.AttachCortexShell.MissingShellType", "Cortex shell type was not found in Cortex.dll.");
                     return;
                 }
 
                 if (_loaderRoot.GetComponent(shellType) == null)
                 {
                     _loaderRoot.AddComponent(shellType);
-                    MMLog.WriteInfo("Cortex IDE shell attached.");
-                }
-                else
-                {
-                    MMLog.WriteDebug("Cortex IDE shell already attached.");
                 }
             }
             catch (Exception ex)

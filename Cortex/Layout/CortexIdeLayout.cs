@@ -1,4 +1,5 @@
 using System;
+using Cortex.Core.Models;
 using UnityEngine;
 
 namespace Cortex
@@ -48,13 +49,55 @@ namespace Cortex
             GUILayout.EndVertical();
         }
 
+        public static string GetHostDisplayName(WorkbenchHostLocation hostLocation)
+        {
+            switch (hostLocation)
+            {
+                case WorkbenchHostLocation.PrimarySideHost:
+                    return "Side";
+                case WorkbenchHostLocation.DocumentHost:
+                    return "Editors";
+                case WorkbenchHostLocation.PanelHost:
+                    return "Panels";
+                case WorkbenchHostLocation.SecondarySideHost:
+                    return "Aux";
+                case WorkbenchHostLocation.ToolRail:
+                    return "Rail";
+                case WorkbenchHostLocation.StatusStrip:
+                    return "Status";
+                case WorkbenchHostLocation.CommandSurface:
+                    return "Commands";
+                default:
+                    return "Host";
+            }
+        }
+
+        public static Color GetHostAccentColor(WorkbenchHostLocation hostLocation)
+        {
+            switch (hostLocation)
+            {
+                case WorkbenchHostLocation.PrimarySideHost:
+                    return new Color(0.35f, 0.74f, 1f, 1f);
+                case WorkbenchHostLocation.DocumentHost:
+                    return new Color(0.44f, 0.91f, 0.66f, 1f);
+                case WorkbenchHostLocation.PanelHost:
+                    return new Color(1f, 0.77f, 0.34f, 1f);
+                case WorkbenchHostLocation.SecondarySideHost:
+                    return new Color(0.83f, 0.63f, 1f, 1f);
+                case WorkbenchHostLocation.CommandSurface:
+                    return new Color(1f, 0.56f, 0.56f, 1f);
+                default:
+                    return new Color(0.78f, 0.82f, 0.9f, 1f);
+            }
+        }
+
         private static void EnsureStyles()
         {
             if (_groupStyle == null)
             {
                 _groupBackground = MakeTex(new Color(0.08f, 0.08f, 0.1f, 0.94f));
                 _groupStyle = new GUIStyle(GUI.skin.box);
-                _groupStyle.normal.background = _groupBackground;
+                GuiStyleUtil.ApplyBackgroundToAllStates(_groupStyle, _groupBackground);
                 _groupStyle.padding = new RectOffset(10, 10, 10, 10);
                 _groupStyle.margin = new RectOffset(4, 4, 4, 4);
             }
@@ -63,8 +106,8 @@ namespace Cortex
             {
                 _headerBackground = MakeTex(new Color(0.16f, 0.17f, 0.2f, 0.98f));
                 _headerStyle = new GUIStyle(GUI.skin.label);
-                _headerStyle.normal.background = _headerBackground;
-                _headerStyle.normal.textColor = new Color(0.95f, 0.95f, 0.95f, 1f);
+                GuiStyleUtil.ApplyBackgroundToAllStates(_headerStyle, _headerBackground);
+                GuiStyleUtil.ApplyTextColorToAllStates(_headerStyle, new Color(0.95f, 0.95f, 0.95f, 1f));
                 _headerStyle.fontStyle = FontStyle.Bold;
                 _headerStyle.padding = new RectOffset(8, 8, 4, 4);
                 _headerStyle.margin = new RectOffset(0, 0, 0, 8);

@@ -42,11 +42,16 @@ namespace ModAPI.Core
 
         public sealed class LogEntry
         {
+            public long Sequence;
+            public string EntryId;
             public DateTime Timestamp;
             public LogLevel Level;
             public LogCategory Category;
             public string Source;
             public string Message;
+            public int ThreadId;
+            public int UnityFrame;
+            public int RepeatCount;
             public List<RuntimeStackFrameInfo> StackFrames;
         }
 
@@ -87,6 +92,9 @@ namespace ModAPI.Core
         private static readonly object _cacheLock = new object();
         private static readonly Queue<LogEntry> _recentEntries = new Queue<LogEntry>();
         private static readonly int _maxRecentEntries = 500;
+        private static readonly List<IMMLogRuntimeSink> _runtimeSinks = new List<IMMLogRuntimeSink>();
+        private static MMLogRuntimeOptions _runtimeOptions = MMLogRuntimeOptions.Disabled();
+        private static long _sequenceCounter = 0;
 
         static MMLog()
         {
@@ -395,17 +403,59 @@ namespace ModAPI.Core
 
         public static void Flush()
         {
+            LogEntry emittedEntry = null;
             lock (_lock)
             {
-                FlushRepeat_NoLock(DateTime.UtcNow);
+                emittedEntry = FlushRepeat_NoLock(DateTime.UtcNow);
                 CheckLogRotation();
             }
+
+            PublishRuntimeSinkEntry(emittedEntry);
         }
 
         public static void SetLogLevel(LogLevel level)
         {
             _minLevel = level;
             WriteInternal(LogLevel.Info, LogCategory.General, "Logger", $"Log level changed to: {level}");
+        }
+
+        public static void ConfigureRuntimeIntegration(MMLogRuntimeOptions options)
+        {
+            lock (_lock)
+            {
+                _runtimeOptions = options ?? MMLogRuntimeOptions.Disabled();
+            }
+        }
+
+        public static void RegisterRuntimeSink(IMMLogRuntimeSink sink)
+        {
+            if (sink == null)
+            {
+                return;
+            }
+
+            lock (_lock)
+            {
+                if (_runtimeSinks.Contains(sink))
+                {
+                    return;
+                }
+
+                _runtimeSinks.Add(sink);
+            }
+        }
+
+        public static void UnregisterRuntimeSink(IMMLogRuntimeSink sink)
+        {
+            if (sink == null)
+            {
+                return;
+            }
+
+            lock (_lock)
+            {
+                _runtimeSinks.Remove(sink);
+            }
         }
 
         public static List<LogEntry> GetRecentEntries(LogLevel minLevel, int maxCount)
@@ -418,15 +468,7 @@ namespace ModAPI.Core
                     .Reverse()
                     .Take(maxCount)
                     .Reverse()
-                    .Select(e => new LogEntry
-                    {
-                        Timestamp = e.Timestamp,
-                        Level = e.Level,
-                        Category = e.Category,
-                        Source = e.Source,
-                        Message = e.Message,
-                        StackFrames = CloneRuntimeFrames(e.StackFrames)
-                    })
+                    .Select(CloneLogEntry)
                     .ToList();
             }
         }
@@ -436,8 +478,15 @@ namespace ModAPI.Core
             if (level < _minLevel) return;
             if (message == null) message = string.Empty;
 
+            if (stackFrames == null && ShouldCaptureRuntimeFrames(level))
+            {
+                stackFrames = CaptureCurrentRuntimeFrames(3);
+            }
+
             var now = DateTime.Now;
             var comparableMessage = FormatLogMessage(level, category, source, message, now, false);
+            LogEntry repeatedEntry = null;
+            LogEntry emittedEntry = null;
 
             lock (_lock)
             {
@@ -454,19 +503,19 @@ namespace ModAPI.Core
                     _repeatCount++;
                     if ((now - _repeatStartTime) >= _repeatFlushInterval)
                     {
-                        FlushRepeat_NoLock(now);
+                        repeatedEntry = FlushRepeat_NoLock(now);
                     }
-                    return;
+                    goto PublishAndExit;
                 }
 
                 if (_repeatCount > 0)
                 {
-                    FlushRepeat_NoLock(now);
+                    repeatedEntry = FlushRepeat_NoLock(now);
                 }
 
                 var formattedMessage = FormatLogMessage(level, category, source, message, now);
                 WriteToFile(formattedMessage);
-                PushRecentEntry_NoLock(now, level, category, source, message, stackFrames);
+                emittedEntry = PushRecentEntry_NoLock(now, level, category, source, message, stackFrames, 1);
 
                 TrackModLogCount(source);
 
@@ -474,6 +523,10 @@ namespace ModAPI.Core
                 _repeatCount = 0;
                 _lastWriteUtc = now;
             }
+
+        PublishAndExit:
+            PublishRuntimeSinkEntry(repeatedEntry);
+            PublishRuntimeSinkEntry(emittedEntry);
         }
 
         private static string FormatLogMessage(LogLevel level, LogCategory category, string source, string message, DateTime timestamp, bool includeTimestamp = true)
@@ -500,9 +553,9 @@ namespace ModAPI.Core
             }
         }
 
-        private static void FlushRepeat_NoLock(DateTime nowUtc)
+        private static LogEntry FlushRepeat_NoLock(DateTime nowUtc)
         {
-            if (_repeatCount <= 0) return;
+            if (_repeatCount <= 0) return null;
 
             var startTime = _repeatStartTime.ToLocalTime().ToString("HH:mm:ss.fff");
             var endTime = nowUtc.ToLocalTime().ToString("HH:mm:ss.fff");
@@ -511,27 +564,37 @@ namespace ModAPI.Core
                 ($"(Previous message repeated {_repeatCount} times from {startTime} to {endTime})"), nowUtc, true);
 
             WriteToFile(summary);
-            PushRecentEntry_NoLock(nowUtc, LogLevel.Info, LogCategory.General, "Logger",
-                $"(Previous message repeated {_repeatCount} times from {startTime} to {endTime})");
+            var entry = PushRecentEntry_NoLock(nowUtc, LogLevel.Info, LogCategory.General, "Logger",
+                $"(Previous message repeated {_repeatCount} times from {startTime} to {endTime})", null, _repeatCount);
             _repeatCount = 0;
             _lastWriteUtc = nowUtc;
+            return entry;
         }
 
-        private static void PushRecentEntry_NoLock(DateTime timestamp, LogLevel level, LogCategory category, string source, string message, List<RuntimeStackFrameInfo> stackFrames = null)
+        private static LogEntry PushRecentEntry_NoLock(DateTime timestamp, LogLevel level, LogCategory category, string source, string message, List<RuntimeStackFrameInfo> stackFrames, int repeatCount)
         {
-            _recentEntries.Enqueue(new LogEntry
+            var sequence = ++_sequenceCounter;
+            var entry = new LogEntry
             {
+                Sequence = sequence,
+                EntryId = "log-" + sequence.ToString(),
                 Timestamp = timestamp,
                 Level = level,
                 Category = category,
                 Source = source ?? "Unknown",
                 Message = message ?? string.Empty,
+                ThreadId = Thread.CurrentThread.ManagedThreadId,
+                UnityFrame = SafeGetUnityFrameCount(),
+                RepeatCount = repeatCount <= 0 ? 1 : repeatCount,
                 StackFrames = CloneRuntimeFrames(stackFrames)
-            });
+            };
+            _recentEntries.Enqueue(entry);
             while (_recentEntries.Count > _maxRecentEntries)
             {
                 _recentEntries.Dequeue();
             }
+
+            return entry;
         }
 
         private static void CheckLogRotation()
@@ -856,6 +919,147 @@ namespace ModAPI.Core
             }
 
             return clones;
+        }
+
+        private static LogEntry CloneLogEntry(LogEntry entry)
+        {
+            if (entry == null)
+            {
+                return null;
+            }
+
+            return new LogEntry
+            {
+                Sequence = entry.Sequence,
+                EntryId = entry.EntryId,
+                Timestamp = entry.Timestamp,
+                Level = entry.Level,
+                Category = entry.Category,
+                Source = entry.Source,
+                Message = entry.Message,
+                ThreadId = entry.ThreadId,
+                UnityFrame = entry.UnityFrame,
+                RepeatCount = entry.RepeatCount,
+                StackFrames = CloneRuntimeFrames(entry.StackFrames)
+            };
+        }
+
+        private static bool ShouldCaptureRuntimeFrames(LogLevel level)
+        {
+            var options = _runtimeOptions;
+            if (options == null)
+            {
+                return false;
+            }
+
+            switch (level)
+            {
+                case LogLevel.Warning:
+                    return options.CaptureWarningStackFrames;
+                case LogLevel.Error:
+                    return options.CaptureErrorStackFrames;
+                case LogLevel.Fatal:
+                    return options.CaptureFatalStackFrames;
+                default:
+                    return false;
+            }
+        }
+
+        private static List<RuntimeStackFrameInfo> CaptureCurrentRuntimeFrames(int skipFrameCount)
+        {
+            try
+            {
+                var maxCapturedFrames = _runtimeOptions != null && _runtimeOptions.MaxCapturedFrames > 0
+                    ? _runtimeOptions.MaxCapturedFrames
+                    : 0;
+                if (maxCapturedFrames <= 0)
+                {
+                    return null;
+                }
+
+                var trace = new StackTrace(skipFrameCount, true);
+                var frames = trace.GetFrames();
+                if (frames == null || frames.Length == 0)
+                {
+                    return null;
+                }
+
+                var results = new List<RuntimeStackFrameInfo>(Math.Min(frames.Length, maxCapturedFrames));
+                for (var i = 0; i < frames.Length && results.Count < maxCapturedFrames; i++)
+                {
+                    var runtimeFrame = BuildRuntimeFrame(frames[i]);
+                    if (runtimeFrame == null || IsInternalRuntimeFrame(runtimeFrame))
+                    {
+                        continue;
+                    }
+
+                    results.Add(runtimeFrame);
+                }
+
+                return results.Count > 0 ? results : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool IsInternalRuntimeFrame(RuntimeStackFrameInfo frame)
+        {
+            if (frame == null)
+            {
+                return true;
+            }
+
+            var typeName = frame.TypeName ?? string.Empty;
+            if (typeName == typeof(MMLog).FullName || typeName == typeof(ModLog).FullName || typeName == typeof(PrefixedLogger).FullName)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static int SafeGetUnityFrameCount()
+        {
+            try
+            {
+                return Time.frameCount;
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+
+        private static void PublishRuntimeSinkEntry(LogEntry entry)
+        {
+            if (entry == null)
+            {
+                return;
+            }
+
+            List<IMMLogRuntimeSink> sinks = null;
+            lock (_lock)
+            {
+                if (_runtimeSinks.Count == 0)
+                {
+                    return;
+                }
+
+                sinks = new List<IMMLogRuntimeSink>(_runtimeSinks);
+            }
+
+            for (var i = 0; i < sinks.Count; i++)
+            {
+                try
+                {
+                    sinks[i].OnLogEntry(CloneLogEntry(entry));
+                }
+                catch
+                {
+                }
+            }
         }
 
         private static int SafeGetMetadataToken(MethodBase method)
