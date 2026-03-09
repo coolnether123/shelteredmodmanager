@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
-using System.Xml.Linq;
+using System.Xml;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 
@@ -116,7 +116,8 @@ namespace Cortex.Core.Services
 
             try
             {
-                var xmlDocument = XDocument.Load(xmlPath);
+                var xmlDocument = new XmlDocument();
+                xmlDocument.Load(xmlPath);
                 var xmlTextBuilder = new StringBuilder();
 
                 if (request.EntityKind == DecompilerEntityKind.Type)
@@ -211,14 +212,16 @@ namespace Cortex.Core.Services
             }
         }
 
-        private static void AppendMemberDocumentation(XDocument document, string memberName, string label, StringBuilder builder)
+        private static void AppendMemberDocumentation(XmlDocument document, string memberName, string label, StringBuilder builder)
         {
             if (document == null || string.IsNullOrEmpty(memberName) || builder == null)
             {
                 return;
             }
 
-            var members = document.Root != null ? document.Root.Element("members") : null;
+            var members = document.DocumentElement != null
+                ? document.DocumentElement.SelectSingleNode("members") as XmlElement
+                : null;
             if (members == null)
             {
                 return;
@@ -240,11 +243,22 @@ namespace Cortex.Core.Services
             AppendElementValue(builder, member, "remarks", "Remarks");
             AppendElementValue(builder, member, "returns", "Returns");
 
-            var paramElements = member.Elements("param");
-            foreach (var param in paramElements)
+            var paramElements = member.SelectNodes("param");
+            if (paramElements == null)
             {
-                var name = param.Attribute("name") != null ? param.Attribute("name").Value : string.Empty;
-                var text = NormalizeXmlText(param.Value);
+                return;
+            }
+
+            for (var i = 0; i < paramElements.Count; i++)
+            {
+                var param = paramElements[i] as XmlElement;
+                if (param == null)
+                {
+                    continue;
+                }
+
+                var name = param.HasAttribute("name") ? param.GetAttribute("name") : string.Empty;
+                var text = NormalizeXmlText(param.InnerText);
                 if (!string.IsNullOrEmpty(text))
                 {
                     builder.AppendLine("Param " + name + ": " + text);
@@ -252,12 +266,23 @@ namespace Cortex.Core.Services
             }
         }
 
-        private static XElement FindMemberElement(XElement members, string memberName)
+        private static XmlElement FindMemberElement(XmlElement members, string memberName)
         {
-            var memberElements = members.Elements("member");
-            foreach (var member in memberElements)
+            var memberElements = members.SelectNodes("member");
+            if (memberElements == null)
             {
-                var name = member.Attribute("name") != null ? member.Attribute("name").Value : string.Empty;
+                return null;
+            }
+
+            for (var i = 0; i < memberElements.Count; i++)
+            {
+                var member = memberElements[i] as XmlElement;
+                if (member == null)
+                {
+                    continue;
+                }
+
+                var name = member.HasAttribute("name") ? member.GetAttribute("name") : string.Empty;
                 if (string.Equals(name, memberName, StringComparison.Ordinal))
                 {
                     return member;
@@ -267,15 +292,15 @@ namespace Cortex.Core.Services
             return null;
         }
 
-        private static void AppendElementValue(StringBuilder builder, XElement member, string elementName, string label)
+        private static void AppendElementValue(StringBuilder builder, XmlElement member, string elementName, string label)
         {
-            var element = member.Element(elementName);
+            var element = member != null ? member.SelectSingleNode(elementName) as XmlElement : null;
             if (element == null)
             {
                 return;
             }
 
-            var text = NormalizeXmlText(element.Value);
+            var text = NormalizeXmlText(element.InnerText);
             if (!string.IsNullOrEmpty(text))
             {
                 builder.AppendLine(label + ": " + text);

@@ -14,7 +14,10 @@ namespace Cortex.Core.Services
             session.Text = File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
             session.OriginalTextSnapshot = session.Text;
             session.IsDirty = false;
+            session.TextVersion = 1;
+            session.LastLanguageAnalysisVersion = 0;
             session.LastKnownWriteUtc = File.Exists(filePath) ? File.GetLastWriteTimeUtc(filePath) : DateTime.MinValue;
+            session.LastTextMutationUtc = DateTime.UtcNow;
             session.HasExternalChanges = false;
             return session;
         }
@@ -47,7 +50,9 @@ namespace Cortex.Core.Services
             session.Text = desiredText;
             session.OriginalTextSnapshot = desiredText;
             session.IsDirty = false;
+            session.TextVersion++;
             session.HasExternalChanges = false;
+            session.LastTextMutationUtc = DateTime.UtcNow;
             return true;
         }
 
@@ -62,7 +67,9 @@ namespace Cortex.Core.Services
             session.OriginalTextSnapshot = session.Text;
             session.LastKnownWriteUtc = File.GetLastWriteTimeUtc(session.FilePath);
             session.IsDirty = false;
+            session.TextVersion++;
             session.HasExternalChanges = false;
+            session.LastTextMutationUtc = DateTime.UtcNow;
             return true;
         }
 

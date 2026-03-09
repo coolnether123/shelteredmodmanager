@@ -77,6 +77,8 @@ namespace Cortex.Roslyn.Worker
             _sourceRoots = payload.SourceRoots ?? new string[0];
             _projectFilePaths = payload.ProjectFilePaths ?? new string[0];
             _solutionFilePaths = payload.SolutionFilePaths ?? new string[0];
+            _documentContextCache.Clear();
+            WarmProjectCache(_projectFilePaths);
 
             return BuildSuccessEnvelope(request, new LanguageServiceInitializeResponse
             {

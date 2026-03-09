@@ -68,6 +68,12 @@ namespace Cortex.Core.Abstractions
         bool IsEnabled { get; }
         bool IsRunning { get; }
         string LastError { get; }
+        string QueueInitialize(LanguageServiceInitializeRequest request);
+        string QueueStatus();
+        string QueueAnalyzeDocument(LanguageServiceDocumentRequest request);
+        string QueueHover(LanguageServiceHoverRequest request);
+        string QueueGoToDefinition(LanguageServiceDefinitionRequest request);
+        bool TryDequeueResponse(out LanguageServiceEnvelope envelope);
         LanguageServiceInitializeResponse Initialize(LanguageServiceInitializeRequest request);
         LanguageServiceStatusResponse GetStatus();
         LanguageServiceAnalysisResponse AnalyzeDocument(LanguageServiceDocumentRequest request);
