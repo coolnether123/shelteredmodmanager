@@ -48,6 +48,7 @@
     <Compile Include="Layout\CortexIdeLayout.cs" />
     <Compile Include="Modules\Build\BuildModule.cs" />
     <Compile Include="Modules\Editor\EditorModule.cs" />
+    <Compile Include="Modules\FileExplorer\FileExplorerModule.cs" />
     <Compile Include="Modules\Logs\LogsModule.cs" />
     <Compile Include="Modules\Projects\ProjectsModule.cs" />
     <Compile Include="Modules\Reference\ReferenceModule.cs" />

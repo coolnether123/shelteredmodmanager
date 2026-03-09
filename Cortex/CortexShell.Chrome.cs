@@ -10,50 +10,39 @@ namespace Cortex
 {
     public sealed partial class CortexShell
     {
+        // ── Active open menu tracking (simple one-at-a-time popup model) ────────────────
+        private string _openMenuGroup = string.Empty;
+
         private void DrawHeader(WorkbenchPresentationSnapshot snapshot)
         {
-            GUILayout.BeginVertical(_sectionStyle);
-            DrawMenuBar();
-            GUILayout.Space(2f);
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Cortex", _titleStyle, GUILayout.Width(72f));
-            GUILayout.Label(
-                _state.SelectedProject != null
-                    ? "Solution: " + _state.SelectedProject.GetDisplayName()
-                    : "Solution: ShelteredModManager",
-                _captionStyle);
+            GUILayout.BeginHorizontal(_sectionStyle, GUILayout.Height(26f));
+
+            // ── Cortex branding (small, to save space) ──────────────────────────────────
+            GUILayout.Label("Cortex", _titleStyle, GUILayout.Width(56f));
+            GUILayout.Space(6f);
+
+            // ── Menu bar (functional drop-down style) ───────────────────────────────────
+            DrawMenuBar(snapshot);
+
             GUILayout.FlexibleSpace();
+
+            // ── Solution title (compact) ────────────────────────────────────────────────
+            if (_state.SelectedProject != null)
+            {
+                GUILayout.Label(_state.SelectedProject.GetDisplayName(), _captionStyle, GUILayout.ExpandWidth(false));
+                GUILayout.Space(12f);
+            }
+
+            // ── Window chrome buttons ────────────────────────────────────────────────────
             var actions = new List<CortexWindowAction>();
             actions.Add(BuildGlyphWindowAction(
-                "shell.collapse",
-                "_",
-                "Minimize Cortex",
+                "shell.collapse", "_", "Minimize",
                 delegate
                 {
                     _windowRect = CortexWindowChromeController.ToggleCollapsed(_state.Chrome.Main, _windowRect, 126f, 28f);
                 }));
-            actions.Add(new CortexWindowAction
-            {
-                ActionId = "shell.logs",
-                Label = _windowRect.width < 1220f ? "Logs" : (_state.Logs.ShowDetachedWindow ? "Hide Logs" : "Show Logs"),
-                ToolTip = _state.Logs.ShowDetachedWindow ? "Hide detached logs window" : "Show detached logs window",
-                Width = _windowRect.width < 1220f ? 64f : 104f,
-                Height = 22f,
-                Execute = delegate { ExecuteCommand("cortex.logs.toggleWindow", null); }
-            });
-            actions.Add(new CortexWindowAction
-            {
-                ActionId = "shell.fit",
-                Label = _windowRect.width < 1220f ? "Fit" : "Fit Screen",
-                ToolTip = "Fit Cortex to the current game view",
-                Width = _windowRect.width < 1220f ? 48f : 84f,
-                Height = 22f,
-                Execute = delegate { ExecuteCommand("cortex.shell.fitWindow", null); }
-            });
             actions.Add(BuildGlyphWindowAction(
-                "shell.close",
-                "X",
-                "Close Cortex",
+                "shell.close", "X", "Close Cortex",
                 delegate
                 {
                     PersistWorkbenchSession();
@@ -62,14 +51,6 @@ namespace Cortex
                 }));
             CortexWindowChromeController.DrawActions(actions);
             GUILayout.EndHorizontal();
-            GUILayout.Space(3f);
-            DrawContributionToolbar(snapshot);
-            if (snapshot != null && !string.IsNullOrEmpty(snapshot.RendererSummary))
-            {
-                GUILayout.Space(2f);
-                GUILayout.Label("Runtime: " + snapshot.RendererSummary + " | Toggle: F8", _captionStyle);
-            }
-            GUILayout.EndVertical();
         }
 
         private void DrawWorkbenchSurface(WorkbenchPresentationSnapshot snapshot, Rect workspaceRect)
@@ -278,9 +259,10 @@ namespace Cortex
         private void DrawDockHost(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation, float width)
         {
             var activeContainerId = GetActiveContainerForHost(snapshot, hostLocation);
-            CortexIdeLayout.DrawGroup(GetHostTitle(snapshot, hostLocation, activeContainerId), delegate
+            CortexIdeLayout.DrawGroup(null, delegate
             {
                 DrawHostDropTarget(hostLocation);
+                // Tab strip
                 GUILayout.BeginHorizontal();
                 var items = GetHostItems(snapshot, hostLocation);
                 for (var i = 0; i < items.Count; i++)
@@ -289,7 +271,7 @@ namespace Cortex
                 }
                 GUILayout.FlexibleSpace();
                 GUILayout.EndHorizontal();
-                GUILayout.Space(4f);
+                GUILayout.Space(2f);
 
                 if (string.IsNullOrEmpty(activeContainerId))
                 {
@@ -297,21 +279,18 @@ namespace Cortex
                     return;
                 }
 
-                var previousContentColor = GUI.contentColor;
-                GUI.contentColor = CortexIdeLayout.GetHostAccentColor(hostLocation);
-                GUILayout.Label(GetHostDescription(hostLocation), _statusStyle);
-                GUI.contentColor = previousContentColor;
                 DrawActiveModule(snapshot, activeContainerId, false);
             }, GUILayout.Width(width), GUILayout.ExpandHeight(true));
         }
 
+        /// <summary>
+        /// Central editor host: just the module, no extra chrome labels. Clean like VS.
+        /// </summary>
         private void DrawEditorHost(WorkbenchPresentationSnapshot snapshot)
         {
-            CortexIdeLayout.DrawGroup("Editor | " + GetContainerTitle(snapshot, _state.Workbench.EditorContainerId), delegate
+            CortexIdeLayout.DrawGroup(null, delegate
             {
                 DrawHostDropTarget(WorkbenchHostLocation.DocumentHost);
-                GUILayout.Label("Open docs: " + _state.Documents.OpenDocuments.Count + " | Active: " + (_state.Documents.ActiveDocument != null ? _state.Documents.ActiveDocument.FilePath : "None"), _captionStyle);
-                GUILayout.Space(4f);
                 DrawActiveModule(snapshot, _state.Workbench.EditorContainerId, false);
             }, GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(true));
         }
@@ -319,9 +298,10 @@ namespace Cortex
         private void DrawPanelHost(WorkbenchPresentationSnapshot snapshot, float panelHeight)
         {
             var activeContainerId = GetActiveContainerForHost(snapshot, WorkbenchHostLocation.PanelHost);
-            CortexIdeLayout.DrawGroup(GetHostTitle(snapshot, WorkbenchHostLocation.PanelHost, activeContainerId), delegate
+            CortexIdeLayout.DrawGroup(null, delegate
             {
                 DrawHostDropTarget(WorkbenchHostLocation.PanelHost);
+                // Tab strip for panel items
                 GUILayout.BeginHorizontal();
                 var items = GetHostItems(snapshot, WorkbenchHostLocation.PanelHost);
                 for (var i = 0; i < items.Count; i++)
@@ -330,10 +310,9 @@ namespace Cortex
                 }
                 GUILayout.FlexibleSpace();
                 GUILayout.EndHorizontal();
-                GUILayout.Space(4f);
+
                 if (string.IsNullOrEmpty(activeContainerId))
                 {
-                    GUILayout.Label(GetHostDescription(WorkbenchHostLocation.PanelHost), _captionStyle);
                     return;
                 }
 
@@ -474,19 +453,19 @@ namespace Cortex
 
         private string GetHostTitle(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation, string activeContainerId)
         {
-            if (hostLocation == WorkbenchHostLocation.SecondarySideHost)
+            switch (hostLocation)
             {
-                return "Solution Explorer";
+                case WorkbenchHostLocation.PrimarySideHost:
+                    return "Explorer";
+                case WorkbenchHostLocation.SecondarySideHost:
+                    return "Solution";
+                case WorkbenchHostLocation.PanelHost:
+                    return string.Equals(activeContainerId, CortexWorkbenchIds.BuildContainer, StringComparison.OrdinalIgnoreCase)
+                        ? "Build Output"
+                        : "Output";
+                default:
+                    return GetContainerTitle(snapshot, activeContainerId);
             }
-
-            if (hostLocation == WorkbenchHostLocation.PanelHost)
-            {
-                return string.Equals(activeContainerId, CortexWorkbenchIds.BuildContainer, StringComparison.OrdinalIgnoreCase)
-                    ? "Build Output"
-                    : "Output";
-            }
-
-            return CortexIdeLayout.GetHostDisplayName(hostLocation) + " | " + GetContainerTitle(snapshot, activeContainerId);
         }
 
         private static string GetHostDescription(WorkbenchHostLocation hostLocation)
@@ -505,24 +484,134 @@ namespace Cortex
             }
         }
 
-        private void DrawContributionToolbar(WorkbenchPresentationSnapshot snapshot)
+        /// <summary>
+        /// A single-row menu bar where each menu group name is a button.
+        /// Clicking a group shows its items inline for this frame (a simple, one-level drop-down
+        /// model that works in Unity's immediate-mode GUI without popup windows).
+        /// </summary>
+        private void DrawMenuBar(WorkbenchPresentationSnapshot snapshot)
         {
-            DrawMenuProjectionRow(snapshot != null ? snapshot.ToolbarItems : null, "Quick");
+            // Groups come from MainMenu contributions
+            var menuItems = snapshot != null && snapshot.MainMenuItems != null
+                ? snapshot.MainMenuItems
+                : null;
+
+            // Fallback static groups when no contributions are loaded
+            var staticGroups = new[] { "File", "Edit", "View", "Build", "Window" };
+            var hasContributions = menuItems != null && menuItems.Count > 0;
+
+            if (!hasContributions)
+            {
+                // Render static, command-driving buttons while contributions load
+                foreach (var group in staticGroups)
+                {
+                    DrawStaticMenuGroup(group);
+                }
+
+                return;
+            }
+
+            // Build group list preserving insertion order
+            var seenGroups = new List<string>();
+            for (var i = 0; i < menuItems.Count; i++)
+            {
+                var g = menuItems[i].Group ?? "Misc";
+                if (!seenGroups.Contains(g))
+                {
+                    seenGroups.Add(g);
+                }
+            }
+
+            foreach (var group in seenGroups)
+            {
+                var isOpen = string.Equals(_openMenuGroup, group, StringComparison.OrdinalIgnoreCase);
+                if (GUILayout.Toggle(isOpen, group, _menuStyle, GUILayout.ExpandWidth(false)))
+                {
+                    _openMenuGroup = isOpen ? string.Empty : group;
+                }
+            }
+
+            // Dismiss on click outside menus
+            if (!string.IsNullOrEmpty(_openMenuGroup))
+            {
+                var ev = Event.current;
+                if (ev != null && (ev.type == EventType.MouseDown || ev.type == EventType.KeyDown))
+                {
+                    // Items are drawn in DrawOpenMenuPanel(), called after this
+                }
+            }
         }
 
-        private void DrawMenuBar()
+        /// <summary>
+        /// Draws the open menu's item list immediately below the menu bar, overlapping the workspace.
+        /// Rendered last (after everything else in the header horizontal) so it floats over content.
+        /// </summary>
+        private void DrawOpenMenuPanel(WorkbenchPresentationSnapshot snapshot)
         {
-            GUILayout.BeginHorizontal();
-            var menuItems = new[] { "File", "Edit", "View", "Project", "Build", "Tools", "Window", "Help" };
-            for (var i = 0; i < menuItems.Length; i++)
+            if (string.IsNullOrEmpty(_openMenuGroup))
             {
-                GUILayout.Label(menuItems[i], _menuStyle);
+                return;
+            }
+
+            var menuItems = snapshot != null && snapshot.MainMenuItems != null
+                ? snapshot.MainMenuItems
+                : null;
+
+            if (menuItems == null || menuItems.Count == 0)
+            {
+                _openMenuGroup = string.Empty;
+                return;
+            }
+
+            GUILayout.BeginHorizontal();
+            var drewAny = false;
+            for (var i = 0; i < menuItems.Count; i++)
+            {
+                var item = menuItems[i];
+                if (!string.Equals(item.Group, _openMenuGroup, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (GUILayout.Button(item.DisplayName ?? item.CommandId, GUILayout.ExpandWidth(false)))
+                {
+                    ExecuteCommand(item.CommandId, null);
+                    _openMenuGroup = string.Empty;
+                }
+
+                drewAny = true;
+            }
+
+            if (!drewAny)
+            {
+                _openMenuGroup = string.Empty;
             }
 
             GUILayout.FlexibleSpace();
-            GUILayout.Label("Search", _captionStyle, GUILayout.Width(48f));
-            GUILayout.Box(CortexModuleUtil.GetDocumentDisplayName(_state.Documents.ActiveDocument), GUILayout.Width(220f), GUILayout.Height(20f));
             GUILayout.EndHorizontal();
+        }
+
+        private void DrawStaticMenuGroup(string group)
+        {
+            var commands = GetStaticCommandsForGroup(group);
+            var isOpen = string.Equals(_openMenuGroup, group, StringComparison.OrdinalIgnoreCase);
+            if (GUILayout.Toggle(isOpen, group, _menuStyle, GUILayout.ExpandWidth(false)))
+            {
+                _openMenuGroup = isOpen ? string.Empty : group;
+            }
+        }
+
+        private static string[] GetStaticCommandsForGroup(string group)
+        {
+            switch (group)
+            {
+                case "File": return new[] { "cortex.file.saveAll", "cortex.file.closeActive" };
+                case "Edit": return new string[0];
+                case "View": return new[] { "cortex.view.fileExplorer", "cortex.win.theme", "cortex.logs.toggleWindow", "cortex.shell.fitWindow" };
+                case "Build": return new[] { "cortex.build.execute" };
+                case "Window": return new[] { "cortex.shell.fitWindow" };
+                default: return new string[0];
+            }
         }
 
         private void DrawMenuProjectionRow(IList<MenuItemProjection> items, string fallbackGroup)
@@ -561,18 +650,38 @@ namespace Cortex
             GUILayout.EndHorizontal();
         }
 
+        /// <summary>
+        /// Slim, single-line status bar like Visual Studio: left info items, centre status message,
+        /// right items (renderer, theme). Replaces the old two-row verbose status strip.
+        /// </summary>
         private void DrawStatusStrip(WorkbenchPresentationSnapshot snapshot)
         {
-            GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.BeginHorizontal();
+            GUILayout.BeginHorizontal(_sectionStyle, GUILayout.Height(22f));
+
+            // Left items (e.g. renderer)
             DrawStatusItems(snapshot != null ? snapshot.LeftStatusItems : null);
+
             GUILayout.FlexibleSpace();
-            GUILayout.Label(string.IsNullOrEmpty(_state.StatusMessage) ? "Ready" : _state.StatusMessage, _statusStyle);
+
+            // Status message
+            var msg = string.IsNullOrEmpty(_state.StatusMessage)
+                ? (snapshot != null && !string.IsNullOrEmpty(snapshot.RendererSummary) ? snapshot.RendererSummary : "Ready")
+                : _state.StatusMessage;
+            GUILayout.Label(msg, _statusStyle);
+
             GUILayout.FlexibleSpace();
+
+            // Theme indicator
+            var themeId = snapshot != null && !string.IsNullOrEmpty(snapshot.ActiveThemeId)
+                ? snapshot.ActiveThemeId
+                : ((_state.Settings != null && !string.IsNullOrEmpty(_state.Settings.ThemeId)) ? _state.Settings.ThemeId : "vs-dark");
+            GUILayout.Label(themeId, _captionStyle, GUILayout.ExpandWidth(false));
+            GUILayout.Space(8f);
+
+            // Right contributor items
             DrawStatusItems(snapshot != null ? snapshot.RightStatusItems : null);
+
             GUILayout.EndHorizontal();
-            GUILayout.Label(BuildStatusLine(snapshot), _captionStyle);
-            GUILayout.EndVertical();
         }
 
         private void DrawStatusItems(IList<StatusItemContribution> items)

@@ -60,6 +60,18 @@ namespace Cortex
                 });
 
             RegisterModuleBinding(
+                CortexWorkbenchIds.FileExplorerContainer,
+                delegate
+                {
+                    if (_fileExplorerModule == null) _fileExplorerModule = new Modules.FileExplorer.FileExplorerModule();
+                },
+                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+                {
+                    if (_fileExplorerModule == null) return;
+                    _fileExplorerModule.Draw(_documentService, _workspaceBrowserService, _state);
+                });
+
+            RegisterModuleBinding(
                 CortexWorkbenchIds.EditorContainer,
                 delegate
                 {
@@ -68,7 +80,7 @@ namespace Cortex
                 delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
                 {
                     if (_editorModule == null) return;
-                    _editorModule.Draw(_documentService, _workspaceBrowserService, _projectWorkspaceService, _loadedModCatalog, _state);
+                    _editorModule.Draw(_documentService, _state);
                 });
 
             RegisterModuleBinding(
@@ -181,6 +193,94 @@ namespace Cortex
                 {
                     return _visible && _state.SelectedProject != null;
                 });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.file.saveAll",
+                delegate(CommandExecutionContext context)
+                {
+                    var saved = 0;
+                    for (var i = 0; i < _state.Documents.OpenDocuments.Count; i++)
+                    {
+                        var doc = _state.Documents.OpenDocuments[i];
+                        if (doc != null && doc.IsDirty && _documentService != null && _documentService.Save(doc))
+                        {
+                            saved++;
+                        }
+                    }
+
+                    _state.StatusMessage = "Saved " + saved + " file(s).";
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.file.closeActive",
+                delegate(CommandExecutionContext context)
+                {
+                    if (_state.Documents.ActiveDocument != null)
+                    {
+                        var path = _state.Documents.ActiveDocument.FilePath;
+                        Modules.Shared.CortexModuleUtil.CloseDocument(_state, path);
+                        _state.StatusMessage = "Closed " + System.IO.Path.GetFileName(path);
+                    }
+                },
+                delegate(CommandExecutionContext context) { return _visible && _state.Documents.ActiveDocument != null; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.view.fileExplorer",
+                delegate(CommandExecutionContext context)
+                {
+                    var isVisible = string.Equals(_state.Workbench.SideContainerId, CortexWorkbenchIds.FileExplorerContainer, System.StringComparison.OrdinalIgnoreCase);
+                    if (isVisible)
+                    {
+                        _state.Workbench.SideContainerId = string.Empty;
+                        _state.StatusMessage = "File Explorer hidden.";
+                    }
+                    else
+                    {
+                        ActivateContainer(CortexWorkbenchIds.FileExplorerContainer);
+                        _state.StatusMessage = "File Explorer shown.";
+                    }
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.view.zoomIn",
+                delegate(CommandExecutionContext context) { _state.StatusMessage = "Font size increase (apply via Settings).";
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.view.zoomOut",
+                delegate(CommandExecutionContext context) { _state.StatusMessage = "Font size decrease (apply via Settings)."; },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.win.theme",
+                delegate(CommandExecutionContext context)
+                {
+                    if (_workbenchRuntime == null) return;
+                    var themes = _workbenchRuntime.ContributionRegistry.GetThemes();
+                    if (themes == null || themes.Count == 0) return;
+                    var current = _workbenchRuntime.ThemeState.ThemeId;
+                    var nextIndex = 0;
+                    for (var i = 0; i < themes.Count; i++)
+                    {
+                        if (string.Equals(themes[i].ThemeId, current, System.StringComparison.OrdinalIgnoreCase))
+                        {
+                            nextIndex = (i + 1) % themes.Count;
+                            break;
+                        }
+                    }
+
+                    _workbenchRuntime.ThemeState.ThemeId = themes[nextIndex].ThemeId;
+                    if (_state.Settings != null)
+                    {
+                        _state.Settings.ThemeId = _workbenchRuntime.ThemeState.ThemeId;
+                    }
+
+                    _state.StatusMessage = "Theme: " + themes[nextIndex].DisplayName;
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
         }
 
         private bool ExecuteCommand(string commandId, object parameter)
@@ -213,7 +313,8 @@ namespace Cortex
 
             var persisted = _workbenchPersistenceService.Load(DefaultWorkspaceId) ?? new PersistedWorkbenchState();
             _state.Workbench.FocusedContainerId = NormalizeContainerId(persisted.FocusedContainerId, CortexWorkbenchIds.EditorContainer);
-            _state.Workbench.SideContainerId = NormalizeContainerId(persisted.SideContainerId, string.Empty);
+            // Default the primary side host to the file explorer on fresh sessions
+            _state.Workbench.SideContainerId = NormalizeContainerId(persisted.SideContainerId, CortexWorkbenchIds.FileExplorerContainer);
             _state.Workbench.SecondarySideContainerId = NormalizeContainerId(persisted.SecondarySideContainerId, CortexWorkbenchIds.ProjectsContainer);
             _state.Workbench.EditorContainerId = NormalizeContainerId(persisted.EditorContainerId, CortexWorkbenchIds.EditorContainer);
             _state.Workbench.PanelContainerId = NormalizeContainerId(persisted.PanelContainerId, CortexWorkbenchIds.LogsContainer);

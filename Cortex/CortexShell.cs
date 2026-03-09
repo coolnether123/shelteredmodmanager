@@ -9,6 +9,7 @@ using Cortex.Core.Services;
 using Cortex.Host.Unity.Runtime;
 using Cortex.Modules.Build;
 using Cortex.Modules.Editor;
+using Cortex.Modules.FileExplorer;
 using Cortex.Modules.Logs;
 using Cortex.Modules.Projects;
 using Cortex.Modules.Reference;
@@ -60,6 +61,7 @@ namespace Cortex
         private LogsModule _logsModule;
         private ProjectsModule _projectsModule;
         private EditorModule _editorModule;
+        private FileExplorerModule _fileExplorerModule;
         private BuildModule _buildModule;
         private ReferenceModule _referenceModule;
         private RuntimeToolsModule _runtimeToolsModule;
@@ -175,20 +177,33 @@ namespace Cortex
         private void DrawWindow(int windowId)
         {
             var snapshot = _frameSnapshot ?? (_workbenchRuntime != null ? _workbenchRuntime.CreateSnapshot() : new WorkbenchPresentationSnapshot());
-            var headerHeight = 72f;
-            var statusHeight = 38f;
+            // VS-style: slim 30px header (menu bar) + slim 24px status bar at bottom.
+            const float headerHeight = 30f;
+            const float statusHeight = 24f;
+            // Optional open-menu dropdown band (0 when no menu is open)
+            var hasOpenMenu = !string.IsNullOrEmpty(_openMenuGroup);
+            const float openMenuBandHeight = 28f;
             var contentRect = new Rect(6f, 24f, Mathf.Max(0f, _windowRect.width - 12f), Mathf.Max(0f, _windowRect.height - 30f));
             var headerRect = new Rect(contentRect.x, contentRect.y, contentRect.width, headerHeight);
+            var menuPanelRect = new Rect(contentRect.x, headerRect.yMax, contentRect.width, hasOpenMenu ? openMenuBandHeight : 0f);
             var statusRect = new Rect(contentRect.x, Mathf.Max(contentRect.y + headerHeight + 8f, contentRect.yMax - statusHeight), contentRect.width, statusHeight);
+            var workbenchTop = headerRect.yMax + (hasOpenMenu ? openMenuBandHeight : 0f) + 2f;
             var workbenchRect = new Rect(
                 contentRect.x,
-                headerRect.yMax + 4f,
+                workbenchTop,
                 contentRect.width,
-                Mathf.Max(0f, statusRect.y - headerRect.yMax - 8f));
+                Mathf.Max(0f, statusRect.y - workbenchTop - 3f));
 
             GUILayout.BeginArea(headerRect);
             DrawHeader(snapshot);
             GUILayout.EndArea();
+
+            if (hasOpenMenu)
+            {
+                GUILayout.BeginArea(menuPanelRect);
+                DrawOpenMenuPanel(snapshot);
+                GUILayout.EndArea();
+            }
 
             GUILayout.BeginArea(workbenchRect);
             DrawWorkbenchSurface(snapshot, new Rect(0f, 0f, workbenchRect.width, workbenchRect.height));
