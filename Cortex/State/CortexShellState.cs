@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Cortex.Core.Models;
+using Cortex.LanguageService.Protocol;
 using UnityEngine;
 
 namespace Cortex
@@ -91,6 +92,22 @@ namespace Cortex
         public readonly List<DocumentSession> OpenDocuments = new List<DocumentSession>();
     }
 
+    public sealed class CortexEditorInteractionState
+    {
+        public string RequestedHoverKey = string.Empty;
+        public string RequestedHoverDocumentPath = string.Empty;
+        public int RequestedHoverLine;
+        public int RequestedHoverColumn;
+        public string RequestedHoverTokenText = string.Empty;
+        public string ActiveHoverKey = string.Empty;
+        public LanguageServiceHoverResponse ActiveHoverResponse;
+        public string RequestedDefinitionKey = string.Empty;
+        public string RequestedDefinitionDocumentPath = string.Empty;
+        public int RequestedDefinitionLine;
+        public int RequestedDefinitionColumn;
+        public string RequestedDefinitionTokenText = string.Empty;
+    }
+
     public sealed class CortexLogSelectionState
     {
         public RuntimeLogEntry SelectedEntry;
@@ -122,11 +139,13 @@ namespace Cortex
         public readonly CortexWindowChromeWorkspaceState Chrome = new CortexWindowChromeWorkspaceState();
         public readonly CortexWorkbenchSelectionState Workbench = new CortexWorkbenchSelectionState();
         public readonly CortexDocumentWorkspaceState Documents = new CortexDocumentWorkspaceState();
+        public readonly CortexEditorInteractionState Editor = new CortexEditorInteractionState();
         public readonly CortexLogSelectionState Logs = new CortexLogSelectionState();
         public readonly CortexInterfaceDiagnosticState Diagnostics = new CortexInterfaceDiagnosticState();
         public CortexProjectDefinition SelectedProject;
         public BuildResult LastBuildResult;
         public DecompilerResponse LastReferenceResult;
+        public LanguageServiceStatusResponse LanguageServiceStatus;
         public CortexSettings Settings;
         public string StatusMessage;
         public bool ReloadSettingsRequested;

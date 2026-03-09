@@ -39,6 +39,7 @@
   <ItemGroup>
     <Reference Include="0Harmony">
       <HintPath>..\..\..\..\..\Epic Games\Sheltered\SMM\bin\0Harmony.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
@@ -275,6 +276,9 @@ SET BIN_DIR=%25BASE%25Dist\SMM\bin
 :: Ensure directories exist
 if not exist "%25BIN_DIR%25" mkdir "%25BIN_DIR%25"
 if not exist "%25BIN_DIR%25\decompiler" mkdir "%25BIN_DIR%25\decompiler"
+
+:: Keep Harmony deployment centralized in the SMM bin folder only.
+if exist "%25BASE%25Dist\SMM\0Harmony.dll" del /q "%25BASE%25Dist\SMM\0Harmony.dll"
 
 :: Decompiler Tool (Isolated .NET 8 environment)
 for %%C in (Debug Release) do (

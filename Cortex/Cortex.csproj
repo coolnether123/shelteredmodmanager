@@ -42,12 +42,16 @@
     <Compile Include="Adapters\RuntimeAdapters.cs" />
     <Compile Include="Chrome\CortexWindowChromeController.cs" />
     <Compile Include="CortexShell.Chrome.cs" />
+    <Compile Include="CortexShell.Language.cs" />
     <Compile Include="CortexShell.Runtime.cs" />
     <Compile Include="CortexShell.cs" />
+    <Compile Include="ExternalWorkbenchPluginLoader.cs" />
     <Compile Include="GuiStyleUtil.cs" />
     <Compile Include="Layout\CortexIdeLayout.cs" />
     <Compile Include="Modules\Build\BuildModule.cs" />
+    <Compile Include="Modules\Editor\CodeViewSurface.cs" />
     <Compile Include="Modules\Editor\EditorModule.cs" />
+    <Compile Include="Modules\Editor\EditorSyntaxHighlighter.cs" />
     <Compile Include="Modules\FileExplorer\FileExplorerModule.cs" />
     <Compile Include="Modules\Logs\LogsModule.cs" />
     <Compile Include="Modules\Projects\ProjectsModule.cs" />
@@ -73,6 +77,11 @@
     <ProjectReference Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj">
       <Project>{7A570620-E51D-499E-A28E-13A1D8156417}</Project>
       <Name>Cortex.Host.Unity</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj">
+      <Project>{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1}</Project>
+      <Name>Cortex.Plugins.Abstractions</Name>
       <Private>False</Private>
     </ProjectReference>
     <ProjectReference Include="..\ModAPI\ModAPI.csproj">

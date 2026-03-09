@@ -69,6 +69,7 @@ namespace Cortex.Modules.Settings
                 if (GUILayout.Button("Save", GUILayout.Width(100f), GUILayout.Height(24f)))
                 {
                     Apply(snapshot, themeState, state);
+                    ApplyLoadedModMappings(state);
                     settingsStore.Save(state.Settings);
                     state.ReloadSettingsRequested = true;
                     _loaded = false;
@@ -903,6 +904,68 @@ namespace Cortex.Modules.Settings
             }
 
             state.StatusMessage = "Linked loaded mod " + mod.ModId + " to " + (analysis.Definition.SourceRootPath ?? string.Empty) + ".";
+        }
+
+        private void ApplyLoadedModMappings(CortexShellState state)
+        {
+            if (_projectCatalog == null || _workspaceService == null || _loadedModCatalog == null)
+            {
+                return;
+            }
+
+            var loadedMods = _loadedModCatalog.GetLoadedMods();
+            if (loadedMods == null || loadedMods.Count == 0)
+            {
+                return;
+            }
+
+            for (var i = 0; i < loadedMods.Count; i++)
+            {
+                var mod = loadedMods[i];
+                if (mod == null || string.IsNullOrEmpty(mod.ModId))
+                {
+                    continue;
+                }
+
+                string draftValue;
+                if (!_loadedModPathDrafts.TryGetValue(mod.ModId, out draftValue) || string.IsNullOrEmpty(draftValue))
+                {
+                    continue;
+                }
+
+                var existing = _projectCatalog.GetProject(mod.ModId);
+                if (existing != null &&
+                    string.Equals(existing.SourceRootPath ?? string.Empty, draftValue, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var analysis = _workspaceService.AnalyzeSourceRoot(draftValue, mod.ModId);
+                if (analysis == null || analysis.Definition == null || !analysis.Success)
+                {
+                    if (analysis != null)
+                    {
+                        for (var diagnosticIndex = 0; diagnosticIndex < analysis.Diagnostics.Count; diagnosticIndex++)
+                        {
+                            state.Diagnostics.Add(analysis.Diagnostics[diagnosticIndex]);
+                        }
+                    }
+
+                    continue;
+                }
+
+                _projectCatalog.Upsert(analysis.Definition);
+                _loadedModPathDrafts[mod.ModId] = analysis.Definition.SourceRootPath ?? draftValue;
+                for (var diagnosticIndex = 0; diagnosticIndex < analysis.Diagnostics.Count; diagnosticIndex++)
+                {
+                    state.Diagnostics.Add(analysis.Diagnostics[diagnosticIndex]);
+                }
+
+                if (state.SelectedProject == null || string.Equals(state.SelectedProject.ModId, mod.ModId, StringComparison.OrdinalIgnoreCase))
+                {
+                    state.SelectedProject = _projectCatalog.GetProject(mod.ModId) ?? analysis.Definition;
+                }
+            }
         }
 
         private static int ParseInt(string raw, int fallback)

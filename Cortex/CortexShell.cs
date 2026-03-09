@@ -7,6 +7,7 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Host.Unity.Runtime;
+using Cortex.Plugins.Abstractions;
 using Cortex.Modules.Build;
 using Cortex.Modules.Editor;
 using Cortex.Modules.FileExplorer;
@@ -70,6 +71,7 @@ namespace Cortex
         private ReferenceModule _referenceModule;
         private RuntimeToolsModule _runtimeToolsModule;
         private SettingsModule _settingsModule;
+        private ExternalWorkbenchPluginLoader _externalPluginLoader;
 
         private GUIStyle _titleStyle;
         private GUIStyle _menuStyle;
@@ -111,6 +113,7 @@ namespace Cortex
 
         private void OnDestroy()
         {
+            ShutdownLanguageService();
             DisableMmLogRuntimeIntegration();
             PersistWorkbenchSession();
             PersistWindowSettings();
@@ -127,6 +130,8 @@ namespace Cortex
             {
                 ApplySettingsChanges();
             }
+
+            UpdateLanguageService();
 
             if (!string.IsNullOrEmpty(_state.Workbench.RequestedContainerId))
             {
@@ -294,6 +299,12 @@ namespace Cortex
         private void InitializeWorkbenchRuntime()
         {
             _workbenchRuntime = new UnityWorkbenchRuntime();
+            if (_externalPluginLoader == null)
+            {
+                _externalPluginLoader = new ExternalWorkbenchPluginLoader();
+            }
+
+            RegisterExternalWorkbenchPlugins();
             _workbenchRuntime.LayoutState.PrimarySideWidth = _state.Settings != null ? _state.Settings.ProjectsPaneWidth : 360f;
             _workbenchRuntime.LayoutState.SecondarySideWidth = _state.Settings != null ? _state.Settings.EditorFilePaneWidth : 320f;
             _workbenchRuntime.LayoutState.PanelSize = 260f;
@@ -307,6 +318,37 @@ namespace Cortex
             }
             ActivateContainer(_state.Workbench.EditorContainerId);
             ActivateContainer(_state.Workbench.PanelContainerId);
+        }
+
+        private void RegisterExternalWorkbenchPlugins()
+        {
+            if (_workbenchRuntime == null || _externalPluginLoader == null)
+            {
+                return;
+            }
+
+            var results = _externalPluginLoader.LoadPlugins(
+                _state.Settings,
+                _workbenchRuntime.CommandRegistry,
+                _workbenchRuntime.ContributionRegistry);
+
+            for (var i = 0; i < results.Count; i++)
+            {
+                var result = results[i];
+                if (result == null)
+                {
+                    continue;
+                }
+
+                if (result.Loaded)
+                {
+                    _state.Diagnostics.Add("Loaded Cortex plugin " + result.DisplayName + " from " + result.AssemblyPath + ".");
+                }
+                else if (!string.IsNullOrEmpty(result.StatusMessage))
+                {
+                    _state.Diagnostics.Add("Cortex plugin skip: " + result.StatusMessage);
+                }
+            }
         }
 
         private void InitializeServices(string gameRoot, string smmRoot, string smmBin, CortexSettings settings)
@@ -342,6 +384,7 @@ namespace Cortex
             _runtimeSourceNavigationService = new RuntimeSourceNavigationService(new ModApiRuntimeSymbolResolver(_sourcePathResolver), _sourcePathResolver);
             _runtimeToolBridge = new ModApiRuntimeToolBridge();
             _restartCoordinator = new ModApiRestartCoordinator(new RestartRequestWriter());
+            InitializeLanguageService(smmBin, settings);
             EnableMmLogRuntimeIntegration();
         }
 
@@ -416,6 +459,11 @@ namespace Cortex
                 effective.AdditionalSourceRoots = effective.WorkspaceRootPath;
             }
 
+            if (string.IsNullOrEmpty(effective.CortexPluginSearchRoots))
+            {
+                effective.CortexPluginSearchRoots = effective.ModsRootPath;
+            }
+
             if (string.IsNullOrEmpty(effective.LogFilePath))
             {
                 effective.LogFilePath = Path.Combine(smmRoot, "mod_manager.log");
@@ -439,6 +487,11 @@ namespace Cortex
             if (effective.BuildTimeoutMs <= 0)
             {
                 effective.BuildTimeoutMs = 300000;
+            }
+
+            if (effective.RoslynServiceTimeoutMs <= 0)
+            {
+                effective.RoslynServiceTimeoutMs = 15000;
             }
 
             if (effective.MaxRecentLogs <= 0)

@@ -144,6 +144,7 @@ namespace Cortex.Host.Unity.Composition
             RegisterSetting(contributionRegistry, nameof(CortexSettings.ManagedAssemblyRootPath), "Game Managed DLLs", "Used to locate assemblies for reference browsing and decompilation.", "Workspace", string.Empty, SettingValueKind.String, 20);
             RegisterSetting(contributionRegistry, nameof(CortexSettings.AdditionalSourceRoots), "Extra Source Roots", "Semicolon-separated fallback roots for source resolution.", "Workspace", string.Empty, SettingValueKind.String, 30);
             RegisterSetting(contributionRegistry, nameof(CortexSettings.ProjectCatalogPath), "Project Catalog", "Path to the persisted Cortex project catalog file.", "Workspace", string.Empty, SettingValueKind.String, 40);
+            RegisterSetting(contributionRegistry, nameof(CortexSettings.CortexPluginSearchRoots), "Cortex Plugin Roots", "Semicolon-separated roots scanned for external Cortex workbench plugins.", "Workspace", string.Empty, SettingValueKind.String, 50);
 
             RegisterSetting(contributionRegistry, nameof(CortexSettings.LogFilePath), "Live Log File", "Optional file that is tailed under the live in-memory log feed.", "Logs", string.Empty, SettingValueKind.String, 0);
             RegisterSetting(contributionRegistry, nameof(CortexSettings.MaxRecentLogs), "Max Recent Logs", "Maximum number of live log entries to keep in the in-memory feed.", "Logs", "300", SettingValueKind.Integer, 10);
@@ -152,6 +153,9 @@ namespace Cortex.Host.Unity.Composition
 
             RegisterSetting(contributionRegistry, nameof(CortexSettings.DecompilerPathOverride), "Decompiler Override", "Optional path to a custom decompiler executable.", "Decompiler", string.Empty, SettingValueKind.String, 0);
             RegisterSetting(contributionRegistry, nameof(CortexSettings.DecompilerCachePath), "Decompiler Cache", "Location used to cache generated source from runtime and reference browsing.", "Decompiler", string.Empty, SettingValueKind.String, 10);
+            RegisterSetting(contributionRegistry, nameof(CortexSettings.EnableRoslynLanguageService), "Enable Roslyn Worker", "Start the external Roslyn language service for diagnostics, hover info, and semantic classification.", "Language Service", "true", SettingValueKind.Boolean, 0);
+            RegisterSetting(contributionRegistry, nameof(CortexSettings.RoslynServicePathOverride), "Roslyn Worker Path", "Optional override for the external Cortex.Roslyn.Worker executable or DLL.", "Language Service", string.Empty, SettingValueKind.String, 10);
+            RegisterSetting(contributionRegistry, nameof(CortexSettings.RoslynServiceTimeoutMs), "Roslyn Timeout (ms)", "Maximum request time for the external Roslyn language service.", "Language Service", "15000", SettingValueKind.Integer, 20);
 
             RegisterSetting(contributionRegistry, nameof(CortexSettings.DefaultBuildConfiguration), "Default Build Config", "Default build configuration used by build tooling.", "Build", "Debug", SettingValueKind.String, 0);
             RegisterSetting(contributionRegistry, nameof(CortexSettings.BuildTimeoutMs), "Build Timeout (ms)", "Maximum time allowed for build execution before timing out.", "Build", "300000", SettingValueKind.Integer, 10);

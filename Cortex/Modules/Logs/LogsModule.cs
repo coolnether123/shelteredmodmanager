@@ -164,38 +164,37 @@ namespace Cortex.Modules.Logs
 
         private void DrawSeverityToggle(ref bool visible, string label, int count, Color color)
         {
-            var previousContent = GUI.contentColor;
-            GUI.contentColor = visible ? color : CortexIdeLayout.GetMutedTextColor();
             var style = visible ? (_severityToggleActiveStyle ?? GUI.skin.toggle) : (_severityToggleStyle ?? GUI.skin.toggle);
             visible = GUILayout.Toggle(visible, label + " " + count, style, GUILayout.Width(SeverityButtonWidth));
-            GUI.contentColor = previousContent;
         }
 
         // ── Log list ──────────────────────────────────────────────────────────────────
 
         private void DrawLogList(IList<RuntimeLogEntry> visibleEntries, CortexShellState state)
         {
-            _listScroll = GUILayout.BeginScrollView(
-                _listScroll, false, true,
-                GUILayout.ExpandHeight(true),
-                GUILayout.MinHeight(80f));
+            var viewRect = GUILayoutUtility.GetRect(0f, 0f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true), GUILayout.MinHeight(80f));
+            var rowCount = visibleEntries != null ? visibleEntries.Count : 0;
+            var contentHeight = Mathf.Max(viewRect.height - 2f, rowCount > 0 ? (rowCount * EntryHeight) + 2f : 42f);
+            var contentRect = new Rect(0f, 0f, Mathf.Max(1f, viewRect.width - 18f), contentHeight);
+            var rowStartY = Mathf.Max(0f, contentHeight - (rowCount * EntryHeight));
 
-            if (visibleEntries.Count == 0)
+            _listScroll = GUI.BeginScrollView(viewRect, _listScroll, contentRect, false, true);
+            if (rowCount == 0)
             {
-                GUILayout.Label("No entries match the current filters.", _detailLabelStyle ?? GUI.skin.label);
+                GUI.Label(new Rect(8f, Mathf.Max(6f, contentHeight - 28f), Mathf.Max(80f, contentRect.width - 16f), 20f), "No entries match the current filters.", _detailLabelStyle ?? GUI.skin.label);
             }
             else
             {
-                for (var i = 0; i < visibleEntries.Count; i++)
+                for (var i = 0; i < rowCount; i++)
                 {
-                    DrawEntryRow(visibleEntries[i], state);
+                    DrawEntryRow(new Rect(0f, rowStartY + (i * EntryHeight), contentRect.width, EntryHeight), visibleEntries[i], state);
                 }
             }
 
-            GUILayout.EndScrollView();
+            GUI.EndScrollView();
         }
 
-        private void DrawEntryRow(RuntimeLogEntry entry, CortexShellState state)
+        private void DrawEntryRow(Rect rowRect, RuntimeLogEntry entry, CortexShellState state)
         {
             var isSelected = IsSameEntry(state.Logs.SelectedEntry, entry);
             var severity = RuntimeLogVisuals.GetSeverity(entry.Level);
@@ -227,9 +226,8 @@ namespace Cortex.Modules.Logs
 
             GUI.contentColor = RuntimeLogVisuals.GetEntryTextColor(entry.Level, isSelected);
 
-            if (GUILayout.Button(BuildRowLabel(entry), rowStyle, GUILayout.ExpandWidth(true), GUILayout.Height(EntryHeight)))
+            if (GUI.Button(rowRect, BuildRowLabel(entry), rowStyle))
             {
-                var wasAlreadySelected = isSelected;
                 state.Logs.SelectedEntry = entry;
                 state.Logs.SelectedFrameIndex = -1;
             }
@@ -617,13 +615,18 @@ namespace Cortex.Modules.Logs
             _toolbarStyle.margin = new RectOffset(0, 0, 0, 0);
 
             // Severity toggles
-            _severityToggleStyle = new GUIStyle(GUI.skin.toggle);
+            _severityToggleStyle = new GUIStyle(GUI.skin.button);
             _severityToggleStyle.fontSize = 11;
-            _severityToggleStyle.padding = new RectOffset(20, 4, 2, 2);
+            _severityToggleStyle.alignment = TextAnchor.MiddleCenter;
+            _severityToggleStyle.padding = new RectOffset(8, 8, 1, 1);
+            _severityToggleStyle.margin = new RectOffset(0, 2, 0, 0);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_severityToggleStyle, MakeTex(CortexIdeLayout.Blend(surfaceColor, headerColor, 0.55f)));
             GuiStyleUtil.ApplyTextColorToAllStates(_severityToggleStyle, mutedColor);
 
             _severityToggleActiveStyle = new GUIStyle(_severityToggleStyle);
             _severityToggleActiveStyle.fontStyle = FontStyle.Bold;
+            GuiStyleUtil.ApplyBackgroundToAllStates(_severityToggleActiveStyle, MakeTex(CortexIdeLayout.Blend(accentColor, headerColor, 0.18f)));
+            GuiStyleUtil.ApplyTextColorToAllStates(_severityToggleActiveStyle, textColor);
 
             // Filter input
             _filterInputStyle = new GUIStyle(GUI.skin.textField);

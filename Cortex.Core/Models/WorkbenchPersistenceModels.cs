@@ -25,6 +25,8 @@ namespace Cortex.Core.Models
         public string PanelContainerId;
         public bool ShowDetachedLogWindow;
         public bool EditorUnlocked;
+        public string SelectedProjectModId;
+        public string SelectedProjectSourceRoot;
         public string ActiveDocumentPath;
         public string[] OpenDocumentPaths;
         public ContainerHostAssignment[] ContainerHostAssignments;
@@ -39,6 +41,8 @@ namespace Cortex.Core.Models
             PanelContainerId = CortexWorkbenchIds.LogsContainer;
             ShowDetachedLogWindow = false;
             EditorUnlocked = false;
+            SelectedProjectModId = string.Empty;
+            SelectedProjectSourceRoot = string.Empty;
             ActiveDocumentPath = string.Empty;
             OpenDocumentPaths = new string[0];
             ContainerHostAssignments = new ContainerHostAssignment[0];

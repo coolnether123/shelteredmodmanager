@@ -2,6 +2,7 @@ using System;
 using System.Text;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
 using UnityEngine;
 
@@ -25,23 +26,29 @@ namespace Cortex.Modules.Editor
         private GUIStyle _activeTabStyle;
         private GUIStyle _dirtyTabStyle;
         private GUIStyle _gutterStyle;
-        private GUIStyle _gutterHighlightStyle;
+        private GUIStyle _gutterReadOnlyStyle;
         private GUIStyle _editorAreaStyle;
+        private GUIStyle _editorReadOnlyStyle;
         private GUIStyle _pathBarStyle;
         private GUIStyle _statusBarStyle;
         private GUIStyle _emptyStateStyle;
         private GUIStyle _toolbarButtonStyle;
         private GUIStyle _editingToggleStyle;
         private GUIStyle _tabCloseButtonStyle;
+        private GUIStyle _codeTooltipStyle;
+        private GUIStyle _contextMenuStyle;
+        private GUIStyle _contextMenuButtonStyle;
+        private GUIStyle _contextMenuHeaderStyle;
+        private Font _monoFont;
         private Texture2D _tabBg;
         private Texture2D _activeTabBg;
         private Texture2D _dirtyTabBg;
         private Texture2D _gutterBg;
-        private Texture2D _gutterHighlightBg;
         private Texture2D _editorBg;
         private Texture2D _pathBarBg;
         private Texture2D _statusBg;
         private Texture2D _toolbarBg;
+        private readonly CodeViewSurface _codeViewSurface = new CodeViewSurface();
 
         // ── constants ─────────────────────────────────────────────────────────────────
         private const float TabHeight = 26f;
@@ -224,39 +231,58 @@ namespace Cortex.Modules.Editor
 
             documentService.HasExternalChanges(active);
             var editingAllowed = state.Settings != null && state.Settings.EnableFileEditing;
+            var isEditable = editingAllowed && state.Documents.EditorUnlocked;
 
-            _editorScroll = GUILayout.BeginScrollView(
-                _editorScroll,
-                false, true,
-                GUILayout.ExpandHeight(true),
-                GUILayout.ExpandWidth(true));
-
-            GUILayout.BeginHorizontal(GUILayout.ExpandHeight(true));
-
-            // Line number gutter
-            GUILayout.TextArea(
-                BuildLineGutter(active),
-                _gutterStyle ?? GUI.skin.textArea,
-                GUILayout.Width(GutterWidth),
-                GUILayout.ExpandHeight(true));
-
-            // Editor content
-            var previousEnabled = GUI.enabled;
-            GUI.enabled = editingAllowed && state.Documents.EditorUnlocked;
-            var updated = GUILayout.TextArea(
-                active.Text ?? string.Empty,
-                _editorAreaStyle ?? GUI.skin.textArea,
-                GUILayout.ExpandHeight(true),
-                GUILayout.ExpandWidth(true));
-            GUI.enabled = previousEnabled;
-
-            GUILayout.EndHorizontal();
-            GUILayout.EndScrollView();
-
-            if (editingAllowed && state.Documents.EditorUnlocked && !string.Equals(updated, active.Text, StringComparison.Ordinal))
+            if (isEditable)
             {
-                active.Text = updated;
-                active.IsDirty = true;
+                _editorScroll = GUILayout.BeginScrollView(
+                    _editorScroll,
+                    false, true,
+                    GUILayout.ExpandHeight(true),
+                    GUILayout.ExpandWidth(true));
+
+                GUILayout.BeginHorizontal(GUILayout.ExpandHeight(true));
+                GUILayout.TextArea(
+                    BuildLineGutter(active),
+                    _gutterStyle ?? GUI.skin.textArea,
+                    GUILayout.Width(GutterWidth),
+                    GUILayout.ExpandHeight(true));
+
+                var previousEnabled = GUI.enabled;
+                GUI.enabled = true;
+                var updated = GUILayout.TextArea(
+                    active.Text ?? string.Empty,
+                    _editorAreaStyle ?? GUI.skin.textArea,
+                    GUILayout.ExpandHeight(true),
+                    GUILayout.ExpandWidth(true));
+                GUI.enabled = previousEnabled;
+
+                if (!string.Equals(updated, active.Text, StringComparison.Ordinal))
+                {
+                    active.Text = updated;
+                    active.IsDirty = true;
+                    _codeViewSurface.Invalidate();
+                }
+
+                GUILayout.EndHorizontal();
+                GUILayout.EndScrollView();
+            }
+            else
+            {
+                var rect = GUILayoutUtility.GetRect(0f, 100000f, 0f, 100000f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+                _editorScroll = _codeViewSurface.Draw(
+                    rect,
+                    _editorScroll,
+                    active,
+                    state,
+                    _appliedTheme,
+                    _editorReadOnlyStyle,
+                    _gutterReadOnlyStyle,
+                    _codeTooltipStyle,
+                    _contextMenuStyle,
+                    _contextMenuButtonStyle,
+                    _contextMenuHeaderStyle,
+                    GutterWidth);
             }
         }
 
@@ -275,9 +301,15 @@ namespace Cortex.Modules.Editor
             var editingAllowed = state.Settings != null && state.Settings.EnableFileEditing;
             var savingAllowed = state.Settings != null && state.Settings.EnableFileSaving;
             var dirtyLabel = active.IsDirty ? " ●" : string.Empty;
+            var analysis = active.LanguageAnalysis;
+            var errorCount = CountDiagnostics(analysis, "Error");
+            var warningCount = CountDiagnostics(analysis, "Warning");
+            var roslynLabel = BuildRoslynLabel(state, analysis, errorCount, warningCount);
 
             GUILayout.BeginHorizontal(_statusBarStyle ?? GUI.skin.box, GUILayout.Height(StatusBarHeight));
             GUILayout.Label(editLabel + dirtyLabel + "   Ln " + lineCount + " lines", GUILayout.ExpandWidth(false));
+            GUILayout.Space(10f);
+            GUILayout.Label(roslynLabel, GUILayout.ExpandWidth(false));
             GUILayout.FlexibleSpace();
 
             // Editing toggle on the right like VS's "Edit" toggle in status bar
@@ -297,6 +329,51 @@ namespace Cortex.Modules.Editor
             }
             GUI.enabled = previousEnabled;
             GUILayout.EndHorizontal();
+        }
+
+        private static int CountDiagnostics(LanguageServiceAnalysisResponse analysis, string severity)
+        {
+            if (analysis == null || analysis.Diagnostics == null || analysis.Diagnostics.Length == 0)
+            {
+                return 0;
+            }
+
+            var count = 0;
+            for (var i = 0; i < analysis.Diagnostics.Length; i++)
+            {
+                if (string.Equals(analysis.Diagnostics[i].Severity, severity, StringComparison.OrdinalIgnoreCase))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static string BuildRoslynLabel(CortexShellState state, LanguageServiceAnalysisResponse analysis, int errorCount, int warningCount)
+        {
+            var status = state != null ? state.LanguageServiceStatus : null;
+            if (status == null)
+            {
+                return "Roslyn: offline";
+            }
+
+            if (!status.IsRunning)
+            {
+                return "Roslyn: " + (string.IsNullOrEmpty(status.StatusMessage) ? "standby" : status.StatusMessage);
+            }
+
+            if (analysis == null)
+            {
+                return "Roslyn: ready";
+            }
+
+            if (!analysis.Success)
+            {
+                return "Roslyn: " + (string.IsNullOrEmpty(analysis.StatusMessage) ? "analysis failed" : analysis.StatusMessage);
+            }
+
+            return "Roslyn E:" + errorCount + " W:" + warningCount;
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -391,6 +468,15 @@ namespace Cortex.Modules.Editor
             _gutterStyle.margin = new RectOffset(0, 0, 0, 0);
             _gutterStyle.border = new RectOffset(0, 1, 0, 0);
             _gutterStyle.fontSize = 11;
+            _gutterReadOnlyStyle = new GUIStyle(GUI.skin.label);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_gutterReadOnlyStyle, _gutterBg);
+            GuiStyleUtil.ApplyTextColorToAllStates(_gutterReadOnlyStyle, mutedColor);
+            _gutterReadOnlyStyle.alignment = TextAnchor.UpperRight;
+            _gutterReadOnlyStyle.padding = new RectOffset(4, 6, 4, 4);
+            _gutterReadOnlyStyle.margin = new RectOffset(0, 0, 0, 0);
+            _gutterReadOnlyStyle.border = new RectOffset(0, 1, 0, 0);
+            _gutterReadOnlyStyle.fontSize = 11;
+            _gutterReadOnlyStyle.wordWrap = false;
 
             // Editor area
             _editorBg = MakeTex(bgColor);
@@ -401,6 +487,48 @@ namespace Cortex.Modules.Editor
             _editorAreaStyle.padding = new RectOffset(8, 8, 4, 4);
             _editorAreaStyle.margin = new RectOffset(0, 0, 0, 0);
             _editorAreaStyle.fontSize = 12;
+            if (_monoFont == null)
+            {
+                try
+                {
+                    _monoFont = Font.CreateDynamicFontFromOSFont(new[] { "Consolas", "Courier New", "Courier" }, 13);
+                }
+                catch
+                {
+                    _monoFont = null;
+                }
+            }
+            if (_monoFont != null)
+            {
+                _gutterStyle.font = _monoFont;
+                _editorAreaStyle.font = _monoFont;
+            }
+
+            _editorReadOnlyStyle = new GUIStyle(GUI.skin.label);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_editorReadOnlyStyle, _editorBg);
+            GuiStyleUtil.ApplyTextColorToAllStates(_editorReadOnlyStyle, textColor);
+            _editorReadOnlyStyle.wordWrap = false;
+            _editorReadOnlyStyle.richText = true;
+            _editorReadOnlyStyle.alignment = TextAnchor.UpperLeft;
+            _editorReadOnlyStyle.padding = new RectOffset(8, 8, 4, 4);
+            _editorReadOnlyStyle.margin = new RectOffset(0, 0, 0, 0);
+            _editorReadOnlyStyle.fontSize = 12;
+            _editorReadOnlyStyle.stretchHeight = false;
+            if (_monoFont != null)
+            {
+                _gutterReadOnlyStyle.font = _monoFont;
+                _editorReadOnlyStyle.font = _monoFont;
+            }
+
+            _codeTooltipStyle = new GUIStyle(GUI.skin.box);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_codeTooltipStyle, MakeTex(CortexIdeLayout.Blend(headerColor, bgColor, 0.22f)));
+            GuiStyleUtil.ApplyTextColorToAllStates(_codeTooltipStyle, textColor);
+            _codeTooltipStyle.alignment = TextAnchor.UpperLeft;
+            _codeTooltipStyle.wordWrap = true;
+            _codeTooltipStyle.richText = false;
+            _codeTooltipStyle.padding = new RectOffset(8, 8, 8, 8);
+            _codeTooltipStyle.margin = new RectOffset(0, 0, 0, 0);
+            _codeTooltipStyle.border = new RectOffset(1, 1, 1, 1);
 
             // Path bar
             _pathBarBg = MakeTex(CortexIdeLayout.Blend(headerColor, bgColor, 0.3f));
@@ -428,6 +556,22 @@ namespace Cortex.Modules.Editor
             _toolbarButtonStyle.margin = new RectOffset(2, 0, 0, 0);
             _toolbarButtonStyle.fontSize = 11;
 
+            _contextMenuStyle = new GUIStyle(GUI.skin.box);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_contextMenuStyle, MakeTex(CortexIdeLayout.Blend(surfaceColor, headerColor, 0.55f)));
+            GuiStyleUtil.ApplyTextColorToAllStates(_contextMenuStyle, textColor);
+            _contextMenuStyle.padding = new RectOffset(6, 6, 6, 6);
+            _contextMenuStyle.margin = new RectOffset(0, 0, 0, 0);
+            _contextMenuStyle.border = new RectOffset(1, 1, 1, 1);
+
+            _contextMenuButtonStyle = new GUIStyle(_toolbarButtonStyle);
+            _contextMenuButtonStyle.alignment = TextAnchor.MiddleLeft;
+            _contextMenuButtonStyle.padding = new RectOffset(8, 8, 3, 3);
+
+            _contextMenuHeaderStyle = new GUIStyle(GUI.skin.label);
+            GuiStyleUtil.ApplyTextColorToAllStates(_contextMenuHeaderStyle, CortexIdeLayout.GetAccentColor());
+            _contextMenuHeaderStyle.fontStyle = FontStyle.Bold;
+            _contextMenuHeaderStyle.wordWrap = false;
+
             // Editing toggle
             _editingToggleStyle = new GUIStyle(GUI.skin.toggle);
             GuiStyleUtil.ApplyTextColorToAllStates(_editingToggleStyle, mutedColor);
@@ -448,6 +592,7 @@ namespace Cortex.Modules.Editor
             _emptyStateStyle.wordWrap = true;
             GuiStyleUtil.ApplyTextColorToAllStates(_emptyStateStyle, mutedColor);
             _emptyStateStyle.fontSize = 12;
+            _codeViewSurface.Invalidate();
         }
 
         private static Texture2D MakeTex(Color color)
