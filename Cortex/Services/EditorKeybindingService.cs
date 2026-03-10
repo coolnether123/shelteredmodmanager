@@ -29,11 +29,11 @@ namespace Cortex.Services
             Create("edit.outdent", "edit.outdent", "Editing", "Outdent", "Outdent the current selection.", KeyCode.Tab, false, true, false),
             Create("edit.newline", "edit.newline", "Editing", "New Line", "Insert a newline.", KeyCode.Return, false, false, false),
             Create("edit.complete", "edit.complete", "Editing", "Trigger Completion", "Open the completion list at the current caret.", KeyCode.Space, true, false, false),
-            Create("multi.above", "multi.above", "Multi-caret", "Add Caret Above", "Duplicate the active carets on the line above.", KeyCode.UpArrow, false, true, true),
-            Create("multi.below", "multi.below", "Multi-caret", "Add Caret Below", "Duplicate the active carets on the line below.", KeyCode.DownArrow, false, true, true),
+            CreateUnbound("multi.above", "multi.above", "Multi-caret", "Add Caret Above", "Duplicate the active carets on the line above."),
+            CreateUnbound("multi.below", "multi.below", "Multi-caret", "Add Caret Below", "Duplicate the active carets on the line below."),
             Create("multi.clear", "multi.clear", "Multi-caret", "Clear Extra Carets", "Clear secondary carets.", KeyCode.Escape, false, false, false),
-            Create("move.line.up", "move.line.up", "Line Editing", "Move Line Up", "Move the current line block upward.", KeyCode.UpArrow, false, false, true),
-            Create("move.line.down", "move.line.down", "Line Editing", "Move Line Down", "Move the current line block downward.", KeyCode.DownArrow, false, false, true)
+            CreateUnbound("move.line.up", "move.line.up", "Line Editing", "Move Line Up", "Move the current line block upward."),
+            CreateUnbound("move.line.down", "move.line.down", "Line Editing", "Move Line Down", "Move the current line block downward.")
         };
 
         public IList<EditorCommandBindingDefinition> GetCommandBindings()
@@ -50,7 +50,7 @@ namespace Cortex.Services
             for (var i = 0; i < Definitions.Length; i++)
             {
                 var overrideBinding = FindBinding(configured, Definitions[i].BindingId);
-                results.Add(CloneBinding(overrideBinding ?? Definitions[i].DefaultBinding));
+                results.Add(NormalizeBinding(Definitions[i], CloneBinding(overrideBinding ?? Definitions[i].DefaultBinding)));
             }
 
             return results;
@@ -152,6 +152,32 @@ namespace Cortex.Services
             };
         }
 
+        private static EditorCommandBindingDefinition CreateUnbound(
+            string bindingId,
+            string commandId,
+            string category,
+            string displayName,
+            string description)
+        {
+            return new EditorCommandBindingDefinition
+            {
+                BindingId = bindingId,
+                CommandId = commandId,
+                Category = category,
+                DisplayName = displayName,
+                Description = description,
+                DefaultBinding = new EditorKeybinding
+                {
+                    BindingId = bindingId,
+                    CommandId = commandId,
+                    Key = string.Empty,
+                    Control = false,
+                    Shift = false,
+                    Alt = false
+                }
+            };
+        }
+
         private static EditorKeybinding FindBinding(EditorKeybinding[] bindings, string bindingId)
         {
             if (bindings == null || string.IsNullOrEmpty(bindingId))
@@ -183,6 +209,48 @@ namespace Cortex.Services
                     Alt = binding.Alt
                 }
                 : new EditorKeybinding();
+        }
+
+        private static EditorKeybinding NormalizeBinding(EditorCommandBindingDefinition definition, EditorKeybinding binding)
+        {
+            if (binding == null)
+            {
+                return new EditorKeybinding();
+            }
+
+            if (!IsAdvancedCommand(definition) || !MatchesLegacyAdvancedDefault(binding))
+            {
+                return binding;
+            }
+
+            binding.Key = string.Empty;
+            binding.Control = false;
+            binding.Shift = false;
+            binding.Alt = false;
+            return binding;
+        }
+
+        private static bool IsAdvancedCommand(EditorCommandBindingDefinition definition)
+        {
+            var bindingId = definition != null ? definition.BindingId ?? string.Empty : string.Empty;
+            return string.Equals(bindingId, "multi.above", StringComparison.Ordinal) ||
+                string.Equals(bindingId, "multi.below", StringComparison.Ordinal) ||
+                string.Equals(bindingId, "move.line.up", StringComparison.Ordinal) ||
+                string.Equals(bindingId, "move.line.down", StringComparison.Ordinal);
+        }
+
+        private static bool MatchesLegacyAdvancedDefault(EditorKeybinding binding)
+        {
+            if (binding == null || string.IsNullOrEmpty(binding.Key))
+            {
+                return false;
+            }
+
+            return
+                (string.Equals(binding.Key, KeyCode.UpArrow.ToString(), StringComparison.OrdinalIgnoreCase) && !binding.Control && binding.Shift && binding.Alt) ||
+                (string.Equals(binding.Key, KeyCode.DownArrow.ToString(), StringComparison.OrdinalIgnoreCase) && !binding.Control && binding.Shift && binding.Alt) ||
+                (string.Equals(binding.Key, KeyCode.UpArrow.ToString(), StringComparison.OrdinalIgnoreCase) && !binding.Control && !binding.Shift && binding.Alt) ||
+                (string.Equals(binding.Key, KeyCode.DownArrow.ToString(), StringComparison.OrdinalIgnoreCase) && !binding.Control && !binding.Shift && binding.Alt);
         }
 
         private static bool Matches(EditorKeybinding binding, Event current)
