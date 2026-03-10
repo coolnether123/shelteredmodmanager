@@ -956,6 +956,7 @@ namespace Cortex.Core.Services
                 return;
             }
 
+            var text = GetText(session);
             session.EditorState.Selections.Clear();
             if (selections != null)
             {
@@ -964,7 +965,7 @@ namespace Cortex.Core.Services
                     var selection = selections[i] != null ? selections[i].Clone() : new EditorSelectionRange();
                     if (!preservePreferredColumn || selection.PreferredColumn < 0)
                     {
-                        selection.PreferredColumn = GetCaretPosition(session, selection.CaretIndex).Column;
+                        selection.PreferredColumn = GetCaretPosition(text, selection.CaretIndex).Column;
                     }
 
                     session.EditorState.Selections.Add(selection);

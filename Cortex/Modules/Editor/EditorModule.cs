@@ -55,7 +55,6 @@ namespace Cortex.Modules.Editor
         private Texture2D _statusModeBackground;
         private Texture2D _statusModeActiveBackground;
         private Texture2D _statusModeDisabledBackground;
-        private bool _statusModeMenuOpen;
         private readonly CodeViewSurface _codeViewSurface = new CodeViewSurface();
         private readonly EditableCodeViewSurface _editableCodeViewSurface = new EditableCodeViewSurface();
         private readonly IEditorService _editorService = new EditorService();
@@ -241,8 +240,7 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            var editingAllowed = state.Settings != null && state.Settings.EnableFileEditing;
-            var isEditable = editingAllowed && state.Documents.EditorUnlocked && active.SupportsEditing;
+            var isEditable = IsEditingDocument(state, active);
             var rect = GUILayoutUtility.GetRect(0f, 100000f, 0f, 100000f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
 
             if (isEditable)
@@ -288,27 +286,33 @@ namespace Cortex.Modules.Editor
             var caret = active.EditorState != null
                 ? _editorService.GetCaretPosition(active, active.EditorState.CaretIndex)
                 : new EditorCaretPosition();
-            var canEditDocument = active.SupportsEditing;
-            var isEditing = state.Documents.EditorUnlocked && canEditDocument;
+            var canEditDocument = CanToggleDocumentEditing(state, active);
+            var isEditing = IsEditingDocument(state, active);
             var editingAllowed = state.Settings != null && state.Settings.EnableFileEditing;
             var savingAllowed = state.Settings != null && state.Settings.EnableFileSaving;
             var analysis = active.LanguageAnalysis;
             var errorCount = CountDiagnostics(analysis, "Error");
             var warningCount = CountDiagnostics(analysis, "Warning");
             var roslynLabel = BuildRoslynLabel(state, analysis, errorCount, warningCount);
-            var modeTooltip = "Choose the editor mode for the active tab.";
-            var modeContent = new GUIContent((isEditing ? "EDIT" : "READ") + " v", modeTooltip);
+            var modeTooltip = BuildEditModeTooltip(active, editingAllowed, canEditDocument, isEditing);
+            var modeContent = new GUIContent(isEditing ? "EDIT" : "READ", modeTooltip);
             var tooltip = string.Empty;
             Rect modeRect;
+            var canToggleMode = canEditDocument;
 
             GUILayout.BeginHorizontal(_statusBarStyle ?? GUI.skin.box, GUILayout.Height(StatusBarHeight));
-            if (GUILayout.Button(modeContent, ResolveStatusModeButtonStyle(true, isEditing), GUILayout.Width(68f)))
+            GUI.enabled = canToggleMode;
+            if (GUILayout.Button(modeContent, ResolveStatusModeButtonStyle(canToggleMode, isEditing), GUILayout.Width(68f)))
             {
-                _statusModeMenuOpen = !_statusModeMenuOpen;
+                state.Documents.EditorUnlocked = !isEditing;
+                state.StatusMessage = state.Documents.EditorUnlocked
+                    ? "Edit mode enabled for writable source tabs."
+                    : "Read mode enabled.";
             }
+            GUI.enabled = true;
 
             modeRect = GUILayoutUtility.GetLastRect();
-            tooltip = !_statusModeMenuOpen && Event.current != null && modeRect.Contains(Event.current.mousePosition) ? modeContent.tooltip : string.Empty;
+            tooltip = Event.current != null && modeRect.Contains(Event.current.mousePosition) ? modeContent.tooltip : string.Empty;
 
             if (active.IsDirty)
             {
@@ -328,8 +332,6 @@ namespace Cortex.Modules.Editor
 
             GUI.enabled = true;
             GUILayout.EndHorizontal();
-
-            DrawStatusModeMenu(state, active, modeRect, editingAllowed, canEditDocument, isEditing);
             DrawStatusTooltip(modeRect, tooltip);
         }
 
@@ -390,72 +392,20 @@ namespace Cortex.Modules.Editor
                 : (_statusModeButtonStyle ?? _toolbarButtonStyle ?? GUI.skin.button);
         }
 
-        private void DrawStatusModeMenu(CortexShellState state, DocumentSession session, Rect anchorRect, bool editingAllowed, bool canEditDocument, bool isEditing)
+        private static bool CanToggleDocumentEditing(CortexShellState state, DocumentSession session)
         {
-            if (!_statusModeMenuOpen || Event.current == null || anchorRect.width <= 0f || anchorRect.height <= 0f)
-            {
-                return;
-            }
-
-            var current = Event.current;
-            var menuHeight = 78f;
-            var menuY = anchorRect.y - menuHeight - 2f;
-            if (menuY < 8f)
-            {
-                menuY = anchorRect.yMax + 2f;
-            }
-
-            var menuRect = new Rect(anchorRect.x, menuY, 152f, menuHeight);
-            var readRect = new Rect(menuRect.x + 6f, menuRect.y + 24f, menuRect.width - 12f, 22f);
-            var editRect = new Rect(menuRect.x + 6f, menuRect.y + 48f, menuRect.width - 12f, 22f);
-
-            if (current.type == EventType.MouseDown &&
-                current.button == 0 &&
-                !menuRect.Contains(current.mousePosition) &&
-                !anchorRect.Contains(current.mousePosition))
-            {
-                _statusModeMenuOpen = false;
-                return;
-            }
-
-            GUI.Box(menuRect, GUIContent.none, _contextMenuStyle ?? GUI.skin.box);
-            GUI.Label(new Rect(menuRect.x + 8f, menuRect.y + 5f, menuRect.width - 16f, 18f), "Editor Mode", _contextMenuHeaderStyle ?? GUI.skin.label);
-
-            if (DrawStatusModeMenuItem(readRect, "READ", !isEditing, true))
-            {
-                state.Documents.EditorUnlocked = false;
-                _statusModeMenuOpen = false;
-                EditorInteractionLog.WriteEdit("Switched active tab to read-only mode.");
-                current.Use();
-                return;
-            }
-
-            var editEnabled = editingAllowed && canEditDocument;
-            if (DrawStatusModeMenuItem(editRect, "EDIT", isEditing, editEnabled))
-            {
-                state.Documents.EditorUnlocked = true;
-                _statusModeMenuOpen = false;
-                EditorInteractionLog.WriteEdit("Unlocked active tab for in-memory editing.");
-                current.Use();
-                return;
-            }
-
-            if (editRect.Contains(current.mousePosition))
-            {
-                DrawStatusTooltip(editRect, BuildEditModeTooltip(session, editingAllowed, canEditDocument, isEditing));
-            }
+            return state != null &&
+                state.Settings != null &&
+                state.Settings.EnableFileEditing &&
+                session != null &&
+                session.SupportsEditing;
         }
 
-        private bool DrawStatusModeMenuItem(Rect rect, string label, bool selected, bool enabled)
+        private static bool IsEditingDocument(CortexShellState state, DocumentSession session)
         {
-            var style = ResolveStatusModeButtonStyle(enabled, selected);
-            if (!enabled)
-            {
-                GUI.Box(rect, label, style);
-                return false;
-            }
-
-            return GUI.Button(rect, label, style);
+            return CanToggleDocumentEditing(state, session) &&
+                state.Documents != null &&
+                state.Documents.EditorUnlocked;
         }
 
         private static string BuildEditModeTooltip(DocumentSession session, bool editingAllowed, bool canEditDocument, bool isEditing)
