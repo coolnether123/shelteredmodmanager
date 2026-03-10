@@ -83,6 +83,7 @@
     <Compile Include="Characters\Models\CharacterSaveData.cs" />
     <Compile Include="Characters\Models\EffectInstance.cs" />
     <Compile Include="Core\IGameHelper.cs" />
+    <Compile Include="Core\IOverlayInputCaptureService.cs" />
     <Compile Include="Core\IPlugin.cs" />
     <Compile Include="Core\ModRegistry.cs" />
     <Compile Include="Core\ModLog.cs" />

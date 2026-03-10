@@ -81,7 +81,7 @@ namespace Cortex
                 delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
                 {
                     if (_editorModule == null) return;
-                    _editorModule.Draw(_documentService, _state);
+                    _editorModule.Draw(_documentService, _navigationService, _state);
                 });
 
             RegisterModuleBinding(

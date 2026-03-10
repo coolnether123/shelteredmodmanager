@@ -1,4 +1,4 @@
-using System;
+    using System;
 using System.Collections.Generic;
 using System.IO;
 using Cortex.Adapters;
@@ -31,6 +31,7 @@ namespace Cortex
         private const int MainWindowId = 0xC07E;
         private const int LogsWindowId = 0xC07F;
         private const int SettingsWindowId = 0xC080;
+        private const string OverlayInputCaptureOwnerId = "Cortex.Shell";
 
         private Rect _windowRect = new Rect(70f, 70f, 1180f, 760f);
         private Rect _logWindowRect = new Rect(100f, 100f, 980f, 620f);
@@ -59,6 +60,7 @@ namespace Cortex
         private IRuntimeSourceNavigationService _runtimeSourceNavigationService;
         private IRuntimeToolBridge _runtimeToolBridge;
         private IRestartCoordinator _restartCoordinator;
+        private IOverlayInputCaptureService _overlayInputCaptureService;
         private CortexNavigationService _navigationService;
         private UnityWorkbenchRuntime _workbenchRuntime;
         private readonly HashSet<string> _activatedContainers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -94,6 +96,8 @@ namespace Cortex
         private string _appliedThemeId = string.Empty;
         private WorkbenchPresentationSnapshot _frameSnapshot;
         private readonly Dictionary<string, Rect> _menuGroupRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        private bool _lastOverlayMouseCapture;
+        private bool _lastOverlayKeyboardCapture;
 
         private void Awake()
         {
@@ -116,6 +120,7 @@ namespace Cortex
 
         private void OnDestroy()
         {
+            ReleaseOverlayInputCapture();
             ShutdownLanguageService();
             DisableMmLogRuntimeIntegration();
             PersistWorkbenchSession();
@@ -124,6 +129,11 @@ namespace Cortex
 
         private void Update()
         {
+            if (!_visible)
+            {
+                ReleaseOverlayInputCapture();
+            }
+
             if (InputActionRegistry.IsDown(ToggleActionId))
             {
                 ExecuteCommand("cortex.shell.toggle", null);
@@ -152,6 +162,7 @@ namespace Cortex
         {
             if (!_visible)
             {
+                ReleaseOverlayInputCapture();
                 return;
             }
 
@@ -161,6 +172,7 @@ namespace Cortex
             var previousSkin = GUI.skin;
             GUI.skin = CortexIdeLayout.GetWorkbenchSkin(previousSkin);
             ClampWindowsToScreen();
+            UpdateOverlayInputCapture(Event.current);
             if (_state.Chrome.Main.IsCollapsed)
             {
                 DrawCollapsedWindowButton(_state.Chrome.Main, ">", "Cortex");
@@ -388,9 +400,121 @@ namespace Cortex
             _runtimeSourceNavigationService = new RuntimeSourceNavigationService(new ModApiRuntimeSymbolResolver(_sourcePathResolver), _sourcePathResolver);
             _runtimeToolBridge = new ModApiRuntimeToolBridge();
             _restartCoordinator = new ModApiRestartCoordinator(new RestartRequestWriter());
-            _navigationService = new CortexNavigationService(_documentService, _sourceReferenceService, _runtimeSourceNavigationService);
+            _navigationService = new CortexNavigationService(_documentService, _sourceReferenceService, _runtimeSourceNavigationService, _sourceLookupIndex);
+            _overlayInputCaptureService = null;
             InitializeLanguageService(smmBin, settings);
             EnableMmLogRuntimeIntegration();
+        }
+
+        private void UpdateOverlayInputCapture(Event currentEvent)
+        {
+            var captureMouse = false;
+            var captureKeyboard = GUIUtility.hotControl != 0 || GUIUtility.keyboardControl != 0;
+
+            if (_visible)
+            {
+                Vector2 guiMouse;
+                if (currentEvent != null)
+                {
+                    guiMouse = currentEvent.mousePosition;
+                }
+                else
+                {
+                    var screenMouse = Input.mousePosition;
+                    guiMouse = new Vector2(screenMouse.x, Screen.height - screenMouse.y);
+                }
+
+                captureMouse = GUIUtility.hotControl != 0 || IsPointWithinVisibleChrome(guiMouse);
+            }
+
+            ApplyOverlayInputCapture(captureMouse, captureKeyboard);
+        }
+
+        private void ReleaseOverlayInputCapture()
+        {
+            ApplyOverlayInputCapture(false, false);
+        }
+
+        private void ApplyOverlayInputCapture(bool captureMouse, bool captureKeyboard)
+        {
+            var hasChanged = _lastOverlayMouseCapture != captureMouse || _lastOverlayKeyboardCapture != captureKeyboard;
+            var captureService = ResolveOverlayInputCaptureService();
+            if (captureService == null)
+            {
+                return;
+            }
+
+            if (!hasChanged)
+            {
+                return;
+            }
+
+            if (captureMouse || captureKeyboard)
+            {
+                captureService.ReportCapture(OverlayInputCaptureOwnerId, captureMouse, captureKeyboard);
+            }
+            else
+            {
+                captureService.ReleaseCapture(OverlayInputCaptureOwnerId);
+            }
+
+            _lastOverlayMouseCapture = captureMouse;
+            _lastOverlayKeyboardCapture = captureKeyboard;
+            MMLog.WriteInfo("[Cortex.InputCapture] Reported overlay capture. Mouse=" + captureMouse + ", Keyboard=" + captureKeyboard + ".");
+        }
+
+        private IOverlayInputCaptureService ResolveOverlayInputCaptureService()
+        {
+            if (_overlayInputCaptureService != null)
+            {
+                return _overlayInputCaptureService;
+            }
+
+            if (!ModAPIRegistry.IsAPIRegistered(OverlayInputCaptureApi.Name))
+            {
+                return null;
+            }
+
+            IOverlayInputCaptureService captureService;
+            if (!ModAPIRegistry.TryGetAPI<IOverlayInputCaptureService>(OverlayInputCaptureApi.Name, out captureService))
+            {
+                return null;
+            }
+
+            _overlayInputCaptureService = captureService;
+            return _overlayInputCaptureService;
+        }
+
+        private bool IsPointWithinVisibleChrome(Vector2 guiPoint)
+        {
+            if (_state.Chrome.Main.IsCollapsed)
+            {
+                if (_state.Chrome.Main.CollapsedRect.Contains(guiPoint))
+                {
+                    return true;
+                }
+            }
+            else if (_windowRect.Contains(guiPoint))
+            {
+                return true;
+            }
+
+            if (_state.Logs.ShowDetachedWindow)
+            {
+                if (_state.Chrome.Logs.IsCollapsed)
+                {
+                    if (_state.Chrome.Logs.CollapsedRect.Contains(guiPoint))
+                    {
+                        return true;
+                    }
+                }
+                else if (_logWindowRect.Contains(guiPoint))
+                {
+                    return true;
+                }
+            }
+
+            return _showSettingsWindow && _settingsWindowRect.Contains(guiPoint);
         }
 
         private void ApplySettingsChanges()
