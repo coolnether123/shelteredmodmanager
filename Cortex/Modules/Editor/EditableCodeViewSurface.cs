@@ -867,14 +867,14 @@ namespace Cortex.Modules.Editor
 
         private void WritePointerSelectionAudit(DocumentSession session, string action, PointerContext pointerContext, PointerHitTestResult hitTest)
         {
-            if (session == null || string.IsNullOrEmpty(action))
+            if (!EditorInteractionLog.IsSelectionDiagnosticsEnabled || session == null || string.IsNullOrEmpty(action))
             {
                 return;
             }
 
             var selection = _editorService.GetPrimarySelection(session);
             var caret = _editorService.GetCaretPosition(session, selection.CaretIndex);
-            MMLog.WriteInfo("[Cortex.Editor] Pointer selection. Action=" + action +
+            MMLog.WriteDebug("[Cortex.Editor] Pointer selection. Action=" + action +
                 ", File=" + (session.FilePath ?? string.Empty) +
                 ", RawMouse=(" + pointerContext.RawMouse.x.ToString("F1") + "," + pointerContext.RawMouse.y.ToString("F1") + ")" +
                 ", SurfaceMouse=(" + pointerContext.SurfaceMouse.x.ToString("F1") + "," + pointerContext.SurfaceMouse.y.ToString("F1") + ")" +

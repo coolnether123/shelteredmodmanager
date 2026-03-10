@@ -104,7 +104,7 @@ namespace Cortex
             _languageServiceClient = new RoslynLanguageServiceClient(
                 workerPath,
                 settings.RoslynServiceTimeoutMs,
-                delegate(string message) { MMLog.WriteInfo(message); });
+                delegate(string message) { MMLog.WriteDebug(message); });
             _languageServiceInitializeRequest = initializeRequest;
             _lastAnalyzedDocumentFingerprint = string.Empty;
             _pendingLanguageAnalysisFingerprint = string.Empty;
@@ -186,7 +186,7 @@ namespace Cortex
 
             _languageInitializeQueuedUtc = DateTime.UtcNow;
             _lastLanguageInitializationProgressLogUtc = DateTime.UtcNow;
-            MMLog.WriteInfo("[Cortex.Roslyn] Worker initialize queued. Generation=" + generation +
+            MMLog.WriteDebug("[Cortex.Roslyn] Worker initialize queued. Generation=" + generation +
                 ", RequestId=" + _languageInitializeRequestId + ".");
         }
 
@@ -365,7 +365,7 @@ namespace Cortex
             var requestDocumentPath = request.DocumentPath ?? string.Empty;
             var requestDocumentVersion = request.DocumentVersion;
             _languageHoverInFlight = true;
-            MMLog.WriteInfo("[Cortex.Roslyn] Queueing hover for " +
+            MMLog.WriteDebug("[Cortex.Roslyn] Queueing hover for " +
                 (_state.Editor.RequestedHoverTokenText ?? string.Empty) +
                 " @ " + _state.Editor.RequestedHoverLine + ":" + _state.Editor.RequestedHoverColumn +
                 " in " + Path.GetFileName(requestDocumentPath) + ".");
@@ -661,7 +661,7 @@ namespace Cortex
                 target.TextVersion > 0 &&
                 response.DocumentVersion != target.TextVersion)
             {
-                MMLog.WriteInfo("[Cortex.Roslyn] Ignored stale analysis for " + Path.GetFileName(target.FilePath) +
+                MMLog.WriteDebug("[Cortex.Roslyn] Ignored stale analysis for " + Path.GetFileName(target.FilePath) +
                     ". ResponseVersion=" + response.DocumentVersion +
                     ", LiveVersion=" + target.TextVersion);
                 return;
@@ -692,7 +692,7 @@ namespace Cortex
                 _lastAnalyzedDocumentFingerprint = pending.Fingerprint ?? string.Empty;
             }
 
-            MMLog.WriteInfo("[Cortex.Roslyn] Analysis complete for " +
+            MMLog.WriteDebug("[Cortex.Roslyn] Analysis complete for " +
                 Path.GetFileName(target.FilePath) +
                 ". Phase=" + _documentLanguageAnalysisService.BuildAnalysisPhaseLabel(pending) +
                 ", Diagnostics=" + CountDiagnostics(target.LanguageAnalysis) +
@@ -747,7 +747,7 @@ namespace Cortex
             _state.Editor.RequestedHoverTokenText = string.Empty;
             if (response.Success)
             {
-                MMLog.WriteInfo("[Cortex.Roslyn] Hover resolved for " + requestedHoverTokenText + ".");
+                MMLog.WriteDebug("[Cortex.Roslyn] Hover resolved for " + requestedHoverTokenText + ".");
                 return;
             }
 

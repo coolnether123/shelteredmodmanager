@@ -472,7 +472,7 @@ namespace Cortex
 
             _lastOverlayMouseCapture = captureMouse;
             _lastOverlayKeyboardCapture = captureKeyboard;
-            MMLog.WriteInfo("[Cortex.InputCapture] Reported overlay capture. Mouse=" + captureMouse + ", Keyboard=" + captureKeyboard + ".");
+            MMLog.WriteDebug("[Cortex.InputCapture] Reported overlay capture. Mouse=" + captureMouse + ", Keyboard=" + captureKeyboard + ".");
         }
 
         private IOverlayInputCaptureService ResolveOverlayInputCaptureService()
