@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
+using Cortex.Services;
 using ModAPI.Core;
 using UnityEngine;
 
@@ -15,7 +16,8 @@ namespace Cortex.Modules.Editor
         private const float TooltipWidth = 420f;
         private const float FoldGlyphWidth = 14f;
         private const int TabSize = 4;
-        private const double StickyHoverGraceMs = 220d;
+        private const double StickyHoverGraceMs = 700d;
+        private const float StickyHoverBridgePadding = 10f;
 
         private readonly Dictionary<string, GUIStyle> _classificationStyles = new Dictionary<string, GUIStyle>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, HashSet<string>> _collapsedRegionKeys = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
@@ -26,6 +28,9 @@ namespace Cortex.Modules.Editor
         private GUIStyle _baseStyle;
         private GUIStyle _gutterStyle;
         private GUIStyle _tooltipStyle;
+        private GUIStyle _tooltipSignatureStyle;
+        private GUIStyle _tooltipLinkStyle;
+        private GUIStyle _tooltipDetailStyle;
         private GUIStyle _contextMenuStyle;
         private GUIStyle _contextMenuButtonStyle;
         private GUIStyle _contextMenuHeaderStyle;
@@ -34,6 +39,8 @@ namespace Cortex.Modules.Editor
         private Texture2D _hoverFill;
         private Texture2D _selectedFill;
         private Texture2D _lineHighlightFill;
+        private Texture2D _navigationLineFill;
+        private Texture2D _tooltipUnderlineFill;
         private float _lineHeight = 18f;
         private string _hoverCandidateKey = string.Empty;
         private DateTime _hoverCandidateUtc = DateTime.MinValue;
@@ -51,7 +58,7 @@ namespace Cortex.Modules.Editor
         private string _lastFocusedDocumentPath = string.Empty;
         private int _lastFocusedLineNumber = -1;
 
-        public Vector2 Draw(Rect rect, Vector2 scroll, DocumentSession session, CortexShellState state, string themeKey, GUIStyle baseStyle, GUIStyle gutterStyle, GUIStyle tooltipStyle, GUIStyle contextMenuStyle, GUIStyle contextMenuButtonStyle, GUIStyle contextMenuHeaderStyle, float gutterWidth)
+        public Vector2 Draw(Rect rect, Vector2 scroll, DocumentSession session, CortexNavigationService navigationService, CortexShellState state, string themeKey, GUIStyle baseStyle, GUIStyle gutterStyle, GUIStyle tooltipStyle, GUIStyle contextMenuStyle, GUIStyle contextMenuButtonStyle, GUIStyle contextMenuHeaderStyle, float gutterWidth)
         {
             if (session == null)
             {
@@ -79,12 +86,14 @@ namespace Cortex.Modules.Editor
                 var current = Event.current;
                 var localMouse = current != null ? current.mousePosition - new Vector2(rect.x, rect.y) : Vector2.zero;
                 var hasMouse = current != null && rect.Contains(current.mousePosition);
+                var pointerOnHoverSurface = hasMouse && IsPointerWithinHoverSurface(localMouse);
+                var editorHoverActive = hasMouse && !pointerOnHoverSurface;
                 var contentMouse = scroll + localMouse;
-                var hoveredFoldRegion = hasMouse ? FindFoldRegionAt(contentMouse) : null;
-                var hoveredToken = hoveredFoldRegion == null && hasMouse ? FindTokenAt(contentMouse, gutterWidth) : null;
+                var hoveredFoldRegion = editorHoverActive ? FindFoldRegionAt(contentMouse) : null;
+                var hoveredToken = hoveredFoldRegion == null && editorHoverActive ? FindTokenAt(contentMouse, gutterWidth) : null;
                 hoveredToken = CanHoverToken(hoveredToken) ? hoveredToken : null;
-                UpdateHoverRequest(session, state, hoveredToken, hasMouse);
-                HandlePointerInput(session, state, hoveredToken, hoveredFoldRegion, hasMouse, current, localMouse, rect.size);
+                UpdateHoverRequest(session, state, hoveredToken, editorHoverActive);
+                HandlePointerInput(session, state, hoveredToken, hoveredFoldRegion, editorHoverActive, current, localMouse, rect.size);
 
                 GUI.BeginGroup(rect);
                 try
@@ -93,14 +102,14 @@ namespace Cortex.Modules.Editor
                     scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
                     try
                     {
-                        DrawVisibleLines(scroll, rect.height, hoveredToken, hoveredFoldRegion, gutterWidth);
+                        DrawVisibleLines(session, scroll, rect.height, hoveredToken, hoveredFoldRegion, gutterWidth);
                     }
                     finally
                     {
                         GUI.EndScrollView();
                     }
 
-                    DrawTooltip(session, localMouse, hoveredToken, state, rect.size, hasMouse);
+                    DrawTooltip(session, scroll, localMouse, hoveredToken, navigationService, state, rect.size, hasMouse);
                     DrawContextMenu(state, session, current, localMouse, rect.size);
                 }
                 finally
@@ -140,6 +149,20 @@ namespace Cortex.Modules.Editor
             _baseStyle = baseStyle ?? GUI.skin.label;
             _gutterStyle = gutterStyle ?? GUI.skin.label;
             _tooltipStyle = tooltipStyle ?? GUI.skin.box;
+            _tooltipSignatureStyle = new GUIStyle(_baseStyle);
+            _tooltipSignatureStyle.wordWrap = false;
+            _tooltipSignatureStyle.clipping = TextClipping.Overflow;
+            _tooltipSignatureStyle.padding = new RectOffset(0, 0, 0, 0);
+            _tooltipSignatureStyle.margin = new RectOffset(0, 0, 0, 0);
+            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipSignatureStyle, CortexIdeLayout.GetTextColor());
+            _tooltipLinkStyle = new GUIStyle(_tooltipSignatureStyle);
+            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipLinkStyle, CortexIdeLayout.GetAccentColor());
+            _tooltipDetailStyle = new GUIStyle(_baseStyle);
+            _tooltipDetailStyle.wordWrap = true;
+            _tooltipDetailStyle.clipping = TextClipping.Clip;
+            _tooltipDetailStyle.padding = new RectOffset(0, 0, 0, 0);
+            _tooltipDetailStyle.margin = new RectOffset(0, 0, 0, 0);
+            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipDetailStyle, CortexIdeLayout.GetTextColor());
             _contextMenuStyle = contextMenuStyle ?? GUI.skin.box;
             _contextMenuButtonStyle = contextMenuButtonStyle ?? GUI.skin.button;
             _contextMenuHeaderStyle = contextMenuHeaderStyle ?? GUI.skin.label;
@@ -168,6 +191,8 @@ namespace Cortex.Modules.Editor
             _hoverFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.18f));
             _selectedFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f));
             _lineHighlightFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), 0.35f));
+            _navigationLineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.16f));
+            _tooltipUnderlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.9f));
             Invalidate();
         }
 
@@ -356,7 +381,7 @@ namespace Cortex.Modules.Editor
             layout.ContentHeight = Mathf.Max(_lineHeight, layout.VisibleLines.Count * _lineHeight + 4f);
         }
 
-        private void DrawVisibleLines(Vector2 scroll, float viewHeight, CodeViewToken hoveredToken, FoldRegion hoveredFoldRegion, float gutterWidth)
+        private void DrawVisibleLines(DocumentSession session, Vector2 scroll, float viewHeight, CodeViewToken hoveredToken, FoldRegion hoveredFoldRegion, float gutterWidth)
         {
             if (_layout == null || _layout.VisibleLines.Count == 0)
             {
@@ -366,23 +391,36 @@ namespace Cortex.Modules.Editor
             var firstLine = Mathf.Max(0, Mathf.FloorToInt(scroll.y / _lineHeight));
             var lastLine = Mathf.Min(_layout.VisibleLines.Count - 1, Mathf.CeilToInt((scroll.y + viewHeight) / _lineHeight) + 1);
             var hoveredLine = hoveredToken != null ? hoveredToken.LineNumber : -1;
+            var highlightedLine = session != null ? session.HighlightedLine : 0;
 
             for (var i = firstLine; i <= lastLine; i++)
             {
                 var line = _layout.VisibleLines[i];
                 var lineRect = new Rect(0f, line.Y, _layout.ContentWidth, _lineHeight);
+                var isNavigationLine = highlightedLine > 0 && highlightedLine == line.LineNumber;
+                if (isNavigationLine)
+                {
+                    GUI.DrawTexture(lineRect, _navigationLineFill);
+                }
+
                 if (hoveredLine == line.LineNumber || (hoveredFoldRegion != null && hoveredFoldRegion.StartLineNumber == line.LineNumber))
                 {
                     GUI.DrawTexture(lineRect, _lineHighlightFill);
                 }
 
                 DrawFoldGlyph(line, hoveredFoldRegion);
-                GUI.Label(new Rect(FoldGlyphWidth + 2f, line.Y, gutterWidth - FoldGlyphWidth - 10f, _lineHeight), line.LineNumber.ToString("D4"), _gutterStyle);
+                var gutterRect = new Rect(FoldGlyphWidth + 2f, line.Y, gutterWidth - FoldGlyphWidth - 10f, _lineHeight);
+                if (isNavigationLine)
+                {
+                    GUI.DrawTexture(new Rect(gutterRect.x - 4f, gutterRect.y + 2f, 2f, Mathf.Max(2f, gutterRect.height - 4f)), _tooltipUnderlineFill);
+                }
+
+                GUI.Label(gutterRect, line.LineNumber.ToString("D4"), _gutterStyle);
                 for (var tokenIndex = 0; tokenIndex < line.Tokens.Count; tokenIndex++)
                 {
                     var token = line.Tokens[tokenIndex];
                     var tokenRect = new Rect(gutterWidth + token.X, line.Y, Mathf.Max(2f, token.Width), _lineHeight);
-                    token.LastRect = tokenRect;
+                    token.ContentRect = tokenRect;
                     if (string.Equals(token.Key, _selectedTokenKey, StringComparison.Ordinal))
                     {
                         GUI.DrawTexture(tokenRect, _selectedFill);
@@ -622,36 +660,64 @@ namespace Cortex.Modules.Editor
             state.Editor.RequestedDefinitionTokenText = token.RawText.Trim();
         }
 
-        private void DrawTooltip(DocumentSession session, Vector2 localMouse, CodeViewToken hoveredToken, CortexShellState state, Vector2 viewportSize, bool hasMouse)
+        private void DrawTooltip(DocumentSession session, Vector2 scroll, Vector2 localMouse, CodeViewToken hoveredToken, CortexNavigationService navigationService, CortexShellState state, Vector2 viewportSize, bool hasMouse)
         {
             LanguageServiceHoverResponse response;
             string hoverKey;
-            if (!TryResolveVisibleHover(session, hoveredToken, state, hasMouse, localMouse, out response, out hoverKey))
+            if (!TryResolveVisibleHover(session, scroll, hoveredToken, state, hasMouse, localMouse, out response, out hoverKey))
             {
                 ClearVisibleHover(state);
                 return;
             }
 
-            var label = response.SymbolDisplay ?? string.Empty;
-            var docs = response.DocumentationText ?? string.Empty;
-            var tooltipText = string.IsNullOrEmpty(docs) ? label : label + "\n\n" + docs;
-            if (string.IsNullOrEmpty(tooltipText))
+            var displayParts = GetTooltipDisplayParts(response);
+            var signatureHeight = LayoutTooltipParts(new Rect(0f, 0f, TooltipWidth - 16f, 0f), displayParts, null, false);
+            if (signatureHeight <= 0f)
             {
                 ClearStickyHover(state);
                 return;
             }
 
-            var size = _tooltipStyle.CalcHeight(new GUIContent(tooltipText), TooltipWidth - 18f);
-            var tooltipRect = BuildTooltipRect(localMouse, hoveredToken, hoverKey, viewportSize, Mathf.Min(220f, size + 14f));
+            var tooltipRect = BuildTooltipRect(
+                scroll,
+                localMouse,
+                hoveredToken,
+                hoverKey,
+                viewportSize,
+                BuildTooltipHeight(signatureHeight, BuildTooltipDetailText(response, null)));
+
+            var partVisuals = new List<TooltipPartVisual>();
+            LayoutTooltipParts(new Rect(tooltipRect.x + 8f, tooltipRect.y + 7f, TooltipWidth - 16f, 0f), displayParts, partVisuals, false);
+            var hoveredPart = FindHoveredTooltipPart(partVisuals, localMouse);
+            var detailText = BuildTooltipDetailText(response, hoveredPart != null ? hoveredPart.Part : null);
+            var finalHeight = BuildTooltipHeight(signatureHeight, detailText);
+            tooltipRect = BuildTooltipRect(scroll, localMouse, hoveredToken, hoverKey, viewportSize, finalHeight);
             _stickyHoverTooltipRect = tooltipRect;
             SetVisibleHover(state, hoverKey, response);
             LogVisibleHover(hoverKey, response, hoveredToken);
             GUI.Box(tooltipRect, GUIContent.none, _tooltipStyle);
-            GUI.Label(new Rect(tooltipRect.x + 8f, tooltipRect.y + 7f, tooltipRect.width - 16f, tooltipRect.height - 14f), tooltipText, _tooltipStyle);
+
+            partVisuals.Clear();
+            LayoutTooltipParts(new Rect(tooltipRect.x + 8f, tooltipRect.y + 7f, TooltipWidth - 16f, 0f), displayParts, partVisuals, true);
+            hoveredPart = FindHoveredTooltipPart(partVisuals, localMouse);
+
+            if (hoveredPart != null && hoveredPart.Part != null && hoveredPart.Part.IsInteractive)
+            {
+                GUI.DrawTexture(hoveredPart.Rect, _hoverFill);
+                GUI.Label(hoveredPart.Rect, hoveredPart.Part.Text, _tooltipLinkStyle);
+                HandleTooltipPartClick(navigationService, state, hoveredPart.Part);
+            }
+
+            if (!string.IsNullOrEmpty(detailText))
+            {
+                var detailRect = BuildTooltipDetailRect(tooltipRect, signatureHeight);
+                GUI.Label(detailRect, detailText, _tooltipDetailStyle);
+            }
         }
 
         private bool TryResolveVisibleHover(
             DocumentSession session,
+            Vector2 scroll,
             CodeViewToken hoveredToken,
             CortexShellState state,
             bool hasMouse,
@@ -679,13 +745,24 @@ namespace Cortex.Modules.Editor
             {
                 _stickyHoverKey = hoverKey;
                 _stickyHoverDocumentPath = documentPath;
-                _stickyHoverAnchorRect = hoveredToken.LastRect;
+                _stickyHoverAnchorRect = ToViewportRect(hoveredToken.ContentRect, scroll);
                 RefreshStickyHoverKeepAlive();
                 return true;
             }
 
             if (hoveredToken != null)
             {
+                if (IsPointerWithinHoverSurface(localMouse))
+                {
+                    RefreshStickyHoverKeepAlive();
+                    return true;
+                }
+
+                if (DateTime.UtcNow <= _stickyHoverKeepAliveUtc)
+                {
+                    return true;
+                }
+
                 ClearStickyHover(state);
                 return false;
             }
@@ -712,36 +789,201 @@ namespace Cortex.Modules.Editor
             return false;
         }
 
-        private Rect BuildTooltipRect(Vector2 localMouse, CodeViewToken hoveredToken, string hoverKey, Vector2 viewportSize, float height)
+        private Rect BuildTooltipRect(Vector2 scroll, Vector2 localMouse, CodeViewToken hoveredToken, string hoverKey, Vector2 viewportSize, float height)
         {
             if (hoveredToken != null && string.Equals(hoverKey, hoveredToken.Key, StringComparison.Ordinal))
             {
-                var tooltipRect = new Rect(localMouse.x + 18f, localMouse.y + 18f, TooltipWidth, height);
-                tooltipRect.x = Mathf.Min(tooltipRect.x, Mathf.Max(8f, viewportSize.x - tooltipRect.width - 12f));
-                tooltipRect.y = Mathf.Min(tooltipRect.y, Mathf.Max(8f, viewportSize.y - tooltipRect.height - 12f));
-                return tooltipRect;
+                return ClampTooltipRect(BuildTooltipRectFromAnchor(ToViewportRect(hoveredToken.ContentRect, scroll), viewportSize, height), viewportSize);
             }
 
             if (_stickyHoverTooltipRect.width > 0f && _stickyHoverTooltipRect.height > 0f)
             {
-                var tooltipRect = _stickyHoverTooltipRect;
-                tooltipRect.width = TooltipWidth;
-                tooltipRect.height = height;
-                tooltipRect.x = Mathf.Min(tooltipRect.x, Mathf.Max(8f, viewportSize.x - tooltipRect.width - 12f));
-                tooltipRect.y = Mathf.Min(tooltipRect.y, Mathf.Max(8f, viewportSize.y - tooltipRect.height - 12f));
-                return tooltipRect;
+                var stickyRect = _stickyHoverTooltipRect;
+                stickyRect.width = TooltipWidth;
+                stickyRect.height = height;
+                return ClampTooltipRect(stickyRect, viewportSize);
             }
 
-            var fallbackRect = new Rect(localMouse.x + 18f, localMouse.y + 18f, TooltipWidth, height);
-            fallbackRect.x = Mathf.Min(fallbackRect.x, Mathf.Max(8f, viewportSize.x - fallbackRect.width - 12f));
-            fallbackRect.y = Mathf.Min(fallbackRect.y, Mathf.Max(8f, viewportSize.y - fallbackRect.height - 12f));
-            return fallbackRect;
+            return ClampTooltipRect(new Rect(localMouse.x + 18f, localMouse.y + 18f, TooltipWidth, height), viewportSize);
+        }
+
+        private static Rect BuildTooltipRectFromAnchor(Rect anchorRect, Vector2 viewportSize, float height)
+        {
+            var x = anchorRect.xMin - 4f;
+            var y = anchorRect.yMax - 3f;
+            if (y + height > viewportSize.y - 12f)
+            {
+                y = anchorRect.yMin - height + 3f;
+            }
+
+            return new Rect(x, y, TooltipWidth, height);
+        }
+
+        private static Rect ToViewportRect(Rect contentRect, Vector2 scroll)
+        {
+            return new Rect(contentRect.x - scroll.x, contentRect.y - scroll.y, contentRect.width, contentRect.height);
+        }
+
+        private LanguageServiceHoverDisplayPart[] GetTooltipDisplayParts(LanguageServiceHoverResponse response)
+        {
+            if (response != null && response.DisplayParts != null && response.DisplayParts.Length > 0)
+            {
+                return response.DisplayParts;
+            }
+
+            return new[]
+            {
+                new LanguageServiceHoverDisplayPart
+                {
+                    Text = response != null ? response.SymbolDisplay ?? string.Empty : string.Empty,
+                    Classification = string.Empty,
+                    IsInteractive = false
+                }
+            };
+        }
+
+        private float LayoutTooltipParts(Rect bounds, LanguageServiceHoverDisplayPart[] parts, List<TooltipPartVisual> visuals, bool draw)
+        {
+            var x = bounds.x;
+            var y = bounds.y;
+            var maxX = bounds.x + Mathf.Max(8f, bounds.width);
+            var lineHeight = Mathf.Max(18f, _tooltipSignatureStyle.CalcSize(new GUIContent("Ag")).y + 2f);
+
+            for (var i = 0; parts != null && i < parts.Length; i++)
+            {
+                var part = parts[i];
+                var text = part != null ? part.Text ?? string.Empty : string.Empty;
+                if (string.IsNullOrEmpty(text))
+                {
+                    continue;
+                }
+
+                var style = part.IsInteractive ? _tooltipLinkStyle : _tooltipSignatureStyle;
+                var width = Mathf.Max(2f, style.CalcSize(new GUIContent(text)).x);
+                if (x > bounds.x && x + width > maxX)
+                {
+                    x = bounds.x;
+                    y += lineHeight;
+                }
+
+                var rect = new Rect(x, y, width, lineHeight);
+                if (visuals != null)
+                {
+                    visuals.Add(new TooltipPartVisual { Part = part, Rect = rect });
+                }
+
+                if (draw)
+                {
+                    GUI.Label(rect, text, style);
+                    if (part.IsInteractive)
+                    {
+                        GUI.DrawTexture(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), _tooltipUnderlineFill);
+                    }
+                }
+
+                x += width;
+            }
+
+            return Mathf.Max(lineHeight, (y - bounds.y) + lineHeight);
+        }
+
+        private static TooltipPartVisual FindHoveredTooltipPart(List<TooltipPartVisual> visuals, Vector2 localMouse)
+        {
+            if (visuals == null)
+            {
+                return null;
+            }
+
+            for (var i = 0; i < visuals.Count; i++)
+            {
+                var visual = visuals[i];
+                if (visual != null && visual.Part != null && visual.Part.IsInteractive && visual.Rect.Contains(localMouse))
+                {
+                    return visual;
+                }
+            }
+
+            return null;
+        }
+
+        private float BuildTooltipHeight(float signatureHeight, string detailText)
+        {
+            var detailHeight = string.IsNullOrEmpty(detailText)
+                ? 0f
+                : _tooltipDetailStyle.CalcHeight(new GUIContent(detailText), TooltipWidth - 16f);
+            return Mathf.Min(260f, 14f + signatureHeight + (detailHeight > 0f ? detailHeight + 8f : 0f));
+        }
+
+        private static Rect BuildTooltipDetailRect(Rect tooltipRect, float signatureHeight)
+        {
+            return new Rect(
+                tooltipRect.x + 8f,
+                tooltipRect.y + 7f + signatureHeight + 6f,
+                tooltipRect.width - 16f,
+                Mathf.Max(0f, tooltipRect.height - signatureHeight - 20f));
+        }
+
+        private static string BuildTooltipDetailText(LanguageServiceHoverResponse response, LanguageServiceHoverDisplayPart hoveredPart)
+        {
+            if (hoveredPart != null)
+            {
+                var partDocs = hoveredPart.DocumentationText ?? string.Empty;
+                return partDocs;
+            }
+
+            var docs = response != null ? response.DocumentationText ?? string.Empty : string.Empty;
+            return docs;
+        }
+
+        private void HandleTooltipPartClick(CortexNavigationService navigationService, CortexShellState state, LanguageServiceHoverDisplayPart part)
+        {
+            var current = Event.current;
+            if (navigationService == null || state == null || part == null || current == null ||
+                current.type != EventType.MouseDown || current.button != 0)
+            {
+                return;
+            }
+
+            if (navigationService.OpenHoverDisplayPart(
+                state,
+                part,
+                "Opened definition: " + (part.SymbolDisplay ?? part.Text ?? string.Empty),
+                "Unable to open definition for " + (part.SymbolDisplay ?? part.Text ?? string.Empty) + "."))
+            {
+                MMLog.WriteInfo("[Cortex.HoverUI] Opened tooltip symbol target for " + (part.SymbolDisplay ?? part.Text ?? string.Empty) + ".");
+                current.Use();
+            }
+        }
+
+        private static Rect ClampTooltipRect(Rect rect, Vector2 viewportSize)
+        {
+            rect.x = Mathf.Min(rect.x, Mathf.Max(8f, viewportSize.x - rect.width - 12f));
+            rect.y = Mathf.Min(rect.y, Mathf.Max(8f, viewportSize.y - rect.height - 12f));
+            rect.x = Mathf.Max(8f, rect.x);
+            rect.y = Mathf.Max(8f, rect.y);
+            return rect;
         }
 
         private bool IsPointerWithinHoverSurface(Vector2 localMouse)
         {
-            return (_stickyHoverAnchorRect.width > 0f && _stickyHoverAnchorRect.height > 0f && _stickyHoverAnchorRect.Contains(localMouse)) ||
-                (_stickyHoverTooltipRect.width > 0f && _stickyHoverTooltipRect.height > 0f && _stickyHoverTooltipRect.Contains(localMouse));
+            if ((_stickyHoverAnchorRect.width > 0f && _stickyHoverAnchorRect.height > 0f && _stickyHoverAnchorRect.Contains(localMouse)) ||
+                (_stickyHoverTooltipRect.width > 0f && _stickyHoverTooltipRect.height > 0f && _stickyHoverTooltipRect.Contains(localMouse)))
+            {
+                return true;
+            }
+
+            if (_stickyHoverAnchorRect.width <= 0f || _stickyHoverAnchorRect.height <= 0f ||
+                _stickyHoverTooltipRect.width <= 0f || _stickyHoverTooltipRect.height <= 0f)
+            {
+                return false;
+            }
+
+            var bridgeRect = Rect.MinMaxRect(
+                Mathf.Min(_stickyHoverAnchorRect.xMin, _stickyHoverTooltipRect.xMin) - StickyHoverBridgePadding,
+                Mathf.Min(_stickyHoverAnchorRect.yMin, _stickyHoverTooltipRect.yMin) - StickyHoverBridgePadding,
+                Mathf.Max(_stickyHoverAnchorRect.xMax, _stickyHoverTooltipRect.xMax) + StickyHoverBridgePadding,
+                Mathf.Max(_stickyHoverAnchorRect.yMax, _stickyHoverTooltipRect.yMax) + StickyHoverBridgePadding);
+            return bridgeRect.Contains(localMouse);
         }
 
         private void RefreshStickyHoverKeepAlive()
@@ -1581,7 +1823,13 @@ namespace Cortex.Modules.Editor
             public int Column;
             public float X;
             public float Width;
-            public Rect LastRect;
+            public Rect ContentRect;
+        }
+
+        private sealed class TooltipPartVisual
+        {
+            public LanguageServiceHoverDisplayPart Part;
+            public Rect Rect;
         }
 
         private struct NormalizedSpan

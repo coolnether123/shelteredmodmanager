@@ -335,6 +335,26 @@ namespace Cortex.LanguageService.Protocol
     }
 
     /// <summary>
+    /// Interactive symbol fragment exposed within a hover signature.
+    /// </summary>
+    public sealed class LanguageServiceHoverDisplayPart
+    {
+        public string Text;
+        public string Classification;
+        public bool IsInteractive;
+        public string SymbolDisplay;
+        public string SymbolKind;
+        public string MetadataName;
+        public string ContainingTypeName;
+        public string ContainingAssemblyName;
+        public string DocumentationCommentId;
+        public string DocumentationXml;
+        public string DocumentationText;
+        public string DefinitionDocumentPath;
+        public LanguageServiceRange DefinitionRange;
+    }
+
+    /// <summary>
     /// Compiler or analyzer diagnostic produced by Roslyn.
     /// </summary>
     public sealed class LanguageServiceDiagnostic
@@ -393,6 +413,7 @@ namespace Cortex.LanguageService.Protocol
         public LanguageServiceRange Range;
         public string DefinitionDocumentPath;
         public LanguageServiceRange DefinitionRange;
+        public LanguageServiceHoverDisplayPart[] DisplayParts;
     }
 
     /// <summary>

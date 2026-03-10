@@ -84,7 +84,8 @@ namespace Cortex.Roslyn.Worker
                     SymbolDisplay = string.Empty,
                     SymbolKind = string.Empty,
                     DocumentationXml = string.Empty,
-                    DocumentationText = string.Empty
+                    DocumentationText = string.Empty,
+                    DisplayParts = new LanguageServiceHoverDisplayPart[0]
                 };
             }
 
@@ -102,7 +103,8 @@ namespace Cortex.Roslyn.Worker
                     SymbolDisplay = string.Empty,
                     SymbolKind = string.Empty,
                     DocumentationXml = string.Empty,
-                    DocumentationText = string.Empty
+                    DocumentationText = string.Empty,
+                    DisplayParts = new LanguageServiceHoverDisplayPart[0]
                 };
             }
 
@@ -120,7 +122,8 @@ namespace Cortex.Roslyn.Worker
                     SymbolDisplay = string.Empty,
                     SymbolKind = string.Empty,
                     DocumentationXml = string.Empty,
-                    DocumentationText = string.Empty
+                    DocumentationText = string.Empty,
+                    DisplayParts = new LanguageServiceHoverDisplayPart[0]
                 };
             }
 
@@ -154,7 +157,8 @@ namespace Cortex.Roslyn.Worker
                 DefinitionDocumentPath = definitionLocation != null && definitionLocation.SourceTree != null
                     ? definitionLocation.SourceTree.FilePath ?? string.Empty
                     : string.Empty,
-                DefinitionRange = BuildRange(definitionText, definitionLocation != null ? definitionLocation.SourceSpan : default(TextSpan))
+                DefinitionRange = BuildRange(definitionText, definitionLocation != null ? definitionLocation.SourceSpan : default(TextSpan)),
+                DisplayParts = BuildHoverDisplayParts(symbol)
             };
         }
 
@@ -271,6 +275,68 @@ namespace Cortex.Roslyn.Worker
             return symbol.ContainingType != null
                 ? symbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty)
                 : string.Empty;
+        }
+
+        private static LanguageServiceHoverDisplayPart[] BuildHoverDisplayParts(ISymbol symbol)
+        {
+            if (symbol == null)
+            {
+                return new LanguageServiceHoverDisplayPart[0];
+            }
+
+            var parts = symbol.ToDisplayParts(SymbolDisplayFormat.CSharpErrorMessageFormat);
+            if (parts.IsDefaultOrEmpty)
+            {
+                return new LanguageServiceHoverDisplayPart[0];
+            }
+
+            var results = new List<LanguageServiceHoverDisplayPart>(parts.Length);
+            for (var i = 0; i < parts.Length; i++)
+            {
+                var displayPart = parts[i];
+                var part = new LanguageServiceHoverDisplayPart
+                {
+                    Text = displayPart.ToString(),
+                    Classification = displayPart.Kind.ToString(),
+                    IsInteractive = displayPart.Symbol != null
+                };
+
+                if (displayPart.Symbol != null)
+                {
+                    PopulateHoverDisplayPart(part, displayPart.Symbol);
+                }
+
+                results.Add(part);
+            }
+
+            return results.ToArray();
+        }
+
+        private static void PopulateHoverDisplayPart(LanguageServiceHoverDisplayPart part, ISymbol symbol)
+        {
+            if (part == null || symbol == null)
+            {
+                return;
+            }
+
+            var definitionLocation = symbol.Locations.FirstOrDefault(location => location.IsInSource);
+            var definitionText = definitionLocation != null && definitionLocation.SourceTree != null
+                ? definitionLocation.SourceTree.GetText()
+                : null;
+            var documentationXml = symbol.GetDocumentationCommentXml();
+
+            part.SymbolDisplay = symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+            part.SymbolKind = symbol.Kind.ToString();
+            part.MetadataName = symbol.MetadataName ?? string.Empty;
+            part.ContainingTypeName = GetContainingTypeName(symbol);
+            part.ContainingAssemblyName = symbol.ContainingAssembly != null ? symbol.ContainingAssembly.Identity.Name : string.Empty;
+            part.DocumentationCommentId = symbol.GetDocumentationCommentId() ?? string.Empty;
+            part.DocumentationXml = documentationXml ?? string.Empty;
+            part.DocumentationText = FlattenDocumentation(documentationXml);
+            part.DefinitionDocumentPath = definitionLocation != null && definitionLocation.SourceTree != null
+                ? definitionLocation.SourceTree.FilePath ?? string.Empty
+                : string.Empty;
+            part.DefinitionRange = BuildRange(definitionText, definitionLocation != null ? definitionLocation.SourceSpan : default(TextSpan));
         }
 
         private DocumentContext ResolveDocument(string documentPath, string projectPath, string workspaceRootPath, string[] sourceRoots, string documentText, int documentVersion)

@@ -85,7 +85,7 @@ namespace Cortex.Modules.Logs
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             DrawToolbar(allEntries, visibleEntries, settings, state, detachedWindow);
-            DrawLogSurface(visibleEntries, navigationService, sourcePathResolver, state);
+            DrawLogSurface(visibleEntries, sourcePathResolver, navigationService, state);
             GUILayout.EndVertical();
         }
 
@@ -99,7 +99,7 @@ namespace Cortex.Modules.Logs
             {
                 CortexIdeLayout.DrawGroup("Log Stream", delegate
                 {
-                    DrawLogList(visibleEntries, navigationService, sourcePathResolver, state);
+                    DrawLogList(visibleEntries, sourcePathResolver, navigationService, state);
                 }, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
                 return;
             }
@@ -107,12 +107,12 @@ namespace Cortex.Modules.Logs
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             CortexIdeLayout.DrawGroup("Log Stream", delegate
             {
-                DrawLogList(visibleEntries, navigationService, sourcePathResolver, state);
+                DrawLogList(visibleEntries, sourcePathResolver, navigationService, state);
             }, GUILayout.ExpandWidth(true), GUILayout.MinHeight(120f), GUILayout.Height(180f));
             GUILayout.Space(6f);
             CortexIdeLayout.DrawGroup("Entry Details", delegate
             {
-                DrawDetailStrip(navigationService, sourcePathResolver, state);
+                DrawDetailStrip(sourcePathResolver, navigationService, state);
             }, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.EndVertical();
         }
@@ -193,8 +193,8 @@ namespace Cortex.Modules.Logs
                     DrawEntryRow(
                         new Rect(0f, rowStartY + (i * EntryHeight), contentRect.width, EntryHeight),
                         visibleEntries[i],
-                        navigationService,
                         sourcePathResolver,
+                        navigationService,
                         state);
                 }
             }
@@ -254,7 +254,7 @@ namespace Cortex.Modules.Logs
                 {
                     MMLog.WriteInfo("[Cortex.Logs] Double-activate navigation requested for log entry '" +
                         (entry.Source ?? "Unknown") + "'.");
-                    NavigateToEntry(entry, navigationService, sourcePathResolver, state);
+                    NavigateToEntry(entry, sourcePathResolver, navigationService, state);
                 }
 
                 current.Use();
@@ -327,7 +327,7 @@ namespace Cortex.Modules.Logs
             // Stack frames (compact horizontal list)
             if (entry.StackFrames != null && entry.StackFrames.Count > 0)
             {
-                DrawStackFrameList(navigationService, documentService, state, entry);
+                DrawStackFrameList(navigationService, state, entry);
             }
             else
             {

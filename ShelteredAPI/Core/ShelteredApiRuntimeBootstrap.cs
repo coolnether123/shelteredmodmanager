@@ -49,6 +49,7 @@ namespace ShelteredAPI.Core
 
         private static void EnsureApiRegistrations()
         {
+            ModAPIRegistry.RegisterAPI<IOverlayInputCaptureService>(OverlayInputCaptureApi.Name, new ShelteredOverlayInputCaptureService(), "shelteredapi");
             ModAPIRegistry.RegisterAPI<IGameHelper>("ShelteredAPI.GameHelper", new GameHelperImpl(), "shelteredapi");
 
             IActorSystem actors = ActorSystem.Instance;

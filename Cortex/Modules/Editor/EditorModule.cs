@@ -60,6 +60,7 @@ namespace Cortex.Modules.Editor
 
         public void Draw(
             IDocumentService documentService,
+            Services.CortexNavigationService navigationService,
             CortexShellState state)
         {
             EnsureStyles(state);
@@ -75,7 +76,7 @@ namespace Cortex.Modules.Editor
 
             DrawTabStrip(state);
             DrawPathBar(documentService, state);
-            DrawCodeArea(documentService, state);
+            DrawCodeArea(documentService, navigationService, state);
             DrawStatusBar(state);
 
             GUILayout.EndVertical();
@@ -221,7 +222,7 @@ namespace Cortex.Modules.Editor
 
         // ── Code editor area ──────────────────────────────────────────────────────────
 
-        private void DrawCodeArea(IDocumentService documentService, CortexShellState state)
+        private void DrawCodeArea(IDocumentService documentService, Services.CortexNavigationService navigationService, CortexShellState state)
         {
             var active = state.Documents.ActiveDocument;
             if (active == null)
@@ -276,6 +277,7 @@ namespace Cortex.Modules.Editor
                     rect,
                     _editorScroll,
                     active,
+                    navigationService,
                     state,
                     _appliedTheme,
                     _editorReadOnlyStyle,
