@@ -80,6 +80,11 @@ namespace Cortex.Core.Services
             return QueueRequest(LanguageServiceCommands.GoToDefinition, request, _timeoutMs);
         }
 
+        public string QueueCompletion(LanguageServiceCompletionRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.Completion, request, _timeoutMs);
+        }
+
         public bool TryDequeueResponse(out LanguageServiceEnvelope envelope)
         {
             lock (_sync)
@@ -119,6 +124,11 @@ namespace Cortex.Core.Services
         public LanguageServiceDefinitionResponse GoToDefinition(LanguageServiceDefinitionRequest request)
         {
             return SendRequest<LanguageServiceDefinitionResponse>(LanguageServiceCommands.GoToDefinition, request);
+        }
+
+        public LanguageServiceCompletionResponse GetCompletion(LanguageServiceCompletionRequest request)
+        {
+            return SendRequest<LanguageServiceCompletionResponse>(LanguageServiceCommands.Completion, request);
         }
 
         public void Shutdown()

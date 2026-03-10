@@ -20,19 +20,30 @@ namespace Cortex.Modules.Editor
         private const float DefaultLineHeight = 18f;
         private const float SelectionPadding = 2f;
         private const double DoubleClickThresholdSeconds = 0.32d;
+        private const int CompletionVisibleItemCount = 8;
 
         private readonly IEditorService _editorService = new EditorService();
         private readonly IEditorKeybindingService _keybindingService = new EditorKeybindingService();
+        private readonly DocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
+        private readonly DocumentLanguageInteractionService _documentLanguageInteractionService = new DocumentLanguageInteractionService();
         private readonly GUIContent _measureContent = new GUIContent();
         private readonly List<NormalizedSpan> _orderedSpans = new List<NormalizedSpan>();
         private readonly Dictionary<string, GUIStyle> _classificationStyles = new Dictionary<string, GUIStyle>(StringComparer.OrdinalIgnoreCase);
 
         private GUIStyle _codeStyle;
         private GUIStyle _gutterStyle;
+        private GUIStyle _completionPopupStyle;
+        private GUIStyle _completionItemStyle;
+        private GUIStyle _completionItemSelectedStyle;
+        private GUIStyle _completionDetailStyle;
         private Texture2D _selectionFill;
         private Texture2D _caretFill;
         private Texture2D _currentLineFill;
+        private Texture2D _currentLineEdgeFill;
         private Texture2D _surfaceFill;
+        private Texture2D _completionPopupFill;
+        private Texture2D _completionSelectedFill;
+        private Texture2D _completionBorderFill;
         private string _styleCacheKey = string.Empty;
         private float _lineHeight = DefaultLineHeight;
         private bool _hasFocus;
@@ -40,6 +51,10 @@ namespace Cortex.Modules.Editor
         private int _dragAnchorIndex;
         private int _lastClickIndex = -1;
         private DateTime _lastClickUtc = DateTime.MinValue;
+        private string _lastDrawError = string.Empty;
+        private DateTime _lastDrawErrorUtc = DateTime.MinValue;
+        private string _completionStateKey = string.Empty;
+        private int _completionSelectedIndex = -1;
         private LayoutCache _layout;
 
         public Vector2 Draw(
@@ -69,14 +84,30 @@ namespace Cortex.Modules.Editor
                 {
                     return scroll;
                 }
-
-                scroll = EnsureCaretVisible(session, scroll, rect.height);
+                var inputTextVersion = session.TextVersion;
+                var inputAnalysisTick = session.LastLanguageAnalysisUtc.Ticks;
 
                 var current = Event.current;
                 var localMouse = current != null ? current.mousePosition - new Vector2(rect.x, rect.y) : Vector2.zero;
                 var hasMouse = current != null && rect.Contains(current.mousePosition);
-                HandlePointerInput(session, current, hasMouse, localMouse, rect, scroll, gutterWidth);
+                HandlePointerInput(session, state, current, hasMouse, localMouse, rect, scroll, gutterWidth);
                 HandleKeyboardInput(session, state, current);
+                if (session.TextVersion != inputTextVersion)
+                {
+                    _documentLanguageAnalysisService.ApplyProvisionalClassificationProjection(session);
+                }
+
+                if (session.TextVersion != inputTextVersion ||
+                    session.LastLanguageAnalysisUtc.Ticks != inputAnalysisTick)
+                {
+                    EnsureLayout(session, themeKey, gutterWidth);
+                    if (_layout == null)
+                    {
+                        return scroll;
+                    }
+                }
+
+                scroll = EnsureCaretVisible(session, scroll, rect.height);
 
                 GUI.BeginGroup(rect);
                 try
@@ -92,6 +123,8 @@ namespace Cortex.Modules.Editor
                     {
                         GUI.EndScrollView();
                     }
+
+                    DrawCompletionPopup(session, state, scroll, rect.size, gutterWidth);
                 }
                 finally
                 {
@@ -103,7 +136,14 @@ namespace Cortex.Modules.Editor
                 _hasFocus = false;
                 _isDraggingSelection = false;
                 _layout = null;
-                MMLog.WriteError("[Cortex.Editor] Editable code surface draw failed: " + ex);
+                var error = ex.GetType().FullName + "|" + (ex.Message ?? string.Empty);
+                if (!string.Equals(_lastDrawError, error, StringComparison.Ordinal) ||
+                    (DateTime.UtcNow - _lastDrawErrorUtc).TotalSeconds >= 1d)
+                {
+                    _lastDrawError = error;
+                    _lastDrawErrorUtc = DateTime.UtcNow;
+                    MMLog.WriteError("[Cortex.Editor] Editable code surface draw failed: " + ex);
+                }
             }
 
             return scroll;
@@ -122,9 +162,17 @@ namespace Cortex.Modules.Editor
             if (string.Equals(cacheKey, _styleCacheKey, StringComparison.Ordinal) &&
                 _codeStyle != null &&
                 _gutterStyle != null &&
+                _completionPopupStyle != null &&
+                _completionItemStyle != null &&
+                _completionItemSelectedStyle != null &&
+                _completionDetailStyle != null &&
                 _selectionFill != null &&
                 _caretFill != null &&
                 _currentLineFill != null &&
+                _currentLineEdgeFill != null &&
+                _completionPopupFill != null &&
+                _completionSelectedFill != null &&
+                _completionBorderFill != null &&
                 _surfaceFill != null)
             {
                 return;
@@ -151,8 +199,32 @@ namespace Cortex.Modules.Editor
             _lineHeight = _codeStyle.lineHeight > 0f ? Mathf.Max(DefaultLineHeight, _codeStyle.lineHeight + 2f) : DefaultLineHeight;
             _selectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.30f));
             _caretFill = MakeFill(CortexIdeLayout.GetAccentColor());
-            _currentLineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), 0.42f));
+            _currentLineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), 0.16f));
+            _currentLineEdgeFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f));
+            _completionPopupFill = MakeFill(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.55f));
+            _completionSelectedFill = MakeFill(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetSurfaceColor(), 0.22f));
+            _completionBorderFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.38f));
             _surfaceFill = MakeFill(CortexIdeLayout.GetBackgroundColor());
+            _completionPopupStyle = new GUIStyle(GUI.skin.box);
+            _completionPopupStyle.padding = new RectOffset(4, 4, 4, 4);
+            _completionPopupStyle.margin = new RectOffset(0, 0, 0, 0);
+            _completionPopupStyle.border = new RectOffset(1, 1, 1, 1);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_completionPopupStyle, _completionPopupFill);
+            GuiStyleUtil.ApplyTextColorToAllStates(_completionPopupStyle, CortexIdeLayout.GetTextColor());
+
+            _completionItemStyle = new GUIStyle(_codeStyle);
+            _completionItemStyle.padding = new RectOffset(8, 8, 2, 2);
+            _completionItemStyle.margin = new RectOffset(0, 0, 0, 0);
+            _completionItemStyle.alignment = TextAnchor.MiddleLeft;
+            GuiStyleUtil.ApplyBackgroundToAllStates(_completionItemStyle, null);
+            GuiStyleUtil.ApplyTextColorToAllStates(_completionItemStyle, CortexIdeLayout.GetTextColor());
+
+            _completionItemSelectedStyle = new GUIStyle(_completionItemStyle);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_completionItemSelectedStyle, _completionSelectedFill);
+
+            _completionDetailStyle = new GUIStyle(_completionItemStyle);
+            _completionDetailStyle.alignment = TextAnchor.MiddleRight;
+            GuiStyleUtil.ApplyTextColorToAllStates(_completionDetailStyle, CortexIdeLayout.GetMutedTextColor());
             Invalidate();
         }
 
@@ -438,9 +510,11 @@ namespace Cortex.Modules.Editor
             {
                 var line = _layout.Lines[i];
                 var lineRect = new Rect(0f, line.Y, _layout.ContentWidth, _lineHeight);
-                if (primaryCaret.Line == i)
+                if (_hasFocus && primaryCaret.Line == i)
                 {
                     GUI.DrawTexture(lineRect, _currentLineFill);
+                    GUI.DrawTexture(new Rect(0f, line.Y, _layout.ContentWidth, 1f), _currentLineEdgeFill);
+                    GUI.DrawTexture(new Rect(0f, line.Y + _lineHeight - 1f, _layout.ContentWidth, 1f), _currentLineEdgeFill);
                 }
 
                 DrawGutter(line, gutterWidth);
@@ -510,7 +584,121 @@ namespace Cortex.Modules.Editor
             GUI.DrawTexture(new Rect(x, line.Y + 1f, 1.5f, _lineHeight - 2f), _caretFill);
         }
 
-        private void HandlePointerInput(DocumentSession session, Event current, bool hasMouse, Vector2 localMouse, Rect rect, Vector2 scroll, float gutterWidth)
+        private void DrawCompletionPopup(DocumentSession session, CortexShellState state, Vector2 scroll, Vector2 viewportSize, float gutterWidth)
+        {
+            if (_layout == null || session == null || state == null || state.Editor == null)
+            {
+                return;
+            }
+
+            var response = state.Editor.ActiveCompletionResponse;
+            if (!_documentLanguageInteractionService.HasCompletionItems(response) ||
+                !string.Equals(response.DocumentPath ?? string.Empty, session.FilePath ?? string.Empty, StringComparison.OrdinalIgnoreCase) ||
+                response.DocumentVersion != session.TextVersion ||
+                session.EditorState == null ||
+                session.EditorState.HasMultipleSelections)
+            {
+                if (HasVisibleCompletion(state))
+                {
+                    ClearCompletion(state);
+                }
+
+                return;
+            }
+
+            var caret = _editorService.GetCaretPosition(session, session.EditorState.CaretIndex);
+            if (caret.Line < 0 || caret.Line >= _layout.Lines.Count)
+            {
+                return;
+            }
+
+            SyncCompletionSelection(response);
+            var caretRect = BuildCaretViewportRect(_layout.Lines[caret.Line], gutterWidth, session.EditorState.CaretIndex, scroll);
+            var popupWidth = CalculateCompletionPopupWidth(response);
+            var visibleCount = Math.Min(CompletionVisibleItemCount, response.Items.Length);
+            var popupHeight = visibleCount * _lineHeight + 8f;
+            var popupRect = new Rect(caretRect.x, caretRect.yMax + 2f, popupWidth, popupHeight);
+            if (popupRect.xMax > viewportSize.x - 6f)
+            {
+                popupRect.x = Mathf.Max(4f, viewportSize.x - popupWidth - 6f);
+            }
+
+            if (popupRect.yMax > viewportSize.y - 6f)
+            {
+                popupRect.y = Mathf.Max(4f, caretRect.y - popupHeight - 4f);
+            }
+
+            GUI.Box(popupRect, GUIContent.none, _completionPopupStyle);
+            GUI.DrawTexture(new Rect(popupRect.x, popupRect.y, popupRect.width, 1f), _completionBorderFill);
+            GUI.DrawTexture(new Rect(popupRect.x, popupRect.yMax - 1f, popupRect.width, 1f), _completionBorderFill);
+
+            var firstVisible = Mathf.Clamp(_completionSelectedIndex - 3, 0, Math.Max(0, response.Items.Length - visibleCount));
+            for (var i = 0; i < visibleCount; i++)
+            {
+                var itemIndex = firstVisible + i;
+                var item = response.Items[itemIndex];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                var rowRect = new Rect(popupRect.x + 2f, popupRect.y + 4f + (i * _lineHeight), popupRect.width - 4f, _lineHeight);
+                var isSelected = itemIndex == _completionSelectedIndex;
+                if (isSelected)
+                {
+                    GUI.DrawTexture(rowRect, _completionSelectedFill);
+                }
+
+                var displayRect = new Rect(rowRect.x + 6f, rowRect.y, rowRect.width * 0.62f, rowRect.height);
+                GUI.Label(displayRect, item.DisplayText ?? string.Empty, isSelected ? _completionItemSelectedStyle : _completionItemStyle);
+
+                var detailText = !string.IsNullOrEmpty(item.InlineDescription)
+                    ? item.InlineDescription
+                    : (item.Kind ?? string.Empty);
+                if (!string.IsNullOrEmpty(detailText))
+                {
+                    var detailRect = new Rect(rowRect.x + rowRect.width * 0.63f, rowRect.y, rowRect.width * 0.33f, rowRect.height);
+                    GUI.Label(detailRect, detailText, _completionDetailStyle);
+                }
+            }
+        }
+
+        private Rect BuildCaretViewportRect(EditableLineLayout line, float gutterWidth, int caretIndex, Vector2 scroll)
+        {
+            var rawColumn = Mathf.Max(0, Mathf.Min(line.RawText.Length, caretIndex - line.StartIndex));
+            var prefix = rawColumn > 0 ? line.RawText.Substring(0, rawColumn) : string.Empty;
+            var x = gutterWidth + Measure(ExpandTabs(prefix)) - scroll.x;
+            var y = line.Y - scroll.y;
+            return new Rect(x, y, 2f, _lineHeight);
+        }
+
+        private float CalculateCompletionPopupWidth(LanguageServiceCompletionResponse response)
+        {
+            if (response == null || response.Items == null || response.Items.Length == 0)
+            {
+                return 240f;
+            }
+
+            var width = 240f;
+            var maxItems = Math.Min(response.Items.Length, CompletionVisibleItemCount);
+            for (var i = 0; i < maxItems; i++)
+            {
+                var item = response.Items[i];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                var detailText = !string.IsNullOrEmpty(item.InlineDescription)
+                    ? item.InlineDescription
+                    : (item.Kind ?? string.Empty);
+                width = Mathf.Max(width, 40f + Measure(item.DisplayText ?? string.Empty) + Measure(detailText) + 40f);
+            }
+
+            return Mathf.Min(520f, width);
+        }
+
+        private void HandlePointerInput(DocumentSession session, CortexShellState state, Event current, bool hasMouse, Vector2 localMouse, Rect rect, Vector2 scroll, float gutterWidth)
         {
             if (current == null)
             {
@@ -520,6 +708,7 @@ namespace Cortex.Modules.Editor
             var contentMouse = scroll + localMouse;
             if (current.type == EventType.MouseDown && current.button == 0)
             {
+                ClearCompletion(state);
                 _hasFocus = hasMouse;
                 if (!hasMouse)
                 {
@@ -537,17 +726,26 @@ namespace Cortex.Modules.Editor
 
                 if (isDoubleClick)
                 {
+                    _editorService.ClearSecondarySelections(session);
                     _editorService.SelectWord(session, clickedIndex);
                     _dragAnchorIndex = session.EditorState.SelectionAnchorIndex;
                 }
                 else
                 {
-                    _dragAnchorIndex = current.shift
-                        ? session.EditorState.SelectionAnchorIndex
-                        : clickedIndex;
-                    _editorService.SetSelection(session, _dragAnchorIndex, clickedIndex);
+                    if (current.shift)
+                    {
+                        _dragAnchorIndex = session.EditorState.SelectionAnchorIndex;
+                        _editorService.SetSelection(session, _dragAnchorIndex, clickedIndex);
+                    }
+                    else
+                    {
+                        _editorService.ClearSecondarySelections(session);
+                        _dragAnchorIndex = clickedIndex;
+                        _editorService.SetCaret(session, clickedIndex, false, false);
+                    }
                 }
 
+                session.EditorState.ScrollToCaretPending = false;
                 _isDraggingSelection = true;
                 current.Use();
                 return;
@@ -557,6 +755,7 @@ namespace Cortex.Modules.Editor
             {
                 var draggedIndex = GetCharacterIndexAt(session, contentMouse, gutterWidth);
                 _editorService.SetSelection(session, _dragAnchorIndex, draggedIndex);
+                session.EditorState.ScrollToCaretPending = false;
                 current.Use();
                 return;
             }
@@ -574,11 +773,26 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
+            if (TryHandleCompletionInput(session, state, current))
+            {
+                current.Use();
+                return;
+            }
+
+            var previousTextVersion = session != null ? session.TextVersion : 0;
             var handled = false;
-            string commandId;
+            var commandId = string.Empty;
             if (_keybindingService.TryResolveCommand(state != null ? state.Settings : null, current, out commandId))
             {
-                handled = ExecuteCommand(session, commandId, current.shift);
+                if (string.Equals(commandId, "edit.complete", StringComparison.Ordinal))
+                {
+                    QueueCompletionRequest(session, state, true, string.Empty);
+                    handled = true;
+                }
+                else
+                {
+                    handled = ExecuteCommand(session, commandId, current.shift);
+                }
             }
 
             if (!handled && !current.control && !current.alt)
@@ -635,7 +849,7 @@ namespace Cortex.Modules.Editor
 
             if (handled)
             {
-                Invalidate();
+                HandleCompletionAfterKey(session, state, current, commandId, previousTextVersion);
                 current.Use();
             }
         }
@@ -735,6 +949,202 @@ namespace Cortex.Modules.Editor
             return handled;
         }
 
+        private bool TryHandleCompletionInput(DocumentSession session, CortexShellState state, Event current)
+        {
+            var response = state != null && state.Editor != null ? state.Editor.ActiveCompletionResponse : null;
+            if (!_documentLanguageInteractionService.HasCompletionItems(response))
+            {
+                return false;
+            }
+
+            SyncCompletionSelection(response);
+            switch (current.keyCode)
+            {
+                case KeyCode.UpArrow:
+                    _completionSelectedIndex = Mathf.Max(0, _completionSelectedIndex - 1);
+                    return true;
+                case KeyCode.DownArrow:
+                    _completionSelectedIndex = Mathf.Min(response.Items.Length - 1, _completionSelectedIndex + 1);
+                    return true;
+                case KeyCode.PageUp:
+                    _completionSelectedIndex = Mathf.Max(0, _completionSelectedIndex - CompletionVisibleItemCount);
+                    return true;
+                case KeyCode.PageDown:
+                    _completionSelectedIndex = Mathf.Min(response.Items.Length - 1, _completionSelectedIndex + CompletionVisibleItemCount);
+                    return true;
+                case KeyCode.Return:
+                case KeyCode.KeypadEnter:
+                    return ApplySelectedCompletion(session, state);
+                case KeyCode.Tab:
+                    if (!current.shift)
+                    {
+                        return ApplySelectedCompletion(session, state);
+                    }
+
+                    return false;
+                case KeyCode.Escape:
+                    ClearCompletion(state);
+                    return true;
+            }
+
+            return false;
+        }
+
+        private void HandleCompletionAfterKey(DocumentSession session, CortexShellState state, Event current, string commandId, int previousTextVersion)
+        {
+            if (state == null || state.Editor == null || session == null || session.EditorState == null)
+            {
+                return;
+            }
+
+            if (string.Equals(commandId, "edit.complete", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var textChanged = session.TextVersion != previousTextVersion;
+            if (textChanged)
+            {
+                if (_documentLanguageInteractionService.ShouldTriggerCompletion(current.character))
+                {
+                    QueueCompletionRequest(session, state, false, current.character.ToString());
+                    return;
+                }
+
+                if (_documentLanguageInteractionService.ShouldContinueCompletion(session, session.EditorState.CaretIndex))
+                {
+                    QueueCompletionRequest(session, state, false, string.Empty);
+                    return;
+                }
+
+                ClearCompletion(state);
+                return;
+            }
+
+            if (HasVisibleCompletion(state) &&
+                (string.Equals(commandId, "caret.left", StringComparison.Ordinal) ||
+                 string.Equals(commandId, "caret.right", StringComparison.Ordinal) ||
+                 string.Equals(commandId, "caret.up", StringComparison.Ordinal) ||
+                 string.Equals(commandId, "caret.down", StringComparison.Ordinal) ||
+                 string.Equals(commandId, "caret.line.start", StringComparison.Ordinal) ||
+                 string.Equals(commandId, "caret.line.end", StringComparison.Ordinal) ||
+                 string.Equals(commandId, "caret.document.start", StringComparison.Ordinal) ||
+                 string.Equals(commandId, "caret.document.end", StringComparison.Ordinal)))
+            {
+                ClearCompletion(state);
+            }
+        }
+
+        private void QueueCompletionRequest(DocumentSession session, CortexShellState state, bool explicitInvocation, string triggerCharacter)
+        {
+            if (state == null || state.Editor == null || session == null || session.EditorState == null || session.EditorState.HasMultipleSelections)
+            {
+                ClearCompletion(state);
+                return;
+            }
+
+            var caretIndex = Mathf.Max(0, session.EditorState.CaretIndex);
+            var caret = _editorService.GetCaretPosition(session, caretIndex);
+            state.Editor.RequestedCompletionKey = _documentLanguageInteractionService.BuildCompletionRequestKey(
+                session.FilePath,
+                session.TextVersion,
+                caretIndex,
+                explicitInvocation,
+                triggerCharacter);
+            state.Editor.RequestedCompletionDocumentPath = session.FilePath ?? string.Empty;
+            state.Editor.RequestedCompletionLine = caret.Line + 1;
+            state.Editor.RequestedCompletionColumn = caret.Column + 1;
+            state.Editor.RequestedCompletionAbsolutePosition = caretIndex;
+            state.Editor.RequestedCompletionTriggerCharacter = triggerCharacter ?? string.Empty;
+            state.Editor.RequestedCompletionExplicit = explicitInvocation;
+            state.Editor.ActiveCompletionKey = string.Empty;
+            state.Editor.ActiveCompletionResponse = null;
+            _completionStateKey = string.Empty;
+            _completionSelectedIndex = -1;
+        }
+
+        private bool ApplySelectedCompletion(DocumentSession session, CortexShellState state)
+        {
+            var response = state != null && state.Editor != null ? state.Editor.ActiveCompletionResponse : null;
+            if (!_documentLanguageInteractionService.HasCompletionItems(response))
+            {
+                return false;
+            }
+
+            SyncCompletionSelection(response);
+            if (_completionSelectedIndex < 0 || _completionSelectedIndex >= response.Items.Length)
+            {
+                return false;
+            }
+
+            var applied = _documentLanguageInteractionService.ApplyCompletion(
+                session,
+                _editorService,
+                response,
+                response.Items[_completionSelectedIndex]);
+            ClearCompletion(state);
+            return applied;
+        }
+
+        private bool HasVisibleCompletion(CortexShellState state)
+        {
+            return state != null &&
+                state.Editor != null &&
+                _documentLanguageInteractionService.HasCompletionItems(state.Editor.ActiveCompletionResponse);
+        }
+
+        private void ClearCompletion(CortexShellState state)
+        {
+            _completionStateKey = string.Empty;
+            _completionSelectedIndex = -1;
+            if (state == null || state.Editor == null)
+            {
+                return;
+            }
+
+            state.Editor.RequestedCompletionKey = string.Empty;
+            state.Editor.RequestedCompletionDocumentPath = string.Empty;
+            state.Editor.RequestedCompletionLine = 0;
+            state.Editor.RequestedCompletionColumn = 0;
+            state.Editor.RequestedCompletionAbsolutePosition = -1;
+            state.Editor.RequestedCompletionTriggerCharacter = string.Empty;
+            state.Editor.RequestedCompletionExplicit = false;
+            state.Editor.ActiveCompletionKey = string.Empty;
+            state.Editor.ActiveCompletionResponse = null;
+        }
+
+        private void SyncCompletionSelection(LanguageServiceCompletionResponse response)
+        {
+            if (response == null)
+            {
+                _completionStateKey = string.Empty;
+                _completionSelectedIndex = -1;
+                return;
+            }
+
+            var responseKey = (response.DocumentPath ?? string.Empty) + "|" +
+                response.DocumentVersion + "|" +
+                (response.Items != null ? response.Items.Length : 0);
+            if (!string.Equals(_completionStateKey, responseKey, StringComparison.Ordinal))
+            {
+                _completionStateKey = responseKey;
+                _completionSelectedIndex = 0;
+                if (response.Items != null)
+                {
+                    for (var i = 0; i < response.Items.Length; i++)
+                    {
+                        if (response.Items[i] != null && response.Items[i].IsPreselected)
+                        {
+                            _completionSelectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            _completionSelectedIndex = _documentLanguageInteractionService.NormalizeSelectedIndex(response, _completionSelectedIndex);
+        }
+
         private bool HandleTextInput(DocumentSession session, char character)
         {
             if (character == '\0' || character == '\b' || character == '\n' || character == '\r' || character == '\t')
@@ -822,7 +1232,21 @@ namespace Cortex.Modules.Editor
                 }
             }
 
-            return line.StartIndex + Mathf.Clamp(low, 0, line.RawText.Length);
+            var candidate = Mathf.Clamp(low, 0, line.RawText.Length);
+            if (candidate <= 0)
+            {
+                return line.StartIndex;
+            }
+
+            var previous = candidate - 1;
+            var previousWidth = Measure(ExpandTabs(line.RawText.Substring(0, previous)));
+            var candidateWidth = Measure(ExpandTabs(line.RawText.Substring(0, candidate)));
+            if (Mathf.Abs(targetX - previousWidth) <= Mathf.Abs(candidateWidth - targetX))
+            {
+                candidate = previous;
+            }
+
+            return line.StartIndex + candidate;
         }
 
         private GUIStyle GetClassificationStyle(string classification)
@@ -851,7 +1275,12 @@ namespace Cortex.Modules.Editor
 
         private float Measure(string text)
         {
-            _measureContent.text = string.IsNullOrEmpty(text) ? " " : text;
+            if (string.IsNullOrEmpty(text))
+            {
+                return 0f;
+            }
+
+            _measureContent.text = text;
             return _codeStyle.CalcSize(_measureContent).x;
         }
 

@@ -77,6 +77,7 @@ namespace Cortex.Modules.Editor
             }
 
             DrawTabStrip(state);
+            StabilizeActiveDocumentViewState(documentService, state);
             DrawPathBar(documentService, state);
             DrawCodeArea(documentService, navigationService, state);
             DrawStatusBar(state);
@@ -166,6 +167,7 @@ namespace Cortex.Modules.Editor
 
             var allowSaving = state.Settings != null && state.Settings.EnableFileSaving && active.SupportsSaving;
             var canReload = documentService != null;
+            var closeRequested = false;
 
             GUILayout.BeginHorizontal(_pathBarStyle ?? GUI.skin.box, GUILayout.Height(PathBarHeight));
 
@@ -206,13 +208,29 @@ namespace Cortex.Modules.Editor
             GUI.enabled = previousEnabled;
             if (GUILayout.Button("X", _toolbarButtonStyle ?? GUI.skin.button, GUILayout.Width(26f)))
             {
-                var closingPath = active.FilePath;
-                CortexModuleUtil.CloseDocument(state, closingPath);
-                GUILayout.EndHorizontal();
-                return;
+                closeRequested = true;
             }
 
             GUILayout.EndHorizontal();
+            if (closeRequested)
+            {
+                CortexModuleUtil.CloseDocument(state, active.FilePath);
+            }
+        }
+
+        private void StabilizeActiveDocumentViewState(IDocumentService documentService, CortexShellState state)
+        {
+            var active = state != null && state.Documents != null ? state.Documents.ActiveDocument : null;
+            if (active == null)
+            {
+                return;
+            }
+
+            _editorService.EnsureDocumentState(active);
+            if (documentService != null)
+            {
+                documentService.HasExternalChanges(active);
+            }
         }
 
         private void DrawCodeArea(IDocumentService documentService, Services.CortexNavigationService navigationService, CortexShellState state)
@@ -223,7 +241,6 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            documentService.HasExternalChanges(active);
             var editingAllowed = state.Settings != null && state.Settings.EnableFileEditing;
             var isEditable = editingAllowed && state.Documents.EditorUnlocked && active.SupportsEditing;
             var rect = GUILayoutUtility.GetRect(0f, 100000f, 0f, 100000f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));

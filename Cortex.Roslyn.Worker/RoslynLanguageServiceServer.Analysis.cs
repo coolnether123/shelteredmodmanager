@@ -8,6 +8,7 @@ using Cortex.LanguageService.Protocol;
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Classification;
+using Microsoft.CodeAnalysis.Completion;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
@@ -263,6 +264,96 @@ namespace Cortex.Roslyn.Worker
             };
         }
 
+        private LanguageServiceCompletionResponse GetCompletion(LanguageServiceCompletionRequest request)
+        {
+            var documentContext = ResolveDocument(
+                request.DocumentPath,
+                request.ProjectFilePath,
+                request.WorkspaceRootPath,
+                request.SourceRoots,
+                request.DocumentText,
+                request.DocumentVersion);
+
+            if (documentContext.Document == null)
+            {
+                return new LanguageServiceCompletionResponse
+                {
+                    Success = false,
+                    StatusMessage = "Roslyn could not resolve a document for completion.",
+                    DocumentPath = request.DocumentPath ?? string.Empty,
+                    ProjectFilePath = request.ProjectFilePath ?? string.Empty,
+                    DocumentVersion = request.DocumentVersion,
+                    ReplacementRange = new LanguageServiceRange(),
+                    Items = new LanguageServiceCompletionItem[0]
+                };
+            }
+
+            var text = documentContext.Document.GetTextAsync().Result;
+            var position = ResolveRequestPosition(text, request.Line, request.Column, request.AbsolutePosition);
+            if (position < 0 || position > text.Length)
+            {
+                return new LanguageServiceCompletionResponse
+                {
+                    Success = false,
+                    StatusMessage = "Completion position is outside the document.",
+                    DocumentPath = documentContext.Document.FilePath ?? request.DocumentPath ?? string.Empty,
+                    ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
+                    DocumentVersion = request.DocumentVersion,
+                    ReplacementRange = new LanguageServiceRange(),
+                    Items = new LanguageServiceCompletionItem[0]
+                };
+            }
+
+            var completionService = CompletionService.GetService(documentContext.Document);
+            if (completionService == null)
+            {
+                return new LanguageServiceCompletionResponse
+                {
+                    Success = false,
+                    StatusMessage = "Roslyn completion service is unavailable for this document.",
+                    DocumentPath = documentContext.Document.FilePath ?? request.DocumentPath ?? string.Empty,
+                    ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
+                    DocumentVersion = request.DocumentVersion,
+                    ReplacementRange = new LanguageServiceRange(),
+                    Items = new LanguageServiceCompletionItem[0]
+                };
+            }
+
+            var trigger = request.ExplicitInvocation
+                ? CompletionTrigger.Invoke
+                : BuildCompletionTrigger(request.TriggerCharacter);
+            var completionList = completionService.GetCompletionsAsync(documentContext.Document, position, trigger: trigger).Result;
+            if (completionList == null)
+            {
+                return new LanguageServiceCompletionResponse
+                {
+                    Success = true,
+                    StatusMessage = "No completion items were available.",
+                    DocumentPath = documentContext.Document.FilePath ?? request.DocumentPath ?? string.Empty,
+                    ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
+                    DocumentVersion = request.DocumentVersion,
+                    ReplacementRange = new LanguageServiceRange(),
+                    Items = new LanguageServiceCompletionItem[0]
+                };
+            }
+
+            var items = completionList.ItemsList
+                .Take(48)
+                .Select(item => ToProtocolCompletionItem(completionService, documentContext.Document, completionList, item))
+                .Where(item => item != null)
+                .ToArray();
+            return new LanguageServiceCompletionResponse
+            {
+                Success = true,
+                StatusMessage = "Completion resolved.",
+                DocumentPath = documentContext.Document.FilePath ?? request.DocumentPath ?? string.Empty,
+                ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
+                DocumentVersion = request.DocumentVersion,
+                ReplacementRange = BuildRange(text, completionList.Span),
+                Items = items
+            };
+        }
+
         private static string GetContainingTypeName(ISymbol symbol)
         {
             if (symbol == null)
@@ -278,6 +369,40 @@ namespace Cortex.Roslyn.Worker
             return symbol.ContainingType != null
                 ? symbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty)
                 : string.Empty;
+        }
+
+        private static CompletionTrigger BuildCompletionTrigger(string triggerCharacter)
+        {
+            if (!string.IsNullOrEmpty(triggerCharacter))
+            {
+                return CompletionTrigger.CreateInsertionTrigger(triggerCharacter[0]);
+            }
+
+            return CompletionTrigger.Invoke;
+        }
+
+        private static LanguageServiceCompletionItem ToProtocolCompletionItem(
+            CompletionService completionService,
+            Document document,
+            CompletionList completionList,
+            CompletionItem item)
+        {
+            if (completionService == null || document == null || completionList == null || item == null)
+            {
+                return null;
+            }
+
+            var change = completionService.GetChangeAsync(document, item).Result;
+            return new LanguageServiceCompletionItem
+            {
+                DisplayText = item.DisplayText ?? string.Empty,
+                InsertText = change.TextChange.NewText ?? item.DisplayText ?? string.Empty,
+                FilterText = item.FilterText ?? item.DisplayText ?? string.Empty,
+                SortText = item.SortText ?? item.DisplayText ?? string.Empty,
+                InlineDescription = string.Empty,
+                Kind = item.Tags.Length > 0 ? item.Tags[0] ?? string.Empty : string.Empty,
+                IsPreselected = completionList.SuggestionModeItem != null && item == completionList.SuggestionModeItem
+            };
         }
 
         private static string GetQualifiedSymbolDisplay(ISymbol symbol)

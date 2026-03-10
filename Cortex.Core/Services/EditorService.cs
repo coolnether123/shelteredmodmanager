@@ -32,11 +32,17 @@ namespace Cortex.Core.Services
             NormalizeSelections(session);
             if (!session.EditorState.HasExplicitCaretPlacement && session.HighlightedLine > 0)
             {
-                var targetIndex = GetCharacterIndex(session, Math.Max(0, session.HighlightedLine - 1), 0);
-                SetSingleSelection(session, CreateSelection(targetIndex, targetIndex, 0));
+                var targetIndex = GetCharacterIndexCore(
+                    GetText(session),
+                    session.EditorState.LineMap,
+                    Math.Max(0, session.HighlightedLine - 1),
+                    0);
                 session.EditorState.HasExplicitCaretPlacement = true;
+                SetSingleSelection(session, CreateSelection(targetIndex, targetIndex, 0));
                 session.EditorState.ScrollToCaretPending = true;
             }
+
+            SyncHighlightedLine(session);
         }
 
         public void SetUndoLimit(DocumentSession session, int undoLimit)
@@ -77,16 +83,7 @@ namespace Cortex.Core.Services
         public int GetCharacterIndex(DocumentSession session, int line, int column)
         {
             EnsureDocumentState(session);
-            var map = GetLineMap(session);
-            if (map.LineStarts.Length == 0)
-            {
-                return 0;
-            }
-
-            var targetLine = Clamp(line, 0, map.LineStarts.Length - 1);
-            var lineStart = map.LineStarts[targetLine];
-            var lineEnd = GetLineEndIndex(session, targetLine);
-            return Clamp(lineStart + Math.Max(0, column), lineStart, lineEnd);
+            return GetCharacterIndexCore(GetText(session), GetLineMap(session), line, column);
         }
 
         public int GetLineCount(DocumentSession session)
@@ -980,6 +977,7 @@ namespace Cortex.Core.Services
             }
 
             NormalizeSelections(session);
+            SyncHighlightedLine(session);
         }
 
         private void SetSingleSelection(DocumentSession session, EditorSelectionRange selection)
@@ -1431,18 +1429,47 @@ namespace Cortex.Core.Services
             };
         }
 
+        private void SyncHighlightedLine(DocumentSession session)
+        {
+            if (session == null || session.EditorState == null || session.EditorState.Selections.Count == 0)
+            {
+                return;
+            }
+
+            var primary = session.EditorState.PrimarySelection;
+            var caret = GetCaretPosition(GetText(session), primary.CaretIndex);
+            session.HighlightedLine = caret.Line + 1;
+        }
+
         private int GetLineEndIndex(DocumentSession session, int line)
         {
-            var map = GetLineMap(session);
-            if (line < 0 || line >= map.LineStarts.Length)
+            return GetLineEndIndexCore(GetText(session), GetLineMap(session), line);
+        }
+
+        private static int GetCharacterIndexCore(string text, EditorLineMap map, int line, int column)
+        {
+            if (map == null || map.LineStarts == null || map.LineStarts.Length == 0)
             {
                 return 0;
             }
 
-            var text = GetText(session);
-            var nextLineStart = line + 1 < map.LineStarts.Length ? map.LineStarts[line + 1] : text.Length;
+            var targetLine = Clamp(line, 0, map.LineStarts.Length - 1);
+            var lineStart = map.LineStarts[targetLine];
+            var lineEnd = GetLineEndIndexCore(text, map, targetLine);
+            return Clamp(lineStart + Math.Max(0, column), lineStart, lineEnd);
+        }
+
+        private static int GetLineEndIndexCore(string text, EditorLineMap map, int line)
+        {
+            if (map == null || map.LineStarts == null || line < 0 || line >= map.LineStarts.Length)
+            {
+                return 0;
+            }
+
+            var safeText = text ?? string.Empty;
+            var nextLineStart = line + 1 < map.LineStarts.Length ? map.LineStarts[line + 1] : safeText.Length;
             var end = nextLineStart;
-            while (end > map.LineStarts[line] && (text[end - 1] == '\r' || text[end - 1] == '\n'))
+            while (end > map.LineStarts[line] && (safeText[end - 1] == '\r' || safeText[end - 1] == '\n'))
             {
                 end--;
             }

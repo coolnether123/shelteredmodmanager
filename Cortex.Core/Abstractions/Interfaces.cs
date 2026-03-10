@@ -75,12 +75,14 @@ namespace Cortex.Core.Abstractions
         string QueueAnalyzeDocument(LanguageServiceDocumentRequest request);
         string QueueHover(LanguageServiceHoverRequest request);
         string QueueGoToDefinition(LanguageServiceDefinitionRequest request);
+        string QueueCompletion(LanguageServiceCompletionRequest request);
         bool TryDequeueResponse(out LanguageServiceEnvelope envelope);
         LanguageServiceInitializeResponse Initialize(LanguageServiceInitializeRequest request);
         LanguageServiceStatusResponse GetStatus();
         LanguageServiceAnalysisResponse AnalyzeDocument(LanguageServiceDocumentRequest request);
         LanguageServiceHoverResponse GetHover(LanguageServiceHoverRequest request);
         LanguageServiceDefinitionResponse GoToDefinition(LanguageServiceDefinitionRequest request);
+        LanguageServiceCompletionResponse GetCompletion(LanguageServiceCompletionRequest request);
         void Shutdown();
     }
 

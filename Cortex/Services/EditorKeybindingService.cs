@@ -28,6 +28,7 @@ namespace Cortex.Services
             Create("edit.indent", "edit.indent", "Editing", "Indent", "Indent the current selection.", KeyCode.Tab, false, false, false),
             Create("edit.outdent", "edit.outdent", "Editing", "Outdent", "Outdent the current selection.", KeyCode.Tab, false, true, false),
             Create("edit.newline", "edit.newline", "Editing", "New Line", "Insert a newline.", KeyCode.Return, false, false, false),
+            Create("edit.complete", "edit.complete", "Editing", "Trigger Completion", "Open the completion list at the current caret.", KeyCode.Space, true, false, false),
             Create("multi.above", "multi.above", "Multi-caret", "Add Caret Above", "Duplicate the active carets on the line above.", KeyCode.UpArrow, false, true, true),
             Create("multi.below", "multi.below", "Multi-caret", "Add Caret Below", "Duplicate the active carets on the line below.", KeyCode.DownArrow, false, true, true),
             Create("multi.clear", "multi.clear", "Multi-caret", "Clear Extra Carets", "Clear secondary carets.", KeyCode.Escape, false, false, false),

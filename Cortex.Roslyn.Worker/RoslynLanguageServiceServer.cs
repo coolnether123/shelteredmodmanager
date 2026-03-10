@@ -46,6 +46,11 @@ namespace Cortex.Roslyn.Worker
                     return HandleGoToDefinition(request);
                 }
 
+                if (string.Equals(command, LanguageServiceCommands.Completion, StringComparison.OrdinalIgnoreCase))
+                {
+                    return HandleCompletion(request);
+                }
+
                 if (string.Equals(command, LanguageServiceCommands.Shutdown, StringComparison.OrdinalIgnoreCase))
                 {
                     return BuildSuccessEnvelope(request, new LanguageServiceOperationResponse
@@ -88,7 +93,8 @@ namespace Cortex.Roslyn.Worker
                     "classifications",
                     "diagnostics",
                     "hover",
-                    "definition"
+                    "definition",
+                    "completion"
                 }
             });
         }
@@ -109,7 +115,8 @@ namespace Cortex.Roslyn.Worker
                     "classifications",
                     "diagnostics",
                     "hover",
-                    "definition"
+                    "definition",
+                    "completion"
                 },
                 CachedProjectCount = GetCachedProjectCount(),
                 LoadedProjectPaths = GetLoadedProjectPaths(),
@@ -133,6 +140,12 @@ namespace Cortex.Roslyn.Worker
         {
             var payload = DeserializePayload<LanguageServiceDefinitionRequest>(request);
             return BuildSuccessEnvelope(request, GoToDefinition(payload));
+        }
+
+        private LanguageServiceEnvelope HandleCompletion(LanguageServiceEnvelope request)
+        {
+            var payload = DeserializePayload<LanguageServiceCompletionRequest>(request);
+            return BuildSuccessEnvelope(request, GetCompletion(payload));
         }
 
         private T DeserializePayload<T>(LanguageServiceEnvelope request) where T : class, new()
