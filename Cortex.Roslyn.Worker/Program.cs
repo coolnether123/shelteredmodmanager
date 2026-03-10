@@ -1,17 +1,11 @@
 using System.Text;
-using System.Text.Json;
 using Cortex.LanguageService.Protocol;
+using GameModding.Shared.Serialization;
 
 namespace Cortex.Roslyn.Worker
 {
     internal static class Program
     {
-        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
-        {
-            WriteIndented = false,
-            IncludeFields = true
-        };
-
         private static int Main()
         {
             Console.InputEncoding = Encoding.UTF8;
@@ -34,7 +28,7 @@ namespace Cortex.Roslyn.Worker
                 LanguageServiceEnvelope request;
                 try
                 {
-                    request = JsonSerializer.Deserialize<LanguageServiceEnvelope>(line, JsonOptions) ?? new LanguageServiceEnvelope();
+                    request = ManualJson.Deserialize<LanguageServiceEnvelope>(line) ?? new LanguageServiceEnvelope();
                 }
                 catch (Exception ex)
                 {
@@ -60,7 +54,7 @@ namespace Cortex.Roslyn.Worker
 
         private static void WriteResponse(LanguageServiceEnvelope response)
         {
-            Console.Out.WriteLine(JsonSerializer.Serialize(response, JsonOptions));
+            Console.Out.WriteLine(ManualJson.Serialize(response));
             Console.Out.Flush();
         }
     }

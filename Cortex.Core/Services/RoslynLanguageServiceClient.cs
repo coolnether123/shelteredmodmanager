@@ -11,9 +11,10 @@ namespace Cortex.Core.Services
 {
     public sealed class RoslynLanguageServiceClient : ILanguageServiceClient
     {
-        private const int MinimumInitializeTimeoutMs = 60000;
+        private const int MinimumInitializeTimeoutMs = 120000;
         private readonly string _workerPath;
         private readonly int _timeoutMs;
+        private readonly Action<string> _log;
         private readonly object _sync = new object();
         private readonly Queue<PendingRequest> _outgoing = new Queue<PendingRequest>();
         private readonly Queue<LanguageServiceEnvelope> _completed = new Queue<LanguageServiceEnvelope>();
@@ -26,10 +27,11 @@ namespace Cortex.Core.Services
         private int _nextRequestId;
         private bool _shutdownRequested;
 
-        public RoslynLanguageServiceClient(string workerPath, int timeoutMs)
+        public RoslynLanguageServiceClient(string workerPath, int timeoutMs, Action<string> log)
         {
             _workerPath = workerPath ?? string.Empty;
             _timeoutMs = timeoutMs > 0 ? timeoutMs : 15000;
+            _log = log;
         }
 
         public bool IsEnabled
@@ -149,6 +151,10 @@ namespace Cortex.Core.Services
                 var pending = CreatePendingRequest(command, payload, false, timeoutMs);
                 _outgoing.Enqueue(pending);
                 _pendingById[pending.Envelope.RequestId] = pending;
+                Log("Queued request. Command=" + (command ?? string.Empty) +
+                    ", RequestId=" + pending.Envelope.RequestId +
+                    ", TimeoutMs=" + pending.TimeoutMs +
+                    ", ProcessRunning=" + (_process != null && !_process.HasExited) + ".");
                 _outgoingSignal.Set();
                 return pending.Envelope.RequestId;
             }
@@ -274,10 +280,16 @@ namespace Cortex.Core.Services
 
             _process = new Process();
             _process.StartInfo = BuildStartInfo(_workerPath);
+            _process.EnableRaisingEvents = true;
+            _process.Exited += OnProcessExited;
+            Log("Starting worker process. FileName=" + _process.StartInfo.FileName +
+                ", Arguments=" + _process.StartInfo.Arguments +
+                ", WorkingDirectory=" + _process.StartInfo.WorkingDirectory + ".");
             if (!_process.Start())
             {
                 throw new InvalidOperationException("Failed to start Roslyn worker.");
             }
+            Log("Worker process started. Pid=" + _process.Id + ".");
 
             _process.ErrorDataReceived += OnProcessErrorDataReceived;
             _process.BeginErrorReadLine();
@@ -286,11 +298,13 @@ namespace Cortex.Core.Services
             _readerThread.Name = "Cortex.RoslynLanguageServiceClient.Reader";
             _readerThread.IsBackground = true;
             _readerThread.Start();
+            Log("Worker reader thread started.");
 
             _writerThread = new Thread(WriteInputLoop);
             _writerThread.Name = "Cortex.RoslynLanguageServiceClient.Writer";
             _writerThread.IsBackground = true;
             _writerThread.Start();
+            Log("Worker writer thread started.");
             _lastError = string.Empty;
         }
 
@@ -300,7 +314,7 @@ namespace Cortex.Core.Services
             var extension = Path.GetExtension(workerPath) ?? string.Empty;
             if (string.Equals(extension, ".dll", StringComparison.OrdinalIgnoreCase))
             {
-                startInfo.FileName = "dotnet";
+                startInfo.FileName = ResolveDotnetHostPath();
                 startInfo.Arguments = "\"" + workerPath + "\"";
             }
             else
@@ -316,6 +330,41 @@ namespace Cortex.Core.Services
             startInfo.RedirectStandardError = true;
             startInfo.WorkingDirectory = Path.GetDirectoryName(workerPath) ?? Environment.CurrentDirectory;
             return startInfo;
+        }
+
+        private static string ResolveDotnetHostPath()
+        {
+            var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT");
+            if (!string.IsNullOrEmpty(dotnetRoot))
+            {
+                var rootCandidate = Path.Combine(dotnetRoot, "dotnet.exe");
+                if (File.Exists(rootCandidate))
+                {
+                    return rootCandidate;
+                }
+            }
+
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            if (!string.IsNullOrEmpty(programFiles))
+            {
+                var candidate = Path.Combine(Path.Combine(programFiles, "dotnet"), "dotnet.exe");
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            var programFilesX86 = Environment.GetEnvironmentVariable("ProgramFiles(x86)");
+            if (!string.IsNullOrEmpty(programFilesX86))
+            {
+                var candidate = Path.Combine(Path.Combine(programFilesX86, "dotnet"), "dotnet.exe");
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return "dotnet";
         }
 
         private void WriteInputLoop()
@@ -353,8 +402,13 @@ namespace Cortex.Core.Services
                             continue;
                         }
 
+                        Log("Writing request to worker. Command=" +
+                            (pending.Envelope != null ? pending.Envelope.Command ?? string.Empty : string.Empty) +
+                            ", RequestId=" + (pending.Envelope != null ? pending.Envelope.RequestId ?? string.Empty : string.Empty) + ".");
                         _process.StandardInput.WriteLine(ManualJson.Serialize(pending.Envelope));
                         _process.StandardInput.Flush();
+                        Log("Request write complete. RequestId=" +
+                            (pending.Envelope != null ? pending.Envelope.RequestId ?? string.Empty : string.Empty) + ".");
                     }
                 }
                 catch (Exception ex)
@@ -362,6 +416,9 @@ namespace Cortex.Core.Services
                     lock (_sync)
                     {
                         _lastError = ex.Message;
+                        Log("Request write failed. RequestId=" +
+                            (pending.Envelope != null ? pending.Envelope.RequestId ?? string.Empty : string.Empty) +
+                            ", Error=" + ex.Message + ".");
                         FailPending_NoLock(pending.Envelope.RequestId, ex.Message);
                         DisposeProcess_NoLock();
                     }
@@ -386,12 +443,37 @@ namespace Cortex.Core.Services
                     }
 
                     var line = process.StandardOutput.ReadLine();
-                    if (string.IsNullOrEmpty(line))
+                    if (line == null)
                     {
                         lock (_sync)
                         {
                             if (_process == null || _process.HasExited)
                             {
+                                if (string.IsNullOrEmpty(_lastError))
+                                {
+                                    _lastError = "Roslyn worker exited before responding.";
+                                }
+
+                                DisposeProcess_NoLock();
+                                return;
+                            }
+                        }
+
+                        continue;
+                    }
+
+                    if (line.Length == 0)
+                    {
+                        lock (_sync)
+                        {
+                            if (_process == null || _process.HasExited)
+                            {
+                                if (string.IsNullOrEmpty(_lastError))
+                                {
+                                    _lastError = "Roslyn worker exited before responding.";
+                                }
+
+                                DisposeProcess_NoLock();
                                 return;
                             }
                         }
@@ -405,6 +487,22 @@ namespace Cortex.Core.Services
                         if (envelope == null)
                         {
                             _lastError = "Roslyn worker produced an unreadable response.";
+                            Log("Worker produced unreadable response line.");
+                            continue;
+                        }
+
+                        Log("Received worker response. Command=" + (envelope.Command ?? string.Empty) +
+                            ", RequestId=" + (envelope.RequestId ?? string.Empty) +
+                            ", Success=" + envelope.Success +
+                            ", Error=" + (envelope.ErrorMessage ?? string.Empty) + ".");
+
+                        if (string.IsNullOrEmpty(envelope.RequestId))
+                        {
+                            _lastError = !string.IsNullOrEmpty(envelope.ErrorMessage)
+                                ? envelope.ErrorMessage
+                                : "Roslyn worker returned an uncorrelated error response.";
+                            Log("Worker returned uncorrelated failure. RawError=" + (_lastError ?? string.Empty) + ".");
+                            FailAllPending_NoLock(_lastError);
                             continue;
                         }
 
@@ -428,6 +526,7 @@ namespace Cortex.Core.Services
                 lock (_sync)
                 {
                     _lastError = ex.Message;
+                    Log("Reader loop crashed. Error=" + ex.Message + ".");
                     FailAllPending_NoLock(ex.Message);
                 }
             }
@@ -461,6 +560,7 @@ namespace Cortex.Core.Services
                 }
 
                 _lastError = "Roslyn worker timed out after " + timeoutMs + " ms.";
+                Log("Request timed out. RequestId=" + requestId + ", TimeoutMs=" + timeoutMs + ".");
                 FailPending_NoLock(requestId, _lastError);
             }
         }
@@ -488,6 +588,10 @@ namespace Cortex.Core.Services
                 pending.WaitHandle.Set();
             }
 
+            Log("Completing pending request with failure. Command=" +
+                (pending.Envelope != null ? pending.Envelope.Command ?? string.Empty : string.Empty) +
+                ", RequestId=" + (requestId ?? string.Empty) +
+                ", Error=" + (message ?? string.Empty) + ".");
             _completed.Enqueue(envelope);
         }
 
@@ -527,6 +631,8 @@ namespace Cortex.Core.Services
             }
             finally
             {
+                Log("Disposing worker process. HadProcess=" + (_process != null) +
+                    ", LastError=" + (_lastError ?? string.Empty) + ".");
                 _process = null;
                 _readerThread = null;
                 _writerThread = null;
@@ -540,6 +646,51 @@ namespace Cortex.Core.Services
             if (!string.IsNullOrEmpty(e.Data))
             {
                 _lastError = e.Data;
+                Log("Worker stderr: " + e.Data);
+            }
+        }
+
+        private void OnProcessExited(object sender, EventArgs e)
+        {
+            lock (_sync)
+            {
+                if (_shutdownRequested || _process == null)
+                {
+                    return;
+                }
+
+                if (string.IsNullOrEmpty(_lastError))
+                {
+                    _lastError = "Roslyn worker exited before responding.";
+                }
+
+                var exitCode = 0;
+                try
+                {
+                    exitCode = _process.ExitCode;
+                }
+                catch
+                {
+                }
+
+                Log("Worker process exited. ExitCode=" + exitCode + ", LastError=" + (_lastError ?? string.Empty) + ".");
+                DisposeProcess_NoLock();
+            }
+        }
+
+        private void Log(string message)
+        {
+            if (_log == null || string.IsNullOrEmpty(message))
+            {
+                return;
+            }
+
+            try
+            {
+                _log("[Cortex.Roslyn.Client] " + message);
+            }
+            catch
+            {
             }
         }
 

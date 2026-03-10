@@ -273,6 +273,11 @@ namespace Cortex.LanguageService.Protocol
         /// One-based column number for the hover position.
         /// </summary>
         public int Column;
+
+        /// <summary>
+        /// Zero-based absolute position for the hover token when Cortex already knows the exact source offset.
+        /// </summary>
+        public int AbsolutePosition;
     }
 
     /// <summary>
@@ -319,6 +324,11 @@ namespace Cortex.LanguageService.Protocol
         /// One-based column number for the lookup position.
         /// </summary>
         public int Column;
+
+        /// <summary>
+        /// Zero-based absolute position for the definition token when Cortex already knows the exact source offset.
+        /// </summary>
+        public int AbsolutePosition;
     }
 
     /// <summary>

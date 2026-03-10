@@ -7,6 +7,35 @@ namespace Cortex.Modules.Shared
 {
     internal static class CortexModuleUtil
     {
+        public static DocumentSession FindOpenDocument(CortexShellState state, string filePath)
+        {
+            if (state == null || string.IsNullOrEmpty(filePath))
+            {
+                return null;
+            }
+
+            string fullPath;
+            try
+            {
+                fullPath = Path.GetFullPath(filePath);
+            }
+            catch
+            {
+                return null;
+            }
+
+            for (var i = 0; i < state.Documents.OpenDocuments.Count; i++)
+            {
+                var session = state.Documents.OpenDocuments[i];
+                if (session != null && string.Equals(session.FilePath, fullPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return session;
+                }
+            }
+
+            return null;
+        }
+
         public static DocumentSession OpenDocument(IDocumentService documentService, CortexShellState state, string filePath, int highlightedLine)
         {
             if (documentService == null || state == null || string.IsNullOrEmpty(filePath))
@@ -24,15 +53,13 @@ namespace Cortex.Modules.Shared
                 return null;
             }
 
-            for (var i = 0; i < state.Documents.OpenDocuments.Count; i++)
+            var existing = FindOpenDocument(state, fullPath);
+            if (existing != null)
             {
-                if (string.Equals(state.Documents.OpenDocuments[i].FilePath, fullPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    state.Documents.ActiveDocument = state.Documents.OpenDocuments[i];
-                    state.Documents.ActiveDocumentPath = fullPath;
-                    state.Documents.ActiveDocument.HighlightedLine = highlightedLine;
-                    return state.Documents.ActiveDocument;
-                }
+                state.Documents.ActiveDocument = existing;
+                state.Documents.ActiveDocumentPath = fullPath;
+                state.Documents.ActiveDocument.HighlightedLine = highlightedLine;
+                return state.Documents.ActiveDocument;
             }
 
             DocumentSession session;

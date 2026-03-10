@@ -98,6 +98,7 @@ namespace Cortex
         public string RequestedHoverDocumentPath = string.Empty;
         public int RequestedHoverLine;
         public int RequestedHoverColumn;
+        public int RequestedHoverAbsolutePosition = -1;
         public string RequestedHoverTokenText = string.Empty;
         public string ActiveHoverKey = string.Empty;
         public LanguageServiceHoverResponse ActiveHoverResponse;
@@ -107,6 +108,7 @@ namespace Cortex
         public string RequestedDefinitionDocumentPath = string.Empty;
         public int RequestedDefinitionLine;
         public int RequestedDefinitionColumn;
+        public int RequestedDefinitionAbsolutePosition = -1;
         public string RequestedDefinitionTokenText = string.Empty;
     }
 

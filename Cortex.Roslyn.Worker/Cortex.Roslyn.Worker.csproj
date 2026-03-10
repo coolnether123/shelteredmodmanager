@@ -21,5 +21,6 @@
 
   <ItemGroup>
     <Compile Include="..\Cortex.LanguageService.Protocol\LanguageServiceProtocol.cs" Link="Protocol\LanguageServiceProtocol.cs" />
+    <Compile Include="..\GameModding.Shared\Serialization\ManualJson.cs" Link="Serialization\ManualJson.cs" />
   </ItemGroup>
 </Project>
