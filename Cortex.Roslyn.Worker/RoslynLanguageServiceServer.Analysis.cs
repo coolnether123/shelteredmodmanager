@@ -148,6 +148,7 @@ namespace Cortex.Roslyn.Worker
                 ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
                 DocumentVersion = request.DocumentVersion,
                 SymbolDisplay = symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                QualifiedSymbolDisplay = GetQualifiedSymbolDisplay(symbol),
                 SymbolKind = symbol.Kind.ToString(),
                 MetadataName = symbol.MetadataName ?? string.Empty,
                 ContainingTypeName = GetContainingTypeName(symbol),
@@ -277,6 +278,16 @@ namespace Cortex.Roslyn.Worker
             return symbol.ContainingType != null
                 ? symbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty)
                 : string.Empty;
+        }
+
+        private static string GetQualifiedSymbolDisplay(ISymbol symbol)
+        {
+            if (symbol == null)
+            {
+                return string.Empty;
+            }
+
+            return symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty);
         }
 
         private static LanguageServiceHoverDisplayPart[] BuildHoverDisplayParts(ISymbol symbol)
