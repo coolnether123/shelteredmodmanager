@@ -57,6 +57,30 @@ namespace Cortex.Modules.Editor
         private int _completionSelectedIndex = -1;
         private LayoutCache _layout;
 
+        private struct PointerContext
+        {
+            public bool IsWithinSurface;
+            public bool PreGroupHit;
+            public bool UsedRectOffset;
+            public Rect SurfaceRect;
+            public Vector2 RawMouse;
+            public Vector2 SurfaceMouse;
+            public Vector2 ContentMouse;
+        }
+
+        private struct PointerHitTestResult
+        {
+            public int CharacterIndex;
+            public int LineIndex;
+            public int LineNumber;
+            public int LineStartIndex;
+            public int RawLength;
+            public int CandidateColumn;
+            public float TargetX;
+            public float PreviousWidth;
+            public float CandidateWidth;
+        }
+
         public Vector2 Draw(
             Rect rect,
             Vector2 scroll,
@@ -76,7 +100,21 @@ namespace Cortex.Modules.Editor
 
             try
             {
+                var hadExplicitCaretPlacement = session.EditorState != null && session.EditorState.HasExplicitCaretPlacement;
+                var highlightedLineBeforeEnsure = session.HighlightedLine;
                 _editorService.EnsureDocumentState(session);
+                if (!hadExplicitCaretPlacement && highlightedLineBeforeEnsure > 0 && session.EditorState != null)
+                {
+                    var bootstrappedSelection = _editorService.GetPrimarySelection(session);
+                    var bootstrappedCaret = _editorService.GetCaretPosition(session, bootstrappedSelection.CaretIndex);
+                    EditorInteractionLog.WriteEditorStateBootstrap(
+                        session.FilePath,
+                        highlightedLineBeforeEnsure,
+                        bootstrappedCaret.Line + 1,
+                        bootstrappedCaret.Column + 1,
+                        bootstrappedSelection.CaretIndex,
+                        session.EditorState.HasExplicitCaretPlacement);
+                }
                 _editorService.SetUndoLimit(session, state != null && state.Settings != null ? state.Settings.EditorUndoHistoryLimit : 128);
                 EnsureStyles(themeKey, codeStyle, gutterStyle);
                 EnsureLayout(session, themeKey, gutterWidth);
@@ -90,7 +128,6 @@ namespace Cortex.Modules.Editor
                 var current = Event.current;
                 var localMouse = current != null ? current.mousePosition - new Vector2(rect.x, rect.y) : Vector2.zero;
                 var hasMouse = current != null && rect.Contains(current.mousePosition);
-                HandlePointerInput(session, state, current, hasMouse, localMouse, rect, scroll, gutterWidth);
                 HandleKeyboardInput(session, state, current);
                 if (session.TextVersion != inputTextVersion)
                 {
@@ -108,14 +145,16 @@ namespace Cortex.Modules.Editor
                 }
 
                 scroll = EnsureCaretVisible(session, scroll, rect.height);
+                var pointerContext = BuildPointerContext(current, rect, hasMouse, localMouse, scroll, true);
+                HandlePointerInput(session, state, current, pointerContext, gutterWidth);
 
                 GUI.BeginGroup(rect);
                 try
                 {
                     var contentRect = new Rect(0f, 0f, Mathf.Max(rect.width - 18f, _layout.ContentWidth), Mathf.Max(rect.height - 18f, _layout.ContentHeight));
-                    scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
                     try
                     {
+                        scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
                         GUI.DrawTexture(new Rect(0f, 0f, contentRect.width, contentRect.height), _surfaceFill);
                         DrawLines(session, scroll, rect.height, gutterWidth);
                     }
@@ -698,52 +737,45 @@ namespace Cortex.Modules.Editor
             return Mathf.Min(520f, width);
         }
 
-        private void HandlePointerInput(DocumentSession session, CortexShellState state, Event current, bool hasMouse, Vector2 localMouse, Rect rect, Vector2 scroll, float gutterWidth)
+        private static PointerContext BuildPointerContext(Event current, Rect surfaceRect, bool isWithinSurface, Vector2 surfaceMouse, Vector2 scroll, bool usedRectOffset)
+        {
+            var context = new PointerContext();
+            if (current == null)
+            {
+                return context;
+            }
+
+            context.PreGroupHit = isWithinSurface;
+            context.SurfaceRect = surfaceRect;
+            context.RawMouse = current.mousePosition;
+            context.UsedRectOffset = usedRectOffset;
+            context.SurfaceMouse = surfaceMouse;
+            context.IsWithinSurface = isWithinSurface;
+            context.ContentMouse = scroll + context.SurfaceMouse;
+            return context;
+        }
+
+        private void HandlePointerInput(DocumentSession session, CortexShellState state, Event current, PointerContext pointerContext, float gutterWidth)
         {
             if (current == null)
             {
                 return;
             }
 
-            var contentMouse = scroll + localMouse;
             if (current.type == EventType.MouseDown && current.button == 0)
             {
                 ClearCompletion(state);
-                _hasFocus = hasMouse;
-                if (!hasMouse)
+                _hasFocus = pointerContext.IsWithinSurface;
+                if (!pointerContext.IsWithinSurface)
                 {
                     _isDraggingSelection = false;
                     return;
                 }
 
-                var clickedIndex = GetCharacterIndexAt(session, contentMouse, gutterWidth);
-                var now = DateTime.UtcNow;
-                var isDoubleClick = _lastClickIndex >= 0 &&
-                    Math.Abs(clickedIndex - _lastClickIndex) <= 1 &&
-                    (now - _lastClickUtc).TotalSeconds <= DoubleClickThresholdSeconds;
-                _lastClickIndex = clickedIndex;
-                _lastClickUtc = now;
-
-                if (isDoubleClick)
-                {
-                    _editorService.ClearSecondarySelections(session);
-                    _editorService.SelectWord(session, clickedIndex);
-                    _dragAnchorIndex = session.EditorState.SelectionAnchorIndex;
-                }
-                else
-                {
-                    if (current.shift)
-                    {
-                        _dragAnchorIndex = session.EditorState.SelectionAnchorIndex;
-                        _editorService.SetSelection(session, _dragAnchorIndex, clickedIndex);
-                    }
-                    else
-                    {
-                        _editorService.ClearSecondarySelections(session);
-                        _dragAnchorIndex = clickedIndex;
-                        _editorService.SetCaret(session, clickedIndex, false, false);
-                    }
-                }
+                var hitTest = GetCharacterIndexAt(session, pointerContext.ContentMouse, gutterWidth);
+                var selectionAction = ApplyPointerSelection(session, current, hitTest.CharacterIndex);
+                LogPointerSelection(session, selectionAction, pointerContext, gutterWidth, hitTest);
+                WritePointerSelectionAudit(session, selectionAction, pointerContext, hitTest);
 
                 session.EditorState.ScrollToCaretPending = false;
                 _isDraggingSelection = true;
@@ -753,8 +785,8 @@ namespace Cortex.Modules.Editor
 
             if (_isDraggingSelection && current.type == EventType.MouseDrag && current.button == 0)
             {
-                var draggedIndex = GetCharacterIndexAt(session, contentMouse, gutterWidth);
-                _editorService.SetSelection(session, _dragAnchorIndex, draggedIndex);
+                var draggedHitTest = GetCharacterIndexAt(session, pointerContext.ContentMouse, gutterWidth);
+                _editorService.SetSelection(session, _dragAnchorIndex, draggedHitTest.CharacterIndex);
                 session.EditorState.ScrollToCaretPending = false;
                 current.Use();
                 return;
@@ -766,6 +798,96 @@ namespace Cortex.Modules.Editor
             }
         }
 
+        private string ApplyPointerSelection(DocumentSession session, Event current, int clickedIndex)
+        {
+            var now = DateTime.UtcNow;
+            var isDoubleClick = _lastClickIndex >= 0 &&
+                Math.Abs(clickedIndex - _lastClickIndex) <= 1 &&
+                (now - _lastClickUtc).TotalSeconds <= DoubleClickThresholdSeconds;
+            _lastClickIndex = clickedIndex;
+            _lastClickUtc = now;
+
+            if (isDoubleClick)
+            {
+                _editorService.ClearSecondarySelections(session);
+                _editorService.SelectWord(session, clickedIndex);
+                _dragAnchorIndex = _editorService.GetPrimarySelection(session).AnchorIndex;
+                return "double-click";
+            }
+
+            if (current != null && current.shift)
+            {
+                _dragAnchorIndex = _editorService.GetPrimarySelection(session).AnchorIndex;
+                _editorService.SetSelection(session, _dragAnchorIndex, clickedIndex);
+                return "shift-click";
+            }
+
+            _editorService.SetSelection(session, clickedIndex, clickedIndex);
+            _dragAnchorIndex = clickedIndex;
+            return "click";
+        }
+
+        private void LogPointerSelection(DocumentSession session, string action, PointerContext pointerContext, float gutterWidth, PointerHitTestResult hitTest)
+        {
+            if (!EditorInteractionLog.IsSelectionDiagnosticsEnabled || session == null || string.IsNullOrEmpty(action))
+            {
+                return;
+            }
+
+            var selection = _editorService.GetPrimarySelection(session);
+            var caret = _editorService.GetCaretPosition(session, selection.CaretIndex);
+            EditorInteractionLog.WritePointerSelection(
+                session.FilePath,
+                action,
+                caret.Line + 1,
+                caret.Column + 1,
+                selection.CaretIndex,
+                selection.HasSelection,
+                pointerContext.PreGroupHit,
+                pointerContext.UsedRectOffset,
+                pointerContext.SurfaceRect,
+                pointerContext.RawMouse,
+                pointerContext.SurfaceMouse,
+                pointerContext.ContentMouse,
+                gutterWidth,
+                session.Text != null ? session.Text.Length : 0,
+                session.TextVersion,
+                session.EditorState != null ? session.EditorState.Selections.Count : 0,
+                hitTest.LineIndex,
+                hitTest.LineNumber,
+                hitTest.LineStartIndex,
+                hitTest.RawLength,
+                hitTest.CharacterIndex,
+                hitTest.CandidateColumn,
+                hitTest.TargetX,
+                hitTest.PreviousWidth,
+                hitTest.CandidateWidth,
+                _lineHeight);
+        }
+
+        private void WritePointerSelectionAudit(DocumentSession session, string action, PointerContext pointerContext, PointerHitTestResult hitTest)
+        {
+            if (session == null || string.IsNullOrEmpty(action))
+            {
+                return;
+            }
+
+            var selection = _editorService.GetPrimarySelection(session);
+            var caret = _editorService.GetCaretPosition(session, selection.CaretIndex);
+            MMLog.WriteInfo("[Cortex.Editor] Pointer selection. Action=" + action +
+                ", File=" + (session.FilePath ?? string.Empty) +
+                ", RawMouse=(" + pointerContext.RawMouse.x.ToString("F1") + "," + pointerContext.RawMouse.y.ToString("F1") + ")" +
+                ", SurfaceMouse=(" + pointerContext.SurfaceMouse.x.ToString("F1") + "," + pointerContext.SurfaceMouse.y.ToString("F1") + ")" +
+                ", ContentMouse=(" + pointerContext.ContentMouse.x.ToString("F1") + "," + pointerContext.ContentMouse.y.ToString("F1") + ")" +
+                ", UsedRectOffset=" + pointerContext.UsedRectOffset +
+                ", HitLine=" + hitTest.LineNumber +
+                ", HitColumn=" + (hitTest.CandidateColumn + 1) +
+                ", HitIndex=" + hitTest.CharacterIndex +
+                ", SelectedLine=" + (caret.Line + 1) +
+                ", SelectedColumn=" + (caret.Column + 1) +
+                ", SelectedIndex=" + selection.CaretIndex + ".");
+        }
+
         private void HandleKeyboardInput(DocumentSession session, CortexShellState state, Event current)
         {
             if (!_hasFocus || current == null || current.type != EventType.KeyDown)
@@ -773,6 +895,8 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
+            var selectionCountBefore = session != null && session.EditorState != null ? session.EditorState.Selections.Count : 0;
+            var caretIndexBefore = session != null && session.EditorState != null ? session.EditorState.CaretIndex : 0;
             if (TryHandleCompletionInput(session, state, current))
             {
                 current.Use();
@@ -849,9 +973,32 @@ namespace Cortex.Modules.Editor
 
             if (handled)
             {
+                LogKeyboardSelectionState(session, commandId, current.character, selectionCountBefore, caretIndexBefore);
                 HandleCompletionAfterKey(session, state, current, commandId, previousTextVersion);
                 current.Use();
             }
+        }
+
+        private void LogKeyboardSelectionState(DocumentSession session, string commandId, char character, int selectionCountBefore, int caretIndexBefore)
+        {
+            if (!EditorInteractionLog.IsSelectionDiagnosticsEnabled || session == null || session.EditorState == null)
+            {
+                return;
+            }
+
+            var selection = _editorService.GetPrimarySelection(session);
+            var caret = _editorService.GetCaretPosition(session, selection.CaretIndex);
+            EditorInteractionLog.WriteKeyboardSelectionState(
+                session.FilePath,
+                commandId,
+                character,
+                selectionCountBefore,
+                session.EditorState.Selections.Count,
+                caretIndexBefore,
+                selection.CaretIndex,
+                selection.AnchorIndex,
+                caret.Line + 1,
+                caret.Column + 1);
         }
 
         private bool ExecuteCommand(DocumentSession session, string commandId, bool extendSelection)
@@ -1201,21 +1348,28 @@ namespace Cortex.Modules.Editor
             return false;
         }
 
-        private int GetCharacterIndexAt(DocumentSession session, Vector2 contentMouse, float gutterWidth)
+        private PointerHitTestResult GetCharacterIndexAt(DocumentSession session, Vector2 contentMouse, float gutterWidth)
         {
+            var result = new PointerHitTestResult();
             if (_layout == null || _layout.Lines.Count == 0)
             {
-                return 0;
+                return result;
             }
 
             var lineIndex = Mathf.Clamp(Mathf.FloorToInt(contentMouse.y / _lineHeight), 0, _layout.Lines.Count - 1);
             var line = _layout.Lines[lineIndex];
+            result.LineIndex = lineIndex;
+            result.LineNumber = line.LineNumber;
+            result.LineStartIndex = line.StartIndex;
+            result.RawLength = line.RawText != null ? line.RawText.Length : 0;
             if (contentMouse.x <= gutterWidth)
             {
-                return line.StartIndex;
+                result.CharacterIndex = line.StartIndex;
+                return result;
             }
 
             var targetX = contentMouse.x - gutterWidth;
+            result.TargetX = targetX;
             var low = 0;
             var high = line.RawText.Length;
             while (low < high)
@@ -1235,18 +1389,23 @@ namespace Cortex.Modules.Editor
             var candidate = Mathf.Clamp(low, 0, line.RawText.Length);
             if (candidate <= 0)
             {
-                return line.StartIndex;
+                result.CharacterIndex = line.StartIndex;
+                return result;
             }
 
             var previous = candidate - 1;
             var previousWidth = Measure(ExpandTabs(line.RawText.Substring(0, previous)));
             var candidateWidth = Measure(ExpandTabs(line.RawText.Substring(0, candidate)));
+            result.PreviousWidth = previousWidth;
+            result.CandidateWidth = candidateWidth;
             if (Mathf.Abs(targetX - previousWidth) <= Mathf.Abs(candidateWidth - targetX))
             {
                 candidate = previous;
             }
 
-            return line.StartIndex + candidate;
+            result.CandidateColumn = candidate;
+            result.CharacterIndex = line.StartIndex + candidate;
+            return result;
         }
 
         private GUIStyle GetClassificationStyle(string classification)

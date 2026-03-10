@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using ModAPI.Core;
 
 namespace Cortex.Modules.Shared
 {
@@ -9,7 +10,14 @@ namespace Cortex.Modules.Shared
     {
         public static bool IsDecompilerDocumentPath(CortexShellState state, string filePath)
         {
-            if (state == null || state.Settings == null || string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(state.Settings.DecompilerCachePath))
+            string reason;
+            return TryGetDecompilerDocumentPathReason(state, filePath, out reason);
+        }
+
+        private static bool TryGetDecompilerDocumentPathReason(CortexShellState state, string filePath, out string reason)
+        {
+            reason = string.Empty;
+            if (string.IsNullOrEmpty(filePath))
             {
                 return false;
             }
@@ -17,13 +25,49 @@ namespace Cortex.Modules.Shared
             try
             {
                 var fullPath = Path.GetFullPath(filePath);
-                var cacheRoot = Path.GetFullPath(state.Settings.DecompilerCachePath)
+                if (state != null && state.Settings != null && !string.IsNullOrEmpty(state.Settings.DecompilerCachePath))
+                {
+                    var cacheRoot = Path.GetFullPath(state.Settings.DecompilerCachePath)
+                        .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                        Path.DirectorySeparatorChar;
+                    if (fullPath.StartsWith(cacheRoot, StringComparison.OrdinalIgnoreCase))
+                    {
+                        reason = "settings-cache-root";
+                        return true;
+                    }
+                }
+
+                if (fullPath.IndexOf(Path.DirectorySeparatorChar + "cortex_cache" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    fullPath.IndexOf(Path.AltDirectorySeparatorChar + "cortex_cache" + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    reason = "cortex-cache-segment";
+                    return true;
+                }
+
+                var runtimeCacheRoot = Path.Combine(
+                    Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                        "ModAPI"),
+                    "Cache");
+                if (string.IsNullOrEmpty(runtimeCacheRoot))
+                {
+                    return false;
+                }
+
+                runtimeCacheRoot = Path.GetFullPath(runtimeCacheRoot)
                     .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
                     Path.DirectorySeparatorChar;
-                return fullPath.StartsWith(cacheRoot, StringComparison.OrdinalIgnoreCase);
+                if (fullPath.StartsWith(runtimeCacheRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    reason = "legacy-modapi-cache-root";
+                    return true;
+                }
+
+                return false;
             }
             catch
             {
+                reason = "path-normalization-failed";
                 return false;
             }
         }
@@ -83,10 +127,11 @@ namespace Cortex.Modules.Shared
             var existing = FindOpenDocument(state, fullPath);
             if (existing != null)
             {
-                ApplyDocumentMetadata(existing, fullPath, documentKind);
+                ApplyDocumentMetadata(existing, fullPath, documentKind, state);
                 state.Documents.ActiveDocument = existing;
                 state.Documents.ActiveDocumentPath = fullPath;
                 state.Documents.ActiveDocument.HighlightedLine = highlightedLine;
+                LogOpenedDocument(existing, highlightedLine, true, state);
                 return state.Documents.ActiveDocument;
             }
 
@@ -105,11 +150,12 @@ namespace Cortex.Modules.Shared
                 return null;
             }
 
-            ApplyDocumentMetadata(session, fullPath, documentKind);
+            ApplyDocumentMetadata(session, fullPath, documentKind, state);
             session.HighlightedLine = highlightedLine;
             state.Documents.OpenDocuments.Add(session);
             state.Documents.ActiveDocument = session;
             state.Documents.ActiveDocumentPath = fullPath;
+            LogOpenedDocument(session, highlightedLine, false, state);
             return session;
         }
 
@@ -186,7 +232,7 @@ namespace Cortex.Modules.Shared
             return true;
         }
 
-        private static void ApplyDocumentMetadata(DocumentSession session, string fullPath, DocumentKind documentKind)
+        private static void ApplyDocumentMetadata(DocumentSession session, string fullPath, DocumentKind documentKind, CortexShellState state)
         {
             if (session == null)
             {
@@ -194,7 +240,7 @@ namespace Cortex.Modules.Shared
             }
 
             session.FilePath = fullPath ?? session.FilePath;
-            switch (ResolveDocumentKind(fullPath, documentKind))
+            switch (ResolveDocumentKind(fullPath, documentKind, state))
             {
                 case DocumentKind.DecompiledCode:
                     session.Kind = DocumentKind.DecompiledCode;
@@ -219,11 +265,37 @@ namespace Cortex.Modules.Shared
             }
         }
 
-        private static DocumentKind ResolveDocumentKind(string filePath, DocumentKind preferredKind)
+        private static void LogOpenedDocument(DocumentSession session, int highlightedLine, bool existing, CortexShellState state)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            string decompilerReason;
+            var decompilerMatch = TryGetDecompilerDocumentPathReason(state, session.FilePath, out decompilerReason);
+            MMLog.WriteInfo("[Cortex.Documents] " +
+                (existing ? "Activated" : "Opened") +
+                " document. Path=" + (session.FilePath ?? string.Empty) +
+                ", Kind=" + session.Kind +
+                ", ReadOnly=" + session.IsReadOnly +
+                ", SupportsEditing=" + session.SupportsEditing +
+                ", SupportsSaving=" + session.SupportsSaving +
+                ", HighlightedLine=" + highlightedLine +
+                ", DecompiledMatch=" + decompilerMatch +
+                ", MatchReason=" + (decompilerReason ?? string.Empty) + ".");
+        }
+
+        private static DocumentKind ResolveDocumentKind(string filePath, DocumentKind preferredKind, CortexShellState state)
         {
             if (preferredKind != DocumentKind.Unknown)
             {
                 return preferredKind;
+            }
+
+            if (IsDecompilerDocumentPath(state, filePath))
+            {
+                return DocumentKind.DecompiledCode;
             }
 
             var extension = !string.IsNullOrEmpty(filePath)
