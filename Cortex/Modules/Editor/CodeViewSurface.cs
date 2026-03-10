@@ -664,6 +664,7 @@ namespace Cortex.Modules.Editor
             state.Editor.RequestedHoverDocumentPath = session.FilePath ?? string.Empty;
             state.Editor.RequestedHoverLine = hoveredToken.LineNumber;
             state.Editor.RequestedHoverColumn = hoveredToken.Column;
+            state.Editor.RequestedHoverAbsolutePosition = hoveredToken.Start;
             state.Editor.RequestedHoverTokenText = hoveredToken.RawText.Trim();
             MMLog.WriteInfo("[Cortex.HoverUI] Queued hover request for " +
                 state.Editor.RequestedHoverTokenText +
@@ -686,6 +687,7 @@ namespace Cortex.Modules.Editor
             state.Editor.RequestedDefinitionDocumentPath = session.FilePath ?? string.Empty;
             state.Editor.RequestedDefinitionLine = token.LineNumber;
             state.Editor.RequestedDefinitionColumn = token.Column;
+            state.Editor.RequestedDefinitionAbsolutePosition = token.Start;
             state.Editor.RequestedDefinitionTokenText = token.RawText.Trim();
         }
 
@@ -748,7 +750,7 @@ namespace Cortex.Modules.Editor
                 tooltipRect = _stickyHoverTooltipRect;
             }
 
-            SetVisibleHover(state, hoverKey, response);
+            SetVisibleHover(state, hoverKey, response, hoveredPart != null ? hoveredPart.Part : null);
             if (current == null || current.type == EventType.Repaint)
             {
                 LogHoverPlacement(hoverKey, response, hoveredToken, tooltipRect, localMouse, effectiveViewportSize);
@@ -765,6 +767,7 @@ namespace Cortex.Modules.Editor
             signatureRect = BuildTooltipSignatureRect(tooltipRect, pathHeight);
             LayoutTooltipParts(signatureRect, displayParts, partVisuals, true);
             hoveredPart = FindHoveredTooltipPart(partVisuals, localMouse);
+            PreloadTooltipTargets(navigationService, state, response, hoveredPart != null ? hoveredPart.Part : null);
 
             if (hoveredPart != null && hoveredPart.Part != null && hoveredPart.Part.IsInteractive)
             {
@@ -780,6 +783,26 @@ namespace Cortex.Modules.Editor
                 var detailRect = BuildTooltipDetailRect(tooltipRect, pathHeight, signatureHeight);
                 GUI.Label(detailRect, detailText, _tooltipDetailStyle);
             }
+        }
+
+        private static void PreloadTooltipTargets(
+            CortexNavigationService navigationService,
+            CortexShellState state,
+            LanguageServiceHoverResponse response,
+            LanguageServiceHoverDisplayPart hoveredPart)
+        {
+            if (navigationService == null || state == null)
+            {
+                return;
+            }
+
+            if (hoveredPart != null && hoveredPart.IsInteractive)
+            {
+                navigationService.PreloadHoverDisplayPartTarget(state, hoveredPart);
+                return;
+            }
+
+            navigationService.PreloadHoverResponseTarget(state, response);
         }
 
         private bool TryResolveVisibleHover(
@@ -1316,7 +1339,11 @@ namespace Cortex.Modules.Editor
                 ", Tooltip=" + FormatRect(_stickyHoverTooltipRect) + ".");
         }
 
-        private static void SetVisibleHover(CortexShellState state, string hoverKey, LanguageServiceHoverResponse response)
+        private static void SetVisibleHover(
+            CortexShellState state,
+            string hoverKey,
+            LanguageServiceHoverResponse response,
+            LanguageServiceHoverDisplayPart hoveredPart)
         {
             if (state == null || state.Editor == null)
             {
@@ -1324,9 +1351,10 @@ namespace Cortex.Modules.Editor
             }
 
             state.Editor.VisibleHoverKey = hoverKey ?? string.Empty;
-            state.Editor.VisibleHoverDefinitionDocumentPath = response != null
-                ? response.DefinitionDocumentPath ?? string.Empty
-                : string.Empty;
+            state.Editor.VisibleHoverDefinitionDocumentPath =
+                hoveredPart != null && hoveredPart.IsInteractive && !string.IsNullOrEmpty(hoveredPart.DefinitionDocumentPath)
+                    ? hoveredPart.DefinitionDocumentPath
+                    : (response != null ? response.DefinitionDocumentPath ?? string.Empty : string.Empty);
         }
 
         private static void ClearVisibleHover(CortexShellState state)
@@ -1677,9 +1705,10 @@ namespace Cortex.Modules.Editor
                 return false;
             }
 
-            if (IsHoverClassification(token.Classification, rawText))
+            var classification = NormalizeClassification(token.Classification);
+            if (!string.IsNullOrEmpty(classification))
             {
-                return true;
+                return IsHoverClassification(classification, rawText);
             }
 
             return IsIdentifierLikeTokenText(rawText);

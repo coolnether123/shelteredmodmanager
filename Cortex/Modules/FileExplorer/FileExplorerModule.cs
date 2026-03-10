@@ -533,6 +533,10 @@ namespace Cortex.Modules.FileExplorer
             var headerColor = CortexIdeLayout.GetHeaderColor();
             var borderColor = CortexIdeLayout.GetBorderColor();
             var bgColor = CortexIdeLayout.GetBackgroundColor();
+            var hoverHighlightColor = CortexIdeLayout.Blend(
+                surfaceColor,
+                CortexIdeLayout.ParseColor("#DCDCAA", textColor),
+                0.28f);
 
             _folderLabelStyle = new GUIStyle(GUI.skin.button);
             _folderLabelStyle.alignment = TextAnchor.MiddleLeft;
@@ -543,9 +547,10 @@ namespace Cortex.Modules.FileExplorer
             GuiStyleUtil.ApplyTextColorToAllStates(_folderLabelStyle, textColor);
 
             _hoverFolderLabelStyle = new GUIStyle(_folderLabelStyle);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_hoverFolderLabelStyle, MakeTex(hoverHighlightColor));
             GuiStyleUtil.ApplyTextColorToAllStates(
                 _hoverFolderLabelStyle,
-                CortexIdeLayout.Blend(textColor, CortexIdeLayout.ParseColor("#DCDCAA", textColor), 0.35f));
+                CortexIdeLayout.ParseColor("#FFF4B0", textColor));
 
             _fileButtonStyle = new GUIStyle(GUI.skin.button);
             _fileButtonStyle.alignment = TextAnchor.MiddleLeft;
@@ -560,9 +565,10 @@ namespace Cortex.Modules.FileExplorer
             _fileButtonStyle.hover.textColor = textColor;
 
             _hoverFileButtonStyle = new GUIStyle(_fileButtonStyle);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_hoverFileButtonStyle, MakeTex(hoverHighlightColor));
             GuiStyleUtil.ApplyTextColorToAllStates(
                 _hoverFileButtonStyle,
-                CortexIdeLayout.Blend(mutedColor, CortexIdeLayout.ParseColor("#DCDCAA", textColor), 0.4f));
+                CortexIdeLayout.ParseColor("#FFF4B0", textColor));
 
             _activeFileButtonStyle = new GUIStyle(_fileButtonStyle);
             GuiStyleUtil.ApplyBackgroundToAllStates(_activeFileButtonStyle, _selectedFileBg);

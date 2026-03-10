@@ -9,6 +9,7 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
+using Cortex.Services;
 using GameModding.Shared.Serialization;
 using ModAPI.Core;
 
@@ -32,6 +33,8 @@ namespace Cortex
         private PendingLanguageDefinitionRequest _pendingLanguageDefinition;
         private int _languageServiceGeneration;
         private DateTime _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
+        private DateTime _languageInitializeQueuedUtc = DateTime.MinValue;
+        private DateTime _lastLanguageInitializationProgressLogUtc = DateTime.MinValue;
         private string _languageServiceConfigurationFingerprint = string.Empty;
         private const double LanguageAnalysisDebounceMs = 280d;
 
@@ -93,7 +96,11 @@ namespace Cortex
 
             ShutdownLanguageService();
 
-            _languageServiceClient = new RoslynLanguageServiceClient(workerPath, settings.RoslynServiceTimeoutMs);
+            MMLog.WriteInfo("[Cortex.Roslyn] Resolved worker path: " + workerPath);
+            _languageServiceClient = new RoslynLanguageServiceClient(
+                workerPath,
+                settings.RoslynServiceTimeoutMs,
+                delegate(string message) { MMLog.WriteInfo(message); });
             _languageServiceInitializeRequest = initializeRequest;
             _lastAnalyzedDocumentFingerprint = string.Empty;
             _pendingLanguageAnalysisFingerprint = string.Empty;
@@ -108,6 +115,8 @@ namespace Cortex
             _pendingLanguageHover = null;
             _pendingLanguageDefinition = null;
             _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
+            _languageInitializeQueuedUtc = DateTime.MinValue;
+            _lastLanguageInitializationProgressLogUtc = DateTime.MinValue;
             _languageServiceConfigurationFingerprint = configurationFingerprint;
             Interlocked.Increment(ref _languageServiceGeneration);
 
@@ -166,6 +175,8 @@ namespace Cortex
                 return;
             }
 
+            _languageInitializeQueuedUtc = DateTime.UtcNow;
+            _lastLanguageInitializationProgressLogUtc = DateTime.UtcNow;
             MMLog.WriteInfo("[Cortex.Roslyn] Worker initialize queued. Generation=" + generation +
                 ", RequestId=" + _languageInitializeRequestId + ".");
         }
@@ -206,6 +217,8 @@ namespace Cortex
             _pendingLanguageHover = null;
             _pendingLanguageDefinition = null;
             _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
+            _languageInitializeQueuedUtc = DateTime.MinValue;
+            _lastLanguageInitializationProgressLogUtc = DateTime.MinValue;
             _languageServiceConfigurationFingerprint = string.Empty;
         }
 
@@ -213,6 +226,7 @@ namespace Cortex
         {
             EnsureLanguageServiceStarted();
             ProcessLanguageResponses();
+            LogLanguageInitializationProgress();
             if (_languageServiceClient == null)
             {
                 return;
@@ -425,6 +439,8 @@ namespace Cortex
         {
             _languageInitializeRequestId = string.Empty;
             _languageServiceInitializing = false;
+            _languageInitializeQueuedUtc = DateTime.MinValue;
+            _lastLanguageInitializationProgressLogUtc = DateTime.MinValue;
             if (envelope == null || !envelope.Success)
             {
                 _languageServiceReady = false;
@@ -475,6 +491,29 @@ namespace Cortex
             MMLog.WriteInfo("[Cortex.Roslyn] Worker ready. CachedProjects=" +
                 (_state.LanguageServiceStatus != null ? _state.LanguageServiceStatus.CachedProjectCount.ToString() : "0") +
                 ", Capabilities=" + BuildCapabilitySummary(_state.LanguageServiceStatus));
+        }
+
+        private void LogLanguageInitializationProgress()
+        {
+            if (!_languageServiceInitializing ||
+                _languageServiceClient == null ||
+                string.IsNullOrEmpty(_languageInitializeRequestId) ||
+                _languageInitializeQueuedUtc == DateTime.MinValue)
+            {
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+            if ((now - _lastLanguageInitializationProgressLogUtc).TotalSeconds < 5d)
+            {
+                return;
+            }
+
+            _lastLanguageInitializationProgressLogUtc = now;
+            MMLog.WriteInfo("[Cortex.Roslyn] Waiting for initialize response. RequestId=" + _languageInitializeRequestId +
+                ", ElapsedMs=" + (int)(now - _languageInitializeQueuedUtc).TotalMilliseconds +
+                ", ClientRunning=" + _languageServiceClient.IsRunning +
+                ", LastError=" + (_languageServiceClient.LastError ?? string.Empty) + ".");
         }
 
         private void HandleLanguageAnalysisResponse(LanguageServiceEnvelope envelope, PendingLanguageAnalysisRequest pending)
@@ -562,6 +601,7 @@ namespace Cortex
             _state.Editor.RequestedHoverDocumentPath = string.Empty;
             _state.Editor.RequestedHoverLine = 0;
             _state.Editor.RequestedHoverColumn = 0;
+            _state.Editor.RequestedHoverAbsolutePosition = -1;
             var requestedHoverTokenText = _state.Editor.RequestedHoverTokenText ?? string.Empty;
             _state.Editor.RequestedHoverTokenText = string.Empty;
             if (response.Success)
@@ -606,6 +646,8 @@ namespace Cortex
                         : (envelope != null && !string.IsNullOrEmpty(envelope.ErrorMessage) ? envelope.ErrorMessage : "Definition was not found.");
                     return;
                 }
+
+                _state.Editor.RequestedDefinitionAbsolutePosition = -1;
 
                 if (!string.IsNullOrEmpty(response.DocumentPath) && File.Exists(response.DocumentPath))
                 {
@@ -686,7 +728,7 @@ namespace Cortex
                     "' in assembly '" + (response.ContainingAssemblyName ?? string.Empty) + "'.");
 
                 string assemblyPath;
-                if (!TryResolveAssemblyPath(response.ContainingAssemblyName, out assemblyPath))
+                if (!MetadataNavigationResolver.TryResolveAssemblyPath(_state, _sourceLookupIndex, response.ContainingAssemblyName, out assemblyPath))
                 {
                     MMLog.WriteWarning("[Cortex.Roslyn] Metadata definition fallback could not resolve assembly '" + (response.ContainingAssemblyName ?? string.Empty) + "'.");
                     return false;
@@ -750,393 +792,95 @@ namespace Cortex
             }
         }
 
-        private bool TryResolveAssemblyPath(string assemblyName, out string assemblyPath)
+        private bool TryResolveMetadataTarget(LanguageServiceDefinitionResponse response, string assemblyPath, out int metadataToken, out DecompilerEntityKind entityKind)
         {
-            assemblyPath = string.Empty;
-            if (string.IsNullOrEmpty(assemblyName))
+            metadataToken = 0;
+            entityKind = DecompilerEntityKind.Type;
+            return response != null && MetadataNavigationResolver.TryResolveMetadataTarget(
+                assemblyPath,
+                response.DocumentationCommentId,
+                response.ContainingTypeName,
+                response.SymbolKind,
+                out metadataToken,
+                out entityKind);
+        }
+
+        private DocumentSession FindOpenDocument(string filePath)
+        {
+            return CortexModuleUtil.FindOpenDocument(_state, filePath);
+        }
+
+        private LanguageServiceInitializeRequest BuildLanguageInitializeRequest()
+        {
+            return new LanguageServiceInitializeRequest
             {
-                return false;
+                WorkspaceRootPath = _state.Settings != null ? _state.Settings.WorkspaceRootPath : string.Empty,
+                SourceRoots = BuildLanguageSourceRoots(_state.Settings, _state.SelectedProject),
+                ProjectFilePaths = CollectLanguageWarmupProjectPaths(),
+                SolutionFilePaths = new string[0]
+            };
+        }
+
+        private string[] CollectLanguageWarmupProjectPaths()
+        {
+            var projectPaths = new List<string>();
+            AddLanguageWarmupProjectPath(projectPaths, _state.SelectedProject);
+
+            if (_state.Documents.ActiveDocument != null)
+            {
+                AddLanguageWarmupProjectPath(projectPaths, ResolveProjectForDocument(_state.Documents.ActiveDocument.FilePath));
             }
 
-            var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-            for (var i = 0; i < loadedAssemblies.Length; i++)
+            for (var i = 0; i < _state.Documents.OpenDocuments.Count; i++)
             {
-                var assembly = loadedAssemblies[i];
-                if (assembly == null || !string.Equals(assembly.GetName().Name, assemblyName, StringComparison.OrdinalIgnoreCase))
+                var session = _state.Documents.OpenDocuments[i];
+                if (session == null || string.IsNullOrEmpty(session.FilePath))
                 {
                     continue;
                 }
 
-                try
-                {
-                    assemblyPath = assembly.Location;
-                }
-                catch
-                {
-                    assemblyPath = string.Empty;
-                }
-
-                if (!string.IsNullOrEmpty(assemblyPath) && File.Exists(assemblyPath))
-                {
-                    return true;
-                }
+                AddLanguageWarmupProjectPath(projectPaths, ResolveProjectForDocument(session.FilePath));
             }
 
-            var searchRoots = new List<string>();
-            AddSearchRoot(searchRoots, AppDomain.CurrentDomain.BaseDirectory);
-            var baseDirectory = AppDomain.CurrentDomain.BaseDirectory ?? string.Empty;
-            var smmRoot = Path.Combine(baseDirectory, "SMM");
-            var smmBinRoot = Path.Combine(smmRoot, "bin");
-            AddSearchRoot(searchRoots, smmRoot);
-            AddSearchRoot(searchRoots, smmBinRoot);
-            AddSearchRoot(searchRoots, Path.Combine(smmBinRoot, "decompiler"));
-            if (_state.Settings != null)
-            {
-                var configuredRoots = SourceRootSetBuilder.Build(_state.SelectedProject, _state.Settings, SourceRootSetBuilder.LanguageServiceRoots);
-                for (var i = 0; i < configuredRoots.Count; i++)
-                {
-                    AddSearchRoot(searchRoots, configuredRoots[i]);
-                }
-
-                if (!string.IsNullOrEmpty(_state.Settings.DecompilerCachePath))
-                {
-                    AddSearchRoot(searchRoots, _state.Settings.DecompilerCachePath);
-                }
-            }
-
-            assemblyPath = _sourceLookupIndex != null
-                ? _sourceLookupIndex.ResolveAssemblyPath(searchRoots, assemblyName)
-                : string.Empty;
-            if (!string.IsNullOrEmpty(assemblyPath))
-            {
-                return true;
-            }
-
-            return false;
+            return projectPaths.ToArray();
         }
 
-        private static void AddSearchRoot(List<string> roots, string root)
+        private static void AddLanguageWarmupProjectPath(List<string> projectPaths, CortexProjectDefinition project)
         {
-            if (roots == null || string.IsNullOrEmpty(root))
+            if (projectPaths == null || project == null || string.IsNullOrEmpty(project.ProjectFilePath))
             {
                 return;
             }
 
             try
             {
-                var fullPath = Path.GetFullPath(root);
-                if (!Directory.Exists(fullPath) && !File.Exists(fullPath))
+                var fullPath = Path.GetFullPath(project.ProjectFilePath);
+                if (File.Exists(fullPath) && !ContainsLanguageWarmupProjectPath(projectPaths, fullPath))
                 {
-                    return;
+                    projectPaths.Add(fullPath);
                 }
-
-                for (var i = 0; i < roots.Count; i++)
-                {
-                    if (string.Equals(roots[i], fullPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return;
-                    }
-                }
-
-                roots.Add(fullPath);
             }
             catch
             {
             }
         }
 
-        private bool TryResolveMetadataTarget(LanguageServiceDefinitionResponse response, string assemblyPath, out int metadataToken, out DecompilerEntityKind entityKind)
+        private static bool ContainsLanguageWarmupProjectPath(List<string> projectPaths, string candidatePath)
         {
-            metadataToken = 0;
-            entityKind = DecompilerEntityKind.Type;
-
-            var assembly = LoadAssemblyForMetadata(assemblyPath);
-            if (assembly == null)
+            if (projectPaths == null || string.IsNullOrEmpty(candidatePath))
             {
                 return false;
             }
 
-            var documentationCommentId = response.DocumentationCommentId ?? string.Empty;
-            var containingTypeName = NormalizeMetadataTypeName(response.ContainingTypeName);
-            var symbolKind = response.SymbolKind ?? string.Empty;
-
-            if (IsTypeLikeSymbol(symbolKind))
+            for (var i = 0; i < projectPaths.Count; i++)
             {
-                var type = ResolveTypeByName(assembly, !string.IsNullOrEmpty(documentationCommentId) && documentationCommentId.StartsWith("T:", StringComparison.Ordinal) ? documentationCommentId.Substring(2) : containingTypeName);
-                if (type == null)
+                if (string.Equals(projectPaths[i], candidatePath, StringComparison.OrdinalIgnoreCase))
                 {
-                    return false;
-                }
-
-                metadataToken = type.MetadataToken;
-                entityKind = DecompilerEntityKind.Type;
-                return true;
-            }
-
-            if (!string.IsNullOrEmpty(documentationCommentId) && documentationCommentId.StartsWith("M:", StringComparison.Ordinal))
-            {
-                var method = ResolveMethodByDocumentationId(assembly, documentationCommentId);
-                if (method != null)
-                {
-                    metadataToken = method.MetadataToken;
-                    entityKind = DecompilerEntityKind.Method;
                     return true;
                 }
             }
 
-            var containingType = ResolveTypeByName(assembly, containingTypeName);
-            if (containingType == null)
-            {
-                return false;
-            }
-
-            metadataToken = containingType.MetadataToken;
-            entityKind = DecompilerEntityKind.Type;
-            return true;
-        }
-
-        private static Assembly LoadAssemblyForMetadata(string assemblyPath)
-        {
-            if (string.IsNullOrEmpty(assemblyPath))
-            {
-                return null;
-            }
-
-            var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-            for (var i = 0; i < loadedAssemblies.Length; i++)
-            {
-                try
-                {
-                    if (string.Equals(loadedAssemblies[i].Location, assemblyPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return loadedAssemblies[i];
-                    }
-                }
-                catch
-                {
-                }
-            }
-
-            try
-            {
-                return File.Exists(assemblyPath) ? Assembly.LoadFrom(assemblyPath) : null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static Type ResolveTypeByName(Assembly assembly, string typeName)
-        {
-            if (assembly == null || string.IsNullOrEmpty(typeName))
-            {
-                return null;
-            }
-
-            var normalized = NormalizeMetadataTypeName(typeName);
-            try
-            {
-                var direct = assembly.GetType(normalized, false);
-                if (direct != null)
-                {
-                    return direct;
-                }
-
-                var allTypes = assembly.GetTypes();
-                for (var i = 0; i < allTypes.Length; i++)
-                {
-                    var type = allTypes[i];
-                    if (type != null &&
-                        string.Equals((type.FullName ?? type.Name).Replace('+', '.'), normalized, StringComparison.Ordinal))
-                    {
-                        return type;
-                    }
-                }
-            }
-            catch
-            {
-            }
-
-            return null;
-        }
-
-        private static MethodBase ResolveMethodByDocumentationId(Assembly assembly, string documentationCommentId)
-        {
-            if (assembly == null || string.IsNullOrEmpty(documentationCommentId))
-            {
-                return null;
-            }
-
-            try
-            {
-                var allTypes = assembly.GetTypes();
-                for (var typeIndex = 0; typeIndex < allTypes.Length; typeIndex++)
-                {
-                    var type = allTypes[typeIndex];
-                    if (type == null)
-                    {
-                        continue;
-                    }
-
-                    var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
-                    var methods = type.GetMethods(flags);
-                    for (var methodIndex = 0; methodIndex < methods.Length; methodIndex++)
-                    {
-                        if (string.Equals(BuildMethodDocumentationId(methods[methodIndex]), documentationCommentId, StringComparison.Ordinal))
-                        {
-                            return methods[methodIndex];
-                        }
-                    }
-
-                    var constructors = type.GetConstructors(flags);
-                    for (var ctorIndex = 0; ctorIndex < constructors.Length; ctorIndex++)
-                    {
-                        if (string.Equals(BuildMethodDocumentationId(constructors[ctorIndex]), documentationCommentId, StringComparison.Ordinal))
-                        {
-                            return constructors[ctorIndex];
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-
-            return null;
-        }
-
-        private static string BuildMethodDocumentationId(MethodBase method)
-        {
-            if (method == null || method.DeclaringType == null)
-            {
-                return string.Empty;
-            }
-
-            var builder = new StringBuilder();
-            builder.Append("M:");
-            builder.Append(GetXmlTypeName(method.DeclaringType));
-            builder.Append(".");
-            builder.Append(method.Name);
-
-            var parameters = method.GetParameters();
-            if (parameters.Length > 0)
-            {
-                builder.Append("(");
-                for (var i = 0; i < parameters.Length; i++)
-                {
-                    if (i > 0)
-                    {
-                        builder.Append(",");
-                    }
-
-                    builder.Append(GetXmlTypeName(parameters[i].ParameterType));
-                }
-                builder.Append(")");
-            }
-
-            return builder.ToString();
-        }
-
-        private static string GetXmlTypeName(Type type)
-        {
-            if (type == null)
-            {
-                return string.Empty;
-            }
-
-            if (type.IsByRef)
-            {
-                return GetXmlTypeName(type.GetElementType()) + "@";
-            }
-
-            if (type.IsArray)
-            {
-                return GetXmlTypeName(type.GetElementType()) + "[]";
-            }
-
-            if (type.IsGenericType)
-            {
-                var genericType = type.GetGenericTypeDefinition();
-                var baseName = (genericType.FullName ?? genericType.Name).Replace('+', '.');
-                var tickIndex = baseName.IndexOf('`');
-                if (tickIndex >= 0)
-                {
-                    baseName = baseName.Substring(0, tickIndex);
-                }
-
-                var args = type.GetGenericArguments();
-                var builder = new StringBuilder();
-                builder.Append(baseName);
-                builder.Append("{");
-                for (var i = 0; i < args.Length; i++)
-                {
-                    if (i > 0)
-                    {
-                        builder.Append(",");
-                    }
-
-                    builder.Append(GetXmlTypeName(args[i]));
-                }
-                builder.Append("}");
-                return builder.ToString();
-            }
-
-            return (type.FullName ?? type.Name).Replace('+', '.');
-        }
-
-        private static string NormalizeMetadataTypeName(string typeName)
-        {
-            return string.IsNullOrEmpty(typeName)
-                ? string.Empty
-                : typeName.Replace("global::", string.Empty).Replace('+', '.');
-        }
-
-        private static bool IsTypeLikeSymbol(string symbolKind)
-        {
-            return string.Equals(symbolKind, "NamedType", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(symbolKind, "Namespace", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private DocumentSession FindOpenDocument(string filePath)
-        {
-            if (string.IsNullOrEmpty(filePath))
-            {
-                return null;
-            }
-
-            for (var i = 0; i < _state.Documents.OpenDocuments.Count; i++)
-            {
-                var session = _state.Documents.OpenDocuments[i];
-                if (session != null && string.Equals(session.FilePath, filePath, StringComparison.OrdinalIgnoreCase))
-                {
-                    return session;
-                }
-            }
-
-            return null;
-        }
-
-        private LanguageServiceInitializeRequest BuildLanguageInitializeRequest()
-        {
-            var projects = _projectCatalog != null ? _projectCatalog.GetProjects() : new List<CortexProjectDefinition>();
-            var projectPaths = new List<string>();
-            for (var i = 0; i < projects.Count; i++)
-            {
-                var projectPath = projects[i] != null ? projects[i].ProjectFilePath : string.Empty;
-                if (!string.IsNullOrEmpty(projectPath) && File.Exists(projectPath))
-                {
-                    projectPaths.Add(projectPath);
-                }
-            }
-
-            return new LanguageServiceInitializeRequest
-            {
-                WorkspaceRootPath = _state.Settings != null ? _state.Settings.WorkspaceRootPath : string.Empty,
-                SourceRoots = BuildLanguageSourceRoots(_state.Settings, _state.SelectedProject),
-                ProjectFilePaths = projectPaths.ToArray(),
-                SolutionFilePaths = new string[0]
-            };
+            return false;
         }
 
         private LanguageServiceDocumentRequest BuildLanguageDocumentRequest(DocumentSession session, bool includeDiagnostics, bool includeClassifications)
@@ -1167,7 +911,8 @@ namespace Cortex
                 DocumentText = session != null ? session.Text : string.Empty,
                 DocumentVersion = session != null ? session.TextVersion : 0,
                 Line = line,
-                Column = column
+                Column = column,
+                AbsolutePosition = _state.Editor != null ? _state.Editor.RequestedHoverAbsolutePosition : -1
             };
         }
 
@@ -1183,7 +928,8 @@ namespace Cortex
                 DocumentText = session != null ? session.Text : string.Empty,
                 DocumentVersion = session != null ? session.TextVersion : 0,
                 Line = line,
-                Column = column
+                Column = column,
+                AbsolutePosition = _state.Editor != null ? _state.Editor.RequestedDefinitionAbsolutePosition : -1
             };
         }
 
@@ -1245,8 +991,8 @@ namespace Cortex
                 candidates.Add(settings.RoslynServicePathOverride);
             }
 
-            candidates.Add(Path.Combine(Path.Combine(smmBin, "roslyn"), "Cortex.Roslyn.Worker.exe"));
             candidates.Add(Path.Combine(Path.Combine(smmBin, "roslyn"), "Cortex.Roslyn.Worker.dll"));
+            candidates.Add(Path.Combine(Path.Combine(smmBin, "roslyn"), "Cortex.Roslyn.Worker.exe"));
 
             for (var i = 0; i < candidates.Count; i++)
             {

@@ -59,6 +59,7 @@ namespace Cortex.Core.Abstractions
     public interface IDocumentService
     {
         DocumentSession Open(string filePath);
+        void Preload(string filePath);
         bool Save(DocumentSession session);
         bool Reload(DocumentSession session);
         bool HasExternalChanges(DocumentSession session);

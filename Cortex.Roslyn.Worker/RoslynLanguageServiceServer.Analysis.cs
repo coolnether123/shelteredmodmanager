@@ -92,7 +92,7 @@ namespace Cortex.Roslyn.Worker
             }
 
             var text = documentContext.Document.GetTextAsync().Result;
-            var position = ToAbsolutePosition(text, request.Line, request.Column);
+            var position = ResolveRequestPosition(text, request.Line, request.Column, request.AbsolutePosition);
             if (position < 0 || position > text.Length)
             {
                 return new LanguageServiceHoverResponse
@@ -190,7 +190,7 @@ namespace Cortex.Roslyn.Worker
             }
 
             var text = documentContext.Document.GetTextAsync().Result;
-            var position = ToAbsolutePosition(text, request.Line, request.Column);
+            var position = ResolveRequestPosition(text, request.Line, request.Column, request.AbsolutePosition);
             if (position < 0 || position > text.Length)
             {
                 return new LanguageServiceDefinitionResponse
@@ -662,12 +662,6 @@ namespace Cortex.Roslyn.Worker
 
         private static ISymbol TryResolveSymbolAtPosition(Document document, int position)
         {
-            var symbol = SymbolFinder.FindSymbolAtPositionAsync(document, position).Result;
-            if (symbol != null)
-            {
-                return symbol;
-            }
-
             var semanticModel = document.GetSemanticModelAsync().Result;
             var root = document.GetSyntaxRootAsync().Result;
             if (semanticModel == null || root == null)
@@ -675,50 +669,40 @@ namespace Cortex.Roslyn.Worker
                 return null;
             }
 
-            var token = root.FindToken(position);
-            if (token.Parent == null || token.RawKind == 0)
+            if (IsCommentTriviaPosition(root, position))
             {
                 return null;
             }
 
-            var symbolFromAncestors = TryResolveSymbolFromAncestors(semanticModel, token);
+            var token = root.FindToken(position, true);
+            if (token.Parent == null || token.RawKind == 0 || !token.Span.Contains(position))
+            {
+                return null;
+            }
+
+            var symbol = SymbolFinder.FindSymbolAtPositionAsync(document, position).Result;
+            if (symbol != null)
+            {
+                return symbol;
+            }
+
+            var symbolFromAncestors = TryResolveSymbolFromAncestors(semanticModel, token, position);
             if (symbolFromAncestors != null)
             {
                 return symbolFromAncestors;
             }
 
-            var tokenValueText = token.ValueText ?? token.Text ?? string.Empty;
-            if (!string.IsNullOrEmpty(tokenValueText))
-            {
-                var lookup = semanticModel.LookupSymbols(position, name: tokenValueText).FirstOrDefault();
-                if (lookup != null)
-                {
-                    return lookup;
-                }
-            }
-
             return null;
         }
 
-        private static ISymbol TryResolveSymbolFromAncestors(SemanticModel semanticModel, SyntaxToken token)
+        private static ISymbol TryResolveSymbolFromAncestors(SemanticModel semanticModel, SyntaxToken token, int position)
         {
             for (var node = token.Parent; node != null; node = node.Parent)
             {
-                var declared = semanticModel.GetDeclaredSymbol(node);
-                if (declared != null)
+                ISymbol symbol;
+                if (TryResolveNodeSymbol(semanticModel, node, position, out symbol))
                 {
-                    return declared;
-                }
-
-                var symbolInfo = semanticModel.GetSymbolInfo(node).Symbol;
-                if (symbolInfo != null)
-                {
-                    return symbolInfo;
-                }
-
-                if (node is IdentifierNameSyntax || node is GenericNameSyntax || node is VariableDeclaratorSyntax || node is MemberAccessExpressionSyntax)
-                {
-                    continue;
+                    return symbol;
                 }
             }
 
@@ -789,6 +773,152 @@ namespace Cortex.Roslyn.Worker
         private static bool IsIdentifierCharacter(char value)
         {
             return char.IsLetterOrDigit(value) || value == '_' || value == '@';
+        }
+
+        private static int ResolveRequestPosition(SourceText text, int line, int column, int absolutePosition)
+        {
+            if (text == null)
+            {
+                return -1;
+            }
+
+            if (absolutePosition >= 0)
+            {
+                return Math.Min(absolutePosition, text.Length);
+            }
+
+            return ToAbsolutePosition(text, line, column);
+        }
+
+        private static bool IsCommentTriviaPosition(SyntaxNode root, int position)
+        {
+            if (root == null || position < 0 || position > root.FullSpan.End)
+            {
+                return false;
+            }
+
+            var trivia = root.FindTrivia(position, true);
+            if (trivia.RawKind == 0 || !trivia.FullSpan.Contains(position))
+            {
+                return false;
+            }
+
+            switch ((SyntaxKind)trivia.RawKind)
+            {
+                case SyntaxKind.SingleLineCommentTrivia:
+                case SyntaxKind.MultiLineCommentTrivia:
+                case SyntaxKind.SingleLineDocumentationCommentTrivia:
+                case SyntaxKind.MultiLineDocumentationCommentTrivia:
+                case SyntaxKind.DocumentationCommentExteriorTrivia:
+                case SyntaxKind.DisabledTextTrivia:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool TryResolveNodeSymbol(SemanticModel semanticModel, SyntaxNode node, int position, out ISymbol symbol)
+        {
+            symbol = null;
+            if (semanticModel == null || node == null || !node.Span.Contains(position))
+            {
+                return false;
+            }
+
+            if (node is IdentifierNameSyntax ||
+                node is GenericNameSyntax ||
+                node is QualifiedNameSyntax ||
+                node is AliasQualifiedNameSyntax ||
+                node is MemberAccessExpressionSyntax ||
+                node is InvocationExpressionSyntax)
+            {
+                symbol = semanticModel.GetSymbolInfo(node).Symbol;
+                return symbol != null;
+            }
+
+            if (node is VariableDeclaratorSyntax variable && variable.Identifier.Span.Contains(position))
+            {
+                symbol = semanticModel.GetDeclaredSymbol(variable);
+                return symbol != null;
+            }
+
+            if (node is ParameterSyntax parameter && parameter.Identifier.Span.Contains(position))
+            {
+                symbol = semanticModel.GetDeclaredSymbol(parameter);
+                return symbol != null;
+            }
+
+            if (node is TypeParameterSyntax typeParameter && typeParameter.Identifier.Span.Contains(position))
+            {
+                symbol = semanticModel.GetDeclaredSymbol(typeParameter);
+                return symbol != null;
+            }
+
+            if (node is MethodDeclarationSyntax method && method.Identifier.Span.Contains(position))
+            {
+                symbol = semanticModel.GetDeclaredSymbol(method);
+                return symbol != null;
+            }
+
+            if (node is ConstructorDeclarationSyntax constructor && constructor.Identifier.Span.Contains(position))
+            {
+                symbol = semanticModel.GetDeclaredSymbol(constructor);
+                return symbol != null;
+            }
+
+            if (node is PropertyDeclarationSyntax property && property.Identifier.Span.Contains(position))
+            {
+                symbol = semanticModel.GetDeclaredSymbol(property);
+                return symbol != null;
+            }
+
+            if (node is EventDeclarationSyntax eventDeclaration && eventDeclaration.Identifier.Span.Contains(position))
+            {
+                symbol = semanticModel.GetDeclaredSymbol(eventDeclaration);
+                return symbol != null;
+            }
+
+            if (node is DelegateDeclarationSyntax delegateDeclaration && delegateDeclaration.Identifier.Span.Contains(position))
+            {
+                symbol = semanticModel.GetDeclaredSymbol(delegateDeclaration);
+                return symbol != null;
+            }
+
+            if (node is EnumMemberDeclarationSyntax enumMember && enumMember.Identifier.Span.Contains(position))
+            {
+                symbol = semanticModel.GetDeclaredSymbol(enumMember);
+                return symbol != null;
+            }
+
+            if (node is EnumDeclarationSyntax enumDeclaration && enumDeclaration.Identifier.Span.Contains(position))
+            {
+                symbol = semanticModel.GetDeclaredSymbol(enumDeclaration);
+                return symbol != null;
+            }
+
+            if (node is BaseTypeDeclarationSyntax typeDeclaration && typeDeclaration.Identifier.Span.Contains(position))
+            {
+                symbol = semanticModel.GetDeclaredSymbol(typeDeclaration);
+                return symbol != null;
+            }
+
+            if (node is NamespaceDeclarationSyntax namespaceDeclaration &&
+                namespaceDeclaration.Name != null &&
+                namespaceDeclaration.Name.Span.Contains(position))
+            {
+                symbol = semanticModel.GetSymbolInfo(namespaceDeclaration.Name).Symbol;
+                return symbol != null;
+            }
+
+            if (node is UsingDirectiveSyntax usingDirective &&
+                usingDirective.Name != null &&
+                usingDirective.Name.Span.Contains(position))
+            {
+                symbol = semanticModel.GetSymbolInfo(usingDirective.Name).Symbol;
+                return symbol != null;
+            }
+
+            return false;
         }
 
         private static LanguageServiceRange BuildRange(SourceText text, TextSpan span)

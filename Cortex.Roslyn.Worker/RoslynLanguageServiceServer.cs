@@ -1,17 +1,11 @@
 using System.Reflection;
-using System.Text.Json;
 using Cortex.LanguageService.Protocol;
+using GameModding.Shared.Serialization;
 
 namespace Cortex.Roslyn.Worker
 {
     internal sealed partial class RoslynLanguageServiceServer
     {
-        private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
-        {
-            WriteIndented = false,
-            IncludeFields = true
-        };
-
         private string _workspaceRootPath = string.Empty;
         private string[] _sourceRoots = new string[0];
         private string[] _projectFilePaths = new string[0];
@@ -148,7 +142,7 @@ namespace Cortex.Roslyn.Worker
                 return new T();
             }
 
-            return JsonSerializer.Deserialize<T>(request.PayloadJson, _jsonOptions) ?? new T();
+            return ManualJson.Deserialize<T>(request.PayloadJson) ?? new T();
         }
 
         private LanguageServiceEnvelope BuildSuccessEnvelope(LanguageServiceEnvelope request, object payload)
@@ -158,7 +152,7 @@ namespace Cortex.Roslyn.Worker
                 RequestId = request != null ? request.RequestId : string.Empty,
                 Command = request != null ? request.Command : string.Empty,
                 Success = true,
-                PayloadJson = JsonSerializer.Serialize(payload, _jsonOptions),
+                PayloadJson = ManualJson.Serialize(payload),
                 ErrorMessage = string.Empty
             };
         }
