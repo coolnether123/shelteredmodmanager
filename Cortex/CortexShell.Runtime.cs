@@ -210,7 +210,7 @@ namespace Cortex
                     for (var i = 0; i < _state.Documents.OpenDocuments.Count; i++)
                     {
                         var doc = _state.Documents.OpenDocuments[i];
-                        if (doc == null || !doc.IsDirty || _documentService == null)
+                        if (doc == null || !doc.IsDirty || !doc.SupportsSaving || _documentService == null)
                         {
                             continue;
                         }

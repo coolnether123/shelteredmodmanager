@@ -38,7 +38,10 @@ namespace Cortex.Services
 
         public DocumentSession OpenDocument(CortexShellState state, string filePath, int highlightedLine, string successStatusMessage, string failureStatusMessage)
         {
-            var opened = CortexModuleUtil.OpenDocument(_documentService, state, filePath, highlightedLine);
+            var kind = CortexModuleUtil.IsDecompilerDocumentPath(state, filePath)
+                ? DocumentKind.DecompiledCode
+                : DocumentKind.Unknown;
+            var opened = CortexModuleUtil.OpenDocument(_documentService, state, filePath, highlightedLine, kind);
             if (opened != null)
             {
                 state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
@@ -113,7 +116,7 @@ namespace Cortex.Services
         {
             var lineNumber = highlightedLine > 0 ? highlightedLine : 1;
             var opened = response != null && _documentService != null && state != null
-                ? CortexModuleUtil.OpenDocument(_documentService, state, response.CachePath, lineNumber)
+                ? CortexModuleUtil.OpenDocument(_documentService, state, response.CachePath, lineNumber, DocumentKind.DecompiledCode)
                 : null;
             if (opened != null)
             {

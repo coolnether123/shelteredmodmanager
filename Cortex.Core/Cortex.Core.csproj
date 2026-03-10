@@ -36,6 +36,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Abstractions\EditorInterfaces.cs" />
     <Compile Include="Abstractions\Interfaces.cs" />
     <Compile Include="Abstractions\WorkbenchInterfaces.cs" />
     <Compile Include="Models\CommandModels.cs" />
@@ -44,6 +45,8 @@
     <Compile Include="Models\CortexSettings.cs" />
     <Compile Include="Models\CortexProjectDefinition.cs" />
     <Compile Include="Models\DocumentModels.cs" />
+    <Compile Include="Models\EditorKeybindingModels.cs" />
+    <Compile Include="Models\EditorModels.cs" />
     <Compile Include="..\Cortex.LanguageService.Protocol\LanguageServiceProtocol.cs">
       <Link>Protocol\LanguageServiceProtocol.cs</Link>
     </Compile>
@@ -60,6 +63,7 @@
     <Compile Include="Services\CsprojBuildCommandResolver.cs" />
     <Compile Include="Services\DecompilerExplorerService.cs" />
     <Compile Include="Services\DecompilerCliClient.cs" />
+    <Compile Include="Services\EditorService.cs" />
     <Compile Include="Services\FileDocumentService.cs" />
     <Compile Include="Services\JsonCortexSettingsStore.cs" />
     <Compile Include="Services\JsonProjectConfigurationStore.cs" />

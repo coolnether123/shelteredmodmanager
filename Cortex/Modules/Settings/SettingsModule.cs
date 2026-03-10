@@ -4,6 +4,7 @@ using System.Reflection;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Presentation.Models;
+using Cortex.Services;
 using UnityEngine;
 
 namespace Cortex.Modules.Settings
@@ -12,6 +13,7 @@ namespace Cortex.Modules.Settings
     {
         private const string SourceSetupPageId = "source.setup";
         private const string ThemesPageId = "themes";
+        private const string KeybindingsPageId = "keybindings";
         private const string EditorsPageId = "editors";
         private const string ActionsPageId = "actions";
         private const string WorkspaceRootSettingId = "WorkspaceRootPath";
@@ -31,6 +33,7 @@ namespace Cortex.Modules.Settings
         private IProjectCatalog _projectCatalog;
         private IProjectWorkspaceService _workspaceService;
         private ILoadedModCatalog _loadedModCatalog;
+        private readonly IEditorKeybindingService _editorKeybindingService = new EditorKeybindingService();
 
         public void Draw(
             ICortexSettingsStore settingsStore,
@@ -191,6 +194,7 @@ namespace Cortex.Modules.Settings
             }
 
             pages.Add(CreateThemesPage());
+            pages.Add(CreateKeybindingsPage());
             pages.Add(CreateEditorsPage());
             pages.Add(CreateActionsPage());
             return pages;
@@ -222,7 +226,7 @@ namespace Cortex.Modules.Settings
                 "Configure " + scope.ToLowerInvariant() + " behavior for the Cortex shell.",
                 delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
                 {
-                    DrawSettingsScope(snapshot, scope);
+                    DrawSettingsScope(snapshot, scope, state);
                 });
         }
 
@@ -235,6 +239,18 @@ namespace Cortex.Modules.Settings
                 delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
                 {
                     DrawThemeRegistry(snapshot, themeState, state);
+                });
+        }
+
+        private SettingsPage CreateKeybindingsPage()
+        {
+            return new SettingsPage(
+                KeybindingsPageId,
+                "Keybindings",
+                "Configure editor shortcuts, multi-caret commands, and undo history.",
+                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
+                {
+                    DrawEditorKeybindings(state);
                 });
         }
 
@@ -427,6 +443,8 @@ namespace Cortex.Modules.Settings
                 }
             }
 
+            _textValues["editor.undo.limit"] = settings.EditorUndoHistoryLimit.ToString();
+
             _selectedThemeId = !string.IsNullOrEmpty(settings.ThemeId)
                 ? settings.ThemeId
                 : themeState != null && !string.IsNullOrEmpty(themeState.ThemeId)
@@ -435,7 +453,7 @@ namespace Cortex.Modules.Settings
             _loaded = true;
         }
 
-        private void DrawSettingsScope(WorkbenchPresentationSnapshot snapshot, string scope)
+        private void DrawSettingsScope(WorkbenchPresentationSnapshot snapshot, string scope, CortexShellState state)
         {
             if (snapshot == null || snapshot.Settings.Count == 0)
             {
@@ -459,7 +477,7 @@ namespace Cortex.Modules.Settings
                         continue;
                     }
 
-                    DrawSettingContribution(contribution);
+                    DrawSettingContribution(contribution, state);
                 }
             });
         }
@@ -481,6 +499,78 @@ namespace Cortex.Modules.Settings
                     DrawThemeOption(snapshot.Themes[i], themeState, state);
                 }
             });
+        }
+
+        private void DrawEditorKeybindings(CortexShellState state)
+        {
+            if (state.Settings == null)
+            {
+                state.Settings = new CortexSettings();
+            }
+
+            DrawSectionPanel("Editor Input", delegate
+            {
+                GUILayout.Label("These bindings apply to the Cortex source editor. Key values use Unity KeyCode names such as LeftArrow, Home, Tab, Return, or A.");
+                GUILayout.Space(6f);
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Undo History Limit", GUILayout.Width(180f));
+                var undoLimitKey = "editor.undo.limit";
+                _textValues[undoLimitKey] = GUILayout.TextField(GetTextValue(undoLimitKey, state.Settings.EditorUndoHistoryLimit.ToString()), GUILayout.Width(80f), GUILayout.Height(22f));
+                int undoLimit;
+                if (int.TryParse(_textValues[undoLimitKey], out undoLimit))
+                {
+                    state.Settings.EditorUndoHistoryLimit = Mathf.Clamp(undoLimit, 10, 512);
+                }
+
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Reset Defaults", GUILayout.Width(120f), GUILayout.Height(24f)))
+                {
+                    _editorKeybindingService.ResetToDefaults(state.Settings);
+                    _textValues[undoLimitKey] = "128";
+                    state.Settings.EditorUndoHistoryLimit = 128;
+                }
+                GUILayout.EndHorizontal();
+            });
+
+            var bindings = _editorKeybindingService.GetCommandBindings();
+            var currentCategory = string.Empty;
+            for (var i = 0; i < bindings.Count; i++)
+            {
+                if (!string.Equals(currentCategory, bindings[i].Category, StringComparison.Ordinal))
+                {
+                    currentCategory = bindings[i].Category;
+                    GUILayout.Space(8f);
+                    GUILayout.Label(currentCategory, GUILayout.Height(22f));
+                }
+
+                DrawEditorKeybindingRow(state.Settings, bindings[i]);
+                GUILayout.Space(4f);
+            }
+        }
+
+        private void DrawEditorKeybindingRow(CortexSettings settings, EditorCommandBindingDefinition definition)
+        {
+            var binding = GetEditableBinding(settings, definition);
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label(definition.DisplayName, GUILayout.Height(20f));
+            if (!string.IsNullOrEmpty(definition.Description))
+            {
+                GUILayout.Label(definition.Description);
+            }
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Key", GUILayout.Width(36f));
+            binding.Key = GUILayout.TextField(binding.Key ?? string.Empty, GUILayout.Width(110f), GUILayout.Height(22f));
+            binding.Control = GUILayout.Toggle(binding.Control, "Ctrl", GUILayout.Width(52f));
+            binding.Shift = GUILayout.Toggle(binding.Shift, "Shift", GUILayout.Width(56f));
+            binding.Alt = GUILayout.Toggle(binding.Alt, "Alt", GUILayout.Width(44f));
+            GUILayout.Label("Current: " + _editorKeybindingService.FormatGesture(binding), GUILayout.Width(180f));
+            if (GUILayout.Button("Reset", GUILayout.Width(60f), GUILayout.Height(22f)))
+            {
+                ApplyBinding(binding, definition.DefaultBinding);
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
         }
 
         private static void DrawEditorRegistry(WorkbenchPresentationSnapshot snapshot)
@@ -560,15 +650,13 @@ namespace Cortex.Modules.Settings
             GUILayout.Space(6f);
         }
 
-        private void DrawSettingContribution(SettingContribution contribution)
+        private void DrawSettingContribution(SettingContribution contribution, CortexShellState state)
         {
             GUILayout.BeginVertical(GUI.skin.box);
 
             if (contribution.ValueKind == SettingValueKind.Boolean)
             {
-                var value = GetToggleValue(contribution);
-                value = GUILayout.Toggle(value, contribution.DisplayName ?? contribution.SettingId, GUILayout.Height(22f));
-                _toggleValues[contribution.SettingId] = value;
+                DrawBooleanSettingEditor(contribution, state);
                 DrawSettingMeta(contribution);
                 GUILayout.EndVertical();
                 GUILayout.Space(6f);
@@ -613,6 +701,65 @@ namespace Cortex.Modules.Settings
                 _textValues[settingId] = string.Empty;
             }
             GUILayout.EndHorizontal();
+        }
+
+        private void DrawBooleanSettingEditor(SettingContribution contribution, CortexShellState state)
+        {
+            var value = GetToggleValue(contribution);
+            var previousBackground = GUI.backgroundColor;
+            var previousContent = GUI.contentColor;
+            var displayName = contribution.DisplayName ?? contribution.SettingId;
+
+            GUILayout.Label(displayName, GUILayout.Height(20f));
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Mode", GUILayout.Width(48f));
+
+            GUI.backgroundColor = value
+                ? CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.6f)
+                : CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetHeaderColor(), 0.2f);
+            GUI.contentColor = value ? CortexIdeLayout.GetTextColor() : Color.white;
+            if (GUILayout.Button("Disabled", GUILayout.Width(88f), GUILayout.Height(24f)))
+            {
+                value = SetBooleanSettingValue(contribution, state, false);
+            }
+
+            GUI.backgroundColor = value
+                ? CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetHeaderColor(), 0.2f)
+                : CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.6f);
+            GUI.contentColor = value ? Color.white : CortexIdeLayout.GetTextColor();
+            if (GUILayout.Button("Enabled", GUILayout.Width(88f), GUILayout.Height(24f)))
+            {
+                value = SetBooleanSettingValue(contribution, state, true);
+            }
+
+            GUI.backgroundColor = previousBackground;
+            GUI.contentColor = previousContent;
+            GUILayout.Space(10f);
+            GUILayout.Label(value ? "Current: Enabled" : "Current: Disabled", GUILayout.ExpandWidth(true));
+            GUILayout.EndHorizontal();
+
+            _toggleValues[contribution.SettingId] = value;
+        }
+
+        private bool SetBooleanSettingValue(SettingContribution contribution, CortexShellState state, bool value)
+        {
+            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
+            {
+                return value;
+            }
+
+            _toggleValues[contribution.SettingId] = value;
+
+            if (state != null && state.Settings != null)
+            {
+                var field = GetSettingField(contribution);
+                if (field != null && field.FieldType == typeof(bool))
+                {
+                    field.SetValue(state.Settings, value);
+                }
+            }
+
+            return value;
         }
 
         private static void DrawSettingMeta(SettingContribution contribution)
@@ -693,6 +840,77 @@ namespace Cortex.Modules.Settings
         {
             var luminance = (swatchColor.r * 0.299f) + (swatchColor.g * 0.587f) + (swatchColor.b * 0.114f);
             return luminance >= 0.6f ? Color.black : Color.white;
+        }
+
+        private static void ApplyBinding(EditorKeybinding target, EditorKeybinding source)
+        {
+            if (target == null || source == null)
+            {
+                return;
+            }
+
+            target.BindingId = source.BindingId ?? string.Empty;
+            target.CommandId = source.CommandId ?? string.Empty;
+            target.Key = source.Key ?? string.Empty;
+            target.Control = source.Control;
+            target.Shift = source.Shift;
+            target.Alt = source.Alt;
+        }
+
+        private static EditorKeybinding CreateBindingCopy(EditorKeybinding source)
+        {
+            var copy = new EditorKeybinding();
+            ApplyBinding(copy, source);
+            return copy;
+        }
+
+        private static EditorKeybinding FindBinding(EditorKeybinding[] bindings, string bindingId)
+        {
+            if (bindings == null || string.IsNullOrEmpty(bindingId))
+            {
+                return null;
+            }
+
+            for (var i = 0; i < bindings.Length; i++)
+            {
+                if (bindings[i] != null && string.Equals(bindings[i].BindingId, bindingId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return bindings[i];
+                }
+            }
+
+            return null;
+        }
+
+        private EditorKeybinding GetEditableBinding(CortexSettings settings, EditorCommandBindingDefinition definition)
+        {
+            if (settings == null || definition == null)
+            {
+                return new EditorKeybinding();
+            }
+
+            var existing = FindBinding(settings.EditorKeybindings, definition.BindingId);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var bindings = new List<EditorKeybinding>();
+            if (settings.EditorKeybindings != null)
+            {
+                for (var i = 0; i < settings.EditorKeybindings.Length; i++)
+                {
+                    if (settings.EditorKeybindings[i] != null)
+                    {
+                        bindings.Add(settings.EditorKeybindings[i]);
+                    }
+                }
+            }
+
+            var created = CreateBindingCopy(definition.DefaultBinding);
+            bindings.Add(created);
+            settings.EditorKeybindings = bindings.ToArray();
+            return created;
         }
 
         private void Apply(WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)

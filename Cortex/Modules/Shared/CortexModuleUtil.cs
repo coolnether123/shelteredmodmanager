@@ -7,6 +7,27 @@ namespace Cortex.Modules.Shared
 {
     internal static class CortexModuleUtil
     {
+        public static bool IsDecompilerDocumentPath(CortexShellState state, string filePath)
+        {
+            if (state == null || state.Settings == null || string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(state.Settings.DecompilerCachePath))
+            {
+                return false;
+            }
+
+            try
+            {
+                var fullPath = Path.GetFullPath(filePath);
+                var cacheRoot = Path.GetFullPath(state.Settings.DecompilerCachePath)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                    Path.DirectorySeparatorChar;
+                return fullPath.StartsWith(cacheRoot, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public static DocumentSession FindOpenDocument(CortexShellState state, string filePath)
         {
             if (state == null || string.IsNullOrEmpty(filePath))
@@ -38,6 +59,12 @@ namespace Cortex.Modules.Shared
 
         public static DocumentSession OpenDocument(IDocumentService documentService, CortexShellState state, string filePath, int highlightedLine)
         {
+            var kind = IsDecompilerDocumentPath(state, filePath) ? DocumentKind.DecompiledCode : DocumentKind.Unknown;
+            return OpenDocument(documentService, state, filePath, highlightedLine, kind);
+        }
+
+        public static DocumentSession OpenDocument(IDocumentService documentService, CortexShellState state, string filePath, int highlightedLine, DocumentKind documentKind)
+        {
             if (documentService == null || state == null || string.IsNullOrEmpty(filePath))
             {
                 return null;
@@ -56,6 +83,7 @@ namespace Cortex.Modules.Shared
             var existing = FindOpenDocument(state, fullPath);
             if (existing != null)
             {
+                ApplyDocumentMetadata(existing, fullPath, documentKind);
                 state.Documents.ActiveDocument = existing;
                 state.Documents.ActiveDocumentPath = fullPath;
                 state.Documents.ActiveDocument.HighlightedLine = highlightedLine;
@@ -77,6 +105,7 @@ namespace Cortex.Modules.Shared
                 return null;
             }
 
+            ApplyDocumentMetadata(session, fullPath, documentKind);
             session.HighlightedLine = highlightedLine;
             state.Documents.OpenDocuments.Add(session);
             state.Documents.ActiveDocument = session;
@@ -152,9 +181,70 @@ namespace Cortex.Modules.Shared
                 return false;
             }
 
-            OpenDocument(documentService, state, response.CachePath, 1);
+            OpenDocument(documentService, state, response.CachePath, 1, DocumentKind.DecompiledCode);
             state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
             return true;
+        }
+
+        private static void ApplyDocumentMetadata(DocumentSession session, string fullPath, DocumentKind documentKind)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            session.FilePath = fullPath ?? session.FilePath;
+            switch (ResolveDocumentKind(fullPath, documentKind))
+            {
+                case DocumentKind.DecompiledCode:
+                    session.Kind = DocumentKind.DecompiledCode;
+                    session.IsReadOnly = true;
+                    break;
+                case DocumentKind.SourceCode:
+                    session.Kind = DocumentKind.SourceCode;
+                    session.IsReadOnly = false;
+                    break;
+                case DocumentKind.Log:
+                    session.Kind = DocumentKind.Log;
+                    session.IsReadOnly = true;
+                    break;
+                case DocumentKind.Text:
+                    session.Kind = DocumentKind.Text;
+                    session.IsReadOnly = true;
+                    break;
+                default:
+                    session.Kind = DocumentKind.Unknown;
+                    session.IsReadOnly = true;
+                    break;
+            }
+        }
+
+        private static DocumentKind ResolveDocumentKind(string filePath, DocumentKind preferredKind)
+        {
+            if (preferredKind != DocumentKind.Unknown)
+            {
+                return preferredKind;
+            }
+
+            var extension = !string.IsNullOrEmpty(filePath)
+                ? Path.GetExtension(filePath) ?? string.Empty
+                : string.Empty;
+            if (string.Equals(extension, ".cs", StringComparison.OrdinalIgnoreCase))
+            {
+                return DocumentKind.SourceCode;
+            }
+
+            if (string.Equals(extension, ".log", StringComparison.OrdinalIgnoreCase))
+            {
+                return DocumentKind.Log;
+            }
+
+            if (string.Equals(extension, ".txt", StringComparison.OrdinalIgnoreCase))
+            {
+                return DocumentKind.Text;
+            }
+
+            return DocumentKind.Unknown;
         }
 
         public static bool TryResolveSourceLocation(ISourcePathResolver sourcePathResolver, string text, CortexProjectDefinition project, CortexSettings settings, out string filePath, out int lineNumber)
