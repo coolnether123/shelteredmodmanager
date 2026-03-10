@@ -25,6 +25,8 @@ namespace Cortex.Core.Models
         public bool ShowLogBacklog;
         public bool EnableFileEditing;
         public bool EnableFileSaving;
+        public int EditorUndoHistoryLimit;
+        public EditorKeybinding[] EditorKeybindings;
         public float LogsPaneWidth;
         public float ProjectsPaneWidth;
         public float EditorFilePaneWidth;
@@ -55,6 +57,8 @@ namespace Cortex.Core.Models
             ShowLogBacklog = false;
             EnableFileEditing = false;
             EnableFileSaving = false;
+            EditorUndoHistoryLimit = 128;
+            EditorKeybindings = new EditorKeybinding[0];
             LogsPaneWidth = 520f;
             ProjectsPaneWidth = 360f;
             EditorFilePaneWidth = 420f;

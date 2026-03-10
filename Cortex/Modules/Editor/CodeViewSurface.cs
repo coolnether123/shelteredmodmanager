@@ -666,7 +666,7 @@ namespace Cortex.Modules.Editor
             state.Editor.RequestedHoverColumn = hoveredToken.Column;
             state.Editor.RequestedHoverAbsolutePosition = hoveredToken.Start;
             state.Editor.RequestedHoverTokenText = hoveredToken.RawText.Trim();
-            MMLog.WriteInfo("[Cortex.HoverUI] Queued hover request for " +
+            EditorInteractionLog.WriteHover("Queued hover request for " +
                 state.Editor.RequestedHoverTokenText +
                 " @ " + state.Editor.RequestedHoverLine + ":" + state.Editor.RequestedHoverColumn + ".");
         }
@@ -1094,7 +1094,7 @@ namespace Cortex.Modules.Editor
             }
 
             var definitionRange = part != null ? part.DefinitionRange : null;
-            MMLog.WriteInfo("[Cortex.HoverUI] Opening tooltip part. Symbol=" + (part != null ? (part.SymbolDisplay ?? part.Text ?? string.Empty) : string.Empty) +
+            EditorInteractionLog.WriteHover("Opening tooltip part. Symbol=" + (part != null ? (part.SymbolDisplay ?? part.Text ?? string.Empty) : string.Empty) +
                 ", DefinitionPath=" + (part != null ? (part.DefinitionDocumentPath ?? string.Empty) : string.Empty) +
                 ", DefinitionLine=" + (definitionRange != null ? definitionRange.StartLine : 0) +
                 ", DefinitionColumn=" + (definitionRange != null ? definitionRange.StartColumn : 0) + ".");
@@ -1105,7 +1105,7 @@ namespace Cortex.Modules.Editor
                 "Opened definition: " + (part.SymbolDisplay ?? part.Text ?? string.Empty),
                 "Unable to open definition for " + (part.SymbolDisplay ?? part.Text ?? string.Empty) + "."))
             {
-                MMLog.WriteInfo("[Cortex.HoverUI] Opened tooltip symbol target for " + (part.SymbolDisplay ?? part.Text ?? string.Empty) + ".");
+                EditorInteractionLog.WriteHover("Opened tooltip symbol target for " + (part.SymbolDisplay ?? part.Text ?? string.Empty) + ".");
                 current.Use();
             }
         }
@@ -1258,7 +1258,7 @@ namespace Cortex.Modules.Editor
             }
 
             _lastVisibleHoverLogKey = hoverKey;
-            MMLog.WriteInfo("[Cortex.HoverUI] Displayed hover tooltip for " +
+            EditorInteractionLog.WriteHover("Displayed hover tooltip for " +
                 (!string.IsNullOrEmpty(response != null ? response.SymbolDisplay : string.Empty)
                     ? response.SymbolDisplay
                     : (hoveredToken != null ? hoveredToken.RawText.Trim() : string.Empty)) + ".");
@@ -1286,7 +1286,7 @@ namespace Cortex.Modules.Editor
             }
 
             _lastHoverPlacementLogKey = placementKey;
-            MMLog.WriteInfo("[Cortex.HoverUI] Hover placement key=" + hoverKey +
+            EditorInteractionLog.WriteHover("Hover placement key=" + hoverKey +
                 ", symbol=" + (!string.IsNullOrEmpty(response != null ? response.SymbolDisplay : string.Empty)
                     ? response.SymbolDisplay
                     : (hoveredToken != null ? hoveredToken.RawText.Trim() : string.Empty)) +
@@ -1325,7 +1325,7 @@ namespace Cortex.Modules.Editor
             }
 
             _lastHoverClearLogKey = clearKey;
-            MMLog.WriteInfo("[Cortex.HoverUI] Clearing sticky hover. Reason=" + (reason ?? string.Empty) +
+            EditorInteractionLog.WriteHover("Clearing sticky hover. Reason=" + (reason ?? string.Empty) +
                 ", stickyKey=" + (_stickyHoverKey ?? string.Empty) +
                 ", activeKey=" + (hoverKey ?? string.Empty) +
                 ", anchor=" + FormatRect(_stickyHoverAnchorRect) +
@@ -1342,7 +1342,7 @@ namespace Cortex.Modules.Editor
             }
 
             _lastHoverRetargetLogKey = suppressionKey;
-            MMLog.WriteInfo("[Cortex.HoverUI] Suppressed hover retarget from sticky key " +
+            EditorInteractionLog.WriteHover("Suppressed hover retarget from sticky key " +
                 (_stickyHoverKey ?? string.Empty) + " to " + (hoverKey ?? string.Empty) +
                 " for token " + (hoveredToken != null ? hoveredToken.RawText.Trim() : string.Empty) +
                 " @ " + (hoveredToken != null ? hoveredToken.LineNumber : 0) + ":" + (hoveredToken != null ? hoveredToken.Column : 0) +

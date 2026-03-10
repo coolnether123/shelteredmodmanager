@@ -3,9 +3,28 @@ using Cortex.LanguageService.Protocol;
 
 namespace Cortex.Core.Models
 {
+    /// <summary>
+    /// Identifies the role of an open document so the shell can enforce the correct
+    /// editing, saving, and presentation rules.
+    /// </summary>
+    public enum DocumentKind
+    {
+        Unknown,
+        SourceCode,
+        DecompiledCode,
+        Text,
+        Log
+    }
+
+    /// <summary>
+    /// Represents the in-memory state for an open document tab.
+    /// Disk writes are deferred until an explicit save operation succeeds.
+    /// </summary>
     public sealed class DocumentSession
     {
         public string FilePath;
+        public DocumentKind Kind;
+        public bool IsReadOnly;
         public string Text;
         public string OriginalTextSnapshot;
         public bool IsDirty;
@@ -19,5 +38,24 @@ namespace Cortex.Core.Models
         public int HighlightedLine;
         public LanguageServiceAnalysisResponse LanguageAnalysis;
         public DateTime LastLanguageAnalysisUtc;
+        public EditorDocumentState EditorState;
+
+        /// <summary>
+        /// True when the document is a writable source file and can route through the
+        /// editor mutation pipeline.
+        /// </summary>
+        public bool SupportsEditing
+        {
+            get { return Kind == DocumentKind.SourceCode && !IsReadOnly; }
+        }
+
+        /// <summary>
+        /// True when Cortex is allowed to persist the current in-memory snapshot back
+        /// to disk.
+        /// </summary>
+        public bool SupportsSaving
+        {
+            get { return !IsReadOnly && Kind != DocumentKind.DecompiledCode; }
+        }
     }
 }

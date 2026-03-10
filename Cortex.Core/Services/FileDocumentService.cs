@@ -51,7 +51,7 @@ namespace Cortex.Core.Services
 
         public bool Save(DocumentSession session)
         {
-            if (session == null || string.IsNullOrEmpty(session.FilePath))
+            if (session == null || string.IsNullOrEmpty(session.FilePath) || !session.SupportsSaving)
             {
                 return false;
             }
@@ -99,6 +99,7 @@ namespace Cortex.Core.Services
             session.TextVersion++;
             session.HasExternalChanges = false;
             session.LastTextMutationUtc = DateTime.UtcNow;
+            session.EditorState = new EditorDocumentState();
             return true;
         }
 
@@ -144,6 +145,8 @@ namespace Cortex.Core.Services
         {
             var session = new DocumentSession();
             session.FilePath = snapshot.FilePath;
+            session.Kind = DocumentKind.Unknown;
+            session.IsReadOnly = false;
             session.Text = snapshot.Text;
             session.OriginalTextSnapshot = snapshot.Text;
             session.IsDirty = false;
@@ -154,6 +157,7 @@ namespace Cortex.Core.Services
             session.LastKnownWriteUtc = snapshot.LastWriteUtc;
             session.LastTextMutationUtc = DateTime.UtcNow;
             session.HasExternalChanges = false;
+            session.EditorState = new EditorDocumentState();
             return session;
         }
 
