@@ -274,7 +274,7 @@ namespace Cortex.Modules.Shared
 
             string decompilerReason;
             var decompilerMatch = TryGetDecompilerDocumentPathReason(state, session.FilePath, out decompilerReason);
-            MMLog.WriteInfo("[Cortex.Documents] " +
+            MMLog.WriteDebug("[Cortex.Documents] " +
                 (existing ? "Activated" : "Opened") +
                 " document. Path=" + (session.FilePath ?? string.Empty) +
                 ", Kind=" + session.Kind +
