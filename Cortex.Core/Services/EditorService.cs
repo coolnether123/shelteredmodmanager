@@ -857,6 +857,7 @@ namespace Cortex.Core.Services
             session.IsDirty = !string.Equals(session.Text ?? string.Empty, session.OriginalTextSnapshot ?? string.Empty, StringComparison.Ordinal);
             session.EditorState.CachedTextVersion = -1;
             session.EditorState.PendingInvalidation = invalidation ?? new EditorInvalidation();
+            session.PendingLanguageInvalidation = CloneInvalidation(invalidation);
             ApplySelections(session, selections, true);
             session.EditorState.ScrollToCaretPending = true;
             session.EditorState.HasExplicitCaretPlacement = true;
@@ -1053,16 +1054,145 @@ namespace Cortex.Core.Services
                 newLength += changes[i].InsertedText != null ? changes[i].InsertedText.Length : 0;
             }
 
-            var startPosition = GetCaretPosition(previousText, start);
-            var endPosition = GetCaretPosition(updatedText, Clamp(start + newLength, 0, (updatedText ?? string.Empty).Length));
+            var safePreviousText = previousText ?? string.Empty;
+            var safeUpdatedText = updatedText ?? string.Empty;
+            var previousStartPosition = GetCaretPosition(safePreviousText, start);
+            var previousEndPosition = GetCaretPosition(safePreviousText, Clamp(start + oldLength, 0, safePreviousText.Length));
+            var updatedEndPosition = GetCaretPosition(safeUpdatedText, Clamp(start + newLength, 0, safeUpdatedText.Length));
+            var previousContextStart = GetExpandedLineStart(safePreviousText, start, 1);
+            var previousContextEnd = GetExpandedLineEndExclusive(
+                safePreviousText,
+                GetLineRangeFocusPosition(safePreviousText, start, oldLength),
+                1);
+            var currentContextStart = GetExpandedLineStart(safeUpdatedText, start, 1);
+            var currentContextEnd = GetExpandedLineEndExclusive(
+                safeUpdatedText,
+                GetLineRangeFocusPosition(safeUpdatedText, start, newLength),
+                1);
             return new EditorInvalidation
             {
                 Start = start,
                 OldLength = oldLength,
                 NewLength = newLength,
-                StartLine = startPosition.Line,
-                EndLine = endPosition.Line
+                StartLine = previousStartPosition.Line,
+                EndLine = updatedEndPosition.Line,
+                PreviousContextStart = previousContextStart,
+                PreviousContextLength = Math.Max(0, previousContextEnd - previousContextStart),
+                CurrentContextStart = currentContextStart,
+                CurrentContextLength = Math.Max(0, currentContextEnd - currentContextStart),
+                CanUseIncrementalLanguageAnalysis =
+                    previousStartPosition.Line == previousEndPosition.Line &&
+                    previousStartPosition.Line == updatedEndPosition.Line
             };
+        }
+
+        private static EditorInvalidation CloneInvalidation(EditorInvalidation invalidation)
+        {
+            if (invalidation == null)
+            {
+                return new EditorInvalidation();
+            }
+
+            return new EditorInvalidation
+            {
+                Start = invalidation.Start,
+                OldLength = invalidation.OldLength,
+                NewLength = invalidation.NewLength,
+                StartLine = invalidation.StartLine,
+                EndLine = invalidation.EndLine,
+                PreviousContextStart = invalidation.PreviousContextStart,
+                PreviousContextLength = invalidation.PreviousContextLength,
+                CurrentContextStart = invalidation.CurrentContextStart,
+                CurrentContextLength = invalidation.CurrentContextLength,
+                CanUseIncrementalLanguageAnalysis = invalidation.CanUseIncrementalLanguageAnalysis
+            };
+        }
+
+        private static int GetLineRangeFocusPosition(string text, int start, int length)
+        {
+            var safeText = text ?? string.Empty;
+            if (safeText.Length == 0)
+            {
+                return 0;
+            }
+
+            var end = Clamp(start + Math.Max(0, length), 0, safeText.Length);
+            if (end > start && end > 0)
+            {
+                return end - 1;
+            }
+
+            return Clamp(start, 0, safeText.Length - 1);
+        }
+
+        private static int GetExpandedLineStart(string text, int position, int linesBefore)
+        {
+            var safeText = text ?? string.Empty;
+            var lineStart = FindLineStart(safeText, Clamp(position, 0, safeText.Length));
+            for (var i = 0; i < linesBefore && lineStart > 0; i++)
+            {
+                lineStart = FindLineStart(safeText, Math.Max(0, lineStart - 1));
+            }
+
+            return lineStart;
+        }
+
+        private static int GetExpandedLineEndExclusive(string text, int position, int linesAfter)
+        {
+            var safeText = text ?? string.Empty;
+            var lineEnd = FindLineEndExclusive(safeText, Clamp(position, 0, safeText.Length));
+            for (var i = 0; i < linesAfter && lineEnd < safeText.Length; i++)
+            {
+                lineEnd = FindLineEndExclusive(safeText, lineEnd);
+            }
+
+            return lineEnd;
+        }
+
+        private static int FindLineStart(string text, int position)
+        {
+            var safeText = text ?? string.Empty;
+            var index = Clamp(position, 0, safeText.Length);
+            while (index > 0)
+            {
+                var previous = safeText[index - 1];
+                if (previous == '\n' || previous == '\r')
+                {
+                    break;
+                }
+
+                index--;
+            }
+
+            return index;
+        }
+
+        private static int FindLineEndExclusive(string text, int position)
+        {
+            var safeText = text ?? string.Empty;
+            var index = Clamp(position, 0, safeText.Length);
+            while (index < safeText.Length)
+            {
+                if (safeText[index] == '\r')
+                {
+                    index++;
+                    if (index < safeText.Length && safeText[index] == '\n')
+                    {
+                        index++;
+                    }
+
+                    return index;
+                }
+
+                if (safeText[index] == '\n')
+                {
+                    return index + 1;
+                }
+
+                index++;
+            }
+
+            return safeText.Length;
         }
 
         private static EditorCaretPosition GetCaretPosition(string text, int characterIndex)

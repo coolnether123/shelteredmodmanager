@@ -5,6 +5,7 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Services;
+using ModAPI.Core;
 using UnityEngine;
 
 namespace Cortex.Modules.Editor
@@ -58,36 +59,51 @@ namespace Cortex.Modules.Editor
                 return scroll;
             }
 
-            _editorService.EnsureDocumentState(session);
-            _editorService.SetUndoLimit(session, state != null && state.Settings != null ? state.Settings.EditorUndoHistoryLimit : 128);
-            EnsureStyles(themeKey, codeStyle, gutterStyle);
-            EnsureLayout(session, themeKey, gutterWidth);
-            scroll = EnsureCaretVisible(session, scroll, rect.height);
-
-            var current = Event.current;
-            var localMouse = current != null ? current.mousePosition - new Vector2(rect.x, rect.y) : Vector2.zero;
-            var hasMouse = current != null && rect.Contains(current.mousePosition);
-            HandlePointerInput(session, current, hasMouse, localMouse, rect, scroll, gutterWidth);
-            HandleKeyboardInput(session, state, current);
-
-            GUI.BeginGroup(rect);
             try
             {
-                var contentRect = new Rect(0f, 0f, Mathf.Max(rect.width - 18f, _layout.ContentWidth), Mathf.Max(rect.height - 18f, _layout.ContentHeight));
-                scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
+                _editorService.EnsureDocumentState(session);
+                _editorService.SetUndoLimit(session, state != null && state.Settings != null ? state.Settings.EditorUndoHistoryLimit : 128);
+                EnsureStyles(themeKey, codeStyle, gutterStyle);
+                EnsureLayout(session, themeKey, gutterWidth);
+                if (_layout == null || _codeStyle == null || _gutterStyle == null || _surfaceFill == null)
+                {
+                    return scroll;
+                }
+
+                scroll = EnsureCaretVisible(session, scroll, rect.height);
+
+                var current = Event.current;
+                var localMouse = current != null ? current.mousePosition - new Vector2(rect.x, rect.y) : Vector2.zero;
+                var hasMouse = current != null && rect.Contains(current.mousePosition);
+                HandlePointerInput(session, current, hasMouse, localMouse, rect, scroll, gutterWidth);
+                HandleKeyboardInput(session, state, current);
+
+                GUI.BeginGroup(rect);
                 try
                 {
-                    GUI.DrawTexture(new Rect(0f, 0f, contentRect.width, contentRect.height), _surfaceFill);
-                    DrawLines(session, scroll, rect.height, gutterWidth);
+                    var contentRect = new Rect(0f, 0f, Mathf.Max(rect.width - 18f, _layout.ContentWidth), Mathf.Max(rect.height - 18f, _layout.ContentHeight));
+                    scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
+                    try
+                    {
+                        GUI.DrawTexture(new Rect(0f, 0f, contentRect.width, contentRect.height), _surfaceFill);
+                        DrawLines(session, scroll, rect.height, gutterWidth);
+                    }
+                    finally
+                    {
+                        GUI.EndScrollView();
+                    }
                 }
                 finally
                 {
-                    GUI.EndScrollView();
+                    GUI.EndGroup();
                 }
             }
-            finally
+            catch (Exception ex)
             {
-                GUI.EndGroup();
+                _hasFocus = false;
+                _isDraggingSelection = false;
+                _layout = null;
+                MMLog.WriteError("[Cortex.Editor] Editable code surface draw failed: " + ex);
             }
 
             return scroll;
@@ -103,14 +119,34 @@ namespace Cortex.Modules.Editor
             var cacheKey = (themeKey ?? string.Empty) + "|" +
                 (codeStyle != null && codeStyle.font != null ? codeStyle.font.name : string.Empty) + "|" +
                 (codeStyle != null ? codeStyle.fontSize.ToString() : "0");
-            if (string.Equals(cacheKey, _styleCacheKey, StringComparison.Ordinal) && _codeStyle != null)
+            if (string.Equals(cacheKey, _styleCacheKey, StringComparison.Ordinal) &&
+                _codeStyle != null &&
+                _gutterStyle != null &&
+                _selectionFill != null &&
+                _caretFill != null &&
+                _currentLineFill != null &&
+                _surfaceFill != null)
             {
                 return;
             }
 
             _styleCacheKey = cacheKey;
-            _codeStyle = codeStyle ?? GUI.skin.label;
-            _gutterStyle = gutterStyle ?? GUI.skin.label;
+            _codeStyle = new GUIStyle(codeStyle ?? GUI.skin.label);
+            _codeStyle.padding = new RectOffset(0, 0, 0, 0);
+            _codeStyle.margin = new RectOffset(0, 0, 0, 0);
+            _codeStyle.border = new RectOffset(0, 0, 0, 0);
+            _codeStyle.overflow = new RectOffset(0, 0, 0, 0);
+            _codeStyle.wordWrap = false;
+            _codeStyle.richText = false;
+            _codeStyle.alignment = TextAnchor.UpperLeft;
+            _codeStyle.clipping = TextClipping.Overflow;
+            _codeStyle.stretchWidth = false;
+            _codeStyle.stretchHeight = false;
+            GuiStyleUtil.ApplyBackgroundToAllStates(_codeStyle, null);
+
+            _gutterStyle = new GUIStyle(gutterStyle ?? GUI.skin.label);
+            _gutterStyle.wordWrap = false;
+            _gutterStyle.clipping = TextClipping.Clip;
             _classificationStyles.Clear();
             _lineHeight = _codeStyle.lineHeight > 0f ? Mathf.Max(DefaultLineHeight, _codeStyle.lineHeight + 2f) : DefaultLineHeight;
             _selectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.30f));
@@ -205,6 +241,7 @@ namespace Cortex.Modules.Editor
                 cache.Lines.RemoveRange(startLine, cache.Lines.Count - startLine);
             }
 
+            session.Text = session.Text ?? string.Empty;
             NormalizeSpans(session);
             var map = _editorService.GetLineMap(session);
             for (var lineIndex = 0; lineIndex < map.LineStarts.Length; lineIndex++)
@@ -231,11 +268,12 @@ namespace Cortex.Modules.Editor
         private EditableLineLayout BuildLineLayout(DocumentSession session, EditorLineMap map, int lineIndex, float gutterWidth)
         {
             var lineNumber = lineIndex + 1;
+            var text = session != null ? session.Text ?? string.Empty : string.Empty;
             var lineStart = map.LineStarts[lineIndex];
-            var lineEnd = lineIndex + 1 < map.LineStarts.Length ? map.LineStarts[lineIndex + 1] : (session.Text ?? string.Empty).Length;
+            var lineEnd = lineIndex + 1 < map.LineStarts.Length ? map.LineStarts[lineIndex + 1] : text.Length;
             while (lineEnd > lineStart)
             {
-                var trailing = session.Text[lineEnd - 1];
+                var trailing = text[lineEnd - 1];
                 if (trailing != '\r' && trailing != '\n')
                 {
                     break;
@@ -244,7 +282,7 @@ namespace Cortex.Modules.Editor
                 lineEnd--;
             }
 
-            var rawText = lineEnd > lineStart ? session.Text.Substring(lineStart, lineEnd - lineStart) : string.Empty;
+            var rawText = lineEnd > lineStart ? text.Substring(lineStart, lineEnd - lineStart) : string.Empty;
             var layout = new EditableLineLayout();
             layout.LineNumber = lineNumber;
             layout.StartIndex = lineStart;
@@ -258,12 +296,12 @@ namespace Cortex.Modules.Editor
 
         private void BuildSegments(EditableLineLayout lineLayout)
         {
-            lineLayout.Segments.Clear();
             if (lineLayout == null)
             {
                 return;
             }
 
+            lineLayout.Segments.Clear();
             var lineStart = lineLayout.StartIndex;
             var lineEnd = lineLayout.EndIndex;
             var cursor = lineStart;
@@ -742,8 +780,9 @@ namespace Cortex.Modules.Editor
                 return false;
             }
 
+            var text = session.Text ?? string.Empty;
             var caret = session.EditorState.CaretIndex;
-            if (caret < (session.Text != null ? session.Text.Length : 0) && session.Text[caret] == closer)
+            if (caret < text.Length && text[caret] == closer)
             {
                 _editorService.SetCaret(session, caret + 1, false, false);
                 return true;
@@ -797,6 +836,15 @@ namespace Cortex.Modules.Editor
 
             style = new GUIStyle(_codeStyle);
             style.normal.textColor = GetClassificationColor(classification);
+            style.padding = new RectOffset(0, 0, 0, 0);
+            style.margin = new RectOffset(0, 0, 0, 0);
+            style.border = new RectOffset(0, 0, 0, 0);
+            style.overflow = new RectOffset(0, 0, 0, 0);
+            style.wordWrap = false;
+            style.richText = false;
+            style.alignment = TextAnchor.UpperLeft;
+            style.clipping = TextClipping.Overflow;
+            GuiStyleUtil.ApplyBackgroundToAllStates(style, null);
             _classificationStyles[key] = style;
             return style;
         }
