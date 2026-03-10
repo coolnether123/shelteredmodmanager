@@ -249,12 +249,18 @@ namespace Cortex
             }
 
             var fingerprint = BuildLanguageFingerprint(active);
-            if (string.Equals(fingerprint, _lastAnalyzedDocumentFingerprint, StringComparison.Ordinal))
+            var needsClassifications = active.LastLanguageClassificationVersion != active.TextVersion;
+            var needsDiagnostics = active.LastLanguageDiagnosticVersion != active.TextVersion;
+            if (!needsClassifications && !needsDiagnostics)
             {
+                _lastAnalyzedDocumentFingerprint = fingerprint;
                 return;
             }
 
-            if (_languageAnalysisInFlight || string.Equals(fingerprint, _pendingLanguageAnalysisFingerprint, StringComparison.Ordinal))
+            var includeClassifications = needsClassifications;
+            var includeDiagnostics = !needsClassifications && needsDiagnostics;
+            var analysisWorkKey = BuildLanguageAnalysisWorkKey(fingerprint, includeDiagnostics, includeClassifications);
+            if (_languageAnalysisInFlight || string.Equals(analysisWorkKey, _pendingLanguageAnalysisFingerprint, StringComparison.Ordinal))
             {
                 return;
             }
@@ -265,11 +271,11 @@ namespace Cortex
                 return;
             }
 
-            var request = BuildLanguageDocumentRequest(active, true, true);
+            var request = BuildLanguageDocumentRequest(active, includeDiagnostics, includeClassifications);
             var generation = _languageServiceGeneration;
             var client = _languageServiceClient;
             _languageAnalysisInFlight = true;
-            _pendingLanguageAnalysisFingerprint = fingerprint;
+            _pendingLanguageAnalysisFingerprint = analysisWorkKey;
             _lastLanguageAnalysisRequestUtc = DateTime.UtcNow;
             var requestId = client != null ? client.QueueAnalyzeDocument(request) : string.Empty;
             if (string.IsNullOrEmpty(requestId))
@@ -285,7 +291,9 @@ namespace Cortex
                 Generation = generation,
                 Fingerprint = fingerprint,
                 DocumentPath = request.DocumentPath ?? string.Empty,
-                DocumentVersion = request.DocumentVersion
+                DocumentVersion = request.DocumentVersion,
+                IncludeDiagnostics = includeDiagnostics,
+                IncludeClassifications = includeClassifications
             };
         }
 
@@ -548,15 +556,31 @@ namespace Cortex
                 return;
             }
 
-            target.LanguageAnalysis = response;
+            target.LanguageAnalysis = MergeLanguageAnalysis(target.LanguageAnalysis, response, pending);
             target.LastLanguageAnalysisUtc = DateTime.UtcNow;
             target.LastLanguageAnalysisVersion = response.DocumentVersion;
-            _lastAnalyzedDocumentFingerprint = pending.Fingerprint ?? string.Empty;
+            if (pending.IncludeClassifications)
+            {
+                target.LastLanguageClassificationVersion = response.DocumentVersion;
+            }
+
+            if (pending.IncludeDiagnostics)
+            {
+                target.LastLanguageDiagnosticVersion = response.DocumentVersion;
+            }
+
+            if (target.LastLanguageClassificationVersion == target.TextVersion &&
+                target.LastLanguageDiagnosticVersion == target.TextVersion)
+            {
+                _lastAnalyzedDocumentFingerprint = pending.Fingerprint ?? string.Empty;
+            }
+
             MMLog.WriteInfo("[Cortex.Roslyn] Analysis complete for " +
                 Path.GetFileName(target.FilePath) +
-                ". Diagnostics=" + CountDiagnostics(response) +
-                ", Classifications=" + CountClassifications(response) +
-                ", Summary=" + BuildClassificationSummary(response));
+                ". Phase=" + BuildLanguageAnalysisPhaseLabel(pending) +
+                ", Diagnostics=" + CountDiagnostics(target.LanguageAnalysis) +
+                ", Classifications=" + CountClassifications(target.LanguageAnalysis) +
+                ", Summary=" + BuildClassificationSummary(target.LanguageAnalysis));
 
             if (!response.Success)
             {
@@ -649,26 +673,30 @@ namespace Cortex
 
                 _state.Editor.RequestedDefinitionAbsolutePosition = -1;
 
-                if (!string.IsNullOrEmpty(response.DocumentPath) && File.Exists(response.DocumentPath))
+                var opened = _navigationService != null && _navigationService.OpenLanguageSymbolTarget(
+                    _state,
+                    response.SymbolDisplay,
+                    response.SymbolKind,
+                    response.MetadataName,
+                    response.ContainingTypeName,
+                    response.ContainingAssemblyName,
+                    response.DocumentationCommentId,
+                    response.DocumentPath,
+                    response.Range,
+                    "Opened definition: " + (response.SymbolDisplay ?? (!string.IsNullOrEmpty(response.DocumentPath) ? Path.GetFileName(response.DocumentPath) : response.MetadataName ?? string.Empty)),
+                    !string.IsNullOrEmpty(response.DocumentPath)
+                        ? "Could not open definition source file."
+                        : "Could not open decompiled definition.")
+                    ? FindOpenDocument(!string.IsNullOrEmpty(response.DocumentPath) ? response.DocumentPath : _state.Documents.ActiveDocumentPath)
+                    : null;
+                if (opened != null)
                 {
-                    var opened = _navigationService != null
-                        ? _navigationService.OpenDocument(
-                            _state,
-                            response.DocumentPath,
-                            response.Range != null ? response.Range.StartLine : 1,
-                            "Opened definition: " + (response.SymbolDisplay ?? Path.GetFileName(response.DocumentPath)),
-                            "Could not open definition source file.")
-                        : null;
-                    if (opened != null)
-                    {
-                        opened.HighlightedLine = response.Range != null ? response.Range.StartLine : 1;
-                    }
-                    MMLog.WriteInfo("[Cortex.Roslyn] Opened definition for " + (pending.TokenText ?? string.Empty) + " -> " + response.DocumentPath);
-                    return;
-                }
-
-                if (TryOpenMetadataDefinition(response))
-                {
+                    MMLog.WriteInfo("[Cortex.Roslyn] Opened definition for " +
+                        (pending.TokenText ?? string.Empty) +
+                        " -> " +
+                        (!string.IsNullOrEmpty(response.DocumentPath)
+                            ? response.DocumentPath
+                            : (response.SymbolDisplay ?? response.MetadataName ?? string.Empty)));
                     return;
                 }
 
@@ -1032,6 +1060,70 @@ namespace Cortex
             return response != null && response.Classifications != null ? response.Classifications.Length : 0;
         }
 
+        private static string BuildLanguageAnalysisWorkKey(string fingerprint, bool includeDiagnostics, bool includeClassifications)
+        {
+            return (fingerprint ?? string.Empty) +
+                "|diag=" + includeDiagnostics +
+                "|class=" + includeClassifications;
+        }
+
+        private static string BuildLanguageAnalysisPhaseLabel(PendingLanguageAnalysisRequest pending)
+        {
+            if (pending == null)
+            {
+                return "unknown";
+            }
+
+            if (pending.IncludeClassifications && pending.IncludeDiagnostics)
+            {
+                return "full";
+            }
+
+            if (pending.IncludeClassifications)
+            {
+                return "classifications";
+            }
+
+            if (pending.IncludeDiagnostics)
+            {
+                return "diagnostics";
+            }
+
+            return "empty";
+        }
+
+        private static LanguageServiceAnalysisResponse MergeLanguageAnalysis(
+            LanguageServiceAnalysisResponse existing,
+            LanguageServiceAnalysisResponse incoming,
+            PendingLanguageAnalysisRequest pending)
+        {
+            if (incoming == null)
+            {
+                return existing;
+            }
+
+            var merged = new LanguageServiceAnalysisResponse
+            {
+                Success = incoming.Success,
+                StatusMessage = incoming.StatusMessage ?? string.Empty,
+                DocumentPath = !string.IsNullOrEmpty(incoming.DocumentPath)
+                    ? incoming.DocumentPath
+                    : (existing != null ? existing.DocumentPath ?? string.Empty : string.Empty),
+                ProjectFilePath = !string.IsNullOrEmpty(incoming.ProjectFilePath)
+                    ? incoming.ProjectFilePath
+                    : (existing != null ? existing.ProjectFilePath ?? string.Empty : string.Empty),
+                DocumentVersion = incoming.DocumentVersion,
+                Diagnostics = pending != null && pending.IncludeDiagnostics
+                    ? (incoming.Diagnostics ?? new LanguageServiceDiagnostic[0])
+                    : (existing != null && existing.Diagnostics != null ? existing.Diagnostics : new LanguageServiceDiagnostic[0]),
+                Classifications = pending != null && pending.IncludeClassifications
+                    ? (incoming.Classifications ?? new LanguageServiceClassifiedSpan[0])
+                    : (existing != null && existing.Classifications != null ? existing.Classifications : new LanguageServiceClassifiedSpan[0])
+            };
+
+            return merged;
+        }
+
         private static string BuildCapabilitySummary(LanguageServiceStatusResponse response)
         {
             if (response == null || response.Capabilities == null || response.Capabilities.Length == 0)
@@ -1131,6 +1223,8 @@ namespace Cortex
             public string Fingerprint;
             public string DocumentPath;
             public int DocumentVersion;
+            public bool IncludeDiagnostics;
+            public bool IncludeClassifications;
         }
 
         private sealed class PendingLanguageHoverRequest

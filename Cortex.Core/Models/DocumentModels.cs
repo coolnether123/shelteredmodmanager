@@ -11,6 +11,8 @@ namespace Cortex.Core.Models
         public bool IsDirty;
         public int TextVersion;
         public int LastLanguageAnalysisVersion;
+        public int LastLanguageClassificationVersion;
+        public int LastLanguageDiagnosticVersion;
         public DateTime LastKnownWriteUtc;
         public DateTime LastTextMutationUtc;
         public bool HasExternalChanges;

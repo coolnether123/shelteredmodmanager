@@ -149,6 +149,8 @@ namespace Cortex.Core.Services
             session.IsDirty = false;
             session.TextVersion = 1;
             session.LastLanguageAnalysisVersion = 0;
+            session.LastLanguageClassificationVersion = 0;
+            session.LastLanguageDiagnosticVersion = 0;
             session.LastKnownWriteUtc = snapshot.LastWriteUtc;
             session.LastTextMutationUtc = DateTime.UtcNow;
             session.HasExternalChanges = false;

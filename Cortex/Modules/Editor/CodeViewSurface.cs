@@ -1093,6 +1093,12 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
+            var definitionRange = part != null ? part.DefinitionRange : null;
+            MMLog.WriteInfo("[Cortex.HoverUI] Opening tooltip part. Symbol=" + (part != null ? (part.SymbolDisplay ?? part.Text ?? string.Empty) : string.Empty) +
+                ", DefinitionPath=" + (part != null ? (part.DefinitionDocumentPath ?? string.Empty) : string.Empty) +
+                ", DefinitionLine=" + (definitionRange != null ? definitionRange.StartLine : 0) +
+                ", DefinitionColumn=" + (definitionRange != null ? definitionRange.StartColumn : 0) + ".");
+
             if (navigationService.OpenHoverDisplayPart(
                 state,
                 part,
@@ -1115,6 +1121,11 @@ namespace Cortex.Modules.Editor
 
         private bool IsPointerWithinHoverSurface(Vector2 localMouse)
         {
+            if (IsPointerWithinTooltip(localMouse))
+            {
+                return true;
+            }
+
             if (_stickyHoverAnchorRect.width > 0f && _stickyHoverAnchorRect.height > 0f && _stickyHoverAnchorRect.Contains(localMouse))
             {
                 return true;
@@ -2187,10 +2198,13 @@ namespace Cortex.Modules.Editor
                 return string.Empty;
             }
 
+            var definitionRange = part.DefinitionRange;
+
             return (part.SymbolDisplay ?? string.Empty) + "|" +
                 (part.DocumentationCommentId ?? string.Empty) + "|" +
                 (part.DefinitionDocumentPath ?? string.Empty) + "|" +
-                part.DefinitionRange.Start + ":" + part.DefinitionRange.Length;
+                (definitionRange != null ? definitionRange.Start : 0) + ":" +
+                (definitionRange != null ? definitionRange.Length : 0);
         }
 
         private static string FormatRect(Rect rect)
