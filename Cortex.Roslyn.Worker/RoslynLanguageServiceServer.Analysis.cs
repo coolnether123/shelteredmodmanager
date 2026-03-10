@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,6 +9,7 @@ using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Classification;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Host.Mef;
 using Microsoft.CodeAnalysis.MSBuild;
@@ -628,6 +630,27 @@ namespace Cortex.Roslyn.Worker
 
         private static ISymbol ResolveSymbol(Document document, int position)
         {
+            var text = document != null ? document.GetTextAsync().Result : null;
+            if (document == null || text == null)
+            {
+                return null;
+            }
+
+            var candidatePositions = BuildSymbolCandidatePositions(text, position);
+            for (var i = 0; i < candidatePositions.Count; i++)
+            {
+                var symbol = TryResolveSymbolAtPosition(document, candidatePositions[i]);
+                if (symbol != null)
+                {
+                    return symbol;
+                }
+            }
+
+            return null;
+        }
+
+        private static ISymbol TryResolveSymbolAtPosition(Document document, int position)
+        {
             var symbol = SymbolFinder.FindSymbolAtPositionAsync(document, position).Result;
             if (symbol != null)
             {
@@ -642,12 +665,119 @@ namespace Cortex.Roslyn.Worker
             }
 
             var token = root.FindToken(position);
-            if (token.Parent == null)
+            if (token.Parent == null || token.RawKind == 0)
             {
                 return null;
             }
 
-            return semanticModel.GetSymbolInfo(token.Parent).Symbol ?? semanticModel.GetDeclaredSymbol(token.Parent);
+            var symbolFromAncestors = TryResolveSymbolFromAncestors(semanticModel, token);
+            if (symbolFromAncestors != null)
+            {
+                return symbolFromAncestors;
+            }
+
+            var tokenValueText = token.ValueText ?? token.Text ?? string.Empty;
+            if (!string.IsNullOrEmpty(tokenValueText))
+            {
+                var lookup = semanticModel.LookupSymbols(position, name: tokenValueText).FirstOrDefault();
+                if (lookup != null)
+                {
+                    return lookup;
+                }
+            }
+
+            return null;
+        }
+
+        private static ISymbol TryResolveSymbolFromAncestors(SemanticModel semanticModel, SyntaxToken token)
+        {
+            for (var node = token.Parent; node != null; node = node.Parent)
+            {
+                var declared = semanticModel.GetDeclaredSymbol(node);
+                if (declared != null)
+                {
+                    return declared;
+                }
+
+                var symbolInfo = semanticModel.GetSymbolInfo(node).Symbol;
+                if (symbolInfo != null)
+                {
+                    return symbolInfo;
+                }
+
+                if (node is IdentifierNameSyntax || node is GenericNameSyntax || node is VariableDeclaratorSyntax || node is MemberAccessExpressionSyntax)
+                {
+                    continue;
+                }
+            }
+
+            return null;
+        }
+
+        private static List<int> BuildSymbolCandidatePositions(SourceText text, int position)
+        {
+            var candidates = new List<int>();
+            AddCandidatePosition(candidates, text, position);
+            AddCandidatePosition(candidates, text, position - 1);
+            AddCandidatePosition(candidates, text, position + 1);
+
+            var identifierSpan = FindIdentifierSpanAt(text, position);
+            if (identifierSpan.Length > 0)
+            {
+                AddCandidatePosition(candidates, text, identifierSpan.Start);
+                AddCandidatePosition(candidates, text, identifierSpan.End - 1);
+                AddCandidatePosition(candidates, text, identifierSpan.Start + (identifierSpan.Length / 2));
+            }
+
+            return candidates;
+        }
+
+        private static void AddCandidatePosition(List<int> candidates, SourceText text, int position)
+        {
+            if (candidates == null || text == null || position < 0 || position >= text.Length || candidates.Contains(position))
+            {
+                return;
+            }
+
+            candidates.Add(position);
+        }
+
+        private static TextSpan FindIdentifierSpanAt(SourceText text, int position)
+        {
+            if (text == null || text.Length == 0)
+            {
+                return default(TextSpan);
+            }
+
+            var pivot = Math.Max(0, Math.Min(position, text.Length - 1));
+            if (!IsIdentifierCharacter(text[pivot]) && pivot > 0 && IsIdentifierCharacter(text[pivot - 1]))
+            {
+                pivot--;
+            }
+
+            if (!IsIdentifierCharacter(text[pivot]))
+            {
+                return default(TextSpan);
+            }
+
+            var start = pivot;
+            while (start > 0 && IsIdentifierCharacter(text[start - 1]))
+            {
+                start--;
+            }
+
+            var end = pivot + 1;
+            while (end < text.Length && IsIdentifierCharacter(text[end]))
+            {
+                end++;
+            }
+
+            return TextSpan.FromBounds(start, end);
+        }
+
+        private static bool IsIdentifierCharacter(char value)
+        {
+            return char.IsLetterOrDigit(value) || value == '_' || value == '@';
         }
 
         private static LanguageServiceRange BuildRange(SourceText text, TextSpan span)

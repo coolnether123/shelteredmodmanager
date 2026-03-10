@@ -11,6 +11,7 @@ namespace Cortex.Core.Services
 {
     public sealed class RoslynLanguageServiceClient : ILanguageServiceClient
     {
+        private const int MinimumInitializeTimeoutMs = 60000;
         private readonly string _workerPath;
         private readonly int _timeoutMs;
         private readonly object _sync = new object();
@@ -54,27 +55,27 @@ namespace Cortex.Core.Services
 
         public string QueueInitialize(LanguageServiceInitializeRequest request)
         {
-            return QueueRequest(LanguageServiceCommands.Initialize, request);
+            return QueueRequest(LanguageServiceCommands.Initialize, request, GetInitializeTimeoutMs());
         }
 
         public string QueueStatus()
         {
-            return QueueRequest(LanguageServiceCommands.Status, new LanguageServiceStatusRequest());
+            return QueueRequest(LanguageServiceCommands.Status, new LanguageServiceStatusRequest(), _timeoutMs);
         }
 
         public string QueueAnalyzeDocument(LanguageServiceDocumentRequest request)
         {
-            return QueueRequest(LanguageServiceCommands.AnalyzeDocument, request);
+            return QueueRequest(LanguageServiceCommands.AnalyzeDocument, request, _timeoutMs);
         }
 
         public string QueueHover(LanguageServiceHoverRequest request)
         {
-            return QueueRequest(LanguageServiceCommands.Hover, request);
+            return QueueRequest(LanguageServiceCommands.Hover, request, _timeoutMs);
         }
 
         public string QueueGoToDefinition(LanguageServiceDefinitionRequest request)
         {
-            return QueueRequest(LanguageServiceCommands.GoToDefinition, request);
+            return QueueRequest(LanguageServiceCommands.GoToDefinition, request, _timeoutMs);
         }
 
         public bool TryDequeueResponse(out LanguageServiceEnvelope envelope)
@@ -134,7 +135,7 @@ namespace Cortex.Core.Services
             _outgoingSignal.Close();
         }
 
-        private string QueueRequest<TRequest>(string command, TRequest payload)
+        private string QueueRequest<TRequest>(string command, TRequest payload, int timeoutMs)
         {
             lock (_sync)
             {
@@ -145,7 +146,7 @@ namespace Cortex.Core.Services
                 }
 
                 EnsureProcessStarted_NoLock();
-                var pending = CreatePendingRequest(command, payload, false);
+                var pending = CreatePendingRequest(command, payload, false, timeoutMs);
                 _outgoing.Enqueue(pending);
                 _pendingById[pending.Envelope.RequestId] = pending;
                 _outgoingSignal.Set();
@@ -169,7 +170,7 @@ namespace Cortex.Core.Services
                 }
 
                 EnsureProcessStarted_NoLock();
-                pending = CreatePendingRequest(command, payload, true);
+                pending = CreatePendingRequest(command, payload, true, _timeoutMs);
                 _outgoing.Enqueue(pending);
                 _pendingById[pending.Envelope.RequestId] = pending;
                 _outgoingSignal.Set();
@@ -233,7 +234,7 @@ namespace Cortex.Core.Services
             };
         }
 
-        private PendingRequest CreatePendingRequest<TRequest>(string command, TRequest payload, bool waitForCompletion)
+        private PendingRequest CreatePendingRequest<TRequest>(string command, TRequest payload, bool waitForCompletion, int timeoutMs)
         {
             return new PendingRequest
             {
@@ -246,8 +247,14 @@ namespace Cortex.Core.Services
                     ErrorMessage = string.Empty
                 },
                 QueuedUtc = DateTime.UtcNow,
+                TimeoutMs = timeoutMs > 0 ? timeoutMs : _timeoutMs,
                 WaitHandle = waitForCompletion ? new ManualResetEvent(false) : null
             };
+        }
+
+        private int GetInitializeTimeoutMs()
+        {
+            return Math.Max(_timeoutMs, MinimumInitializeTimeoutMs);
         }
 
         private void EnsureProcessStarted_NoLock()
@@ -437,7 +444,7 @@ namespace Cortex.Core.Services
             var expiredIds = new List<string>();
             foreach (var pair in _pendingById)
             {
-                if ((now - pair.Value.QueuedUtc).TotalMilliseconds > _timeoutMs)
+                if ((now - pair.Value.QueuedUtc).TotalMilliseconds > pair.Value.TimeoutMs)
                 {
                     expiredIds.Add(pair.Key);
                 }
@@ -446,7 +453,14 @@ namespace Cortex.Core.Services
             for (var i = 0; i < expiredIds.Count; i++)
             {
                 var requestId = expiredIds[i];
-                _lastError = "Roslyn worker timed out after " + _timeoutMs + " ms.";
+                PendingRequest pending;
+                var timeoutMs = _timeoutMs;
+                if (_pendingById.TryGetValue(requestId, out pending) && pending != null && pending.TimeoutMs > 0)
+                {
+                    timeoutMs = pending.TimeoutMs;
+                }
+
+                _lastError = "Roslyn worker timed out after " + timeoutMs + " ms.";
                 FailPending_NoLock(requestId, _lastError);
             }
         }
@@ -533,6 +547,7 @@ namespace Cortex.Core.Services
         {
             public LanguageServiceEnvelope Envelope;
             public DateTime QueuedUtc;
+            public int TimeoutMs;
             public ManualResetEvent WaitHandle;
             public LanguageServiceEnvelope Response;
         }
