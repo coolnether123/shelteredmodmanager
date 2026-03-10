@@ -368,6 +368,14 @@ namespace Cortex
 
         private void InitializeServices(string gameRoot, string smmRoot, string smmBin, CortexSettings settings)
         {
+            MMLog.WriteInfo("[Cortex] Initializing services. WorkspaceRoot=" +
+                (settings != null ? settings.WorkspaceRootPath ?? string.Empty : string.Empty) +
+                ", ManagedRoot=" + (settings != null ? settings.ManagedAssemblyRootPath ?? string.Empty : string.Empty) +
+                ", Visible=" + _visible +
+                ", ExistingRuntimeFeed=" + (_runtimeLogFeed != null) +
+                ", ExistingLanguageClient=" + (_languageServiceClient != null) +
+                ", ExistingLanguageReady=" + _languageServiceReady + ".");
+
             var existingFeed = _runtimeLogFeed as MmLogRuntimeLogFeed;
             if (existingFeed != null)
             {
@@ -381,6 +389,10 @@ namespace Cortex
             var decompilerPath = string.IsNullOrEmpty(settings.DecompilerPathOverride)
                 ? new ModAPI.Inspector.ExternalProcessManager().ResolveDecompilerPath()
                 : settings.DecompilerPathOverride;
+
+            MMLog.WriteInfo("[Cortex] Service inputs resolved. ProjectCatalogPath=" + projectCatalogPath +
+                ", DecompilerPath=" + decompilerPath +
+                ", DecompilerCachePath=" + (settings != null ? settings.DecompilerCachePath ?? string.Empty : string.Empty) + ".");
 
             _projectCatalog = new ProjectCatalog(new JsonProjectConfigurationStore(projectCatalogPath));
             _loadedModCatalog = new ModApiLoadedModCatalog();
@@ -519,6 +531,10 @@ namespace Cortex
 
         private void ApplySettingsChanges()
         {
+            MMLog.WriteInfo("[Cortex] Applying settings changes. ActiveProject=" +
+                (_state.SelectedProject != null ? _state.SelectedProject.ModId ?? string.Empty : string.Empty) +
+                ", ActiveDocument=" + (_state.Documents.ActiveDocument != null ? _state.Documents.ActiveDocument.FilePath ?? string.Empty : string.Empty) +
+                ", ReloadRequested=" + _state.ReloadSettingsRequested + ".");
             PersistWorkbenchSession();
             PersistWindowSettings();
 

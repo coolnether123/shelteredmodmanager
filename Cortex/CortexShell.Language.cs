@@ -32,14 +32,15 @@ namespace Cortex
         private PendingLanguageDefinitionRequest _pendingLanguageDefinition;
         private int _languageServiceGeneration;
         private DateTime _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
+        private string _languageServiceConfigurationFingerprint = string.Empty;
         private const double LanguageAnalysisDebounceMs = 280d;
 
         private void InitializeLanguageService(string smmBin, CortexSettings settings)
         {
-            ShutdownLanguageService();
-
             if (settings == null || !settings.EnableRoslynLanguageService)
             {
+                MMLog.WriteInfo("[Cortex.Roslyn] Language service disabled by settings. ExistingClient=" + (_languageServiceClient != null) + ".");
+                ShutdownLanguageService();
                 _state.LanguageServiceStatus = new LanguageServiceStatusResponse
                 {
                     Success = false,
@@ -54,6 +55,8 @@ namespace Cortex
             var workerPath = ResolveLanguageWorkerPath(settings, smmBin);
             if (string.IsNullOrEmpty(workerPath))
             {
+                MMLog.WriteWarning("[Cortex.Roslyn] Language service worker path could not be resolved. ExistingClient=" + (_languageServiceClient != null) + ".");
+                ShutdownLanguageService();
                 _state.LanguageServiceStatus = new LanguageServiceStatusResponse
                 {
                     Success = false,
@@ -66,8 +69,32 @@ namespace Cortex
                 return;
             }
 
+            var initializeRequest = BuildLanguageInitializeRequest();
+            var configurationFingerprint = BuildLanguageServiceConfigurationFingerprint(workerPath, settings, initializeRequest);
+            if (_languageServiceClient != null &&
+                string.Equals(_languageServiceConfigurationFingerprint, configurationFingerprint, StringComparison.Ordinal))
+            {
+                _languageServiceInitializeRequest = initializeRequest;
+                MMLog.WriteInfo("[Cortex.Roslyn] Reusing existing language service configuration. Generation=" + _languageServiceGeneration +
+                    ", Ready=" + _languageServiceReady +
+                    ", Initializing=" + _languageServiceInitializing +
+                    ", WorkspaceRoot=" + (initializeRequest.WorkspaceRootPath ?? string.Empty) +
+                    ", Projects=" + (initializeRequest.ProjectFilePaths != null ? initializeRequest.ProjectFilePaths.Length : 0) +
+                    ", SourceRoots=" + (initializeRequest.SourceRoots != null ? initializeRequest.SourceRoots.Length : 0) + ".");
+                return;
+            }
+
+            if (_languageServiceClient != null)
+            {
+                MMLog.WriteInfo("[Cortex.Roslyn] Reinitializing language service due to configuration change. PreviousGeneration=" + _languageServiceGeneration +
+                    ", PreviousFingerprintLength=" + (_languageServiceConfigurationFingerprint ?? string.Empty).Length +
+                    ", NewFingerprintLength=" + (configurationFingerprint ?? string.Empty).Length + ".");
+            }
+
+            ShutdownLanguageService();
+
             _languageServiceClient = new RoslynLanguageServiceClient(workerPath, settings.RoslynServiceTimeoutMs);
-            _languageServiceInitializeRequest = BuildLanguageInitializeRequest();
+            _languageServiceInitializeRequest = initializeRequest;
             _lastAnalyzedDocumentFingerprint = string.Empty;
             _pendingLanguageAnalysisFingerprint = string.Empty;
             _languageServiceReady = false;
@@ -81,6 +108,7 @@ namespace Cortex
             _pendingLanguageHover = null;
             _pendingLanguageDefinition = null;
             _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
+            _languageServiceConfigurationFingerprint = configurationFingerprint;
             Interlocked.Increment(ref _languageServiceGeneration);
 
             _state.LanguageServiceStatus = new LanguageServiceStatusResponse
@@ -95,7 +123,7 @@ namespace Cortex
 
         private void EnsureLanguageServiceStarted()
         {
-            if (_languageServiceClient == null || _languageServiceReady || _languageServiceInitializing)
+            if (_languageServiceClient == null || _languageServiceReady || _languageServiceInitializing || !string.IsNullOrEmpty(_languageInitializeRequestId))
             {
                 return;
             }
@@ -107,7 +135,11 @@ namespace Cortex
 
             var generation = _languageServiceGeneration;
             _languageServiceInitializing = true;
-            MMLog.WriteInfo("[Cortex.Roslyn] Starting language service worker in background.");
+            MMLog.WriteInfo("[Cortex.Roslyn] Starting language service worker in background. Generation=" + generation +
+                ", FingerprintLength=" + (_languageServiceConfigurationFingerprint ?? string.Empty).Length +
+                ", WorkspaceRoot=" + (_languageServiceInitializeRequest != null ? (_languageServiceInitializeRequest.WorkspaceRootPath ?? string.Empty) : string.Empty) +
+                ", Projects=" + (_languageServiceInitializeRequest != null && _languageServiceInitializeRequest.ProjectFilePaths != null ? _languageServiceInitializeRequest.ProjectFilePaths.Length : 0) +
+                ", SourceRoots=" + (_languageServiceInitializeRequest != null && _languageServiceInitializeRequest.SourceRoots != null ? _languageServiceInitializeRequest.SourceRoots.Length : 0) + ".");
             _state.LanguageServiceStatus = new LanguageServiceStatusResponse
             {
                 Success = true,
@@ -129,11 +161,29 @@ namespace Cortex
                     LoadedProjectPaths = new string[0]
                 };
                 _state.Diagnostics.Add("Roslyn worker failed to queue initialization: " + _state.LanguageServiceStatus.StatusMessage);
+                MMLog.WriteWarning("[Cortex.Roslyn] Worker initialize queue failed. Generation=" + generation +
+                    ", Error=" + _state.LanguageServiceStatus.StatusMessage + ".");
+                return;
             }
+
+            MMLog.WriteInfo("[Cortex.Roslyn] Worker initialize queued. Generation=" + generation +
+                ", RequestId=" + _languageInitializeRequestId + ".");
         }
 
         private void ShutdownLanguageService()
         {
+            var hadClient = _languageServiceClient != null;
+            if (hadClient || _languageServiceReady || _languageServiceInitializing || _languageAnalysisInFlight || _languageHoverInFlight || _languageDefinitionInFlight)
+            {
+                MMLog.WriteInfo("[Cortex.Roslyn] Shutting down language service. HadClient=" + hadClient +
+                    ", Ready=" + _languageServiceReady +
+                    ", Initializing=" + _languageServiceInitializing +
+                    ", AnalysisInFlight=" + _languageAnalysisInFlight +
+                    ", HoverInFlight=" + _languageHoverInFlight +
+                    ", DefinitionInFlight=" + _languageDefinitionInFlight +
+                    ", Generation=" + _languageServiceGeneration + ".");
+            }
+
             Interlocked.Increment(ref _languageServiceGeneration);
             var disposable = _languageServiceClient as IDisposable;
             if (disposable != null)
@@ -156,6 +206,7 @@ namespace Cortex
             _pendingLanguageHover = null;
             _pendingLanguageDefinition = null;
             _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
+            _languageServiceConfigurationFingerprint = string.Empty;
         }
 
         private void UpdateLanguageService()
@@ -507,14 +558,20 @@ namespace Cortex
 
             _state.Editor.ActiveHoverKey = pending.HoverKey;
             _state.Editor.ActiveHoverResponse = response;
+            _state.Editor.RequestedHoverKey = string.Empty;
+            _state.Editor.RequestedHoverDocumentPath = string.Empty;
+            _state.Editor.RequestedHoverLine = 0;
+            _state.Editor.RequestedHoverColumn = 0;
+            var requestedHoverTokenText = _state.Editor.RequestedHoverTokenText ?? string.Empty;
+            _state.Editor.RequestedHoverTokenText = string.Empty;
             if (response.Success)
             {
-                MMLog.WriteInfo("[Cortex.Roslyn] Hover resolved for " + (_state.Editor.RequestedHoverTokenText ?? string.Empty) + ".");
+                MMLog.WriteInfo("[Cortex.Roslyn] Hover resolved for " + requestedHoverTokenText + ".");
                 return;
             }
 
             MMLog.WriteWarning("[Cortex.Roslyn] Hover failed for " +
-                (_state.Editor.RequestedHoverTokenText ?? string.Empty) +
+                requestedHoverTokenText +
                 ": " + (response.StatusMessage ?? "Unknown Roslyn hover failure."));
         }
 
@@ -1237,6 +1294,52 @@ namespace Cortex
             }
 
             return string.Join(",", response.Capabilities);
+        }
+
+        private static string BuildLanguageServiceConfigurationFingerprint(
+            string workerPath,
+            CortexSettings settings,
+            LanguageServiceInitializeRequest request)
+        {
+            var builder = new StringBuilder();
+            builder.Append(workerPath ?? string.Empty);
+            builder.Append("|timeout=");
+            builder.Append(settings != null ? settings.RoslynServiceTimeoutMs : 0);
+            builder.Append("|workspace=");
+            builder.Append(request != null ? request.WorkspaceRootPath ?? string.Empty : string.Empty);
+            builder.Append("|projects=");
+            AppendFingerprintValues(builder, request != null ? request.ProjectFilePaths : null);
+            builder.Append("|sources=");
+            AppendFingerprintValues(builder, request != null ? request.SourceRoots : null);
+            return builder.ToString();
+        }
+
+        private static void AppendFingerprintValues(StringBuilder builder, string[] values)
+        {
+            if (builder == null || values == null || values.Length == 0)
+            {
+                return;
+            }
+
+            var copy = new List<string>(values.Length);
+            for (var i = 0; i < values.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(values[i]))
+                {
+                    copy.Add(values[i]);
+                }
+            }
+
+            copy.Sort(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < copy.Count; i++)
+            {
+                if (i > 0)
+                {
+                    builder.Append(";");
+                }
+
+                builder.Append(copy[i]);
+            }
         }
 
         private static string BuildClassificationSummary(LanguageServiceAnalysisResponse response)
