@@ -31,6 +31,11 @@ namespace Cortex.LanguageService.Protocol
         public const string GoToDefinition = "go-to-definition";
 
         /// <summary>
+        /// Requests completion items for a symbol position.
+        /// </summary>
+        public const string Completion = "completion";
+
+        /// <summary>
         /// Requests an orderly worker shutdown.
         /// </summary>
         public const string Shutdown = "shutdown";
@@ -344,6 +349,24 @@ namespace Cortex.LanguageService.Protocol
     }
 
     /// <summary>
+    /// Request payload used to resolve completion suggestions at a given position.
+    /// </summary>
+    public sealed class LanguageServiceCompletionRequest
+    {
+        public string DocumentPath;
+        public string ProjectFilePath;
+        public string WorkspaceRootPath;
+        public string[] SourceRoots;
+        public string DocumentText;
+        public int DocumentVersion;
+        public int Line;
+        public int Column;
+        public int AbsolutePosition;
+        public bool ExplicitInvocation;
+        public string TriggerCharacter;
+    }
+
+    /// <summary>
     /// Represents a text range in both line/column and absolute offset form.
     /// </summary>
     public sealed class LanguageServiceRange
@@ -456,5 +479,31 @@ namespace Cortex.LanguageService.Protocol
         public string DocumentationXml;
         public string DocumentationText;
         public LanguageServiceRange Range;
+    }
+
+    /// <summary>
+    /// One completion candidate returned by Roslyn.
+    /// </summary>
+    public sealed class LanguageServiceCompletionItem
+    {
+        public string DisplayText;
+        public string InsertText;
+        public string FilterText;
+        public string SortText;
+        public string InlineDescription;
+        public string Kind;
+        public bool IsPreselected;
+    }
+
+    /// <summary>
+    /// Completion suggestions resolved by Roslyn.
+    /// </summary>
+    public sealed class LanguageServiceCompletionResponse : LanguageServiceOperationResponse
+    {
+        public string DocumentPath;
+        public string ProjectFilePath;
+        public int DocumentVersion;
+        public LanguageServiceRange ReplacementRange;
+        public LanguageServiceCompletionItem[] Items;
     }
 }

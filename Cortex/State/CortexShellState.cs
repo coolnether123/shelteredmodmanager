@@ -110,6 +110,15 @@ namespace Cortex
         public int RequestedDefinitionColumn;
         public int RequestedDefinitionAbsolutePosition = -1;
         public string RequestedDefinitionTokenText = string.Empty;
+        public string RequestedCompletionKey = string.Empty;
+        public string RequestedCompletionDocumentPath = string.Empty;
+        public int RequestedCompletionLine;
+        public int RequestedCompletionColumn;
+        public int RequestedCompletionAbsolutePosition = -1;
+        public string RequestedCompletionTriggerCharacter = string.Empty;
+        public bool RequestedCompletionExplicit;
+        public string ActiveCompletionKey = string.Empty;
+        public LanguageServiceCompletionResponse ActiveCompletionResponse;
     }
 
     public sealed class CortexLogSelectionState

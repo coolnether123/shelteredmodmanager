@@ -18,6 +18,8 @@ namespace Cortex
     public sealed partial class CortexShell
     {
         private ILanguageServiceClient _languageServiceClient;
+        private readonly DocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
+        private readonly DocumentLanguageInteractionService _documentLanguageInteractionService = new DocumentLanguageInteractionService();
         private LanguageServiceInitializeRequest _languageServiceInitializeRequest;
         private string _lastAnalyzedDocumentFingerprint = string.Empty;
         private string _pendingLanguageAnalysisFingerprint = string.Empty;
@@ -26,11 +28,13 @@ namespace Cortex
         private bool _languageAnalysisInFlight;
         private bool _languageHoverInFlight;
         private bool _languageDefinitionInFlight;
+        private bool _languageCompletionInFlight;
         private string _languageInitializeRequestId = string.Empty;
         private string _languageStatusRequestId = string.Empty;
-        private PendingLanguageAnalysisRequest _pendingLanguageAnalysis;
+        private DocumentLanguageAnalysisRequestState _pendingLanguageAnalysis;
         private PendingLanguageHoverRequest _pendingLanguageHover;
         private PendingLanguageDefinitionRequest _pendingLanguageDefinition;
+        private DocumentLanguageCompletionRequestState _pendingLanguageCompletion;
         private int _languageServiceGeneration;
         private DateTime _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
         private DateTime _languageInitializeQueuedUtc = DateTime.MinValue;
@@ -109,11 +113,16 @@ namespace Cortex
             _languageAnalysisInFlight = false;
             _languageHoverInFlight = false;
             _languageDefinitionInFlight = false;
+            _languageCompletionInFlight = false;
             _languageInitializeRequestId = string.Empty;
             _languageStatusRequestId = string.Empty;
             _pendingLanguageAnalysis = null;
             _pendingLanguageHover = null;
             _pendingLanguageDefinition = null;
+            _pendingLanguageCompletion = null;
+            _state.Editor.ActiveCompletionKey = string.Empty;
+            _state.Editor.ActiveCompletionResponse = null;
+            _state.Editor.RequestedCompletionKey = string.Empty;
             _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
             _languageInitializeQueuedUtc = DateTime.MinValue;
             _lastLanguageInitializationProgressLogUtc = DateTime.MinValue;
@@ -192,6 +201,7 @@ namespace Cortex
                     ", AnalysisInFlight=" + _languageAnalysisInFlight +
                     ", HoverInFlight=" + _languageHoverInFlight +
                     ", DefinitionInFlight=" + _languageDefinitionInFlight +
+                    ", CompletionInFlight=" + _languageCompletionInFlight +
                     ", Generation=" + _languageServiceGeneration + ".");
             }
 
@@ -211,11 +221,16 @@ namespace Cortex
             _languageAnalysisInFlight = false;
             _languageHoverInFlight = false;
             _languageDefinitionInFlight = false;
+            _languageCompletionInFlight = false;
             _languageInitializeRequestId = string.Empty;
             _languageStatusRequestId = string.Empty;
             _pendingLanguageAnalysis = null;
             _pendingLanguageHover = null;
             _pendingLanguageDefinition = null;
+            _pendingLanguageCompletion = null;
+            _state.Editor.ActiveCompletionKey = string.Empty;
+            _state.Editor.ActiveCompletionResponse = null;
+            _state.Editor.RequestedCompletionKey = string.Empty;
             _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
             _languageInitializeQueuedUtc = DateTime.MinValue;
             _lastLanguageInitializationProgressLogUtc = DateTime.MinValue;
@@ -239,16 +254,19 @@ namespace Cortex
 
             UpdateLanguageHover();
             UpdateLanguageDefinition();
+            UpdateLanguageCompletion();
 
             var active = _state.Documents.ActiveDocument;
             if (active == null || string.IsNullOrEmpty(active.FilePath))
             {
                 _lastAnalyzedDocumentFingerprint = string.Empty;
                 _pendingLanguageAnalysisFingerprint = string.Empty;
+                _state.Editor.ActiveCompletionKey = string.Empty;
+                _state.Editor.ActiveCompletionResponse = null;
                 return;
             }
 
-            TryRestoreLanguageAnalysisFromRecentCache(active);
+            _documentLanguageAnalysisService.TryRestoreFromRecentCache(active, null);
             var fingerprint = BuildLanguageFingerprint(active);
             var needsClassifications = active.LastLanguageClassificationVersion != active.TextVersion;
             var needsDiagnostics = active.LastLanguageDiagnosticVersion != active.TextVersion;
@@ -260,7 +278,7 @@ namespace Cortex
 
             var includeClassifications = needsClassifications;
             var includeDiagnostics = !needsClassifications && needsDiagnostics;
-            var analysisWorkKey = BuildLanguageAnalysisWorkKey(fingerprint, includeDiagnostics, includeClassifications);
+            var analysisWorkKey = _documentLanguageAnalysisService.BuildAnalysisWorkKey(fingerprint, includeDiagnostics, includeClassifications);
             if (_languageAnalysisInFlight || string.Equals(analysisWorkKey, _pendingLanguageAnalysisFingerprint, StringComparison.Ordinal))
             {
                 return;
@@ -272,8 +290,16 @@ namespace Cortex
                 return;
             }
 
-            var classificationRange = includeClassifications ? BuildIncrementalClassificationRange(active) : null;
-            var request = BuildLanguageDocumentRequest(active, includeDiagnostics, includeClassifications, classificationRange);
+            var classificationRange = includeClassifications ? _documentLanguageAnalysisService.BuildIncrementalClassificationRange(active) : null;
+            var project = ResolveProjectForDocument(active.FilePath);
+            var request = _documentLanguageAnalysisService.BuildDocumentRequest(
+                active,
+                _state.Settings,
+                project,
+                BuildLanguageSourceRoots(_state.Settings, project),
+                includeDiagnostics,
+                includeClassifications,
+                classificationRange);
             var generation = _languageServiceGeneration;
             var client = _languageServiceClient;
             _languageAnalysisInFlight = true;
@@ -287,7 +313,7 @@ namespace Cortex
                 return;
             }
 
-            _pendingLanguageAnalysis = new PendingLanguageAnalysisRequest
+            _pendingLanguageAnalysis = new DocumentLanguageAnalysisRequestState
             {
                 RequestId = requestId,
                 Generation = generation,
@@ -323,7 +349,16 @@ namespace Cortex
                 return;
             }
 
-            var request = BuildLanguageHoverRequest(session, _state.Editor.RequestedHoverLine, _state.Editor.RequestedHoverColumn);
+            var project = ResolveProjectForDocument(session.FilePath);
+            var sourceRoots = BuildLanguageSourceRoots(_state.Settings, project);
+            var request = _documentLanguageInteractionService.BuildHoverRequest(
+                session,
+                _state.Settings,
+                project,
+                sourceRoots,
+                _state.Editor.RequestedHoverLine,
+                _state.Editor.RequestedHoverColumn,
+                _state.Editor.RequestedHoverAbsolutePosition);
             var client = _languageServiceClient;
             var generation = _languageServiceGeneration;
             var hoverKey = requestKey;
@@ -373,7 +408,16 @@ namespace Cortex
                 return;
             }
 
-            var request = BuildLanguageDefinitionRequest(session, _state.Editor.RequestedDefinitionLine, _state.Editor.RequestedDefinitionColumn);
+            var project = ResolveProjectForDocument(session.FilePath);
+            var sourceRoots = BuildLanguageSourceRoots(_state.Settings, project);
+            var request = _documentLanguageInteractionService.BuildDefinitionRequest(
+                session,
+                _state.Settings,
+                project,
+                sourceRoots,
+                _state.Editor.RequestedDefinitionLine,
+                _state.Editor.RequestedDefinitionColumn,
+                _state.Editor.RequestedDefinitionAbsolutePosition);
             var client = _languageServiceClient;
             var generation = _languageServiceGeneration;
             var requestDocumentPath = request.DocumentPath ?? string.Empty;
@@ -395,6 +439,58 @@ namespace Cortex
                 DocumentPath = requestDocumentPath,
                 DocumentVersion = requestDocumentVersion,
                 TokenText = _state.Editor.RequestedDefinitionTokenText ?? string.Empty
+            };
+        }
+
+        private void UpdateLanguageCompletion()
+        {
+            if (_languageCompletionInFlight || _state.Editor == null)
+            {
+                return;
+            }
+
+            var requestKey = _state.Editor.RequestedCompletionKey ?? string.Empty;
+            if (string.IsNullOrEmpty(requestKey) ||
+                string.Equals(requestKey, _state.Editor.ActiveCompletionKey ?? string.Empty, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var session = FindOpenDocument(_state.Editor.RequestedCompletionDocumentPath);
+            if (session == null)
+            {
+                return;
+            }
+
+            var project = ResolveProjectForDocument(session.FilePath);
+            var sourceRoots = BuildLanguageSourceRoots(_state.Settings, project);
+            var request = _documentLanguageInteractionService.BuildCompletionRequest(
+                session,
+                _state.Settings,
+                project,
+                sourceRoots,
+                _state.Editor.RequestedCompletionLine,
+                _state.Editor.RequestedCompletionColumn,
+                _state.Editor.RequestedCompletionAbsolutePosition,
+                _state.Editor.RequestedCompletionExplicit,
+                _state.Editor.RequestedCompletionTriggerCharacter);
+            var client = _languageServiceClient;
+            var generation = _languageServiceGeneration;
+            _languageCompletionInFlight = true;
+            var requestId = client != null ? client.QueueCompletion(request) : string.Empty;
+            if (string.IsNullOrEmpty(requestId))
+            {
+                _languageCompletionInFlight = false;
+                return;
+            }
+
+            _pendingLanguageCompletion = new DocumentLanguageCompletionRequestState
+            {
+                RequestId = requestId,
+                Generation = generation,
+                RequestKey = requestKey,
+                DocumentPath = request.DocumentPath ?? string.Empty,
+                DocumentVersion = request.DocumentVersion
             };
         }
 
@@ -446,6 +542,14 @@ namespace Cortex
                 {
                     HandleLanguageDefinitionResponse(envelope, _pendingLanguageDefinition);
                     _pendingLanguageDefinition = null;
+                    continue;
+                }
+
+                if (_pendingLanguageCompletion != null &&
+                    string.Equals(envelope.RequestId, _pendingLanguageCompletion.RequestId, StringComparison.Ordinal))
+                {
+                    HandleLanguageCompletionResponse(envelope, _pendingLanguageCompletion);
+                    _pendingLanguageCompletion = null;
                 }
             }
         }
@@ -531,7 +635,7 @@ namespace Cortex
                 ", LastError=" + (_languageServiceClient.LastError ?? string.Empty) + ".");
         }
 
-        private void HandleLanguageAnalysisResponse(LanguageServiceEnvelope envelope, PendingLanguageAnalysisRequest pending)
+        private void HandleLanguageAnalysisResponse(LanguageServiceEnvelope envelope, DocumentLanguageAnalysisRequestState pending)
         {
             _languageAnalysisInFlight = false;
             _pendingLanguageAnalysisFingerprint = string.Empty;
@@ -563,7 +667,7 @@ namespace Cortex
                 return;
             }
 
-            target.LanguageAnalysis = MergeLanguageAnalysis(target.LanguageAnalysis, response, pending);
+            target.LanguageAnalysis = _documentLanguageAnalysisService.MergeAnalysis(target.LanguageAnalysis, response, pending);
             if (response.Success)
             {
                 target.LastLanguageAnalysisUtc = DateTime.UtcNow;
@@ -579,7 +683,7 @@ namespace Cortex
                     target.LastLanguageDiagnosticVersion = response.DocumentVersion;
                 }
 
-                RememberLanguageAnalysisSnapshot(target);
+                _documentLanguageAnalysisService.RememberSnapshot(target);
             }
 
             if (target.LastLanguageClassificationVersion == target.TextVersion &&
@@ -590,7 +694,7 @@ namespace Cortex
 
             MMLog.WriteInfo("[Cortex.Roslyn] Analysis complete for " +
                 Path.GetFileName(target.FilePath) +
-                ". Phase=" + BuildLanguageAnalysisPhaseLabel(pending) +
+                ". Phase=" + _documentLanguageAnalysisService.BuildAnalysisPhaseLabel(pending) +
                 ", Diagnostics=" + CountDiagnostics(target.LanguageAnalysis) +
                 ", Classifications=" + CountClassifications(target.LanguageAnalysis) +
                 ", Summary=" + BuildClassificationSummary(target.LanguageAnalysis));
@@ -723,6 +827,52 @@ namespace Cortex
                 MMLog.WriteError("[Cortex.Roslyn] Definition response handling crashed for '" +
                     (pending.TokenText ?? string.Empty) + "': " + ex);
             }
+        }
+
+        private void HandleLanguageCompletionResponse(LanguageServiceEnvelope envelope, DocumentLanguageCompletionRequestState pending)
+        {
+            _languageCompletionInFlight = false;
+            if (pending == null || pending.Generation != _languageServiceGeneration || _state.Editor == null)
+            {
+                return;
+            }
+
+            if (!string.Equals(_state.Editor.RequestedCompletionKey ?? string.Empty, pending.RequestKey ?? string.Empty, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var response = DeserializeEnvelopePayload<LanguageServiceCompletionResponse>(envelope);
+            _state.Editor.RequestedCompletionKey = string.Empty;
+            _state.Editor.RequestedCompletionDocumentPath = string.Empty;
+            _state.Editor.RequestedCompletionLine = 0;
+            _state.Editor.RequestedCompletionColumn = 0;
+            _state.Editor.RequestedCompletionAbsolutePosition = -1;
+            _state.Editor.RequestedCompletionTriggerCharacter = string.Empty;
+            _state.Editor.RequestedCompletionExplicit = false;
+            if (response == null)
+            {
+                _state.Editor.ActiveCompletionKey = string.Empty;
+                _state.Editor.ActiveCompletionResponse = null;
+                return;
+            }
+
+            var target = FindOpenDocument(response.DocumentPath);
+            if (target == null ||
+                (response.DocumentVersion > 0 && target.TextVersion > 0 && response.DocumentVersion != target.TextVersion))
+            {
+                return;
+            }
+
+            if (!_documentLanguageInteractionService.HasCompletionItems(response))
+            {
+                _state.Editor.ActiveCompletionKey = string.Empty;
+                _state.Editor.ActiveCompletionResponse = null;
+                return;
+            }
+
+            _state.Editor.ActiveCompletionKey = pending.RequestKey ?? string.Empty;
+            _state.Editor.ActiveCompletionResponse = response;
         }
 
         private static TResponse DeserializeEnvelopePayload<TResponse>(LanguageServiceEnvelope envelope)
@@ -924,62 +1074,6 @@ namespace Cortex
             return false;
         }
 
-        private LanguageServiceDocumentRequest BuildLanguageDocumentRequest(
-            DocumentSession session,
-            bool includeDiagnostics,
-            bool includeClassifications,
-            IncrementalClassificationRange classificationRange)
-        {
-            var project = ResolveProjectForDocument(session != null ? session.FilePath : string.Empty);
-            return new LanguageServiceDocumentRequest
-            {
-                DocumentPath = session != null ? session.FilePath : string.Empty,
-                ProjectFilePath = project != null ? project.ProjectFilePath : string.Empty,
-                WorkspaceRootPath = _state.Settings != null ? _state.Settings.WorkspaceRootPath : string.Empty,
-                SourceRoots = BuildLanguageSourceRoots(_state.Settings, project),
-                DocumentText = session != null ? session.Text : string.Empty,
-                DocumentVersion = session != null ? session.TextVersion : 0,
-                IncludeDiagnostics = includeDiagnostics,
-                IncludeClassifications = includeClassifications,
-                ClassificationRangeStart = classificationRange != null ? classificationRange.RequestStart : -1,
-                ClassificationRangeLength = classificationRange != null ? classificationRange.RequestLength : 0
-            };
-        }
-
-        private LanguageServiceHoverRequest BuildLanguageHoverRequest(DocumentSession session, int line, int column)
-        {
-            var project = ResolveProjectForDocument(session != null ? session.FilePath : string.Empty);
-            return new LanguageServiceHoverRequest
-            {
-                DocumentPath = session != null ? session.FilePath : string.Empty,
-                ProjectFilePath = project != null ? project.ProjectFilePath : string.Empty,
-                WorkspaceRootPath = _state.Settings != null ? _state.Settings.WorkspaceRootPath : string.Empty,
-                SourceRoots = BuildLanguageSourceRoots(_state.Settings, project),
-                DocumentText = session != null ? session.Text : string.Empty,
-                DocumentVersion = session != null ? session.TextVersion : 0,
-                Line = line,
-                Column = column,
-                AbsolutePosition = _state.Editor != null ? _state.Editor.RequestedHoverAbsolutePosition : -1
-            };
-        }
-
-        private LanguageServiceDefinitionRequest BuildLanguageDefinitionRequest(DocumentSession session, int line, int column)
-        {
-            var project = ResolveProjectForDocument(session != null ? session.FilePath : string.Empty);
-            return new LanguageServiceDefinitionRequest
-            {
-                DocumentPath = session != null ? session.FilePath : string.Empty,
-                ProjectFilePath = project != null ? project.ProjectFilePath : string.Empty,
-                WorkspaceRootPath = _state.Settings != null ? _state.Settings.WorkspaceRootPath : string.Empty,
-                SourceRoots = BuildLanguageSourceRoots(_state.Settings, project),
-                DocumentText = session != null ? session.Text : string.Empty,
-                DocumentVersion = session != null ? session.TextVersion : 0,
-                Line = line,
-                Column = column,
-                AbsolutePosition = _state.Editor != null ? _state.Editor.RequestedDefinitionAbsolutePosition : -1
-            };
-        }
-
         private CortexProjectDefinition ResolveProjectForDocument(string filePath)
         {
             if (string.IsNullOrEmpty(filePath) || _projectCatalog == null)
@@ -1079,368 +1173,6 @@ namespace Cortex
             return response != null && response.Classifications != null ? response.Classifications.Length : 0;
         }
 
-        private static string BuildLanguageAnalysisWorkKey(string fingerprint, bool includeDiagnostics, bool includeClassifications)
-        {
-            return (fingerprint ?? string.Empty) +
-                "|diag=" + includeDiagnostics +
-                "|class=" + includeClassifications;
-        }
-
-        private static string BuildLanguageAnalysisPhaseLabel(PendingLanguageAnalysisRequest pending)
-        {
-            if (pending == null)
-            {
-                return "unknown";
-            }
-
-            if (pending.IncludeClassifications && pending.IncludeDiagnostics)
-            {
-                return "full";
-            }
-
-            if (pending.IncludeClassifications)
-            {
-                return pending.IsPartialClassification ? "classifications(partial)" : "classifications";
-            }
-
-            if (pending.IncludeDiagnostics)
-            {
-                return "diagnostics";
-            }
-
-            return "empty";
-        }
-
-        private static LanguageServiceAnalysisResponse MergeLanguageAnalysis(
-            LanguageServiceAnalysisResponse existing,
-            LanguageServiceAnalysisResponse incoming,
-            PendingLanguageAnalysisRequest pending)
-        {
-            if (incoming == null)
-            {
-                return existing;
-            }
-
-            var merged = new LanguageServiceAnalysisResponse
-            {
-                Success = incoming.Success,
-                StatusMessage = incoming.StatusMessage ?? string.Empty,
-                DocumentPath = !string.IsNullOrEmpty(incoming.DocumentPath)
-                    ? incoming.DocumentPath
-                    : (existing != null ? existing.DocumentPath ?? string.Empty : string.Empty),
-                ProjectFilePath = !string.IsNullOrEmpty(incoming.ProjectFilePath)
-                    ? incoming.ProjectFilePath
-                    : (existing != null ? existing.ProjectFilePath ?? string.Empty : string.Empty),
-                DocumentVersion = incoming.DocumentVersion,
-                Diagnostics = pending != null && pending.IncludeDiagnostics && incoming.Success
-                    ? CloneDiagnostics(incoming.Diagnostics)
-                    : CloneDiagnostics(existing != null ? existing.Diagnostics : null),
-                Classifications = pending != null && pending.IncludeClassifications && incoming.Success
-                    ? MergeClassifications(existing, incoming, pending)
-                    : CloneClassifications(existing != null ? existing.Classifications : null)
-            };
-
-            return merged;
-        }
-
-        private static LanguageServiceDiagnostic[] CloneDiagnostics(LanguageServiceDiagnostic[] diagnostics)
-        {
-            if (diagnostics == null || diagnostics.Length == 0)
-            {
-                return new LanguageServiceDiagnostic[0];
-            }
-
-            var clone = new LanguageServiceDiagnostic[diagnostics.Length];
-            for (var i = 0; i < diagnostics.Length; i++)
-            {
-                clone[i] = diagnostics[i] == null
-                    ? null
-                    : new LanguageServiceDiagnostic
-                    {
-                        Id = diagnostics[i].Id,
-                        Severity = diagnostics[i].Severity,
-                        Message = diagnostics[i].Message,
-                        Category = diagnostics[i].Category,
-                        FilePath = diagnostics[i].FilePath,
-                        Line = diagnostics[i].Line,
-                        Column = diagnostics[i].Column,
-                        EndLine = diagnostics[i].EndLine,
-                        EndColumn = diagnostics[i].EndColumn
-                    };
-            }
-
-            return clone;
-        }
-
-        private static LanguageServiceClassifiedSpan[] CloneClassifications(LanguageServiceClassifiedSpan[] classifications)
-        {
-            if (classifications == null || classifications.Length == 0)
-            {
-                return new LanguageServiceClassifiedSpan[0];
-            }
-
-            var clone = new LanguageServiceClassifiedSpan[classifications.Length];
-            for (var i = 0; i < classifications.Length; i++)
-            {
-                clone[i] = CloneClassification(classifications[i]);
-            }
-
-            return clone;
-        }
-
-        private static LanguageServiceClassifiedSpan[] MergeClassifications(
-            LanguageServiceAnalysisResponse existing,
-            LanguageServiceAnalysisResponse incoming,
-            PendingLanguageAnalysisRequest pending)
-        {
-            if (incoming == null)
-            {
-                return CloneClassifications(existing != null ? existing.Classifications : null);
-            }
-
-            if (pending == null || !pending.IsPartialClassification)
-            {
-                return CloneClassifications(incoming.Classifications);
-            }
-
-            var merged = new List<LanguageServiceClassifiedSpan>();
-            var existingClassifications = existing != null ? existing.Classifications : null;
-            var oldRangeStart = pending.OldClassificationStart;
-            var oldRangeEnd = pending.OldClassificationStart + Math.Max(0, pending.OldClassificationLength);
-            var shift = pending.NewClassificationLength - pending.OldClassificationLength;
-
-            if (existingClassifications != null)
-            {
-                for (var i = 0; i < existingClassifications.Length; i++)
-                {
-                    var span = existingClassifications[i];
-                    if (span == null || span.Length <= 0)
-                    {
-                        continue;
-                    }
-
-                    var spanStart = span.Start;
-                    var spanEnd = span.Start + span.Length;
-                    if (spanEnd <= oldRangeStart)
-                    {
-                        merged.Add(CloneClassification(span));
-                        continue;
-                    }
-
-                    if (spanStart >= oldRangeEnd)
-                    {
-                        var shifted = CloneClassification(span);
-                        shifted.Start += shift;
-                        merged.Add(shifted);
-                    }
-                }
-            }
-
-            var incomingClassifications = incoming.Classifications;
-            if (incomingClassifications != null)
-            {
-                for (var i = 0; i < incomingClassifications.Length; i++)
-                {
-                    if (incomingClassifications[i] != null)
-                    {
-                        merged.Add(CloneClassification(incomingClassifications[i]));
-                    }
-                }
-            }
-
-            merged.Sort(delegate(LanguageServiceClassifiedSpan left, LanguageServiceClassifiedSpan right)
-            {
-                if (left.Start != right.Start)
-                {
-                    return left.Start.CompareTo(right.Start);
-                }
-
-                return right.Length.CompareTo(left.Length);
-            });
-            return merged.ToArray();
-        }
-
-        private static LanguageServiceClassifiedSpan CloneClassification(LanguageServiceClassifiedSpan classification)
-        {
-            return classification == null
-                ? null
-                : new LanguageServiceClassifiedSpan
-                {
-                    Classification = classification.Classification,
-                    Start = classification.Start,
-                    Length = classification.Length,
-                    Line = classification.Line,
-                    Column = classification.Column
-                };
-        }
-
-        private static LanguageServiceAnalysisResponse CloneLanguageAnalysis(LanguageServiceAnalysisResponse response)
-        {
-            if (response == null)
-            {
-                return new LanguageServiceAnalysisResponse();
-            }
-
-            return new LanguageServiceAnalysisResponse
-            {
-                Success = response.Success,
-                StatusMessage = response.StatusMessage ?? string.Empty,
-                DocumentPath = response.DocumentPath ?? string.Empty,
-                ProjectFilePath = response.ProjectFilePath ?? string.Empty,
-                DocumentVersion = response.DocumentVersion,
-                Diagnostics = CloneDiagnostics(response.Diagnostics),
-                Classifications = CloneClassifications(response.Classifications)
-            };
-        }
-
-        private void TryRestoreLanguageAnalysisFromRecentCache(DocumentSession session)
-        {
-            if (session == null || session.LanguageAnalysisHistory == null || session.LanguageAnalysisHistory.Count == 0)
-            {
-                return;
-            }
-
-            if (session.LastLanguageClassificationVersion == session.TextVersion &&
-                session.LastLanguageDiagnosticVersion == session.TextVersion)
-            {
-                return;
-            }
-
-            DocumentLanguageAnalysisSnapshot cached = null;
-            var currentText = session.Text ?? string.Empty;
-            for (var i = 0; i < session.LanguageAnalysisHistory.Count; i++)
-            {
-                var candidate = session.LanguageAnalysisHistory[i];
-                if (candidate != null && string.Equals(candidate.TextSnapshot ?? string.Empty, currentText, StringComparison.Ordinal))
-                {
-                    cached = candidate;
-                    break;
-                }
-            }
-
-            if (cached == null)
-            {
-                return;
-            }
-
-            var restored = CloneLanguageAnalysis(cached.Analysis);
-            restored.DocumentPath = session.FilePath ?? restored.DocumentPath;
-            restored.DocumentVersion = session.TextVersion;
-            var restoredAny = false;
-            if (cached.HasClassifications && session.LastLanguageClassificationVersion != session.TextVersion)
-            {
-                session.LastLanguageClassificationVersion = session.TextVersion;
-                restoredAny = true;
-            }
-
-            if (cached.HasDiagnostics && session.LastLanguageDiagnosticVersion != session.TextVersion)
-            {
-                session.LastLanguageDiagnosticVersion = session.TextVersion;
-                restoredAny = true;
-            }
-
-            if (!restoredAny)
-            {
-                return;
-            }
-
-            session.LanguageAnalysis = restored;
-            session.LastLanguageAnalysisUtc = DateTime.UtcNow;
-            session.LastLanguageAnalysisVersion = cached.HasClassifications || cached.HasDiagnostics
-                ? session.TextVersion
-                : session.LastLanguageAnalysisVersion;
-            session.PendingLanguageInvalidation = new EditorInvalidation();
-            MMLog.WriteInfo("[Cortex.Roslyn] Restored cached analysis for " +
-                Path.GetFileName(session.FilePath) +
-                ". Classifications=" + cached.HasClassifications +
-                ", Diagnostics=" + cached.HasDiagnostics + ".");
-        }
-
-        private void RememberLanguageAnalysisSnapshot(DocumentSession session)
-        {
-            if (session == null || session.LanguageAnalysisHistory == null || session.LanguageAnalysis == null)
-            {
-                return;
-            }
-
-            var hasClassifications =
-                session.LastLanguageClassificationVersion == session.TextVersion &&
-                session.LanguageAnalysis.Classifications != null;
-            var hasDiagnostics =
-                session.LastLanguageDiagnosticVersion == session.TextVersion &&
-                session.LanguageAnalysis.Diagnostics != null;
-            if (!hasClassifications && !hasDiagnostics)
-            {
-                return;
-            }
-
-            var textSnapshot = session.Text ?? string.Empty;
-            DocumentLanguageAnalysisSnapshot existing = null;
-            for (var i = 0; i < session.LanguageAnalysisHistory.Count; i++)
-            {
-                var candidate = session.LanguageAnalysisHistory[i];
-                if (candidate != null && string.Equals(candidate.TextSnapshot ?? string.Empty, textSnapshot, StringComparison.Ordinal))
-                {
-                    existing = candidate;
-                    session.LanguageAnalysisHistory.RemoveAt(i);
-                    break;
-                }
-            }
-
-            var snapshot = existing ?? new DocumentLanguageAnalysisSnapshot();
-            snapshot.TextSnapshot = textSnapshot;
-            snapshot.Analysis = CloneLanguageAnalysis(session.LanguageAnalysis);
-            snapshot.Analysis.DocumentVersion = session.TextVersion;
-            if (!hasClassifications)
-            {
-                snapshot.Analysis.Classifications = new LanguageServiceClassifiedSpan[0];
-            }
-
-            if (!hasDiagnostics)
-            {
-                snapshot.Analysis.Diagnostics = new LanguageServiceDiagnostic[0];
-            }
-
-            snapshot.HasClassifications = hasClassifications;
-            snapshot.HasDiagnostics = hasDiagnostics;
-            snapshot.CachedUtc = DateTime.UtcNow;
-            session.LanguageAnalysisHistory.Insert(0, snapshot);
-            while (session.LanguageAnalysisHistory.Count > 3)
-            {
-                session.LanguageAnalysisHistory.RemoveAt(session.LanguageAnalysisHistory.Count - 1);
-            }
-        }
-
-        private static IncrementalClassificationRange BuildIncrementalClassificationRange(DocumentSession session)
-        {
-            if (session == null ||
-                session.PendingLanguageInvalidation == null ||
-                session.LanguageAnalysis == null ||
-                session.LanguageAnalysis.Classifications == null ||
-                session.LanguageAnalysis.Classifications.Length == 0)
-            {
-                return null;
-            }
-
-            var invalidation = session.PendingLanguageInvalidation;
-            if (!invalidation.CanUseIncrementalLanguageAnalysis ||
-                invalidation.CurrentContextLength <= 0 ||
-                invalidation.PreviousContextLength < 0)
-            {
-                return null;
-            }
-
-            return new IncrementalClassificationRange
-            {
-                RequestStart = invalidation.CurrentContextStart,
-                RequestLength = invalidation.CurrentContextLength,
-                OldSpanStart = invalidation.PreviousContextStart,
-                OldSpanLength = invalidation.PreviousContextLength,
-                NewSpanStart = invalidation.CurrentContextStart,
-                NewSpanLength = invalidation.CurrentContextLength
-            };
-        }
-
         private static string BuildCapabilitySummary(LanguageServiceStatusResponse response)
         {
             if (response == null || response.Capabilities == null || response.Capabilities.Length == 0)
@@ -1533,22 +1265,6 @@ namespace Cortex
             return string.Join("; ", parts.ToArray());
         }
 
-        private sealed class PendingLanguageAnalysisRequest
-        {
-            public string RequestId;
-            public int Generation;
-            public string Fingerprint;
-            public string DocumentPath;
-            public int DocumentVersion;
-            public bool IncludeDiagnostics;
-            public bool IncludeClassifications;
-            public bool IsPartialClassification;
-            public int OldClassificationStart;
-            public int OldClassificationLength;
-            public int NewClassificationStart;
-            public int NewClassificationLength;
-        }
-
         private sealed class PendingLanguageHoverRequest
         {
             public string RequestId;
@@ -1565,16 +1281,6 @@ namespace Cortex
             public string DocumentPath;
             public int DocumentVersion;
             public string TokenText;
-        }
-
-        private sealed class IncrementalClassificationRange
-        {
-            public int RequestStart;
-            public int RequestLength;
-            public int OldSpanStart;
-            public int OldSpanLength;
-            public int NewSpanStart;
-            public int NewSpanLength;
         }
     }
 }
