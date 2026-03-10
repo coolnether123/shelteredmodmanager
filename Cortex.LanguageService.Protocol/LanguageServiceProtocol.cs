@@ -403,6 +403,7 @@ namespace Cortex.LanguageService.Protocol
         public string ProjectFilePath;
         public int DocumentVersion;
         public string SymbolDisplay;
+        public string QualifiedSymbolDisplay;
         public string SymbolKind;
         public string MetadataName;
         public string ContainingTypeName;

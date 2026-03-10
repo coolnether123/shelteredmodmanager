@@ -28,6 +28,7 @@ namespace Cortex.Modules.Editor
         private GUIStyle _gutterStyle;
         private GUIStyle _tooltipStyle;
         private GUIStyle _tooltipSignatureStyle;
+        private GUIStyle _tooltipPathStyle;
         private GUIStyle _tooltipLinkStyle;
         private GUIStyle _tooltipDetailStyle;
         private GUIStyle _contextMenuStyle;
@@ -160,6 +161,12 @@ namespace Cortex.Modules.Editor
             _tooltipSignatureStyle.padding = new RectOffset(0, 0, 0, 0);
             _tooltipSignatureStyle.margin = new RectOffset(0, 0, 0, 0);
             GuiStyleUtil.ApplyTextColorToAllStates(_tooltipSignatureStyle, CortexIdeLayout.GetTextColor());
+            _tooltipPathStyle = new GUIStyle(_baseStyle);
+            _tooltipPathStyle.wordWrap = false;
+            _tooltipPathStyle.clipping = TextClipping.Clip;
+            _tooltipPathStyle.padding = new RectOffset(0, 0, 0, 0);
+            _tooltipPathStyle.margin = new RectOffset(0, 0, 0, 0);
+            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipPathStyle, CortexIdeLayout.GetMutedTextColor());
             _tooltipLinkStyle = new GUIStyle(_tooltipSignatureStyle);
             GuiStyleUtil.ApplyTextColorToAllStates(_tooltipLinkStyle, CortexIdeLayout.GetAccentColor());
             _tooltipDetailStyle = new GUIStyle(_baseStyle);
@@ -706,6 +713,10 @@ namespace Cortex.Modules.Editor
             }
 
             var displayParts = GetTooltipDisplayParts(response);
+            var qualifiedPath = GetTooltipQualifiedPath(response);
+            var pathHeight = string.IsNullOrEmpty(qualifiedPath)
+                ? 0f
+                : Mathf.Max(16f, _tooltipPathStyle.CalcSize(new GUIContent(qualifiedPath)).y);
             var signatureHeight = LayoutTooltipParts(new Rect(0f, 0f, TooltipWidth - 16f, 0f), displayParts, null, false);
             if (signatureHeight <= 0f)
             {
@@ -719,13 +730,14 @@ namespace Cortex.Modules.Editor
                 hoveredToken,
                 hoverKey,
                 effectiveViewportSize,
-                BuildTooltipHeight(signatureHeight, BuildTooltipDetailText(response, null)));
+                BuildTooltipHeight(pathHeight, signatureHeight, BuildTooltipDetailText(response, null)));
 
             var partVisuals = new List<TooltipPartVisual>();
-            LayoutTooltipParts(new Rect(tooltipRect.x + 8f, tooltipRect.y + 7f, TooltipWidth - 16f, 0f), displayParts, partVisuals, false);
+            var signatureRect = BuildTooltipSignatureRect(tooltipRect, pathHeight);
+            LayoutTooltipParts(signatureRect, displayParts, partVisuals, false);
             var hoveredPart = FindHoveredTooltipPart(partVisuals, localMouse);
             var detailText = BuildTooltipDetailText(response, hoveredPart != null ? hoveredPart.Part : null);
-            var finalHeight = BuildTooltipHeight(signatureHeight, detailText);
+            var finalHeight = BuildTooltipHeight(pathHeight, signatureHeight, detailText);
             if (canUpdateTooltipVisuals || !HasArea(_stickyHoverTooltipRect))
             {
                 tooltipRect = BuildTooltipRect(scroll, localMouse, hoveredToken, hoverKey, effectiveViewportSize, finalHeight);
@@ -744,21 +756,28 @@ namespace Cortex.Modules.Editor
             LogVisibleHover(hoverKey, response, hoveredToken);
             GUI.Box(tooltipRect, GUIContent.none, _tooltipStyle);
 
+            if (!string.IsNullOrEmpty(qualifiedPath))
+            {
+                GUI.Label(BuildTooltipPathRect(tooltipRect, pathHeight), qualifiedPath, _tooltipPathStyle);
+            }
+
             partVisuals.Clear();
-            LayoutTooltipParts(new Rect(tooltipRect.x + 8f, tooltipRect.y + 7f, TooltipWidth - 16f, 0f), displayParts, partVisuals, true);
+            signatureRect = BuildTooltipSignatureRect(tooltipRect, pathHeight);
+            LayoutTooltipParts(signatureRect, displayParts, partVisuals, true);
             hoveredPart = FindHoveredTooltipPart(partVisuals, localMouse);
 
             if (hoveredPart != null && hoveredPart.Part != null && hoveredPart.Part.IsInteractive)
             {
                 GUI.DrawTexture(hoveredPart.Rect, _hoverFill);
                 GUI.Label(hoveredPart.Rect, hoveredPart.Part.Text, _tooltipLinkStyle);
+                GUI.DrawTexture(new Rect(hoveredPart.Rect.x, hoveredPart.Rect.yMax - 1f, hoveredPart.Rect.width, 1f), _tooltipUnderlineFill);
             }
 
             HandleTooltipPartInteraction(navigationService, state, hoveredPart != null ? hoveredPart.Part : null);
 
             if (!string.IsNullOrEmpty(detailText))
             {
-                var detailRect = BuildTooltipDetailRect(tooltipRect, signatureHeight);
+                var detailRect = BuildTooltipDetailRect(tooltipRect, pathHeight, signatureHeight);
                 GUI.Label(detailRect, detailText, _tooltipDetailStyle);
             }
         }
@@ -902,6 +921,16 @@ namespace Cortex.Modules.Editor
             };
         }
 
+        private static string GetTooltipQualifiedPath(LanguageServiceHoverResponse response)
+        {
+            if (response == null)
+            {
+                return string.Empty;
+            }
+
+            return response.QualifiedSymbolDisplay ?? string.Empty;
+        }
+
         private float LayoutTooltipParts(Rect bounds, LanguageServiceHoverDisplayPart[] parts, List<TooltipPartVisual> visuals, bool draw)
         {
             var x = bounds.x;
@@ -935,10 +964,6 @@ namespace Cortex.Modules.Editor
                 if (draw)
                 {
                     GUI.Label(rect, text, style);
-                    if (part.IsInteractive)
-                    {
-                        GUI.DrawTexture(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), _tooltipUnderlineFill);
-                    }
                 }
 
                 x += width;
@@ -966,21 +991,39 @@ namespace Cortex.Modules.Editor
             return null;
         }
 
-        private float BuildTooltipHeight(float signatureHeight, string detailText)
+        private float BuildTooltipHeight(float pathHeight, float signatureHeight, string detailText)
         {
             var detailHeight = string.IsNullOrEmpty(detailText)
                 ? 0f
                 : _tooltipDetailStyle.CalcHeight(new GUIContent(detailText), TooltipWidth - 16f);
-            return Mathf.Min(260f, 14f + signatureHeight + (detailHeight > 0f ? detailHeight + 8f : 0f));
+            return Mathf.Min(280f, 14f + pathHeight + signatureHeight + (detailHeight > 0f ? detailHeight + 8f : 0f));
         }
 
-        private static Rect BuildTooltipDetailRect(Rect tooltipRect, float signatureHeight)
+        private static Rect BuildTooltipPathRect(Rect tooltipRect, float pathHeight)
         {
             return new Rect(
                 tooltipRect.x + 8f,
-                tooltipRect.y + 7f + signatureHeight + 6f,
+                tooltipRect.y + 7f,
                 tooltipRect.width - 16f,
-                Mathf.Max(0f, tooltipRect.height - signatureHeight - 20f));
+                Mathf.Max(0f, pathHeight));
+        }
+
+        private static Rect BuildTooltipSignatureRect(Rect tooltipRect, float pathHeight)
+        {
+            return new Rect(
+                tooltipRect.x + 8f,
+                tooltipRect.y + 7f + pathHeight,
+                tooltipRect.width - 16f,
+                Mathf.Max(0f, tooltipRect.height - pathHeight - 14f));
+        }
+
+        private static Rect BuildTooltipDetailRect(Rect tooltipRect, float pathHeight, float signatureHeight)
+        {
+            return new Rect(
+                tooltipRect.x + 8f,
+                tooltipRect.y + 7f + pathHeight + signatureHeight + 6f,
+                tooltipRect.width - 16f,
+                Mathf.Max(0f, tooltipRect.height - pathHeight - signatureHeight - 20f));
         }
 
         private static string BuildTooltipDetailText(LanguageServiceHoverResponse response, LanguageServiceHoverDisplayPart hoveredPart)
