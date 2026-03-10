@@ -248,6 +248,7 @@ namespace Cortex
                 return;
             }
 
+            TryRestoreLanguageAnalysisFromRecentCache(active);
             var fingerprint = BuildLanguageFingerprint(active);
             var needsClassifications = active.LastLanguageClassificationVersion != active.TextVersion;
             var needsDiagnostics = active.LastLanguageDiagnosticVersion != active.TextVersion;
@@ -271,7 +272,8 @@ namespace Cortex
                 return;
             }
 
-            var request = BuildLanguageDocumentRequest(active, includeDiagnostics, includeClassifications);
+            var classificationRange = includeClassifications ? BuildIncrementalClassificationRange(active) : null;
+            var request = BuildLanguageDocumentRequest(active, includeDiagnostics, includeClassifications, classificationRange);
             var generation = _languageServiceGeneration;
             var client = _languageServiceClient;
             _languageAnalysisInFlight = true;
@@ -293,7 +295,12 @@ namespace Cortex
                 DocumentPath = request.DocumentPath ?? string.Empty,
                 DocumentVersion = request.DocumentVersion,
                 IncludeDiagnostics = includeDiagnostics,
-                IncludeClassifications = includeClassifications
+                IncludeClassifications = includeClassifications,
+                IsPartialClassification = classificationRange != null,
+                OldClassificationStart = classificationRange != null ? classificationRange.OldSpanStart : 0,
+                OldClassificationLength = classificationRange != null ? classificationRange.OldSpanLength : 0,
+                NewClassificationStart = classificationRange != null ? classificationRange.NewSpanStart : 0,
+                NewClassificationLength = classificationRange != null ? classificationRange.NewSpanLength : 0
             };
         }
 
@@ -557,16 +564,22 @@ namespace Cortex
             }
 
             target.LanguageAnalysis = MergeLanguageAnalysis(target.LanguageAnalysis, response, pending);
-            target.LastLanguageAnalysisUtc = DateTime.UtcNow;
-            target.LastLanguageAnalysisVersion = response.DocumentVersion;
-            if (pending.IncludeClassifications)
+            if (response.Success)
             {
-                target.LastLanguageClassificationVersion = response.DocumentVersion;
-            }
+                target.LastLanguageAnalysisUtc = DateTime.UtcNow;
+                target.LastLanguageAnalysisVersion = response.DocumentVersion;
+                if (pending.IncludeClassifications)
+                {
+                    target.LastLanguageClassificationVersion = response.DocumentVersion;
+                    target.PendingLanguageInvalidation = new EditorInvalidation();
+                }
 
-            if (pending.IncludeDiagnostics)
-            {
-                target.LastLanguageDiagnosticVersion = response.DocumentVersion;
+                if (pending.IncludeDiagnostics)
+                {
+                    target.LastLanguageDiagnosticVersion = response.DocumentVersion;
+                }
+
+                RememberLanguageAnalysisSnapshot(target);
             }
 
             if (target.LastLanguageClassificationVersion == target.TextVersion &&
@@ -911,7 +924,11 @@ namespace Cortex
             return false;
         }
 
-        private LanguageServiceDocumentRequest BuildLanguageDocumentRequest(DocumentSession session, bool includeDiagnostics, bool includeClassifications)
+        private LanguageServiceDocumentRequest BuildLanguageDocumentRequest(
+            DocumentSession session,
+            bool includeDiagnostics,
+            bool includeClassifications,
+            IncrementalClassificationRange classificationRange)
         {
             var project = ResolveProjectForDocument(session != null ? session.FilePath : string.Empty);
             return new LanguageServiceDocumentRequest
@@ -923,7 +940,9 @@ namespace Cortex
                 DocumentText = session != null ? session.Text : string.Empty,
                 DocumentVersion = session != null ? session.TextVersion : 0,
                 IncludeDiagnostics = includeDiagnostics,
-                IncludeClassifications = includeClassifications
+                IncludeClassifications = includeClassifications,
+                ClassificationRangeStart = classificationRange != null ? classificationRange.RequestStart : -1,
+                ClassificationRangeLength = classificationRange != null ? classificationRange.RequestLength : 0
             };
         }
 
@@ -1081,7 +1100,7 @@ namespace Cortex
 
             if (pending.IncludeClassifications)
             {
-                return "classifications";
+                return pending.IsPartialClassification ? "classifications(partial)" : "classifications";
             }
 
             if (pending.IncludeDiagnostics)
@@ -1113,15 +1132,313 @@ namespace Cortex
                     ? incoming.ProjectFilePath
                     : (existing != null ? existing.ProjectFilePath ?? string.Empty : string.Empty),
                 DocumentVersion = incoming.DocumentVersion,
-                Diagnostics = pending != null && pending.IncludeDiagnostics
-                    ? (incoming.Diagnostics ?? new LanguageServiceDiagnostic[0])
-                    : (existing != null && existing.Diagnostics != null ? existing.Diagnostics : new LanguageServiceDiagnostic[0]),
-                Classifications = pending != null && pending.IncludeClassifications
-                    ? (incoming.Classifications ?? new LanguageServiceClassifiedSpan[0])
-                    : (existing != null && existing.Classifications != null ? existing.Classifications : new LanguageServiceClassifiedSpan[0])
+                Diagnostics = pending != null && pending.IncludeDiagnostics && incoming.Success
+                    ? CloneDiagnostics(incoming.Diagnostics)
+                    : CloneDiagnostics(existing != null ? existing.Diagnostics : null),
+                Classifications = pending != null && pending.IncludeClassifications && incoming.Success
+                    ? MergeClassifications(existing, incoming, pending)
+                    : CloneClassifications(existing != null ? existing.Classifications : null)
             };
 
             return merged;
+        }
+
+        private static LanguageServiceDiagnostic[] CloneDiagnostics(LanguageServiceDiagnostic[] diagnostics)
+        {
+            if (diagnostics == null || diagnostics.Length == 0)
+            {
+                return new LanguageServiceDiagnostic[0];
+            }
+
+            var clone = new LanguageServiceDiagnostic[diagnostics.Length];
+            for (var i = 0; i < diagnostics.Length; i++)
+            {
+                clone[i] = diagnostics[i] == null
+                    ? null
+                    : new LanguageServiceDiagnostic
+                    {
+                        Id = diagnostics[i].Id,
+                        Severity = diagnostics[i].Severity,
+                        Message = diagnostics[i].Message,
+                        Category = diagnostics[i].Category,
+                        FilePath = diagnostics[i].FilePath,
+                        Line = diagnostics[i].Line,
+                        Column = diagnostics[i].Column,
+                        EndLine = diagnostics[i].EndLine,
+                        EndColumn = diagnostics[i].EndColumn
+                    };
+            }
+
+            return clone;
+        }
+
+        private static LanguageServiceClassifiedSpan[] CloneClassifications(LanguageServiceClassifiedSpan[] classifications)
+        {
+            if (classifications == null || classifications.Length == 0)
+            {
+                return new LanguageServiceClassifiedSpan[0];
+            }
+
+            var clone = new LanguageServiceClassifiedSpan[classifications.Length];
+            for (var i = 0; i < classifications.Length; i++)
+            {
+                clone[i] = CloneClassification(classifications[i]);
+            }
+
+            return clone;
+        }
+
+        private static LanguageServiceClassifiedSpan[] MergeClassifications(
+            LanguageServiceAnalysisResponse existing,
+            LanguageServiceAnalysisResponse incoming,
+            PendingLanguageAnalysisRequest pending)
+        {
+            if (incoming == null)
+            {
+                return CloneClassifications(existing != null ? existing.Classifications : null);
+            }
+
+            if (pending == null || !pending.IsPartialClassification)
+            {
+                return CloneClassifications(incoming.Classifications);
+            }
+
+            var merged = new List<LanguageServiceClassifiedSpan>();
+            var existingClassifications = existing != null ? existing.Classifications : null;
+            var oldRangeStart = pending.OldClassificationStart;
+            var oldRangeEnd = pending.OldClassificationStart + Math.Max(0, pending.OldClassificationLength);
+            var shift = pending.NewClassificationLength - pending.OldClassificationLength;
+
+            if (existingClassifications != null)
+            {
+                for (var i = 0; i < existingClassifications.Length; i++)
+                {
+                    var span = existingClassifications[i];
+                    if (span == null || span.Length <= 0)
+                    {
+                        continue;
+                    }
+
+                    var spanStart = span.Start;
+                    var spanEnd = span.Start + span.Length;
+                    if (spanEnd <= oldRangeStart)
+                    {
+                        merged.Add(CloneClassification(span));
+                        continue;
+                    }
+
+                    if (spanStart >= oldRangeEnd)
+                    {
+                        var shifted = CloneClassification(span);
+                        shifted.Start += shift;
+                        merged.Add(shifted);
+                    }
+                }
+            }
+
+            var incomingClassifications = incoming.Classifications;
+            if (incomingClassifications != null)
+            {
+                for (var i = 0; i < incomingClassifications.Length; i++)
+                {
+                    if (incomingClassifications[i] != null)
+                    {
+                        merged.Add(CloneClassification(incomingClassifications[i]));
+                    }
+                }
+            }
+
+            merged.Sort(delegate(LanguageServiceClassifiedSpan left, LanguageServiceClassifiedSpan right)
+            {
+                if (left.Start != right.Start)
+                {
+                    return left.Start.CompareTo(right.Start);
+                }
+
+                return right.Length.CompareTo(left.Length);
+            });
+            return merged.ToArray();
+        }
+
+        private static LanguageServiceClassifiedSpan CloneClassification(LanguageServiceClassifiedSpan classification)
+        {
+            return classification == null
+                ? null
+                : new LanguageServiceClassifiedSpan
+                {
+                    Classification = classification.Classification,
+                    Start = classification.Start,
+                    Length = classification.Length,
+                    Line = classification.Line,
+                    Column = classification.Column
+                };
+        }
+
+        private static LanguageServiceAnalysisResponse CloneLanguageAnalysis(LanguageServiceAnalysisResponse response)
+        {
+            if (response == null)
+            {
+                return new LanguageServiceAnalysisResponse();
+            }
+
+            return new LanguageServiceAnalysisResponse
+            {
+                Success = response.Success,
+                StatusMessage = response.StatusMessage ?? string.Empty,
+                DocumentPath = response.DocumentPath ?? string.Empty,
+                ProjectFilePath = response.ProjectFilePath ?? string.Empty,
+                DocumentVersion = response.DocumentVersion,
+                Diagnostics = CloneDiagnostics(response.Diagnostics),
+                Classifications = CloneClassifications(response.Classifications)
+            };
+        }
+
+        private void TryRestoreLanguageAnalysisFromRecentCache(DocumentSession session)
+        {
+            if (session == null || session.LanguageAnalysisHistory == null || session.LanguageAnalysisHistory.Count == 0)
+            {
+                return;
+            }
+
+            if (session.LastLanguageClassificationVersion == session.TextVersion &&
+                session.LastLanguageDiagnosticVersion == session.TextVersion)
+            {
+                return;
+            }
+
+            DocumentLanguageAnalysisSnapshot cached = null;
+            var currentText = session.Text ?? string.Empty;
+            for (var i = 0; i < session.LanguageAnalysisHistory.Count; i++)
+            {
+                var candidate = session.LanguageAnalysisHistory[i];
+                if (candidate != null && string.Equals(candidate.TextSnapshot ?? string.Empty, currentText, StringComparison.Ordinal))
+                {
+                    cached = candidate;
+                    break;
+                }
+            }
+
+            if (cached == null)
+            {
+                return;
+            }
+
+            var restored = CloneLanguageAnalysis(cached.Analysis);
+            restored.DocumentPath = session.FilePath ?? restored.DocumentPath;
+            restored.DocumentVersion = session.TextVersion;
+            var restoredAny = false;
+            if (cached.HasClassifications && session.LastLanguageClassificationVersion != session.TextVersion)
+            {
+                session.LastLanguageClassificationVersion = session.TextVersion;
+                restoredAny = true;
+            }
+
+            if (cached.HasDiagnostics && session.LastLanguageDiagnosticVersion != session.TextVersion)
+            {
+                session.LastLanguageDiagnosticVersion = session.TextVersion;
+                restoredAny = true;
+            }
+
+            if (!restoredAny)
+            {
+                return;
+            }
+
+            session.LanguageAnalysis = restored;
+            session.LastLanguageAnalysisUtc = DateTime.UtcNow;
+            session.LastLanguageAnalysisVersion = cached.HasClassifications || cached.HasDiagnostics
+                ? session.TextVersion
+                : session.LastLanguageAnalysisVersion;
+            session.PendingLanguageInvalidation = new EditorInvalidation();
+            MMLog.WriteInfo("[Cortex.Roslyn] Restored cached analysis for " +
+                Path.GetFileName(session.FilePath) +
+                ". Classifications=" + cached.HasClassifications +
+                ", Diagnostics=" + cached.HasDiagnostics + ".");
+        }
+
+        private void RememberLanguageAnalysisSnapshot(DocumentSession session)
+        {
+            if (session == null || session.LanguageAnalysisHistory == null || session.LanguageAnalysis == null)
+            {
+                return;
+            }
+
+            var hasClassifications =
+                session.LastLanguageClassificationVersion == session.TextVersion &&
+                session.LanguageAnalysis.Classifications != null;
+            var hasDiagnostics =
+                session.LastLanguageDiagnosticVersion == session.TextVersion &&
+                session.LanguageAnalysis.Diagnostics != null;
+            if (!hasClassifications && !hasDiagnostics)
+            {
+                return;
+            }
+
+            var textSnapshot = session.Text ?? string.Empty;
+            DocumentLanguageAnalysisSnapshot existing = null;
+            for (var i = 0; i < session.LanguageAnalysisHistory.Count; i++)
+            {
+                var candidate = session.LanguageAnalysisHistory[i];
+                if (candidate != null && string.Equals(candidate.TextSnapshot ?? string.Empty, textSnapshot, StringComparison.Ordinal))
+                {
+                    existing = candidate;
+                    session.LanguageAnalysisHistory.RemoveAt(i);
+                    break;
+                }
+            }
+
+            var snapshot = existing ?? new DocumentLanguageAnalysisSnapshot();
+            snapshot.TextSnapshot = textSnapshot;
+            snapshot.Analysis = CloneLanguageAnalysis(session.LanguageAnalysis);
+            snapshot.Analysis.DocumentVersion = session.TextVersion;
+            if (!hasClassifications)
+            {
+                snapshot.Analysis.Classifications = new LanguageServiceClassifiedSpan[0];
+            }
+
+            if (!hasDiagnostics)
+            {
+                snapshot.Analysis.Diagnostics = new LanguageServiceDiagnostic[0];
+            }
+
+            snapshot.HasClassifications = hasClassifications;
+            snapshot.HasDiagnostics = hasDiagnostics;
+            snapshot.CachedUtc = DateTime.UtcNow;
+            session.LanguageAnalysisHistory.Insert(0, snapshot);
+            while (session.LanguageAnalysisHistory.Count > 3)
+            {
+                session.LanguageAnalysisHistory.RemoveAt(session.LanguageAnalysisHistory.Count - 1);
+            }
+        }
+
+        private static IncrementalClassificationRange BuildIncrementalClassificationRange(DocumentSession session)
+        {
+            if (session == null ||
+                session.PendingLanguageInvalidation == null ||
+                session.LanguageAnalysis == null ||
+                session.LanguageAnalysis.Classifications == null ||
+                session.LanguageAnalysis.Classifications.Length == 0)
+            {
+                return null;
+            }
+
+            var invalidation = session.PendingLanguageInvalidation;
+            if (!invalidation.CanUseIncrementalLanguageAnalysis ||
+                invalidation.CurrentContextLength <= 0 ||
+                invalidation.PreviousContextLength < 0)
+            {
+                return null;
+            }
+
+            return new IncrementalClassificationRange
+            {
+                RequestStart = invalidation.CurrentContextStart,
+                RequestLength = invalidation.CurrentContextLength,
+                OldSpanStart = invalidation.PreviousContextStart,
+                OldSpanLength = invalidation.PreviousContextLength,
+                NewSpanStart = invalidation.CurrentContextStart,
+                NewSpanLength = invalidation.CurrentContextLength
+            };
         }
 
         private static string BuildCapabilitySummary(LanguageServiceStatusResponse response)
@@ -1225,6 +1542,11 @@ namespace Cortex
             public int DocumentVersion;
             public bool IncludeDiagnostics;
             public bool IncludeClassifications;
+            public bool IsPartialClassification;
+            public int OldClassificationStart;
+            public int OldClassificationLength;
+            public int NewClassificationStart;
+            public int NewClassificationLength;
         }
 
         private sealed class PendingLanguageHoverRequest
@@ -1243,6 +1565,16 @@ namespace Cortex
             public string DocumentPath;
             public int DocumentVersion;
             public string TokenText;
+        }
+
+        private sealed class IncrementalClassificationRange
+        {
+            public int RequestStart;
+            public int RequestLength;
+            public int OldSpanStart;
+            public int OldSpanLength;
+            public int NewSpanStart;
+            public int NewSpanLength;
         }
     }
 }

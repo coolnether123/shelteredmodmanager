@@ -74,6 +74,11 @@ namespace Cortex.Core.Models
         public int NewLength;
         public int StartLine;
         public int EndLine;
+        public int PreviousContextStart;
+        public int PreviousContextLength;
+        public int CurrentContextStart;
+        public int CurrentContextLength;
+        public bool CanUseIncrementalLanguageAnalysis;
     }
 
     /// <summary>

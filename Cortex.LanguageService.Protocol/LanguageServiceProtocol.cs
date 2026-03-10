@@ -227,6 +227,18 @@ namespace Cortex.LanguageService.Protocol
         /// Indicates whether classified spans should be returned.
         /// </summary>
         public bool IncludeClassifications;
+
+        /// <summary>
+        /// Zero-based start offset for an incremental classification refresh.
+        /// Use -1 to classify the full document.
+        /// </summary>
+        public int ClassificationRangeStart;
+
+        /// <summary>
+        /// Length of the incremental classification refresh span.
+        /// Ignored when <see cref="ClassificationRangeStart"/> is less than zero.
+        /// </summary>
+        public int ClassificationRangeLength;
     }
 
     /// <summary>

@@ -59,7 +59,7 @@ namespace Cortex.Roslyn.Worker
                     ? CollectDiagnostics(documentContext.Document)
                     : new LanguageServiceDiagnostic[0],
                 Classifications = request.IncludeClassifications
-                    ? CollectClassifications(documentContext.Document, text)
+                    ? CollectClassifications(documentContext.Document, text, request.ClassificationRangeStart, request.ClassificationRangeLength)
                     : new LanguageServiceClassifiedSpan[0]
             };
         }
@@ -603,9 +603,10 @@ namespace Cortex.Roslyn.Worker
                 .ToArray();
         }
 
-        private static LanguageServiceClassifiedSpan[] CollectClassifications(Document document, SourceText text)
+        private static LanguageServiceClassifiedSpan[] CollectClassifications(Document document, SourceText text, int rangeStart, int rangeLength)
         {
-            var spans = Classifier.GetClassifiedSpansAsync(document, new TextSpan(0, text.Length)).Result;
+            var classificationSpan = BuildClassificationSpan(text, rangeStart, rangeLength);
+            var spans = Classifier.GetClassifiedSpansAsync(document, classificationSpan).Result;
             return spans.Select(span =>
             {
                 var linePosition = text.Lines.GetLinePosition(span.TextSpan.Start);
@@ -618,6 +619,23 @@ namespace Cortex.Roslyn.Worker
                     Column = linePosition.Character + 1
                 };
             }).ToArray();
+        }
+
+        private static TextSpan BuildClassificationSpan(SourceText text, int rangeStart, int rangeLength)
+        {
+            if (text == null || text.Length <= 0)
+            {
+                return new TextSpan(0, 0);
+            }
+
+            if (rangeStart < 0)
+            {
+                return new TextSpan(0, text.Length);
+            }
+
+            var start = Math.Max(0, Math.Min(rangeStart, text.Length));
+            var length = Math.Max(0, Math.Min(rangeLength, text.Length - start));
+            return new TextSpan(start, length);
         }
 
         private static LanguageServiceDiagnostic ToProtocolDiagnostic(Diagnostic diagnostic)
