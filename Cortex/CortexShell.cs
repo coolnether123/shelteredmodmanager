@@ -127,6 +127,7 @@ namespace Cortex
         {
             ReleaseOverlayInputCapture();
             ShutdownLanguageService();
+            ShutdownCompletionAugmentation();
             DisableMmLogRuntimeIntegration();
             PersistWorkbenchSession();
             PersistWindowSettings();
@@ -643,6 +644,67 @@ namespace Cortex
             if (effective.RoslynServiceTimeoutMs <= 0)
             {
                 effective.RoslynServiceTimeoutMs = 15000;
+            }
+
+            if (string.IsNullOrEmpty(effective.CompletionAugmentationProviderId))
+            {
+                effective.CompletionAugmentationProviderId = CompletionAugmentationProviderIds.Tabby;
+            }
+
+            if (effective.EnableTabbyCompletion && !effective.EnableCompletionAugmentation)
+            {
+                effective.EnableCompletionAugmentation = true;
+                effective.CompletionAugmentationProviderId = CompletionAugmentationProviderIds.Tabby;
+            }
+
+            if (effective.CompletionAugmentationSnippetDocumentLimit < 0)
+            {
+                effective.CompletionAugmentationSnippetDocumentLimit = 3;
+            }
+
+            if (effective.CompletionAugmentationSnippetCharacterLimit <= 0)
+            {
+                effective.CompletionAugmentationSnippetCharacterLimit = 800;
+            }
+
+            if (effective.TabbyRequestTimeoutMs <= 0)
+            {
+                effective.TabbyRequestTimeoutMs = 8000;
+            }
+
+            if (string.IsNullOrEmpty(effective.OllamaServerUrl))
+            {
+                effective.OllamaServerUrl = "http://localhost:11434";
+            }
+
+            if (string.IsNullOrEmpty(effective.OllamaSystemPrompt))
+            {
+                effective.OllamaSystemPrompt = CompletionAugmentationPromptDefaults.OllamaSystemPrompt;
+            }
+
+            if (effective.OllamaRequestTimeoutMs <= 0)
+            {
+                effective.OllamaRequestTimeoutMs = 8000;
+            }
+
+            if (string.IsNullOrEmpty(effective.OpenRouterBaseUrl))
+            {
+                effective.OpenRouterBaseUrl = "https://openrouter.ai/api/v1";
+            }
+
+            if (string.IsNullOrEmpty(effective.OpenRouterPromptPreamble))
+            {
+                effective.OpenRouterPromptPreamble = CompletionAugmentationPromptDefaults.OpenRouterPromptPreamble;
+            }
+
+            if (string.IsNullOrEmpty(effective.OpenRouterAppTitle))
+            {
+                effective.OpenRouterAppTitle = "Cortex";
+            }
+
+            if (effective.OpenRouterRequestTimeoutMs <= 0)
+            {
+                effective.OpenRouterRequestTimeoutMs = 10000;
             }
 
             if (effective.MaxRecentLogs <= 0)

@@ -511,4 +511,5 @@ namespace Cortex.LanguageService.Protocol
         public LanguageServiceRange ReplacementRange;
         public LanguageServiceCompletionItem[] Items;
     }
+
 }

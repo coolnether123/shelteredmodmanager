@@ -91,6 +91,23 @@ namespace Cortex.Core.Abstractions
         void Shutdown();
     }
 
+    public interface ICompletionAugmentationClient : System.IDisposable
+    {
+        bool IsEnabled { get; }
+        string ProviderId { get; }
+        string LastError { get; }
+        string QueueCompletion(CompletionAugmentationRequest request);
+        bool TryDequeueResponse(out CompletionAugmentationResult result);
+    }
+
+    public interface ICompletionAugmentationProviderFactory
+    {
+        string ProviderId { get; }
+        string DisplayName { get; }
+        bool CanCreate(CortexSettings settings);
+        ICompletionAugmentationClient Create(CortexSettings settings, System.Action<string> log);
+    }
+
     public interface ISourcePathResolver
     {
         string ResolveCandidatePath(CortexProjectDefinition project, CortexSettings settings, string rawPath);

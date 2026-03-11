@@ -45,6 +45,7 @@ namespace Cortex
 
         private void InitializeLanguageService(string smmBin, CortexSettings settings)
         {
+            InitializeCompletionAugmentation(settings);
             if (settings == null || !settings.EnableRoslynLanguageService)
             {
                 MMLog.WriteInfo("[Cortex.Roslyn] Language service disabled by settings. ExistingClient=" + (_languageServiceClient != null) + ".");
@@ -240,20 +241,25 @@ namespace Cortex
         {
             EnsureLanguageServiceStarted();
             ProcessLanguageResponses();
+            ProcessCompletionAugmentationResponses();
             LogLanguageInitializationProgress();
-            if (_languageServiceClient == null)
-            {
-                return;
-            }
+            UpdateLanguageCompletion();
 
-            if (!_languageServiceReady || _languageServiceInitializing)
+            if (_languageServiceClient == null || !_languageServiceReady || _languageServiceInitializing)
             {
+                var activeDocument = _state.Documents.ActiveDocument;
+                if (activeDocument == null || string.IsNullOrEmpty(activeDocument.FilePath))
+                {
+                    _lastAnalyzedDocumentFingerprint = string.Empty;
+                    _pendingLanguageAnalysisFingerprint = string.Empty;
+                    _editorCompletionService.Reset(_state.Editor);
+                }
+
                 return;
             }
 
             UpdateLanguageHover();
             UpdateLanguageDefinition();
-            UpdateLanguageCompletion();
 
             var active = _state.Documents.ActiveDocument;
             if (active == null || string.IsNullOrEmpty(active.FilePath))
@@ -442,7 +448,7 @@ namespace Cortex
 
         private void UpdateLanguageCompletion()
         {
-            if (!_editorCompletionService.ShouldDispatch(_state.Editor, _languageCompletionInFlight))
+            if (!_editorCompletionService.ShouldDispatch(_state.Editor, _languageCompletionInFlight || _completionAugmentationInFlight))
             {
                 return;
             }
@@ -467,12 +473,45 @@ namespace Cortex
             }
 
             var requestKey = _state.Editor.RequestedCompletionKey ?? string.Empty;
-            var client = _languageServiceClient;
             var generation = _languageServiceGeneration;
-            _languageCompletionInFlight = true;
-            var requestId = client != null ? client.QueueCompletion(request) : string.Empty;
-            if (string.IsNullOrEmpty(requestId))
+            var augmentationPending = new DocumentLanguageCompletionRequestState
             {
+                Generation = generation,
+                RequestKey = requestKey,
+                DocumentPath = request.DocumentPath ?? string.Empty,
+                DocumentVersion = request.DocumentVersion,
+                AbsolutePosition = request.AbsolutePosition
+            };
+            var augmentationRequest = BuildCompletionAugmentationRequest(session, augmentationPending);
+            var roslEnabled = _languageServiceClient != null && _languageServiceReady && !_languageServiceInitializing;
+            if (roslEnabled)
+            {
+                var client = _languageServiceClient;
+                _languageCompletionInFlight = true;
+                var requestId = client != null ? client.QueueCompletion(request) : string.Empty;
+                if (!string.IsNullOrEmpty(requestId))
+                {
+                    _pendingLanguageCompletion = new DocumentLanguageCompletionRequestState
+                    {
+                        RequestId = requestId,
+                        Generation = generation,
+                        RequestKey = requestKey,
+                        DocumentPath = request.DocumentPath ?? string.Empty,
+                        DocumentVersion = request.DocumentVersion,
+                        AbsolutePosition = request.AbsolutePosition
+                    };
+                    MMLog.WriteInfo("[Cortex.Completion] Roslyn completion queued. RequestId=" +
+                        requestId +
+                        ", Document=" + (request.DocumentPath ?? string.Empty) +
+                        ", Position=" + request.AbsolutePosition + ".");
+                    var augmentationQueued = TryQueueCompletionAugmentation(augmentationPending, augmentationRequest, null);
+                    MMLog.WriteInfo("[Cortex.Completion] Tabby augmentation queued alongside Roslyn=" +
+                        augmentationQueued +
+                        ". RequestKey=" + requestKey +
+                        ", Document=" + (request.DocumentPath ?? string.Empty) + ".");
+                    return;
+                }
+
                 _languageCompletionInFlight = false;
                 MMLog.LogOnce("Cortex.Completion.DispatchFailed", delegate
                 {
@@ -480,17 +519,12 @@ namespace Cortex
                 });
                 MMLog.WriteInfo("[Cortex.Completion] QueueCompletion returned an empty request id. LastError=" +
                     (_languageServiceClient != null ? _languageServiceClient.LastError ?? string.Empty : "client unavailable") + ".");
-                return;
             }
 
-            _pendingLanguageCompletion = new DocumentLanguageCompletionRequestState
+            if (!TryQueueCompletionAugmentation(augmentationPending, augmentationRequest, null))
             {
-                RequestId = requestId,
-                Generation = generation,
-                RequestKey = requestKey,
-                DocumentPath = request.DocumentPath ?? string.Empty,
-                DocumentVersion = request.DocumentVersion
-            };
+                _editorCompletionService.ClearPendingRequest(_state.Editor);
+            }
         }
 
         private void ProcessLanguageResponses()
@@ -843,7 +877,17 @@ namespace Cortex
 
             var response = DeserializeEnvelopePayload<LanguageServiceCompletionResponse>(envelope);
             var target = FindOpenDocument(response != null ? response.DocumentPath : pending.DocumentPath);
-            _editorCompletionService.AcceptResponse(_state.Editor, target, pending, response);
+            var accepted = _editorCompletionService.AcceptResponse(_state.Editor, target, pending, response);
+            MMLog.WriteInfo("[Cortex.Completion] Roslyn completion response received. Accepted=" +
+                accepted +
+                ", Success=" + (response != null && response.Success) +
+                ", Items=" + (response != null && response.Items != null ? response.Items.Length : 0) +
+                ", Document=" + (target != null ? target.FilePath ?? string.Empty : pending.DocumentPath ?? string.Empty) +
+                ", Status=" + (response != null ? response.StatusMessage ?? string.Empty : string.Empty) + ".");
+            if (!_completionAugmentationInFlight)
+            {
+                TryQueueCompletionAugmentation(pending, BuildCompletionAugmentationRequest(target, pending), response);
+            }
         }
 
         private static TResponse DeserializeEnvelopePayload<TResponse>(LanguageServiceEnvelope envelope)

@@ -42,6 +42,7 @@
     <Compile Include="Adapters\RuntimeAdapters.cs" />
     <Compile Include="Chrome\CortexWindowChromeController.cs" />
     <Compile Include="CortexShell.Chrome.cs" />
+    <Compile Include="CortexShell.CompletionAugmentation.cs" />
     <Compile Include="CortexShell.Language.cs" />
     <Compile Include="CortexShell.Runtime.cs" />
     <Compile Include="CortexShell.cs" />
@@ -95,6 +96,11 @@
     <ProjectReference Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj">
       <Project>{7A570620-E51D-499E-A28E-13A1D8156417}</Project>
       <Name>Cortex.Host.Unity</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.CompletionProviders\Cortex.CompletionProviders.csproj">
+      <Project>{14738F9A-BE56-4675-B1B4-78A4EF833586}</Project>
+      <Name>Cortex.CompletionProviders</Name>
       <Private>False</Private>
     </ProjectReference>
     <ProjectReference Include="..\Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj">
