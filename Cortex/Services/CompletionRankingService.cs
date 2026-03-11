@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
 
@@ -11,22 +12,26 @@ namespace Cortex.Services
             return BuildContext(session, response).Query;
         }
 
-        public LanguageServiceCompletionResponse Rank(DocumentSession session, LanguageServiceCompletionResponse response)
+        public LanguageServiceCompletionResponse Rank(
+            DocumentSession session,
+            CortexEditorInteractionState editorState,
+            LanguageServiceCompletionResponse response)
         {
             if (session == null || response == null || response.Items == null || response.Items.Length <= 1)
             {
                 return response;
             }
 
-            var rankingContext = BuildContext(session, response);
-            var ranked = new RankedCompletionItem[response.Items.Length];
-            for (var i = 0; i < response.Items.Length; i++)
+            var rankingContext = BuildContext(session, editorState, response);
+            var candidates = BuildAugmentedCandidates(response.Items, rankingContext);
+            var ranked = new RankedCompletionItem[candidates.Length];
+            for (var i = 0; i < candidates.Length; i++)
             {
-                var match = EvaluateQueryMatch(response.Items[i], rankingContext);
+                var match = EvaluateQueryMatch(candidates[i], rankingContext);
                 ranked[i] = new RankedCompletionItem
                 {
-                    Item = response.Items[i],
-                    Score = ScoreItem(response.Items[i], rankingContext, match),
+                    Item = candidates[i],
+                    Score = ScoreItem(candidates[i], rankingContext, match),
                     MatchTier = match.MatchTier,
                     OriginalIndex = i
                 };
@@ -44,7 +49,10 @@ namespace Cortex.Services
             return response;
         }
 
-        private static CompletionRankingContext BuildContext(DocumentSession session, LanguageServiceCompletionResponse response)
+        private static CompletionRankingContext BuildContext(
+            DocumentSession session,
+            CortexEditorInteractionState editorState,
+            LanguageServiceCompletionResponse response)
         {
             var text = session.Text ?? string.Empty;
             var caretIndex = session.EditorState != null ? session.EditorState.CaretIndex : text.Length;
@@ -70,8 +78,11 @@ namespace Cortex.Services
             var queryTrimmed = query.Trim();
             var previousToken = FindPreviousToken(text, queryStart);
             var previousSymbol = FindPreviousSymbol(text, queryStart);
+            var acceptedCompletions = editorState != null
+                ? editorState.RecentAcceptedCompletions
+                : null;
 
-            return new CompletionRankingContext
+            var context = new CompletionRankingContext
             {
                 Query = queryTrimmed,
                 LowerQuery = queryTrimmed.ToLowerInvariant(),
@@ -83,8 +94,110 @@ namespace Cortex.Services
                 IsAfterNew = string.Equals(previousToken, "new", StringComparison.OrdinalIgnoreCase),
                 IsAfterReturn = string.Equals(previousToken, "return", StringComparison.OrdinalIgnoreCase),
                 IsAfterOverride = string.Equals(previousToken, "override", StringComparison.OrdinalIgnoreCase),
-                IsDeclarationContext = IsDeclarationContext(text, queryStart, previousToken)
+                IsDeclarationContext = IsDeclarationContext(text, queryStart, previousToken),
+                CaretIndex = caretIndex,
+                RecentAcceptedCompletions = acceptedCompletions,
+                DocumentPath = session.FilePath ?? string.Empty
             };
+
+            PopulateObservedContext(text, caretIndex, context);
+            return context;
+        }
+
+        private static LanguageServiceCompletionItem[] BuildAugmentedCandidates(
+            LanguageServiceCompletionItem[] items,
+            CompletionRankingContext context)
+        {
+            if (items == null || items.Length == 0)
+            {
+                return items ?? new LanguageServiceCompletionItem[0];
+            }
+
+            var combined = new List<LanguageServiceCompletionItem>(items.Length + 8);
+            var knownKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < items.Length; i++)
+            {
+                var item = items[i];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                combined.Add(item);
+                knownKeys.Add(BuildCandidateKey(item));
+            }
+
+            var synthetic = BuildSyntheticPatternCandidates(context);
+            for (var i = 0; i < synthetic.Count; i++)
+            {
+                var item = synthetic[i];
+                var key = BuildCandidateKey(item);
+                if (knownKeys.Contains(key))
+                {
+                    continue;
+                }
+
+                knownKeys.Add(key);
+                combined.Add(item);
+            }
+
+            return combined.ToArray();
+        }
+
+        private static List<LanguageServiceCompletionItem> BuildSyntheticPatternCandidates(CompletionRankingContext context)
+        {
+            var results = new List<LanguageServiceCompletionItem>();
+            if (context == null ||
+                context.IsMemberAccess ||
+                string.IsNullOrEmpty(context.Query) ||
+                context.MemberChainStats.Count == 0)
+            {
+                return results;
+            }
+
+            var rankedPatterns = new List<MemberChainPattern>();
+            foreach (var pair in context.MemberChainStats)
+            {
+                var chain = pair.Value;
+                if (chain == null ||
+                    string.IsNullOrEmpty(chain.DisplayText) ||
+                    string.IsNullOrEmpty(chain.RootIdentifier))
+                {
+                    continue;
+                }
+
+                if (!chain.LowerRootIdentifier.StartsWith(context.LowerQuery, StringComparison.OrdinalIgnoreCase) &&
+                    !chain.LowerDisplayText.StartsWith(context.LowerQuery, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (chain.SegmentCount < 2)
+                {
+                    continue;
+                }
+
+                rankedPatterns.Add(chain);
+            }
+
+            rankedPatterns.Sort(CompareMemberChainPatterns);
+            var limit = Math.Min(4, rankedPatterns.Count);
+            for (var i = 0; i < limit; i++)
+            {
+                var pattern = rankedPatterns[i];
+                results.Add(new LanguageServiceCompletionItem
+                {
+                    DisplayText = pattern.DisplayText,
+                    InsertText = pattern.DisplayText,
+                    FilterText = pattern.DisplayText,
+                    SortText = pattern.DisplayText,
+                    InlineDescription = "context pattern",
+                    Kind = "Pattern",
+                    IsPreselected = false
+                });
+            }
+
+            return results;
         }
 
         private static long ScoreItem(LanguageServiceCompletionItem item, CompletionRankingContext context, QueryMatchResult match)
@@ -111,6 +224,9 @@ namespace Cortex.Services
             if (!string.IsNullOrEmpty(context.Query))
             {
                 score += match.Score;
+                score += GetShortQueryKindBoost(item, context, match);
+                score += GetObservedContextBoost(item, candidate, lowerCandidate, context, match);
+                score += GetAcceptedCompletionBoost(candidate, lowerCandidate, context, match);
             }
             else
             {
@@ -120,6 +236,11 @@ namespace Cortex.Services
             if (!string.IsNullOrEmpty(item.SortText))
             {
                 score -= Math.Min(200, item.SortText.Length);
+            }
+
+            if (!context.IsMemberAccess && candidate.IndexOf('.') >= 0)
+            {
+                score -= 1800;
             }
 
             score -= Math.Min(120, candidate.Length);
@@ -362,6 +483,69 @@ namespace Cortex.Services
             return 0;
         }
 
+        private static int GetShortQueryKindBoost(LanguageServiceCompletionItem item, CompletionRankingContext context, QueryMatchResult match)
+        {
+            if (item == null || string.IsNullOrEmpty(context.Query))
+            {
+                return 0;
+            }
+
+            var queryLength = context.Query.Length;
+            if (queryLength > 2 || context.IsMemberAccess)
+            {
+                return 0;
+            }
+
+            var score = 0;
+            if (IsTypeLikeKind(item.Kind))
+            {
+                if (match.MatchTier >= 5)
+                {
+                    score += 3200;
+                }
+                else if (match.MatchTier >= 4)
+                {
+                    score += 1800;
+                }
+            }
+            else if (string.Equals(item.Kind ?? string.Empty, "Namespace", StringComparison.OrdinalIgnoreCase))
+            {
+                if (match.MatchTier >= 5)
+                {
+                    score += 2400;
+                }
+                else if (match.MatchTier >= 4)
+                {
+                    score += 1200;
+                }
+            }
+
+            if (queryLength == 1)
+            {
+                if (match.MatchTier == 2)
+                {
+                    score -= 90000;
+                }
+                else if (match.MatchTier <= 1)
+                {
+                    score -= 120000;
+                }
+            }
+            else if (queryLength == 2)
+            {
+                if (match.MatchTier == 2)
+                {
+                    score -= 45000;
+                }
+                else if (match.MatchTier <= 1)
+                {
+                    score -= 70000;
+                }
+            }
+
+            return score;
+        }
+
         private static RankedCompletionItem[] FilterWeakMatches(RankedCompletionItem[] ranked, CompletionRankingContext context)
         {
             if (ranked == null || ranked.Length == 0 || string.IsNullOrEmpty(context.Query))
@@ -369,7 +553,7 @@ namespace Cortex.Services
                 return ranked ?? new RankedCompletionItem[0];
             }
 
-            var minimumTier = context.Query.Length >= 3 ? 2 : (context.Query.Length >= 2 ? 1 : 0);
+            var minimumTier = GetMinimumMatchTier(context.Query);
             var strongCount = 0;
             for (var i = 0; i < ranked.Length; i++)
             {
@@ -379,11 +563,66 @@ namespace Cortex.Services
                 }
             }
 
-            if (strongCount < 3)
+            if (strongCount == 0)
             {
-                return ranked;
+                return LimitRankedItems(ranked, GetWeakMatchFallbackLimit(context.Query));
             }
 
+            if (strongCount < GetStrongMatchThreshold(context.Query))
+            {
+                return LimitRankedItems(BuildFilteredMatches(ranked, minimumTier, strongCount), GetStrongMatchFallbackLimit(context.Query));
+            }
+
+            return BuildFilteredMatches(ranked, minimumTier, strongCount);
+        }
+
+        private static int GetMinimumMatchTier(string query)
+        {
+            if (string.IsNullOrEmpty(query))
+            {
+                return 0;
+            }
+
+            if (query.Length <= 2)
+            {
+                return 4;
+            }
+
+            return query.Length >= 3 ? 2 : 0;
+        }
+
+        private static int GetStrongMatchThreshold(string query)
+        {
+            return !string.IsNullOrEmpty(query) && query.Length <= 2 ? 5 : 3;
+        }
+
+        private static int GetStrongMatchFallbackLimit(string query)
+        {
+            if (string.IsNullOrEmpty(query))
+            {
+                return 32;
+            }
+
+            if (query.Length <= 2)
+            {
+                return 12;
+            }
+
+            return 8;
+        }
+
+        private static int GetWeakMatchFallbackLimit(string query)
+        {
+            if (string.IsNullOrEmpty(query))
+            {
+                return 32;
+            }
+
+            return query.Length <= 2 ? 24 : 12;
+        }
+
+        private static RankedCompletionItem[] BuildFilteredMatches(RankedCompletionItem[] ranked, int minimumTier, int strongCount)
+        {
             var filtered = new RankedCompletionItem[strongCount];
             var next = 0;
             for (var i = 0; i < ranked.Length; i++)
@@ -395,6 +634,139 @@ namespace Cortex.Services
             }
 
             return filtered;
+        }
+
+        private static int GetObservedContextBoost(
+            LanguageServiceCompletionItem item,
+            string candidate,
+            string lowerCandidate,
+            CompletionRankingContext context,
+            QueryMatchResult match)
+        {
+            if (string.IsNullOrEmpty(candidate))
+            {
+                return 0;
+            }
+
+            var score = 0;
+            IdentifierObservation identifierObservation;
+            if (context.IdentifierObservations.TryGetValue(lowerCandidate, out identifierObservation))
+            {
+                score += Math.Min(24000, (identifierObservation.Count * 1400) + identifierObservation.RecencyScore);
+                if (identifierObservation.NearCaretCount > 0)
+                {
+                    score += Math.Min(9000, identifierObservation.NearCaretCount * 2200);
+                }
+            }
+
+            MemberChainPattern memberPattern;
+            if (context.MemberChainStats.TryGetValue(lowerCandidate, out memberPattern))
+            {
+                score += Math.Min(18000, (memberPattern.Count * 2200) + memberPattern.RecencyScore);
+                if (memberPattern.NearCaretCount > 0)
+                {
+                    score += Math.Min(9000, memberPattern.NearCaretCount * 2400);
+                }
+            }
+
+            MemberChainRootObservation rootObservation;
+            if (context.MemberChainRootStats.TryGetValue(lowerCandidate, out rootObservation))
+            {
+                score += Math.Min(12000, (rootObservation.Count * 1200) + rootObservation.RecencyScore);
+                if (match.MatchTier >= 5)
+                {
+                    score += Math.Min(5000, rootObservation.Count * 450);
+                }
+            }
+
+            if (!context.IsMemberAccess &&
+                candidate.IndexOf('.') < 0 &&
+                IsTypeLikeKind(item != null ? item.Kind : string.Empty) &&
+                identifierObservation != null &&
+                identifierObservation.Count > 0)
+            {
+                score += 1800;
+            }
+
+            return score;
+        }
+
+        private static int GetAcceptedCompletionBoost(
+            string candidate,
+            string lowerCandidate,
+            CompletionRankingContext context,
+            QueryMatchResult match)
+        {
+            if (string.IsNullOrEmpty(candidate) ||
+                context == null ||
+                context.RecentAcceptedCompletions == null ||
+                context.RecentAcceptedCompletions.Count == 0)
+            {
+                return 0;
+            }
+
+            var score = 0;
+            for (var i = context.RecentAcceptedCompletions.Count - 1; i >= 0; i--)
+            {
+                var entry = context.RecentAcceptedCompletions[i];
+                if (entry == null)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(entry.DocumentPath) &&
+                    !string.IsNullOrEmpty(context.DocumentPath) &&
+                    !string.Equals(entry.DocumentPath, context.DocumentPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var text = entry.CompletionText ?? string.Empty;
+                if (string.IsNullOrEmpty(text))
+                {
+                    continue;
+                }
+
+                var lowerText = text.ToLowerInvariant();
+                var recencyWeight = Math.Max(1, context.AcceptanceSequence - entry.Sequence + 1);
+                var recencyScore = 14000 / recencyWeight;
+
+                if (string.Equals(lowerText, lowerCandidate, StringComparison.Ordinal))
+                {
+                    score += recencyScore;
+                    continue;
+                }
+
+                if (lowerText.StartsWith(lowerCandidate, StringComparison.Ordinal) && match.MatchTier >= 5)
+                {
+                    score += Math.Max(1500, recencyScore / 2);
+                    continue;
+                }
+
+                if (lowerText.StartsWith(lowerCandidate + ".", StringComparison.Ordinal) && match.MatchTier >= 5)
+                {
+                    score += Math.Max(1200, recencyScore / 3);
+                }
+            }
+
+            return score;
+        }
+
+        private static RankedCompletionItem[] LimitRankedItems(RankedCompletionItem[] ranked, int limit)
+        {
+            if (ranked == null || ranked.Length == 0)
+            {
+                return ranked ?? new RankedCompletionItem[0];
+            }
+
+            if (limit <= 0 || ranked.Length <= limit)
+            {
+                return ranked;
+            }
+
+            var limited = new RankedCompletionItem[limit];
+            Array.Copy(ranked, limited, limit);
+            return limited;
         }
 
         private static bool IsDeclarationContext(string text, int replacementStart, string previousToken)
@@ -666,6 +1038,281 @@ namespace Cortex.Services
             return left.OriginalIndex.CompareTo(right.OriginalIndex);
         }
 
+        private static int CompareMemberChainPatterns(MemberChainPattern left, MemberChainPattern right)
+        {
+            var rightScore = right != null ? ((right.Count * 1000) + right.RecencyScore + (right.NearCaretCount * 2500)) : 0;
+            var leftScore = left != null ? ((left.Count * 1000) + left.RecencyScore + (left.NearCaretCount * 2500)) : 0;
+            var scoreCompare = rightScore.CompareTo(leftScore);
+            if (scoreCompare != 0)
+            {
+                return scoreCompare;
+            }
+
+            var leftText = left != null ? left.DisplayText ?? string.Empty : string.Empty;
+            var rightText = right != null ? right.DisplayText ?? string.Empty : string.Empty;
+            return string.Compare(leftText, rightText, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string BuildCandidateKey(LanguageServiceCompletionItem item)
+        {
+            if (item == null)
+            {
+                return string.Empty;
+            }
+
+            return (item.FilterText ?? string.Empty) + "|" +
+                (item.InsertText ?? string.Empty) + "|" +
+                (item.DisplayText ?? string.Empty);
+        }
+
+        private static void PopulateObservedContext(string text, int caretIndex, CompletionRankingContext context)
+        {
+            if (context == null || string.IsNullOrEmpty(text) || caretIndex <= 0)
+            {
+                return;
+            }
+
+            var limit = Math.Max(0, Math.Min(caretIndex, text.Length));
+            var index = 0;
+            while (index < limit)
+            {
+                if (!IsIdentifierStart(text[index]))
+                {
+                    index++;
+                    continue;
+                }
+
+                var rootStart = index;
+                var root = ReadIdentifier(text, ref index, limit);
+                if (string.IsNullOrEmpty(root))
+                {
+                    index++;
+                    continue;
+                }
+
+                RecordIdentifierObservation(context, root, rootStart, caretIndex);
+
+                var chainBuilder = root;
+                var segmentCount = 1;
+                var lookahead = index;
+                while (TryReadMemberAccess(text, ref lookahead, limit, out var segment, out var segmentStart))
+                {
+                    if (string.IsNullOrEmpty(segment))
+                    {
+                        break;
+                    }
+
+                    chainBuilder += "." + segment;
+                    segmentCount++;
+                    RecordIdentifierObservation(context, segment, segmentStart, caretIndex);
+                    RecordMemberChainObservation(context, root, chainBuilder, segmentCount, rootStart, caretIndex);
+                    index = lookahead;
+                }
+            }
+        }
+
+        private static void RecordIdentifierObservation(
+            CompletionRankingContext context,
+            string identifier,
+            int startIndex,
+            int caretIndex)
+        {
+            if (context == null || string.IsNullOrEmpty(identifier))
+            {
+                return;
+            }
+
+            var key = identifier.ToLowerInvariant();
+            IdentifierObservation observation;
+            if (!context.IdentifierObservations.TryGetValue(key, out observation))
+            {
+                observation = new IdentifierObservation
+                {
+                    DisplayText = identifier
+                };
+                context.IdentifierObservations[key] = observation;
+            }
+
+            observation.Count++;
+            var distance = Math.Max(0, caretIndex - startIndex);
+            observation.RecencyScore += ComputeOccurrenceWeight(distance);
+            if (distance <= 240)
+            {
+                observation.NearCaretCount++;
+            }
+        }
+
+        private static void RecordMemberChainObservation(
+            CompletionRankingContext context,
+            string rootIdentifier,
+            string chain,
+            int segmentCount,
+            int startIndex,
+            int caretIndex)
+        {
+            if (context == null || string.IsNullOrEmpty(rootIdentifier) || string.IsNullOrEmpty(chain))
+            {
+                return;
+            }
+
+            var lowerChain = chain.ToLowerInvariant();
+            MemberChainPattern pattern;
+            if (!context.MemberChainStats.TryGetValue(lowerChain, out pattern))
+            {
+                pattern = new MemberChainPattern
+                {
+                    DisplayText = chain,
+                    LowerDisplayText = lowerChain,
+                    RootIdentifier = rootIdentifier,
+                    LowerRootIdentifier = rootIdentifier.ToLowerInvariant(),
+                    SegmentCount = segmentCount
+                };
+                context.MemberChainStats[lowerChain] = pattern;
+            }
+
+            pattern.Count++;
+            var distance = Math.Max(0, caretIndex - startIndex);
+            pattern.RecencyScore += ComputeOccurrenceWeight(distance);
+            if (distance <= 320)
+            {
+                pattern.NearCaretCount++;
+            }
+
+            var lowerRoot = pattern.LowerRootIdentifier;
+            MemberChainRootObservation rootObservation;
+            if (!context.MemberChainRootStats.TryGetValue(lowerRoot, out rootObservation))
+            {
+                rootObservation = new MemberChainRootObservation();
+                context.MemberChainRootStats[lowerRoot] = rootObservation;
+            }
+
+            rootObservation.Count++;
+            rootObservation.RecencyScore += Math.Max(400, ComputeOccurrenceWeight(distance) / 2);
+        }
+
+        private static int ComputeOccurrenceWeight(int distance)
+        {
+            if (distance <= 48)
+            {
+                return 5200;
+            }
+
+            if (distance <= 160)
+            {
+                return 3600;
+            }
+
+            if (distance <= 480)
+            {
+                return 2200;
+            }
+
+            if (distance <= 1200)
+            {
+                return 1200;
+            }
+
+            if (distance <= 3200)
+            {
+                return 650;
+            }
+
+            return 250;
+        }
+
+        private static bool TryReadMemberAccess(
+            string text,
+            ref int index,
+            int limit,
+            out string identifier,
+            out int identifierStart)
+        {
+            identifier = string.Empty;
+            identifierStart = -1;
+            var lookahead = index;
+            while (lookahead < limit && char.IsWhiteSpace(text[lookahead]))
+            {
+                lookahead++;
+            }
+
+            if (lookahead >= limit || text[lookahead] != '.')
+            {
+                return false;
+            }
+
+            lookahead++;
+            while (lookahead < limit && char.IsWhiteSpace(text[lookahead]))
+            {
+                lookahead++;
+            }
+
+            if (lookahead >= limit || !IsIdentifierStart(text[lookahead]))
+            {
+                return false;
+            }
+
+            identifierStart = lookahead;
+            identifier = ReadIdentifier(text, ref lookahead, limit);
+            index = lookahead;
+            return !string.IsNullOrEmpty(identifier);
+        }
+
+        private static string ReadIdentifier(string text, ref int index, int limit)
+        {
+            if (string.IsNullOrEmpty(text) || index < 0 || index >= limit)
+            {
+                return string.Empty;
+            }
+
+            var start = index;
+            if (text[index] == '@')
+            {
+                index++;
+            }
+
+            if (index >= limit || (!char.IsLetter(text[index]) && text[index] != '_'))
+            {
+                index = start;
+                return string.Empty;
+            }
+
+            index++;
+            while (index < limit)
+            {
+                var value = text[index];
+                if (!char.IsLetterOrDigit(value) && value != '_')
+                {
+                    break;
+                }
+
+                index++;
+            }
+
+            var raw = text.Substring(start, index - start);
+            return raw.Length > 0 && raw[0] == '@'
+                ? raw.Substring(1)
+                : raw;
+        }
+
+        private static bool IsIdentifierStart(char value)
+        {
+            return char.IsLetter(value) || value == '_' || value == '@';
+        }
+
+        private static bool IsTypeLikeKind(string kind)
+        {
+            if (string.IsNullOrEmpty(kind))
+            {
+                return false;
+            }
+
+            return kind.Equals("Class", StringComparison.OrdinalIgnoreCase) ||
+                kind.Equals("Interface", StringComparison.OrdinalIgnoreCase) ||
+                kind.Equals("Struct", StringComparison.OrdinalIgnoreCase) ||
+                kind.Equals("Enum", StringComparison.OrdinalIgnoreCase) ||
+                kind.Equals("Delegate", StringComparison.OrdinalIgnoreCase);
+        }
+
         private sealed class RankedCompletionItem
         {
             public LanguageServiceCompletionItem Item;
@@ -699,6 +1346,39 @@ namespace Cortex.Services
             public bool IsAfterReturn;
             public bool IsAfterOverride;
             public bool IsDeclarationContext;
+            public int CaretIndex;
+            public string DocumentPath;
+            public IList<CortexAcceptedCompletionEntry> RecentAcceptedCompletions;
+            public readonly Dictionary<string, IdentifierObservation> IdentifierObservations = new Dictionary<string, IdentifierObservation>(StringComparer.OrdinalIgnoreCase);
+            public readonly Dictionary<string, MemberChainPattern> MemberChainStats = new Dictionary<string, MemberChainPattern>(StringComparer.OrdinalIgnoreCase);
+            public readonly Dictionary<string, MemberChainRootObservation> MemberChainRootStats = new Dictionary<string, MemberChainRootObservation>(StringComparer.OrdinalIgnoreCase);
+            public int AcceptanceSequence;
+        }
+
+        private sealed class IdentifierObservation
+        {
+            public string DisplayText;
+            public int Count;
+            public int RecencyScore;
+            public int NearCaretCount;
+        }
+
+        private sealed class MemberChainPattern
+        {
+            public string DisplayText;
+            public string LowerDisplayText;
+            public string RootIdentifier;
+            public string LowerRootIdentifier;
+            public int SegmentCount;
+            public int Count;
+            public int RecencyScore;
+            public int NearCaretCount;
+        }
+
+        private sealed class MemberChainRootObservation
+        {
+            public int Count;
+            public int RecencyScore;
         }
     }
 }

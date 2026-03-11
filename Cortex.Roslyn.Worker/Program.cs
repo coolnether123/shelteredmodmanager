@@ -20,6 +20,7 @@ namespace Cortex.Roslyn.Worker
                     return 0;
                 }
 
+                line = SanitizeInputLine(line);
                 if (string.IsNullOrWhiteSpace(line))
                 {
                     continue;
@@ -56,6 +57,16 @@ namespace Cortex.Roslyn.Worker
         {
             Console.Out.WriteLine(ManualJson.Serialize(response));
             Console.Out.Flush();
+        }
+
+        private static string SanitizeInputLine(string line)
+        {
+            if (string.IsNullOrEmpty(line))
+            {
+                return string.Empty;
+            }
+
+            return line.TrimStart('\uFEFF', '\u200B', '\0');
         }
     }
 }

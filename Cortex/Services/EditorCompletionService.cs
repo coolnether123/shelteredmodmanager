@@ -122,7 +122,7 @@ namespace Cortex.Services
                 return false;
             }
 
-            response = _completionRankingService.Rank(target, response);
+            response = _completionRankingService.Rank(target, editorState, response);
             var query = _completionRankingService.GetQuery(target, response);
             editorState.ActiveCompletionKey = pending.RequestKey ?? string.Empty;
             editorState.ActiveCompletionResponse = response;
@@ -139,6 +139,7 @@ namespace Cortex.Services
                 ", ReplacementStart=" + (response.ReplacementRange != null ? response.ReplacementRange.Start.ToString() : "0") +
                 ", ReplacementLength=" + (response.ReplacementRange != null ? response.ReplacementRange.Length.ToString() : "0") +
                 ", Query='" + (query ?? string.Empty) + "'" +
+                ", MatchSummary=" + BuildMatchSummary(response, query) +
                 ", Preview=" + BuildCompletionPreview(response) + ".");
             return true;
         }
@@ -253,6 +254,10 @@ namespace Cortex.Services
                 editorService,
                 response,
                 response.Items[editorState.CompletionSelectedIndex]);
+            if (applied)
+            {
+                RecordAcceptedCompletion(editorState, session, response.Items[editorState.CompletionSelectedIndex]);
+            }
             Reset(editorState);
             return applied;
         }
@@ -307,6 +312,56 @@ namespace Cortex.Services
             editorState.CompletionSelectedIndex = -1;
         }
 
+        private static void RecordAcceptedCompletion(
+            CortexEditorInteractionState editorState,
+            DocumentSession session,
+            LanguageServiceCompletionItem item)
+        {
+            if (editorState == null || item == null)
+            {
+                return;
+            }
+
+            var completionText = !string.IsNullOrEmpty(item.InsertText)
+                ? item.InsertText
+                : (!string.IsNullOrEmpty(item.DisplayText) ? item.DisplayText : item.FilterText ?? string.Empty);
+            if (string.IsNullOrEmpty(completionText))
+            {
+                return;
+            }
+
+            var documentPath = session != null ? session.FilePath ?? string.Empty : string.Empty;
+            var entries = editorState.RecentAcceptedCompletions;
+            for (var i = entries.Count - 1; i >= 0; i--)
+            {
+                var existing = entries[i];
+                if (existing == null)
+                {
+                    entries.RemoveAt(i);
+                    continue;
+                }
+
+                if (string.Equals(existing.DocumentPath ?? string.Empty, documentPath, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(existing.CompletionText ?? string.Empty, completionText, StringComparison.OrdinalIgnoreCase))
+                {
+                    entries.RemoveAt(i);
+                }
+            }
+
+            entries.Add(new CortexAcceptedCompletionEntry
+            {
+                DocumentPath = documentPath,
+                CompletionText = completionText,
+                Sequence = ++editorState.CompletionAcceptanceSequence
+            });
+
+            const int maxAcceptedEntries = 12;
+            while (entries.Count > maxAcceptedEntries)
+            {
+                entries.RemoveAt(0);
+            }
+        }
+
         private static void LogQueueBehavior(
             DocumentSession session,
             CortexEditorInteractionState editorState,
@@ -353,13 +408,6 @@ namespace Cortex.Services
                 });
             }
 
-            MMLog.WriteInfo("[Cortex.Completion] Queue requested for " +
-                BuildDocumentLabel(session) +
-                " @ " + editorState.RequestedCompletionLine + ":" + editorState.RequestedCompletionColumn +
-                " absolute=" + editorState.RequestedCompletionAbsolutePosition +
-                ", explicit=" + explicitInvocation +
-                ", trigger='" + (triggerCharacter ?? string.Empty) + "'" +
-                ", keyLength=" + (editorState.RequestedCompletionKey ?? string.Empty).Length + ".");
         }
 
         private static void LogRejectedResponse(DocumentSession target, LanguageServiceCompletionResponse response)
@@ -421,6 +469,79 @@ namespace Cortex.Services
             }
 
             return builder.ToString();
+        }
+
+        private static string BuildMatchSummary(LanguageServiceCompletionResponse response, string query)
+        {
+            if (response == null || response.Items == null || response.Items.Length == 0 || string.IsNullOrEmpty(query))
+            {
+                return "none";
+            }
+
+            var prefixMatches = 0;
+            var wordPartMatches = 0;
+            var containsMatches = 0;
+            for (var i = 0; i < response.Items.Length; i++)
+            {
+                var item = response.Items[i];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                var candidate = !string.IsNullOrEmpty(item.FilterText)
+                    ? item.FilterText
+                    : (!string.IsNullOrEmpty(item.DisplayText) ? item.DisplayText : item.InsertText ?? string.Empty);
+                if (candidate.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+                {
+                    prefixMatches++;
+                }
+                else if (StartsWithWordPart(candidate, query))
+                {
+                    wordPartMatches++;
+                }
+                else if (candidate.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    containsMatches++;
+                }
+            }
+
+            return "prefix=" + prefixMatches +
+                ", wordPart=" + wordPartMatches +
+                ", contains=" + containsMatches;
+        }
+
+        private static bool StartsWithWordPart(string candidate, string query)
+        {
+            if (string.IsNullOrEmpty(candidate) || string.IsNullOrEmpty(query))
+            {
+                return false;
+            }
+
+            for (var i = 1; i < candidate.Length; i++)
+            {
+                var current = candidate[i];
+                var previous = candidate[i - 1];
+                if (current == '_')
+                {
+                    continue;
+                }
+
+                if (previous == '_' ||
+                    previous == '.' ||
+                    previous == ':' ||
+                    (char.IsUpper(current) && !char.IsUpper(previous)))
+                {
+                    var remaining = candidate.Length - i;
+                    if (remaining >= query.Length &&
+                        string.Compare(candidate, i, query, 0, query.Length, StringComparison.OrdinalIgnoreCase) == 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
     }
 

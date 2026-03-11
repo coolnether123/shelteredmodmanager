@@ -655,7 +655,11 @@ namespace Cortex.Core.Services
         {
             if (!string.IsNullOrEmpty(e.Data))
             {
-                _lastError = e.Data;
+                if (!IsInformationalWorkerStderr(e.Data))
+                {
+                    _lastError = e.Data;
+                }
+
                 Log("Worker stderr: " + e.Data);
             }
         }
@@ -690,7 +694,7 @@ namespace Cortex.Core.Services
 
         private void Log(string message)
         {
-            if (_log == null || string.IsNullOrEmpty(message))
+            if (_log == null || string.IsNullOrEmpty(message) || !ShouldLogMessage(message))
             {
                 return;
             }
@@ -702,6 +706,37 @@ namespace Cortex.Core.Services
             catch
             {
             }
+        }
+
+        private static bool IsInformationalWorkerStderr(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+            {
+                return false;
+            }
+
+            return message.StartsWith("Initialized Roslyn worker.", StringComparison.Ordinal) ||
+                message.StartsWith("Applied ", StringComparison.Ordinal);
+        }
+
+        private static bool ShouldLogMessage(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+            {
+                return false;
+            }
+
+            return message.StartsWith("Starting worker process.", StringComparison.Ordinal) ||
+                message.StartsWith("Worker process started.", StringComparison.Ordinal) ||
+                message.StartsWith("Request write failed.", StringComparison.Ordinal) ||
+                message.StartsWith("Worker produced unreadable response line.", StringComparison.Ordinal) ||
+                message.StartsWith("Worker returned uncorrelated failure.", StringComparison.Ordinal) ||
+                message.StartsWith("Reader loop crashed.", StringComparison.Ordinal) ||
+                message.StartsWith("Request timed out.", StringComparison.Ordinal) ||
+                message.StartsWith("Completing pending request with failure.", StringComparison.Ordinal) ||
+                message.StartsWith("Disposing worker process.", StringComparison.Ordinal) ||
+                message.StartsWith("Worker stderr:", StringComparison.Ordinal) ||
+                message.StartsWith("Worker process exited.", StringComparison.Ordinal);
         }
 
         private sealed class PendingRequest
