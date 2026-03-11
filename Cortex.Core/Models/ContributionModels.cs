@@ -68,6 +68,7 @@ namespace Cortex.Core.Models
     {
         public string CommandId;
         public MenuProjectionLocation Location;
+        public string ContextId;
         public string Group;
         public int SortOrder;
     }

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
 
@@ -7,9 +6,11 @@ namespace Cortex.Services
 {
     internal sealed class CompletionRankingService
     {
+        private readonly CompletionContextAnalyzer _contextAnalyzer = new CompletionContextAnalyzer();
+
         public string GetQuery(DocumentSession session, LanguageServiceCompletionResponse response)
         {
-            return BuildContext(session, response).Query;
+            return _contextAnalyzer.Analyze(session, null, response).Query;
         }
 
         public LanguageServiceCompletionResponse Rank(
@@ -22,8 +23,8 @@ namespace Cortex.Services
                 return response;
             }
 
-            var rankingContext = BuildContext(session, editorState, response);
-            var candidates = BuildAugmentedCandidates(response.Items, rankingContext);
+            var rankingContext = _contextAnalyzer.Analyze(session, editorState, response);
+            var candidates = _contextAnalyzer.BuildAugmentedCandidates(response.Items, rankingContext);
             var ranked = new RankedCompletionItem[candidates.Length];
             for (var i = 0; i < candidates.Length; i++)
             {
@@ -49,157 +50,6 @@ namespace Cortex.Services
             return response;
         }
 
-        private static CompletionRankingContext BuildContext(
-            DocumentSession session,
-            CortexEditorInteractionState editorState,
-            LanguageServiceCompletionResponse response)
-        {
-            var text = session.Text ?? string.Empty;
-            var caretIndex = session.EditorState != null ? session.EditorState.CaretIndex : text.Length;
-            caretIndex = Math.Max(0, Math.Min(text.Length, caretIndex));
-
-            var replacementRange = response.ReplacementRange;
-            var replacementStart = replacementRange != null ? Math.Max(0, Math.Min(text.Length, replacementRange.Start)) : caretIndex;
-            if (replacementStart > caretIndex)
-            {
-                replacementStart = caretIndex;
-            }
-
-            var identifierStart = FindIdentifierStart(text, caretIndex);
-            var queryStart = Math.Min(identifierStart, replacementStart);
-            if (queryStart > caretIndex)
-            {
-                queryStart = caretIndex;
-            }
-
-            var query = caretIndex > queryStart
-                ? text.Substring(queryStart, caretIndex - queryStart)
-                : string.Empty;
-            var queryTrimmed = query.Trim();
-            var previousToken = FindPreviousToken(text, queryStart);
-            var previousSymbol = FindPreviousSymbol(text, queryStart);
-            var acceptedCompletions = editorState != null
-                ? editorState.RecentAcceptedCompletions
-                : null;
-
-            var context = new CompletionRankingContext
-            {
-                Query = queryTrimmed,
-                LowerQuery = queryTrimmed.ToLowerInvariant(),
-                PreviousToken = previousToken,
-                LowerPreviousToken = previousToken.ToLowerInvariant(),
-                PreviousSymbol = previousSymbol,
-                IsMemberAccess = previousSymbol == '.',
-                IsAfterUsing = string.Equals(previousToken, "using", StringComparison.OrdinalIgnoreCase),
-                IsAfterNew = string.Equals(previousToken, "new", StringComparison.OrdinalIgnoreCase),
-                IsAfterReturn = string.Equals(previousToken, "return", StringComparison.OrdinalIgnoreCase),
-                IsAfterOverride = string.Equals(previousToken, "override", StringComparison.OrdinalIgnoreCase),
-                IsDeclarationContext = IsDeclarationContext(text, queryStart, previousToken),
-                CaretIndex = caretIndex,
-                RecentAcceptedCompletions = acceptedCompletions,
-                DocumentPath = session.FilePath ?? string.Empty
-            };
-
-            PopulateObservedContext(text, caretIndex, context);
-            return context;
-        }
-
-        private static LanguageServiceCompletionItem[] BuildAugmentedCandidates(
-            LanguageServiceCompletionItem[] items,
-            CompletionRankingContext context)
-        {
-            if (items == null || items.Length == 0)
-            {
-                return items ?? new LanguageServiceCompletionItem[0];
-            }
-
-            var combined = new List<LanguageServiceCompletionItem>(items.Length + 8);
-            var knownKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            for (var i = 0; i < items.Length; i++)
-            {
-                var item = items[i];
-                if (item == null)
-                {
-                    continue;
-                }
-
-                combined.Add(item);
-                knownKeys.Add(BuildCandidateKey(item));
-            }
-
-            var synthetic = BuildSyntheticPatternCandidates(context);
-            for (var i = 0; i < synthetic.Count; i++)
-            {
-                var item = synthetic[i];
-                var key = BuildCandidateKey(item);
-                if (knownKeys.Contains(key))
-                {
-                    continue;
-                }
-
-                knownKeys.Add(key);
-                combined.Add(item);
-            }
-
-            return combined.ToArray();
-        }
-
-        private static List<LanguageServiceCompletionItem> BuildSyntheticPatternCandidates(CompletionRankingContext context)
-        {
-            var results = new List<LanguageServiceCompletionItem>();
-            if (context == null ||
-                context.IsMemberAccess ||
-                string.IsNullOrEmpty(context.Query) ||
-                context.MemberChainStats.Count == 0)
-            {
-                return results;
-            }
-
-            var rankedPatterns = new List<MemberChainPattern>();
-            foreach (var pair in context.MemberChainStats)
-            {
-                var chain = pair.Value;
-                if (chain == null ||
-                    string.IsNullOrEmpty(chain.DisplayText) ||
-                    string.IsNullOrEmpty(chain.RootIdentifier))
-                {
-                    continue;
-                }
-
-                if (!chain.LowerRootIdentifier.StartsWith(context.LowerQuery, StringComparison.OrdinalIgnoreCase) &&
-                    !chain.LowerDisplayText.StartsWith(context.LowerQuery, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (chain.SegmentCount < 2)
-                {
-                    continue;
-                }
-
-                rankedPatterns.Add(chain);
-            }
-
-            rankedPatterns.Sort(CompareMemberChainPatterns);
-            var limit = Math.Min(4, rankedPatterns.Count);
-            for (var i = 0; i < limit; i++)
-            {
-                var pattern = rankedPatterns[i];
-                results.Add(new LanguageServiceCompletionItem
-                {
-                    DisplayText = pattern.DisplayText,
-                    InsertText = pattern.DisplayText,
-                    FilterText = pattern.DisplayText,
-                    SortText = pattern.DisplayText,
-                    InlineDescription = "context pattern",
-                    Kind = "Pattern",
-                    IsPreselected = false
-                });
-            }
-
-            return results;
-        }
-
         private static long ScoreItem(LanguageServiceCompletionItem item, CompletionRankingContext context, QueryMatchResult match)
         {
             if (item == null)
@@ -207,9 +57,7 @@ namespace Cortex.Services
                 return long.MinValue;
             }
 
-            var candidate = !string.IsNullOrEmpty(item.FilterText)
-                ? item.FilterText
-                : (!string.IsNullOrEmpty(item.DisplayText) ? item.DisplayText : item.InsertText ?? string.Empty);
+            var candidate = CompletionMatchUtility.GetCandidateText(item);
             var lowerCandidate = candidate.ToLowerInvariant();
             var score = 0L;
 
@@ -230,7 +78,7 @@ namespace Cortex.Services
             }
             else
             {
-                score += ScoreNoQueryContext(item, lowerCandidate, context);
+                score += ScoreNoQueryContext(item, candidate, lowerCandidate, context);
             }
 
             if (!string.IsNullOrEmpty(item.SortText))
@@ -254,9 +102,7 @@ namespace Cortex.Services
                 return new QueryMatchResult();
             }
 
-            var candidate = !string.IsNullOrEmpty(item.FilterText)
-                ? item.FilterText
-                : (!string.IsNullOrEmpty(item.DisplayText) ? item.DisplayText : item.InsertText ?? string.Empty);
+            var candidate = CompletionMatchUtility.GetCandidateText(item);
             var lowerCandidate = candidate.ToLowerInvariant();
             var query = context.Query;
             var lowerQuery = context.LowerQuery;
@@ -281,7 +127,7 @@ namespace Cortex.Services
                 return new QueryMatchResult(5, 190000 - Math.Max(0, candidate.Length - query.Length));
             }
 
-            if (StartsWithWordPart(candidate, query))
+            if (CompletionMatchUtility.StartsWithWordPart(candidate, query))
             {
                 return new QueryMatchResult(4, 170000 - Math.Max(0, candidate.Length - query.Length));
             }
@@ -318,13 +164,19 @@ namespace Cortex.Services
             return new QueryMatchResult(0, -60000 - (distance * 400));
         }
 
-        private static long ScoreNoQueryContext(LanguageServiceCompletionItem item, string lowerCandidate, CompletionRankingContext context)
+        private static long ScoreNoQueryContext(
+            LanguageServiceCompletionItem item,
+            string candidate,
+            string lowerCandidate,
+            CompletionRankingContext context)
         {
             var score = 0L;
             if (context.IsMemberAccess)
             {
                 score += 1000;
             }
+
+            score += GetReceiverMemberBoost(candidate, lowerCandidate, context, 0);
 
             if (item != null &&
                 string.Equals(item.Kind ?? string.Empty, "Keyword", StringComparison.OrdinalIgnoreCase) &&
@@ -679,6 +531,8 @@ namespace Cortex.Services
                 }
             }
 
+            score += GetReceiverMemberBoost(candidate, lowerCandidate, context, match.MatchTier);
+
             if (!context.IsMemberAccess &&
                 candidate.IndexOf('.') < 0 &&
                 IsTypeLikeKind(item != null ? item.Kind : string.Empty) &&
@@ -686,6 +540,46 @@ namespace Cortex.Services
                 identifierObservation.Count > 0)
             {
                 score += 1800;
+            }
+
+            return score;
+        }
+
+        private static int GetReceiverMemberBoost(
+            string candidate,
+            string lowerCandidate,
+            CompletionRankingContext context,
+            int matchTier)
+        {
+            if (string.IsNullOrEmpty(candidate) ||
+                context == null ||
+                !context.IsMemberAccess ||
+                string.IsNullOrEmpty(context.LowerMemberAccessReceiver))
+            {
+                return 0;
+            }
+
+            ReceiverMemberObservation observation;
+            if (!context.ReceiverMemberObservations.TryGetValue(
+                BuildReceiverMemberKey(context.LowerMemberAccessReceiver, lowerCandidate),
+                out observation))
+            {
+                return 0;
+            }
+
+            var score = Math.Min(32000, (observation.Count * 2600) + observation.RecencyScore);
+            if (observation.NearCaretCount > 0)
+            {
+                score += Math.Min(10000, observation.NearCaretCount * 2600);
+            }
+
+            if (matchTier >= 5)
+            {
+                score += 2400;
+            }
+            else if (matchTier >= 4)
+            {
+                score += 1200;
             }
 
             return score;
@@ -769,135 +663,6 @@ namespace Cortex.Services
             return limited;
         }
 
-        private static bool IsDeclarationContext(string text, int replacementStart, string previousToken)
-        {
-            if (string.IsNullOrEmpty(previousToken))
-            {
-                return false;
-            }
-
-            switch (previousToken)
-            {
-                case "public":
-                case "private":
-                case "protected":
-                case "internal":
-                case "static":
-                case "partial":
-                case "abstract":
-                case "sealed":
-                case "unsafe":
-                case "virtual":
-                case "async":
-                    return true;
-            }
-
-            var lineStart = replacementStart;
-            while (lineStart > 0)
-            {
-                var previous = text[lineStart - 1];
-                if (previous == '\n' || previous == '\r')
-                {
-                    break;
-                }
-
-                lineStart--;
-            }
-
-            var linePrefix = replacementStart > lineStart
-                ? text.Substring(lineStart, replacementStart - lineStart).TrimStart()
-                : string.Empty;
-            return linePrefix.StartsWith("public ", StringComparison.Ordinal) ||
-                linePrefix.StartsWith("private ", StringComparison.Ordinal) ||
-                linePrefix.StartsWith("protected ", StringComparison.Ordinal) ||
-                linePrefix.StartsWith("internal ", StringComparison.Ordinal) ||
-                linePrefix.StartsWith("static ", StringComparison.Ordinal) ||
-                linePrefix.StartsWith("partial ", StringComparison.Ordinal) ||
-                linePrefix.StartsWith("abstract ", StringComparison.Ordinal) ||
-                linePrefix.StartsWith("sealed ", StringComparison.Ordinal);
-        }
-
-        private static string FindPreviousToken(string text, int index)
-        {
-            if (string.IsNullOrEmpty(text) || index <= 0)
-            {
-                return string.Empty;
-            }
-
-            var current = index - 1;
-            while (current >= 0 && char.IsWhiteSpace(text[current]))
-            {
-                current--;
-            }
-
-            if (current < 0)
-            {
-                return string.Empty;
-            }
-
-            if (!char.IsLetterOrDigit(text[current]) && text[current] != '_')
-            {
-                current--;
-                while (current >= 0 && char.IsWhiteSpace(text[current]))
-                {
-                    current--;
-                }
-            }
-
-            if (current < 0)
-            {
-                return string.Empty;
-            }
-
-            var end = current;
-            while (current >= 0 && (char.IsLetterOrDigit(text[current]) || text[current] == '_'))
-            {
-                current--;
-            }
-
-            return end >= current + 1
-                ? text.Substring(current + 1, end - current)
-                : string.Empty;
-        }
-
-        private static int FindIdentifierStart(string text, int caretIndex)
-        {
-            if (string.IsNullOrEmpty(text) || caretIndex <= 0)
-            {
-                return Math.Max(0, caretIndex);
-            }
-
-            var index = Math.Min(text.Length, caretIndex);
-            while (index > 0)
-            {
-                var value = text[index - 1];
-                if (!char.IsLetterOrDigit(value) && value != '_')
-                {
-                    break;
-                }
-
-                index--;
-            }
-
-            return index;
-        }
-
-        private static char FindPreviousSymbol(string text, int index)
-        {
-            if (string.IsNullOrEmpty(text) || index <= 0)
-            {
-                return '\0';
-            }
-
-            var current = index - 1;
-            while (current >= 0 && char.IsWhiteSpace(text[current]))
-            {
-                current--;
-            }
-
-            return current >= 0 ? text[current] : '\0';
-        }
-
         private static bool CamelCaseStartsWith(string candidate, string query)
         {
             if (string.IsNullOrEmpty(candidate) || string.IsNullOrEmpty(query))
@@ -916,39 +681,6 @@ namespace Cortex.Services
             }
 
             return capitals.StartsWith(query, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool StartsWithWordPart(string candidate, string query)
-        {
-            if (string.IsNullOrEmpty(candidate) || string.IsNullOrEmpty(query))
-            {
-                return false;
-            }
-
-            for (var i = 1; i < candidate.Length; i++)
-            {
-                var current = candidate[i];
-                var previous = candidate[i - 1];
-                if (current == '_')
-                {
-                    continue;
-                }
-
-                if (previous == '_' ||
-                    previous == '.' ||
-                    previous == ':' ||
-                    char.IsUpper(current) && !char.IsUpper(previous))
-                {
-                    var remaining = candidate.Length - i;
-                    if (remaining >= query.Length &&
-                        string.Compare(candidate, i, query, 0, query.Length, StringComparison.OrdinalIgnoreCase) == 0)
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
         }
 
         private static bool IsSubsequence(string query, string candidate)
@@ -1019,6 +751,11 @@ namespace Cortex.Services
             return distance;
         }
 
+        private static string BuildReceiverMemberKey(string receiver, string member)
+        {
+            return (receiver ?? string.Empty) + "|" + (member ?? string.Empty);
+        }
+
         private static int CompareRankedItems(RankedCompletionItem left, RankedCompletionItem right)
         {
             var scoreCompare = right.Score.CompareTo(left.Score);
@@ -1027,8 +764,8 @@ namespace Cortex.Services
                 return scoreCompare;
             }
 
-            var leftText = left.Item != null ? left.Item.SortText ?? left.Item.FilterText ?? left.Item.DisplayText ?? string.Empty : string.Empty;
-            var rightText = right.Item != null ? right.Item.SortText ?? right.Item.FilterText ?? right.Item.DisplayText ?? string.Empty : string.Empty;
+            var leftText = left.Item != null ? left.Item.SortText ?? CompletionMatchUtility.GetCandidateText(left.Item) : string.Empty;
+            var rightText = right.Item != null ? right.Item.SortText ?? CompletionMatchUtility.GetCandidateText(right.Item) : string.Empty;
             var textCompare = string.Compare(leftText, rightText, StringComparison.OrdinalIgnoreCase);
             if (textCompare != 0)
             {
@@ -1036,267 +773,6 @@ namespace Cortex.Services
             }
 
             return left.OriginalIndex.CompareTo(right.OriginalIndex);
-        }
-
-        private static int CompareMemberChainPatterns(MemberChainPattern left, MemberChainPattern right)
-        {
-            var rightScore = right != null ? ((right.Count * 1000) + right.RecencyScore + (right.NearCaretCount * 2500)) : 0;
-            var leftScore = left != null ? ((left.Count * 1000) + left.RecencyScore + (left.NearCaretCount * 2500)) : 0;
-            var scoreCompare = rightScore.CompareTo(leftScore);
-            if (scoreCompare != 0)
-            {
-                return scoreCompare;
-            }
-
-            var leftText = left != null ? left.DisplayText ?? string.Empty : string.Empty;
-            var rightText = right != null ? right.DisplayText ?? string.Empty : string.Empty;
-            return string.Compare(leftText, rightText, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string BuildCandidateKey(LanguageServiceCompletionItem item)
-        {
-            if (item == null)
-            {
-                return string.Empty;
-            }
-
-            return (item.FilterText ?? string.Empty) + "|" +
-                (item.InsertText ?? string.Empty) + "|" +
-                (item.DisplayText ?? string.Empty);
-        }
-
-        private static void PopulateObservedContext(string text, int caretIndex, CompletionRankingContext context)
-        {
-            if (context == null || string.IsNullOrEmpty(text) || caretIndex <= 0)
-            {
-                return;
-            }
-
-            var limit = Math.Max(0, Math.Min(caretIndex, text.Length));
-            var index = 0;
-            while (index < limit)
-            {
-                if (!IsIdentifierStart(text[index]))
-                {
-                    index++;
-                    continue;
-                }
-
-                var rootStart = index;
-                var root = ReadIdentifier(text, ref index, limit);
-                if (string.IsNullOrEmpty(root))
-                {
-                    index++;
-                    continue;
-                }
-
-                RecordIdentifierObservation(context, root, rootStart, caretIndex);
-
-                var chainBuilder = root;
-                var segmentCount = 1;
-                var lookahead = index;
-                while (TryReadMemberAccess(text, ref lookahead, limit, out var segment, out var segmentStart))
-                {
-                    if (string.IsNullOrEmpty(segment))
-                    {
-                        break;
-                    }
-
-                    chainBuilder += "." + segment;
-                    segmentCount++;
-                    RecordIdentifierObservation(context, segment, segmentStart, caretIndex);
-                    RecordMemberChainObservation(context, root, chainBuilder, segmentCount, rootStart, caretIndex);
-                    index = lookahead;
-                }
-            }
-        }
-
-        private static void RecordIdentifierObservation(
-            CompletionRankingContext context,
-            string identifier,
-            int startIndex,
-            int caretIndex)
-        {
-            if (context == null || string.IsNullOrEmpty(identifier))
-            {
-                return;
-            }
-
-            var key = identifier.ToLowerInvariant();
-            IdentifierObservation observation;
-            if (!context.IdentifierObservations.TryGetValue(key, out observation))
-            {
-                observation = new IdentifierObservation
-                {
-                    DisplayText = identifier
-                };
-                context.IdentifierObservations[key] = observation;
-            }
-
-            observation.Count++;
-            var distance = Math.Max(0, caretIndex - startIndex);
-            observation.RecencyScore += ComputeOccurrenceWeight(distance);
-            if (distance <= 240)
-            {
-                observation.NearCaretCount++;
-            }
-        }
-
-        private static void RecordMemberChainObservation(
-            CompletionRankingContext context,
-            string rootIdentifier,
-            string chain,
-            int segmentCount,
-            int startIndex,
-            int caretIndex)
-        {
-            if (context == null || string.IsNullOrEmpty(rootIdentifier) || string.IsNullOrEmpty(chain))
-            {
-                return;
-            }
-
-            var lowerChain = chain.ToLowerInvariant();
-            MemberChainPattern pattern;
-            if (!context.MemberChainStats.TryGetValue(lowerChain, out pattern))
-            {
-                pattern = new MemberChainPattern
-                {
-                    DisplayText = chain,
-                    LowerDisplayText = lowerChain,
-                    RootIdentifier = rootIdentifier,
-                    LowerRootIdentifier = rootIdentifier.ToLowerInvariant(),
-                    SegmentCount = segmentCount
-                };
-                context.MemberChainStats[lowerChain] = pattern;
-            }
-
-            pattern.Count++;
-            var distance = Math.Max(0, caretIndex - startIndex);
-            pattern.RecencyScore += ComputeOccurrenceWeight(distance);
-            if (distance <= 320)
-            {
-                pattern.NearCaretCount++;
-            }
-
-            var lowerRoot = pattern.LowerRootIdentifier;
-            MemberChainRootObservation rootObservation;
-            if (!context.MemberChainRootStats.TryGetValue(lowerRoot, out rootObservation))
-            {
-                rootObservation = new MemberChainRootObservation();
-                context.MemberChainRootStats[lowerRoot] = rootObservation;
-            }
-
-            rootObservation.Count++;
-            rootObservation.RecencyScore += Math.Max(400, ComputeOccurrenceWeight(distance) / 2);
-        }
-
-        private static int ComputeOccurrenceWeight(int distance)
-        {
-            if (distance <= 48)
-            {
-                return 5200;
-            }
-
-            if (distance <= 160)
-            {
-                return 3600;
-            }
-
-            if (distance <= 480)
-            {
-                return 2200;
-            }
-
-            if (distance <= 1200)
-            {
-                return 1200;
-            }
-
-            if (distance <= 3200)
-            {
-                return 650;
-            }
-
-            return 250;
-        }
-
-        private static bool TryReadMemberAccess(
-            string text,
-            ref int index,
-            int limit,
-            out string identifier,
-            out int identifierStart)
-        {
-            identifier = string.Empty;
-            identifierStart = -1;
-            var lookahead = index;
-            while (lookahead < limit && char.IsWhiteSpace(text[lookahead]))
-            {
-                lookahead++;
-            }
-
-            if (lookahead >= limit || text[lookahead] != '.')
-            {
-                return false;
-            }
-
-            lookahead++;
-            while (lookahead < limit && char.IsWhiteSpace(text[lookahead]))
-            {
-                lookahead++;
-            }
-
-            if (lookahead >= limit || !IsIdentifierStart(text[lookahead]))
-            {
-                return false;
-            }
-
-            identifierStart = lookahead;
-            identifier = ReadIdentifier(text, ref lookahead, limit);
-            index = lookahead;
-            return !string.IsNullOrEmpty(identifier);
-        }
-
-        private static string ReadIdentifier(string text, ref int index, int limit)
-        {
-            if (string.IsNullOrEmpty(text) || index < 0 || index >= limit)
-            {
-                return string.Empty;
-            }
-
-            var start = index;
-            if (text[index] == '@')
-            {
-                index++;
-            }
-
-            if (index >= limit || (!char.IsLetter(text[index]) && text[index] != '_'))
-            {
-                index = start;
-                return string.Empty;
-            }
-
-            index++;
-            while (index < limit)
-            {
-                var value = text[index];
-                if (!char.IsLetterOrDigit(value) && value != '_')
-                {
-                    break;
-                }
-
-                index++;
-            }
-
-            var raw = text.Substring(start, index - start);
-            return raw.Length > 0 && raw[0] == '@'
-                ? raw.Substring(1)
-                : raw;
-        }
-
-        private static bool IsIdentifierStart(char value)
-        {
-            return char.IsLetter(value) || value == '_' || value == '@';
         }
 
         private static bool IsTypeLikeKind(string kind)
@@ -1331,54 +807,6 @@ namespace Cortex.Services
 
             public int MatchTier;
             public long Score;
-        }
-
-        private sealed class CompletionRankingContext
-        {
-            public string Query;
-            public string LowerQuery;
-            public string PreviousToken;
-            public string LowerPreviousToken;
-            public char PreviousSymbol;
-            public bool IsMemberAccess;
-            public bool IsAfterUsing;
-            public bool IsAfterNew;
-            public bool IsAfterReturn;
-            public bool IsAfterOverride;
-            public bool IsDeclarationContext;
-            public int CaretIndex;
-            public string DocumentPath;
-            public IList<CortexAcceptedCompletionEntry> RecentAcceptedCompletions;
-            public readonly Dictionary<string, IdentifierObservation> IdentifierObservations = new Dictionary<string, IdentifierObservation>(StringComparer.OrdinalIgnoreCase);
-            public readonly Dictionary<string, MemberChainPattern> MemberChainStats = new Dictionary<string, MemberChainPattern>(StringComparer.OrdinalIgnoreCase);
-            public readonly Dictionary<string, MemberChainRootObservation> MemberChainRootStats = new Dictionary<string, MemberChainRootObservation>(StringComparer.OrdinalIgnoreCase);
-            public int AcceptanceSequence;
-        }
-
-        private sealed class IdentifierObservation
-        {
-            public string DisplayText;
-            public int Count;
-            public int RecencyScore;
-            public int NearCaretCount;
-        }
-
-        private sealed class MemberChainPattern
-        {
-            public string DisplayText;
-            public string LowerDisplayText;
-            public string RootIdentifier;
-            public string LowerRootIdentifier;
-            public int SegmentCount;
-            public int Count;
-            public int RecencyScore;
-            public int NearCaretCount;
-        }
-
-        private sealed class MemberChainRootObservation
-        {
-            public int Count;
-            public int RecencyScore;
         }
     }
 }

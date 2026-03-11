@@ -4,6 +4,7 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
+using Cortex.Modules.Shared;
 using Cortex.Services;
 using ModAPI.Core;
 using UnityEngine;
@@ -26,9 +27,13 @@ namespace Cortex.Modules.Editor
         private readonly IEditorKeybindingService _keybindingService = new EditorKeybindingService();
         private readonly DocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
         private readonly EditorCompletionService _editorCompletionService = new EditorCompletionService();
+        private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
+        private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
+        private readonly PopupMenuSurface _popupMenuSurface = new PopupMenuSurface();
         private readonly GUIContent _measureContent = new GUIContent();
         private readonly List<NormalizedSpan> _orderedSpans = new List<NormalizedSpan>();
         private readonly Dictionary<string, GUIStyle> _classificationStyles = new Dictionary<string, GUIStyle>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<PopupMenuItem> _popupMenuItems = new List<PopupMenuItem>();
 
         private GUIStyle _codeStyle;
         private GUIStyle _gutterStyle;
@@ -51,6 +56,9 @@ namespace Cortex.Modules.Editor
         private int _dragAnchorIndex;
         private int _lastClickIndex = -1;
         private DateTime _lastClickUtc = DateTime.MinValue;
+        private bool _contextMenuOpen;
+        private Vector2 _contextMenuPosition = Vector2.zero;
+        private EditorCommandTarget _contextTarget;
         private string _lastDrawError = string.Empty;
         private DateTime _lastDrawErrorUtc = DateTime.MinValue;
         private LayoutCache _layout;
@@ -83,10 +91,16 @@ namespace Cortex.Modules.Editor
             Rect rect,
             Vector2 scroll,
             DocumentSession session,
+            ICommandRegistry commandRegistry,
+            IContributionRegistry contributionRegistry,
             CortexShellState state,
             string themeKey,
             GUIStyle codeStyle,
             GUIStyle gutterStyle,
+            GUIStyle contextMenuStyle,
+            GUIStyle contextMenuButtonStyle,
+            GUIStyle contextMenuHeaderStyle,
+            Rect blockedRect,
             float gutterWidth)
         {
             if (session == null || !session.SupportsEditing || rect.width <= 0f || rect.height <= 0f)
@@ -125,8 +139,9 @@ namespace Cortex.Modules.Editor
 
                 var current = Event.current;
                 var localMouse = current != null ? current.mousePosition - new Vector2(rect.x, rect.y) : Vector2.zero;
-                var hasMouse = current != null && rect.Contains(current.mousePosition);
-                HandleKeyboardInput(session, state, current);
+                var mouseBlocked = current != null && blockedRect.width > 0f && blockedRect.height > 0f && blockedRect.Contains(current.mousePosition);
+                var hasMouse = current != null && rect.Contains(current.mousePosition) && !mouseBlocked;
+                HandleKeyboardInput(session, state, commandRegistry, current);
                 if (session.TextVersion != inputTextVersion)
                 {
                     _documentLanguageAnalysisService.ApplyProvisionalClassificationProjection(session);
@@ -144,7 +159,7 @@ namespace Cortex.Modules.Editor
 
                 scroll = EnsureCaretVisible(session, scroll, rect.height);
                 var pointerContext = BuildPointerContext(current, rect, hasMouse, localMouse, scroll, true);
-                HandlePointerInput(session, state, current, pointerContext, gutterWidth);
+                HandlePointerInput(session, state, current, pointerContext, gutterWidth, commandRegistry, contributionRegistry);
 
                 GUI.BeginGroup(rect);
                 try
@@ -162,6 +177,7 @@ namespace Cortex.Modules.Editor
                     }
 
                     DrawCompletionPopup(session, state, scroll, rect.size, gutterWidth);
+                    DrawContextMenu(state, current, pointerContext.SurfaceMouse, rect.size, commandRegistry, contextMenuStyle, contextMenuButtonStyle, contextMenuHeaderStyle);
                 }
                 finally
                 {
@@ -172,6 +188,7 @@ namespace Cortex.Modules.Editor
             {
                 _hasFocus = false;
                 _isDraggingSelection = false;
+                CloseContextMenu();
                 _layout = null;
                 var error = ex.GetType().FullName + "|" + (ex.Message ?? string.Empty);
                 if (!string.Equals(_lastDrawError, error, StringComparison.Ordinal) ||
@@ -189,6 +206,7 @@ namespace Cortex.Modules.Editor
         public void Invalidate()
         {
             _layout = null;
+            CloseContextMenu();
         }
 
         private void EnsureStyles(string themeKey, GUIStyle codeStyle, GUIStyle gutterStyle)
@@ -750,10 +768,32 @@ namespace Cortex.Modules.Editor
             return context;
         }
 
-        private void HandlePointerInput(DocumentSession session, CortexShellState state, Event current, PointerContext pointerContext, float gutterWidth)
+        private void HandlePointerInput(
+            DocumentSession session,
+            CortexShellState state,
+            Event current,
+            PointerContext pointerContext,
+            float gutterWidth,
+            ICommandRegistry commandRegistry,
+            IContributionRegistry contributionRegistry)
         {
             if (current == null)
             {
+                return;
+            }
+
+            if (current.type == EventType.MouseDown && current.button == 1)
+            {
+                _hasFocus = pointerContext.IsWithinSurface;
+                if (!pointerContext.IsWithinSurface)
+                {
+                    CloseContextMenu();
+                    return;
+                }
+
+                var hitTest = GetCharacterIndexAt(session, pointerContext.ContentMouse, gutterWidth);
+                OpenContextMenu(session, state, hitTest.CharacterIndex, pointerContext.SurfaceMouse, commandRegistry, contributionRegistry);
+                current.Use();
                 return;
             }
 
@@ -764,6 +804,7 @@ namespace Cortex.Modules.Editor
                 if (!pointerContext.IsWithinSurface)
                 {
                     _isDraggingSelection = false;
+                    CloseContextMenu();
                     return;
                 }
 
@@ -774,6 +815,16 @@ namespace Cortex.Modules.Editor
 
                 session.EditorState.ScrollToCaretPending = false;
                 _isDraggingSelection = true;
+                if (string.Equals(selectionAction, "double-click", StringComparison.Ordinal))
+                {
+                    EditorCommandTarget target;
+                    if (TryBuildCommandTarget(session, hitTest.CharacterIndex, out target) && target.CanGoToDefinition)
+                    {
+                        _symbolInteractionService.RequestDefinition(state, target);
+                    }
+                }
+
+                CloseContextMenu();
                 current.Use();
                 return;
             }
@@ -820,6 +871,112 @@ namespace Cortex.Modules.Editor
             _editorService.SetSelection(session, clickedIndex, clickedIndex);
             _dragAnchorIndex = clickedIndex;
             return "click";
+        }
+
+        private void DrawContextMenu(
+            CortexShellState state,
+            Event current,
+            Vector2 localMouse,
+            Vector2 viewportSize,
+            ICommandRegistry commandRegistry,
+            GUIStyle contextMenuStyle,
+            GUIStyle contextMenuButtonStyle,
+            GUIStyle contextMenuHeaderStyle)
+        {
+            if (!_contextMenuOpen || _contextTarget == null || _popupMenuItems.Count == 0)
+            {
+                return;
+            }
+
+            var menuResult = _popupMenuSurface.Draw(
+                _contextMenuPosition,
+                viewportSize,
+                _contextTarget.SymbolText ?? string.Empty,
+                _popupMenuItems,
+                current,
+                localMouse,
+                contextMenuStyle,
+                contextMenuButtonStyle,
+                contextMenuHeaderStyle);
+
+            if (!string.IsNullOrEmpty(menuResult.ActivatedCommandId))
+            {
+                _contextMenuService.Execute(state, commandRegistry, _contextTarget, menuResult.ActivatedCommandId);
+                CloseContextMenu();
+                return;
+            }
+
+            if (menuResult.ShouldClose)
+            {
+                CloseContextMenu();
+            }
+        }
+
+        private void OpenContextMenu(
+            DocumentSession session,
+            CortexShellState state,
+            int absolutePosition,
+            Vector2 localMouse,
+            ICommandRegistry commandRegistry,
+            IContributionRegistry contributionRegistry)
+        {
+            EditorCommandTarget target;
+            if (!TryBuildCommandTarget(session, absolutePosition, out target))
+            {
+                CloseContextMenu();
+                return;
+            }
+
+            var items = _contextMenuService.BuildItems(state, commandRegistry, contributionRegistry, target);
+            if (items == null || items.Count == 0)
+            {
+                CloseContextMenu();
+                return;
+            }
+
+            _contextMenuOpen = true;
+            _contextMenuPosition = localMouse;
+            _contextTarget = target;
+            PopulatePopupMenuItems(items);
+        }
+
+        private bool TryBuildCommandTarget(DocumentSession session, int absolutePosition, out EditorCommandTarget target)
+        {
+            return _symbolInteractionService.TryCreateTargetFromPosition(session, absolutePosition, null, out target);
+        }
+
+        private void PopulatePopupMenuItems(IList<EditorContextMenuItem> items)
+        {
+            _popupMenuItems.Clear();
+            if (items == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                _popupMenuItems.Add(new PopupMenuItem
+                {
+                    CommandId = item.CommandId,
+                    Label = item.Label,
+                    ShortcutText = item.ShortcutText,
+                    Enabled = item.Enabled,
+                    IsSeparator = item.IsSeparator
+                });
+            }
+        }
+
+        private void CloseContextMenu()
+        {
+            _contextMenuOpen = false;
+            _contextTarget = null;
+            _popupMenuItems.Clear();
         }
 
         private void LogPointerSelection(DocumentSession session, string action, PointerContext pointerContext, float gutterWidth, PointerHitTestResult hitTest)
@@ -883,9 +1040,14 @@ namespace Cortex.Modules.Editor
                 ", SelectedIndex=" + selection.CaretIndex + ".");
         }
 
-        private void HandleKeyboardInput(DocumentSession session, CortexShellState state, Event current)
+        private void HandleKeyboardInput(DocumentSession session, CortexShellState state, ICommandRegistry commandRegistry, Event current)
         {
             if (!_hasFocus || current == null || current.type != EventType.KeyDown)
+            {
+                return;
+            }
+
+            if (GUIUtility.keyboardControl != 0 && !string.IsNullOrEmpty(GUI.GetNameOfFocusedControl()))
             {
                 return;
             }
@@ -910,7 +1072,7 @@ namespace Cortex.Modules.Editor
                 }
                 else
                 {
-                    handled = ExecuteCommand(session, commandId, current.shift);
+                    handled = ExecuteCommand(session, state, commandRegistry, commandId, current.shift);
                 }
             }
 
@@ -996,7 +1158,7 @@ namespace Cortex.Modules.Editor
                 caret.Column + 1);
         }
 
-        private bool ExecuteCommand(DocumentSession session, string commandId, bool extendSelection)
+        private bool ExecuteCommand(DocumentSession session, CortexShellState state, ICommandRegistry commandRegistry, string commandId, bool extendSelection)
         {
             var handled = false;
             switch (commandId ?? string.Empty)
@@ -1081,6 +1243,17 @@ namespace Cortex.Modules.Editor
                 case "move.line.down":
                     handled = _editorService.MoveSelectedLines(session, 1);
                     break;
+            }
+
+            if (!handled && commandRegistry != null && !string.IsNullOrEmpty(commandId))
+            {
+                handled = commandRegistry.Execute(commandId, new CommandExecutionContext
+                {
+                    ActiveContainerId = state != null ? state.Workbench.FocusedContainerId : string.Empty,
+                    ActiveDocumentId = state != null ? state.Documents.ActiveDocumentPath : string.Empty,
+                    FocusedRegionId = state != null ? state.Workbench.FocusedContainerId : string.Empty,
+                    Parameter = session
+                });
             }
 
             if (handled)

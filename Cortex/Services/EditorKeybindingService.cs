@@ -29,9 +29,13 @@ namespace Cortex.Services
             Create("edit.outdent", "edit.outdent", "Editing", "Outdent", "Outdent the current selection.", KeyCode.Tab, false, true, false),
             Create("edit.newline", "edit.newline", "Editing", "New Line", "Insert a newline.", KeyCode.Return, false, false, false),
             Create("edit.complete", "edit.complete", "Editing", "Trigger Completion", "Open the completion list at the current caret.", KeyCode.Space, true, false, false),
+            Create("search.find", "cortex.editor.find", "Search", "Find", "Open the find bar.", KeyCode.F, true, false, false),
+            Create("search.next", "cortex.search.next", "Search", "Find Next", "Move to the next search result.", KeyCode.F3, false, false, false),
+            Create("search.previous", "cortex.search.previous", "Search", "Find Previous", "Move to the previous search result.", KeyCode.F3, false, true, false),
+            Create("search.close", "cortex.search.close", "Search", "Close Find", "Close the active find bar.", KeyCode.Escape, false, false, false),
             CreateUnbound("multi.above", "multi.above", "Multi-caret", "Add Caret Above", "Duplicate the active carets on the line above."),
             CreateUnbound("multi.below", "multi.below", "Multi-caret", "Add Caret Below", "Duplicate the active carets on the line below."),
-            Create("multi.clear", "multi.clear", "Multi-caret", "Clear Extra Carets", "Clear secondary carets.", KeyCode.Escape, false, false, false),
+            CreateUnbound("multi.clear", "multi.clear", "Multi-caret", "Clear Extra Carets", "Clear secondary carets."),
             CreateUnbound("move.line.up", "move.line.up", "Line Editing", "Move Line Up", "Move the current line block upward."),
             CreateUnbound("move.line.down", "move.line.down", "Line Editing", "Move Line Down", "Move the current line block downward.")
         };

@@ -655,6 +655,11 @@ namespace Cortex.Core.Services
         {
             if (!string.IsNullOrEmpty(e.Data))
             {
+                if (ShouldIgnoreWorkerStderr(e.Data))
+                {
+                    return;
+                }
+
                 if (!IsInformationalWorkerStderr(e.Data))
                 {
                     _lastError = e.Data;
@@ -717,6 +722,20 @@ namespace Cortex.Core.Services
 
             return message.StartsWith("Initialized Roslyn worker.", StringComparison.Ordinal) ||
                 message.StartsWith("Applied ", StringComparison.Ordinal);
+        }
+
+        private static bool ShouldIgnoreWorkerStderr(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+            {
+                return false;
+            }
+
+            return string.Equals(message, "No .NET SDKs were found.", StringComparison.Ordinal) ||
+                string.Equals(message, "Download a .NET SDK:", StringComparison.Ordinal) ||
+                string.Equals(message, "Learn about SDK resolution:", StringComparison.Ordinal) ||
+                message.IndexOf("https://aka.ms/dotnet/download", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("https://aka.ms/dotnet/sdk-not-found", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static bool ShouldLogMessage(string message)

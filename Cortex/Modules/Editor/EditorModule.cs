@@ -4,6 +4,7 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
+using ModAPI.Core;
 using UnityEngine;
 
 namespace Cortex.Modules.Editor
@@ -15,15 +16,27 @@ namespace Cortex.Modules.Editor
     /// </summary>
     public sealed class EditorModule
     {
+        private const string FindQueryControlName = "cortex.find.query";
         private const float TabHeight = 26f;
         private const float TabWidth = 160f;
         private const float TabStripHeight = 28f;
         private const float PathBarHeight = 22f;
+        private const float FindOverlayWidth = 336f;
+        private const float FindOverlayTopRowHeight = 24f;
+        private const float FindOverlayBottomRowHeight = 20f;
+        private const float FindOverlayPadding = 8f;
+        private const float MinimumUsableCodeAreaWidth = 64f;
+        private const float MinimumUsableCodeAreaHeight = 64f;
         private const float StatusBarHeight = 20f;
         private const float GutterWidth = 52f;
 
         private Vector2 _tabScroll = Vector2.zero;
         private Vector2 _editorScroll = Vector2.zero;
+        // Sheltered's Unity runtime does not expose Rect.zero, so keep an explicit
+        // zero rect here instead of relying on the convenience property.
+        private Rect _lastCodeAreaRect = new Rect(0f, 0f, 0f, 0f);
+        private string _lastFindOverlayLogKey = string.Empty;
+        private DateTime _lastFindOverlayLogUtc = DateTime.MinValue;
         private string _appliedTheme = string.Empty;
         private GUIStyle _tabStyle;
         private GUIStyle _activeTabStyle;
@@ -62,9 +75,13 @@ namespace Cortex.Modules.Editor
         public void Draw(
             IDocumentService documentService,
             Services.CortexNavigationService navigationService,
+            ICommandRegistry commandRegistry,
+            IContributionRegistry contributionRegistry,
+            Services.WorkbenchSearchService workbenchSearchService,
             CortexShellState state)
         {
             EnsureStyles(state);
+            HandleSearchShortcuts(commandRegistry, state);
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(true));
 
@@ -78,10 +95,55 @@ namespace Cortex.Modules.Editor
             DrawTabStrip(state);
             StabilizeActiveDocumentViewState(documentService, state);
             DrawPathBar(documentService, state);
-            DrawCodeArea(documentService, navigationService, state);
+            DrawCodeArea(documentService, navigationService, commandRegistry, contributionRegistry, state);
+            DrawFindOverlay(commandRegistry, workbenchSearchService, state);
             DrawStatusBar(state);
 
             GUILayout.EndVertical();
+        }
+
+        private void HandleSearchShortcuts(ICommandRegistry commandRegistry, CortexShellState state)
+        {
+            var current = Event.current;
+            if (current == null || current.type != EventType.KeyDown || commandRegistry == null || state == null || state.Documents.ActiveDocument == null)
+            {
+                return;
+            }
+
+            if (GUIUtility.keyboardControl != 0 &&
+                !string.IsNullOrEmpty(GUI.GetNameOfFocusedControl()) &&
+                !string.Equals(GUI.GetNameOfFocusedControl(), FindQueryControlName, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (current.control && !current.alt && !current.shift && current.keyCode == KeyCode.F)
+            {
+                ExecuteWorkbenchCommand(commandRegistry, "cortex.editor.find", state);
+                current.Use();
+                return;
+            }
+
+            if (!state.Search.IsVisible)
+            {
+                return;
+            }
+
+            if (!current.control && !current.alt && !current.shift && current.keyCode == KeyCode.F3)
+            {
+                ExecuteWorkbenchCommand(commandRegistry, "cortex.search.next", state);
+                current.Use();
+            }
+            else if (!current.control && !current.alt && current.shift && current.keyCode == KeyCode.F3)
+            {
+                ExecuteWorkbenchCommand(commandRegistry, "cortex.search.previous", state);
+                current.Use();
+            }
+            else if (!current.control && !current.alt && !current.shift && current.keyCode == KeyCode.Escape)
+            {
+                ExecuteWorkbenchCommand(commandRegistry, "cortex.search.close", state);
+                current.Use();
+            }
         }
 
         private void DrawEmptyState()
@@ -232,16 +294,220 @@ namespace Cortex.Modules.Editor
             }
         }
 
-        private void DrawCodeArea(IDocumentService documentService, Services.CortexNavigationService navigationService, CortexShellState state)
+        private void DrawFindOverlay(ICommandRegistry commandRegistry, Services.WorkbenchSearchService workbenchSearchService, CortexShellState state)
+        {
+            var search = state != null ? state.Search : null;
+            if (search == null || !search.IsVisible)
+            {
+                return;
+            }
+
+            var query = search.Query;
+            var current = Event.current;
+            var codeAreaRect = _lastCodeAreaRect;
+            if (!IsUsableCodeAreaRect(codeAreaRect))
+            {
+                LogFindOverlayState("Skipped render: code area rect was not usable.", search, codeAreaRect, new Rect(0f, 0f, 0f, 0f), true);
+                return;
+            }
+
+            var menuHeight = search.ScopeMenuOpen ? 94f : 0f;
+            var overlayRect = BuildFindOverlayRect(codeAreaRect, menuHeight);
+            var topRowRect = new Rect(FindOverlayPadding, FindOverlayPadding, overlayRect.width - FindOverlayPadding * 2f, FindOverlayTopRowHeight);
+            var bottomRowRect = new Rect(FindOverlayPadding, topRowRect.yMax + 4f, overlayRect.width - FindOverlayPadding * 2f, FindOverlayBottomRowHeight);
+            var queryRect = new Rect(topRowRect.x, topRowRect.y, topRowRect.width - 104f, topRowRect.height);
+            var summaryRect = new Rect(queryRect.xMax + 4f, topRowRect.y + 2f, 30f, topRowRect.height - 4f);
+            var prevRect = new Rect(summaryRect.xMax + 2f, topRowRect.y, 18f, topRowRect.height);
+            var nextRect = new Rect(prevRect.xMax + 2f, topRowRect.y, 22f, topRowRect.height);
+            var closeRect = new Rect(nextRect.xMax + 2f, topRowRect.y, 22f, topRowRect.height);
+            var toggleCaseRect = new Rect(bottomRowRect.x, bottomRowRect.y, 30f, bottomRowRect.height);
+            var toggleWordRect = new Rect(toggleCaseRect.xMax + 4f, bottomRowRect.y, 26f, bottomRowRect.height);
+            var scopeRect = new Rect(bottomRowRect.xMax - 154f, bottomRowRect.y, 154f, bottomRowRect.height);
+            LogFindOverlayState("Rendering overlay.", search, codeAreaRect, overlayRect, false);
+
+            GUI.Box(overlayRect, GUIContent.none, _pathBarStyle ?? GUI.skin.box);
+            GUILayout.BeginArea(overlayRect);
+            GUI.SetNextControlName(FindQueryControlName);
+            var updatedQuery = GUI.TextField(queryRect, search.QueryText ?? string.Empty);
+            if (!string.Equals(updatedQuery, search.QueryText, StringComparison.Ordinal))
+            {
+                search.QueryText = updatedQuery;
+                search.PendingRefresh = true;
+                search.ActiveMatchIndex = -1;
+            }
+
+            if (search.FocusQueryRequested)
+            {
+                GUIUtility.hotControl = 0;
+                GUIUtility.keyboardControl = 0;
+                GUI.FocusControl(FindQueryControlName);
+                if (string.Equals(GUI.GetNameOfFocusedControl(), FindQueryControlName, StringComparison.Ordinal))
+                {
+                    SelectAllFocusedFindQuery();
+                    search.FocusQueryRequested = false;
+                }
+            }
+
+            GUI.Label(summaryRect, BuildFindSummary(workbenchSearchService, state));
+
+            if (GUI.Button(prevRect, "<", _toolbarButtonStyle ?? GUI.skin.button))
+            {
+                ExecuteWorkbenchCommand(commandRegistry, "cortex.search.previous", state);
+            }
+
+            if (GUI.Button(nextRect, ">", _toolbarButtonStyle ?? GUI.skin.button))
+            {
+                ExecuteWorkbenchCommand(commandRegistry, "cortex.search.next", state);
+            }
+
+            if (GUI.Button(closeRect, "X", _toolbarButtonStyle ?? GUI.skin.button))
+            {
+                ExecuteWorkbenchCommand(commandRegistry, "cortex.search.close", state);
+            }
+
+            var updatedMatchCase = GUI.Toggle(toggleCaseRect, query.MatchCase, "Aa", _toolbarButtonStyle ?? GUI.skin.button);
+            if (updatedMatchCase != query.MatchCase)
+            {
+                query.MatchCase = updatedMatchCase;
+                search.PendingRefresh = true;
+                search.ActiveMatchIndex = -1;
+            }
+
+            var updatedWholeWord = GUI.Toggle(toggleWordRect, query.WholeWord, "W", _toolbarButtonStyle ?? GUI.skin.button);
+            if (updatedWholeWord != query.WholeWord)
+            {
+                query.WholeWord = updatedWholeWord;
+                search.PendingRefresh = true;
+                search.ActiveMatchIndex = -1;
+            }
+
+            if (GUI.Button(scopeRect, BuildScopeLabel(query.Scope) + " v", _toolbarButtonStyle ?? GUI.skin.button))
+            {
+                search.ScopeMenuOpen = !search.ScopeMenuOpen;
+            }
+
+            if (search.ScopeMenuOpen)
+            {
+                var menuRect = new Rect(scopeRect.x, bottomRowRect.yMax + 4f, scopeRect.width, 90f);
+                GUI.Box(menuRect, GUIContent.none, GUI.skin.box);
+                DrawScopeButton(commandRegistry, state, SearchScopeKind.CurrentDocument, "Current document", new Rect(menuRect.x + 4f, menuRect.y + 4f, menuRect.width - 8f, 19f));
+                DrawScopeButton(commandRegistry, state, SearchScopeKind.AllOpenDocuments, "All open documents", new Rect(menuRect.x + 4f, menuRect.y + 25f, menuRect.width - 8f, 19f));
+                DrawScopeButton(commandRegistry, state, SearchScopeKind.CurrentProject, "Current project", new Rect(menuRect.x + 4f, menuRect.y + 46f, menuRect.width - 8f, 19f));
+                DrawScopeButton(commandRegistry, state, SearchScopeKind.EntireSolution, "Entire solution", new Rect(menuRect.x + 4f, menuRect.y + 67f, menuRect.width - 8f, 19f));
+            }
+            GUILayout.EndArea();
+
+            var queryHasFocus = string.Equals(GUI.GetNameOfFocusedControl(), FindQueryControlName, StringComparison.Ordinal);
+            if (current != null && current.type == EventType.KeyDown && queryHasFocus)
+            {
+                if (current.keyCode == KeyCode.Return || current.keyCode == KeyCode.KeypadEnter)
+                {
+                    ExecuteWorkbenchCommand(commandRegistry, "cortex.search.next", state);
+                    current.Use();
+                }
+                else if (current.keyCode == KeyCode.Escape)
+                {
+                    ExecuteWorkbenchCommand(commandRegistry, "cortex.search.close", state);
+                    current.Use();
+                }
+            }
+        }
+
+        private void DrawScopeButton(ICommandRegistry commandRegistry, CortexShellState state, SearchScopeKind scope, string label, Rect rect)
+        {
+            var selected = state != null && state.Search != null && state.Search.Query.Scope == scope;
+            if (GUI.Button(rect, (selected ? "> " : string.Empty) + label, _toolbarButtonStyle ?? GUI.skin.button))
+            {
+                state.Search.Query.Scope = scope;
+                state.Search.ScopeMenuOpen = false;
+                state.Search.PendingRefresh = true;
+                state.Search.ActiveMatchIndex = -1;
+                state.Search.FocusQueryRequested = true;
+                ExecuteWorkbenchCommand(commandRegistry, "cortex.window.search", state);
+            }
+        }
+
+        private string BuildFindSummary(Services.WorkbenchSearchService workbenchSearchService, CortexShellState state)
+        {
+            if (state == null || state.Search == null)
+            {
+                return string.Empty;
+            }
+
+            if (state.Search.PendingRefresh)
+            {
+                return string.IsNullOrEmpty(state.Search.QueryText) ? "Type to search" : "Press Enter";
+            }
+
+            var results = state.Search.Results;
+            if (results == null)
+            {
+                return "Press Enter";
+            }
+
+            var total = workbenchSearchService != null ? workbenchSearchService.CountMatches(results) : results.TotalMatchCount;
+            if (total <= 0)
+            {
+                return results.StatusMessage ?? "No matches";
+            }
+
+            var active = state.Search.ActiveMatchIndex >= 0 ? state.Search.ActiveMatchIndex + 1 : 0;
+            return active + "/" + total;
+        }
+
+        private static string BuildScopeLabel(SearchScopeKind scope)
+        {
+            switch (scope)
+            {
+                case SearchScopeKind.AllOpenDocuments: return "All open documents";
+                case SearchScopeKind.CurrentProject: return "Current project";
+                case SearchScopeKind.EntireSolution: return "Entire solution";
+                default: return "Current document";
+            }
+        }
+
+        private static void ExecuteWorkbenchCommand(ICommandRegistry commandRegistry, string commandId, CortexShellState state)
+        {
+            if (commandRegistry == null || string.IsNullOrEmpty(commandId))
+            {
+                return;
+            }
+
+            commandRegistry.Execute(commandId, new CommandExecutionContext
+            {
+                ActiveContainerId = state != null ? state.Workbench.FocusedContainerId : string.Empty,
+                ActiveDocumentId = state != null ? state.Documents.ActiveDocumentPath : string.Empty,
+                FocusedRegionId = state != null ? state.Workbench.FocusedContainerId : string.Empty,
+                Parameter = state != null ? state.Documents.ActiveDocument : null
+            });
+        }
+
+        private void DrawCodeArea(
+            IDocumentService documentService,
+            Services.CortexNavigationService navigationService,
+            ICommandRegistry commandRegistry,
+            IContributionRegistry contributionRegistry,
+            CortexShellState state)
         {
             var active = state.Documents.ActiveDocument;
             if (active == null)
             {
+                // Sheltered's Unity runtime does not expose Rect.zero.
+                _lastCodeAreaRect = new Rect(0f, 0f, 0f, 0f);
                 return;
             }
 
             var isEditable = IsEditingDocument(state, active);
             var rect = GUILayoutUtility.GetRect(0f, 100000f, 0f, 100000f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            // IMGUI layout passes can report a placeholder 1x1 rect before the real
+            // repaint bounds exist. Keep the last usable editor viewport so the find
+            // overlay has stable coordinates across layout/repaint pairs.
+            if (IsUsableCodeAreaRect(rect))
+            {
+                _lastCodeAreaRect = rect;
+            }
+
+            var overlayBlockRect = BuildActiveFindInputBlockRect(state, rect);
 
             if (isEditable)
             {
@@ -249,10 +515,16 @@ namespace Cortex.Modules.Editor
                     rect,
                     _editorScroll,
                     active,
+                    commandRegistry,
+                    contributionRegistry,
                     state,
                     _appliedTheme,
                     _editorReadOnlyStyle,
                     _gutterReadOnlyStyle,
+                    _contextMenuStyle,
+                    _contextMenuButtonStyle,
+                    _contextMenuHeaderStyle,
+                    overlayBlockRect,
                     GutterWidth);
                 return;
             }
@@ -262,6 +534,8 @@ namespace Cortex.Modules.Editor
                 _editorScroll,
                 active,
                 navigationService,
+                commandRegistry,
+                contributionRegistry,
                 state,
                 _appliedTheme,
                 _editorReadOnlyStyle,
@@ -270,7 +544,70 @@ namespace Cortex.Modules.Editor
                 _contextMenuStyle,
                 _contextMenuButtonStyle,
                 _contextMenuHeaderStyle,
+                overlayBlockRect,
                 GutterWidth);
+        }
+
+        private Rect BuildActiveFindInputBlockRect(CortexShellState state, Rect codeAreaRect)
+        {
+            var search = state != null ? state.Search : null;
+            if (search == null || !search.IsVisible || !IsUsableCodeAreaRect(codeAreaRect))
+            {
+                return new Rect(0f, 0f, 0f, 0f);
+            }
+
+            return BuildFindOverlayRect(codeAreaRect, search.ScopeMenuOpen ? 94f : 0f);
+        }
+
+        private static Rect BuildFindOverlayRect(Rect codeAreaRect, float menuHeight)
+        {
+            var overlayHeight = FindOverlayPadding * 2f + FindOverlayTopRowHeight + 4f + FindOverlayBottomRowHeight + menuHeight;
+            return new Rect(
+                codeAreaRect.xMax - FindOverlayWidth,
+                codeAreaRect.y,
+                FindOverlayWidth,
+                overlayHeight);
+        }
+
+        private static bool IsUsableCodeAreaRect(Rect rect)
+        {
+            return rect.width >= MinimumUsableCodeAreaWidth && rect.height >= MinimumUsableCodeAreaHeight;
+        }
+
+        private static void SelectAllFocusedFindQuery()
+        {
+            var textEditor = GUIUtility.GetStateObject(typeof(TextEditor), GUIUtility.keyboardControl) as TextEditor;
+            if (textEditor != null)
+            {
+                textEditor.SelectAll();
+            }
+        }
+
+        private void LogFindOverlayState(string message, CortexSearchInteractionState search, Rect codeAreaRect, Rect overlayRect, bool force)
+        {
+            var searchText = search != null ? search.QueryText ?? string.Empty : string.Empty;
+            var scope = search != null ? search.Query.Scope.ToString() : string.Empty;
+            var key = message + "|" +
+                searchText + "|" +
+                scope + "|" +
+                (search != null && search.ScopeMenuOpen) + "|" +
+                codeAreaRect.x.ToString("F0") + "," + codeAreaRect.y.ToString("F0") + "," + codeAreaRect.width.ToString("F0") + "," + codeAreaRect.height.ToString("F0") + "|" +
+                overlayRect.x.ToString("F0") + "," + overlayRect.y.ToString("F0") + "," + overlayRect.width.ToString("F0") + "," + overlayRect.height.ToString("F0");
+            if (!force &&
+                string.Equals(_lastFindOverlayLogKey, key, StringComparison.Ordinal) &&
+                (DateTime.UtcNow - _lastFindOverlayLogUtc).TotalSeconds < 1d)
+            {
+                return;
+            }
+
+                _lastFindOverlayLogKey = key;
+                _lastFindOverlayLogUtc = DateTime.UtcNow;
+                MMLog.WriteInfo("[Cortex.FindUI] " + message +
+                " Query='" + searchText +
+                "', Scope=" + scope +
+                ", ScopeMenuOpen=" + (search != null && search.ScopeMenuOpen) +
+                ", CodeArea=(" + codeAreaRect.x.ToString("F1") + "," + codeAreaRect.y.ToString("F1") + "," + codeAreaRect.width.ToString("F1") + "," + codeAreaRect.height.ToString("F1") + ")" +
+                ", Overlay=(" + overlayRect.x.ToString("F1") + "," + overlayRect.y.ToString("F1") + "," + overlayRect.width.ToString("F1") + "," + overlayRect.height.ToString("F1") + ").");
         }
 
         private void DrawStatusBar(CortexShellState state)

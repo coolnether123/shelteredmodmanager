@@ -24,6 +24,24 @@ namespace Cortex.Core.Models
         public object Parameter;
     }
 
+    public static class EditorContextIds
+    {
+        public const string Symbol = "cortex.editor.symbol";
+    }
+
+    public sealed class EditorCommandTarget
+    {
+        public string ContextId;
+        public string DocumentPath;
+        public string SymbolText;
+        public string HoverText;
+        public int Line;
+        public int Column;
+        public int AbsolutePosition;
+        public bool SupportsEditing;
+        public bool CanGoToDefinition;
+    }
+
     public sealed class CommandHandlerRegistration
     {
         public string CommandId;

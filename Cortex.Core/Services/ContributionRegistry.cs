@@ -188,6 +188,12 @@ namespace Cortex.Core.Services
                     return order;
                 }
 
+                order = string.Compare(left.ContextId, right.ContextId, StringComparison.OrdinalIgnoreCase);
+                if (order != 0)
+                {
+                    return order;
+                }
+
                 order = left.SortOrder.CompareTo(right.SortOrder);
                 return order != 0
                     ? order

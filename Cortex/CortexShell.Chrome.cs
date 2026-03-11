@@ -714,6 +714,7 @@ namespace Cortex
                 case "cortex.window.explorer": return "Explorer";
                 case "cortex.window.projects": return "Projects";
                 case "cortex.window.references": return "References";
+                case "cortex.window.search": return "Search";
                 case "cortex.window.logs": return "Logs";
                 case "cortex.window.build": return "Build";
                 case "cortex.window.runtime": return "Runtime";
