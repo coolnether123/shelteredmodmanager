@@ -470,13 +470,6 @@ namespace Cortex
             var client = _languageServiceClient;
             var generation = _languageServiceGeneration;
             _languageCompletionInFlight = true;
-            MMLog.WriteInfo("[Cortex.Completion] Dispatching Roslyn completion for " +
-                Path.GetFileName(request.DocumentPath ?? string.Empty) +
-                " @ " + request.Line + ":" + request.Column +
-                " absolute=" + request.AbsolutePosition +
-                ", explicit=" + request.ExplicitInvocation +
-                ", trigger='" + (request.TriggerCharacter ?? string.Empty) + "'" +
-                ", project=" + (string.IsNullOrEmpty(request.ProjectFilePath) ? "<none>" : Path.GetFileName(request.ProjectFilePath)) + ".");
             var requestId = client != null ? client.QueueCompletion(request) : string.Empty;
             if (string.IsNullOrEmpty(requestId))
             {

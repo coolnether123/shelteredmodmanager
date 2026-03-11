@@ -94,6 +94,8 @@ namespace Cortex
 
     public sealed class CortexEditorInteractionState
     {
+        public readonly List<CortexAcceptedCompletionEntry> RecentAcceptedCompletions = new List<CortexAcceptedCompletionEntry>();
+        public int CompletionAcceptanceSequence;
         public string RequestedHoverKey = string.Empty;
         public string RequestedHoverDocumentPath = string.Empty;
         public int RequestedHoverLine;
@@ -121,6 +123,13 @@ namespace Cortex
         public LanguageServiceCompletionResponse ActiveCompletionResponse;
         public string CompletionPopupStateKey = string.Empty;
         public int CompletionSelectedIndex = -1;
+    }
+
+    public sealed class CortexAcceptedCompletionEntry
+    {
+        public string DocumentPath = string.Empty;
+        public string CompletionText = string.Empty;
+        public int Sequence;
     }
 
     public sealed class CortexLogSelectionState

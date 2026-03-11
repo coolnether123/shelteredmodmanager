@@ -20,7 +20,7 @@ namespace Cortex.Roslyn.Worker
 {
     internal sealed partial class RoslynLanguageServiceServer
     {
-        private const int CompletionCandidateLimit = 256;
+        private const int CompletionCandidateLimit = 512;
         private readonly Dictionary<string, Project> _projectCache = new Dictionary<string, Project>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, MSBuildWorkspace> _workspaceCache = new Dictionary<string, MSBuildWorkspace>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, CachedDocumentContext> _documentContextCache = new Dictionary<string, CachedDocumentContext>(StringComparer.OrdinalIgnoreCase);
