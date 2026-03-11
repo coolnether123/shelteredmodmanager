@@ -112,6 +112,11 @@ namespace Cortex.LanguageService.Protocol
         /// Explicit solution files already known by Cortex.
         /// </summary>
         public string[] SolutionFilePaths;
+
+        /// <summary>
+        /// Supplemental managed assembly paths that should be visible to Roslyn.
+        /// </summary>
+        public string[] ReferenceAssemblyPaths;
     }
 
     /// <summary>

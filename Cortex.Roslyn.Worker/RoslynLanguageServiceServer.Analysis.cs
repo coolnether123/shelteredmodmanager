@@ -20,6 +20,7 @@ namespace Cortex.Roslyn.Worker
 {
     internal sealed partial class RoslynLanguageServiceServer
     {
+        private const int CompletionCandidateLimit = 256;
         private readonly Dictionary<string, Project> _projectCache = new Dictionary<string, Project>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, MSBuildWorkspace> _workspaceCache = new Dictionary<string, MSBuildWorkspace>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, CachedDocumentContext> _documentContextCache = new Dictionary<string, CachedDocumentContext>(StringComparer.OrdinalIgnoreCase);
@@ -338,7 +339,7 @@ namespace Cortex.Roslyn.Worker
             }
 
             var items = completionList.ItemsList
-                .Take(48)
+                .Take(CompletionCandidateLimit)
                 .Select(item => ToProtocolCompletionItem(completionService, documentContext.Document, completionList, item))
                 .Where(item => item != null)
                 .ToArray();
@@ -375,7 +376,11 @@ namespace Cortex.Roslyn.Worker
         {
             if (!string.IsNullOrEmpty(triggerCharacter))
             {
-                return CompletionTrigger.CreateInsertionTrigger(triggerCharacter[0]);
+                var trigger = triggerCharacter[0];
+                if (trigger == '.' || trigger == ':' || trigger == '#' || trigger == '>')
+                {
+                    return CompletionTrigger.CreateInsertionTrigger(trigger);
+                }
             }
 
             return CompletionTrigger.Invoke;
@@ -643,6 +648,7 @@ namespace Cortex.Roslyn.Worker
                     Console.Error.WriteLine(args.Diagnostic.Message);
                 };
                 project = workspace.OpenProjectAsync(normalized).Result;
+                project = AddSupplementalMetadataReferences(project);
 
                 _projectCache[normalized] = project;
                 _workspaceCache[normalized] = workspace;
@@ -679,7 +685,7 @@ namespace Cortex.Roslyn.Worker
                 string.Equals(NormalizePath(document.FilePath), documentPath, StringComparison.OrdinalIgnoreCase));
         }
 
-        private static Document CreateAdhocDocument(string documentPath, string documentText)
+        private Document CreateAdhocDocument(string documentPath, string documentText)
         {
             var host = MefHostServices.Create(MefHostServices.DefaultAssemblies);
             var workspace = new AdhocWorkspace(host);
@@ -690,9 +696,10 @@ namespace Cortex.Roslyn.Worker
                 "AdhocProject",
                 LanguageNames.CSharp,
                 parseOptions: new CSharpParseOptions(LanguageVersion.Latest)));
-            project = project.AddMetadataReference(MetadataReference.CreateFromFile(typeof(object).Assembly.Location));
-            project = project.AddMetadataReference(MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location));
-            project = project.AddMetadataReference(MetadataReference.CreateFromFile(typeof(Uri).Assembly.Location));
+            project = AddMetadataReferenceIfPossible(project, typeof(object).Assembly.Location);
+            project = AddMetadataReferenceIfPossible(project, typeof(Enumerable).Assembly.Location);
+            project = AddMetadataReferenceIfPossible(project, typeof(Uri).Assembly.Location);
+            project = AddSupplementalMetadataReferences(project);
             var text = SourceText.From(documentText ?? ReadAllTextSafe(documentPath), Encoding.UTF8);
             var documentId = DocumentId.CreateNewId(project.Id);
             var documentInfo = DocumentInfo.Create(
@@ -701,6 +708,93 @@ namespace Cortex.Roslyn.Worker
                 loader: TextLoader.From(TextAndVersion.Create(text, VersionStamp.Create(), documentPath ?? "Document.cs")),
                 filePath: documentPath ?? "Document.cs");
             return workspace.AddDocument(documentInfo);
+        }
+
+        private Project AddSupplementalMetadataReferences(Project project)
+        {
+            if (project == null || _referenceAssemblyPaths == null || _referenceAssemblyPaths.Length == 0)
+            {
+                return project;
+            }
+
+            var existingPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var reference in project.MetadataReferences)
+            {
+                var portableReference = reference as PortableExecutableReference;
+                if (portableReference == null || string.IsNullOrEmpty(portableReference.FilePath))
+                {
+                    continue;
+                }
+
+                existingPaths.Add(NormalizePath(portableReference.FilePath));
+            }
+
+            var addedCount = 0;
+            var solution = project.Solution;
+            for (var i = 0; i < _referenceAssemblyPaths.Length; i++)
+            {
+                var referencePath = NormalizePath(_referenceAssemblyPaths[i]);
+                if (string.IsNullOrEmpty(referencePath) || existingPaths.Contains(referencePath))
+                {
+                    continue;
+                }
+
+                var reference = GetMetadataReference(referencePath);
+                if (reference == null)
+                {
+                    continue;
+                }
+
+                solution = solution.AddMetadataReference(project.Id, reference);
+                existingPaths.Add(referencePath);
+                addedCount++;
+            }
+
+            if (addedCount > 0)
+            {
+                Console.Error.WriteLine("Applied " + addedCount + " supplemental metadata references to " +
+                    (project.FilePath ?? project.Name ?? "project") + ".");
+            }
+
+            return solution.GetProject(project.Id) ?? project;
+        }
+
+        private Project AddMetadataReferenceIfPossible(Project project, string referencePath)
+        {
+            if (project == null)
+            {
+                return null;
+            }
+
+            var reference = GetMetadataReference(referencePath);
+            return reference != null ? project.AddMetadataReference(reference) : project;
+        }
+
+        private PortableExecutableReference GetMetadataReference(string referencePath)
+        {
+            var normalized = NormalizePath(referencePath);
+            if (string.IsNullOrEmpty(normalized) || !File.Exists(normalized))
+            {
+                return null;
+            }
+
+            PortableExecutableReference cached;
+            if (_metadataReferenceCache.TryGetValue(normalized, out cached))
+            {
+                return cached;
+            }
+
+            try
+            {
+                cached = MetadataReference.CreateFromFile(normalized);
+                _metadataReferenceCache[normalized] = cached;
+                return cached;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("Skipping metadata reference '" + normalized + "': " + ex.Message);
+                return null;
+            }
         }
 
         private static LanguageServiceDiagnostic[] CollectDiagnostics(Document document)

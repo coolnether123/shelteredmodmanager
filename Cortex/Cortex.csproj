@@ -64,7 +64,9 @@
     <Compile Include="Modules\Shared\RuntimeLogVisuals.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\MetadataNavigationResolver.cs" />
+    <Compile Include="Services\CompletionRankingService.cs" />
     <Compile Include="Services\DocumentLanguageAnalysisService.cs" />
+    <Compile Include="Services\EditorCompletionService.cs" />
     <Compile Include="Services\DocumentLanguageInteractionService.cs" />
     <Compile Include="Services\IEditorKeybindingService.cs" />
     <Compile Include="Services\EditorKeybindingService.cs" />

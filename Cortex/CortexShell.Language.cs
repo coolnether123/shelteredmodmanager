@@ -20,6 +20,7 @@ namespace Cortex
         private ILanguageServiceClient _languageServiceClient;
         private readonly DocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
         private readonly DocumentLanguageInteractionService _documentLanguageInteractionService = new DocumentLanguageInteractionService();
+        private readonly EditorCompletionService _editorCompletionService = new EditorCompletionService();
         private LanguageServiceInitializeRequest _languageServiceInitializeRequest;
         private string _lastAnalyzedDocumentFingerprint = string.Empty;
         private string _pendingLanguageAnalysisFingerprint = string.Empty;
@@ -87,7 +88,8 @@ namespace Cortex
                     ", Initializing=" + _languageServiceInitializing +
                     ", WorkspaceRoot=" + (initializeRequest.WorkspaceRootPath ?? string.Empty) +
                     ", Projects=" + (initializeRequest.ProjectFilePaths != null ? initializeRequest.ProjectFilePaths.Length : 0) +
-                    ", SourceRoots=" + (initializeRequest.SourceRoots != null ? initializeRequest.SourceRoots.Length : 0) + ".");
+                    ", SourceRoots=" + (initializeRequest.SourceRoots != null ? initializeRequest.SourceRoots.Length : 0) +
+                    ", References=" + (initializeRequest.ReferenceAssemblyPaths != null ? initializeRequest.ReferenceAssemblyPaths.Length : 0) + ".");
                 return;
             }
 
@@ -104,7 +106,7 @@ namespace Cortex
             _languageServiceClient = new RoslynLanguageServiceClient(
                 workerPath,
                 settings.RoslynServiceTimeoutMs,
-                delegate(string message) { MMLog.WriteDebug(message); });
+                delegate(string message) { MMLog.WriteInfo(message); });
             _languageServiceInitializeRequest = initializeRequest;
             _lastAnalyzedDocumentFingerprint = string.Empty;
             _pendingLanguageAnalysisFingerprint = string.Empty;
@@ -120,9 +122,7 @@ namespace Cortex
             _pendingLanguageHover = null;
             _pendingLanguageDefinition = null;
             _pendingLanguageCompletion = null;
-            _state.Editor.ActiveCompletionKey = string.Empty;
-            _state.Editor.ActiveCompletionResponse = null;
-            _state.Editor.RequestedCompletionKey = string.Empty;
+            _editorCompletionService.Reset(_state.Editor);
             _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
             _languageInitializeQueuedUtc = DateTime.MinValue;
             _lastLanguageInitializationProgressLogUtc = DateTime.MinValue;
@@ -157,7 +157,8 @@ namespace Cortex
                 ", FingerprintLength=" + (_languageServiceConfigurationFingerprint ?? string.Empty).Length +
                 ", WorkspaceRoot=" + (_languageServiceInitializeRequest != null ? (_languageServiceInitializeRequest.WorkspaceRootPath ?? string.Empty) : string.Empty) +
                 ", Projects=" + (_languageServiceInitializeRequest != null && _languageServiceInitializeRequest.ProjectFilePaths != null ? _languageServiceInitializeRequest.ProjectFilePaths.Length : 0) +
-                ", SourceRoots=" + (_languageServiceInitializeRequest != null && _languageServiceInitializeRequest.SourceRoots != null ? _languageServiceInitializeRequest.SourceRoots.Length : 0) + ".");
+                ", SourceRoots=" + (_languageServiceInitializeRequest != null && _languageServiceInitializeRequest.SourceRoots != null ? _languageServiceInitializeRequest.SourceRoots.Length : 0) +
+                ", References=" + (_languageServiceInitializeRequest != null && _languageServiceInitializeRequest.ReferenceAssemblyPaths != null ? _languageServiceInitializeRequest.ReferenceAssemblyPaths.Length : 0) + ".");
             _state.LanguageServiceStatus = new LanguageServiceStatusResponse
             {
                 Success = true,
@@ -228,9 +229,7 @@ namespace Cortex
             _pendingLanguageHover = null;
             _pendingLanguageDefinition = null;
             _pendingLanguageCompletion = null;
-            _state.Editor.ActiveCompletionKey = string.Empty;
-            _state.Editor.ActiveCompletionResponse = null;
-            _state.Editor.RequestedCompletionKey = string.Empty;
+            _editorCompletionService.Reset(_state.Editor);
             _lastLanguageAnalysisRequestUtc = DateTime.MinValue;
             _languageInitializeQueuedUtc = DateTime.MinValue;
             _lastLanguageInitializationProgressLogUtc = DateTime.MinValue;
@@ -261,8 +260,7 @@ namespace Cortex
             {
                 _lastAnalyzedDocumentFingerprint = string.Empty;
                 _pendingLanguageAnalysisFingerprint = string.Empty;
-                _state.Editor.ActiveCompletionKey = string.Empty;
-                _state.Editor.ActiveCompletionResponse = null;
+                _editorCompletionService.Reset(_state.Editor);
                 return;
             }
 
@@ -444,14 +442,7 @@ namespace Cortex
 
         private void UpdateLanguageCompletion()
         {
-            if (_languageCompletionInFlight || _state.Editor == null)
-            {
-                return;
-            }
-
-            var requestKey = _state.Editor.RequestedCompletionKey ?? string.Empty;
-            if (string.IsNullOrEmpty(requestKey) ||
-                string.Equals(requestKey, _state.Editor.ActiveCompletionKey ?? string.Empty, StringComparison.Ordinal))
+            if (!_editorCompletionService.ShouldDispatch(_state.Editor, _languageCompletionInFlight))
             {
                 return;
             }
@@ -464,23 +455,38 @@ namespace Cortex
 
             var project = ResolveProjectForDocument(session.FilePath);
             var sourceRoots = BuildLanguageSourceRoots(_state.Settings, project);
-            var request = _documentLanguageInteractionService.BuildCompletionRequest(
+            var request = _editorCompletionService.BuildWorkerRequest(
                 session,
                 _state.Settings,
                 project,
                 sourceRoots,
-                _state.Editor.RequestedCompletionLine,
-                _state.Editor.RequestedCompletionColumn,
-                _state.Editor.RequestedCompletionAbsolutePosition,
-                _state.Editor.RequestedCompletionExplicit,
-                _state.Editor.RequestedCompletionTriggerCharacter);
+                _state.Editor);
+            if (request == null)
+            {
+                return;
+            }
+
+            var requestKey = _state.Editor.RequestedCompletionKey ?? string.Empty;
             var client = _languageServiceClient;
             var generation = _languageServiceGeneration;
             _languageCompletionInFlight = true;
+            MMLog.WriteInfo("[Cortex.Completion] Dispatching Roslyn completion for " +
+                Path.GetFileName(request.DocumentPath ?? string.Empty) +
+                " @ " + request.Line + ":" + request.Column +
+                " absolute=" + request.AbsolutePosition +
+                ", explicit=" + request.ExplicitInvocation +
+                ", trigger='" + (request.TriggerCharacter ?? string.Empty) + "'" +
+                ", project=" + (string.IsNullOrEmpty(request.ProjectFilePath) ? "<none>" : Path.GetFileName(request.ProjectFilePath)) + ".");
             var requestId = client != null ? client.QueueCompletion(request) : string.Empty;
             if (string.IsNullOrEmpty(requestId))
             {
                 _languageCompletionInFlight = false;
+                MMLog.LogOnce("Cortex.Completion.DispatchFailed", delegate
+                {
+                    MMLog.WriteWarning("[Cortex.Completion] Cortex failed to queue a Roslyn completion request. Enable Debug logging to capture per-request failure details.");
+                });
+                MMLog.WriteInfo("[Cortex.Completion] QueueCompletion returned an empty request id. LastError=" +
+                    (_languageServiceClient != null ? _languageServiceClient.LastError ?? string.Empty : "client unavailable") + ".");
                 return;
             }
 
@@ -843,36 +849,8 @@ namespace Cortex
             }
 
             var response = DeserializeEnvelopePayload<LanguageServiceCompletionResponse>(envelope);
-            _state.Editor.RequestedCompletionKey = string.Empty;
-            _state.Editor.RequestedCompletionDocumentPath = string.Empty;
-            _state.Editor.RequestedCompletionLine = 0;
-            _state.Editor.RequestedCompletionColumn = 0;
-            _state.Editor.RequestedCompletionAbsolutePosition = -1;
-            _state.Editor.RequestedCompletionTriggerCharacter = string.Empty;
-            _state.Editor.RequestedCompletionExplicit = false;
-            if (response == null)
-            {
-                _state.Editor.ActiveCompletionKey = string.Empty;
-                _state.Editor.ActiveCompletionResponse = null;
-                return;
-            }
-
-            var target = FindOpenDocument(response.DocumentPath);
-            if (target == null ||
-                (response.DocumentVersion > 0 && target.TextVersion > 0 && response.DocumentVersion != target.TextVersion))
-            {
-                return;
-            }
-
-            if (!_documentLanguageInteractionService.HasCompletionItems(response))
-            {
-                _state.Editor.ActiveCompletionKey = string.Empty;
-                _state.Editor.ActiveCompletionResponse = null;
-                return;
-            }
-
-            _state.Editor.ActiveCompletionKey = pending.RequestKey ?? string.Empty;
-            _state.Editor.ActiveCompletionResponse = response;
+            var target = FindOpenDocument(response != null ? response.DocumentPath : pending.DocumentPath);
+            _editorCompletionService.AcceptResponse(_state.Editor, target, pending, response);
         }
 
         private static TResponse DeserializeEnvelopePayload<TResponse>(LanguageServiceEnvelope envelope)
@@ -1008,7 +986,8 @@ namespace Cortex
                 WorkspaceRootPath = _state.Settings != null ? _state.Settings.WorkspaceRootPath : string.Empty,
                 SourceRoots = BuildLanguageSourceRoots(_state.Settings, _state.SelectedProject),
                 ProjectFilePaths = CollectLanguageWarmupProjectPaths(),
-                SolutionFilePaths = new string[0]
+                SolutionFilePaths = new string[0],
+                ReferenceAssemblyPaths = CollectLanguageReferenceAssemblyPaths()
             };
         }
 
@@ -1072,6 +1051,83 @@ namespace Cortex
             }
 
             return false;
+        }
+
+        private string[] CollectLanguageReferenceAssemblyPaths()
+        {
+            var assemblyPaths = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            CollectLoadedAssemblyPaths(assemblyPaths, seen);
+            CollectAssemblyPathsFromDirectory(_state.Settings != null ? _state.Settings.ManagedAssemblyRootPath : string.Empty, assemblyPaths, seen);
+
+            return assemblyPaths.ToArray();
+        }
+
+        private static void CollectLoadedAssemblyPaths(List<string> assemblyPaths, HashSet<string> seen)
+        {
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            for (var i = 0; i < assemblies.Length; i++)
+            {
+                TryAddAssemblyPath(assemblyPaths, seen, SafeAssemblyLocation(assemblies[i]));
+            }
+        }
+
+        private static void CollectAssemblyPathsFromDirectory(string rootPath, List<string> assemblyPaths, HashSet<string> seen)
+        {
+            if (string.IsNullOrEmpty(rootPath) || !Directory.Exists(rootPath))
+            {
+                return;
+            }
+
+            string[] dllFiles;
+            try
+            {
+                dllFiles = Directory.GetFiles(rootPath, "*.dll", SearchOption.TopDirectoryOnly);
+            }
+            catch
+            {
+                return;
+            }
+
+            for (var i = 0; i < dllFiles.Length; i++)
+            {
+                TryAddAssemblyPath(assemblyPaths, seen, dllFiles[i]);
+            }
+        }
+
+        private static void TryAddAssemblyPath(List<string> assemblyPaths, HashSet<string> seen, string assemblyPath)
+        {
+            if (assemblyPaths == null || seen == null || string.IsNullOrEmpty(assemblyPath))
+            {
+                return;
+            }
+
+            try
+            {
+                var normalized = Path.GetFullPath(assemblyPath);
+                if (!File.Exists(normalized) || !seen.Add(normalized))
+                {
+                    return;
+                }
+
+                assemblyPaths.Add(normalized);
+            }
+            catch
+            {
+            }
+        }
+
+        private static string SafeAssemblyLocation(Assembly assembly)
+        {
+            try
+            {
+                return assembly != null ? assembly.Location : string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private CortexProjectDefinition ResolveProjectForDocument(string filePath)
@@ -1198,6 +1254,8 @@ namespace Cortex
             AppendFingerprintValues(builder, request != null ? request.ProjectFilePaths : null);
             builder.Append("|sources=");
             AppendFingerprintValues(builder, request != null ? request.SourceRoots : null);
+            builder.Append("|references=");
+            AppendFingerprintValues(builder, request != null ? request.ReferenceAssemblyPaths : null);
             return builder.ToString();
         }
 

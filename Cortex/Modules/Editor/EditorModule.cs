@@ -372,12 +372,28 @@ namespace Cortex.Modules.Editor
                 return "Roslyn: ready";
             }
 
+            if (!HasResolvedAnalysis(analysis))
+            {
+                return "Roslyn: analyzing";
+            }
+
             if (!analysis.Success)
             {
                 return "Roslyn: " + (string.IsNullOrEmpty(analysis.StatusMessage) ? "analysis failed" : analysis.StatusMessage);
             }
 
             return "Roslyn E:" + errorCount + " W:" + warningCount;
+        }
+
+        private static bool HasResolvedAnalysis(LanguageServiceAnalysisResponse analysis)
+        {
+            return analysis != null &&
+                (analysis.Success ||
+                 !string.IsNullOrEmpty(analysis.StatusMessage) ||
+                 !string.IsNullOrEmpty(analysis.DocumentPath) ||
+                 analysis.DocumentVersion > 0 ||
+                 (analysis.Diagnostics != null && analysis.Diagnostics.Length > 0) ||
+                 (analysis.Classifications != null && analysis.Classifications.Length > 0));
         }
 
         private GUIStyle ResolveStatusModeButtonStyle(bool enabled, bool isEditing)
