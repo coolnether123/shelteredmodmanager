@@ -7,6 +7,7 @@ namespace Cortex.Core.Models
         public const string EditorContainer = "cortex.editor";
         public const string BuildContainer = "cortex.build";
         public const string ReferenceContainer = "cortex.reference";
+        public const string SearchContainer = "cortex.search";
         public const string RuntimeContainer = "cortex.runtime";
         public const string SettingsContainer = "cortex.settings";
 

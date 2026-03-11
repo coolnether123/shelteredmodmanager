@@ -1181,8 +1181,8 @@ namespace Cortex
                 candidates.Add(settings.RoslynServicePathOverride);
             }
 
-            candidates.Add(Path.Combine(Path.Combine(smmBin, "roslyn"), "Cortex.Roslyn.Worker.dll"));
             candidates.Add(Path.Combine(Path.Combine(smmBin, "roslyn"), "Cortex.Roslyn.Worker.exe"));
+            candidates.Add(Path.Combine(Path.Combine(smmBin, "roslyn"), "Cortex.Roslyn.Worker.dll"));
 
             for (var i = 0; i < candidates.Count; i++)
             {

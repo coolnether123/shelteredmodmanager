@@ -15,6 +15,7 @@ using Cortex.Modules.Logs;
 using Cortex.Modules.Projects;
 using Cortex.Modules.Reference;
 using Cortex.Modules.Runtime;
+using Cortex.Modules.Search;
 using Cortex.Modules.Settings;
 using Cortex.Presentation.Models;
 using Cortex.Services;
@@ -61,8 +62,11 @@ namespace Cortex
         private IRuntimeToolBridge _runtimeToolBridge;
         private IRestartCoordinator _restartCoordinator;
         private IOverlayInputCaptureService _overlayInputCaptureService;
+        private ITextSearchService _textSearchService;
         private CortexNavigationService _navigationService;
         private UnityWorkbenchRuntime _workbenchRuntime;
+        private readonly EditorSymbolInteractionService _editorSymbolInteractionService = new EditorSymbolInteractionService();
+        private readonly WorkbenchSearchService _workbenchSearchService = new WorkbenchSearchService();
         private readonly HashSet<string> _activatedContainers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         private readonly CortexShellState _state = new CortexShellState();
@@ -74,6 +78,7 @@ namespace Cortex
         private FileExplorerModule _fileExplorerModule;
         private BuildModule _buildModule;
         private ReferenceModule _referenceModule;
+        private SearchModule _searchModule;
         private RuntimeToolsModule _runtimeToolsModule;
         private SettingsModule _settingsModule;
         private ExternalWorkbenchPluginLoader _externalPluginLoader;
@@ -412,6 +417,7 @@ namespace Cortex
             _runtimeSourceNavigationService = new RuntimeSourceNavigationService(new ModApiRuntimeSymbolResolver(_sourcePathResolver), _sourcePathResolver);
             _runtimeToolBridge = new ModApiRuntimeToolBridge();
             _restartCoordinator = new ModApiRestartCoordinator(new RestartRequestWriter());
+            _textSearchService = new TextSearchService();
             _navigationService = new CortexNavigationService(_documentService, _sourceReferenceService, _runtimeSourceNavigationService, _sourceLookupIndex);
             _overlayInputCaptureService = null;
             InitializeLanguageService(smmBin, settings);

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Modules.Shared;
 using Cortex.LanguageService.Protocol;
 using Cortex.Services;
 using ModAPI.Core;
@@ -21,6 +23,10 @@ namespace Cortex.Modules.Editor
         private readonly Dictionary<string, GUIStyle> _classificationStyles = new Dictionary<string, GUIStyle>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, HashSet<string>> _collapsedRegionKeys = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         private readonly GUIContent _sharedContent = new GUIContent();
+        private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
+        private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
+        private readonly PopupMenuSurface _popupMenuSurface = new PopupMenuSurface();
+        private readonly List<PopupMenuItem> _popupMenuItems = new List<PopupMenuItem>();
         private string _styleCacheKey = string.Empty;
         private string _layoutCacheKey = string.Empty;
         private CodeViewLayout _layout;
@@ -58,12 +64,28 @@ namespace Cortex.Modules.Editor
         private string _pressedTooltipPartKey = string.Empty;
         private bool _contextMenuOpen;
         private Vector2 _contextMenuPosition = Vector2.zero;
-        private CodeViewToken _contextToken;
+        private EditorCommandTarget _contextTarget;
         private string _lastDrawError = string.Empty;
         private string _lastFocusedDocumentPath = string.Empty;
         private int _lastFocusedLineNumber = -1;
 
-        public Vector2 Draw(Rect rect, Vector2 scroll, DocumentSession session, CortexNavigationService navigationService, CortexShellState state, string themeKey, GUIStyle baseStyle, GUIStyle gutterStyle, GUIStyle tooltipStyle, GUIStyle contextMenuStyle, GUIStyle contextMenuButtonStyle, GUIStyle contextMenuHeaderStyle, float gutterWidth)
+        public Vector2 Draw(
+            Rect rect,
+            Vector2 scroll,
+            DocumentSession session,
+            CortexNavigationService navigationService,
+            ICommandRegistry commandRegistry,
+            IContributionRegistry contributionRegistry,
+            CortexShellState state,
+            string themeKey,
+            GUIStyle baseStyle,
+            GUIStyle gutterStyle,
+            GUIStyle tooltipStyle,
+            GUIStyle contextMenuStyle,
+            GUIStyle contextMenuButtonStyle,
+            GUIStyle contextMenuHeaderStyle,
+            Rect blockedRect,
+            float gutterWidth)
         {
             if (session == null)
             {
@@ -90,7 +112,8 @@ namespace Cortex.Modules.Editor
 
                 var current = Event.current;
                 var localMouse = current != null ? current.mousePosition - new Vector2(rect.x, rect.y) : Vector2.zero;
-                var hasMouse = current != null && rect.Contains(current.mousePosition);
+                var mouseBlocked = current != null && blockedRect.width > 0f && blockedRect.height > 0f && blockedRect.Contains(current.mousePosition);
+                var hasMouse = current != null && rect.Contains(current.mousePosition) && !mouseBlocked;
                 var pointerOnTooltip = hasMouse && IsPointerWithinTooltip(localMouse);
                 var pointerOnHoverSurface = hasMouse && (pointerOnTooltip || IsPointerWithinHoverSurface(localMouse));
                 var editorHoverActive = hasMouse && !pointerOnHoverSurface;
@@ -99,7 +122,7 @@ namespace Cortex.Modules.Editor
                 var hoveredToken = hoveredFoldRegion == null && editorHoverActive ? FindTokenAt(contentMouse, gutterWidth) : null;
                 hoveredToken = CanHoverToken(hoveredToken) ? hoveredToken : null;
                 UpdateHoverRequest(session, state, hoveredToken, editorHoverActive && !pointerOnTooltip);
-                HandlePointerInput(session, state, hoveredToken, hoveredFoldRegion, editorHoverActive, current, localMouse, rect.size);
+                HandlePointerInput(session, state, hoveredToken, hoveredFoldRegion, editorHoverActive, current, localMouse, rect.size, commandRegistry, contributionRegistry);
 
                 GUI.BeginGroup(rect);
                 try
@@ -116,7 +139,7 @@ namespace Cortex.Modules.Editor
                     }
 
                     DrawTooltip(session, scroll, localMouse, hoveredToken, navigationService, state, rect.size, hasMouse);
-                    DrawContextMenu(state, session, current, localMouse, rect.size);
+                    DrawContextMenu(state, current, localMouse, rect.size, commandRegistry);
                 }
                 finally
                 {
@@ -128,8 +151,7 @@ namespace Cortex.Modules.Editor
             catch (Exception ex)
             {
                 LogDrawFailure(session, ex);
-                _contextMenuOpen = false;
-                _contextToken = null;
+                CloseContextMenu();
                 ClearStickyHover(state);
                 Invalidate();
                 return scroll;
@@ -140,6 +162,7 @@ namespace Cortex.Modules.Editor
         {
             _layoutCacheKey = string.Empty;
             _layout = null;
+            CloseContextMenu();
         }
 
         private void EnsureStyles(string themeKey, GUIStyle baseStyle, GUIStyle gutterStyle, GUIStyle tooltipStyle, GUIStyle contextMenuStyle, GUIStyle contextMenuButtonStyle, GUIStyle contextMenuHeaderStyle)
@@ -455,21 +478,21 @@ namespace Cortex.Modules.Editor
             }
         }
 
-        private void HandlePointerInput(DocumentSession session, CortexShellState state, CodeViewToken hoveredToken, FoldRegion hoveredFoldRegion, bool hasMouse, Event current, Vector2 localMouse, Vector2 viewportSize)
+        private void HandlePointerInput(
+            DocumentSession session,
+            CortexShellState state,
+            CodeViewToken hoveredToken,
+            FoldRegion hoveredFoldRegion,
+            bool hasMouse,
+            Event current,
+            Vector2 localMouse,
+            Vector2 viewportSize,
+            ICommandRegistry commandRegistry,
+            IContributionRegistry contributionRegistry)
         {
             if (current == null)
             {
                 return;
-            }
-
-            if (_contextMenuOpen && current.type == EventType.MouseDown && current.button == 0)
-            {
-                var menuRect = BuildMenuRect(viewportSize);
-                if (!menuRect.Contains(localMouse))
-                {
-                    _contextMenuOpen = false;
-                    _contextToken = null;
-                }
             }
 
             if (!hasMouse || current.type != EventType.MouseDown)
@@ -486,10 +509,7 @@ namespace Cortex.Modules.Editor
 
             if (current.button == 1 && hoveredToken != null)
             {
-                _selectedTokenKey = hoveredToken.Key;
-                _contextMenuOpen = true;
-                _contextMenuPosition = localMouse;
-                _contextToken = hoveredToken;
+                OpenContextMenu(session, state, hoveredToken, localMouse, commandRegistry, contributionRegistry);
                 current.Use();
                 return;
             }
@@ -500,9 +520,13 @@ namespace Cortex.Modules.Editor
             }
 
             _selectedTokenKey = hoveredToken.Key;
-            if (current.clickCount >= 2 && CanNavigateToDefinition(hoveredToken))
+            if (current.clickCount >= 2)
             {
-                RequestDefinition(state, session, hoveredToken);
+                EditorCommandTarget target;
+                if (TryBuildCommandTarget(session, state, hoveredToken, out target) && target.CanGoToDefinition)
+                {
+                    _symbolInteractionService.RequestDefinition(state, target);
+                }
             }
 
             current.Use();
@@ -669,26 +693,6 @@ namespace Cortex.Modules.Editor
             EditorInteractionLog.WriteHover("Queued hover request for " +
                 state.Editor.RequestedHoverTokenText +
                 " @ " + state.Editor.RequestedHoverLine + ":" + state.Editor.RequestedHoverColumn + ".");
-        }
-
-        private void RequestDefinition(CortexShellState state, DocumentSession session, CodeViewToken token)
-        {
-            if (state == null || state.Editor == null || session == null || token == null)
-            {
-                return;
-            }
-
-            if (!CanNavigateToDefinition(token))
-            {
-                return;
-            }
-
-            state.Editor.RequestedDefinitionKey = token.Key + "|" + DateTime.UtcNow.Ticks;
-            state.Editor.RequestedDefinitionDocumentPath = session.FilePath ?? string.Empty;
-            state.Editor.RequestedDefinitionLine = token.LineNumber;
-            state.Editor.RequestedDefinitionColumn = token.Column;
-            state.Editor.RequestedDefinitionAbsolutePosition = token.Start;
-            state.Editor.RequestedDefinitionTokenText = token.RawText.Trim();
         }
 
         private void DrawTooltip(DocumentSession session, Vector2 scroll, Vector2 localMouse, CodeViewToken hoveredToken, CortexNavigationService navigationService, CortexShellState state, Vector2 viewportSize, bool hasMouse)
@@ -1379,55 +1383,138 @@ namespace Cortex.Modules.Editor
             state.Editor.VisibleHoverDefinitionDocumentPath = string.Empty;
         }
 
-        private void DrawContextMenu(CortexShellState state, DocumentSession session, Event current, Vector2 localMouse, Vector2 viewportSize)
+        private void DrawContextMenu(
+            CortexShellState state,
+            Event current,
+            Vector2 localMouse,
+            Vector2 viewportSize,
+            ICommandRegistry commandRegistry)
         {
-            if (!_contextMenuOpen || _contextToken == null)
+            if (!_contextMenuOpen || _contextTarget == null || _popupMenuItems.Count == 0)
             {
                 return;
             }
 
-            var menuRect = BuildMenuRect(viewportSize);
-            GUI.Box(menuRect, GUIContent.none, _contextMenuStyle);
-            GUI.Label(new Rect(menuRect.x + 8f, menuRect.y + 6f, menuRect.width - 16f, 18f), _contextToken.RawText.Trim(), _contextMenuHeaderStyle);
+            var menuResult = _popupMenuSurface.Draw(
+                _contextMenuPosition,
+                viewportSize,
+                _contextTarget.SymbolText ?? string.Empty,
+                _popupMenuItems,
+                current,
+                localMouse,
+                _contextMenuStyle,
+                _contextMenuButtonStyle,
+                _contextMenuHeaderStyle);
 
-            var buttonY = menuRect.y + 28f;
-            if (CanNavigateToDefinition(_contextToken) &&
-                GUI.Button(new Rect(menuRect.x + 6f, buttonY, menuRect.width - 12f, MenuItemHeight), "Go To Definition", _contextMenuButtonStyle))
+            if (!string.IsNullOrEmpty(menuResult.ActivatedCommandId))
             {
-                RequestDefinition(state, session, _contextToken);
-                _contextMenuOpen = false;
+                _contextMenuService.Execute(state, commandRegistry, _contextTarget, menuResult.ActivatedCommandId);
+                CloseContextMenu();
+                return;
             }
 
-            buttonY += MenuItemHeight + 4f;
-            if (GUI.Button(new Rect(menuRect.x + 6f, buttonY, menuRect.width - 12f, MenuItemHeight), "Copy Token", _contextMenuButtonStyle))
+            if (menuResult.ShouldClose)
             {
-                GUIUtility.systemCopyBuffer = _contextToken.RawText ?? string.Empty;
-                _contextMenuOpen = false;
-            }
-
-            buttonY += MenuItemHeight + 4f;
-            if (GUI.Button(new Rect(menuRect.x + 6f, buttonY, menuRect.width - 12f, MenuItemHeight), "Copy Hover Info", _contextMenuButtonStyle))
-            {
-                var hover = state != null && state.Editor != null ? state.Editor.ActiveHoverResponse : null;
-                GUIUtility.systemCopyBuffer = hover != null && hover.Success
-                    ? ((hover.SymbolDisplay ?? string.Empty) + Environment.NewLine + Environment.NewLine + (hover.DocumentationText ?? string.Empty)).Trim()
-                    : string.Empty;
-                _contextMenuOpen = false;
-            }
-
-            if (current != null && current.type == EventType.MouseDown && current.button == 1 && !menuRect.Contains(localMouse))
-            {
-                _contextMenuOpen = false;
-                _contextToken = null;
+                CloseContextMenu();
             }
         }
 
-        private Rect BuildMenuRect(Vector2 viewportSize)
+        private void OpenContextMenu(
+            DocumentSession session,
+            CortexShellState state,
+            CodeViewToken token,
+            Vector2 localMouse,
+            ICommandRegistry commandRegistry,
+            IContributionRegistry contributionRegistry)
         {
-            var height = 28f + (MenuItemHeight * 3f) + 16f;
-            var x = Mathf.Min(_contextMenuPosition.x, Mathf.Max(6f, viewportSize.x - MenuWidth - 6f));
-            var y = Mathf.Min(_contextMenuPosition.y, Mathf.Max(6f, viewportSize.y - height - 6f));
-            return new Rect(x, y, MenuWidth, height);
+            EditorCommandTarget target;
+            if (!TryBuildCommandTarget(session, state, token, out target))
+            {
+                CloseContextMenu();
+                return;
+            }
+
+            var items = _contextMenuService.BuildItems(state, commandRegistry, contributionRegistry, target);
+            if (items == null || items.Count == 0)
+            {
+                CloseContextMenu();
+                return;
+            }
+
+            _selectedTokenKey = token != null ? token.Key : string.Empty;
+            _contextMenuOpen = true;
+            _contextMenuPosition = localMouse;
+            _contextTarget = target;
+            PopulatePopupMenuItems(items);
+        }
+
+        private bool TryBuildCommandTarget(
+            DocumentSession session,
+            CortexShellState state,
+            CodeViewToken token,
+            out EditorCommandTarget target)
+        {
+            target = null;
+            if (session == null || token == null)
+            {
+                return false;
+            }
+
+            return _symbolInteractionService.TryCreateTargetFromToken(
+                session,
+                token.Start,
+                token.LineNumber,
+                token.Column,
+                token.RawText,
+                ResolveHoverResponse(state, token),
+                CanNavigateToDefinition(token),
+                out target);
+        }
+
+        private LanguageServiceHoverResponse ResolveHoverResponse(CortexShellState state, CodeViewToken token)
+        {
+            if (state == null || state.Editor == null || token == null)
+            {
+                return null;
+            }
+
+            return string.Equals(state.Editor.ActiveHoverKey, token.Key, StringComparison.Ordinal)
+                ? state.Editor.ActiveHoverResponse
+                : null;
+        }
+
+        private void PopulatePopupMenuItems(IList<EditorContextMenuItem> items)
+        {
+            _popupMenuItems.Clear();
+            if (items == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                _popupMenuItems.Add(new PopupMenuItem
+                {
+                    CommandId = item.CommandId,
+                    Label = item.Label,
+                    ShortcutText = item.ShortcutText,
+                    Enabled = item.Enabled,
+                    IsSeparator = item.IsSeparator
+                });
+            }
+        }
+
+        private void CloseContextMenu()
+        {
+            _contextMenuOpen = false;
+            _contextTarget = null;
+            _popupMenuItems.Clear();
         }
 
         private CodeViewToken FindTokenAt(Vector2 contentMouse, float gutterWidth)

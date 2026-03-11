@@ -125,6 +125,19 @@ namespace Cortex
         public int CompletionSelectedIndex = -1;
     }
 
+    public sealed class CortexSearchInteractionState
+    {
+        public bool IsVisible;
+        public bool FocusQueryRequested;
+        public bool ScopeMenuOpen;
+        public bool PendingRefresh = true;
+        public int ActiveMatchIndex = -1;
+        public string QueryText = string.Empty;
+        public string LastExecutedFingerprint = string.Empty;
+        public TextSearchQuery Query = new TextSearchQuery();
+        public TextSearchResultSet Results;
+    }
+
     public sealed class CortexAcceptedCompletionEntry
     {
         public string DocumentPath = string.Empty;
@@ -164,6 +177,7 @@ namespace Cortex
         public readonly CortexWorkbenchSelectionState Workbench = new CortexWorkbenchSelectionState();
         public readonly CortexDocumentWorkspaceState Documents = new CortexDocumentWorkspaceState();
         public readonly CortexEditorInteractionState Editor = new CortexEditorInteractionState();
+        public readonly CortexSearchInteractionState Search = new CortexSearchInteractionState();
         public readonly CortexLogSelectionState Logs = new CortexLogSelectionState();
         public readonly CortexInterfaceDiagnosticState Diagnostics = new CortexInterfaceDiagnosticState();
         public CortexProjectDefinition SelectedProject;

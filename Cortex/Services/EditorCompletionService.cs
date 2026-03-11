@@ -489,14 +489,12 @@ namespace Cortex.Services
                     continue;
                 }
 
-                var candidate = !string.IsNullOrEmpty(item.FilterText)
-                    ? item.FilterText
-                    : (!string.IsNullOrEmpty(item.DisplayText) ? item.DisplayText : item.InsertText ?? string.Empty);
+                var candidate = CompletionMatchUtility.GetCandidateText(item);
                 if (candidate.StartsWith(query, StringComparison.OrdinalIgnoreCase))
                 {
                     prefixMatches++;
                 }
-                else if (StartsWithWordPart(candidate, query))
+                else if (CompletionMatchUtility.StartsWithWordPart(candidate, query))
                 {
                     wordPartMatches++;
                 }
@@ -509,39 +507,6 @@ namespace Cortex.Services
             return "prefix=" + prefixMatches +
                 ", wordPart=" + wordPartMatches +
                 ", contains=" + containsMatches;
-        }
-
-        private static bool StartsWithWordPart(string candidate, string query)
-        {
-            if (string.IsNullOrEmpty(candidate) || string.IsNullOrEmpty(query))
-            {
-                return false;
-            }
-
-            for (var i = 1; i < candidate.Length; i++)
-            {
-                var current = candidate[i];
-                var previous = candidate[i - 1];
-                if (current == '_')
-                {
-                    continue;
-                }
-
-                if (previous == '_' ||
-                    previous == '.' ||
-                    previous == ':' ||
-                    (char.IsUpper(current) && !char.IsUpper(previous)))
-                {
-                    var remaining = candidate.Length - i;
-                    if (remaining >= query.Length &&
-                        string.Compare(candidate, i, query, 0, query.Length, StringComparison.OrdinalIgnoreCase) == 0)
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
         }
     }
 

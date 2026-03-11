@@ -47,6 +47,7 @@
     <Compile Include="Models\DocumentModels.cs" />
     <Compile Include="Models\EditorKeybindingModels.cs" />
     <Compile Include="Models\EditorModels.cs" />
+    <Compile Include="Models\SearchModels.cs" />
     <Compile Include="..\Cortex.LanguageService.Protocol\LanguageServiceProtocol.cs">
       <Link>Protocol\LanguageServiceProtocol.cs</Link>
     </Compile>
@@ -78,6 +79,7 @@
     <Compile Include="Services\SourcePathResolver.cs" />
     <Compile Include="Services\SourceRootSetBuilder.cs" />
     <Compile Include="Services\SourceReferenceService.cs" />
+    <Compile Include="Services\TextSearchService.cs" />
     <Compile Include="Services\WorkspaceBrowserService.cs" />
     <Compile Include="Services\WorkspaceLocator.cs" />
   </ItemGroup>

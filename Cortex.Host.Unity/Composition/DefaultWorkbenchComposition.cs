@@ -20,6 +20,7 @@ namespace Cortex.Host.Unity.Composition
             // Secondary right side: project management and references.
             RegisterContainer(contributionRegistry, CortexWorkbenchIds.ProjectsContainer, "Projects", WorkbenchHostLocation.SecondarySideHost, 10, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.ProjectsContainer);
             RegisterContainer(contributionRegistry, CortexWorkbenchIds.ReferenceContainer, "References", WorkbenchHostLocation.SecondarySideHost, 20, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.ReferenceContainer);
+            RegisterContainer(contributionRegistry, CortexWorkbenchIds.SearchContainer, "Search", WorkbenchHostLocation.PanelHost, 30, ModuleActivationKind.OnCommand, "cortex.editor.find");
             // Editor is the central document host.
             RegisterContainer(contributionRegistry, CortexWorkbenchIds.EditorContainer, "Editor", WorkbenchHostLocation.DocumentHost, 0, ModuleActivationKind.OnDocumentRestore, CortexWorkbenchIds.EditorContainer);
 
@@ -38,29 +39,58 @@ namespace Cortex.Host.Unity.Composition
             RegisterCommand(commandRegistry, "cortex.window.explorer", "Explorer", "Window", "Show the explorer tool window.", string.Empty, 0, false);
             RegisterCommand(commandRegistry, "cortex.window.projects", "Projects", "Window", "Show the projects tool window.", string.Empty, 10, false);
             RegisterCommand(commandRegistry, "cortex.window.references", "References", "Window", "Show the references tool window.", string.Empty, 20, false);
-            RegisterCommand(commandRegistry, "cortex.window.logs", "Logs", "Window", "Show the logs tool window.", string.Empty, 30, false);
-            RegisterCommand(commandRegistry, "cortex.window.build", "Build", "Window", "Show the build tool window.", string.Empty, 40, false);
-            RegisterCommand(commandRegistry, "cortex.window.runtime", "Runtime", "Window", "Show the runtime tool window.", string.Empty, 50, false);
-            RegisterCommand(commandRegistry, "cortex.window.settings", "Settings", "Window", "Show the Cortex settings window.", string.Empty, 60, false);
+            RegisterCommand(commandRegistry, "cortex.window.search", "Search", "Window", "Show the search results tool window.", string.Empty, 30, false);
+            RegisterCommand(commandRegistry, "cortex.window.logs", "Logs", "Window", "Show the logs tool window.", string.Empty, 40, false);
+            RegisterCommand(commandRegistry, "cortex.window.build", "Build", "Window", "Show the build tool window.", string.Empty, 50, false);
+            RegisterCommand(commandRegistry, "cortex.window.runtime", "Runtime", "Window", "Show the runtime tool window.", string.Empty, 60, false);
+            RegisterCommand(commandRegistry, "cortex.window.settings", "Settings", "Window", "Show the Cortex settings window.", string.Empty, 70, false);
+            RegisterCommand(commandRegistry, "cortex.editor.find", "Find...", "Editor", "Open the find bar for text search.", "Ctrl+F", 0, false);
+            RegisterCommand(commandRegistry, "cortex.search.next", "Find Next", "Editor", "Advance to the next search result.", "F3", 110, false);
+            RegisterCommand(commandRegistry, "cortex.search.previous", "Find Previous", "Editor", "Move to the previous search result.", "Shift+F3", 120, false);
+            RegisterCommand(commandRegistry, "cortex.search.close", "Close Find", "Editor", "Close the active find bar.", "Escape", 130, false);
+            RegisterCommand(commandRegistry, "cortex.editor.quickActions", "Quick Actions and Refactorings...", "Editor", "Show editor quick actions for the current symbol.", "Ctrl+.", 0, false);
+            RegisterCommand(commandRegistry, "cortex.editor.rename", "Rename...", "Editor", "Rename the current symbol.", "F2", 10, false);
+            RegisterCommand(commandRegistry, "cortex.editor.removeAndSortUsings", "Remove and Sort Usings", "Editor", "Clean and reorder using directives.", "Ctrl+R, Ctrl+G", 20, false);
+            RegisterCommand(commandRegistry, "cortex.editor.peekDefinition", "Peek Definition", "Editor", "Open an inline peek view for the current symbol definition.", "Alt+F12", 30, false);
+            RegisterCommand(commandRegistry, "cortex.editor.goToDefinition", "Go To Definition", "Editor", "Navigate to the current symbol definition.", "F12", 40, false);
+            RegisterCommand(commandRegistry, "cortex.editor.goToBase", "Go To Base", "Editor", "Navigate to the base symbol.", "Alt+Home", 50, false);
+            RegisterCommand(commandRegistry, "cortex.editor.goToImplementation", "Go To Implementation", "Editor", "Navigate to the current symbol implementation.", "Ctrl+F12", 60, false);
+            RegisterCommand(commandRegistry, "cortex.editor.findAllReferences", "Find All References", "Editor", "Find references for the current symbol.", "Ctrl+K, R", 70, false);
+            RegisterCommand(commandRegistry, "cortex.editor.viewCallHierarchy", "View Call Hierarchy", "Editor", "Show call hierarchy for the current symbol.", "Ctrl+K, Ctrl+T", 80, false);
+            RegisterCommand(commandRegistry, "cortex.editor.copySymbol", "Copy Symbol", "Editor", "Copy the selected symbol text.", "Ctrl+C", 90, false);
+            RegisterCommand(commandRegistry, "cortex.editor.copyHoverInfo", "Copy Hover Info", "Editor", "Copy the current hover/signature information.", string.Empty, 100, false);
 
             // ── Menu projections (File / Edit / View / Build / Window) ────────────────
-            RegisterMenu(contributionRegistry, "cortex.file.saveAll", MenuProjectionLocation.MainMenu, "File", 0);
-            RegisterMenu(contributionRegistry, "cortex.file.closeActive", MenuProjectionLocation.MainMenu, "File", 10);
-            RegisterMenu(contributionRegistry, "cortex.file.settings", MenuProjectionLocation.MainMenu, "File", 20);
-            RegisterMenu(contributionRegistry, "cortex.view.fileExplorer", MenuProjectionLocation.MainMenu, "View", 0);
-            RegisterMenu(contributionRegistry, "cortex.view.zoomIn", MenuProjectionLocation.MainMenu, "View", 10);
-            RegisterMenu(contributionRegistry, "cortex.view.zoomOut", MenuProjectionLocation.MainMenu, "View", 20);
-            RegisterMenu(contributionRegistry, "cortex.win.theme", MenuProjectionLocation.MainMenu, "View", 30);
-            RegisterMenu(contributionRegistry, "cortex.logs.toggleWindow", MenuProjectionLocation.MainMenu, "View", 40);
-            RegisterMenu(contributionRegistry, "cortex.window.explorer", MenuProjectionLocation.MainMenu, "Window", 0);
-            RegisterMenu(contributionRegistry, "cortex.window.projects", MenuProjectionLocation.MainMenu, "Window", 10);
-            RegisterMenu(contributionRegistry, "cortex.window.references", MenuProjectionLocation.MainMenu, "Window", 20);
-            RegisterMenu(contributionRegistry, "cortex.window.logs", MenuProjectionLocation.MainMenu, "Window", 30);
-            RegisterMenu(contributionRegistry, "cortex.window.build", MenuProjectionLocation.MainMenu, "Window", 40);
-            RegisterMenu(contributionRegistry, "cortex.window.runtime", MenuProjectionLocation.MainMenu, "Window", 50);
-            RegisterMenu(contributionRegistry, "cortex.window.settings", MenuProjectionLocation.MainMenu, "Window", 60);
-            RegisterMenu(contributionRegistry, "cortex.shell.fitWindow", MenuProjectionLocation.MainMenu, "Window", 100);
-            RegisterMenu(contributionRegistry, "cortex.build.execute", MenuProjectionLocation.MainMenu, "Build", 0);
+            RegisterMenu(contributionRegistry, "cortex.file.saveAll", MenuProjectionLocation.MainMenu, "File", 0, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.file.closeActive", MenuProjectionLocation.MainMenu, "File", 10, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.file.settings", MenuProjectionLocation.MainMenu, "File", 20, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.view.fileExplorer", MenuProjectionLocation.MainMenu, "View", 0, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.view.zoomIn", MenuProjectionLocation.MainMenu, "View", 10, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.view.zoomOut", MenuProjectionLocation.MainMenu, "View", 20, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.win.theme", MenuProjectionLocation.MainMenu, "View", 30, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.logs.toggleWindow", MenuProjectionLocation.MainMenu, "View", 40, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.window.explorer", MenuProjectionLocation.MainMenu, "Window", 0, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.window.projects", MenuProjectionLocation.MainMenu, "Window", 10, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.window.references", MenuProjectionLocation.MainMenu, "Window", 20, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.window.search", MenuProjectionLocation.MainMenu, "Window", 30, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.window.logs", MenuProjectionLocation.MainMenu, "Window", 40, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.window.build", MenuProjectionLocation.MainMenu, "Window", 50, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.window.runtime", MenuProjectionLocation.MainMenu, "Window", 60, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.window.settings", MenuProjectionLocation.MainMenu, "Window", 70, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.shell.fitWindow", MenuProjectionLocation.MainMenu, "Window", 110, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.editor.find", MenuProjectionLocation.MainMenu, "Edit", 0, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.build.execute", MenuProjectionLocation.MainMenu, "Build", 0, string.Empty);
+            RegisterMenu(contributionRegistry, "cortex.editor.quickActions", MenuProjectionLocation.ContextMenu, "01_actions", 0, EditorContextIds.Symbol);
+            RegisterMenu(contributionRegistry, "cortex.editor.rename", MenuProjectionLocation.ContextMenu, "01_actions", 10, EditorContextIds.Symbol);
+            RegisterMenu(contributionRegistry, "cortex.editor.removeAndSortUsings", MenuProjectionLocation.ContextMenu, "01_actions", 20, EditorContextIds.Symbol);
+            RegisterMenu(contributionRegistry, "cortex.editor.peekDefinition", MenuProjectionLocation.ContextMenu, "02_navigation", 0, EditorContextIds.Symbol);
+            RegisterMenu(contributionRegistry, "cortex.editor.goToDefinition", MenuProjectionLocation.ContextMenu, "02_navigation", 10, EditorContextIds.Symbol);
+            RegisterMenu(contributionRegistry, "cortex.editor.goToBase", MenuProjectionLocation.ContextMenu, "02_navigation", 20, EditorContextIds.Symbol);
+            RegisterMenu(contributionRegistry, "cortex.editor.goToImplementation", MenuProjectionLocation.ContextMenu, "02_navigation", 30, EditorContextIds.Symbol);
+            RegisterMenu(contributionRegistry, "cortex.editor.findAllReferences", MenuProjectionLocation.ContextMenu, "02_navigation", 40, EditorContextIds.Symbol);
+            RegisterMenu(contributionRegistry, "cortex.editor.viewCallHierarchy", MenuProjectionLocation.ContextMenu, "02_navigation", 50, EditorContextIds.Symbol);
+            RegisterMenu(contributionRegistry, "cortex.editor.copySymbol", MenuProjectionLocation.ContextMenu, "03_clipboard", 0, EditorContextIds.Symbol);
+            RegisterMenu(contributionRegistry, "cortex.editor.copyHoverInfo", MenuProjectionLocation.ContextMenu, "03_clipboard", 10, EditorContextIds.Symbol);
 
             RegisterTheme(
                 contributionRegistry,
@@ -131,6 +161,7 @@ namespace Cortex.Host.Unity.Composition
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.LogsContainer, "LG");
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.ProjectsContainer, "PJ");
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.ReferenceContainer, "RF");
+            RegisterIcon(contributionRegistry, CortexWorkbenchIds.SearchContainer, "SR");
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.EditorContainer, "ED");
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.BuildContainer, "BL");
             RegisterIcon(contributionRegistry, CortexWorkbenchIds.RuntimeContainer, "RT");
@@ -188,12 +219,14 @@ namespace Cortex.Host.Unity.Composition
             string commandId,
             MenuProjectionLocation location,
             string group,
-            int sortOrder)
+            int sortOrder,
+            string contextId)
         {
             contributionRegistry.RegisterMenu(new MenuContribution
             {
                 CommandId = commandId,
                 Location = location,
+                ContextId = contextId,
                 Group = group,
                 SortOrder = sortOrder
             });

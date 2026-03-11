@@ -50,6 +50,11 @@ namespace Cortex.Core.Abstractions
         void Refresh(string rootPath, WorkspaceTreeKind kind);
     }
 
+    public interface ITextSearchService
+    {
+        TextSearchResultSet Search(TextSearchQuery query, IList<TextSearchDocumentInput> documents);
+    }
+
     public interface IDecompilerExplorerService
     {
         WorkspaceTreeNode BuildTree(string preferredRootPath);

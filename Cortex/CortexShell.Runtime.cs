@@ -81,7 +81,13 @@ namespace Cortex
                 delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
                 {
                     if (_editorModule == null) return;
-                    _editorModule.Draw(_documentService, _navigationService, _state);
+                    _editorModule.Draw(
+                        _documentService,
+                        _navigationService,
+                        _workbenchRuntime != null ? _workbenchRuntime.CommandRegistry : null,
+                        _workbenchRuntime != null ? _workbenchRuntime.ContributionRegistry : null,
+                        _workbenchSearchService,
+                        _state);
                 });
 
             RegisterModuleBinding(
@@ -106,6 +112,18 @@ namespace Cortex
                 {
                     if (_referenceModule == null) return;
                     _referenceModule.Draw(_referenceCatalogService, _navigationService, _state);
+                });
+
+            RegisterModuleBinding(
+                CortexWorkbenchIds.SearchContainer,
+                delegate
+                {
+                    if (_searchModule == null) _searchModule = new Modules.Search.SearchModule();
+                },
+                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+                {
+                    if (_searchModule == null) return;
+                    _searchModule.Draw(_workbenchSearchService, _navigationService, _state);
                 });
 
             RegisterModuleBinding(
@@ -299,6 +317,15 @@ namespace Cortex
                 delegate(CommandExecutionContext context) { return _visible; });
 
             _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.window.search",
+                delegate(CommandExecutionContext context)
+                {
+                    ActivateContainer(CortexWorkbenchIds.SearchContainer);
+                    _state.StatusMessage = "Search window shown.";
+                },
+                delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
                 "cortex.window.logs",
                 delegate(CommandExecutionContext context)
                 {
@@ -371,6 +398,100 @@ namespace Cortex
                     _state.StatusMessage = "Theme: " + themes[nextIndex].DisplayName;
                 },
                 delegate(CommandExecutionContext context) { return _visible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.editor.find",
+                delegate(CommandExecutionContext context)
+                {
+                    OpenFind();
+                },
+                delegate(CommandExecutionContext context) { return _visible && _state.Documents.ActiveDocument != null; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.search.next",
+                delegate(CommandExecutionContext context)
+                {
+                    ExecuteSearchOrAdvance(1);
+                },
+                delegate(CommandExecutionContext context) { return _visible && _state.Search != null && _state.Search.IsVisible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.search.previous",
+                delegate(CommandExecutionContext context)
+                {
+                    ExecuteSearchOrAdvance(-1);
+                },
+                delegate(CommandExecutionContext context) { return _visible && _state.Search != null && _state.Search.IsVisible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.search.close",
+                delegate(CommandExecutionContext context)
+                {
+                    CloseFind();
+                },
+                delegate(CommandExecutionContext context) { return _visible && _state.Search != null && _state.Search.IsVisible; });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.editor.goToDefinition",
+                delegate(CommandExecutionContext context)
+                {
+                    var target = GetEditorCommandTarget(context);
+                    if (target == null)
+                    {
+                        return;
+                    }
+
+                    _editorSymbolInteractionService.RequestDefinition(_state, target);
+                    _state.StatusMessage = "Go To Definition: " + (target.SymbolText ?? string.Empty);
+                },
+                delegate(CommandExecutionContext context)
+                {
+                    var target = GetEditorCommandTarget(context);
+                    return _visible && target != null && target.CanGoToDefinition;
+                });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.editor.copySymbol",
+                delegate(CommandExecutionContext context)
+                {
+                    var target = GetEditorCommandTarget(context);
+                    if (target == null)
+                    {
+                        return;
+                    }
+
+                    GUIUtility.systemCopyBuffer = target.SymbolText ?? string.Empty;
+                    _state.StatusMessage = "Copied symbol.";
+                },
+                delegate(CommandExecutionContext context)
+                {
+                    var target = GetEditorCommandTarget(context);
+                    return _visible && target != null && !string.IsNullOrEmpty(target.SymbolText);
+                });
+
+            _workbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.editor.copyHoverInfo",
+                delegate(CommandExecutionContext context)
+                {
+                    var target = GetEditorCommandTarget(context);
+                    if (target == null)
+                    {
+                        return;
+                    }
+
+                    GUIUtility.systemCopyBuffer = target.HoverText ?? string.Empty;
+                    _state.StatusMessage = "Copied hover info.";
+                },
+                delegate(CommandExecutionContext context)
+                {
+                    var target = GetEditorCommandTarget(context);
+                    return _visible && target != null && !string.IsNullOrEmpty(target.HoverText);
+                });
+        }
+
+        private static EditorCommandTarget GetEditorCommandTarget(CommandExecutionContext context)
+        {
+            return context != null ? context.Parameter as EditorCommandTarget : null;
         }
 
         private bool ExecuteCommand(string commandId, object parameter)
