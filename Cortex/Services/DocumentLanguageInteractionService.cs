@@ -53,33 +53,6 @@ namespace Cortex.Services
             };
         }
 
-        public LanguageServiceCompletionRequest BuildCompletionRequest(
-            DocumentSession session,
-            CortexSettings settings,
-            CortexProjectDefinition project,
-            string[] sourceRoots,
-            int line,
-            int column,
-            int absolutePosition,
-            bool explicitInvocation,
-            string triggerCharacter)
-        {
-            return new LanguageServiceCompletionRequest
-            {
-                DocumentPath = session != null ? session.FilePath : string.Empty,
-                ProjectFilePath = project != null ? project.ProjectFilePath : string.Empty,
-                WorkspaceRootPath = settings != null ? settings.WorkspaceRootPath : string.Empty,
-                SourceRoots = sourceRoots ?? new string[0],
-                DocumentText = session != null ? session.Text : string.Empty,
-                DocumentVersion = session != null ? session.TextVersion : 0,
-                Line = line,
-                Column = column,
-                AbsolutePosition = absolutePosition,
-                ExplicitInvocation = explicitInvocation,
-                TriggerCharacter = triggerCharacter ?? string.Empty
-            };
-        }
-
         public string BuildCompletionRequestKey(
             string documentPath,
             int documentVersion,
@@ -165,14 +138,5 @@ namespace Cortex.Services
         {
             return value == '.' || value == '_' || char.IsLetterOrDigit(value);
         }
-    }
-
-    internal sealed class DocumentLanguageCompletionRequestState
-    {
-        public string RequestId;
-        public int Generation;
-        public string RequestKey;
-        public string DocumentPath;
-        public int DocumentVersion;
     }
 }

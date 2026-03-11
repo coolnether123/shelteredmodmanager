@@ -1,6 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.Reflection;
 using Cortex.LanguageService.Protocol;
 using GameModding.Shared.Serialization;
+using Microsoft.CodeAnalysis;
 
 namespace Cortex.Roslyn.Worker
 {
@@ -10,6 +13,8 @@ namespace Cortex.Roslyn.Worker
         private string[] _sourceRoots = new string[0];
         private string[] _projectFilePaths = new string[0];
         private string[] _solutionFilePaths = new string[0];
+        private string[] _referenceAssemblyPaths = new string[0];
+        private readonly Dictionary<string, PortableExecutableReference> _metadataReferenceCache = new Dictionary<string, PortableExecutableReference>(StringComparer.OrdinalIgnoreCase);
 
         public RoslynLanguageServiceServer()
         {
@@ -76,8 +81,13 @@ namespace Cortex.Roslyn.Worker
             _sourceRoots = payload.SourceRoots ?? new string[0];
             _projectFilePaths = payload.ProjectFilePaths ?? new string[0];
             _solutionFilePaths = payload.SolutionFilePaths ?? new string[0];
+            _referenceAssemblyPaths = payload.ReferenceAssemblyPaths ?? new string[0];
             _documentContextCache.Clear();
             WarmProjectCache(_projectFilePaths);
+            Console.Error.WriteLine("Initialized Roslyn worker. WorkspaceRoot=" + _workspaceRootPath +
+                ", Projects=" + _projectFilePaths.Length +
+                ", SourceRoots=" + _sourceRoots.Length +
+                ", References=" + _referenceAssemblyPaths.Length + ".");
 
             return BuildSuccessEnvelope(request, new LanguageServiceInitializeResponse
             {

@@ -25,7 +25,7 @@ namespace Cortex.Modules.Editor
         private readonly IEditorService _editorService = new EditorService();
         private readonly IEditorKeybindingService _keybindingService = new EditorKeybindingService();
         private readonly DocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
-        private readonly DocumentLanguageInteractionService _documentLanguageInteractionService = new DocumentLanguageInteractionService();
+        private readonly EditorCompletionService _editorCompletionService = new EditorCompletionService();
         private readonly GUIContent _measureContent = new GUIContent();
         private readonly List<NormalizedSpan> _orderedSpans = new List<NormalizedSpan>();
         private readonly Dictionary<string, GUIStyle> _classificationStyles = new Dictionary<string, GUIStyle>(StringComparer.OrdinalIgnoreCase);
@@ -53,8 +53,6 @@ namespace Cortex.Modules.Editor
         private DateTime _lastClickUtc = DateTime.MinValue;
         private string _lastDrawError = string.Empty;
         private DateTime _lastDrawErrorUtc = DateTime.MinValue;
-        private string _completionStateKey = string.Empty;
-        private int _completionSelectedIndex = -1;
         private LayoutCache _layout;
 
         private struct PointerContext
@@ -631,11 +629,7 @@ namespace Cortex.Modules.Editor
             }
 
             var response = state.Editor.ActiveCompletionResponse;
-            if (!_documentLanguageInteractionService.HasCompletionItems(response) ||
-                !string.Equals(response.DocumentPath ?? string.Empty, session.FilePath ?? string.Empty, StringComparison.OrdinalIgnoreCase) ||
-                response.DocumentVersion != session.TextVersion ||
-                session.EditorState == null ||
-                session.EditorState.HasMultipleSelections)
+            if (!_editorCompletionService.IsVisibleForSession(state.Editor, session))
             {
                 if (HasVisibleCompletion(state))
                 {
@@ -651,7 +645,7 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            SyncCompletionSelection(response);
+            _editorCompletionService.SyncSelection(state.Editor);
             var caretRect = BuildCaretViewportRect(_layout.Lines[caret.Line], gutterWidth, session.EditorState.CaretIndex, scroll);
             var popupWidth = CalculateCompletionPopupWidth(response);
             var visibleCount = Math.Min(CompletionVisibleItemCount, response.Items.Length);
@@ -671,7 +665,8 @@ namespace Cortex.Modules.Editor
             GUI.DrawTexture(new Rect(popupRect.x, popupRect.y, popupRect.width, 1f), _completionBorderFill);
             GUI.DrawTexture(new Rect(popupRect.x, popupRect.yMax - 1f, popupRect.width, 1f), _completionBorderFill);
 
-            var firstVisible = Mathf.Clamp(_completionSelectedIndex - 3, 0, Math.Max(0, response.Items.Length - visibleCount));
+            var selectedIndex = state.Editor.CompletionSelectedIndex;
+            var firstVisible = Mathf.Clamp(selectedIndex - 3, 0, Math.Max(0, response.Items.Length - visibleCount));
             for (var i = 0; i < visibleCount; i++)
             {
                 var itemIndex = firstVisible + i;
@@ -682,7 +677,7 @@ namespace Cortex.Modules.Editor
                 }
 
                 var rowRect = new Rect(popupRect.x + 2f, popupRect.y + 4f + (i * _lineHeight), popupRect.width - 4f, _lineHeight);
-                var isSelected = itemIndex == _completionSelectedIndex;
+                var isSelected = itemIndex == selectedIndex;
                 if (isSelected)
                 {
                     GUI.DrawTexture(rowRect, _completionSelectedFill);
@@ -1099,25 +1094,25 @@ namespace Cortex.Modules.Editor
         private bool TryHandleCompletionInput(DocumentSession session, CortexShellState state, Event current)
         {
             var response = state != null && state.Editor != null ? state.Editor.ActiveCompletionResponse : null;
-            if (!_documentLanguageInteractionService.HasCompletionItems(response))
+            if (!_editorCompletionService.HasCompletionItems(response))
             {
                 return false;
             }
 
-            SyncCompletionSelection(response);
+            _editorCompletionService.SyncSelection(state.Editor);
             switch (current.keyCode)
             {
                 case KeyCode.UpArrow:
-                    _completionSelectedIndex = Mathf.Max(0, _completionSelectedIndex - 1);
+                    _editorCompletionService.MoveSelection(state.Editor, -1);
                     return true;
                 case KeyCode.DownArrow:
-                    _completionSelectedIndex = Mathf.Min(response.Items.Length - 1, _completionSelectedIndex + 1);
+                    _editorCompletionService.MoveSelection(state.Editor, 1);
                     return true;
                 case KeyCode.PageUp:
-                    _completionSelectedIndex = Mathf.Max(0, _completionSelectedIndex - CompletionVisibleItemCount);
+                    _editorCompletionService.MoveSelection(state.Editor, -CompletionVisibleItemCount);
                     return true;
                 case KeyCode.PageDown:
-                    _completionSelectedIndex = Mathf.Min(response.Items.Length - 1, _completionSelectedIndex + CompletionVisibleItemCount);
+                    _editorCompletionService.MoveSelection(state.Editor, CompletionVisibleItemCount);
                     return true;
                 case KeyCode.Return:
                 case KeyCode.KeypadEnter:
@@ -1152,13 +1147,13 @@ namespace Cortex.Modules.Editor
             var textChanged = session.TextVersion != previousTextVersion;
             if (textChanged)
             {
-                if (_documentLanguageInteractionService.ShouldTriggerCompletion(current.character))
+                if (_editorCompletionService.ShouldTriggerCompletion(current.character))
                 {
                     QueueCompletionRequest(session, state, false, current.character.ToString());
                     return;
                 }
 
-                if (_documentLanguageInteractionService.ShouldContinueCompletion(session, session.EditorState.CaretIndex))
+                if (_editorCompletionService.ShouldContinueCompletion(session, session.EditorState.CaretIndex))
                 {
                     QueueCompletionRequest(session, state, false, string.Empty);
                     return;
@@ -1184,112 +1179,34 @@ namespace Cortex.Modules.Editor
 
         private void QueueCompletionRequest(DocumentSession session, CortexShellState state, bool explicitInvocation, string triggerCharacter)
         {
-            if (state == null || state.Editor == null || session == null || session.EditorState == null || session.EditorState.HasMultipleSelections)
+            if (!_editorCompletionService.QueueRequest(
+                session,
+                state != null ? state.Editor : null,
+                _editorService,
+                explicitInvocation,
+                triggerCharacter))
             {
                 ClearCompletion(state);
                 return;
             }
-
-            var caretIndex = Mathf.Max(0, session.EditorState.CaretIndex);
-            var caret = _editorService.GetCaretPosition(session, caretIndex);
-            state.Editor.RequestedCompletionKey = _documentLanguageInteractionService.BuildCompletionRequestKey(
-                session.FilePath,
-                session.TextVersion,
-                caretIndex,
-                explicitInvocation,
-                triggerCharacter);
-            state.Editor.RequestedCompletionDocumentPath = session.FilePath ?? string.Empty;
-            state.Editor.RequestedCompletionLine = caret.Line + 1;
-            state.Editor.RequestedCompletionColumn = caret.Column + 1;
-            state.Editor.RequestedCompletionAbsolutePosition = caretIndex;
-            state.Editor.RequestedCompletionTriggerCharacter = triggerCharacter ?? string.Empty;
-            state.Editor.RequestedCompletionExplicit = explicitInvocation;
-            state.Editor.ActiveCompletionKey = string.Empty;
-            state.Editor.ActiveCompletionResponse = null;
-            _completionStateKey = string.Empty;
-            _completionSelectedIndex = -1;
         }
 
         private bool ApplySelectedCompletion(DocumentSession session, CortexShellState state)
         {
-            var response = state != null && state.Editor != null ? state.Editor.ActiveCompletionResponse : null;
-            if (!_documentLanguageInteractionService.HasCompletionItems(response))
-            {
-                return false;
-            }
-
-            SyncCompletionSelection(response);
-            if (_completionSelectedIndex < 0 || _completionSelectedIndex >= response.Items.Length)
-            {
-                return false;
-            }
-
-            var applied = _documentLanguageInteractionService.ApplyCompletion(
+            return _editorCompletionService.ApplySelectedCompletion(
                 session,
-                _editorService,
-                response,
-                response.Items[_completionSelectedIndex]);
-            ClearCompletion(state);
-            return applied;
+                state != null ? state.Editor : null,
+                _editorService);
         }
 
         private bool HasVisibleCompletion(CortexShellState state)
         {
-            return state != null &&
-                state.Editor != null &&
-                _documentLanguageInteractionService.HasCompletionItems(state.Editor.ActiveCompletionResponse);
+            return state != null && _editorCompletionService.HasVisibleCompletion(state.Editor);
         }
 
         private void ClearCompletion(CortexShellState state)
         {
-            _completionStateKey = string.Empty;
-            _completionSelectedIndex = -1;
-            if (state == null || state.Editor == null)
-            {
-                return;
-            }
-
-            state.Editor.RequestedCompletionKey = string.Empty;
-            state.Editor.RequestedCompletionDocumentPath = string.Empty;
-            state.Editor.RequestedCompletionLine = 0;
-            state.Editor.RequestedCompletionColumn = 0;
-            state.Editor.RequestedCompletionAbsolutePosition = -1;
-            state.Editor.RequestedCompletionTriggerCharacter = string.Empty;
-            state.Editor.RequestedCompletionExplicit = false;
-            state.Editor.ActiveCompletionKey = string.Empty;
-            state.Editor.ActiveCompletionResponse = null;
-        }
-
-        private void SyncCompletionSelection(LanguageServiceCompletionResponse response)
-        {
-            if (response == null)
-            {
-                _completionStateKey = string.Empty;
-                _completionSelectedIndex = -1;
-                return;
-            }
-
-            var responseKey = (response.DocumentPath ?? string.Empty) + "|" +
-                response.DocumentVersion + "|" +
-                (response.Items != null ? response.Items.Length : 0);
-            if (!string.Equals(_completionStateKey, responseKey, StringComparison.Ordinal))
-            {
-                _completionStateKey = responseKey;
-                _completionSelectedIndex = 0;
-                if (response.Items != null)
-                {
-                    for (var i = 0; i < response.Items.Length; i++)
-                    {
-                        if (response.Items[i] != null && response.Items[i].IsPreselected)
-                        {
-                            _completionSelectedIndex = i;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            _completionSelectedIndex = _documentLanguageInteractionService.NormalizeSelectedIndex(response, _completionSelectedIndex);
+            _editorCompletionService.Reset(state != null ? state.Editor : null);
         }
 
         private bool HandleTextInput(DocumentSession session, char character)

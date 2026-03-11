@@ -119,6 +119,8 @@ namespace Cortex
         public bool RequestedCompletionExplicit;
         public string ActiveCompletionKey = string.Empty;
         public LanguageServiceCompletionResponse ActiveCompletionResponse;
+        public string CompletionPopupStateKey = string.Empty;
+        public int CompletionSelectedIndex = -1;
     }
 
     public sealed class CortexLogSelectionState
