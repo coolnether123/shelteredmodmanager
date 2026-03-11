@@ -40,6 +40,8 @@
     <Compile Include="Abstractions\Interfaces.cs" />
     <Compile Include="Abstractions\WorkbenchInterfaces.cs" />
     <Compile Include="Models\CommandModels.cs" />
+    <Compile Include="Models\CompletionAugmentationModels.cs" />
+    <Compile Include="Models\CompletionAugmentationProviderSupport.cs" />
     <Compile Include="Models\ContributionModels.cs" />
     <Compile Include="Models\BuildModels.cs" />
     <Compile Include="Models\CortexSettings.cs" />

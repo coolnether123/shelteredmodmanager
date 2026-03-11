@@ -214,6 +214,8 @@ if exist "%25BASE%25PluginDebugGUI\bin\%25CONFIG%25\PluginDebugGUI.dll" copy /y 
 if exist "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" copy /y "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" "%25MODS_DIR%25\PluginInitializer\Assemblies\"
 
 :: Decompiler Tool &amp; Dependencies
+if exist "%25BASE%25Decompiler\Decompiler.csproj" dotnet build "%25BASE%25Decompiler\Decompiler.csproj" -c %25CONFIG%25
+if exist "%25BASE%25Cortex.Tabby.Server\Cortex.Tabby.Server.csproj" dotnet build "%25BASE%25Cortex.Tabby.Server\Cortex.Tabby.Server.csproj" -c %25CONFIG%25
 if exist "%25BASE%25Cortex.Roslyn.Worker\Cortex.Roslyn.Worker.csproj" dotnet build "%25BASE%25Cortex.Roslyn.Worker\Cortex.Roslyn.Worker.csproj" -c %25CONFIG%25
 if exist "%25BASE%25Dist\SMM\bin\roslyn\Cortex.Roslyn.Worker.dll" copy /y "%25BASE%25Dist\SMM\bin\roslyn\Cortex.Roslyn.Worker.dll" "%25DECOMPILER_DIR%25\"
 if exist "%25BASE%25Dist\SMM\bin\roslyn\Cortex.Roslyn.Worker.deps.json" copy /y "%25BASE%25Dist\SMM\bin\roslyn\Cortex.Roslyn.Worker.deps.json" "%25DECOMPILER_DIR%25\"

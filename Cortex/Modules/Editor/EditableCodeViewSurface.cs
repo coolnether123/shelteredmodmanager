@@ -1322,12 +1322,18 @@ namespace Cortex.Modules.Editor
             {
                 if (_editorCompletionService.ShouldTriggerCompletion(current.character))
                 {
+                    MMLog.WriteInfo("[Cortex.Completion] Triggering completion from typed character '" +
+                        current.character +
+                        "' in " + (session.FilePath ?? string.Empty) + ".");
                     QueueCompletionRequest(session, state, false, current.character.ToString());
                     return;
                 }
 
                 if (_editorCompletionService.ShouldContinueCompletion(session, session.EditorState.CaretIndex))
                 {
+                    MMLog.WriteInfo("[Cortex.Completion] Continuing completion after text edit in " +
+                        (session.FilePath ?? string.Empty) +
+                        ". CaretIndex=" + session.EditorState.CaretIndex + ".");
                     QueueCompletionRequest(session, state, false, string.Empty);
                     return;
                 }
@@ -1352,6 +1358,11 @@ namespace Cortex.Modules.Editor
 
         private void QueueCompletionRequest(DocumentSession session, CortexShellState state, bool explicitInvocation, string triggerCharacter)
         {
+            MMLog.WriteInfo("[Cortex.Completion] Queue request requested. Explicit=" +
+                explicitInvocation +
+                ", Trigger='" + (triggerCharacter ?? string.Empty) +
+                "', Document=" + (session != null ? session.FilePath ?? string.Empty : string.Empty) +
+                ", CaretIndex=" + (session != null && session.EditorState != null ? session.EditorState.CaretIndex.ToString() : "-1") + ".");
             if (!_editorCompletionService.QueueRequest(
                 session,
                 state != null ? state.Editor : null,
@@ -1359,9 +1370,16 @@ namespace Cortex.Modules.Editor
                 explicitInvocation,
                 triggerCharacter))
             {
+                MMLog.WriteInfo("[Cortex.Completion] Queue request was rejected before dispatch. Document=" +
+                    (session != null ? session.FilePath ?? string.Empty : string.Empty) + ".");
                 ClearCompletion(state);
                 return;
             }
+
+            MMLog.WriteInfo("[Cortex.Completion] Queue request accepted. Explicit=" +
+                explicitInvocation +
+                ", Trigger='" + (triggerCharacter ?? string.Empty) +
+                "', Document=" + (session != null ? session.FilePath ?? string.Empty : string.Empty) + ".");
         }
 
         private bool ApplySelectedCompletion(DocumentSession session, CortexShellState state)

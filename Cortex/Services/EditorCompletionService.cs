@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
@@ -123,24 +124,78 @@ namespace Cortex.Services
             }
 
             response = _completionRankingService.Rank(target, editorState, response);
-            var query = _completionRankingService.GetQuery(target, response);
             editorState.ActiveCompletionKey = pending.RequestKey ?? string.Empty;
             editorState.ActiveCompletionResponse = response;
             ResetSelection(editorState);
             SyncSelection(editorState);
-            MMLog.LogOnce("Cortex.Completion.Response.Accepted", delegate
+            return true;
+        }
+
+        public bool MergeSupplementalResponse(
+            CortexEditorInteractionState editorState,
+            DocumentSession target,
+            DocumentLanguageCompletionRequestState pending,
+            LanguageServiceCompletionResponse response)
+        {
+            if (editorState == null || pending == null || target == null || response == null)
             {
-                MMLog.WriteInfo("[Cortex.Completion] Roslyn completion responses are reaching the editor popup and Cortex is re-ranking them by typed prefix and context before display.");
-            });
-            MMLog.WriteInfo("[Cortex.Completion] Accepted response for " +
-                BuildDocumentLabel(target) +
-                " version " + response.DocumentVersion +
-                ". Items=" + (response.Items != null ? response.Items.Length : 0) +
-                ", ReplacementStart=" + (response.ReplacementRange != null ? response.ReplacementRange.Start.ToString() : "0") +
-                ", ReplacementLength=" + (response.ReplacementRange != null ? response.ReplacementRange.Length.ToString() : "0") +
-                ", Query='" + (query ?? string.Empty) + "'" +
-                ", MatchSummary=" + BuildMatchSummary(response, query) +
-                ", Preview=" + BuildCompletionPreview(response) + ".");
+                return false;
+            }
+
+            if ((response.DocumentVersion > 0 && target.TextVersion > 0 && response.DocumentVersion != target.TextVersion) ||
+                !HasCompletionItems(response))
+            {
+                return false;
+            }
+
+            var active = editorState.ActiveCompletionResponse;
+            if (active != null &&
+                string.Equals(active.DocumentPath ?? string.Empty, target.FilePath ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
+                active.DocumentVersion == target.TextVersion &&
+                active.ReplacementRange != null &&
+                pending.AbsolutePosition >= active.ReplacementRange.Start)
+            {
+                var replacementPrefixLength = pending.AbsolutePosition - active.ReplacementRange.Start;
+                var replacementPrefix = replacementPrefixLength > 0 &&
+                    !string.IsNullOrEmpty(target.Text) &&
+                    active.ReplacementRange.Start >= 0 &&
+                    active.ReplacementRange.Start + replacementPrefixLength <= target.Text.Length
+                    ? target.Text.Substring(active.ReplacementRange.Start, replacementPrefixLength)
+                    : string.Empty;
+                NormalizeSupplementalItems(response, replacementPrefix);
+                response.ReplacementRange = CloneRange(active.ReplacementRange);
+            }
+            else if (response.ReplacementRange == null)
+            {
+                response.ReplacementRange = new LanguageServiceRange
+                {
+                    Start = Math.Max(0, pending.AbsolutePosition),
+                    Length = 0
+                };
+            }
+
+            var combined = CloneCompletionResponse(active);
+            if (combined == null)
+            {
+                combined = CloneCompletionResponse(response);
+            }
+            else
+            {
+                combined.Items = MergeItems(combined.Items, response.Items);
+            }
+
+            combined.DocumentPath = target.FilePath ?? response.DocumentPath ?? pending.DocumentPath ?? string.Empty;
+            combined.DocumentVersion = target.TextVersion > 0 ? target.TextVersion : response.DocumentVersion;
+            if (combined.ReplacementRange == null)
+            {
+                combined.ReplacementRange = CloneRange(response.ReplacementRange);
+            }
+
+            combined = _completionRankingService.Rank(target, editorState, combined);
+            editorState.ActiveCompletionKey = pending.RequestKey ?? string.Empty;
+            editorState.ActiveCompletionResponse = combined;
+            ResetSelection(editorState);
+            SyncSelection(editorState);
             return true;
         }
 
@@ -274,6 +329,11 @@ namespace Cortex.Services
             ResetSelection(editorState);
         }
 
+        public void ClearPendingRequest(CortexEditorInteractionState editorState)
+        {
+            ClearRequest(editorState);
+        }
+
         private static void ClearRequest(CortexEditorInteractionState editorState)
         {
             if (editorState == null)
@@ -362,78 +422,168 @@ namespace Cortex.Services
             }
         }
 
+        private static void NormalizeSupplementalItems(LanguageServiceCompletionResponse response, string replacementPrefix)
+        {
+            if (response == null || response.Items == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < response.Items.Length; i++)
+            {
+                var item = response.Items[i];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                var insertText = item.InsertText ?? string.Empty;
+                if (!string.IsNullOrEmpty(replacementPrefix) &&
+                    !insertText.StartsWith(replacementPrefix, StringComparison.Ordinal))
+                {
+                    item.InsertText = replacementPrefix + insertText;
+                }
+
+                if (string.IsNullOrEmpty(item.FilterText))
+                {
+                    item.FilterText = item.InsertText ?? item.DisplayText ?? string.Empty;
+                }
+            }
+        }
+
+        private static LanguageServiceCompletionResponse CloneCompletionResponse(LanguageServiceCompletionResponse response)
+        {
+            if (response == null)
+            {
+                return null;
+            }
+
+            var clone = new LanguageServiceCompletionResponse
+            {
+                Success = response.Success,
+                StatusMessage = response.StatusMessage,
+                DocumentPath = response.DocumentPath,
+                ProjectFilePath = response.ProjectFilePath,
+                DocumentVersion = response.DocumentVersion,
+                ReplacementRange = CloneRange(response.ReplacementRange)
+            };
+
+            if (response.Items == null || response.Items.Length == 0)
+            {
+                clone.Items = new LanguageServiceCompletionItem[0];
+                return clone;
+            }
+
+            clone.Items = new LanguageServiceCompletionItem[response.Items.Length];
+            for (var i = 0; i < response.Items.Length; i++)
+            {
+                clone.Items[i] = CloneItem(response.Items[i]);
+            }
+
+            return clone;
+        }
+
+        private static LanguageServiceRange CloneRange(LanguageServiceRange range)
+        {
+            return range == null
+                ? null
+                : new LanguageServiceRange
+                {
+                    StartLine = range.StartLine,
+                    StartColumn = range.StartColumn,
+                    EndLine = range.EndLine,
+                    EndColumn = range.EndColumn,
+                    Start = range.Start,
+                    Length = range.Length
+                };
+        }
+
+        private static LanguageServiceCompletionItem CloneItem(LanguageServiceCompletionItem item)
+        {
+            return item == null
+                ? null
+                : new LanguageServiceCompletionItem
+                {
+                    DisplayText = item.DisplayText,
+                    InsertText = item.InsertText,
+                    FilterText = item.FilterText,
+                    SortText = item.SortText,
+                    InlineDescription = item.InlineDescription,
+                    Kind = item.Kind,
+                    IsPreselected = item.IsPreselected
+                };
+        }
+
+        private static LanguageServiceCompletionItem[] MergeItems(
+            LanguageServiceCompletionItem[] existing,
+            LanguageServiceCompletionItem[] incoming)
+        {
+            if ((existing == null || existing.Length == 0) &&
+                (incoming == null || incoming.Length == 0))
+            {
+                return new LanguageServiceCompletionItem[0];
+            }
+
+            var results = new List<LanguageServiceCompletionItem>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AppendItems(existing, results, seen);
+            AppendItems(incoming, results, seen);
+            return results.ToArray();
+        }
+
+        private static void AppendItems(
+            LanguageServiceCompletionItem[] items,
+            List<LanguageServiceCompletionItem> results,
+            HashSet<string> seen)
+        {
+            if (items == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < items.Length; i++)
+            {
+                var item = CloneItem(items[i]);
+                if (item == null)
+                {
+                    continue;
+                }
+
+                var key = (item.InsertText ?? string.Empty) + "|" +
+                    (item.FilterText ?? string.Empty) + "|" +
+                    (item.DisplayText ?? string.Empty);
+                if (!seen.Add(key))
+                {
+                    continue;
+                }
+
+                results.Add(item);
+            }
+        }
+
         private static void LogQueueBehavior(
             DocumentSession session,
             CortexEditorInteractionState editorState,
             string triggerCharacter,
             bool explicitInvocation)
         {
-            if (explicitInvocation)
-            {
-                MMLog.LogOnce("Cortex.Completion.Trigger.Explicit", delegate
-                {
-                    MMLog.WriteInfo("[Cortex.Completion] Explicit completion requests are enabled through the editor completion command.");
-                });
-            }
-            else if (!string.IsNullOrEmpty(triggerCharacter))
-            {
-                var trigger = triggerCharacter[0];
-                if (trigger == '.')
-                {
-                    MMLog.LogOnce("Cortex.Completion.Trigger.Dot", delegate
-                    {
-                        MMLog.WriteInfo("[Cortex.Completion] Typing '.' auto-queues Roslyn member completion.");
-                    });
-                }
-                else if (trigger == '_')
-                {
-                    MMLog.LogOnce("Cortex.Completion.Trigger.Underscore", delegate
-                    {
-                        MMLog.WriteInfo("[Cortex.Completion] Typing '_' currently auto-queues Roslyn completion.");
-                    });
-                }
-                else if (char.IsLetterOrDigit(trigger))
-                {
-                    MMLog.LogOnce("Cortex.Completion.Trigger.Identifier", delegate
-                    {
-                        MMLog.WriteInfo("[Cortex.Completion] Identifier characters currently auto-queue completion. Typing a letter like 'E' will request Roslyn suggestions with the current caret context.");
-                    });
-                }
-            }
-            else
-            {
-                MMLog.LogOnce("Cortex.Completion.Trigger.Continue", delegate
-                {
-                    MMLog.WriteInfo("[Cortex.Completion] Completion can be re-queued while typing through an identifier so the popup stays in sync with the current token.");
-                });
-            }
-
+            // Roslyn completion triggers are expected editor behavior; keep runtime logs focused on failures.
         }
 
         private static void LogRejectedResponse(DocumentSession target, LanguageServiceCompletionResponse response)
         {
             if (response == null)
             {
-                MMLog.LogOnce("Cortex.Completion.Response.Null", delegate
-                {
-                    MMLog.WriteInfo("[Cortex.Completion] A completion response was received but the payload was null, so the popup was cleared.");
-                });
                 return;
             }
 
-            if (!response.Success || response.Items == null || response.Items.Length == 0)
+            if (!response.Success)
             {
-                MMLog.LogOnce("Cortex.Completion.Response.Empty", delegate
-                {
-                    MMLog.WriteInfo("[Cortex.Completion] Roslyn can return an empty completion result for the current caret context. When that happens Cortex clears the popup instead of leaving stale suggestions visible.");
-                });
+                MMLog.WriteWarning("[Cortex.Completion] Rejected Roslyn response for " +
+                    BuildDocumentLabel(target) +
+                    ". Status=" + (response.StatusMessage ?? string.Empty) +
+                    ", Items=" + (response.Items != null ? response.Items.Length : 0) + ".");
             }
-
-            MMLog.WriteInfo("[Cortex.Completion] Rejected response for " +
-                BuildDocumentLabel(target) +
-                ". Success=" + response.Success +
-                ", Status=" + (response.StatusMessage ?? string.Empty) +
-                ", Items=" + (response.Items != null ? response.Items.Length : 0) + ".");
         }
 
         private static string BuildDocumentLabel(DocumentSession session)
@@ -443,71 +593,6 @@ namespace Cortex.Services
                 : "<unsaved>";
         }
 
-        private static string BuildCompletionPreview(LanguageServiceCompletionResponse response)
-        {
-            if (response == null || response.Items == null || response.Items.Length == 0)
-            {
-                return "<empty>";
-            }
-
-            var builder = new StringBuilder();
-            var count = Math.Min(5, response.Items.Length);
-            for (var i = 0; i < count; i++)
-            {
-                var item = response.Items[i];
-                if (item == null)
-                {
-                    continue;
-                }
-
-                if (builder.Length > 0)
-                {
-                    builder.Append(", ");
-                }
-
-                builder.Append(item.DisplayText ?? string.Empty);
-            }
-
-            return builder.ToString();
-        }
-
-        private static string BuildMatchSummary(LanguageServiceCompletionResponse response, string query)
-        {
-            if (response == null || response.Items == null || response.Items.Length == 0 || string.IsNullOrEmpty(query))
-            {
-                return "none";
-            }
-
-            var prefixMatches = 0;
-            var wordPartMatches = 0;
-            var containsMatches = 0;
-            for (var i = 0; i < response.Items.Length; i++)
-            {
-                var item = response.Items[i];
-                if (item == null)
-                {
-                    continue;
-                }
-
-                var candidate = CompletionMatchUtility.GetCandidateText(item);
-                if (candidate.StartsWith(query, StringComparison.OrdinalIgnoreCase))
-                {
-                    prefixMatches++;
-                }
-                else if (CompletionMatchUtility.StartsWithWordPart(candidate, query))
-                {
-                    wordPartMatches++;
-                }
-                else if (candidate.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    containsMatches++;
-                }
-            }
-
-            return "prefix=" + prefixMatches +
-                ", wordPart=" + wordPartMatches +
-                ", contains=" + containsMatches;
-        }
     }
 
     internal sealed class DocumentLanguageCompletionRequestState
@@ -517,5 +602,6 @@ namespace Cortex.Services
         public string RequestKey;
         public string DocumentPath;
         public int DocumentVersion;
+        public int AbsolutePosition;
     }
 }
