@@ -53,6 +53,7 @@ namespace Manager
         private int _suppressSettingsReloadLogCount;
         private DateTime _lastNoChangeSettingsReloadLogUtc = DateTime.MinValue;
         private bool _startupNexusUpdateAnnouncementsPending = true;
+        private int _nexusAccountRequestToken;
         private const string APP_VERSION = "1.3.0";
         private static readonly System.Collections.Generic.Dictionary<string, string> KnownModIdMigrations =
             new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -136,6 +137,72 @@ namespace Manager
         private void RecreateNexusService()
         {
             _nexusService = new NexusModsService(_settings != null ? _settings.NexusApiKey : string.Empty);
+        }
+
+        private void ApplyNexusAccountStatus(NexusAccountStatus status)
+        {
+            if (_settingsTab != null)
+                _settingsTab.SetNexusAccountStatus(status);
+            if (_nexusTab != null)
+                _nexusTab.SetAccountStatus(status);
+        }
+
+        private void RefreshNexusAccountStatusAsync(bool showPending)
+        {
+            if (_settings == null)
+            {
+                ApplyNexusAccountStatus(null);
+                return;
+            }
+
+            if (!_settings.EnableNexusIntegration)
+            {
+                ApplyNexusAccountStatus(null);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(_settings.NexusApiKey))
+            {
+                ApplyNexusAccountStatus(NexusAccountStatus.CreateNotConfigured());
+                return;
+            }
+
+            if (_nexusService == null)
+            {
+                ApplyNexusAccountStatus(NexusAccountStatus.CreateUnavailable("Nexus service is unavailable."));
+                return;
+            }
+
+            if (showPending)
+                ApplyNexusAccountStatus(NexusAccountStatus.CreateChecking());
+
+            int token = ++_nexusAccountRequestToken;
+            NexusModsService nexusService = _nexusService;
+
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                string errorMessage;
+                NexusAccountStatus status = nexusService.GetAccountStatus(out errorMessage);
+                if (status == null)
+                    status = NexusAccountStatus.CreateUnavailable(errorMessage);
+                else if (!string.IsNullOrEmpty(errorMessage) && string.IsNullOrEmpty(status.ErrorMessage))
+                    status.ErrorMessage = errorMessage;
+
+                if (IsDisposed || Disposing)
+                    return;
+
+                try
+                {
+                    BeginInvoke((MethodInvoker)delegate
+                    {
+                        if (token != _nexusAccountRequestToken)
+                            return;
+
+                        ApplyNexusAccountStatus(status);
+                    });
+                }
+                catch { }
+            });
         }
 
         private void InitializeComponent()
@@ -469,6 +536,7 @@ namespace Manager
             _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _settingsTab.Initialize(_settings);
+            RefreshNexusAccountStatusAsync(true);
 
             // Apply initial theme
             ApplyTheme(_settings.DarkMode);
@@ -1147,6 +1215,7 @@ namespace Manager
             
             // Re-apply theme in case it changed
             ApplyTheme(_settings.DarkMode);
+            RefreshNexusAccountStatusAsync(true);
 
             if (_settings.IsModsPathValid)
                 _modManagerTab.RefreshMods();
@@ -1190,6 +1259,7 @@ namespace Manager
             
             // Re-apply theme
             ApplyTheme(_settings.DarkMode);
+            RefreshNexusAccountStatusAsync(false);
             if (_settings.IsModsPathValid)
                 _modManagerTab.RefreshMods();
             UpdateStatusCounts();

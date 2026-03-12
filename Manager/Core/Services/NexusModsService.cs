@@ -13,9 +13,11 @@ namespace Manager.Core.Services
     public class NexusModsService
     {
         private readonly NexusGraphQlClient _client;
+        private readonly string _apiKey;
 
         public NexusModsService(string apiKey)
         {
+            _apiKey = apiKey ?? string.Empty;
             _client = new NexusGraphQlClient(apiKey);
         }
 
@@ -430,6 +432,83 @@ query modFiles($modId: ID!, $gameId: ID!){
             }
         }
 
+        public NexusAccountStatus GetAccountStatus(out string errorMessage)
+        {
+            errorMessage = null;
+
+            if (string.IsNullOrEmpty(_apiKey))
+                return NexusAccountStatus.CreateNotConfigured();
+
+            const string viewerQuery = @"
+query nexusViewer {
+  personalApiKey {
+    userId
+  }
+  preferences {
+    download
+    dlLocation
+  }
+}";
+
+            var response = _client.Execute(viewerQuery, null);
+            if (!string.IsNullOrEmpty(response.ErrorMessage))
+            {
+                errorMessage = response.ErrorMessage;
+                return NexusAccountStatus.CreateUnavailable(response.ErrorMessage);
+            }
+
+            var status = new NexusAccountStatus();
+            status.IsConfigured = true;
+
+            var keyInfo = AsDictionary(response.Data, "personalApiKey");
+            status.UserId = ReadInt(keyInfo, "userId");
+            status.IsConnected = status.UserId > 0;
+
+            var preferences = AsDictionary(response.Data, "preferences");
+            status.DownloadPreference = ReadString(preferences, "download");
+            status.DownloadLocation = ReadString(preferences, "dlLocation");
+
+            if (status.UserId <= 0)
+            {
+                status.IsConnected = false;
+                status.DirectDownloadAvailability = NexusDirectDownloadAvailability.Unknown;
+                status.Summary = "The stored Nexus API key did not return a valid account.";
+                status.DirectDownloadSummary = "Direct-download capability could not be determined.";
+                return status;
+            }
+
+            const string userQuery = @"
+query nexusUser($id: Int!) {
+  user(id: $id) {
+    memberId
+    name
+    membershipRoles
+  }
+}";
+
+            var userVariables = new Dictionary<string, object>();
+            userVariables["id"] = status.UserId;
+
+            var userResponse = _client.Execute(userQuery, userVariables);
+            if (!string.IsNullOrEmpty(userResponse.ErrorMessage))
+            {
+                errorMessage = userResponse.ErrorMessage;
+                status.Summary = "Connected to Nexus, but account details could not be loaded.";
+                status.DirectDownloadAvailability = NexusDirectDownloadAvailability.Unknown;
+                status.DirectDownloadSummary = "Direct downloads may still work, but SMM could not determine the account tier.";
+                status.ErrorMessage = userResponse.ErrorMessage;
+                return status;
+            }
+
+            var user = AsDictionary(userResponse.Data, "user");
+            status.UserId = ReadInt(user, "memberId") > 0 ? ReadInt(user, "memberId") : status.UserId;
+            status.UserName = ReadString(user, "name");
+            status.MembershipRoles = ReadStringArray(user, "membershipRoles");
+
+            PopulateAccountSummaries(status);
+            return status;
+        }
+
         private Dictionary<string, NexusRemoteMod> QueryModsByLegacyDomainIds(List<NexusModReference> references, out string errorMessage)
         {
             errorMessage = null;
@@ -518,6 +597,37 @@ query legacyModsByDomain($ids: [CompositeDomainWithIdInput!]!, $count: Int){
             }
 
             return list;
+        }
+
+        private static void PopulateAccountSummaries(NexusAccountStatus status)
+        {
+            if (status == null)
+                return;
+
+            string name = !string.IsNullOrEmpty(status.UserName) ? status.UserName : ("User #" + status.UserId);
+            string membership = status.GetMembershipLabel();
+
+            status.Summary = "Connected as " + name + " (" + membership + ").";
+
+            if (status.HasRole("premium") || status.HasRole("supporter"))
+            {
+                status.DirectDownloadAvailability = NexusDirectDownloadAvailability.Available;
+                status.DirectDownloadSummary =
+                    "This account appears to have elevated Nexus membership. Direct downloads should usually work, but Nexus can still deny specific files or unapproved apps.";
+                return;
+            }
+
+            if (status.HasRole("member"))
+            {
+                status.DirectDownloadAvailability = NexusDirectDownloadAvailability.Limited;
+                status.DirectDownloadSummary =
+                    "This account appears to be a regular member account. Browsing and update checks work, but Nexus may deny direct downloads for some files or apps.";
+                return;
+            }
+
+            status.DirectDownloadAvailability = NexusDirectDownloadAvailability.Unknown;
+            status.DirectDownloadSummary =
+                "SMM could not map the Nexus membership role to a known download policy. Direct downloads may still depend on Nexus account and app approval.";
         }
 
         private static NexusRemoteMod ParseRemoteMod(Dictionary<string, object> node, string fallbackDomain)
@@ -623,5 +733,33 @@ query legacyModsByDomain($ids: [CompositeDomainWithIdInput!]!, $count: Int){
 
             return null;
         }
+
+        private static string[] ReadStringArray(Dictionary<string, object> dict, string key)
+        {
+            if (dict == null || string.IsNullOrEmpty(key))
+                return new string[0];
+
+            object value;
+            if (!dict.TryGetValue(key, out value) || value == null)
+                return new string[0];
+
+            var raw = value as object[];
+            if (raw == null || raw.Length == 0)
+                return new string[0];
+
+            var list = new List<string>();
+            for (int i = 0; i < raw.Length; i++)
+            {
+                if (raw[i] == null)
+                    continue;
+
+                string text = Convert.ToString(raw[i]);
+                if (!string.IsNullOrEmpty(text))
+                    list.Add(text);
+            }
+
+            return list.ToArray();
+        }
+
     }
 }
