@@ -5,13 +5,13 @@ using System.Reflection;
 using ModAPI.Core;
 using UnityEngine;
 
-namespace ModAPI.Content
+namespace ShelteredAPI.Content
 {
     /// <summary>
     /// Utilities for loading mod-local assets (textures, sprites, asset bundles) with caching.
     /// Paths are resolved relative to the owning mod's root:
-    ///   - Icons/Textures:  Assets/Textures/<file>.png
-    ///   - Bundles/Prefabs: Assets/Prefabs/<file>.prefab or Assets/Bundles/<bundle>.bundle
+    ///   - Icons/Textures:  <c>Assets/Textures/icon.png</c>
+    ///   - Bundles/Prefabs: <c>Assets/Prefabs/item.prefab</c> or <c>Assets/Bundles/items.bundle</c>
     /// </summary>
     public static class AssetLoader
     {
@@ -197,7 +197,7 @@ namespace ModAPI.Content
         private static string ResolvePath(Assembly asm, string relativePath)
         {
             if (asm == null || string.IsNullOrEmpty(relativePath)) return null;
-            Core.ModEntry entry;
+            ModAPI.Core.ModEntry entry;
             if (ModRegistry.TryGetModByAssembly(asm, out entry) && entry != null && !string.IsNullOrEmpty(entry.RootPath))
             {
                 return Path.GetFullPath(Path.Combine(entry.RootPath, relativePath));
@@ -218,7 +218,7 @@ namespace ModAPI.Content
         private static string CacheKey(Assembly asm, string relativePath)
         {
             if (asm == null || string.IsNullOrEmpty(relativePath)) return null;
-            Core.ModEntry entry;
+            ModAPI.Core.ModEntry entry;
             var modId = ModRegistry.TryGetModByAssembly(asm, out entry) && entry != null ? entry.Id ?? entry.RootPath : null;
             var asmName = asm.GetName().Name;
             return (modId ?? asmName) + "|" + relativePath;

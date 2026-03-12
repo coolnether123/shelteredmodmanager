@@ -4,7 +4,8 @@
 
 | Area | Assembly | Status |
 |------|----------|--------|
-| Core plugin lifecycle, context, settings, content APIs | `ModAPI.dll` | Current |
+| Core plugin lifecycle, context, settings APIs | `ModAPI.dll` | Current |
+| Sheltered content APIs and content runtime | `ShelteredAPI.dll` | Current |
 | Backward-compat game helpers/events used by v1.2 mods | `ModAPI.dll` | Current (Deprecated for future major) |
 | Sheltered-specific adapters and implementations | `ShelteredAPI.dll` | Current |
 | Docs labeled `v1.2` in this repo | Historical reference | Deprecated where conflicting |
@@ -20,6 +21,7 @@ Exact signatures: `documentation/API_Signatures_Reference.md`.
 - Spine settings UI: `documentation/Spine_Settings_Guide.md`
 - Settings + persistence patterns: `documentation/SETTINGS.md`
 - ShelteredAPI helper surface: `documentation/ShelteredAPI_Guide.md`
+- Sheltered content registration/runtime: `documentation/ShelteredAPI_Content_Guide.md`
 - Actor registry/components/bindings/adapters: `documentation/ShelteredAPI_Characters_Guide.md`
 - Failures and log signatures: `documentation/API_Troubleshooting.md`
 
@@ -44,22 +46,23 @@ public class MyPlugin : IModPlugin
 
 ## 3. Content Registration (Current API)
 
-Register via `ContentRegistry` in `Start(...)` (safe lifecycle guidance below).
+Register via `ShelteredAPI.Content.ContentRegistry` in `Start(...)` (safe lifecycle guidance below).
 
 ### 3.1 Type-Name Collision Warning
 
-`ItemDefinition` exists both in game code and in `ModAPI.Content`. Use aliases in mod code:
+`ItemDefinition` exists both in game code and in `ShelteredAPI.Content`. Use aliases in mod code:
 
 ```csharp
-using ContentItemDefinition = ModAPI.Content.ItemDefinition;
+using ShelteredAPI.Content;
+using ContentItemDefinition = ShelteredAPI.Content.ItemDefinition;
 using GameItemDefinition = global::ItemDefinition;
 ```
 
 ### 3.2 Recommended Registration Example
 
 ```csharp
-using ModAPI.Content;
-using ContentItemDefinition = ModAPI.Content.ItemDefinition;
+using ShelteredAPI.Content;
+using ContentItemDefinition = ShelteredAPI.Content.ItemDefinition;
 
 public void Start(IPluginContext ctx)
 {
@@ -91,7 +94,7 @@ public void Start(IPluginContext ctx)
 }
 ```
 
-### 3.3 Localization Keys vs Text (ModAPI v1.3)
+### 3.3 Localization Keys vs Text (ShelteredAPI v1.3)
 
 Use explicit APIs when possible:
 - `.WithDisplayNameKey("mymod.items.power_cell.name")`
@@ -102,7 +105,7 @@ Use explicit APIs when possible:
 Backward-compatible behavior:
 - Legacy `.WithDisplayName(...)` / `.WithDescription(...)` still work.
 - Values are treated as keys if they look like keys (`.` and no spaces), otherwise treated as literal text.
-- For literal text, ModAPI generates and registers internal keys before item UI reads localization.
+- For literal text, ShelteredAPI generates and registers internal keys before item UI reads localization.
 - This prevents vanilla fallback lowercasing issues when key lookup misses.
 
 ### 3.4 Registration Timing and Lifecycle
@@ -112,7 +115,7 @@ Use this ordering:
 2. `Start(...)`: register items/recipes/patches.
 
 Rationale:
-- `ContentInjector` bootstraps only when managers are ready (`ItemManager.Instance` and `CraftingManager.Instance`).
+- `ContentInjector` binds against the active manager pair (`ItemManager.Instance` and `CraftingManager.Instance`) and rebinds when the game creates fresh managers for a new family/session.
 - Definitions registered by `Start(...)` are available by the time injector bootstraps.
 - Registering in constructors is unsafe and can race before loader context exists.
 

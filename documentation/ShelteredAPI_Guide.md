@@ -4,6 +4,8 @@
 
 Canonical signatures: `documentation/API_Signatures_Reference.md`.
 
+Content-specific guidance: `documentation/ShelteredAPI_Content_Guide.md`.
+
 ## 1. What ShelteredAPI Adds
 
 - `IGameHelper` implementation and `ShelteredAPI.Adapters.GameHelperExtensions`
@@ -18,6 +20,7 @@ Canonical signatures: `documentation/API_Signatures_Reference.md`.
   - `ShelteredAPI.ActorEvents`
   - `ShelteredAPI.ActorSerialization`
 - Sheltered-specific UI and input helpers under `ShelteredAPI.*`
+- Sheltered-specific content registration and runtime injection under `ShelteredAPI.Content`
 
 ## 2. Referencing It
 
@@ -34,6 +37,7 @@ using ModAPI.Core;
 using ModAPI.Events;
 using ModAPI.Actors;
 using ShelteredAPI.Adapters;
+using ShelteredAPI.Content;
 ```
 
 ## 3. Usage Example
@@ -75,5 +79,7 @@ public class MyPlugin : IModPlugin
 
 - scheduler/events compatibility surfaces such as `GameEvents` and `GameTimeTriggerHelper` are hosted in `ModAPI.dll` in the 1.3 line
 - actor contracts live in `ModAPI.Actors`; `ShelteredAPI` provides the default runtime implementation
+- item, recipe, loot, asset, and content-localization APIs live in `ShelteredAPI.Content`
+- the content injector is manager-scoped and will rebind when a new family/session recreates Sheltered runtime managers
 - register triggers and runtime behavior in `Start(...)`, not constructors
 - use unique IDs for triggers, actor bindings, components, and adapters

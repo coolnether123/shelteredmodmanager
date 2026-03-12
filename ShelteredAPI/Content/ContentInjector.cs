@@ -8,8 +8,13 @@ using ModAPI.Reflection;
 using UnityEngine;
 using GameItemDefinition = global::ItemDefinition;
 
-namespace ModAPI.Content
+namespace ShelteredAPI.Content
 {
+    /// <summary>
+    /// Owns Sheltered-specific content runtime injection for custom items, recipes, loot tables, and UI helpers.
+    /// Registrations are process-scoped while injected runtime state is manager-scoped so content can be rebound
+    /// after returning to the main menu and starting another family in the same game session.
+    /// </summary>
     [PatchPolicy(PatchDomain.Content, "ContentInjector",
         TargetBehavior = "Custom item, loot, and icon injection into vanilla systems",
         FailureMode = "Registered content exists in metadata but fails to appear in runtime systems or UI.",
@@ -26,6 +31,9 @@ namespace ModAPI.Content
 
         private static bool _bootstrapped;
         private static readonly object Sync = new object();
+        private static ItemManager _boundItemManager;
+        private static CraftingManager _boundCraftingManager;
+        private static int _runtimeGeneration;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void OnUnityLoad() => TryBootstrap();
@@ -71,6 +79,10 @@ namespace ModAPI.Content
             return _rawFoodTypes;
         }
 
+        /// <summary>
+        /// Signals that a game manager involved in content injection has been initialized and the runtime
+        /// should attempt to bind custom content against the current manager instances.
+        /// </summary>
         public static void NotifyManagerReady(string name) => TryBootstrap();
 
         [Obsolete("Use ContentRegistry.RegisterItem(...) for new code. This wrapper is retained for binary compatibility.", false)]
@@ -130,37 +142,63 @@ namespace ModAPI.Content
 
         private static void TryBootstrap()
         {
-            MMLog.WriteDebug($"TryBootstrap called. Bootstrapped={_bootstrapped}, ItemManager={(ItemManager.Instance != null)}, CraftingManager={(CraftingManager.Instance != null)}");
-            if (_bootstrapped || ItemManager.Instance == null || CraftingManager.Instance == null) return;
+            ItemManager itemManager = ItemManager.Instance;
+            CraftingManager craftingManager = CraftingManager.Instance;
+            MMLog.WriteDebug(
+                $"TryBootstrap called. Bootstrapped={_bootstrapped}, " +
+                $"ItemManager={(itemManager != null)}, CraftingManager={(craftingManager != null)}, " +
+                $"RuntimeBound={IsBoundToCurrentManagers(itemManager, craftingManager)}");
+            if (itemManager == null || craftingManager == null) return;
+            if (_bootstrapped && IsBoundToCurrentManagers(itemManager, craftingManager)) return;
 
             lock (Sync)
             {
-                if (_bootstrapped) return;
-                MMLog.WriteDebug("Starting injection...");
+                itemManager = ItemManager.Instance;
+                craftingManager = CraftingManager.Instance;
+                if (itemManager == null || craftingManager == null) return;
+                if (_bootstrapped && IsBoundToCurrentManagers(itemManager, craftingManager)) return;
+
+                PrepareForBootstrap(itemManager, craftingManager);
+                MMLog.WriteDebug($"Starting injection for content runtime generation {_runtimeGeneration}...");
 
                 // 1. Setup Maps
                 BuildItemMap();
-                BuildRuntimeDefinitions();
+                BuildRuntimeDefinitions(itemManager);
 
                 // 2. Inject Items
-                InjectIntoItemManager();
-                ApplyItemPatches();
+                InjectIntoItemManager(itemManager);
+                ApplyItemPatches(itemManager);
 
                 // 3. Inject Recipes
-                InjectRecipes();
+                InjectRecipes(craftingManager);
                 InjectCookingRecipes();
 
                 _bootstrapped = true;
-                MMLog.Write("Item injection complete.");
+                MMLog.Write($"Item injection complete for runtime generation {_runtimeGeneration}.");
 
                 // Final Check
-                PluginManager.getInstance().EnqueueNextFrame(VerifyExistence);
+                VerifyExistence();
             }
         }
 
-        private static void ApplyItemPatches()
+        private static void PrepareForBootstrap(ItemManager itemManager, CraftingManager craftingManager)
         {
-            var im = ItemManager.Instance;
+            _runtimeGeneration++;
+            _boundItemManager = itemManager;
+            _boundCraftingManager = craftingManager;
+            RuntimeDefinitions.Clear();
+            _cookingRecipes.Clear();
+            _rawFoodTypes.Clear();
+        }
+
+        private static bool IsBoundToCurrentManagers(ItemManager itemManager, CraftingManager craftingManager)
+        {
+            return ReferenceEquals(_boundItemManager, itemManager) &&
+                   ReferenceEquals(_boundCraftingManager, craftingManager);
+        }
+
+        private static void ApplyItemPatches(ItemManager im)
+        {
             if (ContentRegistry.ItemPatches.Count == 0) return;
 
             MMLog.WriteDebug($"Applying {ContentRegistry.ItemPatches.Count} item patches...");
@@ -225,16 +263,17 @@ namespace ModAPI.Content
             MMLog.WriteDebug($"BuildItemMap complete: {ResolvedByType.Count} items mapped");
         }
 
-        private static void BuildRuntimeDefinitions()
+        private static void BuildRuntimeDefinitions(ItemManager itemManager)
         {
             RuntimeDefinitions.Clear();
+            _rawFoodTypes.Clear();
             foreach (var kvp in ResolvedByType)
             {
                 var definition = kvp.Value.Definition;
                 var itemType = kvp.Key;
 
                 // Use Wood as a base template for physical properties
-                var sourceTemplate = ItemManager.Instance.GetItemDefinition(ItemManager.ItemType.Wood);
+                var sourceTemplate = itemManager.GetItemDefinition(ItemManager.ItemType.Wood);
                 var def = UnityEngine.Object.Instantiate(sourceTemplate);
 
                 def.gameObject.SetActive(false);
@@ -298,9 +337,8 @@ namespace ModAPI.Content
         }
 
 
-        private static void InjectIntoItemManager()
+        private static void InjectIntoItemManager(ItemManager im)
         {
-            var im = ItemManager.Instance;
             if (Safe.TryGetField(im, "m_ItemDefinitions", out Dictionary<ItemManager.ItemType, GameItemDefinition> dict))
             {
                 foreach (var kvp in RuntimeDefinitions) dict[kvp.Key] = kvp.Value;
@@ -308,9 +346,8 @@ namespace ModAPI.Content
             }
         }
 
-        private static void InjectRecipes()
+        private static void InjectRecipes(CraftingManager cm)
         {
-            var cm = CraftingManager.Instance;
             MMLog.WriteDebug($"InjectRecipes: Processing {ContentRegistry.Recipes.Count} recipe definitions");
 
             int added = 0;
@@ -668,9 +705,12 @@ namespace ModAPI.Content
 
         private static void VerifyExistence()
         {
+            if (_boundItemManager == null)
+                return;
+
             foreach (var kvp in RuntimeDefinitions)
             {
-                bool found = ItemManager.Instance.HasBeenDefined(kvp.Key);
+                bool found = _boundItemManager.HasBeenDefined(kvp.Key);
                 MMLog.WriteDebug($"VERIFY: {kvp.Key} ({(int)kvp.Key}) exists: {found}");
             }
         }
@@ -747,15 +787,15 @@ namespace ModAPI.Content
             var modId = ResolveModId(definition);
             var itemId = ResolveItemIdSegment(definition);
             var suffix = isName ? "name" : "desc";
-            return $"modapi.{SanitizeKeyPart(modId)}.{SanitizeKeyPart(itemId)}.{suffix}";
+            return $"shelteredapi.{SanitizeKeyPart(modId)}.{SanitizeKeyPart(itemId)}.{suffix}";
         }
 
         private static string ResolveModId(ItemDefinition definition)
         {
             try
             {
-                Core.ModEntry entry;
-                if (Core.ModRegistry.TryGetModByAssembly(definition.OwnerAssembly, out entry) &&
+                ModAPI.Core.ModEntry entry;
+                if (ModAPI.Core.ModRegistry.TryGetModByAssembly(definition.OwnerAssembly, out entry) &&
                     entry != null &&
                     !string.IsNullOrEmpty(entry.Id))
                 {

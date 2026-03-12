@@ -62,11 +62,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Content\ContentRegistry.cs" />
-    <Compile Include="Content\ContentResolver.cs" />
-    <Compile Include="Content\ContentInjector.cs" />
-    <Compile Include="Content\ModLocalization.cs" />
-    <Compile Include="Content\InventoryIntegration.cs" />
     <Compile Include="GameState\ManagerStateHelper.cs" />
     <Compile Include="Items\InventoryHelper.cs" />
     <Compile Include="Actors\Abstractions\IActorSystem.cs" />
@@ -203,7 +198,7 @@
     <Compile Include="Core\ModThreads.cs" />
     <Compile Include="Core\ModManagerBase.cs" />
     <Compile Include="Core\ModManagerBaseT.cs" />
-    <Compile Include="Content\AssetLoader.cs" />
+    <Compile Include="Core\ShelteredContentBridge.cs" />
     <Compile Include="Util\SceneCompat.cs" />
     <Compile Include="Util\SceneUtil.cs" />
     <Compile Include="Util\SaveLoadDictionary.cs" />
