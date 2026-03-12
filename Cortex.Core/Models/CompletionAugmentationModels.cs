@@ -1,4 +1,5 @@
 using Cortex.LanguageService.Protocol;
+using Cortex.Shared;
 
 namespace Cortex.Core.Models
 {
@@ -11,6 +12,21 @@ namespace Cortex.Core.Models
         public const string Tabby = "tabby";
         public const string Ollama = "ollama";
         public const string OpenRouter = "openrouter";
+
+        public static string GetDisplayName(string providerId)
+        {
+            switch ((providerId ?? string.Empty).ToLowerInvariant())
+            {
+                case Tabby:
+                    return "Tabby";
+                case Ollama:
+                    return "Ollama";
+                case OpenRouter:
+                    return "OpenRouter";
+                default:
+                    return "AI";
+            }
+        }
     }
 
     /// <summary>
@@ -18,8 +34,8 @@ namespace Cortex.Core.Models
     /// </summary>
     public static class CompletionAugmentationPromptDefaults
     {
-        public const string OllamaSystemPrompt = "Continue the code at the cursor. Return code only. Preserve the surrounding style, syntax, and naming conventions.";
-        public const string OpenRouterPromptPreamble = "Continue the code at the cursor. Return code only. Preserve the surrounding style, syntax, and naming conventions.";
+        public const string OllamaSystemPrompt = CompletionAugmentationPromptContract.StrictCodeCompletionInstruction;
+        public const string OpenRouterPromptPreamble = OllamaSystemPrompt;
     }
 
     /// <summary>
@@ -56,6 +72,9 @@ namespace Cortex.Core.Models
         public string TriggerCharacter;
         public string PrefixText;
         public string SuffixText;
+        public string CurrentLinePrefixText;
+        public string CurrentLineSuffixText;
+        public string CurrentLineIndentation;
         public string SelectedText;
         public string AdditionalInstructions;
         public bool ReplaceProviderPrompt;

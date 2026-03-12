@@ -19,6 +19,12 @@ public sealed class TabbyCompletionRequest
     [JsonPropertyName("declarations")]
     public string[] Declarations { get; set; } = Array.Empty<string>();
 
+    [JsonPropertyName("current_line_prefix")]
+    public string CurrentLinePrefix { get; set; } = string.Empty;
+
+    [JsonPropertyName("current_line_suffix")]
+    public string CurrentLineSuffix { get; set; } = string.Empty;
+
     [JsonPropertyName("relevant_snippets")]
     public TabbyRelevantSnippet[] RelevantSnippets { get; set; } = Array.Empty<TabbyRelevantSnippet>();
 

@@ -1,12 +1,12 @@
 using System.Text;
 using Cortex.Tabby.Server.Protocol;
+using Cortex.Shared;
 
 namespace Cortex.Tabby.Server.Services;
 
 public sealed class TabbyRequestContextFormatter
 {
-    private const string DefaultInstruction =
-        "Complete the code at the cursor and return only the text to insert. Do not explain the code and do not wrap it in markdown.";
+    private const string DefaultInstruction = CompletionAugmentationPromptContract.StrictCodeCompletionInstruction;
 
     public string BuildSystemPrompt(TabbyCompletionRequest request)
     {
@@ -29,6 +29,15 @@ public sealed class TabbyRequestContextFormatter
                     builder.AppendLine(declaration);
                 }
             }
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.CurrentLinePrefix) ||
+            !string.IsNullOrWhiteSpace(request.CurrentLineSuffix))
+        {
+            builder.AppendLine();
+            builder.AppendLine("[Current Line]");
+            AppendLine(builder, "Prefix", request.CurrentLinePrefix);
+            AppendLine(builder, "Suffix", request.CurrentLineSuffix);
         }
 
         if (request.RelevantSnippets is { Length: > 0 })

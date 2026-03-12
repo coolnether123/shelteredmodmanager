@@ -448,7 +448,9 @@ namespace Cortex
 
         private void UpdateLanguageCompletion()
         {
-            if (!_editorCompletionService.ShouldDispatch(_state.Editor, _languageCompletionInFlight || _completionAugmentationInFlight))
+            DispatchDeferredCompletionAugmentation();
+
+            if (!_editorCompletionService.ShouldDispatch(_state.Editor, _languageCompletionInFlight))
             {
                 return;
             }
@@ -504,7 +506,7 @@ namespace Cortex
                         requestId +
                         ", Document=" + (request.DocumentPath ?? string.Empty) +
                         ", Position=" + request.AbsolutePosition + ".");
-                    var augmentationQueued = TryQueueCompletionAugmentation(augmentationPending, augmentationRequest, null);
+                    var augmentationQueued = TryQueueCompletionAugmentation(session, augmentationPending, augmentationRequest, null);
                     MMLog.WriteInfo("[Cortex.Completion] Tabby augmentation queued alongside Roslyn=" +
                         augmentationQueued +
                         ". RequestKey=" + requestKey +
@@ -521,7 +523,7 @@ namespace Cortex
                     (_languageServiceClient != null ? _languageServiceClient.LastError ?? string.Empty : "client unavailable") + ".");
             }
 
-            if (!TryQueueCompletionAugmentation(augmentationPending, augmentationRequest, null))
+            if (!TryQueueCompletionAugmentation(session, augmentationPending, augmentationRequest, null))
             {
                 _editorCompletionService.ClearPendingRequest(_state.Editor);
             }
@@ -886,7 +888,7 @@ namespace Cortex
                 ", Status=" + (response != null ? response.StatusMessage ?? string.Empty : string.Empty) + ".");
             if (!_completionAugmentationInFlight)
             {
-                TryQueueCompletionAugmentation(pending, BuildCompletionAugmentationRequest(target, pending), response);
+                TryQueueCompletionAugmentation(target, pending, BuildCompletionAugmentationRequest(target, pending), response);
             }
         }
 

@@ -10,4 +10,10 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\CompletionAugmentationPromptContract.cs">
+      <Link>Shared\CompletionAugmentationPromptContract.cs</Link>
+    </Compile>
+  </ItemGroup>
 </Project>

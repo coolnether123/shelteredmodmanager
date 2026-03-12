@@ -68,6 +68,8 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\EditorContextMenuService.cs" />
     <Compile Include="Services\MetadataNavigationResolver.cs" />
+    <Compile Include="Services\CompletionAugmentationDispatchPolicy.cs" />
+    <Compile Include="Services\CompletionAugmentationRequestBuilder.cs" />
     <Compile Include="Services\CompletionContextAnalyzer.cs" />
     <Compile Include="Services\CompletionMatchUtility.cs" />
     <Compile Include="Services\EditorSymbolInteractionService.cs" />

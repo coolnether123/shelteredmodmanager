@@ -123,6 +123,12 @@ namespace Cortex
         public LanguageServiceCompletionResponse ActiveCompletionResponse;
         public string CompletionPopupStateKey = string.Empty;
         public int CompletionSelectedIndex = -1;
+        public string ActiveInlineCompletionKey = string.Empty;
+        public LanguageServiceCompletionResponse ActiveInlineCompletionResponse;
+        public string ActiveInlineCompletionProviderId = string.Empty;
+        public string CompletionAugmentationStatus = string.Empty;
+        public string CompletionAugmentationProviderId = string.Empty;
+        public string CompletionAugmentationStatusMessage = string.Empty;
     }
 
     public sealed class CortexSearchInteractionState
