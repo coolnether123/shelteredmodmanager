@@ -1498,6 +1498,7 @@ namespace Manager
         {
             public string Action;
             public string LoadFromManifest;
+            public bool RequireExactManifest;
         }
 
         private class ManagerSlotManifest
@@ -1561,6 +1562,14 @@ namespace Manager
 
                     if (manifest != null)
                     {
+                        bool manifestIncludesModList = manifest.lastLoadedMods != null;
+                        if (req.RequireExactManifest && !manifestIncludesModList)
+                        {
+                            _gameSetupTab.Log("Restart request manifest was missing mod metadata - launch cancelled.");
+                            try { File.Delete(restartPath); } catch { }
+                            return;
+                        }
+
                         var modsFromManifest = manifest.lastLoadedMods ?? new ManagerLoadedModInfo[0];
 
                         // Extract Mod IDs
@@ -1570,7 +1579,7 @@ namespace Manager
                             if (!string.IsNullOrEmpty(m.modId)) newOrder.Add(m.modId);
                         }
 
-                        bool hasManifestOrder = newOrder.Count > 0;
+                        bool hasManifestOrder = req.RequireExactManifest ? manifestIncludesModList : newOrder.Count > 0;
 
                         // Write Load Order only if manifest explicitly provided mods.
                         if (hasManifestOrder && !string.IsNullOrEmpty(_settings.ModsPath))

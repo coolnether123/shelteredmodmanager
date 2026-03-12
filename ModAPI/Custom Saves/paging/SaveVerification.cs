@@ -20,6 +20,7 @@ namespace ModAPI.Hooks.Paging
         private static readonly Color COLOR_MATCH = new Color(0.3f, 1.0f, 0.3f);
         private static readonly Color COLOR_VERSION_DIFF = new Color(1.0f, 1.0f, 0.2f);
         private static readonly Color COLOR_MISSING = new Color(1.0f, 0.3f, 0.3f);
+        private static readonly Color COLOR_UNKNOWN = new Color(1.0f, 0.6f, 0.2f);
 
         private static UIFont _cachedUIFont;
         private static Font _cachedTTFFont;
@@ -205,8 +206,13 @@ namespace ModAPI.Hooks.Paging
                     } 
                     catch (Exception ex)
                     {
+                        state = VerificationState.Unknown;
                         MMLog.WriteError($"[SaveVerification] Failed to deserialize manifest for slot {absoluteSlot}: {ex.Message}");
                     }
+                }
+                else if (absoluteSlot > 3)
+                {
+                    state = VerificationState.Unknown;
                 }
 
                 // Sprite selection - ensure we have a label for the character icons
@@ -269,6 +275,13 @@ namespace ModAPI.Hooks.Paging
                         break;
                 }
                 
+                if (state == VerificationState.Unknown)
+                {
+                    iconPrefix = "?";
+                    iconColor = COLOR_UNKNOWN;
+                    yOffset = 0f;
+                }
+
                 if (childLabel != null)
                 {
                     childLabel.text = iconPrefix;
@@ -329,12 +342,12 @@ namespace ModAPI.Hooks.Paging
             }
         }
 
-        public enum VerificationState { Match, VersionMismatch, Warning, Missing }
+        public enum VerificationState { Match, VersionMismatch, Warning, Missing, Unknown }
 
         public static VerificationState Verify(SlotManifest manifest)
         {
-            if (manifest == null) return VerificationState.Match; 
-            if (manifest.lastLoadedMods == null) return VerificationState.Match;
+            if (manifest == null) return VerificationState.Unknown; 
+            if (manifest.lastLoadedMods == null) return VerificationState.Unknown;
 
             var activeMods = PluginManager.LoadedMods;
             
