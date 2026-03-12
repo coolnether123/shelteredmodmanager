@@ -41,6 +41,7 @@ namespace Cortex.Modules.Editor
         private GUIStyle _completionItemStyle;
         private GUIStyle _completionItemSelectedStyle;
         private GUIStyle _completionDetailStyle;
+        private GUIStyle _inlineSuggestionStyle;
         private Texture2D _selectionFill;
         private Texture2D _caretFill;
         private Texture2D _currentLineFill;
@@ -169,7 +170,7 @@ namespace Cortex.Modules.Editor
                     {
                         scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
                         GUI.DrawTexture(new Rect(0f, 0f, contentRect.width, contentRect.height), _surfaceFill);
-                        DrawLines(session, scroll, rect.height, gutterWidth);
+                        DrawLines(session, state, scroll, rect.height, gutterWidth);
                     }
                     finally
                     {
@@ -221,6 +222,7 @@ namespace Cortex.Modules.Editor
                 _completionItemStyle != null &&
                 _completionItemSelectedStyle != null &&
                 _completionDetailStyle != null &&
+                _inlineSuggestionStyle != null &&
                 _selectionFill != null &&
                 _caretFill != null &&
                 _currentLineFill != null &&
@@ -280,6 +282,9 @@ namespace Cortex.Modules.Editor
             _completionDetailStyle = new GUIStyle(_completionItemStyle);
             _completionDetailStyle.alignment = TextAnchor.MiddleRight;
             GuiStyleUtil.ApplyTextColorToAllStates(_completionDetailStyle, CortexIdeLayout.GetMutedTextColor());
+            _inlineSuggestionStyle = new GUIStyle(_codeStyle);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_inlineSuggestionStyle, null);
+            GuiStyleUtil.ApplyTextColorToAllStates(_inlineSuggestionStyle, CortexIdeLayout.WithAlpha(CortexIdeLayout.GetMutedTextColor(), 0.72f));
             Invalidate();
         }
 
@@ -548,7 +553,7 @@ namespace Cortex.Modules.Editor
             return scroll;
         }
 
-        private void DrawLines(DocumentSession session, Vector2 scroll, float viewportHeight, float gutterWidth)
+        private void DrawLines(DocumentSession session, CortexShellState state, Vector2 scroll, float viewportHeight, float gutterWidth)
         {
             if (_layout == null || _layout.Lines.Count == 0)
             {
@@ -589,6 +594,11 @@ namespace Cortex.Modules.Editor
                         }
                     }
                 }
+            }
+
+            if (_hasFocus && primaryCaret.Line >= 0 && primaryCaret.Line < _layout.Lines.Count)
+            {
+                DrawInlineSuggestion(session, state, _layout.Lines[primaryCaret.Line], gutterWidth);
             }
         }
 
@@ -639,6 +649,44 @@ namespace Cortex.Modules.Editor
             GUI.DrawTexture(new Rect(x, line.Y + 1f, 1.5f, _lineHeight - 2f), _caretFill);
         }
 
+        private void DrawInlineSuggestion(DocumentSession session, CortexShellState state, EditableLineLayout line, float gutterWidth)
+        {
+            if (session == null || state == null || state.Editor == null || line.RawText == null)
+            {
+                return;
+            }
+
+            string suffixText;
+            if (!_editorCompletionService.TryGetInlineSuggestionSuffix(state.Editor, session, out suffixText) ||
+                string.IsNullOrEmpty(suffixText))
+            {
+                return;
+            }
+
+            var displayLines = BuildInlineSuggestionDisplayLines(suffixText);
+            if (displayLines == null || displayLines.Length == 0)
+            {
+                return;
+            }
+
+            var caretIndex = session.EditorState != null ? session.EditorState.CaretIndex : line.StartIndex;
+            var rawColumn = Mathf.Max(0, Mathf.Min(line.RawText.Length, caretIndex - line.StartIndex));
+            var prefix = rawColumn > 0 ? line.RawText.Substring(0, rawColumn) : string.Empty;
+            var x = gutterWidth + Measure(ExpandTabs(prefix));
+            for (var i = 0; i < displayLines.Length; i++)
+            {
+                var displayLine = displayLines[i];
+                if (string.IsNullOrEmpty(displayLine))
+                {
+                    continue;
+                }
+
+                var drawX = i == 0 ? x + 2f : gutterWidth;
+                var drawWidth = Mathf.Max(2f, Measure(displayLine) + 4f);
+                GUI.Label(new Rect(drawX, line.Y + (i * _lineHeight), drawWidth, _lineHeight), displayLine, _inlineSuggestionStyle);
+            }
+        }
+
         private void DrawCompletionPopup(DocumentSession session, CortexShellState state, Vector2 scroll, Vector2 viewportSize, float gutterWidth)
         {
             if (_layout == null || session == null || state == null || state.Editor == null)
@@ -651,7 +699,7 @@ namespace Cortex.Modules.Editor
             {
                 if (HasVisibleCompletion(state))
                 {
-                    ClearCompletion(state);
+                    _editorCompletionService.ClearPopupCompletion(state.Editor);
                 }
 
                 return;
@@ -1266,7 +1314,30 @@ namespace Cortex.Modules.Editor
 
         private bool TryHandleCompletionInput(DocumentSession session, CortexShellState state, Event current)
         {
+            var hasInlineSuggestion = _editorCompletionService.HasVisibleInlineSuggestion(state != null ? state.Editor : null, session);
             var response = state != null && state.Editor != null ? state.Editor.ActiveCompletionResponse : null;
+            if (!hasInlineSuggestion && !_editorCompletionService.HasCompletionItems(response))
+            {
+                return false;
+            }
+
+            if (hasInlineSuggestion)
+            {
+                switch (current.keyCode)
+                {
+                    case KeyCode.Tab:
+                        if (!current.shift)
+                        {
+                            return ApplyInlineSuggestion(session, state);
+                        }
+
+                        break;
+                    case KeyCode.Escape:
+                        ClearCompletion(state);
+                        return true;
+                }
+            }
+
             if (!_editorCompletionService.HasCompletionItems(response))
             {
                 return false;
@@ -1342,7 +1413,7 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            if (HasVisibleCompletion(state) &&
+            if ((HasVisibleCompletion(state) || _editorCompletionService.HasVisibleInlineSuggestion(state != null ? state.Editor : null, session)) &&
                 (string.Equals(commandId, "caret.left", StringComparison.Ordinal) ||
                  string.Equals(commandId, "caret.right", StringComparison.Ordinal) ||
                  string.Equals(commandId, "caret.up", StringComparison.Ordinal) ||
@@ -1390,6 +1461,14 @@ namespace Cortex.Modules.Editor
                 _editorService);
         }
 
+        private bool ApplyInlineSuggestion(DocumentSession session, CortexShellState state)
+        {
+            return _editorCompletionService.ApplyInlineSuggestion(
+                session,
+                state != null ? state.Editor : null,
+                _editorService);
+        }
+
         private bool HasVisibleCompletion(CortexShellState state)
         {
             return state != null && _editorCompletionService.HasVisibleCompletion(state.Editor);
@@ -1398,6 +1477,34 @@ namespace Cortex.Modules.Editor
         private void ClearCompletion(CortexShellState state)
         {
             _editorCompletionService.Reset(state != null ? state.Editor : null);
+        }
+
+        private static string[] BuildInlineSuggestionDisplayLines(string suffixText)
+        {
+            if (string.IsNullOrEmpty(suffixText))
+            {
+                return new string[0];
+            }
+
+            var normalized = suffixText.Replace("\r\n", "\n").Replace('\r', '\n');
+            var rawLines = normalized.Split(new[] { '\n' }, StringSplitOptions.None);
+            var results = new List<string>();
+            var maxPreviewLines = 5;
+            for (var i = 0; i < rawLines.Length && results.Count < maxPreviewLines; i++)
+            {
+                var rawLine = rawLines[i] ?? string.Empty;
+                if (i == 0 || !string.IsNullOrEmpty(rawLine))
+                {
+                    results.Add(ExpandTabs(rawLine));
+                }
+            }
+
+            if (rawLines.Length > maxPreviewLines && results.Count > 0)
+            {
+                results[results.Count - 1] = results[results.Count - 1] + "...";
+            }
+
+            return results.ToArray();
         }
 
         private bool HandleTextInput(DocumentSession session, char character)

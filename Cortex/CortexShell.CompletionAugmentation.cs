@@ -10,13 +10,18 @@ namespace Cortex
 {
     public sealed partial class CortexShell
     {
+        private const int CompletionAugmentationDebounceMs = 450;
         private ICompletionAugmentationClient _completionAugmentationClient;
         private bool _completionAugmentationInFlight;
         private PendingCompletionAugmentationRequest _pendingCompletionAugmentation;
+        private DeferredCompletionAugmentationRequest _deferredCompletionAugmentation;
 
         private void InitializeCompletionAugmentation(CortexSettings settings)
         {
             ShutdownCompletionAugmentation();
+            SetCompletionAugmentationStatus("starting",
+                settings != null ? settings.CompletionAugmentationProviderId ?? string.Empty : string.Empty,
+                string.Empty);
             MMLog.WriteInfo("[Cortex.Completion.Augmentation] Initializing. EnableCompletionAugmentation=" +
                 (settings != null && settings.EnableCompletionAugmentation) +
                 ", RequestedProvider=" + (settings != null ? settings.CompletionAugmentationProviderId ?? string.Empty : string.Empty) +
@@ -27,6 +32,10 @@ namespace Cortex
             {
                 MMLog.WriteInfo(message);
             });
+            SetCompletionAugmentationStatus(
+                _completionAugmentationClient != null && _completionAugmentationClient.IsEnabled ? "ready" : "offline",
+                _completionAugmentationClient != null ? _completionAugmentationClient.ProviderId ?? string.Empty : settings != null ? settings.CompletionAugmentationProviderId ?? string.Empty : string.Empty,
+                _completionAugmentationClient != null ? _completionAugmentationClient.LastError ?? string.Empty : string.Empty);
             MMLog.WriteInfo("[Cortex.Completion.Augmentation] Provider initialized: " +
                 (_completionAugmentationClient != null ? _completionAugmentationClient.ProviderId ?? string.Empty : "<none>") +
                 ", Enabled=" + (_completionAugmentationClient != null && _completionAugmentationClient.IsEnabled) +
@@ -43,12 +52,15 @@ namespace Cortex
             _completionAugmentationClient = null;
             _completionAugmentationInFlight = false;
             _pendingCompletionAugmentation = null;
+            _deferredCompletionAugmentation = null;
+            SetCompletionAugmentationStatus("offline", string.Empty, string.Empty);
         }
 
         private void ProcessCompletionAugmentationResponses()
         {
             if (_completionAugmentationClient == null)
             {
+                SetCompletionAugmentationStatus("offline", string.Empty, string.Empty);
                 return;
             }
 
@@ -63,17 +75,42 @@ namespace Cortex
 
                 HandleCompletionAugmentationResponse(result, _pendingCompletionAugmentation);
                 _pendingCompletionAugmentation = null;
+                DispatchDeferredCompletionAugmentation();
             }
         }
 
         private bool TryQueueCompletionAugmentation(
+            DocumentSession session,
             DocumentLanguageCompletionRequestState pending,
             CompletionAugmentationRequest request,
             LanguageServiceCompletionResponse primaryResponse)
         {
+            var preQueueReason = CompletionAugmentationDispatchPolicy.GetPreQueueReason(request);
+            if (!string.IsNullOrEmpty(preQueueReason))
+            {
+                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue skipped. Reason=" +
+                    preQueueReason +
+                    ", Document=" + (request != null ? request.DocumentPath ?? string.Empty : string.Empty) + ".");
+                return true;
+            }
+
+            var skipReason = CompletionAugmentationDispatchPolicy.GetSkipReason(
+                _state != null ? _state.Editor : null,
+                session,
+                request,
+                _editorCompletionService);
+            if (!string.IsNullOrEmpty(skipReason))
+            {
+                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue skipped. Reason=" +
+                    skipReason +
+                    ", Document=" + (request != null ? request.DocumentPath ?? string.Empty : string.Empty) + ".");
+                return true;
+            }
+
             if (_completionAugmentationClient == null)
             {
                 MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue skipped. Reason=NoClient.");
+                SetCompletionAugmentationStatus("offline", string.Empty, string.Empty);
                 return false;
             }
 
@@ -82,14 +119,28 @@ namespace Cortex
                 MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue skipped. Reason=ClientDisabled, Provider=" +
                     (_completionAugmentationClient.ProviderId ?? string.Empty) +
                     ", LastError=" + (_completionAugmentationClient.LastError ?? string.Empty) + ".");
+                SetCompletionAugmentationStatus("error",
+                    _completionAugmentationClient.ProviderId ?? string.Empty,
+                    _completionAugmentationClient.LastError ?? string.Empty);
                 return false;
             }
 
             if (_completionAugmentationInFlight)
             {
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue skipped. Reason=InFlight, PendingRequestId=" +
-                    (_pendingCompletionAugmentation != null ? _pendingCompletionAugmentation.RequestId ?? string.Empty : string.Empty) + ".");
-                return false;
+                _deferredCompletionAugmentation = new DeferredCompletionAugmentationRequest
+                {
+                    Pending = ClonePendingRequest(pending),
+                    Request = request,
+                    PreferredReplacementRange = primaryResponse != null ? CloneRange(primaryResponse.ReplacementRange) : null,
+                    EarliestDispatchUtc = CompletionAugmentationDispatchPolicy.GetDeferredDispatchUtc(request, CompletionAugmentationDebounceMs)
+                };
+                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue deferred. Reason=InFlight, PendingRequestId=" +
+                    (_pendingCompletionAugmentation != null ? _pendingCompletionAugmentation.RequestId ?? string.Empty : string.Empty) +
+                    ", DeferredRequestKey=" + (pending != null ? pending.RequestKey ?? string.Empty : string.Empty) + ".");
+                SetCompletionAugmentationStatus("thinking",
+                    _completionAugmentationClient.ProviderId ?? string.Empty,
+                    "queued");
+                return true;
             }
 
             if (pending == null)
@@ -115,16 +166,50 @@ namespace Cortex
                 return false;
             }
 
+            if (CompletionAugmentationDispatchPolicy.ShouldDebounce(request))
+            {
+                _deferredCompletionAugmentation = new DeferredCompletionAugmentationRequest
+                {
+                    Pending = ClonePendingRequest(pending),
+                    Request = request,
+                    PreferredReplacementRange = primaryResponse != null ? CloneRange(primaryResponse.ReplacementRange) : null,
+                    EarliestDispatchUtc = CompletionAugmentationDispatchPolicy.GetDeferredDispatchUtc(request, CompletionAugmentationDebounceMs)
+                };
+                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue deferred. Reason=Debounce, DeferredRequestKey=" +
+                    (pending != null ? pending.RequestKey ?? string.Empty : string.Empty) + ".");
+                SetCompletionAugmentationStatus("thinking",
+                    _completionAugmentationClient.ProviderId ?? string.Empty,
+                    "waiting for typing pause");
+                return true;
+            }
+
+            return QueueCompletionAugmentationCore(
+                ClonePendingRequest(pending),
+                request,
+                primaryResponse != null ? CloneRange(primaryResponse.ReplacementRange) : null);
+        }
+
+        private bool QueueCompletionAugmentationCore(
+            PendingCompletionAugmentationRequest pending,
+            CompletionAugmentationRequest request,
+            LanguageServiceRange preferredReplacementRange)
+        {
             var requestId = _completionAugmentationClient.QueueCompletion(request);
             if (string.IsNullOrEmpty(requestId))
             {
                 MMLog.WriteInfo("[Cortex.Completion.Augmentation] Request was not queued. Provider=" +
                     (_completionAugmentationClient.ProviderId ?? string.Empty) +
                     ", LastError=" + (_completionAugmentationClient.LastError ?? string.Empty) + ".");
+                SetCompletionAugmentationStatus("error",
+                    _completionAugmentationClient.ProviderId ?? string.Empty,
+                    _completionAugmentationClient.LastError ?? string.Empty);
                 return false;
             }
 
             _completionAugmentationInFlight = true;
+            SetCompletionAugmentationStatus("thinking",
+                _completionAugmentationClient.ProviderId ?? string.Empty,
+                string.Empty);
             _pendingCompletionAugmentation = new PendingCompletionAugmentationRequest
             {
                 RequestId = requestId,
@@ -132,7 +217,7 @@ namespace Cortex
                 DocumentPath = pending.DocumentPath ?? string.Empty,
                 DocumentVersion = pending.DocumentVersion,
                 AbsolutePosition = pending.AbsolutePosition,
-                PreferredReplacementRange = primaryResponse != null ? CloneRange(primaryResponse.ReplacementRange) : null
+                PreferredReplacementRange = preferredReplacementRange
             };
             MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queued request " + requestId +
                 ". Provider=" + (_completionAugmentationClient.ProviderId ?? string.Empty) +
@@ -159,6 +244,10 @@ namespace Cortex
                     ", HasTarget=" + (target != null) +
                     ", Success=" + (result != null && result.Response != null && result.Response.Success) +
                     ", Status=" + (result != null && result.Response != null ? result.Response.StatusMessage ?? string.Empty : string.Empty) + ".");
+                SetCompletionAugmentationStatus(
+                    result != null && result.Response != null && result.Response.Success ? "ready" : "error",
+                    result != null ? result.ProviderId ?? string.Empty : _state.Editor.CompletionAugmentationProviderId ?? string.Empty,
+                    result != null && result.Response != null ? result.Response.StatusMessage ?? string.Empty : string.Empty);
                 if (_state.Editor.ActiveCompletionResponse == null)
                 {
                     _editorCompletionService.ClearPendingRequest(_state.Editor);
@@ -191,6 +280,28 @@ namespace Cortex
                 result.Response.DocumentVersion = target.TextVersion;
             }
 
+            var inlineSet = _editorCompletionService.SetInlineSuggestion(
+                _state.Editor,
+                target,
+                new DocumentLanguageCompletionRequestState
+                {
+                    RequestKey = pending.RequestKey,
+                    DocumentPath = pending.DocumentPath,
+                    DocumentVersion = pending.DocumentVersion,
+                    AbsolutePosition = pending.AbsolutePosition
+                },
+                result.Response,
+                result != null ? result.ProviderId ?? string.Empty : string.Empty);
+            MMLog.WriteInfo("[Cortex.Completion.Augmentation] Inline suggestion updated. Provider=" +
+                (result != null ? result.ProviderId ?? string.Empty : string.Empty) +
+                ", Visible=" + inlineSet +
+                ", Items=" + (result != null && result.Response != null && result.Response.Items != null ? result.Response.Items.Length : 0) +
+                ", Document=" + (target != null ? target.FilePath ?? string.Empty : string.Empty) + ".");
+            SetCompletionAugmentationStatus(
+                inlineSet ? "suggestion" : "ready",
+                result != null ? result.ProviderId ?? string.Empty : string.Empty,
+                inlineSet ? "inline suggestion ready" : "response received");
+
             var merged = _editorCompletionService.MergeSupplementalResponse(
                 _state.Editor,
                 target,
@@ -213,40 +324,90 @@ namespace Cortex
             }
         }
 
+        private void SetCompletionAugmentationStatus(string status, string providerId, string statusMessage)
+        {
+            if (_state == null || _state.Editor == null)
+            {
+                return;
+            }
+
+            _state.Editor.CompletionAugmentationStatus = status ?? string.Empty;
+            _state.Editor.CompletionAugmentationProviderId = providerId ?? string.Empty;
+            _state.Editor.CompletionAugmentationStatusMessage = statusMessage ?? string.Empty;
+        }
+
+        private void DispatchDeferredCompletionAugmentation()
+        {
+            if (_deferredCompletionAugmentation == null ||
+                _completionAugmentationClient == null ||
+                !_completionAugmentationClient.IsEnabled)
+            {
+                return;
+            }
+
+            var deferred = _deferredCompletionAugmentation;
+            if (deferred.Pending == null || deferred.Request == null)
+            {
+                _deferredCompletionAugmentation = null;
+                return;
+            }
+
+            if (deferred.EarliestDispatchUtc > DateTime.UtcNow)
+            {
+                return;
+            }
+
+            if (_completionAugmentationInFlight)
+            {
+                if (!deferred.CancelRequested &&
+                    _pendingCompletionAugmentation != null &&
+                    !string.IsNullOrEmpty(_pendingCompletionAugmentation.RequestId) &&
+                    _completionAugmentationClient.CancelCompletion(_pendingCompletionAugmentation.RequestId))
+                {
+                    deferred.CancelRequested = true;
+                    _deferredCompletionAugmentation = deferred;
+                    MMLog.WriteInfo("[Cortex.Completion.Augmentation] Superseding in-flight request. RequestId=" +
+                        (_pendingCompletionAugmentation.RequestId ?? string.Empty) +
+                        ", NewRequestKey=" + (deferred.Pending.RequestKey ?? string.Empty) + ".");
+                }
+                return;
+            }
+
+            _deferredCompletionAugmentation = null;
+
+            var deferredSession = FindOpenDocument(deferred.Request.DocumentPath);
+            var skipReason = CompletionAugmentationDispatchPolicy.GetSkipReason(
+                _state != null ? _state.Editor : null,
+                deferredSession,
+                deferred.Request,
+                _editorCompletionService);
+            if (!string.IsNullOrEmpty(skipReason))
+            {
+                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Deferred request skipped. Reason=" +
+                    skipReason +
+                    ", RequestKey=" + (deferred.Pending.RequestKey ?? string.Empty) +
+                    ", Document=" + (deferred.Request.DocumentPath ?? string.Empty) + ".");
+                return;
+            }
+
+            MMLog.WriteInfo("[Cortex.Completion.Augmentation] Dispatching deferred request. RequestKey=" +
+                (deferred.Pending.RequestKey ?? string.Empty) +
+                ", Document=" + (deferred.Request.DocumentPath ?? string.Empty) + ".");
+            QueueCompletionAugmentationCore(deferred.Pending, deferred.Request, deferred.PreferredReplacementRange);
+        }
+
         private CompletionAugmentationRequest BuildCompletionAugmentationRequest(
             DocumentSession session,
             DocumentLanguageCompletionRequestState pending)
         {
-            if (session == null || pending == null)
-            {
-                return null;
-            }
-
-            var prefixText = BuildPrefixText(session.Text, pending.AbsolutePosition);
-            var suffixText = BuildSuffixText(session.Text, pending.AbsolutePosition);
-            return new CompletionAugmentationRequest
-            {
-                ProviderId = _state.Settings != null ? _state.Settings.CompletionAugmentationProviderId ?? string.Empty : string.Empty,
-                DocumentPath = session.FilePath ?? pending.DocumentPath ?? string.Empty,
-                ProjectFilePath = string.Empty,
-                WorkspaceRootPath = _state.Settings != null ? _state.Settings.WorkspaceRootPath ?? string.Empty : string.Empty,
-                RelativeDocumentPath = BuildRelativePath(
-                    session.FilePath ?? pending.DocumentPath ?? string.Empty,
-                    _state.Settings != null ? _state.Settings.WorkspaceRootPath ?? string.Empty : string.Empty),
-                LanguageId = MapLanguageId(session.FilePath ?? pending.DocumentPath ?? string.Empty),
-                DocumentText = session.Text ?? string.Empty,
-                DocumentVersion = session.TextVersion,
-                AbsolutePosition = pending.AbsolutePosition,
-                ExplicitInvocation = _state.Editor != null && _state.Editor.RequestedCompletionExplicit,
-                TriggerCharacter = _state.Editor != null ? _state.Editor.RequestedCompletionTriggerCharacter ?? string.Empty : string.Empty,
-                PrefixText = prefixText,
-                SuffixText = suffixText,
-                SelectedText = BuildSelectedText(session),
-                AdditionalInstructions = _state.Settings != null ? _state.Settings.CompletionAugmentationAdditionalInstructions ?? string.Empty : string.Empty,
-                ReplaceProviderPrompt = _state.Settings != null && _state.Settings.CompletionAugmentationReplaceProviderPrompt,
-                Declarations = new string[0],
-                RelatedSnippets = BuildRelatedSnippets(session)
-            };
+            var documentPath = session != null ? session.FilePath ?? string.Empty : pending != null ? pending.DocumentPath ?? string.Empty : string.Empty;
+            return CompletionAugmentationRequestBuilder.Build(
+                session,
+                pending,
+                _state.Settings,
+                _state.Editor,
+                _state.Documents != null ? _state.Documents.OpenDocuments : null,
+                MapLanguageId(documentPath));
         }
 
         private static LanguageServiceRange CloneRange(LanguageServiceRange range)
@@ -274,123 +435,29 @@ namespace Cortex
             public LanguageServiceRange PreferredReplacementRange;
         }
 
-        private static string BuildPrefixText(string text, int absolutePosition)
+        private static PendingCompletionAugmentationRequest ClonePendingRequest(DocumentLanguageCompletionRequestState pending)
         {
-            var value = text ?? string.Empty;
-            var caret = Math.Max(0, Math.Min(value.Length, absolutePosition));
-            return caret > 0 ? value.Substring(0, caret) : string.Empty;
+            if (pending == null)
+            {
+                return null;
+            }
+
+            return new PendingCompletionAugmentationRequest
+            {
+                RequestKey = pending.RequestKey ?? string.Empty,
+                DocumentPath = pending.DocumentPath ?? string.Empty,
+                DocumentVersion = pending.DocumentVersion,
+                AbsolutePosition = pending.AbsolutePosition
+            };
         }
 
-        private static string BuildSuffixText(string text, int absolutePosition)
+        private sealed class DeferredCompletionAugmentationRequest
         {
-            var value = text ?? string.Empty;
-            var caret = Math.Max(0, Math.Min(value.Length, absolutePosition));
-            return caret < value.Length ? value.Substring(caret) : string.Empty;
-        }
-
-        private CompletionAugmentationSnippet[] BuildRelatedSnippets(DocumentSession activeSession)
-        {
-            if (_state == null ||
-                _state.Settings == null ||
-                !_state.Settings.CompletionAugmentationIncludeOpenDocumentSnippets ||
-                _state.Documents == null ||
-                _state.Documents.OpenDocuments == null)
-            {
-                return new CompletionAugmentationSnippet[0];
-            }
-
-            var maxDocuments = Math.Max(0, _state.Settings.CompletionAugmentationSnippetDocumentLimit);
-            var maxCharacters = Math.Max(64, _state.Settings.CompletionAugmentationSnippetCharacterLimit);
-            if (maxDocuments == 0)
-            {
-                return new CompletionAugmentationSnippet[0];
-            }
-
-            var snippets = new System.Collections.Generic.List<CompletionAugmentationSnippet>();
-            for (var i = 0; i < _state.Documents.OpenDocuments.Count; i++)
-            {
-                var candidate = _state.Documents.OpenDocuments[i];
-                if (candidate == null ||
-                    candidate == activeSession ||
-                    candidate.Kind != DocumentKind.SourceCode ||
-                    string.IsNullOrEmpty(candidate.Text))
-                {
-                    continue;
-                }
-
-                snippets.Add(new CompletionAugmentationSnippet
-                {
-                    SourceId = candidate.FilePath ?? string.Empty,
-                    DisplayName = System.IO.Path.GetFileName(candidate.FilePath ?? string.Empty),
-                    RelativePath = BuildRelativePath(
-                        candidate.FilePath ?? string.Empty,
-                        _state.Settings.WorkspaceRootPath ?? string.Empty),
-                    Content = TrimSnippet(candidate.Text, maxCharacters),
-                    Score = candidate.IsDirty ? 1f : 0.5f
-                });
-                if (snippets.Count >= maxDocuments)
-                {
-                    break;
-                }
-            }
-
-            return snippets.ToArray();
-        }
-
-        private static string BuildSelectedText(DocumentSession session)
-        {
-            if (session == null || session.EditorState == null || string.IsNullOrEmpty(session.Text))
-            {
-                return string.Empty;
-            }
-
-            var selection = session.EditorState.PrimarySelection;
-            if (selection == null || !selection.HasSelection)
-            {
-                return string.Empty;
-            }
-
-            var start = Math.Max(0, Math.Min(session.Text.Length, selection.Start));
-            var end = Math.Max(start, Math.Min(session.Text.Length, selection.End));
-            return end > start ? session.Text.Substring(start, end - start) : string.Empty;
-        }
-
-        private static string TrimSnippet(string text, int maxCharacters)
-        {
-            var value = text ?? string.Empty;
-            if (value.Length <= maxCharacters)
-            {
-                return value;
-            }
-
-            return value.Substring(0, maxCharacters);
-        }
-
-        private static string BuildRelativePath(string documentPath, string workspaceRootPath)
-        {
-            if (string.IsNullOrEmpty(documentPath))
-            {
-                return string.Empty;
-            }
-
-            if (string.IsNullOrEmpty(workspaceRootPath))
-            {
-                return documentPath.Replace('\\', '/');
-            }
-
-            try
-            {
-                var normalizedRoot = workspaceRootPath.EndsWith("\\", StringComparison.Ordinal) || workspaceRootPath.EndsWith("/", StringComparison.Ordinal)
-                    ? workspaceRootPath
-                    : workspaceRootPath + "\\";
-                var rootUri = new Uri(normalizedRoot, UriKind.Absolute);
-                var pathUri = new Uri(documentPath, UriKind.Absolute);
-                return Uri.UnescapeDataString(rootUri.MakeRelativeUri(pathUri).ToString());
-            }
-            catch
-            {
-                return documentPath.Replace('\\', '/');
-            }
+            public PendingCompletionAugmentationRequest Pending;
+            public CompletionAugmentationRequest Request;
+            public LanguageServiceRange PreferredReplacementRange;
+            public DateTime EarliestDispatchUtc;
+            public bool CancelRequested;
         }
 
         private static string MapLanguageId(string documentPath)

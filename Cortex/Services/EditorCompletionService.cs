@@ -199,6 +199,197 @@ namespace Cortex.Services
             return true;
         }
 
+        public bool SetInlineSuggestion(
+            CortexEditorInteractionState editorState,
+            DocumentSession target,
+            DocumentLanguageCompletionRequestState pending,
+            LanguageServiceCompletionResponse response,
+            string providerId)
+        {
+            if (editorState == null || target == null || pending == null || response == null || !HasCompletionItems(response))
+            {
+                ClearInlineSuggestion(editorState);
+                return false;
+            }
+
+            var firstItem = response.Items[0];
+            var insertText = GetCompletionText(firstItem);
+            if (string.IsNullOrEmpty(insertText))
+            {
+                ClearInlineSuggestion(editorState);
+                return false;
+            }
+
+            var replacementRange = response.ReplacementRange;
+            if (replacementRange == null)
+            {
+                replacementRange = new LanguageServiceRange
+                {
+                    Start = Math.Max(0, pending.AbsolutePosition),
+                    Length = 0
+                };
+                response.ReplacementRange = replacementRange;
+            }
+
+            var suggestionStart = Math.Max(0, replacementRange.Start);
+            var caretIndex = target.EditorState != null ? Math.Max(0, target.EditorState.CaretIndex) : pending.AbsolutePosition;
+            if (caretIndex < suggestionStart)
+            {
+                ClearInlineSuggestion(editorState);
+                return false;
+            }
+
+            var liveText = target.Text ?? string.Empty;
+            if (caretIndex > liveText.Length)
+            {
+                caretIndex = liveText.Length;
+            }
+
+            var typedPrefixLength = caretIndex - suggestionStart;
+            if (typedPrefixLength > insertText.Length)
+            {
+                ClearInlineSuggestion(editorState);
+                return false;
+            }
+
+            var typedPrefix = typedPrefixLength > 0 && suggestionStart + typedPrefixLength <= liveText.Length
+                ? liveText.Substring(suggestionStart, typedPrefixLength)
+                : string.Empty;
+            if (!insertText.StartsWith(typedPrefix, StringComparison.Ordinal))
+            {
+                ClearInlineSuggestion(editorState);
+                return false;
+            }
+
+            editorState.ActiveInlineCompletionKey = pending.RequestKey ?? string.Empty;
+            editorState.ActiveInlineCompletionResponse = CloneCompletionResponse(response);
+            editorState.ActiveInlineCompletionProviderId = providerId ?? string.Empty;
+            return true;
+        }
+
+        public bool HasVisibleInlineSuggestion(CortexEditorInteractionState editorState, DocumentSession session)
+        {
+            string _;
+            return TryGetInlineSuggestionSuffix(editorState, session, out _);
+        }
+
+        public bool TryGetInlineSuggestionSuffix(
+            CortexEditorInteractionState editorState,
+            DocumentSession session,
+            out string suffixText)
+        {
+            suffixText = string.Empty;
+            if (editorState == null || session == null || session.EditorState == null || session.EditorState.HasMultipleSelections)
+            {
+                return false;
+            }
+
+            var response = editorState.ActiveInlineCompletionResponse;
+            if (!HasCompletionItems(response) ||
+                !string.Equals(response.DocumentPath ?? string.Empty, session.FilePath ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var firstItem = response.Items[0];
+            var insertText = GetCompletionText(firstItem);
+            if (string.IsNullOrEmpty(insertText))
+            {
+                return false;
+            }
+
+            var replacementRange = response.ReplacementRange;
+            if (replacementRange == null)
+            {
+                return false;
+            }
+
+            var start = Math.Max(0, replacementRange.Start);
+            var caretIndex = Math.Max(0, session.EditorState.CaretIndex);
+            var text = session.Text ?? string.Empty;
+            if (caretIndex < start || caretIndex > text.Length)
+            {
+                return false;
+            }
+
+            var typedPrefixLength = caretIndex - start;
+            if (typedPrefixLength > insertText.Length)
+            {
+                return false;
+            }
+
+            var typedPrefix = typedPrefixLength > 0 && start + typedPrefixLength <= text.Length
+                ? text.Substring(start, typedPrefixLength)
+                : string.Empty;
+            if (!insertText.StartsWith(typedPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            suffixText = insertText.Substring(typedPrefixLength);
+            return !string.IsNullOrEmpty(suffixText);
+        }
+
+        public bool ApplyInlineSuggestion(DocumentSession session, CortexEditorInteractionState editorState, IEditorService editorService)
+        {
+            if (session == null || editorState == null || editorService == null)
+            {
+                return false;
+            }
+
+            var response = editorState.ActiveInlineCompletionResponse;
+            if (!HasCompletionItems(response))
+            {
+                return false;
+            }
+
+            var replacementRange = response.ReplacementRange;
+            if (replacementRange == null)
+            {
+                return false;
+            }
+
+            var firstItem = response.Items[0];
+            var insertText = GetCompletionText(firstItem);
+            if (string.IsNullOrEmpty(insertText))
+            {
+                return false;
+            }
+
+            var start = Math.Max(0, replacementRange.Start);
+            var caretIndex = session.EditorState != null ? Math.Max(0, session.EditorState.CaretIndex) : start;
+            var textLength = session.Text != null ? session.Text.Length : 0;
+            if (start > textLength)
+            {
+                start = textLength;
+            }
+
+            if (caretIndex > textLength)
+            {
+                caretIndex = textLength;
+            }
+
+            if (caretIndex < start)
+            {
+                caretIndex = start;
+            }
+
+            editorService.SetSelection(session, start, caretIndex);
+            var applied = editorService.InsertText(session, insertText);
+            if (applied)
+            {
+                RecordAcceptedCompletion(editorState, session, firstItem);
+                if (session.EditorState != null)
+                {
+                    // Keep the viewport stable when accepting a large multiline AI suggestion.
+                    session.EditorState.ScrollToCaretPending = false;
+                }
+            }
+
+            ClearInlineSuggestion(editorState);
+            return applied;
+        }
+
         public bool IsVisibleForSession(CortexEditorInteractionState editorState, DocumentSession session)
         {
             var response = editorState != null ? editorState.ActiveCompletionResponse : null;
@@ -326,12 +517,32 @@ namespace Cortex.Services
 
             ClearRequest(editorState);
             ClearActive(editorState);
+            ClearInlineSuggestion(editorState);
             ResetSelection(editorState);
         }
 
         public void ClearPendingRequest(CortexEditorInteractionState editorState)
         {
             ClearRequest(editorState);
+        }
+
+        public void ClearPopupCompletion(CortexEditorInteractionState editorState)
+        {
+            ClearRequest(editorState);
+            ClearActive(editorState);
+            ResetSelection(editorState);
+        }
+
+        public void ClearInlineSuggestion(CortexEditorInteractionState editorState)
+        {
+            if (editorState == null)
+            {
+                return;
+            }
+
+            editorState.ActiveInlineCompletionKey = string.Empty;
+            editorState.ActiveInlineCompletionResponse = null;
+            editorState.ActiveInlineCompletionProviderId = string.Empty;
         }
 
         private static void ClearRequest(CortexEditorInteractionState editorState)
@@ -449,6 +660,15 @@ namespace Cortex.Services
                     item.FilterText = item.InsertText ?? item.DisplayText ?? string.Empty;
                 }
             }
+        }
+
+        private static string GetCompletionText(LanguageServiceCompletionItem item)
+        {
+            return item == null
+                ? string.Empty
+                : (!string.IsNullOrEmpty(item.InsertText)
+                    ? item.InsertText
+                    : (!string.IsNullOrEmpty(item.DisplayText) ? item.DisplayText : item.FilterText ?? string.Empty));
         }
 
         private static LanguageServiceCompletionResponse CloneCompletionResponse(LanguageServiceCompletionResponse response)

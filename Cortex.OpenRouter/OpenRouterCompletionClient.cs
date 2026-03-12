@@ -90,6 +90,11 @@ namespace Cortex.OpenRouter
             }
         }
 
+        public bool CancelCompletion(string requestId)
+        {
+            return false;
+        }
+
         public void Dispose()
         {
             _disposed = true;

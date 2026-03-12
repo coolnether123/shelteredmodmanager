@@ -113,7 +113,12 @@ public sealed class OllamaCompletionBackend : ICompletionBackend
             Suffix = suffix,
             System = systemPrompt,
             Stream = false,
-            Raw = false
+            Raw = false,
+            Options = new OllamaGenerateOptions
+            {
+                NumPredict = 128,
+                Temperature = 0.2
+            }
         };
 
         _logger.LogInformation(
@@ -179,6 +184,15 @@ public sealed class OllamaCompletionBackend : ICompletionBackend
         public bool Stream { get; set; }
 
         public bool Raw { get; set; }
+
+        public OllamaGenerateOptions Options { get; set; }
+    }
+
+    private sealed class OllamaGenerateOptions
+    {
+        public int NumPredict { get; set; }
+
+        public double Temperature { get; set; }
     }
 
     private sealed class OllamaGenerateResponse

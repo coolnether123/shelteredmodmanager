@@ -24,6 +24,7 @@ namespace Cortex.Tabby
         private const int SuffixWindowLength = 2048;
         private readonly object _sync = new object();
         private readonly Queue<CompletionAugmentationResult> _completed = new Queue<CompletionAugmentationResult>();
+        private readonly Dictionary<string, ActiveRequestState> _activeRequests = new Dictionary<string, ActiveRequestState>();
         private readonly Action<string> _log;
         private readonly IDisposable _ownedResource;
         private int _nextRequestId;
@@ -77,6 +78,11 @@ namespace Cortex.Tabby
             }
 
             var requestId = "tabby-" + Interlocked.Increment(ref _nextRequestId);
+            var activeRequest = new ActiveRequestState();
+            lock (_sync)
+            {
+                _activeRequests[requestId] = activeRequest;
+            }
             Log("Queueing completion request " + requestId +
                 ". Endpoint=" + Endpoint +
                 ", Document=" + (request.DocumentPath ?? string.Empty) +
@@ -86,9 +92,10 @@ namespace Cortex.Tabby
                 ", RelatedSnippets=" + (request.RelatedSnippets != null ? request.RelatedSnippets.Length : 0) + ".");
             ThreadPool.QueueUserWorkItem(delegate
             {
-                var response = ExecuteCompletion(request);
+                var response = ExecuteCompletion(request, activeRequest);
                 lock (_sync)
                 {
+                    _activeRequests.Remove(requestId);
                     _completed.Enqueue(new CompletionAugmentationResult
                     {
                         RequestId = requestId,
@@ -98,6 +105,49 @@ namespace Cortex.Tabby
                 }
             });
             return requestId;
+        }
+
+        public bool CancelCompletion(string requestId)
+        {
+            if (string.IsNullOrEmpty(requestId))
+            {
+                return false;
+            }
+
+            ActiveRequestState activeRequest;
+            lock (_sync)
+            {
+                if (!_activeRequests.TryGetValue(requestId, out activeRequest))
+                {
+                    return false;
+                }
+            }
+
+            activeRequest.Cancelled = true;
+            try
+            {
+                if (activeRequest.HttpRequest != null)
+                {
+                    activeRequest.HttpRequest.Abort();
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (activeRequest.TcpClient != null)
+                {
+                    activeRequest.TcpClient.Close();
+                }
+            }
+            catch
+            {
+            }
+
+            Log("Canceled completion request " + requestId + ".");
+            return true;
         }
 
         public bool TryDequeueResponse(out CompletionAugmentationResult result)
@@ -118,13 +168,43 @@ namespace Cortex.Tabby
         public void Dispose()
         {
             _disposed = true;
+            lock (_sync)
+            {
+                foreach (var activeRequest in _activeRequests.Values)
+                {
+                    activeRequest.Cancelled = true;
+                    try
+                    {
+                        if (activeRequest.HttpRequest != null)
+                        {
+                            activeRequest.HttpRequest.Abort();
+                        }
+                    }
+                    catch
+                    {
+                    }
+
+                    try
+                    {
+                        if (activeRequest.TcpClient != null)
+                        {
+                            activeRequest.TcpClient.Close();
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                _activeRequests.Clear();
+            }
             if (_ownedResource != null)
             {
                 _ownedResource.Dispose();
             }
         }
 
-        private LanguageServiceCompletionResponse ExecuteCompletion(CompletionAugmentationRequest request)
+        private LanguageServiceCompletionResponse ExecuteCompletion(CompletionAugmentationRequest request, ActiveRequestState activeRequest)
         {
             try
             {
@@ -133,11 +213,15 @@ namespace Cortex.Tabby
                 Uri endpointUri;
                 if (TryCreateLoopbackEndpoint(Endpoint, out endpointUri))
                 {
-                    return ExecuteCompletionOverTcp(request, endpointUri, json ?? string.Empty);
+                    return ExecuteCompletionOverTcp(request, endpointUri, json ?? string.Empty, activeRequest);
                 }
 
                 var requestBody = Encoding.UTF8.GetBytes(json ?? string.Empty);
                 var httpRequest = (HttpWebRequest)WebRequest.Create(Endpoint);
+                if (activeRequest != null)
+                {
+                    activeRequest.HttpRequest = httpRequest;
+                }
                 httpRequest.Method = "POST";
                 httpRequest.ContentType = "application/json";
                 httpRequest.Accept = "application/json";
@@ -184,7 +268,9 @@ namespace Cortex.Tabby
             }
             catch (WebException ex)
             {
-                LastError = ReadWebException(ex);
+                LastError = activeRequest != null && activeRequest.Cancelled
+                    ? "canceled"
+                    : ReadWebException(ex);
                 Log("Completion request failed. Status=" + ex.Status +
                     ", Message=" + LastError);
                 return BuildErrorResponse(request, LastError);
@@ -206,6 +292,8 @@ namespace Cortex.Tabby
                 git_url = string.Empty,
                 user = Environment.UserName ?? string.Empty,
                 declarations = request.Declarations ?? new string[0],
+                current_line_prefix = request.CurrentLinePrefixText ?? string.Empty,
+                current_line_suffix = request.CurrentLineSuffixText ?? string.Empty,
                 relevant_snippets = BuildRelevantSnippets(request.RelatedSnippets),
                 segments = new TabbyCompletionSegments
                 {
@@ -219,8 +307,7 @@ namespace Cortex.Tabby
             CompletionAugmentationRequest request,
             TabbyCompletionPayloadResponse payload)
         {
-            var items = new List<LanguageServiceCompletionItem>();
-            var query = CompletionAugmentationProviderSupport.ExtractIdentifierPrefix(request != null ? request.PrefixText : string.Empty);
+            var completions = new List<string>();
             if (payload != null && payload.choices != null)
             {
                 for (var i = 0; i < payload.choices.Length; i++)
@@ -232,33 +319,14 @@ namespace Cortex.Tabby
                         continue;
                     }
 
-                    items.Add(new LanguageServiceCompletionItem
-                    {
-                        DisplayText = CompletionAugmentationProviderSupport.BuildDisplayText(request, text),
-                        InsertText = text,
-                        FilterText = (query ?? string.Empty) + text,
-                        SortText = i.ToString("D4"),
-                        InlineDescription = "Tabby",
-                        Kind = "AI",
-                        IsPreselected = i == 0
-                    });
+                    completions.Add(text);
                 }
             }
 
-            return new LanguageServiceCompletionResponse
-            {
-                Success = true,
-                StatusMessage = items.Count > 0 ? "ok" : "no suggestions",
-                DocumentPath = request != null ? request.DocumentPath ?? string.Empty : string.Empty,
-                ProjectFilePath = request != null ? request.ProjectFilePath ?? string.Empty : string.Empty,
-                DocumentVersion = request != null ? request.DocumentVersion : 0,
-                ReplacementRange = new LanguageServiceRange
-                {
-                    Start = request != null ? Math.Max(0, request.AbsolutePosition) : 0,
-                    Length = 0
-                },
-                Items = items.ToArray()
-            };
+            return CompletionAugmentationProviderSupport.BuildSuccessResponse(
+                request,
+                completions.ToArray(),
+                "Tabby");
         }
 
         private static LanguageServiceCompletionResponse BuildErrorResponse(CompletionAugmentationRequest request, string message)
@@ -285,7 +353,8 @@ namespace Cortex.Tabby
         private LanguageServiceCompletionResponse ExecuteCompletionOverTcp(
             CompletionAugmentationRequest request,
             Uri endpointUri,
-            string json)
+            string json,
+            ActiveRequestState activeRequest)
         {
             var requestBody = Encoding.UTF8.GetBytes(json ?? string.Empty);
             var port = endpointUri.Port > 0 ? endpointUri.Port : 80;
@@ -295,6 +364,10 @@ namespace Cortex.Tabby
                 ", TimeoutMs=" + TimeoutMs + ".");
             using (var client = new TcpClient())
             {
+                if (activeRequest != null)
+                {
+                    activeRequest.TcpClient = client;
+                }
                 client.SendTimeout = TimeoutMs;
                 client.ReceiveTimeout = TimeoutMs;
                 var connectResult = client.BeginConnect(endpointUri.Host, port, null, null);
@@ -643,6 +716,13 @@ namespace Cortex.Tabby
             }
         }
 
+        private sealed class ActiveRequestState
+        {
+            public HttpWebRequest HttpRequest;
+            public TcpClient TcpClient;
+            public bool Cancelled;
+        }
+
         private sealed class TabbyCompletionPayloadRequest
         {
             public string language;
@@ -650,6 +730,8 @@ namespace Cortex.Tabby
             public string git_url;
             public string user;
             public string[] declarations;
+            public string current_line_prefix;
+            public string current_line_suffix;
             public TabbyRelevantSnippet[] relevant_snippets;
             public TabbyCompletionSegments segments;
         }

@@ -97,6 +97,7 @@ namespace Cortex.Core.Abstractions
         string ProviderId { get; }
         string LastError { get; }
         string QueueCompletion(CompletionAugmentationRequest request);
+        bool CancelCompletion(string requestId);
         bool TryDequeueResponse(out CompletionAugmentationResult result);
     }
 

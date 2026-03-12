@@ -631,6 +631,7 @@ namespace Cortex.Modules.Editor
             var errorCount = CountDiagnostics(analysis, "Error");
             var warningCount = CountDiagnostics(analysis, "Warning");
             var roslynLabel = BuildRoslynLabel(state, analysis, errorCount, warningCount);
+            var augmentationLabel = BuildCompletionAugmentationLabel(state, active);
             var modeTooltip = BuildEditModeTooltip(active, editingAllowed, canEditDocument, isEditing);
             var modeContent = new GUIContent(isEditing ? "EDIT" : "READ", modeTooltip);
             var tooltip = string.Empty;
@@ -659,6 +660,8 @@ namespace Cortex.Modules.Editor
             GUILayout.Label("Ln " + (caret.Line + 1) + ", Col " + (caret.Column + 1) + "   " + lineCount + " lines", GUILayout.ExpandWidth(false));
             GUILayout.Space(10f);
             GUILayout.Label(roslynLabel, GUILayout.ExpandWidth(false));
+            GUILayout.Space(10f);
+            GUILayout.Label(augmentationLabel, GUILayout.ExpandWidth(false));
             GUILayout.FlexibleSpace();
 
             GUI.enabled = savingAllowed && active.SupportsSaving;
@@ -720,6 +723,76 @@ namespace Cortex.Modules.Editor
             }
 
             return "Roslyn E:" + errorCount + " W:" + warningCount;
+        }
+
+        private static string BuildCompletionAugmentationLabel(CortexShellState state, DocumentSession active)
+        {
+            var settings = state != null ? state.Settings : null;
+            if (settings == null || !settings.EnableCompletionAugmentation)
+            {
+                return "AI: off";
+            }
+
+            var editor = state != null ? state.Editor : null;
+            var providerId = editor != null ? editor.CompletionAugmentationProviderId ?? string.Empty : string.Empty;
+            var status = editor != null ? editor.CompletionAugmentationStatus ?? string.Empty : string.Empty;
+            var statusMessage = editor != null ? editor.CompletionAugmentationStatusMessage ?? string.Empty : string.Empty;
+            var hasInlineSuggestion = editor != null &&
+                active != null &&
+                editor.ActiveInlineCompletionResponse != null &&
+                string.Equals(editor.ActiveInlineCompletionProviderId ?? string.Empty, providerId, StringComparison.OrdinalIgnoreCase);
+
+            if (string.IsNullOrEmpty(providerId) &&
+                !string.IsNullOrEmpty(settings.CompletionAugmentationProviderId))
+            {
+                providerId = settings.CompletionAugmentationProviderId ?? string.Empty;
+            }
+
+            if (string.IsNullOrEmpty(providerId))
+            {
+                return "AI: standby";
+            }
+
+            if (string.Equals(providerId, "tabby", StringComparison.OrdinalIgnoreCase) && !settings.EnableTabbyCompletion)
+            {
+                return "Tabby: off";
+            }
+
+            var providerLabel = CompletionAugmentationProviderIds.GetDisplayName(providerId);
+            if (hasInlineSuggestion)
+            {
+                return providerLabel + ": suggestion";
+            }
+
+            switch ((status ?? string.Empty).ToLowerInvariant())
+            {
+                case "starting":
+                    return providerLabel + ": starting";
+                case "thinking":
+                    return providerLabel + ": thinking";
+                case "suggestion":
+                    return providerLabel + ": suggestion";
+                case "ready":
+                    return providerLabel + ": ready";
+                case "offline":
+                    return providerLabel + ": offline";
+                case "error":
+                    return providerLabel + ": " + BuildCompletionStatusMessage(statusMessage);
+            }
+
+            return providerLabel + ": ready";
+        }
+
+        private static string BuildCompletionStatusMessage(string statusMessage)
+        {
+            if (string.IsNullOrEmpty(statusMessage))
+            {
+                return "error";
+            }
+
+            return statusMessage.Length <= 24
+                ? statusMessage
+                : statusMessage.Substring(0, 21) + "...";
         }
 
         private static bool HasResolvedAnalysis(LanguageServiceAnalysisResponse analysis)
