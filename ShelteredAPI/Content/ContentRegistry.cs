@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Core;
 using UnityEngine;
 
-namespace ModAPI.Content
+namespace ShelteredAPI.Content
 {
     /// <summary>Result of a content registration attempt.</summary>
     public class RegistrationResult
@@ -291,8 +291,8 @@ namespace ModAPI.Content
         {
             try
             {
-                Core.ModEntry entry;
-                if (Core.ModRegistry.TryGetModByAssembly(asm, out entry) && entry != null && !string.IsNullOrEmpty(entry.Id))
+                ModAPI.Core.ModEntry entry;
+                if (ModAPI.Core.ModRegistry.TryGetModByAssembly(asm, out entry) && entry != null && !string.IsNullOrEmpty(entry.Id))
                     return entry.Id;
             }
             catch { }

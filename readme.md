@@ -203,7 +203,7 @@ Sheltered/
 The Developer API is in early development. See the documentation folder for current capabilities.
 
 Currently available:
-* Item and food injection
+* Item and food injection via `ShelteredAPI.Content`
 * Custom crafting recipes
 * Event subscriptions (day cycles, save/load, UI panels)
 * Harmony integration for runtime patching

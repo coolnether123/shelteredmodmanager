@@ -58,6 +58,12 @@
     <Compile Include="Actors\Internal\ActorSystemImpl.Execution.cs" />
     <Compile Include="Actors\Internal\ActorSystemImpl.LiveSync.cs" />
     <Compile Include="Characters\Models\CharacterDataModel.cs" />
+    <Compile Include="Content\AssetLoader.cs" />
+    <Compile Include="Content\ContentRegistry.cs" />
+    <Compile Include="Content\ContentResolver.cs" />
+    <Compile Include="Content\ContentInjector.cs" />
+    <Compile Include="Content\InventoryIntegration.cs" />
+    <Compile Include="Content\ModLocalization.cs" />
     <Compile Include="Core\GameHelperImpl.cs" />
     <Compile Include="Core\ShelteredApiRuntimeBootstrap.cs" />
     <Compile Include="Core\ShelteredKeybindPersistenceGuard.cs" />

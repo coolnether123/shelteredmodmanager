@@ -33,6 +33,7 @@ High-level flow:
 - applying Harmony bootstrap and save-protection patches
 - wiring save/session lifecycle hooks
 - registering built-in APIs exposed by the current runtime
+- leaving Sheltered-specific content runtime ownership to `ShelteredAPI`
 
 That last step includes actor API registration when `ShelteredAPI` is present:
 - `ShelteredAPI.Actors`
