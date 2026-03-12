@@ -21,7 +21,9 @@ namespace ModAPI.Hooks
             }
 
             var active = SaveRuntimeState.ActiveCustomSave;
-            if (active == null || active.absoluteSlot <= 0)
+            if (!SaveRuntimeState.HasActiveCustomSessionFor(requestedType) ||
+                active == null ||
+                active.absoluteSlot <= 3)
             {
                 return false;
             }
@@ -65,7 +67,7 @@ namespace ModAPI.Hooks
         {
             if (SaveRuntimeState.ActiveCustomSave != null && SaveRuntimeState.ActiveCustomSave.id == deletedSaveId)
             {
-                SaveRuntimeState.ActiveCustomSave = null;
+                SaveRuntimeState.ClearActiveCustomSession();
             }
 
             SaveRuntimeState.ClearTrackedReferences(requestedType, deletedSaveId);

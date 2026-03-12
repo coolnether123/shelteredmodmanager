@@ -16,6 +16,9 @@ namespace ModAPI.Core
     {
         private static readonly List<SaveSystemImpl> _instances = new List<SaveSystemImpl>();
         private string _shutdownCache = null;
+        private SaveData _preparedLoadData = null;
+        private bool _afterLoadCallbacksApplied;
+        private readonly HashSet<string> _loadedKeysForPreparedData = new HashSet<string>(StringComparer.Ordinal);
 
         private readonly Dictionary<string, object> _registeredData = new Dictionary<string, object>();
         private readonly Dictionary<string, Delegate> _migrationCallbacks = new Dictionary<string, Delegate>();
@@ -24,9 +27,10 @@ namespace ModAPI.Core
         public SaveSystemImpl(string modId)
         {
             _modId = modId;
-            // Subscribe to generic ModAPI save lifecycle events (fed by ModAPI.Events.GameEvents)
+            // Save blobs need to be available before scene saveables start deserializing.
             ModAPI.Saves.Events.OnBeforeSave += HandleBeforeSave;
-            ModAPI.Saves.Events.OnAfterLoad += HandleAfterLoad;
+            GameEvents.OnBeforeLoadSceneContents += HandleBeforeLoadSceneContents;
+            GameEvents.OnAfterLoad += HandleAfterLoad;
             _instances.Add(this);
         }
 
@@ -207,8 +211,26 @@ namespace ModAPI.Core
             }
         }
 
-        private void HandleAfterLoad(SaveEntry gameData)
+        private void HandleBeforeLoadSceneContents(SaveData data)
         {
+            PrepareRegisteredDataForLoad(data);
+        }
+
+        private void HandleAfterLoad(SaveData data)
+        {
+            PrepareRegisteredDataForLoad(data);
+            ApplyAfterLoadCallbacks();
+        }
+
+        private void PrepareRegisteredDataForLoad(SaveData data)
+        {
+            if (data == null) return;
+            if (ReferenceEquals(_preparedLoadData, data)) return;
+
+            _preparedLoadData = data;
+            _afterLoadCallbacksApplied = false;
+            _loadedKeysForPreparedData.Clear();
+
             var rootPath = GetCurrentSlotPath();
             if (string.IsNullOrEmpty(rootPath)) return;
 
@@ -241,25 +263,15 @@ namespace ModAPI.Core
                             {
                                 JsonUtility.FromJsonOverwrite(entry.json, dataObj);
                                 loadedKeys.Add(entry.key);
-                                
-                                // Support V1.2.1 IModPersistenceLogic hooks
-                                if (dataObj is ModAPI.Persistence.IModPersistenceLogic)
-                                {
-                                    try 
-                                    { 
-                                        var saveEntry = SaveRuntimeState.ActiveCustomSave;
-                                        (dataObj as ModAPI.Persistence.IModPersistenceLogic).OnLoaded(saveEntry); 
-                                    }
-                                    catch (Exception logicEx) { MMLog.WriteError($"[SaveSystem] {entry.key}.OnLoaded failed: {logicEx.Message}"); }
-                                }
+                                _loadedKeysForPreparedData.Add(entry.key);
                             }
                         }
-                        MMLog.WriteDebug(string.Format("[SaveSystem] Loaded mod data for {0} from {1}", _modId, Path.GetFileName(modFilePath)));
+                        MMLog.WriteDebug(string.Format("[SaveSystem] Prepared mod data for {0} from {1}", _modId, Path.GetFileName(modFilePath)));
                     }
                 }
                 catch (Exception ex)
                 {
-                    MMLog.WriteError(string.Format("[SaveSystem] Failed to load mod data for {0}: {1}", _modId, ex.Message));
+                    MMLog.WriteError(string.Format("[SaveSystem] Failed to prepare mod data for {0}: {1}", _modId, ex.Message));
                 }
             }
 
@@ -285,6 +297,30 @@ namespace ModAPI.Core
                     }
                 }
             }
+        }
+
+        private void ApplyAfterLoadCallbacks()
+        {
+            if (_afterLoadCallbacksApplied) return;
+
+            foreach (var key in _loadedKeysForPreparedData)
+            {
+                if (!_registeredData.TryGetValue(key, out var dataObj)) continue;
+
+                var persistenceLogic = dataObj as ModAPI.Persistence.IModPersistenceLogic;
+                if (persistenceLogic == null) continue;
+
+                try
+                {
+                    persistenceLogic.OnLoaded(SaveRuntimeState.ActiveCustomSave);
+                }
+                catch (Exception logicEx)
+                {
+                    MMLog.WriteError($"[SaveSystem] {key}.OnLoaded failed: {logicEx.Message}");
+                }
+            }
+
+            _afterLoadCallbacksApplied = true;
         }
     }
 }
