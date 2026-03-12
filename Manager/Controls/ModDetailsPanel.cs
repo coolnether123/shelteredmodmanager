@@ -143,7 +143,7 @@ namespace Manager.Controls
 
             // ModAPI Status
             _modApiLabel = new Label();
-            _modApiLabel.Text = "ModAPI:";
+            _modApiLabel.Text = "API:";
             _modApiLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             _modApiLabel.AutoSize = true;
             _modApiLabel.Location = new Point(12, 253);
@@ -183,7 +183,7 @@ namespace Manager.Controls
             _nexusStatusLabel.Location = new Point(12, 315);
 
             _nexusLink = new LinkLabel();
-            _nexusLink.Text = "Open Nexus Mod Page";
+            _nexusLink.Text = "Open Nexus Page";
             _nexusLink.Font = new Font("Segoe UI", 9f);
             _nexusLink.AutoSize = true;
             _nexusLink.Location = new Point(12, 333);
@@ -356,7 +356,8 @@ namespace Manager.Controls
             }
 
             // Website
-            _websiteLink.Visible = !string.IsNullOrEmpty(mod.Website);
+            _websiteLink.Visible = ShouldShowWebsiteLink(mod);
+            _websiteLink.Text = GetWebsiteLinkText(mod);
             UpdateNexusStatus(mod);
 
             // Description
@@ -392,9 +393,9 @@ namespace Manager.Controls
             else
             {
                 if (!string.IsNullOrEmpty(_installedModApiVersion))
-                    _modApiValue.Text = "Unknown (Installed: " + _installedModApiVersion + ")";
+                    _modApiValue.Text = "Not declared (Installed: " + _installedModApiVersion + ")";
                 else
-                    _modApiValue.Text = "Unknown";
+                    _modApiValue.Text = "Not declared";
                 _modApiValue.ForeColor = _isDarkMode ? Color.LightGray : Color.Gray;
             }
         }
@@ -405,7 +406,7 @@ namespace Manager.Controls
 
             if (!mod.HasNexusReference)
             {
-                _nexusStatusLabel.Text = "NEXUS: Not linked";
+                _nexusStatusLabel.Text = "Nexus: Not linked";
                 _nexusStatusLabel.ForeColor = _isDarkMode ? Color.Gray : Color.DimGray;
                 return;
             }
@@ -422,19 +423,27 @@ namespace Manager.Controls
             if (mod.HasUpdateAvailable)
             {
                 string latest = string.IsNullOrEmpty(mod.NexusRemoteVersion) ? "new release" : mod.NexusRemoteVersion;
-                _nexusStatusLabel.Text = "NEXUS: Update available (" + latest + ")";
+                _nexusStatusLabel.Text = "Nexus: Update available (" + latest + ")";
                 _nexusStatusLabel.ForeColor = _isDarkMode ? Color.DeepSkyBlue : Color.RoyalBlue;
                 return;
             }
 
-            if (!string.IsNullOrEmpty(mod.NexusRemoteVersion))
+            bool installedMod = !string.IsNullOrEmpty(mod.RootPath);
+            if (!string.IsNullOrEmpty(mod.NexusRemoteVersion) && installedMod)
             {
-                _nexusStatusLabel.Text = "NEXUS: Up to date (" + mod.NexusRemoteVersion + ")";
+                _nexusStatusLabel.Text = "Nexus: Installed and current (" + mod.NexusRemoteVersion + ")";
                 _nexusStatusLabel.ForeColor = _isDarkMode ? Color.LightGreen : Color.Green;
                 return;
             }
 
-            _nexusStatusLabel.Text = "NEXUS: Linked (" + mod.NexusGameDomain + "/" + mod.NexusModId + ")";
+            if (!installedMod && !string.IsNullOrEmpty(mod.NexusRemoteVersion))
+            {
+                _nexusStatusLabel.Text = "Nexus: Available on Nexus (" + mod.NexusRemoteVersion + ")";
+                _nexusStatusLabel.ForeColor = _isDarkMode ? Color.LightGray : Color.Gray;
+                return;
+            }
+
+            _nexusStatusLabel.Text = "Nexus: Linked (" + mod.NexusGameDomain + "/" + mod.NexusModId + ")";
             _nexusStatusLabel.ForeColor = _isDarkMode ? Color.LightGray : Color.Gray;
         }
 
@@ -486,9 +495,42 @@ namespace Manager.Controls
             _nexusLink.Visible = true;
             _descLabel.Visible = true;
             _descriptionBox.Visible = true;
-            _openFolderButton.Visible = true;
+            _openFolderButton.Visible = !string.IsNullOrEmpty(_currentMod != null ? _currentMod.RootPath : string.Empty);
 
             LayoutDetailContent();
+        }
+
+        private static bool ShouldShowWebsiteLink(ModItem mod)
+        {
+            if (mod == null || string.IsNullOrEmpty(mod.Website))
+                return false;
+
+            string website = NormalizeUrl(mod.Website);
+            string nexus = NormalizeUrl(mod.NexusPageUrl);
+            if (!string.IsNullOrEmpty(website) && !string.IsNullOrEmpty(nexus) && string.Equals(website, nexus, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return true;
+        }
+
+        private static string GetWebsiteLinkText(ModItem mod)
+        {
+            if (mod == null || string.IsNullOrEmpty(mod.Website))
+                return "Visit Website";
+
+            string website = mod.Website.Trim();
+            if (website.IndexOf("github.com", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Open GitHub Page";
+
+            return "Visit Website";
+        }
+
+        private static string NormalizeUrl(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            return value.Trim().TrimEnd('/').ToLowerInvariant();
         }
 
         private void LayoutDetailContent()

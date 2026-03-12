@@ -102,6 +102,7 @@
     <Compile Include="Core\Models\NexusModReference.cs" />
     <Compile Include="Core\Models\NexusRemoteMod.cs" />
     <Compile Include="Core\Models\NexusRemoteModFile.cs" />
+    <Compile Include="Core\Models\NexusAccountStatus.cs" />
     <!-- Core Services -->
     <Compile Include="Core\Security\NexusApiKeyProtector.cs" />
     <Compile Include="Core\Services\SettingsService.cs" />
