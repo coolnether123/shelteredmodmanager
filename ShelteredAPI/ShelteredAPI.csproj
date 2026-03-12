@@ -68,7 +68,6 @@
     <Compile Include="Core\ShelteredApiRuntimeBootstrap.cs" />
     <Compile Include="Core\ShelteredKeybindPersistenceGuard.cs" />
     <Compile Include="Debugging\DebugValueTakeover.cs" />
-    <Compile Include="Events\GameEvents.cs" />
     <Compile Include="Harmony\ModManagerKeybindsPatches.cs" />
     <Compile Include="Harmony\PlatformInputKeybindPatches.cs" />
     <Compile Include="Harmony\SettingsKeybindsButtonPatches.cs" />
