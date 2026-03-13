@@ -4,6 +4,7 @@ using System.Linq;
 using System.IO;
 using UnityEngine;
 using ModAPI.Core;
+using ModAPI.InputServices;
 using ModAPI.Saves;
 using ModAPI.UI;
 
@@ -780,7 +781,7 @@ namespace ModAPI.Hooks.Paging
             if (_maxOffset <= 0) return; // No scrolling needed
             
             float scroll;
-            if (!ScrollInputBridge.TryGetVerticalScroll(_minX, _maxX, out scroll))
+            if (!ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.ForUiRange(_minX, _maxX), out scroll))
             {
                 if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
                     scroll = 1f;
@@ -832,7 +833,7 @@ namespace ModAPI.Hooks.Paging
             if (contentHeight <= _clipHeight) return;
             
             float scroll;
-            if (!ScrollInputBridge.TryGetVerticalScroll(-400f, 400f, out scroll))
+            if (!ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.ForUiRange(-400f, 400f), out scroll))
             {
                 if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
                     scroll = 1f;

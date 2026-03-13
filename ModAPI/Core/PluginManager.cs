@@ -192,13 +192,8 @@ namespace ModAPI.Core
             AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
             {
                 string name = new AssemblyName(args.Name).Name;
-                if (name == "ModAPI" || name == "ModAPI.Core") return Assembly.GetExecutingAssembly();
-                if (name == "ShelteredAPI")
-                {
-                    var shelteredType = Type.GetType("ShelteredAPI.Core.ShelteredModManagerBase, ShelteredAPI", false);
-                    if (shelteredType != null) return shelteredType.Assembly;
-                    try { return Assembly.Load("ShelteredAPI"); } catch { return null; }
-                }
+                var sharedAssembly = SharedAssemblyResolver.ResolveSharedAssembly(name);
+                if (sharedAssembly != null) return sharedAssembly;
                 return null;
             };
 
@@ -211,6 +206,7 @@ namespace ModAPI.Core
             var runner = _loaderRoot.GetComponent<PluginRunner>() ?? _loaderRoot.AddComponent<PluginRunner>();
             runner.Manager = this;
 
+            SharedAssemblyResolver.ResolveSharedAssembly("ShelteredAPI");
             HarmonyBootstrap.EnsurePatched();
             
             // Force injection in case SaveManager.Awake already ran before we could patch it
@@ -259,6 +255,7 @@ namespace ModAPI.Core
 
             failures += LogAssembly("ModAPI", Assembly.GetExecutingAssembly());
             failures += LogAssembly("0Harmony", ResolveAssemblyByType("HarmonyLib.Harmony, 0Harmony"));
+            failures += LogAssembly("ShelteredAPI", SharedAssemblyResolver.ResolveSharedAssembly("ShelteredAPI"));
 
             MMLog.WriteDebug($"Assembly Resolution: Failed Assemblies: {failures}");
         }
@@ -441,6 +438,12 @@ namespace ModAPI.Core
             for (int i = 0; i < dllFiles.Length; i++)
             {
                 string dllPath = dllFiles[i];
+                if (SharedAssemblyResolver.ShouldSkipModAssembly(dllPath))
+                {
+                    MMLog.WriteInfo("PrepareAssemblies: skipping shared runtime assembly '" + dllPath + "'.");
+                    continue;
+                }
+
                 try
                 {
                     byte[] assemblyBytes = File.ReadAllBytes(dllPath);

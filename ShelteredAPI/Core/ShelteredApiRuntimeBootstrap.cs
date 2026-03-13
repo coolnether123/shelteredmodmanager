@@ -1,5 +1,6 @@
 using ModAPI.Core;
 using ModAPI.Actors;
+using ModAPI.InputServices;
 using ShelteredAPI.Input;
 using UnityEngine;
 
@@ -25,6 +26,7 @@ namespace ShelteredAPI.Core
                 ShelteredInputActions.EnsureRegistered();
                 ShelteredVanillaInputActions.EnsureRegistered();
                 ShelteredKeybindsProvider.Instance.EnsureLoaded();
+                ScrollInputService.RegisterSource(UnityScrollInputSource.Instance);
                 EnsurePersistenceGuard();
                 EnsureApiRegistrations();
 

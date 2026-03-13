@@ -82,6 +82,12 @@ namespace ModAPI.Core
             
             foreach (var dllPath in dllFiles)
             {
+                if (SharedAssemblyResolver.ShouldSkipModAssembly(dllPath))
+                {
+                    MMLog.WriteInfo("LoadAssemblies: skipping shared runtime assembly '" + dllPath + "'.");
+                    continue;
+                }
+
                 try
                 {
                     // Load assembly bytes to avoid file locking (developer-friendly)

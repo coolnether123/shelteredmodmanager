@@ -1,15 +1,14 @@
 using HarmonyLib;
-using ModAPI.InputActions;
 using ModAPI.Core;
 using ModAPI.Harmony;
-using ModAPI.UI;
+using ModAPI.InputActions;
 using ShelteredAPI.Input;
 using UnityEngine;
 
 namespace ShelteredAPI.Harmony
 {
     /// <summary>
-    /// Routes vanilla PC input polling through ModAPI keybindings (primary + secondary).
+    /// Routes vanilla PC input polling through ModAPI keybindings and Sheltered-specific pointer axis routing.
     /// </summary>
     [PatchPolicy(PatchDomain.Input, "ShelteredPlatformInputBridge",
         TargetBehavior = "Vanilla input polling bridge through ModAPI-managed keybindings",
@@ -76,7 +75,8 @@ namespace ShelteredAPI.Harmony
                 __result = true;
                 return;
             }
-            if (TouchInputBridge.IsTouchDragHeld(FullUiMinX, FullUiMaxX))
+
+            if (ShelteredTouchpadInputRouter.IsTouchDragHeld(FullUiMinX, FullUiMaxX))
             {
                 __result = true;
                 return;
@@ -109,6 +109,20 @@ namespace ShelteredAPI.Harmony
             return !TryResolveMenuAxis(axis, true, ref __result);
         }
 
+        [HarmonyPatch(typeof(PlatformInput_PC), "GetInputAxis", new System.Type[] { typeof(PlatformInput.InputAxis) })]
+        [HarmonyPrefix]
+        private static bool InputAxisPrefix(PlatformInput.InputAxis axis, ref float __result)
+        {
+            return !TryResolveGameplayAxis(axis, false, ref __result);
+        }
+
+        [HarmonyPatch(typeof(PlatformInput_PC), "GetInputAxisRaw", new System.Type[] { typeof(PlatformInput.InputAxis) })]
+        [HarmonyPrefix]
+        private static bool InputAxisRawPrefix(PlatformInput.InputAxis axis, ref float __result)
+        {
+            return !TryResolveGameplayAxis(axis, true, ref __result);
+        }
+
         private static bool TryResolveInputButton(PlatformInput.InputButton button, KeyState state, ref bool result)
         {
             InputBinding binding;
@@ -125,7 +139,6 @@ namespace ShelteredAPI.Harmony
                 || button == PlatformInput.InputButton.Interact
                 || button == PlatformInput.InputButton.GoHere)
             {
-                // Preserve vanilla behavior for click actions (down-only + not hovering UI).
                 result = binding.IsDown() && UICamera.hoveredObject == null;
                 return true;
             }
@@ -161,13 +174,13 @@ namespace ShelteredAPI.Harmony
             switch (state)
             {
                 case KeyState.Down:
-                    result = TouchInputBridge.IsTouchDragDown(FullUiMinX, FullUiMaxX);
+                    result = ShelteredTouchpadInputRouter.IsTouchDragDown(FullUiMinX, FullUiMaxX);
                     break;
                 case KeyState.Up:
-                    result = TouchInputBridge.IsTouchDragUp(FullUiMinX, FullUiMaxX);
+                    result = ShelteredTouchpadInputRouter.IsTouchDragUp(FullUiMinX, FullUiMaxX);
                     break;
                 default:
-                    result = TouchInputBridge.IsTouchDragHeld(FullUiMinX, FullUiMaxX);
+                    result = ShelteredTouchpadInputRouter.IsTouchDragHeld(FullUiMinX, FullUiMaxX);
                     break;
             }
 
@@ -183,17 +196,23 @@ namespace ShelteredAPI.Harmony
             return true;
         }
 
-        private static bool TryResolveMenuAxis(PlatformInput.MenuInputAxis axis, bool raw, ref float result)
+        private static bool TryResolveGameplayAxis(PlatformInput.InputAxis axis, bool raw, ref float result)
         {
-            if (axis != PlatformInput.MenuInputAxis.UIscroll)
+            float resolved;
+            if (!ShelteredTouchpadInputRouter.TryGetGameplayAxis(axis, raw, out resolved))
                 return false;
 
-            float scroll;
-            bool resolved = raw
-                ? ScrollInputBridge.TryGetVerticalScrollAnywhereRaw(out scroll)
-                : ScrollInputBridge.TryGetVerticalScrollAnywhere(out scroll);
+            result = resolved;
+            return true;
+        }
 
-            result = resolved ? scroll : 0f;
+        private static bool TryResolveMenuAxis(PlatformInput.MenuInputAxis axis, bool raw, ref float result)
+        {
+            float resolved;
+            if (!ShelteredTouchpadInputRouter.TryGetMenuAxis(axis, raw, out resolved))
+                return false;
+
+            result = resolved;
             return true;
         }
 
