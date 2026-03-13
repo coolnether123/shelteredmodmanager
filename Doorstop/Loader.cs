@@ -569,8 +569,6 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
         }
         LoaderDebugLog.Write(string.Format("[Bootstrap] Camera.main detected after {0:0.00}s.", waited));
 
-        yield return new WaitForSeconds(0.5f);
-
         try
         {
             // Get the game root and construct paths
