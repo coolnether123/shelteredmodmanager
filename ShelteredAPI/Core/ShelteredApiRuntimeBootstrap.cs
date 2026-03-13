@@ -12,6 +12,7 @@ namespace ShelteredAPI.Core
     {
         private static bool _initialized;
         private static readonly object Sync = new object();
+        private const string ProviderId = "shelteredapi";
 
         public static void Initialize()
         {
@@ -49,18 +50,48 @@ namespace ShelteredAPI.Core
 
         private static void EnsureApiRegistrations()
         {
-            ModAPIRegistry.RegisterAPI<IGameHelper>("ShelteredAPI.GameHelper", new GameHelperImpl(), "shelteredapi");
+            var gameHelper = new GameHelperImpl();
+            RegisterApi(GameRuntimeApiIds.GameHelper, gameHelper);
+            RegisterApi("ShelteredAPI.GameHelper", gameHelper);
 
             IActorSystem actors = ActorSystem.Instance;
-            ModAPIRegistry.RegisterAPI<IActorSystem>("ShelteredAPI.Actors", actors, "shelteredapi");
-            ModAPIRegistry.RegisterAPI<IActorRegistry>("ShelteredAPI.ActorRegistry", actors, "shelteredapi");
-            ModAPIRegistry.RegisterAPI<IActorComponentStore>("ShelteredAPI.ActorComponents", actors, "shelteredapi");
-            ModAPIRegistry.RegisterAPI<IActorBindingStore>("ShelteredAPI.ActorBindings", actors, "shelteredapi");
-            ModAPIRegistry.RegisterAPI<IActorAdapterRegistry>("ShelteredAPI.ActorAdapters", actors, "shelteredapi");
-            ModAPIRegistry.RegisterAPI<IActorDiagnostics>("ShelteredAPI.ActorDiagnostics", actors, "shelteredapi");
-            ModAPIRegistry.RegisterAPI<IActorSimulationScheduler>("ShelteredAPI.ActorSimulation", actors, "shelteredapi");
-            ModAPIRegistry.RegisterAPI<IActorEvents>("ShelteredAPI.ActorEvents", actors, "shelteredapi");
-            ModAPIRegistry.RegisterAPI<IActorSerializationService>("ShelteredAPI.ActorSerialization", actors, "shelteredapi");
+            RegisterApi(GameRuntimeApiIds.Actors, actors);
+            RegisterApi("ShelteredAPI.Actors", actors);
+            RegisterApi(GameRuntimeApiIds.ActorRegistry, (IActorRegistry)actors);
+            RegisterApi("ShelteredAPI.ActorRegistry", (IActorRegistry)actors);
+            RegisterApi(GameRuntimeApiIds.ActorComponents, (IActorComponentStore)actors);
+            RegisterApi("ShelteredAPI.ActorComponents", (IActorComponentStore)actors);
+            RegisterApi(GameRuntimeApiIds.ActorBindings, (IActorBindingStore)actors);
+            RegisterApi("ShelteredAPI.ActorBindings", (IActorBindingStore)actors);
+            RegisterApi(GameRuntimeApiIds.ActorAdapters, (IActorAdapterRegistry)actors);
+            RegisterApi("ShelteredAPI.ActorAdapters", (IActorAdapterRegistry)actors);
+            RegisterApi(GameRuntimeApiIds.ActorDiagnostics, (IActorDiagnostics)actors);
+            RegisterApi("ShelteredAPI.ActorDiagnostics", (IActorDiagnostics)actors);
+            RegisterApi(GameRuntimeApiIds.ActorSimulation, (IActorSimulationScheduler)actors);
+            RegisterApi("ShelteredAPI.ActorSimulation", (IActorSimulationScheduler)actors);
+            RegisterApi(GameRuntimeApiIds.ActorEvents, (IActorEvents)actors);
+            RegisterApi("ShelteredAPI.ActorEvents", (IActorEvents)actors);
+            RegisterApi(GameRuntimeApiIds.ActorSerialization, (IActorSerializationService)actors);
+            RegisterApi("ShelteredAPI.ActorSerialization", (IActorSerializationService)actors);
+        }
+
+        private static void RegisterApi<T>(string apiId, T implementation) where T : class
+        {
+            if (implementation == null || string.IsNullOrEmpty(apiId))
+                return;
+
+            if (ModAPIRegistry.IsAPIRegistered(apiId))
+                return;
+
+            ModAPIRegistry.RegisterAPI<T>(apiId, implementation, ProviderId);
+        }
+    }
+
+    internal sealed class ShelteredGameRuntimeBootstrap : IGameRuntimeBootstrap
+    {
+        public void Initialize()
+        {
+            ShelteredApiRuntimeBootstrap.Initialize();
         }
     }
 }
