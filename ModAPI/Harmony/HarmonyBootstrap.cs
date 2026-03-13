@@ -173,24 +173,7 @@ namespace ModAPI.Harmony
 
         private static Assembly ResolveShelteredApiAssembly()
         {
-            // Prefer type-based resolve first so we bind to the already-loaded instance.
-            // This avoids duplicate loads and preserves compatibility for mods referencing both APIs.
-            try
-            {
-                var shelteredType = Type.GetType("ShelteredAPI.Core.ShelteredModManagerBase, ShelteredAPI", false);
-                if (shelteredType != null)
-                    return shelteredType.Assembly;
-            }
-            catch { }
-
-            try
-            {
-                return Assembly.Load("ShelteredAPI");
-            }
-            catch
-            {
-                return null;
-            }
+            return SharedAssemblyResolver.ResolveSharedAssembly("ShelteredAPI");
         }
 
         private static void StartRetryRunner()

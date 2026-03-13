@@ -72,11 +72,17 @@
     <Compile Include="Harmony\PlatformInputKeybindPatches.cs" />
     <Compile Include="Harmony\SettingsKeybindsButtonPatches.cs" />
     <Compile Include="Interactions\ObjectButtonInjector.cs" />
+    <Compile Include="Input\ShelteredTouchpadInputRouter.cs" />
     <Compile Include="Input\ShelteredInputActions.cs" />
     <Compile Include="Input\ShelteredVanillaInputActions.cs" />
     <Compile Include="Input\InputContext.cs" />
     <Compile Include="Input\KeyValidationPolicy.cs" />
     <Compile Include="Input\KeyConflictResolver.cs" />
+    <Compile Include="Input\UnityIndirectScrollClassifier.cs" />
+    <Compile Include="Input\UnityLegacyAxisReader.cs" />
+    <Compile Include="Input\UnityTouchpadPanReader.cs" />
+    <Compile Include="Input\UnityScrollInputSource.cs" />
+    <Compile Include="Input\UnityTouchDragTracker.cs" />
     <Compile Include="UI\UITakeover.cs" />
     <Compile Include="UI\UIPanelTakeover.cs" />
     <Compile Include="Input\ShelteredKeybindsProvider.cs" />
