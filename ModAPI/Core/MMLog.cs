@@ -201,7 +201,7 @@ namespace ModAPI.Core
 
         public static void Write(string message)
         {
-            WriteInternal(LogLevel.Info, LogCategory.General, GetCallerInfo(), message);
+            WriteInternal(LogLevel.Info, LogCategory.General, "General", message);
         }
 
         public static void Write(string source, string message)
@@ -211,27 +211,27 @@ namespace ModAPI.Core
 
         public static void WriteDebug(string message, LogCategory category = LogCategory.General)
         {
-            WriteInternal(LogLevel.Debug, category, GetCallerInfo(), message);
+            WriteInternal(LogLevel.Debug, category, GetDefaultSource(category), message);
         }
 
         public static void WriteInfo(string message, LogCategory category = LogCategory.General)
         {
-            WriteInternal(LogLevel.Info, category, GetCallerInfo(), message);
+            WriteInternal(LogLevel.Info, category, GetDefaultSource(category), message);
         }
 
         public static void WriteWarning(string message, LogCategory category = LogCategory.General)
         {
-            WriteInternal(LogLevel.Warning, category, GetCallerInfo(), message);
+            WriteInternal(LogLevel.Warning, category, GetDefaultSource(category), message);
         }
 
         public static void WriteError(string message, LogCategory category = LogCategory.General)
         {
-            WriteInternal(LogLevel.Error, category, GetCallerInfo(), message);
+            WriteInternal(LogLevel.Error, category, GetCallerInfo(), AppendCurrentStackTrace(message, 2));
         }
 
         public static void WriteFatal(string message, LogCategory category = LogCategory.General)
         {
-            WriteInternal(LogLevel.Fatal, category, GetCallerInfo(), message);
+            WriteInternal(LogLevel.Fatal, category, GetCallerInfo(), AppendCurrentStackTrace(message, 2));
         }
 
         public static void WriteWithSource(LogLevel level, LogCategory category, string source, string message)
@@ -472,6 +472,11 @@ namespace ModAPI.Core
             return sb.ToString();
         }
 
+        private static string GetDefaultSource(LogCategory category)
+        {
+            return category.ToString();
+        }
+
         private static void WriteToFile(string message)
         {
             try
@@ -629,6 +634,29 @@ namespace ModAPI.Core
             }
             catch { }
             return "Unknown";
+        }
+
+        private static string AppendCurrentStackTrace(string message, int skipFrames)
+        {
+            var sb = new StringBuilder();
+            sb.Append(message ?? string.Empty);
+
+            try
+            {
+                var stackTrace = new StackTrace(skipFrames, false).ToString();
+                if (!string.IsNullOrEmpty(stackTrace))
+                {
+                    if (sb.Length > 0)
+                        sb.AppendLine();
+                    sb.AppendLine("Call Stack:");
+                    sb.Append(stackTrace);
+                }
+            }
+            catch
+            {
+            }
+
+            return sb.ToString();
         }
 
         private static string SafeGetLocation(Assembly assembly)
