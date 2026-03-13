@@ -201,7 +201,8 @@ namespace ModAPI.Core
 
         public static void Write(string message)
         {
-            WriteInternal(LogLevel.Info, LogCategory.General, "General", message);
+            if (!ShouldLog(LogLevel.Info, LogCategory.General)) return;
+            WriteInternal(LogLevel.Info, LogCategory.General, GetLightweightCallerInfo(), message);
         }
 
         public static void Write(string source, string message)
@@ -211,17 +212,20 @@ namespace ModAPI.Core
 
         public static void WriteDebug(string message, LogCategory category = LogCategory.General)
         {
-            WriteInternal(LogLevel.Debug, category, GetDefaultSource(category), message);
+            if (!ShouldLog(LogLevel.Debug, category)) return;
+            WriteInternal(LogLevel.Debug, category, GetLightweightCallerInfo(), message);
         }
 
         public static void WriteInfo(string message, LogCategory category = LogCategory.General)
         {
-            WriteInternal(LogLevel.Info, category, GetDefaultSource(category), message);
+            if (!ShouldLog(LogLevel.Info, category)) return;
+            WriteInternal(LogLevel.Info, category, GetLightweightCallerInfo(), message);
         }
 
         public static void WriteWarning(string message, LogCategory category = LogCategory.General)
         {
-            WriteInternal(LogLevel.Warning, category, GetDefaultSource(category), message);
+            if (!ShouldLog(LogLevel.Warning, category)) return;
+            WriteInternal(LogLevel.Warning, category, GetLightweightCallerInfo(), message);
         }
 
         public static void WriteError(string message, LogCategory category = LogCategory.General)
@@ -472,9 +476,15 @@ namespace ModAPI.Core
             return sb.ToString();
         }
 
-        private static string GetDefaultSource(LogCategory category)
+        private static bool ShouldLog(LogLevel level, LogCategory category)
         {
-            return category.ToString();
+            if (level < _minLevel)
+                return false;
+
+            if (level < LogLevel.Error && !_enabledCategories.Contains(category))
+                return false;
+
+            return true;
         }
 
         private static void WriteToFile(string message)
@@ -634,6 +644,61 @@ namespace ModAPI.Core
             }
             catch { }
             return "Unknown";
+        }
+
+        private static string GetLightweightCallerInfo()
+        {
+            if (PluginRunner.IsQuitting) return "Quitting";
+            try
+            {
+                Assembly modAPIAssembly = typeof(MMLog).Assembly;
+
+                for (int i = 2; i < 8; i++)
+                {
+                    var method = new StackFrame(i, false).GetMethod();
+                    if (method == null) continue;
+
+                    var declaringType = method.DeclaringType;
+                    if (declaringType == null) continue;
+
+                    if (declaringType == typeof(MMLog)
+                        || declaringType.Name == "ModLog"
+                        || declaringType.Name == "PrefixedLogger")
+                    {
+                        continue;
+                    }
+
+                    Assembly callingAssembly = declaringType.Assembly;
+                    if (callingAssembly != modAPIAssembly)
+                    {
+                        lock (_cacheLock)
+                        {
+                            string cached;
+                            if (_sourceCache.TryGetValue(callingAssembly, out cached))
+                                return cached;
+                        }
+
+                        string name = callingAssembly.GetName().Name;
+                        ModEntry entry;
+                        if (ModRegistry.TryGetModByAssembly(callingAssembly, out entry) && entry != null && !string.IsNullOrEmpty(entry.Id))
+                            name = entry.Id;
+
+                        lock (_cacheLock)
+                        {
+                            _sourceCache[callingAssembly] = name;
+                        }
+
+                        return name;
+                    }
+
+                    return declaringType.Name;
+                }
+            }
+            catch
+            {
+            }
+
+            return "General";
         }
 
         private static string AppendCurrentStackTrace(string message, int skipFrames)
