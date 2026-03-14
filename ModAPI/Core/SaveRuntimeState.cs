@@ -11,6 +11,8 @@ namespace ModAPI.Core
     /// </summary>
     internal static class SaveRuntimeState
     {
+        private static SaveManager.SaveType _activeCustomProxySlot = SaveManager.SaveType.Invalid;
+
         internal static SaveEntry ActiveCustomSave
         {
             get { return PlatformSaveProxy.ActiveCustomSave; }
@@ -20,6 +22,28 @@ namespace ModAPI.Core
         internal static bool HasActiveCustomSave
         {
             get { return ActiveCustomSave != null; }
+        }
+
+        internal static SaveManager.SaveType ActiveCustomProxySlot
+        {
+            get { return _activeCustomProxySlot; }
+        }
+
+        internal static void SetActiveCustomSession(SaveManager.SaveType proxySlot, SaveEntry entry)
+        {
+            ActiveCustomSave = entry;
+            _activeCustomProxySlot = entry != null ? proxySlot : SaveManager.SaveType.Invalid;
+        }
+
+        internal static void ClearActiveCustomSession()
+        {
+            ActiveCustomSave = null;
+            _activeCustomProxySlot = SaveManager.SaveType.Invalid;
+        }
+
+        internal static bool HasActiveCustomSessionFor(SaveManager.SaveType type)
+        {
+            return ActiveCustomSave != null && _activeCustomProxySlot == type && type != SaveManager.SaveType.Invalid;
         }
 
         internal static bool HasPendingSave(SaveManager.SaveType type)
@@ -105,6 +129,11 @@ namespace ModAPI.Core
 
         internal static void ClearTrackedReferences(SaveManager.SaveType requestedType, string deletedSaveId)
         {
+            if (ActiveCustomSave != null && ActiveCustomSave.id == deletedSaveId)
+            {
+                ClearActiveCustomSession();
+            }
+
             lock (PlatformSaveProxy._nextLoadLock)
             {
                 var loadKeys = new List<SaveManager.SaveType>();

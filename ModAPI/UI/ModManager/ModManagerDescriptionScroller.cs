@@ -1,3 +1,4 @@
+using ModAPI.InputServices;
 using ModAPI.UI;
 using UnityEngine;
 
@@ -36,7 +37,7 @@ namespace ModAPI.Internal.UI
                 return;
 
             float scroll;
-            if (!ScrollInputBridge.TryGetVerticalScroll(_minX, _maxX, out scroll))
+            if (!ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.ForUiRange(_minX, _maxX), out scroll))
             {
                 if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.PageUp))
                     scroll = 3f * Time.unscaledDeltaTime;

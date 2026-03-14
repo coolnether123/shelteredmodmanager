@@ -33,3 +33,4 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyFileVersion("1.3.0.0")]
 [assembly: AssemblyInformationalVersion("v0.1")]
 [assembly: InternalsVisibleTo("ModAPI")]
+[assembly: TypeForwardedTo(typeof(ModAPI.Events.GameEvents))]

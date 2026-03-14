@@ -1,5 +1,5 @@
 using System;
-using System.Reflection;
+using ShelteredAPI.Content;
 
 namespace ModAPI.Core
 {
@@ -103,34 +103,8 @@ namespace ModAPI.Core
 
         private static bool ResolveItemType(string itemId, out ItemManager.ItemType type)
         {
-            type = ItemManager.ItemType.Undefined;
-            if (string.IsNullOrEmpty(itemId))
-                return false;
-
-            try
-            {
-                var injectorType = Type.GetType("ModAPI.Content.ContentInjector, ModAPI", false);
-                if (injectorType != null)
-                {
-                    var resolveMethod = injectorType.GetMethod("ResolveItemType", BindingFlags.Public | BindingFlags.Static);
-                    if (resolveMethod != null)
-                    {
-                        object[] args = new object[] { itemId, type };
-                        object result = resolveMethod.Invoke(null, args);
-                        if (result is bool && (bool)result)
-                        {
-                            if (args[1] is ItemManager.ItemType)
-                            {
-                                type = (ItemManager.ItemType)args[1];
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
+            if (ContentInjector.ResolveItemType(itemId, out type))
+                return true;
 
             return TryParseItemType(itemId, out type);
         }

@@ -58,11 +58,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Content\ContentRegistry.cs" />
-    <Compile Include="Content\ContentResolver.cs" />
-    <Compile Include="Content\ContentInjector.cs" />
-    <Compile Include="Content\ModLocalization.cs" />
-    <Compile Include="Content\InventoryIntegration.cs" />
     <Compile Include="GameState\ManagerStateHelper.cs" />
     <Compile Include="Items\InventoryHelper.cs" />
     <Compile Include="Actors\Abstractions\IActorSystem.cs" />
@@ -91,6 +86,7 @@
     <Compile Include="Core\MMLogRuntimeIntegration.cs" />
     <Compile Include="Core\SaveRuntimeState.cs" />
     <Compile Include="Core\SaveExitTracer.cs" />
+    <Compile Include="Core\SharedAssemblyResolver.cs" />
     <Compile Include="Core\LoggerExtensions.cs" />
     <Compile Include="Core\ContextExtensions.cs" />
     <Compile Include="Core\IRestartRequestWriter.cs" />
@@ -98,6 +94,9 @@
     <Compile Include="Input\InputBinding.cs" />
     <Compile Include="Input\ModInputAction.cs" />
     <Compile Include="Input\InputActionRegistry.cs" />
+    <Compile Include="Input\IScrollInputSource.cs" />
+    <Compile Include="Input\ScrollInputQuery.cs" />
+    <Compile Include="Input\ScrollInputService.cs" />
     <Compile Include="UI\UIFlowGuard.cs" />
     <Compile Include="UI\UIFontCache.cs" />
     <Compile Include="UI\UIUtil.cs" />
@@ -203,7 +202,7 @@
     <Compile Include="Core\ModThreads.cs" />
     <Compile Include="Core\ModManagerBase.cs" />
     <Compile Include="Core\ModManagerBaseT.cs" />
-    <Compile Include="Content\AssetLoader.cs" />
+    <Compile Include="Core\ShelteredContentBridge.cs" />
     <Compile Include="Util\SceneCompat.cs" />
     <Compile Include="Util\SceneUtil.cs" />
     <Compile Include="Util\SaveLoadDictionary.cs" />

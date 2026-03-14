@@ -83,7 +83,7 @@ Status:
 ## 4. Content System
 
 Primary area:
-- `ModAPI/Content`
+- `ShelteredAPI/Content`
 
 Responsibilities:
 - item registration
@@ -98,6 +98,10 @@ Key files:
 - `ContentInjector.cs`
 - `InventoryIntegration.cs`
 - `AssetLoader.cs`
+
+Ownership note:
+- public content APIs now live in `ShelteredAPI.Content`
+- `ModAPI.dll` only keeps thin internal bridges where shared runtime helpers need to query Sheltered content without creating an assembly cycle
 
 ## 5. Settings and Persistence
 

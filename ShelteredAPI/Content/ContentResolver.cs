@@ -4,7 +4,7 @@ using System.Reflection;
 using ModAPI.Core;
 using UnityEngine;
 
-namespace ModAPI.Content
+namespace ShelteredAPI.Content
 {
     /// <summary>
     /// Bridges registry metadata to loaded assets (sprites/prefabs) with graceful fallbacks.

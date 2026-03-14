@@ -313,11 +313,11 @@ public static string ExplainOpCode(string opCodeName);
 public static void RecordSnapshot(string modId, string stepName, IEnumerable<CodeInstruction> before, IEnumerable<CodeInstruction> after, double durationMs = 0, int warningsCount = 0, MethodBase method = null, string patchOrigin = null, IEnumerable<PatchEdit> patchEdits = null, IEnumerable<string> warnings = null);
 ```
 
-## Content + Assets (`ModAPI.Content`)
+## Content + Assets (`ShelteredAPI.Content`)
 
 Note on type collisions:
-- Prefer aliasing `ModAPI.Content.ItemDefinition` in mod code:
-  `using ContentItemDefinition = ModAPI.Content.ItemDefinition;`
+- Prefer aliasing `ShelteredAPI.Content.ItemDefinition` in mod code:
+  `using ContentItemDefinition = ShelteredAPI.Content.ItemDefinition;`
 
 ```csharp
 public static RegistrationResult RegisterItem(ItemDefinition def);
@@ -337,7 +337,7 @@ public static AssetBundle LoadBundle(string modRootPath, string relativePath);
 public static GameObject LoadPrefabFromBundle(AssetBundle bundle, string assetPath);
 ```
 
-`ItemDefinition` fluent localization APIs (ModAPI v1.3):
+`ItemDefinition` fluent localization APIs (ShelteredAPI v1.3):
 
 ```csharp
 public ItemDefinition WithDisplayName(string name);           // legacy key-or-text auto-detection
@@ -348,11 +348,11 @@ public ItemDefinition WithDisplayNameText(string text);       // explicit litera
 public ItemDefinition WithDescriptionText(string text);       // explicit literal text
 ```
 
-Localization behavior for content injection (ModAPI v1.3):
+Localization behavior for content injection (ShelteredAPI v1.3):
 - `m_NameLocalizationKey` / `m_DescLocalizationKey` are always set to keys (never raw text).
-- For `...Text(...)`, ModAPI auto-generates keys like `modapi.<modid>.<itemid>.name|desc` and registers values in its custom table.
+- For `...Text(...)`, ShelteredAPI auto-generates keys like `shelteredapi.<modid>.<itemid>.name|desc` and registers values in its custom table.
 - Legacy `WithDisplayName/WithDescription` values are interpreted as `key` if they look like keys (`.` and no spaces), otherwise as literal text.
-- ModAPI patches `Localization.Get(string,bool)` and returns custom-table values directly (preserving original case for literal text).
+- ShelteredAPI patches `Localization.Get(string,bool)` and returns custom-table values directly (preserving original case for literal text).
 - Injector logs localization mode diagnostics per item (`name=key|text`, `desc=key|text`, final keys).
 
 ## Event + Registry APIs

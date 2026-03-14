@@ -1,15 +1,14 @@
 using HarmonyLib;
-using ModAPI.InputActions;
 using ModAPI.Core;
 using ModAPI.Harmony;
-using ModAPI.UI;
+using ModAPI.InputActions;
 using ShelteredAPI.Input;
 using UnityEngine;
 
 namespace ShelteredAPI.Harmony
 {
     /// <summary>
-    /// Routes vanilla PC input polling through ModAPI keybindings (primary + secondary).
+    /// Routes vanilla PC input polling through ModAPI keybindings and Sheltered-specific pointer axis routing.
     /// </summary>
     [PatchPolicy(PatchDomain.Input, "ShelteredPlatformInputBridge",
         TargetBehavior = "Vanilla input polling bridge through ModAPI-managed keybindings",
@@ -28,11 +27,6 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool InputButtonDownPrefix(PlatformInput.InputButton button, ref bool __result)
         {
-            if (TrySuppressButton(ref __result))
-            {
-                return false;
-            }
-
             return !TryResolveInputButton(button, KeyState.Down, ref __result);
         }
 
@@ -40,11 +34,6 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool InputButtonUpPrefix(PlatformInput.InputButton button, ref bool __result)
         {
-            if (TrySuppressButton(ref __result))
-            {
-                return false;
-            }
-
             return !TryResolveInputButton(button, KeyState.Up, ref __result);
         }
 
@@ -52,11 +41,6 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool InputButtonHeldPrefix(PlatformInput.InputButton button, ref bool __result)
         {
-            if (TrySuppressButton(ref __result))
-            {
-                return false;
-            }
-
             return !TryResolveInputButton(button, KeyState.Held, ref __result);
         }
 
@@ -64,11 +48,6 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool MenuButtonDownPrefix(PlatformInput.MenuInputButton button, ref bool __result)
         {
-            if (TrySuppressButton(ref __result))
-            {
-                return false;
-            }
-
             return !TryResolveMenuButton(button, KeyState.Down, ref __result);
         }
 
@@ -76,11 +55,6 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool MenuButtonUpPrefix(PlatformInput.MenuInputButton button, ref bool __result)
         {
-            if (TrySuppressButton(ref __result))
-            {
-                return false;
-            }
-
             return !TryResolveMenuButton(button, KeyState.Up, ref __result);
         }
 
@@ -88,11 +62,6 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool MenuButtonHeldPrefix(PlatformInput.MenuInputButton button, ref bool __result)
         {
-            if (TrySuppressButton(ref __result))
-            {
-                return false;
-            }
-
             return !TryResolveMenuButton(button, KeyState.Held, ref __result);
         }
 
@@ -100,19 +69,14 @@ namespace ShelteredAPI.Harmony
         [HarmonyPostfix]
         private static void GetAnyInputPostfix(ref bool __result)
         {
-            if (OverlayInputCaptureRuntime.ShouldSuppressAnyInput())
-            {
-                __result = false;
-                return;
-            }
-
             if (__result) return;
             if (ShelteredVanillaInputActions.IsAnyMappedKeyDown())
             {
                 __result = true;
                 return;
             }
-            if (TouchInputBridge.IsTouchDragHeld(FullUiMinX, FullUiMaxX))
+
+            if (ShelteredTouchpadInputRouter.IsTouchDragHeld(FullUiMinX, FullUiMaxX))
             {
                 __result = true;
                 return;
@@ -131,29 +95,10 @@ namespace ShelteredAPI.Harmony
                 Mathf.Abs(UnityEngine.Input.GetAxisRaw("PC_MouseY")) > AxisEpsilon;
         }
 
-        [HarmonyPatch(typeof(PlatformInput_PC), "GetInputAxis", new System.Type[] { typeof(PlatformInput.InputAxis) })]
-        [HarmonyPrefix]
-        private static bool InputAxisPrefix(PlatformInput.InputAxis axis, ref float __result)
-        {
-            return !TrySuppressAxis(ref __result);
-        }
-
-        [HarmonyPatch(typeof(PlatformInput_PC), "GetInputAxisRaw", new System.Type[] { typeof(PlatformInput.InputAxis) })]
-        [HarmonyPrefix]
-        private static bool InputAxisRawPrefix(PlatformInput.InputAxis axis, ref float __result)
-        {
-            return !TrySuppressAxis(ref __result);
-        }
-
         [HarmonyPatch(typeof(PlatformInput_PC), "GetInputAxis", new System.Type[] { typeof(PlatformInput.MenuInputAxis) })]
         [HarmonyPrefix]
         private static bool MenuAxisPrefix(PlatformInput.MenuInputAxis axis, ref float __result)
         {
-            if (TrySuppressAxis(ref __result))
-            {
-                return false;
-            }
-
             return !TryResolveMenuAxis(axis, false, ref __result);
         }
 
@@ -161,34 +106,21 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool MenuAxisRawPrefix(PlatformInput.MenuInputAxis axis, ref float __result)
         {
-            if (TrySuppressAxis(ref __result))
-            {
-                return false;
-            }
-
             return !TryResolveMenuAxis(axis, true, ref __result);
         }
 
-        private static bool TrySuppressButton(ref bool result)
+        [HarmonyPatch(typeof(PlatformInput_PC), "GetInputAxis", new System.Type[] { typeof(PlatformInput.InputAxis) })]
+        [HarmonyPrefix]
+        private static bool InputAxisPrefix(PlatformInput.InputAxis axis, ref float __result)
         {
-            if (!OverlayInputCaptureRuntime.ShouldSuppressAnyInput())
-            {
-                return false;
-            }
-
-            result = false;
-            return true;
+            return !TryResolveGameplayAxis(axis, false, ref __result);
         }
 
-        private static bool TrySuppressAxis(ref float result)
+        [HarmonyPatch(typeof(PlatformInput_PC), "GetInputAxisRaw", new System.Type[] { typeof(PlatformInput.InputAxis) })]
+        [HarmonyPrefix]
+        private static bool InputAxisRawPrefix(PlatformInput.InputAxis axis, ref float __result)
         {
-            if (!OverlayInputCaptureRuntime.ShouldSuppressAnyInput())
-            {
-                return false;
-            }
-
-            result = 0f;
-            return true;
+            return !TryResolveGameplayAxis(axis, true, ref __result);
         }
 
         private static bool TryResolveInputButton(PlatformInput.InputButton button, KeyState state, ref bool result)
@@ -207,7 +139,6 @@ namespace ShelteredAPI.Harmony
                 || button == PlatformInput.InputButton.Interact
                 || button == PlatformInput.InputButton.GoHere)
             {
-                // Preserve vanilla behavior for click actions (down-only + not hovering UI).
                 result = binding.IsDown() && UICamera.hoveredObject == null;
                 return true;
             }
@@ -243,13 +174,13 @@ namespace ShelteredAPI.Harmony
             switch (state)
             {
                 case KeyState.Down:
-                    result = TouchInputBridge.IsTouchDragDown(FullUiMinX, FullUiMaxX);
+                    result = ShelteredTouchpadInputRouter.IsTouchDragDown(FullUiMinX, FullUiMaxX);
                     break;
                 case KeyState.Up:
-                    result = TouchInputBridge.IsTouchDragUp(FullUiMinX, FullUiMaxX);
+                    result = ShelteredTouchpadInputRouter.IsTouchDragUp(FullUiMinX, FullUiMaxX);
                     break;
                 default:
-                    result = TouchInputBridge.IsTouchDragHeld(FullUiMinX, FullUiMaxX);
+                    result = ShelteredTouchpadInputRouter.IsTouchDragHeld(FullUiMinX, FullUiMaxX);
                     break;
             }
 
@@ -265,17 +196,23 @@ namespace ShelteredAPI.Harmony
             return true;
         }
 
-        private static bool TryResolveMenuAxis(PlatformInput.MenuInputAxis axis, bool raw, ref float result)
+        private static bool TryResolveGameplayAxis(PlatformInput.InputAxis axis, bool raw, ref float result)
         {
-            if (axis != PlatformInput.MenuInputAxis.UIscroll)
+            float resolved;
+            if (!ShelteredTouchpadInputRouter.TryGetGameplayAxis(axis, raw, out resolved))
                 return false;
 
-            float scroll;
-            bool resolved = raw
-                ? ScrollInputBridge.TryGetVerticalScrollAnywhereRaw(out scroll)
-                : ScrollInputBridge.TryGetVerticalScrollAnywhere(out scroll);
+            result = resolved;
+            return true;
+        }
 
-            result = resolved ? scroll : 0f;
+        private static bool TryResolveMenuAxis(PlatformInput.MenuInputAxis axis, bool raw, ref float result)
+        {
+            float resolved;
+            if (!ShelteredTouchpadInputRouter.TryGetMenuAxis(axis, raw, out resolved))
+                return false;
+
+            result = resolved;
             return true;
         }
 

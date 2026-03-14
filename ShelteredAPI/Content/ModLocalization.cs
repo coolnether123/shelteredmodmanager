@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Harmony;
 
-namespace ModAPI.Content
+namespace ShelteredAPI.Content
 {
     /// <summary>
-    /// ModAPI-managed localization table to preserve literal casing and avoid
+    /// ShelteredAPI-managed localization table to preserve literal casing and avoid
     /// fallback key mangling in vanilla Localization.Get.
     /// </summary>
     public static class ModLocalization
@@ -39,7 +39,7 @@ namespace ModAPI.Content
     }
 
     [PatchPolicy(PatchDomain.Content, "ModLocalization",
-        TargetBehavior = "Localization key interception for ModAPI-managed entries",
+        TargetBehavior = "Localization key interception for ShelteredAPI-managed entries",
         FailureMode = "Literal mod localization falls back to vanilla key lookup and casing can be mangled.",
         RollbackStrategy = "Disable the Content patch domain or remove the ModLocalization interception patch.")]
     [HarmonyPatch(typeof(Localization), "Get", new Type[] { typeof(string), typeof(bool) })]
