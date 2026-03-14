@@ -22,4 +22,29 @@ namespace ModAPI.Core
         /// </summary>
         FamilyMember FindMember(string characterId);
     }
+
+    /// <summary>
+    /// Generic registry IDs exposed by game-specific runtime assemblies.
+    /// </summary>
+    public static class GameRuntimeApiIds
+    {
+        public const string GameHelper = "GameRuntime.GameHelper";
+        public const string Actors = "GameRuntime.Actors";
+        public const string ActorRegistry = "GameRuntime.ActorRegistry";
+        public const string ActorComponents = "GameRuntime.ActorComponents";
+        public const string ActorBindings = "GameRuntime.ActorBindings";
+        public const string ActorAdapters = "GameRuntime.ActorAdapters";
+        public const string ActorDiagnostics = "GameRuntime.ActorDiagnostics";
+        public const string ActorSimulation = "GameRuntime.ActorSimulation";
+        public const string ActorEvents = "GameRuntime.ActorEvents";
+        public const string ActorSerialization = "GameRuntime.ActorSerialization";
+    }
+
+    /// <summary>
+    /// Contract implemented by game-specific runtime bootstrap assemblies.
+    /// </summary>
+    public interface IGameRuntimeBootstrap
+    {
+        void Initialize();
+    }
 }

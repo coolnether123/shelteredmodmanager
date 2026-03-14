@@ -5,7 +5,7 @@ using ModAPI.Harmony;
 using System;
 using System.Collections.Generic;
 
-namespace ModAPI.Content
+namespace ShelteredAPI.Content
 {
     /// <summary>
     /// Patches InventoryManager to ensure custom items get inventory slots.

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using ModAPI.Content;
+using ModAPI.Core;
 using UnityEngine;
 
 namespace ModAPI.Items
@@ -20,7 +20,7 @@ namespace ModAPI.Items
         /// </summary>
         public static bool ResolveItemType(string itemId, out ItemManager.ItemType type)
         {
-            return ContentInjector.ResolveItemType(itemId, out type);
+            return ShelteredContentBridge.ResolveItemType(itemId, out type);
         }
 
         /// <summary>

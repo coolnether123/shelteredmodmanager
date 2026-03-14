@@ -334,9 +334,17 @@ namespace ModAPI.Saves
                     return !failIfMissing;
                 }
 
-                MMLog.Write(string.Format("{0}: Deleting directory '{1}'", operation, slotRoot));
-                Directory.Delete(slotRoot, true);
-                MMLog.Write(string.Format("{0}: Directory deleted successfully", operation));
+                string deletedRoot = DirectoryProvider.DeletedRoot(_scenarioId);
+                string deletedName = string.Format("Slot_{0}_{1:yyyyMMdd_HHmmss}", absoluteSlot, DateTime.UtcNow);
+                string deletedPath = Path.Combine(deletedRoot, deletedName);
+                while (Directory.Exists(deletedPath))
+                {
+                    deletedPath = Path.Combine(deletedRoot, deletedName + "_" + Path.GetRandomFileName().Replace(".", string.Empty));
+                }
+
+                MMLog.Write(string.Format("{0}: Moving directory '{1}' to '{2}'", operation, slotRoot, deletedPath));
+                Directory.Move(slotRoot, deletedPath);
+                MMLog.Write(string.Format("{0}: Directory quarantined successfully", operation));
                 return true;
             }
             catch (Exception ex)
@@ -350,42 +358,46 @@ namespace ModAPI.Saves
         {
             try
             {
-                var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, absoluteSlot);
-                var path = Path.Combine(slotRoot, "manifest.json");
-
-                var currentMods = new List<LoadedModInfo>();
-                
-                // SNAPSHOT: Use a lock to safely capture current mods, avoiding collection modified errors.
-                lock (PluginManager.LoadedMods)
+                var newManifest = CreateCurrentManifestSnapshot(info);
+                string manifestPath;
+                string error;
+                if (!TryWriteSlotManifest(_scenarioId, absoluteSlot, newManifest, out manifestPath, out error))
                 {
-                    foreach (var mod in PluginManager.LoadedMods)
-                    {
-                        if (mod == null) continue;
-                        
-                        string warning = mod.About?.missingModWarning;
-                        currentMods.Add(new LoadedModInfo 
-                        { 
-                            modId = mod.Id, 
-                            version = mod.Version, 
-                            warnings = string.IsNullOrEmpty(warning) ? new string[0] : new string[] { warning }
-                        });
-                    }
+                    MMLog.WriteError($"FAILED to update slot manifest for Slot {absoluteSlot}: {error}");
                 }
-
-                var newManifest = new SlotManifest
-                {
-                    lastModified = DateTime.UtcNow.ToString("o"),
-                    family_name = info != null ? info.familyName : "Unknown",
-                    lastLoadedMods = currentMods.ToArray()
-                };
-
-                string slotJson = SerializeSlotManifest(newManifest);
-                File.WriteAllText(path, slotJson);
             }
             catch (Exception ex)
             {
                 MMLog.WriteError($"FAILED to update slot manifest for Slot {absoluteSlot}: {ex}");
             }
+        }
+
+        internal static SlotManifest CreateCurrentManifestSnapshot(SaveInfo info)
+        {
+            var currentMods = new List<LoadedModInfo>();
+
+            lock (PluginManager.LoadedMods)
+            {
+                foreach (var mod in PluginManager.LoadedMods)
+                {
+                    if (mod == null) continue;
+
+                    string warning = mod.About?.missingModWarning;
+                    currentMods.Add(new LoadedModInfo
+                    {
+                        modId = mod.Id,
+                        version = mod.Version,
+                        warnings = string.IsNullOrEmpty(warning) ? new string[0] : new string[] { warning }
+                    });
+                }
+            }
+
+            return new SlotManifest
+            {
+                lastModified = DateTime.UtcNow.ToString("o"),
+                family_name = info != null ? info.familyName : "Unknown",
+                lastLoadedMods = currentMods.ToArray()
+            };
         }
 
 
@@ -648,7 +660,7 @@ namespace ModAPI.Saves
         /// We must use manual StringBuilder formatting to ensure the mod list is actually written.
         /// The companion DeserializeSlotManifest() method uses custom parsing to read this format.
         /// </remarks>
-        private static string SerializeSlotManifest(SlotManifest manifest)
+        internal static string SerializeSlotManifest(SlotManifest manifest)
         {
             var sb = new StringBuilder();
             sb.AppendLine("{");
@@ -690,6 +702,31 @@ namespace ModAPI.Saves
             
             sb.Append("}");
             return sb.ToString();
+        }
+
+        internal static bool TryWriteSlotManifest(string scenarioId, int absoluteSlot, SlotManifest manifest, out string manifestPath, out string error)
+        {
+            manifestPath = null;
+            error = null;
+
+            if (manifest == null)
+            {
+                error = "Manifest was null.";
+                return false;
+            }
+
+            try
+            {
+                var slotRoot = DirectoryProvider.SlotRoot(scenarioId, absoluteSlot, true);
+                manifestPath = Path.Combine(slotRoot, "manifest.json");
+                File.WriteAllText(manifestPath, SerializeSlotManifest(manifest));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
         }
 
 

@@ -20,19 +20,32 @@ namespace ModAPI.Core
     public class PluginManager
     {
         private static PluginManager instance;
-        private static readonly object AssemblyResolveSync = new object();
-        private static bool _assemblyResolveInstalled;
 
         private readonly List<IModPlugin> _plugins;
         private readonly List<IModUpdate> _updates;
         private readonly List<IModShutdown> _shutdown;
         private readonly List<IModSceneEvents> _sceneEvents;
         private readonly List<IModSessionEvents> _sessionEvents;
+        private readonly HashSet<string> _initializedGameRuntimeBootstraps;
         private int _loadErrors;
+        private Stopwatch _startupStopwatch;
 
         private GameObject _loaderRoot;
         private string _gameRoot;
         private string _modsRoot;
+
+        private sealed class PreparedPluginAssembly
+        {
+            public string Path;
+            public Assembly Assembly;
+            public Type[] Types;
+        }
+
+        private sealed class PreparedModLoad
+        {
+            public ModEntry Entry;
+            public List<PreparedPluginAssembly> Assemblies = new List<PreparedPluginAssembly>();
+        }
 
         /// <summary>
         /// Mods that were discovered and accepted by load-order filtering for this session.
@@ -49,6 +62,7 @@ namespace ModAPI.Core
             _shutdown = new List<IModShutdown>();
             _sceneEvents = new List<IModSceneEvents>();
             _sessionEvents = new List<IModSessionEvents>();
+            _initializedGameRuntimeBootstraps = new HashSet<string>(StringComparer.Ordinal);
             LoadedMods = new List<ModEntry>();
         }
 
@@ -80,7 +94,7 @@ namespace ModAPI.Core
         /// </param>
         public void loadAssemblies(GameObject doorstepGameObject)
         {
-            var stopwatch = Stopwatch.StartNew();
+            _startupStopwatch = Stopwatch.StartNew();
             _loadErrors = 0;
 
             InitializeLoader(doorstepGameObject);
@@ -88,16 +102,81 @@ namespace ModAPI.Core
             LogSceneApiDetection();
 
             var orderedModIds = ReadLoadOrderFromFile(_modsRoot);
+
+            if (orderedModIds != null && orderedModIds.Count == 0)
+            {
+                MMLog.Write("Explicit empty load order found. Enabling NO mods (core runtime remains active).");
+                LoadedMods = new List<ModEntry>();
+                AttachInspectorTools();
+                CompleteStartupLog();
+                return;
+            }
+
             DiscoverAndOrderMods(orderedModIds);
 
             AttachInspectorTools();
-            LoadAndInitializePlugins(LoadedMods);
 
-            MMLog.WriteDebug(string.Format("Loaded {0} plugin(s). Updates={1}, Shutdown={2}, SceneEvents={3}", _plugins.Count, _updates.Count, _shutdown.Count, _sceneEvents.Count));
+            if (LoadedMods == null || LoadedMods.Count == 0)
+            {
+                CompleteStartupLog();
+                return;
+            }
 
-            stopwatch.Stop();
-            var ms = stopwatch.ElapsedMilliseconds;
+            StartBackgroundPluginActivation(new List<ModEntry>(LoadedMods));
+        }
+
+        private void CompleteStartupLog()
+        {
+            if (_startupStopwatch == null)
+            {
+                MMLog.Write(string.Format("Startup complete. Loaded {0} plugin(s), {1} error(s).", _plugins.Count, _loadErrors));
+                return;
+            }
+
+            _startupStopwatch.Stop();
+            var ms = _startupStopwatch.ElapsedMilliseconds;
             MMLog.Write(string.Format("Startup complete in {0}ms. Loaded {1} plugin(s), {2} error(s).", ms, _plugins.Count, _loadErrors));
+        }
+
+        private void StartBackgroundPluginActivation(List<ModEntry> orderedMods)
+        {
+            var runner = _loaderRoot != null ? _loaderRoot.GetComponent<PluginRunner>() : null;
+            if (runner == null)
+            {
+                MMLog.WriteWarning("PluginRunner was unavailable for async startup preload. Falling back to synchronous activation.");
+                LoadAndInitializePlugins(orderedMods);
+                CompleteStartupLog();
+                return;
+            }
+
+            MMLog.WriteInfo("Background startup preload beginning for " + orderedMods.Count + " mod(s).");
+            ModThreads.RunAsync(
+                delegate
+                {
+                    return PrepareModLoads(orderedMods);
+                },
+                delegate(List<PreparedModLoad> preparedMods)
+                {
+                    try
+                    {
+                        ActivatePreparedMods(preparedMods);
+                    }
+                    catch (Exception ex)
+                    {
+                        MMLog.WriteWarning("Async startup activation failed on main thread. Falling back to synchronous activation: " + ex.Message);
+                        LoadAndInitializePlugins(orderedMods);
+                    }
+                    finally
+                    {
+                        CompleteStartupLog();
+                    }
+                },
+                delegate(Exception ex)
+                {
+                    MMLog.WriteWarning("Background startup preload failed. Falling back to synchronous activation: " + ex.Message);
+                    LoadAndInitializePlugins(orderedMods);
+                    CompleteStartupLog();
+                });
         }
 
         /// <summary>
@@ -110,7 +189,13 @@ namespace ModAPI.Core
             // This resolver ensures they link back to the ALREADY LOADED ModAPI instance,
             // preventing duplicate assembly loads and fixing IsAssignableFrom failures.
             // It also keeps ShelteredAPI resolution deterministic when mods reference both APIs.
-            EnsureAssemblyResolveInstalled();
+            AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
+            {
+                string name = new AssemblyName(args.Name).Name;
+                var sharedAssembly = SharedAssemblyResolver.ResolveSharedAssembly(name);
+                if (sharedAssembly != null) return sharedAssembly;
+                return null;
+            };
 
             _gameRoot = Directory.GetParent(Application.dataPath).FullName;
             _modsRoot = Path.Combine(_gameRoot, "mods");
@@ -121,6 +206,7 @@ namespace ModAPI.Core
             var runner = _loaderRoot.GetComponent<PluginRunner>() ?? _loaderRoot.AddComponent<PluginRunner>();
             runner.Manager = this;
 
+            SharedAssemblyResolver.ResolveSharedAssembly("ShelteredAPI");
             HarmonyBootstrap.EnsurePatched();
             
             // Force injection in case SaveManager.Awake already ran before we could patch it
@@ -145,7 +231,7 @@ namespace ModAPI.Core
                     delegate { SaveProtectionPatches.ApplyPatches(harmony); },
                     registryOptions);
 
-                EnsureBuiltInApiRegistrations();
+                InitializeLoadedGameRuntimeBootstraps();
 
                 // Initialize Core Systems
                 ModAPI.Saves.Events.OnAfterLoad += ModRandomState.Load;
@@ -159,111 +245,6 @@ namespace ModAPI.Core
             }
         }
 
-        private static void EnsureBuiltInApiRegistrations()
-        {
-            TryRunShelteredApiBootstrap();
-            EnsureGameHelperRegistration();
-            EnsureActorApiRegistrations();
-        }
-
-        private static void TryRunShelteredApiBootstrap()
-        {
-            try
-            {
-                var bootstrapType = Type.GetType("ShelteredAPI.Core.ShelteredApiRuntimeBootstrap, ShelteredAPI", false);
-                if (bootstrapType == null)
-                    return;
-
-                var init = bootstrapType.GetMethod("Initialize", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                if (init != null)
-                    init.Invoke(null, null);
-            }
-            catch (Exception ex)
-            {
-                MMLog.WarnOnce("PluginManager.BuiltInApis.Bootstrap", "Failed to initialize ShelteredAPI runtime bootstrap: " + ex.Message);
-            }
-        }
-
-        private static void EnsureGameHelperRegistration()
-        {
-            if (ModAPIRegistry.IsAPIRegistered("ShelteredAPI.GameHelper"))
-                return;
-
-            try
-            {
-                var helperType = Type.GetType("ModAPI.Core.GameHelperImpl, ShelteredAPI", false);
-                if (helperType == null)
-                    return;
-
-                var helper = Activator.CreateInstance(helperType, true) as IGameHelper;
-                if (helper != null)
-                    ModAPIRegistry.RegisterAPI<IGameHelper>("ShelteredAPI.GameHelper", helper, "shelteredapi");
-            }
-            catch (Exception ex)
-            {
-                MMLog.WarnOnce("PluginManager.BuiltInApis.GameHelper", "Failed to register built-in game helper API: " + ex.Message);
-            }
-        }
-
-        private static void EnsureActorApiRegistrations()
-        {
-            if (ModAPIRegistry.IsAPIRegistered("ShelteredAPI.Actors"))
-                return;
-
-            try
-            {
-                var actorSystemType = Type.GetType("ModAPI.Actors.ActorSystem, ShelteredAPI", false);
-                if (actorSystemType == null)
-                    return;
-
-                var instanceProperty = actorSystemType.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
-                if (instanceProperty == null)
-                    return;
-
-                var actors = instanceProperty.GetValue(null, null) as IActorSystem;
-                if (actors == null)
-                    return;
-
-                ModAPIRegistry.RegisterAPI<IActorSystem>("ShelteredAPI.Actors", actors, "shelteredapi");
-
-                var registry = actors as IActorRegistry;
-                if (registry != null)
-                    ModAPIRegistry.RegisterAPI<IActorRegistry>("ShelteredAPI.ActorRegistry", registry, "shelteredapi");
-
-                var componentStore = actors as IActorComponentStore;
-                if (componentStore != null)
-                    ModAPIRegistry.RegisterAPI<IActorComponentStore>("ShelteredAPI.ActorComponents", componentStore, "shelteredapi");
-
-                var bindingStore = actors as IActorBindingStore;
-                if (bindingStore != null)
-                    ModAPIRegistry.RegisterAPI<IActorBindingStore>("ShelteredAPI.ActorBindings", bindingStore, "shelteredapi");
-
-                var adapterRegistry = actors as IActorAdapterRegistry;
-                if (adapterRegistry != null)
-                    ModAPIRegistry.RegisterAPI<IActorAdapterRegistry>("ShelteredAPI.ActorAdapters", adapterRegistry, "shelteredapi");
-
-                var diagnostics = actors as IActorDiagnostics;
-                if (diagnostics != null)
-                    ModAPIRegistry.RegisterAPI<IActorDiagnostics>("ShelteredAPI.ActorDiagnostics", diagnostics, "shelteredapi");
-
-                var scheduler = actors as IActorSimulationScheduler;
-                if (scheduler != null)
-                    ModAPIRegistry.RegisterAPI<IActorSimulationScheduler>("ShelteredAPI.ActorSimulation", scheduler, "shelteredapi");
-
-                var eventsApi = actors as IActorEvents;
-                if (eventsApi != null)
-                    ModAPIRegistry.RegisterAPI<IActorEvents>("ShelteredAPI.ActorEvents", eventsApi, "shelteredapi");
-
-                var serialization = actors as IActorSerializationService;
-                if (serialization != null)
-                    ModAPIRegistry.RegisterAPI<IActorSerializationService>("ShelteredAPI.ActorSerialization", serialization, "shelteredapi");
-            }
-            catch (Exception ex)
-            {
-                MMLog.WarnOnce("PluginManager.BuiltInApis.Actors", "Failed to register built-in actor APIs: " + ex.Message);
-            }
-        }
-
         /// <summary>
         /// Emits a compact dependency-resolution snapshot to help diagnose bootstrap failures.
         /// </summary>
@@ -274,6 +255,7 @@ namespace ModAPI.Core
 
             failures += LogAssembly("ModAPI", Assembly.GetExecutingAssembly());
             failures += LogAssembly("0Harmony", ResolveAssemblyByType("HarmonyLib.Harmony, 0Harmony"));
+            failures += LogAssembly("ShelteredAPI", SharedAssemblyResolver.ResolveSharedAssembly("ShelteredAPI"));
 
             MMLog.WriteDebug($"Assembly Resolution: Failed Assemblies: {failures}");
         }
@@ -415,6 +397,82 @@ namespace ModAPI.Core
         [Serializable]
         private class SimpleLoadOrder { public string[] order; }
 
+        private List<PreparedModLoad> PrepareModLoads(List<ModEntry> orderedMods)
+        {
+            var prepared = new List<PreparedModLoad>();
+            if (orderedMods == null || orderedMods.Count == 0)
+                return prepared;
+
+            for (int i = 0; i < orderedMods.Count; i++)
+            {
+                var entry = orderedMods[i];
+                if (entry == null)
+                    continue;
+
+                var modLoad = new PreparedModLoad();
+                modLoad.Entry = entry;
+                modLoad.Assemblies = PrepareAssemblies(entry);
+                prepared.Add(modLoad);
+            }
+
+            return prepared;
+        }
+
+        private static List<PreparedPluginAssembly> PrepareAssemblies(ModEntry entry)
+        {
+            var assemblies = new List<PreparedPluginAssembly>();
+            if (entry == null || string.IsNullOrEmpty(entry.AssembliesPath) || !Directory.Exists(entry.AssembliesPath))
+                return assemblies;
+
+            string[] dllFiles = new string[0];
+            try
+            {
+                dllFiles = Directory.GetFiles(entry.AssembliesPath, "*.dll", SearchOption.AllDirectories);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("PrepareAssemblies failed to enumerate DLLs for '" + entry.Id + "': " + ex.Message);
+                return assemblies;
+            }
+
+            for (int i = 0; i < dllFiles.Length; i++)
+            {
+                string dllPath = dllFiles[i];
+                if (SharedAssemblyResolver.ShouldSkipModAssembly(dllPath))
+                {
+                    MMLog.WriteInfo("PrepareAssemblies: skipping shared runtime assembly '" + dllPath + "'.");
+                    continue;
+                }
+
+                try
+                {
+                    byte[] assemblyBytes = File.ReadAllBytes(dllPath);
+                    var asm = Assembly.Load(assemblyBytes);
+
+                    Type[] types = null;
+                    try { types = asm.GetTypes(); }
+                    catch (ReflectionTypeLoadException rtle)
+                    {
+                        MMLog.WritePluginError(entry.Id, "type discovery", rtle);
+                        types = rtle.Types;
+                    }
+
+                    assemblies.Add(new PreparedPluginAssembly
+                    {
+                        Path = dllPath,
+                        Assembly = asm,
+                        Types = types
+                    });
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError("PrepareAssemblies: FAILED to load assembly '" + dllPath + "' for mod '" + entry.Id + "': " + ex);
+                }
+            }
+
+            return assemblies;
+        }
+
         /// <summary>
         /// Discovers mods on disk and applies load order if present.
         /// </summary>
@@ -433,7 +491,7 @@ namespace ModAPI.Core
 
             if (orderedModIds.Count == 0)
             {
-                MMLog.Write("Explicit empty load order found. Enabling NO mods (core ModAPI/ShelteredAPI runtime remains active).");
+                MMLog.Write("Explicit empty load order found. Enabling NO mods (core runtime remains active).");
                 LoadedMods = new List<ModEntry>();
                 return;
             }
@@ -480,10 +538,8 @@ namespace ModAPI.Core
                 if (_loaderRoot.GetComponent<ModAPI.UI.UIDebugInspector>() == null)
                     _loaderRoot.AddComponent<ModAPI.UI.UIDebugInspector>();
 
-                AttachCortexShell();
-
                 // Advanced developer tools (Disabled if decompiler is missing)
-                // This ensures F10 and F7 tools are not accessible in production builds.
+                // This ensures F10 and F12 tools are not accessible in production builds.
                 if (File.Exists(ModAPI.Inspector.SourceCacheManager.ResolveDecompilerPath()))
                 {
                     if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeILInspector>() == null)
@@ -493,49 +549,14 @@ namespace ModAPI.Core
                     if (_loaderRoot.GetComponent<ModAPI.Inspector.RuntimeDebuggerUI>() == null)
                         _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeDebuggerUI>();
                     
-                    MMLog.WriteDebug("Advanced developer tools (F10/F7) enabled.");
+                    MMLog.WriteDebug("Advanced developer tools (F10/F12) enabled.");
                 }
                 else
                 {
-                    MMLog.WriteDebug("Decompiler not found. Advanced developer tools (F10/F7) disabled for production.");
+                    MMLog.WriteDebug("Decompiler not found. Advanced developer tools (F10/F12) disabled for production.");
                 }
             }
             catch (Exception ex) { MMLog.WarnOnce("PluginManager.AttachInspectorTools", "Error attaching inspector: " + ex.Message); }
-        }
-
-        private void AttachCortexShell()
-        {
-            try
-            {
-                var modApiDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
-                var cortexPath = Path.Combine(Path.Combine(Path.Combine(modApiDir, "bin"), "decompiler"), "Cortex.dll");
-                if (!File.Exists(cortexPath))
-                {
-                    cortexPath = Path.Combine(modApiDir, "Cortex.dll");
-                }
-
-                if (!File.Exists(cortexPath))
-                {
-                    return;
-                }
-
-                var cortexAssembly = Assembly.LoadFrom(cortexPath);
-                var shellType = cortexAssembly.GetType("Cortex.CortexShell", false);
-                if (shellType == null || !typeof(MonoBehaviour).IsAssignableFrom(shellType))
-                {
-                    MMLog.WarnOnce("PluginManager.AttachCortexShell.MissingShellType", "Cortex shell type was not found in Cortex.dll.");
-                    return;
-                }
-
-                if (_loaderRoot.GetComponent(shellType) == null)
-                {
-                    _loaderRoot.AddComponent(shellType);
-                }
-            }
-            catch (Exception ex)
-            {
-                MMLog.WarnOnce("PluginManager.AttachCortexShell", "Failed to attach Cortex shell: " + ex.Message);
-            }
         }
 
         /// <summary>
@@ -545,6 +566,7 @@ namespace ModAPI.Core
         private void LoadAndInitializePlugins(List<ModEntry> orderedMods)
         {
             MMLog.WriteDebug(string.Format("LoadAndInitializePlugins: Starting with {0} mods", orderedMods.Count));
+            var preparedMods = new List<PreparedModLoad>();
 
             foreach (var entry in orderedMods)
             {
@@ -564,134 +586,265 @@ namespace ModAPI.Core
                     continue;
                 }
 
-                // Register mod and its assemblies in the global registry for cross-mod access and lookup
-                ModRegistry.Register(entry);
-                foreach (var asm in modAssemblies)
+                preparedMods.Add(BuildPreparedModLoad(entry, modAssemblies));
+            }
+
+            ActivatePreparedMods(preparedMods);
+        }
+
+        private PreparedModLoad BuildPreparedModLoad(ModEntry entry, List<Assembly> modAssemblies)
+        {
+            var prepared = new PreparedModLoad();
+            prepared.Entry = entry;
+
+            if (modAssemblies == null)
+                return prepared;
+
+            for (int i = 0; i < modAssemblies.Count; i++)
+            {
+                var asm = modAssemblies[i];
+                if (asm == null)
+                    continue;
+
+                prepared.Assemblies.Add(new PreparedPluginAssembly
                 {
-                    ModRegistry.RegisterAssemblyForMod(asm, entry);
+                    Path = SafeAssemblyPath(asm),
+                    Assembly = asm,
+                    Types = GetLoadableTypes(asm, entry)
+                });
+            }
 
-                    Type[] types = null;
-                    try { types = asm.GetTypes(); }
-                    catch (ReflectionTypeLoadException rtle)
-                    {
-                        MMLog.WritePluginError(entry.Id, "type discovery", rtle);
-                        types = rtle.Types;
-                    }
+            return prepared;
+        }
 
-                    if (types == null) continue;
+        private void ActivatePreparedMods(List<PreparedModLoad> preparedMods)
+        {
+            if (preparedMods == null)
+                preparedMods = new List<PreparedModLoad>();
 
-                    foreach (var type in types)
-                    {
-                        if (type == null) continue;
-                        if (!type.IsClass || type.IsAbstract) continue;
-                        
-                        try
-                        {
-                            if (!typeof(IModPlugin).IsAssignableFrom(type)) continue;
-                        }
-                        catch { continue; } // Handle cases where IsAssignableFrom might throw due to missing deps
+            RegisterPreparedModAssemblies(preparedMods);
+            InitializeGameRuntimeBootstraps(preparedMods);
 
-                        MMLog.WriteDebug($"Found IModPlugin: {type.FullName}");
+            for (int i = 0; i < preparedMods.Count; i++)
+            {
+                var prepared = preparedMods[i];
+                var entry = prepared != null ? prepared.Entry : null;
+                if (prepared == null || entry == null)
+                    continue;
 
-                        GameObject pluginRoot = null;
-                        try
-                        {
-                            var plugin = (IModPlugin)Activator.CreateInstance(type);
-                            pluginRoot = new GameObject($"Mod-{SafeModIdFor(type)}");
-                            pluginRoot.transform.SetParent(_loaderRoot.transform, false);
+                for (int j = 0; j < prepared.Assemblies.Count; j++)
+                {
+                    var preparedAssembly = prepared.Assemblies[j];
+                    if (preparedAssembly == null || preparedAssembly.Assembly == null)
+                        continue;
 
-                            var ctx = BuildContextFor(type, pluginRoot);
-                            MMLog.WriteDebug($"Initializing plugin: {type.FullName}");
-                            plugin.Initialize(ctx);
-
-                            MMLog.WriteDebug($"Starting plugin: {type.FullName}");
-                            plugin.Start(ctx);
-
-                            ModAPI.Spine.ISettingsProvider sp = plugin as ModAPI.Spine.ISettingsProvider;
-                            if (entry != null && entry.SettingsProvider == null && sp != null)
-                            {
-                                entry.SettingsProvider = sp;
-                            }
-
-                            RegisterPlugin(plugin);
-                            ctx.Log.Info("Started.");
-                        }
-                        catch (Exception ex)
-                        {
-                            if (pluginRoot != null)
-                            {
-                                UnityEngine.Object.Destroy(pluginRoot);
-                            }
-
-                            MMLog.WritePluginError(type.FullName, "startup", ex);
-                            MMLog.WriteError($"error starting plugin '{type.FullName}': {ex.Message}");
-                            _loadErrors++;
-                        }
-                    }
+                    ActivatePluginTypes(entry, preparedAssembly.Types);
                 }
             }
 
             MMLog.Write(string.Format("LoadAndInitializePlugins complete. Total plugins loaded: {0}", _plugins.Count));
         }
 
-        private static void EnsureAssemblyResolveInstalled()
+        private void RegisterPreparedModAssemblies(List<PreparedModLoad> preparedMods)
         {
-            lock (AssemblyResolveSync)
+            for (int i = 0; i < preparedMods.Count; i++)
             {
-                if (_assemblyResolveInstalled)
+                var prepared = preparedMods[i];
+                var entry = prepared != null ? prepared.Entry : null;
+                if (prepared == null || entry == null)
+                    continue;
+
+                ModRegistry.Register(entry);
+
+                for (int j = 0; j < prepared.Assemblies.Count; j++)
                 {
-                    return;
+                    var preparedAssembly = prepared.Assemblies[j];
+                    if (preparedAssembly == null || preparedAssembly.Assembly == null)
+                        continue;
+
+                    ModRegistry.RegisterAssemblyForMod(preparedAssembly.Assembly, entry);
                 }
-
-                AppDomain.CurrentDomain.AssemblyResolve += ResolveLoaderAssembly;
-                _assemblyResolveInstalled = true;
             }
         }
 
-        private static Assembly ResolveLoaderAssembly(object sender, ResolveEventArgs args)
+        private void InitializeGameRuntimeBootstraps(List<PreparedModLoad> preparedMods)
         {
-            string name = new AssemblyName(args.Name).Name;
-            if (name == "ModAPI" || name == "ModAPI.Core") return Assembly.GetExecutingAssembly();
-            if (name == "ShelteredAPI")
+            for (int i = 0; i < preparedMods.Count; i++)
             {
-                var shelteredType = Type.GetType("ShelteredAPI.Core.ShelteredModManagerBase, ShelteredAPI", false);
-                if (shelteredType != null) return shelteredType.Assembly;
-                try { return Assembly.Load("ShelteredAPI"); } catch { return null; }
+                var prepared = preparedMods[i];
+                if (prepared == null)
+                    continue;
+
+                for (int j = 0; j < prepared.Assemblies.Count; j++)
+                {
+                    var preparedAssembly = prepared.Assemblies[j];
+                    if (preparedAssembly == null)
+                        continue;
+
+                    InitializeGameRuntimeBootstraps(preparedAssembly.Types);
+                }
             }
-            return null;
         }
 
-        private void RegisterPlugin(IModPlugin plugin)
+        private void InitializeLoadedGameRuntimeBootstraps()
         {
-            if (plugin == null)
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            for (int i = 0; i < assemblies.Length; i++)
             {
+                if (!IsGameRuntimeAssemblyCandidate(assemblies[i]))
+                    continue;
+
+                InitializeGameRuntimeBootstraps(GetLoadableTypes(assemblies[i], null));
+            }
+        }
+
+        private void InitializeGameRuntimeBootstraps(Type[] types)
+        {
+            if (types == null)
                 return;
+
+            for (int i = 0; i < types.Length; i++)
+            {
+                var type = types[i];
+                if (!IsGameRuntimeBootstrapType(type))
+                    continue;
+
+                var key = type.AssemblyQualifiedName ?? type.FullName;
+                if (string.IsNullOrEmpty(key) || !_initializedGameRuntimeBootstraps.Add(key))
+                    continue;
+
+                try
+                {
+                    var bootstrap = (IGameRuntimeBootstrap)Activator.CreateInstance(type);
+                    bootstrap.Initialize();
+                    MMLog.WriteInfo("Initialized game runtime bootstrap: " + type.FullName);
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WritePluginError(type.FullName, "game runtime bootstrap", ex);
+                    MMLog.WriteError("Failed to initialize game runtime bootstrap '" + type.FullName + "': " + ex.Message);
+                    _loadErrors++;
+                }
+            }
+        }
+
+        private static bool IsGameRuntimeBootstrapType(Type type)
+        {
+            if (type == null || !type.IsClass || type.IsAbstract)
+                return false;
+
+            try
+            {
+                return typeof(IGameRuntimeBootstrap).IsAssignableFrom(type);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsGameRuntimeAssemblyCandidate(Assembly assembly)
+        {
+            if (assembly == null)
+                return false;
+
+            string name = null;
+            try { name = assembly.GetName().Name; }
+            catch { return false; }
+
+            if (string.IsNullOrEmpty(name))
+                return false;
+
+            if (name == "ModAPI" || name == "0Harmony")
+                return false;
+
+            if (name.StartsWith("System", StringComparison.Ordinal)
+                || name.StartsWith("mscorlib", StringComparison.Ordinal)
+                || name.StartsWith("Microsoft", StringComparison.Ordinal)
+                || name.StartsWith("Mono", StringComparison.Ordinal)
+                || name.StartsWith("Unity", StringComparison.Ordinal))
+            {
+                return false;
             }
 
-            _plugins.Add(plugin);
+            return true;
+        }
 
-            var update = plugin as IModUpdate;
-            if (update != null)
+        private static Type[] GetLoadableTypes(Assembly assembly, ModEntry entry)
+        {
+            if (assembly == null)
+                return null;
+
+            try
             {
-                _updates.Add(update);
+                return assembly.GetTypes();
             }
-
-            var shutdown = plugin as IModShutdown;
-            if (shutdown != null)
+            catch (ReflectionTypeLoadException rtle)
             {
-                _shutdown.Add(shutdown);
+                MMLog.WritePluginError(entry != null ? entry.Id : assembly.FullName, "type discovery", rtle);
+                return rtle.Types;
             }
+        }
 
-            var sceneEvents = plugin as IModSceneEvents;
-            if (sceneEvents != null)
+        private void ActivatePluginTypes(ModEntry entry, Type[] types)
+        {
+            if (types == null)
+                return;
+
+            for (int i = 0; i < types.Length; i++)
             {
-                _sceneEvents.Add(sceneEvents);
+                var type = types[i];
+                if (!IsPluginType(type))
+                    continue;
+
+                MMLog.WriteDebug("Found IModPlugin: " + type.FullName);
+
+                try
+                {
+                    var plugin = (IModPlugin)Activator.CreateInstance(type);
+                    var pluginRoot = new GameObject("Mod-" + SafeModIdFor(type));
+                    pluginRoot.transform.SetParent(_loaderRoot.transform, false);
+
+                    var ctx = BuildContextFor(type, pluginRoot);
+                    _plugins.Add(plugin);
+
+                    var u = plugin as IModUpdate; if (u != null) _updates.Add(u);
+                    var s = plugin as IModShutdown; if (s != null) _shutdown.Add(s);
+                    var se = plugin as IModSceneEvents; if (se != null) _sceneEvents.Add(se);
+                    var ss = plugin as IModSessionEvents; if (ss != null) _sessionEvents.Add(ss);
+
+                    MMLog.WriteDebug("Initializing plugin: " + type.FullName);
+                    plugin.Initialize(ctx);
+
+                    var settingsProvider = plugin as ISettingsProvider;
+                    if (entry != null && entry.SettingsProvider == null && settingsProvider != null)
+                        entry.SettingsProvider = settingsProvider;
+
+                    MMLog.WriteDebug("Starting plugin: " + type.FullName);
+                    plugin.Start(ctx);
+                    ctx.Log.Info("Started.");
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WritePluginError(type.FullName, "startup", ex);
+                    MMLog.WriteError("error starting plugin '" + type.FullName + "': " + ex.Message);
+                    _loadErrors++;
+                }
             }
+        }
 
-            var sessionEvents = plugin as IModSessionEvents;
-            if (sessionEvents != null)
+        private static bool IsPluginType(Type type)
+        {
+            if (type == null || !type.IsClass || type.IsAbstract)
+                return false;
+
+            try
             {
-                _sessionEvents.Add(sessionEvents);
+                return typeof(IModPlugin).IsAssignableFrom(type);
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -809,11 +962,10 @@ namespace ModAPI.Core
             ModEntry entry = null;
             ModRegistry.TryGetModByAssembly(type.Assembly, out entry);
 
-            string asmPath = SafeAssemblyPath(type.Assembly);
-            string modRoot = entry != null ? entry.RootPath : ProbeModRootFromAssembly(asmPath);
-
             string modId = entry != null && !string.IsNullOrEmpty(entry.Id) ? entry.Id : (type.Namespace ?? type.Name);
             var log = new PrefixedLogger(modId);
+            var gameHelper = ResolveGameHelper();
+            var actors = ResolveActorSystem();
             if (entry != null && entry.About != null)
             {
                 log.IsDebugEnabled = entry.About.debugLogging;
@@ -828,13 +980,35 @@ namespace ModAPI.Core
                 Mod = entry,
                 Settings = settings,
                 Log = log,
-                Game = ModAPIRegistry.GetAPI<IGameHelper>("ShelteredAPI.GameHelper"),
-                Actors = ModAPIRegistry.GetAPI<IActorSystem>("ShelteredAPI.Actors"),
+                Game = gameHelper,
+                Actors = actors,
                 SaveSystem = new SaveSystemImpl(modId),
                 GameRoot = _gameRoot,
                 ModsRoot = _modsRoot,
                 Scheduler = (Action a) => EnqueueNextFrame(a)
             };
+        }
+
+        private static IGameHelper ResolveGameHelper()
+        {
+            if (ModAPIRegistry.IsAPIRegistered(GameRuntimeApiIds.GameHelper))
+                return ModAPIRegistry.GetAPI<IGameHelper>(GameRuntimeApiIds.GameHelper);
+
+            if (ModAPIRegistry.IsAPIRegistered("ShelteredAPI.GameHelper"))
+                return ModAPIRegistry.GetAPI<IGameHelper>("ShelteredAPI.GameHelper");
+
+            return null;
+        }
+
+        private static IActorSystem ResolveActorSystem()
+        {
+            if (ModAPIRegistry.IsAPIRegistered(GameRuntimeApiIds.Actors))
+                return ModAPIRegistry.GetAPI<IActorSystem>(GameRuntimeApiIds.Actors);
+
+            if (ModAPIRegistry.IsAPIRegistered("ShelteredAPI.Actors"))
+                return ModAPIRegistry.GetAPI<IActorSystem>("ShelteredAPI.Actors");
+
+            return null;
         }
 
         private static string SafeAssemblyPath(Assembly asm)

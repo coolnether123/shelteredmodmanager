@@ -18,6 +18,7 @@ namespace ModAPI.Events
     {
         public static event Action<int> OnNewDay;
         public static event Action<SaveData> OnBeforeSave;
+        public static event Action<SaveData> OnBeforeLoadSceneContents;
         public static event Action<SaveData> OnAfterLoad;
         public static event Action OnNewGame;
         public static event Action OnSessionStarted;
@@ -35,9 +36,11 @@ namespace ModAPI.Events
         }
 
         private static bool _beforeSaveRaised;
+        private static bool _beforeLoadSceneContentsRaised;
         private static bool _afterLoadRaised;
         private static bool _dayHooked;
         private static bool _partyHooked;
+        private static SaveData _loadStartData;
         private static readonly object WarnOnceSync = new object();
         private static readonly HashSet<string> LocalWarnOnceKeys = new HashSet<string>(StringComparer.Ordinal);
 
@@ -78,7 +81,14 @@ namespace ModAPI.Events
         internal static void ResetSaveFlags()
         {
             _beforeSaveRaised = false;
+            _beforeLoadSceneContentsRaised = false;
             _afterLoadRaised = false;
+        }
+
+        internal static void CaptureLoadStartState(SaveManager mgr)
+        {
+            SaveData data;
+            _loadStartData = mgr != null && TryGetField(mgr, "m_data", out data) ? data : null;
         }
 
         internal static void TryRaiseBeforeSave(SaveManager mgr)
@@ -128,6 +138,34 @@ namespace ModAPI.Events
             catch (Exception ex)
             {
                 WriteError("[GameEvents] Error raising Custom AfterLoad: " + ex);
+            }
+        }
+
+        internal static void TryRaiseBeforeLoadSceneContents(SaveManager mgr)
+        {
+            if (mgr == null || _beforeLoadSceneContentsRaised)
+                return;
+
+            SaveData data;
+            if (!TryGetField(mgr, "m_data", out data) || data == null || ReferenceEquals(data, _loadStartData) || data.isFinished)
+                return;
+
+            SaveManager.SaveType type;
+            if (TryGetField(mgr, "m_currentType", out type) &&
+                (type == SaveManager.SaveType.GlobalData || type == SaveManager.SaveType.Invalid))
+                return;
+
+            _beforeLoadSceneContentsRaised = true;
+            if (OnBeforeLoadSceneContents != null)
+                SafeInvoke(delegate { OnBeforeLoadSceneContents(data); }, "OnBeforeLoadSceneContents");
+
+            try
+            {
+                TryRaiseCustomSaveEvent("RaiseBeforeLoad", "BeforeLoad");
+            }
+            catch (Exception ex)
+            {
+                WriteError("[GameEvents] Error raising Custom BeforeLoad: " + ex);
             }
         }
 
@@ -225,9 +263,19 @@ namespace ModAPI.Events
         [HarmonyPatch(typeof(SaveManager), "StartLoad")]
         private static class SaveManager_StartLoad_Patch
         {
-            private static void Prefix()
+            private static void Prefix(SaveManager __instance)
             {
+                GameEvents.CaptureLoadStartState(__instance);
                 GameEvents.ResetSaveFlags();
+            }
+        }
+
+        [HarmonyPatch(typeof(SaveManager), "Update_LoadData")]
+        private static class SaveManager_Update_LoadData_Patch
+        {
+            private static void Postfix(SaveManager __instance)
+            {
+                GameEvents.TryRaiseBeforeLoadSceneContents(__instance);
             }
         }
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using ModAPI.Core;
+using ModAPI.InputServices;
 
 namespace ModAPI.UI
 {
@@ -10,6 +11,8 @@ namespace ModAPI.UI
     /// </summary>
     public class NGUIScrollHelper : MonoBehaviour
     {
+        private const float ScrollStepThreshold = 1f;
+        private const float ScrollSensitivity = 0.45f;
         private List<GameObject> _items = new List<GameObject>();
         private float _itemSpacing;
         private float _startY;
@@ -50,39 +53,76 @@ namespace ModAPI.UI
         }
         
         private int _frameCount = 0;
+        private float _scrollAccumulator;
         
         void Update()
         {
             if (_items == null || _items.Count == 0 || _items.Count <= _maxVisibleItems) return;
             
-            float scroll;
+            float scroll = 0f;
+            bool hasAnalogScroll = false;
 
             // Keyboard fallback for users without reliable wheel/gesture support.
-            if (!ScrollInputBridge.TryGetVerticalScroll(_minX, _maxX, out scroll))
+            if (!ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.ForUiRange(_minX, _maxX), out scroll))
             {
                 if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
                     scroll = 1f;
                 else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.PageDown))
                     scroll = -1f;
             }
+            else
+            {
+                hasAnalogScroll = true;
+            }
 
             if (scroll != 0f)
             {
-                int previousOffset = _currentOffset;
-                
-                if (scroll > 0f && _currentOffset > 0)
+                if (hasAnalogScroll)
                 {
-                    _currentOffset--;
+                    if (ScrollInputService.IsIndirectScrollActive())
+                    {
+                        float clampedScroll = Mathf.Clamp(scroll, -1f, 1f);
+                        _scrollAccumulator += clampedScroll * ScrollSensitivity;
+                        ApplyAccumulatedScroll();
+                    }
+                    else if (ApplyScrollStep(scroll > 0f ? -1 : 1))
+                    {
+                        UpdateItemPositions();
+                    }
                 }
-                else if (scroll < 0f && _currentOffset < _items.Count - _maxVisibleItems)
+                else
                 {
-                    _currentOffset++;
-                }
-                if (_currentOffset != previousOffset)
-                {
-                    UpdateItemPositions();
+                    if (ApplyScrollStep(scroll > 0f ? -1 : 1))
+                        UpdateItemPositions();
                 }
             }
+        }
+
+        private void ApplyAccumulatedScroll()
+        {
+            bool moved = false;
+
+            while (_scrollAccumulator >= ScrollStepThreshold)
+            {
+                moved |= ApplyScrollStep(-1);
+                _scrollAccumulator -= ScrollStepThreshold;
+            }
+
+            while (_scrollAccumulator <= -ScrollStepThreshold)
+            {
+                moved |= ApplyScrollStep(1);
+                _scrollAccumulator += ScrollStepThreshold;
+            }
+
+            if (moved)
+                UpdateItemPositions();
+        }
+
+        private bool ApplyScrollStep(int delta)
+        {
+            int previousOffset = _currentOffset;
+            _currentOffset = Mathf.Clamp(_currentOffset + delta, 0, Mathf.Max(0, _items.Count - _maxVisibleItems));
+            return _currentOffset != previousOffset;
         }
         
         private void UpdateItemPositions()

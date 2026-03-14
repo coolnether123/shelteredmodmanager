@@ -118,6 +118,13 @@ namespace ModAPI.Saves
             return path;
         }
 
+        public static string DeletedRoot(string scenarioId)
+        {
+            var path = Path.Combine(ScenarioRoot(scenarioId), "_trash");
+            EnsureDir(path);
+            return path;
+        }
+
         public static string LibsRoot
         {
             get

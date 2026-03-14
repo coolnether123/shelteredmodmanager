@@ -14,83 +14,58 @@ namespace Manager.Views
     public delegate void NexusInstallCompletedHandler();
     public delegate void NexusActivityHandler(string message);
 
-    /// <summary>
-    /// Nexus browsing, update status, and install workflow tab.
-    /// </summary>
     public class NexusModsTab : UserControl
     {
+        private enum NexusViewMode { Updates, Installed, Discover }
+        private enum NexusItemState { UpdateAvailable, InstalledCurrent, InstalledUnlinked, Available }
+
+        private sealed class NexusBrowserItem
+        {
+            public ModItem LocalMod;
+            public NexusRemoteMod RemoteMod;
+            public NexusItemState State;
+            public string PrimaryText;
+            public string SecondaryText;
+            public string BadgeText;
+        }
+
         private Panel _topPanel;
-        private Label _statusLabel;
-        private Label _managerUpdateLabel;
-        private Label _installedSummaryLabel;
-
-        private Panel _installedPanel;
-        private Label _installedHeaderLabel;
-        private ListBox _installedList;
-
-        private Panel _actionsPanel;
+        private Label _connectionLabel;
+        private Label _downloadLabel;
+        private Label _summaryLabel;
+        private Label _feedStatusLabel;
+        private Label _managerStatusLabel;
         private Button _refreshButton;
         private Button _checkManagerButton;
+        private Panel _leftPanel;
+        private Panel _modePanel;
+        private Button _updatesModeButton;
+        private Button _installedModeButton;
+        private Button _discoverModeButton;
+        private Panel _listActionPanel;
         private Button _installSelectedButton;
         private Button _openPageButton;
-
-        private Panel _latestPanel;
-        private Label _latestHeaderLabel;
-        private ListBox _latestList;
-
+        private ListBox _primaryList;
         private ModDetailsPanel _detailsPanel;
 
         private NexusModsService _nexusService;
         private NexusInstallService _installService = new NexusInstallService();
         private AppSettings _settings;
+        private NexusAccountStatus _accountStatus;
         private string _managerVersion = string.Empty;
-        private int _latestRequestToken = 0;
+        private int _latestRequestToken;
         private DateTime _lastCheckedUtc = DateTime.MinValue;
         private static readonly TimeSpan LatestFeedCooldown = TimeSpan.FromMinutes(5);
         private List<NexusRemoteMod> _latestFeedCache = new List<NexusRemoteMod>();
         private DateTime _latestFeedCacheUtc = DateTime.MinValue;
         private string _latestFeedCacheDomain = string.Empty;
+        private List<ModItem> _installedMods = new List<ModItem>();
+        private Dictionary<string, ModItem> _installedByNexusKey = new Dictionary<string, ModItem>(StringComparer.OrdinalIgnoreCase);
+        private List<NexusBrowserItem> _items = new List<NexusBrowserItem>();
+        private NexusViewMode _currentMode = NexusViewMode.Installed;
 
         public event NexusInstallCompletedHandler InstallCompleted;
         public event NexusActivityHandler NexusActivity;
-
-        private sealed class NexusListItem
-        {
-            public NexusRemoteMod RemoteMod;
-            public ModItem LocalMod;
-            public bool IsInstalledRow;
-
-            public override string ToString()
-            {
-                if (IsInstalledRow)
-                {
-                    if (LocalMod == null) return "Unknown";
-
-                    if (!LocalMod.HasNexusReference)
-                        return "[UNLINKED] " + LocalMod.DisplayName;
-
-                    if (LocalMod.HasUpdateAvailable)
-                        return "[UPDATE] " + LocalMod.DisplayName + "  (" + FormatVersion(LocalMod.Version) + " -> " + FormatVersion(LocalMod.NexusRemoteVersion) + ")";
-
-                    return "[OK] " + LocalMod.DisplayName + "  (" + FormatVersion(LocalMod.Version) + ")";
-                }
-
-                if (RemoteMod == null) return "Unknown";
-                return RemoteMod.Name + "  (" + FormatVersion(RemoteMod.Version) + ")";
-            }
-
-            private static string FormatVersion(string version)
-            {
-                string value = (version ?? string.Empty).Trim();
-                if (string.IsNullOrEmpty(value))
-                    return "?";
-
-                if (value.StartsWith("v", StringComparison.OrdinalIgnoreCase))
-                    return value;
-
-                return "v" + value;
-            }
-        }
 
         public NexusModsTab()
         {
@@ -104,69 +79,197 @@ namespace Manager.Views
             _settings = settings;
             _managerVersion = managerVersion ?? string.Empty;
             _detailsPanel.InstalledModApiVersion = _settings != null ? _settings.InstalledModApiVersion : null;
+            RefreshHeaderText();
+            RebuildPrimaryList();
+            UpdateActionButtons();
+        }
 
-            bool enabled = _settings == null || _settings.EnableNexusIntegration;
-            _refreshButton.Enabled = enabled;
-            _checkManagerButton.Enabled = enabled;
-            _installSelectedButton.Enabled = enabled;
-
-            if (!enabled)
-            {
-                _statusLabel.Text = "Feed: Disabled in Settings";
-            }
-            else
-            {
-                string domain = GetGameDomain();
-                _statusLabel.Text = "Feed: Ready (" + domain + ")";
-            }
-
-            AdjustColumnWidths();
-            AdjustListHeights();
+        public void SetAccountStatus(NexusAccountStatus status)
+        {
+            _accountStatus = status;
+            RefreshHeaderText();
         }
 
         public void UpdateInstalledMods(List<ModItem> mods, int mappedMods, int updateCount, string errorMessage)
         {
-            _installedList.BeginUpdate();
-            _installedList.Items.Clear();
-
-            var source = mods ?? new List<ModItem>();
-            source.Sort(delegate (ModItem a, ModItem b)
-            {
-                int aScore = GetInstalledSortScore(a);
-                int bScore = GetInstalledSortScore(b);
-                if (aScore != bScore) return aScore.CompareTo(bScore);
-                return string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase);
-            });
-
-            foreach (var mod in source)
-            {
-                _installedList.Items.Add(new NexusListItem
-                {
-                    IsInstalledRow = true,
-                    LocalMod = mod,
-                    RemoteMod = BuildRemoteFromLocal(mod)
-                });
-            }
-
-            _installedList.EndUpdate();
-            AdjustListHeights();
-
-            int totalMods = source.Count;
-            if (!string.IsNullOrEmpty(errorMessage))
-                _installedSummaryLabel.Text = "Installed: link check failed (" + errorMessage + ")" + BuildLastCheckedSuffix();
-            else
-                _installedSummaryLabel.Text = "Installed: " + totalMods + " | Linked: " + mappedMods + " | Updates: " + updateCount + BuildLastCheckedSuffix();
+            _installedMods = mods ?? new List<ModItem>();
+            RebuildInstalledLookup();
+            if (_currentMode == NexusViewMode.Updates && updateCount == 0)
+                _currentMode = NexusViewMode.Installed;
+            RefreshHeaderText(errorMessage);
+            RebuildPrimaryList();
         }
 
         public void SetLastCheckedUtc(DateTime checkedUtc)
         {
-            if (checkedUtc <= DateTime.MinValue)
-                return;
+            if (checkedUtc > DateTime.MinValue)
+                _lastCheckedUtc = checkedUtc;
+            RefreshHeaderText();
+        }
 
-            _lastCheckedUtc = checkedUtc;
-            // Preserve current summary text, append/update timestamp on next update pass.
-            if (string.IsNullOrEmpty(_installedSummaryLabel.Text))
-                _installedSummaryLabel.Text = "Installed: waiting for mod scan" + BuildLastCheckedSuffix();
+        private void InitializeComponent()
+        {
+            SuspendLayout();
+
+            _topPanel = new Panel();
+            _connectionLabel = new Label();
+            _downloadLabel = new Label();
+            _summaryLabel = new Label();
+            _feedStatusLabel = new Label();
+            _managerStatusLabel = new Label();
+            _refreshButton = new Button();
+            _checkManagerButton = new Button();
+            _leftPanel = new Panel();
+            _modePanel = new Panel();
+            _updatesModeButton = new Button();
+            _installedModeButton = new Button();
+            _discoverModeButton = new Button();
+            _listActionPanel = new Panel();
+            _installSelectedButton = new Button();
+            _openPageButton = new Button();
+            _primaryList = new ListBox();
+            _detailsPanel = new ModDetailsPanel();
+
+            _topPanel.Dock = DockStyle.Top;
+            _topPanel.Height = 98;
+            _topPanel.Padding = new Padding(12, 10, 12, 10);
+
+            _connectionLabel.AutoSize = false;
+            _connectionLabel.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            _connectionLabel.Location = new Point(12, 10);
+            _connectionLabel.Size = new Size(700, 20);
+            _connectionLabel.AutoEllipsis = true;
+            _connectionLabel.Text = "Nexus: not connected";
+
+            _downloadLabel.AutoSize = false;
+            _downloadLabel.Font = new Font("Segoe UI", 8.75f);
+            _downloadLabel.Location = new Point(12, 32);
+            _downloadLabel.Size = new Size(700, 18);
+            _downloadLabel.AutoEllipsis = true;
+
+            _summaryLabel.AutoSize = false;
+            _summaryLabel.Font = new Font("Segoe UI", 9f);
+            _summaryLabel.Location = new Point(12, 56);
+            _summaryLabel.Size = new Size(700, 18);
+            _summaryLabel.AutoEllipsis = true;
+
+            _feedStatusLabel.AutoSize = false;
+            _feedStatusLabel.Font = new Font("Segoe UI", 9f);
+            _feedStatusLabel.Location = new Point(12, 76);
+            _feedStatusLabel.Size = new Size(220, 18);
+            _feedStatusLabel.AutoEllipsis = true;
+            _feedStatusLabel.Visible = false;
+
+            _managerStatusLabel.AutoSize = false;
+            _managerStatusLabel.Font = new Font("Segoe UI", 9f);
+            _managerStatusLabel.Location = new Point(250, 76);
+            _managerStatusLabel.Size = new Size(430, 18);
+            _managerStatusLabel.AutoEllipsis = true;
+
+            ConfigurePrimaryButton(_refreshButton, "Refresh");
+            ConfigurePrimaryButton(_checkManagerButton, "Check SMM Update");
+            _refreshButton.Size = new Size(120, 32);
+            _checkManagerButton.Size = new Size(145, 32);
+            _refreshButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            _checkManagerButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+
+            _topPanel.Controls.Add(_connectionLabel);
+            _topPanel.Controls.Add(_downloadLabel);
+            _topPanel.Controls.Add(_summaryLabel);
+            _topPanel.Controls.Add(_feedStatusLabel);
+            _topPanel.Controls.Add(_managerStatusLabel);
+            _topPanel.Controls.Add(_refreshButton);
+            _topPanel.Controls.Add(_checkManagerButton);
+
+            _leftPanel.Dock = DockStyle.Left;
+            _leftPanel.Width = 470;
+            _leftPanel.Padding = new Padding(12, 10, 12, 12);
+
+            _modePanel.Dock = DockStyle.Top;
+            _modePanel.Height = 42;
+
+            ConfigureModeButton(_updatesModeButton, "Updates");
+            ConfigureModeButton(_installedModeButton, "Installed");
+            ConfigureModeButton(_discoverModeButton, "Discover");
+            _updatesModeButton.Location = new Point(0, 0);
+            _installedModeButton.Location = new Point(118, 0);
+            _discoverModeButton.Location = new Point(236, 0);
+            _modePanel.Controls.Add(_updatesModeButton);
+            _modePanel.Controls.Add(_installedModeButton);
+            _modePanel.Controls.Add(_discoverModeButton);
+
+            _listActionPanel.Dock = DockStyle.Bottom;
+            _listActionPanel.Height = 48;
+
+            ConfigureSecondaryButton(_installSelectedButton, "Install from Nexus");
+            ConfigureSecondaryButton(_openPageButton, "Open Nexus Page");
+            _installSelectedButton.Location = new Point(0, 8);
+            _installSelectedButton.Size = new Size(170, 32);
+            _openPageButton.Location = new Point(180, 8);
+            _openPageButton.Size = new Size(150, 32);
+            _listActionPanel.Controls.Add(_installSelectedButton);
+            _listActionPanel.Controls.Add(_openPageButton);
+
+            _primaryList.Dock = DockStyle.Fill;
+            _primaryList.BorderStyle = BorderStyle.FixedSingle;
+            _primaryList.Font = new Font("Segoe UI", 9f);
+            _primaryList.DrawMode = DrawMode.OwnerDrawFixed;
+            _primaryList.ItemHeight = 38;
+
+            _leftPanel.Controls.Add(_primaryList);
+            _leftPanel.Controls.Add(_listActionPanel);
+            _leftPanel.Controls.Add(_modePanel);
+
+            _detailsPanel.Dock = DockStyle.Fill;
+            _detailsPanel.Padding = new Padding(12);
+            _detailsPanel.MinimumSize = new Size(340, 380);
+
+            Controls.Add(_detailsPanel);
+            Controls.Add(_leftPanel);
+            Controls.Add(_topPanel);
+            Name = "NexusModsTab";
+            ResumeLayout(false);
+            LayoutTopPanel();
+        }
+
+        private void WireEvents()
+        {
+            _refreshButton.Click += delegate { RefreshLatestModsAsync(true); };
+            _checkManagerButton.Click += delegate { CheckManagerUpdateAsync(true); };
+            _updatesModeButton.Click += delegate { SwitchMode(NexusViewMode.Updates); };
+            _installedModeButton.Click += delegate { SwitchMode(NexusViewMode.Installed); };
+            _discoverModeButton.Click += delegate { SwitchMode(NexusViewMode.Discover); };
+            _installSelectedButton.Click += InstallSelectedButton_Click;
+            _openPageButton.Click += OpenPageButton_Click;
+            _primaryList.SelectedIndexChanged += PrimaryList_SelectedIndexChanged;
+            _primaryList.DrawItem += PrimaryList_DrawItem;
+            _detailsPanel.OpenFolderClicked += DetailsPanel_OpenFolderClicked;
+            _detailsPanel.WebsiteClicked += DetailsPanel_WebsiteClicked;
+            _topPanel.Resize += delegate { LayoutTopPanel(); };
+        }
+
+        public void ApplyTheme(bool isDark)
+        {
+            BackColor = isDark ? Color.FromArgb(46, 48, 53) : SystemColors.Control;
+            _topPanel.BackColor = isDark ? Color.FromArgb(40, 42, 46) : SystemColors.ControlLight;
+            _leftPanel.BackColor = BackColor;
+            _modePanel.BackColor = BackColor;
+            _listActionPanel.BackColor = BackColor;
+            _primaryList.BackColor = isDark ? Color.FromArgb(32, 34, 38) : SystemColors.Window;
+            _primaryList.ForeColor = isDark ? Color.WhiteSmoke : SystemColors.WindowText;
+            _connectionLabel.ForeColor = isDark ? Color.White : SystemColors.ControlText;
+            _downloadLabel.ForeColor = isDark ? Color.Gainsboro : SystemColors.ControlText;
+            _summaryLabel.ForeColor = isDark ? Color.Gainsboro : SystemColors.ControlText;
+            _feedStatusLabel.ForeColor = isDark ? Color.Gainsboro : SystemColors.ControlText;
+            _managerStatusLabel.ForeColor = isDark ? Color.Gainsboro : SystemColors.ControlText;
+            ApplyButtonTheme(_refreshButton, isDark, true);
+            ApplyButtonTheme(_checkManagerButton, isDark, false);
+            ApplyButtonTheme(_updatesModeButton, isDark, _currentMode == NexusViewMode.Updates);
+            ApplyButtonTheme(_installedModeButton, isDark, _currentMode == NexusViewMode.Installed);
+            ApplyButtonTheme(_discoverModeButton, isDark, _currentMode == NexusViewMode.Discover);
+            ApplyButtonTheme(_installSelectedButton, isDark, true);
+            ApplyButtonTheme(_openPageButton, isDark, false);
+            _detailsPanel.ApplyTheme(isDark);
         }
 
         public void RefreshLatestModsAsync()
@@ -178,44 +281,40 @@ namespace Manager.Views
         {
             if (_settings != null && !_settings.EnableNexusIntegration)
             {
-                _statusLabel.Text = "Feed: Disabled in Settings";
-                EmitActivity("Feed refresh skipped because Nexus integration is disabled.");
+                _feedStatusLabel.Text = "Discover: disabled";
+                EmitActivity("Discover refresh skipped because Nexus features are disabled.");
                 return;
             }
-
             if (_nexusService == null)
             {
-                _statusLabel.Text = "Feed: Service unavailable";
-                EmitActivity("Feed refresh failed: Nexus service is unavailable.");
+                _feedStatusLabel.Text = "Discover: unavailable";
                 return;
             }
 
             string domain = GetGameDomain();
             if (string.IsNullOrEmpty(domain))
             {
-                _statusLabel.Text = "Feed: Game domain not configured";
-                EmitActivity("Feed refresh failed: game domain is not configured.");
+                _feedStatusLabel.Text = "Discover: no domain";
                 return;
             }
 
             if (!forceRefresh && HasLatestFeedCache(domain))
             {
-                PopulateLatestList(_latestFeedCache);
-                _statusLabel.Text = "Feed: " + _latestFeedCache.Count + " mods (" + domain + ", cached)";
+                _feedStatusLabel.Text = "Discover: " + _latestFeedCache.Count + " cached";
+                RebuildPrimaryList();
                 return;
             }
 
-            _statusLabel.Text = "Feed: Loading latest releases...";
-            EmitActivity("Refreshing Nexus feed for '" + domain + "'.");
+            _feedStatusLabel.Text = "Discover: loading...";
             _refreshButton.Enabled = false;
             int token = ++_latestRequestToken;
 
             ThreadPool.QueueUserWorkItem(delegate
             {
                 string error;
-                var latest = _nexusService.GetLatestMods(domain, 50, out error);
-
-                if (IsDisposed || Disposing) return;
+                var latest = _nexusService.GetLatestMods(domain, 40, out error);
+                if (IsDisposed || Disposing)
+                    return;
 
                 try
                 {
@@ -223,26 +322,22 @@ namespace Manager.Views
                     {
                         if (token != _latestRequestToken)
                             return;
-
                         _refreshButton.Enabled = true;
-
                         if (!string.IsNullOrEmpty(error))
                         {
-                            _statusLabel.Text = "Feed: Load failed";
-                            EmitActivity("Nexus feed refresh failed: " + error);
-                            _detailsPanel.ShowMod(CreateStatusMod("Nexus Load Failed", error));
+                            _feedStatusLabel.Text = "Discover: refresh failed";
+                            EmitActivity("Discover refresh failed: " + error);
+                            if (_currentMode == NexusViewMode.Discover)
+                                _detailsPanel.ShowMod(CreateStatusMod("Nexus Discover Failed", error));
+                            return;
                         }
-                        else
-                        {
-                            _latestFeedCache = latest ?? new List<NexusRemoteMod>();
-                            _latestFeedCacheUtc = DateTime.UtcNow;
-                            _latestFeedCacheDomain = domain;
-                            PopulateLatestList(_latestFeedCache);
-                            _statusLabel.Text = "Feed: " + latest.Count + " mods (" + domain + ")";
-                            EmitActivity("Nexus feed refresh complete: loaded " + latest.Count + " mods for '" + domain + "'.");
-                            if (latest.Count == 0)
-                                _detailsPanel.ShowMod(CreateStatusMod("No Nexus Results", "No mods were returned for this game domain."));
-                        }
+
+                        _latestFeedCache = latest ?? new List<NexusRemoteMod>();
+                        _latestFeedCacheUtc = DateTime.UtcNow;
+                        _latestFeedCacheDomain = domain;
+                        _feedStatusLabel.Text = "Discover: " + _latestFeedCache.Count + " cached";
+                        EmitActivity("Discover refresh complete: loaded " + _latestFeedCache.Count + " mods.");
+                        RebuildPrimaryList();
                     });
                 }
                 catch { }
@@ -251,378 +346,281 @@ namespace Manager.Views
 
         public void CheckManagerUpdateAsync(bool userInitiated)
         {
-            if (_settings == null || _nexusService == null)
-                return;
-
-            if (!_settings.EnableNexusIntegration)
+            if (_settings == null || _nexusService == null || !_settings.EnableNexusIntegration)
             {
-                _managerUpdateLabel.Text = "SMM: Nexus integration is disabled.";
-                EmitActivity("Manager update check skipped because Nexus integration is disabled.");
+                _managerStatusLabel.Text = "SMM: disabled";
                 return;
             }
-
             if (_settings.ManagerNexusModId <= 0)
             {
-                _managerUpdateLabel.Text = "SMM: Set Manager Mod ID in Settings.";
-                EmitActivity("Manager update check skipped: Manager Mod ID is not set.");
+                _managerStatusLabel.Text = "SMM: no manager ID";
                 return;
             }
 
             string domain = GetGameDomain();
             if (string.IsNullOrEmpty(domain))
             {
-                _managerUpdateLabel.Text = "SMM: Game domain is missing.";
-                EmitActivity("Manager update check failed: game domain is missing.");
+                _managerStatusLabel.Text = "SMM: no domain";
                 return;
             }
 
-            _managerUpdateLabel.Text = userInitiated
-                ? "SMM: checking..."
-                : "SMM: auto-checking...";
-            EmitActivity("Checking manager update on Nexus (" + domain + "/mods/" + _settings.ManagerNexusModId + ").");
+            _managerStatusLabel.Text = "SMM: checking...";
             _checkManagerButton.Enabled = false;
 
             ThreadPool.QueueUserWorkItem(delegate
             {
                 string error;
                 var remote = _nexusService.GetModByDomainAndId(domain, _settings.ManagerNexusModId, out error);
-
-                if (IsDisposed || Disposing) return;
+                if (IsDisposed || Disposing)
+                    return;
 
                 try
                 {
                     BeginInvoke((MethodInvoker)delegate
                     {
                         _checkManagerButton.Enabled = true;
-
                         if (!string.IsNullOrEmpty(error))
                         {
-                            _managerUpdateLabel.Text = "SMM: check failed (" + error + ")";
-                            EmitActivity("Manager update check failed: " + error);
+                            _managerStatusLabel.Text = "SMM: check failed";
+                            EmitActivity("SMM update check failed: " + error);
                             return;
                         }
-
                         if (remote == null)
                         {
-                            _managerUpdateLabel.Text = "SMM: Nexus entry not found.";
-                            EmitActivity("Manager update check: Nexus entry was not found.");
+                            _managerStatusLabel.Text = "SMM: not found on Nexus";
                             return;
                         }
 
                         int comparison = NexusVersionComparer.CompareVersions(_managerVersion, remote.Version);
-                        string localVersion = FormatVersionLabel(_managerVersion);
-                        string remoteVersion = FormatVersionLabel(remote.Version);
+                        string localVersion = FormatVersion(_managerVersion);
+                        string remoteVersion = FormatVersion(remote.Version);
                         if (comparison < 0)
-                        {
-                            _managerUpdateLabel.Text = "SMM: Update available " + remoteVersion + " (current " + localVersion + ")";
-                            EmitActivity("Manager update available: " + remoteVersion + " (current: " + localVersion + ").");
-                        }
+                            _managerStatusLabel.Text = "SMM: update available (" + remoteVersion + ")";
                         else if (comparison == 0)
-                        {
-                            _managerUpdateLabel.Text = "SMM: Up to date (" + localVersion + ")";
-                            EmitActivity("Manager is up to date (" + localVersion + ").");
-                        }
+                            _managerStatusLabel.Text = "SMM: current (" + localVersion + ")";
                         else
-                        {
-                            _managerUpdateLabel.Text = "SMM: " + localVersion + " is newer than Nexus " + remoteVersion;
-                            EmitActivity("Local manager build is newer than Nexus (" + localVersion + " > " + remoteVersion + ").");
-                        }
+                            _managerStatusLabel.Text = "SMM: local build newer than Nexus";
                     });
                 }
                 catch { }
             });
         }
 
-        public void ApplyTheme(bool isDark)
+        private void RebuildInstalledLookup()
         {
-            if (isDark)
+            _installedByNexusKey.Clear();
+            for (int i = 0; i < _installedMods.Count; i++)
             {
-                BackColor = Color.FromArgb(46, 48, 53);
-                _topPanel.BackColor = Color.FromArgb(40, 42, 46);
-                _installedPanel.BackColor = Color.FromArgb(46, 48, 53);
-                _actionsPanel.BackColor = Color.FromArgb(46, 48, 53);
-                _latestPanel.BackColor = Color.FromArgb(46, 48, 53);
-
-                _statusLabel.ForeColor = Color.White;
-                _managerUpdateLabel.ForeColor = Color.Gainsboro;
-                _installedSummaryLabel.ForeColor = Color.Gainsboro;
-                _installedHeaderLabel.ForeColor = Color.White;
-                _latestHeaderLabel.ForeColor = Color.White;
-
-                _installedList.BackColor = Color.FromArgb(32, 34, 38);
-                _installedList.ForeColor = Color.WhiteSmoke;
-                _latestList.BackColor = Color.FromArgb(32, 34, 38);
-                _latestList.ForeColor = Color.WhiteSmoke;
-
-                ApplyButtonTheme(_refreshButton, true, true);
-                ApplyButtonTheme(_checkManagerButton, true, true);
-                ApplyButtonTheme(_installSelectedButton, true, true);
-                ApplyButtonTheme(_openPageButton, true, false);
+                var mod = _installedMods[i];
+                if (mod == null || !mod.HasNexusReference)
+                    continue;
+                _installedByNexusKey[BuildNexusKey(mod.NexusGameDomain, mod.NexusModId)] = mod;
             }
+        }
+
+        private void RebuildPrimaryList()
+        {
+            _items.Clear();
+            switch (_currentMode)
+            {
+                case NexusViewMode.Updates:
+                    BuildUpdateItems();
+                    break;
+                case NexusViewMode.Discover:
+                    BuildDiscoverItems();
+                    break;
+                default:
+                    BuildInstalledItems();
+                    break;
+            }
+
+            _primaryList.BeginUpdate();
+            _primaryList.Items.Clear();
+            for (int i = 0; i < _items.Count; i++)
+                _primaryList.Items.Add(_items[i]);
+            _primaryList.EndUpdate();
+
+            RefreshModeButtons();
+            UpdateActionButtons();
+            if (_items.Count == 0)
+                ShowEmptyState();
+        }
+
+        private void BuildUpdateItems()
+        {
+            var source = new List<ModItem>();
+            for (int i = 0; i < _installedMods.Count; i++)
+            {
+                var mod = _installedMods[i];
+                if (mod != null && mod.HasUpdateAvailable)
+                    source.Add(mod);
+            }
+            source.Sort(delegate (ModItem a, ModItem b) { return string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase); });
+            for (int i = 0; i < source.Count; i++)
+                _items.Add(CreateInstalledItem(source[i], NexusItemState.UpdateAvailable));
+        }
+
+        private void BuildInstalledItems()
+        {
+            var source = new List<ModItem>(_installedMods);
+            source.Sort(delegate (ModItem a, ModItem b)
+            {
+                int aScore = GetInstalledSortScore(a);
+                int bScore = GetInstalledSortScore(b);
+                if (aScore != bScore) return aScore.CompareTo(bScore);
+                return string.Compare(a != null ? a.DisplayName : string.Empty, b != null ? b.DisplayName : string.Empty, StringComparison.OrdinalIgnoreCase);
+            });
+            for (int i = 0; i < source.Count; i++)
+            {
+                var mod = source[i];
+                if (mod == null) continue;
+                NexusItemState state = mod.HasUpdateAvailable ? NexusItemState.UpdateAvailable :
+                    (mod.HasNexusReference ? NexusItemState.InstalledCurrent : NexusItemState.InstalledUnlinked);
+                _items.Add(CreateInstalledItem(mod, state));
+            }
+        }
+
+        private void BuildDiscoverItems()
+        {
+            for (int i = 0; i < _latestFeedCache.Count; i++)
+            {
+                var remote = _latestFeedCache[i];
+                if (remote == null) continue;
+                string key = BuildNexusKey(remote.GameDomain, remote.ModId);
+                ModItem local;
+                _installedByNexusKey.TryGetValue(key, out local);
+                NexusItemState state = NexusItemState.Available;
+                if (local != null)
+                    state = local.HasUpdateAvailable ? NexusItemState.UpdateAvailable : NexusItemState.InstalledCurrent;
+                _items.Add(CreateDiscoverItem(local, remote, state));
+            }
+        }
+
+        private NexusBrowserItem CreateInstalledItem(ModItem mod, NexusItemState state)
+        {
+            var item = new NexusBrowserItem();
+            item.LocalMod = mod;
+            item.RemoteMod = BuildRemoteFromLocal(mod);
+            item.State = state;
+            item.PrimaryText = mod.DisplayName;
+            item.SecondaryText = state == NexusItemState.UpdateAvailable
+                ? FormatVersion(mod.Version) + " -> " + FormatVersion(mod.NexusRemoteVersion)
+                : FormatVersion(mod.Version) + (mod.HasNexusReference ? " linked to Nexus" : " not linked");
+            item.BadgeText = GetBadgeText(state);
+            return item;
+        }
+
+        private NexusBrowserItem CreateDiscoverItem(ModItem local, NexusRemoteMod remote, NexusItemState state)
+        {
+            var item = new NexusBrowserItem();
+            item.LocalMod = local;
+            item.RemoteMod = remote;
+            item.State = state;
+            item.PrimaryText = remote.Name;
+            item.SecondaryText = FormatVersion(remote.Version) + (local != null ? (" | installed as " + local.DisplayName) : " | not installed");
+            item.BadgeText = GetBadgeText(state);
+            return item;
+        }
+
+        private void ShowEmptyState()
+        {
+            if (_currentMode == NexusViewMode.Updates)
+                _detailsPanel.ShowMod(CreateStatusMod("No Updates Found", "All linked installed mods appear current."));
+            else if (_currentMode == NexusViewMode.Discover)
+                _detailsPanel.ShowMod(CreateStatusMod("No Discover Results", "Refresh the Nexus feed to browse the latest releases."));
             else
+                _detailsPanel.ShowMod(CreateStatusMod("No Installed Mods", "No installed mods are available to display in the Nexus view."));
+        }
+
+        private void SwitchMode(NexusViewMode mode)
+        {
+            _currentMode = mode;
+            RebuildPrimaryList();
+        }
+
+        private void RefreshModeButtons()
+        {
+            bool dark = BackColor.R < 90 && BackColor.G < 90 && BackColor.B < 90;
+            ApplyButtonTheme(_updatesModeButton, dark, _currentMode == NexusViewMode.Updates);
+            ApplyButtonTheme(_installedModeButton, dark, _currentMode == NexusViewMode.Installed);
+            ApplyButtonTheme(_discoverModeButton, dark, _currentMode == NexusViewMode.Discover);
+        }
+
+        private void PrimaryList_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            var item = GetSelectedItem();
+            if (item == null)
             {
-                BackColor = SystemColors.Control;
-                _topPanel.BackColor = SystemColors.ControlLight;
-                _installedPanel.BackColor = SystemColors.Control;
-                _actionsPanel.BackColor = SystemColors.Control;
-                _latestPanel.BackColor = SystemColors.Control;
-
-                _statusLabel.ForeColor = SystemColors.ControlText;
-                _managerUpdateLabel.ForeColor = SystemColors.ControlText;
-                _installedSummaryLabel.ForeColor = SystemColors.ControlText;
-                _installedHeaderLabel.ForeColor = SystemColors.ControlText;
-                _latestHeaderLabel.ForeColor = SystemColors.ControlText;
-
-                _installedList.BackColor = SystemColors.Window;
-                _installedList.ForeColor = SystemColors.WindowText;
-                _latestList.BackColor = SystemColors.Window;
-                _latestList.ForeColor = SystemColors.WindowText;
-
-                ApplyButtonTheme(_refreshButton, false, true);
-                ApplyButtonTheme(_checkManagerButton, false, true);
-                ApplyButtonTheme(_installSelectedButton, false, true);
-                ApplyButtonTheme(_openPageButton, false, false);
+                UpdateActionButtons();
+                return;
             }
 
-            _detailsPanel.ApplyTheme(isDark);
+            if (item.LocalMod != null)
+                _detailsPanel.ShowMod(BuildDetailsModFromInstalled(item.LocalMod));
+            else
+                _detailsPanel.ShowMod(BuildDetailsModFromRemote(item.RemoteMod));
+
+            UpdateActionButtons();
         }
 
-        private void InitializeComponent()
+        private void PrimaryList_DrawItem(object sender, DrawItemEventArgs e)
         {
-            SuspendLayout();
+            if (e.Index < 0 || e.Index >= _items.Count)
+                return;
 
-            _topPanel = new Panel();
-            _statusLabel = new Label();
-            _managerUpdateLabel = new Label();
-            _installedSummaryLabel = new Label();
+            var item = _items[e.Index];
+            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            bool dark = BackColor.R < 90 && BackColor.G < 90 && BackColor.B < 90;
+            Color background = selected ? SystemColors.Highlight : _primaryList.BackColor;
+            Color textColor = selected ? SystemColors.HighlightText : _primaryList.ForeColor;
+            using (var bg = new SolidBrush(background))
+                e.Graphics.FillRectangle(bg, e.Bounds);
 
-            _installedPanel = new Panel();
-            _installedHeaderLabel = new Label();
-            _installedList = new ListBox();
+            Rectangle badgeRect = new Rectangle(e.Bounds.X + 4, e.Bounds.Y + 7, 82, e.Bounds.Height - 14);
+            using (var badge = new SolidBrush(GetStateColor(item.State, dark)))
+                e.Graphics.FillRectangle(badge, badgeRect);
+            using (var badgeText = new SolidBrush(Color.White))
+                e.Graphics.DrawString(item.BadgeText, new Font(_primaryList.Font, FontStyle.Bold), badgeText, badgeRect, new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
 
-            _actionsPanel = new Panel();
-            _refreshButton = new Button();
-            _checkManagerButton = new Button();
-            _installSelectedButton = new Button();
-            _openPageButton = new Button();
+            float textX = badgeRect.Right + 8;
+            using (var primary = new SolidBrush(textColor))
+                e.Graphics.DrawString(item.PrimaryText, _primaryList.Font, primary, new PointF(textX, e.Bounds.Y + 4));
+            using (var secondary = new SolidBrush(selected ? SystemColors.HighlightText : (dark ? Color.Gainsboro : Color.DimGray)))
+                e.Graphics.DrawString(item.SecondaryText, new Font(_primaryList.Font.FontFamily, 8.5f), secondary, new PointF(textX, e.Bounds.Y + 20));
 
-            _latestPanel = new Panel();
-            _latestHeaderLabel = new Label();
-            _latestList = new ListBox();
-
-            _detailsPanel = new ModDetailsPanel();
-
-            _topPanel.Dock = DockStyle.Top;
-            _topPanel.Height = 80;
-            _topPanel.Padding = new Padding(12, 8, 12, 8);
-
-            _statusLabel.AutoSize = true;
-            _statusLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            _statusLabel.Location = new Point(12, 10);
-            _statusLabel.Text = "Feed: Ready";
-
-            _managerUpdateLabel.AutoSize = true;
-            _managerUpdateLabel.Font = new Font("Segoe UI", 9f);
-            _managerUpdateLabel.Location = new Point(12, 31);
-            _managerUpdateLabel.Text = "SMM: not checked";
-
-            _installedSummaryLabel.AutoSize = true;
-            _installedSummaryLabel.Font = new Font("Segoe UI", 9f);
-            _installedSummaryLabel.Location = new Point(12, 52);
-            _installedSummaryLabel.Text = "Installed: waiting for mod scan";
-
-            _topPanel.Controls.Add(_statusLabel);
-            _topPanel.Controls.Add(_managerUpdateLabel);
-            _topPanel.Controls.Add(_installedSummaryLabel);
-
-            _installedPanel.Dock = DockStyle.Left;
-            _installedPanel.Width = 320;
-            _installedPanel.Padding = new Padding(12, 10, 8, 12);
-
-            _installedHeaderLabel.Dock = DockStyle.Top;
-            _installedHeaderLabel.Height = 28;
-            _installedHeaderLabel.TextAlign = ContentAlignment.MiddleLeft;
-            _installedHeaderLabel.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            _installedHeaderLabel.Text = "Installed Mods";
-
-            _installedList.Dock = DockStyle.Top;
-            _installedList.Font = new Font("Segoe UI", 9f);
-            _installedList.BorderStyle = BorderStyle.FixedSingle;
-            _installedList.Height = 320;
-            _installedList.IntegralHeight = false;
-            _installedList.DrawMode = DrawMode.OwnerDrawFixed;
-            _installedList.ItemHeight = 24;
-            _installedList.DrawItem += InstalledList_DrawItem;
-
-            _installedPanel.Controls.Add(_installedList);
-            _installedPanel.Controls.Add(_installedHeaderLabel);
-
-            _actionsPanel.Dock = DockStyle.Left;
-            _actionsPanel.Width = 170;
-            _actionsPanel.Padding = new Padding(10, 16, 10, 16);
-
-            _refreshButton.Text = "Refresh Feed";
-            _refreshButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            _refreshButton.Size = new Size(145, 34);
-            _refreshButton.Location = new Point(12, 20);
-
-            _checkManagerButton.Text = "Check Manager";
-            _checkManagerButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            _checkManagerButton.Size = new Size(145, 34);
-            _checkManagerButton.Location = new Point(12, 64);
-
-            _installSelectedButton.Text = "Install Selected";
-            _installSelectedButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            _installSelectedButton.Size = new Size(145, 34);
-            _installSelectedButton.Location = new Point(12, 108);
-
-            _openPageButton.Text = "Open Page";
-            _openPageButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            _openPageButton.Size = new Size(145, 34);
-            _openPageButton.Location = new Point(12, 152);
-
-            _actionsPanel.Controls.Add(_refreshButton);
-            _actionsPanel.Controls.Add(_checkManagerButton);
-            _actionsPanel.Controls.Add(_installSelectedButton);
-            _actionsPanel.Controls.Add(_openPageButton);
-
-            _latestPanel.Dock = DockStyle.Left;
-            _latestPanel.Width = 430;
-            _latestPanel.Padding = new Padding(8, 10, 8, 12);
-
-            _latestHeaderLabel.Dock = DockStyle.Top;
-            _latestHeaderLabel.Height = 28;
-            _latestHeaderLabel.TextAlign = ContentAlignment.MiddleLeft;
-            _latestHeaderLabel.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            _latestHeaderLabel.Text = "Latest On Nexus";
-
-            _latestList.Dock = DockStyle.Top;
-            _latestList.Font = new Font("Segoe UI", 9f);
-            _latestList.BorderStyle = BorderStyle.FixedSingle;
-            _latestList.Height = 320;
-            _latestList.IntegralHeight = false;
-
-            _latestPanel.Controls.Add(_latestList);
-            _latestPanel.Controls.Add(_latestHeaderLabel);
-
-            _detailsPanel.Dock = DockStyle.Fill;
-            _detailsPanel.Padding = new Padding(12);
-            _detailsPanel.MinimumSize = new Size(340, 380);
-
-            Controls.Add(_detailsPanel);
-            Controls.Add(_latestPanel);
-            Controls.Add(_actionsPanel);
-            Controls.Add(_installedPanel);
-            Controls.Add(_topPanel);
-            Name = "NexusModsTab";
-            Padding = new Padding(0);
-
-            LayoutActionButtons();
-            ResumeLayout(false);
-        }
-
-        private void WireEvents()
-        {
-            _refreshButton.Click += delegate { RefreshLatestModsAsync(true); };
-            _checkManagerButton.Click += delegate { CheckManagerUpdateAsync(true); };
-            _installSelectedButton.Click += InstallSelectedButton_Click;
-            _openPageButton.Click += OpenPageButton_Click;
-            _installedList.SelectedIndexChanged += InstalledList_SelectedIndexChanged;
-            _latestList.SelectedIndexChanged += LatestList_SelectedIndexChanged;
-            _detailsPanel.OpenFolderClicked += DetailsPanel_OpenFolderClicked;
-            _detailsPanel.WebsiteClicked += DetailsPanel_WebsiteClicked;
-            SizeChanged += delegate
-            {
-                AdjustColumnWidths();
-                LayoutActionButtons();
-                AdjustListHeights();
-            };
-        }
-
-        private void DetailsPanel_OpenFolderClicked(object sender, string path)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
-                    return;
-
-                System.Diagnostics.Process.Start("explorer.exe", path);
-            }
-            catch { }
-        }
-
-        private void DetailsPanel_WebsiteClicked(object sender, string url)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(url))
-                    return;
-
-                System.Diagnostics.Process.Start(url);
-            }
-            catch { }
-        }
-
-        private void InstalledList_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            var item = _installedList.SelectedItem as NexusListItem;
-            if (item == null) return;
-
-            _latestList.ClearSelected();
-            ShowInstalledDetails(item);
-        }
-
-        private void LatestList_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            var item = _latestList.SelectedItem as NexusListItem;
-            if (item == null) return;
-
-            _installedList.ClearSelected();
-            ShowRemoteDetails(item.RemoteMod, "Latest Nexus release");
+            e.DrawFocusRectangle();
         }
 
         private void InstallSelectedButton_Click(object sender, EventArgs e)
         {
             if (_settings == null || _nexusService == null)
                 return;
-
             if (!_settings.EnableNexusIntegration)
             {
-                _statusLabel.Text = "Install disabled: Nexus integration is disabled.";
-                EmitActivity("Install skipped because Nexus integration is disabled.");
+                EmitActivity("Install skipped because Nexus features are disabled.");
                 return;
             }
-
             if (!_settings.IsModsPathValid)
             {
-                _statusLabel.Text = "Install failed: Mods path is not valid.";
-                EmitActivity("Install failed: mods path is not valid.");
+                _detailsPanel.ShowMod(CreateStatusMod("Install Failed", "Mods folder is not configured."));
                 return;
             }
-
             if (string.IsNullOrEmpty(_settings.NexusApiKey))
             {
-                _statusLabel.Text = "Install failed: Set Nexus API key in Settings for direct downloads.";
-                EmitActivity("Install failed: Nexus API key is missing.");
+                _detailsPanel.ShowMod(CreateStatusMod("Install Disabled", "Add a personal Nexus API key in Settings to attempt direct installs."));
                 return;
             }
 
             NexusRemoteMod selected = GetSelectedRemoteMod();
             if (selected == null)
-            {
-                _statusLabel.Text = "Install failed: Select a Nexus mod first.";
-                EmitActivity("Install failed: no Nexus mod selected.");
                 return;
-            }
 
             _installSelectedButton.Enabled = false;
-            _statusLabel.Text = "Installing '" + selected.Name + "'...";
-            EmitActivity("Installing from Nexus: " + selected.Name + " (" + selected.GameDomain + "/mods/" + selected.ModId + ").");
+            EmitActivity("Installing from Nexus: " + selected.Name + ".");
 
             ThreadPool.QueueUserWorkItem(delegate
             {
                 string error;
-
                 int gameId = selected.GameId;
                 if (gameId <= 0)
                 {
@@ -639,14 +637,14 @@ namespace Manager.Views
                 var file = _nexusService.GetPreferredInstallFile(gameId, selected.ModId, out error);
                 if (!string.IsNullOrEmpty(error) || file == null)
                 {
-                    FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "No installable file found."));
+                    FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "No installable file was returned."));
                     return;
                 }
 
                 string downloadUrl = _nexusService.GetV1DownloadUrl(selected.GameDomain, selected.ModId, file.FileId, _settings.NexusApiKey, out error);
                 if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
                 {
-                    FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "No downloadable URL returned."));
+                    FinishInstallWithError(RewriteDirectDownloadError(error));
                     return;
                 }
 
@@ -657,13 +655,13 @@ namespace Manager.Views
                     return;
                 }
 
-                if (IsDisposed || Disposing) return;
+                if (IsDisposed || Disposing)
+                    return;
                 try
                 {
                     BeginInvoke((MethodInvoker)delegate
                     {
                         _installSelectedButton.Enabled = true;
-                        _statusLabel.Text = "Installed '" + selected.Name + "' to " + result.InstalledPath;
                         EmitActivity("Install complete: " + selected.Name + " -> " + result.InstalledPath);
                         if (InstallCompleted != null)
                             InstallCompleted();
@@ -673,108 +671,170 @@ namespace Manager.Views
             });
         }
 
-        private void FinishInstallWithError(string message)
-        {
-            if (IsDisposed || Disposing) return;
-            try
-            {
-                BeginInvoke((MethodInvoker)delegate
-                {
-                    _installSelectedButton.Enabled = true;
-                    _statusLabel.Text = message;
-                    EmitActivity(message);
-                });
-            }
-            catch { }
-        }
-
         private void OpenPageButton_Click(object sender, EventArgs e)
         {
             string url = GetSelectedPageUrl();
             if (string.IsNullOrEmpty(url))
                 return;
-
             try { System.Diagnostics.Process.Start(url); }
             catch { }
         }
 
-        private string GetSelectedPageUrl()
+        private void FinishInstallWithError(string message)
         {
-            var installed = _installedList.SelectedItem as NexusListItem;
-            if (installed != null)
+            if (IsDisposed || Disposing)
+                return;
+            try
             {
-                if (installed.RemoteMod != null)
+                BeginInvoke((MethodInvoker)delegate
                 {
-                    string url = installed.RemoteMod.GetPageUrl();
-                    if (!string.IsNullOrEmpty(url)) return url;
-                }
+                    _installSelectedButton.Enabled = true;
+                    EmitActivity(message);
+                    _detailsPanel.ShowMod(CreateStatusMod("Install Failed", message));
+                });
+            }
+            catch { }
+        }
 
-                if (installed.LocalMod != null && !string.IsNullOrEmpty(installed.LocalMod.NexusPageUrl))
-                    return installed.LocalMod.NexusPageUrl;
+        private void DetailsPanel_OpenFolderClicked(object sender, string path)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
+                    System.Diagnostics.Process.Start("explorer.exe", path);
+            }
+            catch { }
+        }
+
+        private void DetailsPanel_WebsiteClicked(object sender, string url)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(url))
+                    System.Diagnostics.Process.Start(url);
+            }
+            catch { }
+        }
+
+        private void UpdateActionButtons()
+        {
+            var item = GetSelectedItem();
+            var remote = GetSelectedRemoteMod();
+            string url = GetSelectedPageUrl();
+            _openPageButton.Enabled = !string.IsNullOrEmpty(url);
+
+            bool canInstall = remote != null && _settings != null && _settings.EnableNexusIntegration && _settings.IsModsPathValid && !string.IsNullOrEmpty(_settings.NexusApiKey);
+            _installSelectedButton.Enabled = canInstall;
+            _installSelectedButton.Text = "Install from Nexus";
+            if (item != null && item.LocalMod != null && item.LocalMod.HasUpdateAvailable)
+                _installSelectedButton.Text = "Update via Nexus";
+            else if (item != null && item.LocalMod != null && item.LocalMod.HasNexusReference)
+                _installSelectedButton.Text = "Reinstall from Nexus";
+        }
+
+        private void LayoutTopPanel()
+        {
+            bool showHelper = _downloadLabel.Visible;
+            _topPanel.Height = showHelper ? 80 : 60;
+
+            int rightMargin = 12;
+            _checkManagerButton.Location = new Point(_topPanel.Width - _checkManagerButton.Width - rightMargin, 12);
+            _refreshButton.Location = new Point(_checkManagerButton.Left - _refreshButton.Width - 12, 12);
+
+            int contentWidth = _refreshButton.Left - 24;
+            if (contentWidth < 200)
+                contentWidth = 200;
+
+            _connectionLabel.Width = contentWidth;
+            _downloadLabel.Width = contentWidth;
+            _summaryLabel.Width = contentWidth;
+
+            _connectionLabel.Location = new Point(12, 10);
+            _downloadLabel.Location = new Point(12, 32);
+            _summaryLabel.Location = new Point(12, showHelper ? 56 : 32);
+            _managerStatusLabel.Location = new Point(_summaryLabel.Right - 260, _summaryLabel.Top);
+            _managerStatusLabel.Width = 260;
+        }
+
+        private void RefreshHeaderText(string errorMessage)
+        {
+            bool enabled = _settings == null || _settings.EnableNexusIntegration;
+            if (_accountStatus == null)
+            {
+                _connectionLabel.Text = enabled ? "Nexus: not connected" : "Nexus: disabled";
+                _downloadLabel.Text = enabled
+                    ? "Direct install: add an API key in Settings."
+                    : "Nexus features are disabled in Settings.";
+            }
+            else
+            {
+                _connectionLabel.Text = BuildConnectionText(_accountStatus);
+                _downloadLabel.Text = BuildCapabilityText(_accountStatus);
             }
 
-            var latest = _latestList.SelectedItem as NexusListItem;
-            if (latest != null && latest.RemoteMod != null)
-                return latest.RemoteMod.GetPageUrl();
+            if (!string.IsNullOrEmpty(errorMessage))
+                _summaryLabel.Text = "Installed check failed";
+            else
+                _summaryLabel.Text = "Installed " + _installedMods.Count + "   Linked " + _installedByNexusKey.Count + "   Updates " + CountUpdates(_installedMods) + BuildLastCheckedSuffix();
 
-            return string.Empty;
+            if (string.IsNullOrEmpty(_managerStatusLabel.Text))
+                _managerStatusLabel.Text = "SMM: not checked";
+
+            _downloadLabel.Visible = !string.IsNullOrEmpty(_downloadLabel.Text);
+            LayoutTopPanel();
+        }
+
+        private void RefreshHeaderText()
+        {
+            RefreshHeaderText(null);
+        }
+
+        private string RewriteDirectDownloadError(string error)
+        {
+            if (string.IsNullOrEmpty(error))
+                return "Install failed: Nexus did not return a downloadable URL.";
+            if (error.IndexOf("denied direct download", StringComparison.OrdinalIgnoreCase) < 0)
+                return "Install failed: " + error;
+            if (_accountStatus == null)
+                return "Install failed: Nexus denied the direct download. This can happen because of account tier, file restrictions, or app approval.";
+
+            string membership = _accountStatus.GetMembershipLabel();
+            return "Install failed: Nexus denied the direct download. Connected account: " + membership + ". " + _accountStatus.DirectDownloadSummary;
+        }
+
+        private NexusBrowserItem GetSelectedItem()
+        {
+            return _primaryList.SelectedItem as NexusBrowserItem;
         }
 
         private NexusRemoteMod GetSelectedRemoteMod()
         {
-            var latest = _latestList.SelectedItem as NexusListItem;
-            if (latest != null && latest.RemoteMod != null)
-                return latest.RemoteMod;
-
-            var installed = _installedList.SelectedItem as NexusListItem;
-            if (installed != null)
-            {
-                if (installed.RemoteMod != null)
-                    return installed.RemoteMod;
-
-                var local = installed.LocalMod;
-                if (local != null && local.HasNexusReference)
-                {
-                    var remote = new NexusRemoteMod();
-                    remote.GameDomain = local.NexusGameDomain;
-                    remote.ModId = local.NexusModId;
-                    remote.Name = local.DisplayName;
-                    remote.Version = local.NexusRemoteVersion;
-                    return remote;
-                }
-            }
-
+            var item = GetSelectedItem();
+            if (item == null)
+                return null;
+            if (item.RemoteMod != null)
+                return item.RemoteMod;
+            if (item.LocalMod != null && item.LocalMod.HasNexusReference)
+                return BuildRemoteFromLocal(item.LocalMod);
             return null;
         }
 
-        private void ShowInstalledDetails(NexusListItem item)
+        private string GetSelectedPageUrl()
         {
-            var local = item.LocalMod;
-            if (local == null)
-            {
-                _detailsPanel.ShowMod(CreateStatusMod("No Mod Selected", "No installed mod selected."));
-                return;
-            }
-
-            _detailsPanel.ShowMod(BuildDetailsModFromInstalled(local));
-        }
-
-        private void ShowRemoteDetails(NexusRemoteMod mod, string heading)
-        {
-            if (mod == null)
-            {
-                _detailsPanel.ShowMod(CreateStatusMod("No Nexus Mod", "No Nexus mod selected."));
-                return;
-            }
-
-            _detailsPanel.ShowMod(BuildDetailsModFromRemote(mod, heading));
+            var item = GetSelectedItem();
+            if (item == null)
+                return string.Empty;
+            if (item.RemoteMod != null)
+                return item.RemoteMod.GetPageUrl();
+            if (item.LocalMod != null)
+                return item.LocalMod.NexusPageUrl;
+            return string.Empty;
         }
 
         private NexusRemoteMod BuildRemoteFromLocal(ModItem local)
         {
             if (local == null || !local.HasNexusReference)
                 return null;
-
             var remote = new NexusRemoteMod();
             remote.GameDomain = local.NexusGameDomain;
             remote.ModId = local.NexusModId;
@@ -785,28 +845,20 @@ namespace Manager.Views
             return remote;
         }
 
-        private static ModItem BuildDetailsModFromRemote(NexusRemoteMod mod, string heading)
+        private static ModItem BuildDetailsModFromRemote(NexusRemoteMod mod)
         {
             var details = new ModItem(mod.ModId.ToString(), mod.Name ?? "Nexus Mod", string.Empty);
             details.Version = string.IsNullOrEmpty(mod.Version) ? "Unknown" : mod.Version;
-
             string author = string.IsNullOrEmpty(mod.Author) ? mod.UploaderName : mod.Author;
-            if (!string.IsNullOrEmpty(author))
-                details.Authors = new string[] { author };
-            else
-                details.Authors = new string[0];
-
-            // Nexus release card does not expose meaningful tag taxonomy for our UI.
+            details.Authors = !string.IsNullOrEmpty(author) ? new string[] { author } : new string[0];
             details.Tags = new string[0];
-
             details.NexusGameDomain = mod.GameDomain ?? string.Empty;
             details.NexusModId = mod.ModId;
             details.NexusPageUrl = mod.GetPageUrl();
             details.NexusRemoteVersion = mod.Version ?? string.Empty;
             details.NexusRemoteUpdatedAtUtc = mod.UpdatedAtUtc;
-            details.Website = details.NexusPageUrl;
+            details.Website = string.Empty;
             details.Description = string.IsNullOrEmpty(mod.Summary) ? "No description provided." : mod.Summary.Trim();
-
             return details;
         }
 
@@ -822,7 +874,6 @@ namespace Manager.Views
             details.IsModApiCompatible = local.IsModApiCompatible;
             details.Status = local.Status;
             details.StatusMessage = local.StatusMessage;
-
             details.NexusGameDomain = local.NexusGameDomain;
             details.NexusModId = local.NexusModId;
             details.NexusPageUrl = local.NexusPageUrl;
@@ -830,24 +881,18 @@ namespace Manager.Views
             details.NexusRemoteUpdatedAtUtc = local.NexusRemoteUpdatedAtUtc;
             details.NexusRemoteSummary = local.NexusRemoteSummary;
             details.HasUpdateAvailable = local.HasUpdateAvailable;
-
             if (local.DependsOn != null) details.DependsOn = local.DependsOn;
             if (local.LoadAfter != null) details.LoadAfter = local.LoadAfter;
             if (local.LoadBefore != null) details.LoadBefore = local.LoadBefore;
 
             var sb = new StringBuilder();
-            if (!string.IsNullOrEmpty(local.Description))
-                sb.AppendLine(local.Description.Trim());
-            else
-                sb.AppendLine("No description provided.");
-
+            sb.AppendLine(!string.IsNullOrEmpty(local.Description) ? local.Description.Trim() : "No description provided.");
             if (!local.HasNexusReference)
             {
                 sb.AppendLine();
                 sb.AppendLine("Nexus: Not linked");
-                sb.AppendLine("Tip: installing via Manager writes About/Nexus.json automatically.");
+                sb.AppendLine("Tip: installing through the Manager writes About/Nexus.json automatically.");
             }
-
             details.Description = sb.ToString().Trim();
             return details;
         }
@@ -855,10 +900,9 @@ namespace Manager.Views
         private static ModItem CreateStatusMod(string title, string message)
         {
             var mod = new ModItem("nexus.status", title, string.Empty);
-            mod.Version = string.Empty;
             mod.Authors = new string[0];
-            mod.Description = message ?? string.Empty;
             mod.Tags = new string[0];
+            mod.Description = message ?? string.Empty;
             return mod;
         }
 
@@ -868,6 +912,17 @@ namespace Manager.Views
             if (mod.HasUpdateAvailable) return 0;
             if (mod.HasNexusReference) return 1;
             return 2;
+        }
+
+        private static int CountUpdates(List<ModItem> mods)
+        {
+            int count = 0;
+            for (int i = 0; i < mods.Count; i++)
+            {
+                if (mods[i] != null && mods[i].HasUpdateAvailable)
+                    count++;
+            }
+            return count;
         }
 
         private string GetGameDomain()
@@ -881,220 +936,134 @@ namespace Manager.Views
         {
             if (_lastCheckedUtc <= DateTime.MinValue)
                 return string.Empty;
-            return " | Checked: " + _lastCheckedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
-        }
-
-        private void AdjustListHeights()
-        {
-            if (_installedList == null || _latestList == null || _topPanel == null)
-                return;
-
-            int available = Height - _topPanel.Height - 24;
-            if (available <= 0)
-                return;
-
-            // Use proportional height so lists grow/shrink with window size.
-            int target = (int)(available * 0.70f);
-            if (target < 220) target = 220;
-
-            int installedMax = Math.Max(180, _installedPanel.Height - _installedHeaderLabel.Height - 16);
-            int latestMax = Math.Max(180, _latestPanel.Height - _latestHeaderLabel.Height - 16);
-
-            _installedList.Height = Math.Min(target, installedMax);
-            _latestList.Height = Math.Min(target, latestMax);
-        }
-
-        private void AdjustColumnWidths()
-        {
-            if (_installedPanel == null || _actionsPanel == null || _latestPanel == null)
-                return;
-
-            int totalWidth = ClientSize.Width;
-            if (totalWidth <= 0)
-                return;
-
-            // Ratio-based column sizing so layout scales with available width.
-            const double installedRatio = 0.22;
-            const double actionsRatio = 0.12;
-            const double latestRatio = 0.31;
-
-            const int minInstalled = 190;
-            const int minActions = 120;
-            const int minLatest = 180;
-            const int minDetails = 320;
-
-            int installed = Math.Max(minInstalled, (int)Math.Round(totalWidth * installedRatio));
-            int actions = Math.Max(minActions, (int)Math.Round(totalWidth * actionsRatio));
-            int latest = Math.Max(minLatest, (int)Math.Round(totalWidth * latestRatio));
-
-            int details = totalWidth - installed - actions - latest;
-            if (details < minDetails)
-            {
-                int deficit = minDetails - details;
-
-                int latestSlack = latest - minLatest;
-                int takeLatest = Math.Min(deficit, latestSlack);
-                latest -= takeLatest;
-                deficit -= takeLatest;
-
-                int installedSlack = installed - minInstalled;
-                int takeInstalled = Math.Min(deficit, installedSlack);
-                installed -= takeInstalled;
-                deficit -= takeInstalled;
-
-                int actionsSlack = actions - minActions;
-                int takeActions = Math.Min(deficit, actionsSlack);
-                actions -= takeActions;
-                deficit -= takeActions;
-            }
-
-            _installedPanel.Width = installed;
-            _actionsPanel.Width = actions;
-            _latestPanel.Width = latest;
-            LayoutActionButtons();
-        }
-
-        private void LayoutActionButtons()
-        {
-            if (_actionsPanel == null) return;
-
-            int leftPadding = _actionsPanel.Padding.Left;
-            int rightPadding = _actionsPanel.Padding.Right;
-            int top = _actionsPanel.Padding.Top;
-            int width = Math.Max(104, _actionsPanel.Width - leftPadding - rightPadding);
-            int x = leftPadding;
-
-            _refreshButton.Location = new Point(x, top);
-            _refreshButton.Size = new Size(width, 34);
-
-            _checkManagerButton.Location = new Point(x, _refreshButton.Bottom + 10);
-            _checkManagerButton.Size = new Size(width, 34);
-
-            _installSelectedButton.Location = new Point(x, _checkManagerButton.Bottom + 10);
-            _installSelectedButton.Size = new Size(width, 34);
-
-            _openPageButton.Location = new Point(x, _installSelectedButton.Bottom + 10);
-            _openPageButton.Size = new Size(width, 34);
-        }
-
-        private void InstalledList_DrawItem(object sender, DrawItemEventArgs e)
-        {
-            if (e.Index < 0)
-                return;
-
-            var item = _installedList.Items[e.Index] as NexusListItem;
-            if (item == null)
-                return;
-
-            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            bool hasUpdate = item.LocalMod != null && item.LocalMod.HasUpdateAvailable;
-            bool dark = BackColor.R < 90 && BackColor.G < 90 && BackColor.B < 90;
-
-            Color background;
-            if (selected)
-            {
-                background = SystemColors.Highlight;
-            }
-            else if (hasUpdate)
-            {
-                background = dark ? Color.FromArgb(25, 55, 85) : Color.FromArgb(232, 243, 255);
-            }
-            else
-            {
-                background = _installedList.BackColor;
-            }
-
-            Color textColor = selected ? SystemColors.HighlightText : _installedList.ForeColor;
-            Color updateColor = dark ? Color.DeepSkyBlue : Color.RoyalBlue;
-
-            using (var bg = new SolidBrush(background))
-            {
-                e.Graphics.FillRectangle(bg, e.Bounds);
-            }
-
-            string text = item.ToString();
-            if (selected || !hasUpdate)
-            {
-                using (var brush = new SolidBrush(textColor))
-                {
-                    e.Graphics.DrawString(text, _installedList.Font, brush, new PointF(e.Bounds.X + 4, e.Bounds.Y + 3));
-                }
-            }
-            else
-            {
-                using (var brush = new SolidBrush(updateColor))
-                using (var font = new Font(_installedList.Font, FontStyle.Bold))
-                {
-                    e.Graphics.DrawString(text, font, brush, new PointF(e.Bounds.X + 4, e.Bounds.Y + 3));
-                }
-            }
-
-            e.DrawFocusRectangle();
-        }
-
-        private static string FormatVersionLabel(string version)
-        {
-            string value = (version ?? string.Empty).Trim();
-            if (string.IsNullOrEmpty(value))
-                return "Unknown";
-
-            if (value.StartsWith("v", StringComparison.OrdinalIgnoreCase))
-                return value;
-
-            return "v" + value;
+            return "   Checked " + _lastCheckedUtc.ToLocalTime().ToString("h:mm tt");
         }
 
         private bool HasLatestFeedCache(string domain)
         {
-            if (_latestFeedCache == null || _latestFeedCache.Count == 0)
-                return false;
-
-            if (_latestFeedCacheUtc <= DateTime.MinValue)
-                return false;
-
-            if (!string.Equals(_latestFeedCacheDomain, domain, StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            return (DateTime.UtcNow - _latestFeedCacheUtc) < LatestFeedCooldown;
-        }
-
-        private void PopulateLatestList(List<NexusRemoteMod> latest)
-        {
-            var source = latest ?? new List<NexusRemoteMod>();
-
-            _latestList.BeginUpdate();
-            _latestList.Items.Clear();
-            foreach (var mod in source)
-            {
-                _latestList.Items.Add(new NexusListItem
-                {
-                    IsInstalledRow = false,
-                    RemoteMod = mod
-                });
-            }
-            _latestList.EndUpdate();
-            AdjustListHeights();
+            return _latestFeedCache.Count > 0 &&
+                _latestFeedCacheUtc > DateTime.MinValue &&
+                string.Equals(_latestFeedCacheDomain, domain, StringComparison.OrdinalIgnoreCase) &&
+                (DateTime.UtcNow - _latestFeedCacheUtc) < LatestFeedCooldown;
         }
 
         private void EmitActivity(string message)
         {
-            if (string.IsNullOrEmpty(message))
-                return;
-
-            if (NexusActivity != null)
+            if (!string.IsNullOrEmpty(message) && NexusActivity != null)
                 NexusActivity(message);
         }
 
-        private static void ApplyButtonTheme(Button button, bool isDark, bool primary)
+        private static string BuildNexusKey(string gameDomain, int modId)
         {
-            if (button == null) return;
+            return (gameDomain ?? string.Empty).Trim().ToLowerInvariant() + ":" + modId;
+        }
 
+        private static string FormatVersion(string version)
+        {
+            string value = (version ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(value))
+                return "Unknown";
+            return value.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? value : "v" + value;
+        }
+
+        private static string BuildConnectionText(NexusAccountStatus status)
+        {
+            if (status == null)
+                return "Nexus: not connected";
+
+            if (!status.IsConfigured)
+                return "Nexus: no API key";
+
+            if (!status.IsConnected)
+                return string.Equals(status.Summary, "Checking Nexus account...", StringComparison.OrdinalIgnoreCase)
+                    ? "Nexus: checking account..."
+                    : "Nexus: could not verify account";
+
+            string membership = status.GetMembershipLabel();
+            if (!string.IsNullOrEmpty(status.UserName))
+                return "Nexus: " + status.UserName + " (" + membership + ")";
+
+            return "Nexus: connected (" + membership + ")";
+        }
+
+        private static string BuildCapabilityText(NexusAccountStatus status)
+        {
+            if (status == null)
+                return "Direct install: add an API key in Settings.";
+
+            if (!status.IsConfigured)
+                return "Direct install: add an API key in Settings.";
+
+            if (!status.IsConnected)
+                return string.Equals(status.Summary, "Checking Nexus account...", StringComparison.OrdinalIgnoreCase)
+                    ? "Direct install: checking account capability..."
+                    : "Direct install: account status unavailable.";
+
+            switch (status.DirectDownloadAvailability)
+            {
+                case NexusDirectDownloadAvailability.Available:
+                    return string.Empty;
+                case NexusDirectDownloadAvailability.Limited:
+                    return "Direct install: limited by Nexus policy";
+                case NexusDirectDownloadAvailability.Unavailable:
+                    return "Direct install: unavailable";
+                default:
+                    return "Direct install: capability unknown";
+            }
+        }
+
+        private static string GetBadgeText(NexusItemState state)
+        {
+            switch (state)
+            {
+                case NexusItemState.UpdateAvailable: return "UPDATE";
+                case NexusItemState.InstalledCurrent: return "INSTALLED";
+                case NexusItemState.InstalledUnlinked: return "UNLINKED";
+                default: return "AVAILABLE";
+            }
+        }
+
+        private static Color GetStateColor(NexusItemState state, bool dark)
+        {
+            switch (state)
+            {
+                case NexusItemState.UpdateAvailable: return dark ? Color.FromArgb(0, 122, 204) : Color.RoyalBlue;
+                case NexusItemState.InstalledCurrent: return dark ? Color.FromArgb(0, 153, 96) : Color.SeaGreen;
+                case NexusItemState.InstalledUnlinked: return dark ? Color.FromArgb(120, 120, 120) : Color.Gray;
+                default: return dark ? Color.FromArgb(150, 90, 0) : Color.Peru;
+            }
+        }
+
+        private static void ConfigurePrimaryButton(Button button, string text)
+        {
+            button.Text = text;
+            button.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             button.FlatStyle = FlatStyle.Flat;
-            button.UseVisualStyleBackColor = false;
+        }
 
+        private static void ConfigureSecondaryButton(Button button, string text)
+        {
+            button.Text = text;
+            button.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            button.FlatStyle = FlatStyle.Flat;
+        }
+
+        private static void ConfigureModeButton(Button button, string text)
+        {
+            button.Text = text;
+            button.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            button.FlatStyle = FlatStyle.Flat;
+            button.Size = new Size(108, 30);
+        }
+
+        private static void ApplyButtonTheme(Button button, bool isDark, bool active)
+        {
+            if (button == null)
+                return;
+            button.UseVisualStyleBackColor = false;
             if (isDark)
             {
-                if (primary)
+                if (active)
                 {
                     button.BackColor = Color.FromArgb(0, 122, 204);
                     button.ForeColor = Color.White;
@@ -1109,10 +1078,11 @@ namespace Manager.Views
             }
             else
             {
-                button.BackColor = SystemColors.Control;
+                button.BackColor = active ? Color.FromArgb(225, 235, 248) : SystemColors.Control;
                 button.ForeColor = SystemColors.ControlText;
                 button.FlatAppearance.BorderColor = SystemColors.ControlDark;
             }
         }
+
     }
 }

@@ -207,6 +207,7 @@ namespace ModAPI.Core
                     MMLog.WriteDebug($"[LoadGamePatch] Checking mod data for slot {type}.");
 
                     List<ModManifestData.ModInfo> savedMods = null;
+                    bool isCustomLoadContext = SaveRuntimeState.HasActiveCustomSave;
 
                     // 1. Try reading from SaveData (internal save file)
                     string modDataJson = null;
@@ -233,6 +234,7 @@ namespace ModAPI.Core
                             ModAPI.Hooks.PlatformSaveProxy.Target pending;
                             if (SaveRuntimeState.TryGetPendingLoad(type, out pending) && pending != null)
                             {
+                                isCustomLoadContext = true;
                                 var pendingEntry = pending.scenarioId == "Standard" 
                                     ? ModAPI.Saves.ExpandedVanillaSaves.Get(pending.saveId)
                                     : ModAPI.Saves.ScenarioSaves.Get(pending.scenarioId, pending.saveId);
@@ -265,6 +267,13 @@ namespace ModAPI.Core
                     // If still no data, imply unmodded save.
                     if (savedMods == null)
                     {
+                        if (isCustomLoadContext)
+                        {
+                            MMLog.WriteWarning("[LoadGamePatch] No trusted mod data found for custom save. Blocking load.");
+                            ShowBlockedLoadDetails(data, type, SaveVerification.VerificationState.Unknown);
+                            return false;
+                        }
+
                         MMLog.WriteDebug("[LoadGamePatch] No mod data found anywhere. Assuming clean/vanilla save.");
                         return true; 
                     }
@@ -312,35 +321,7 @@ namespace ModAPI.Core
                         },
                         () =>
                         {
-                            MMLog.WriteDebug("[LoadGamePatch] User cancelled load.");
-                            _isWaitingForUser = false;
-                            
-                            // Reset state to Idle using Reflection
-                            try 
-                            {
-                                var saveStateEnum = typeof(SaveManager).GetNestedType("SaveState", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
-                                if (saveStateEnum != null)
-                                {
-                                    var idleState = Enum.Parse(saveStateEnum, "Idle");
-                                    var setStateMethod = AccessTools.Method(typeof(SaveManager), "SetState");
-                                    if (setStateMethod != null)
-                                    {
-                                        setStateMethod.Invoke(SaveManager.instance, new object[] { idleState });
-                                    }
-                                }
-                            }
-                            catch (Exception ex) { MMLog.WriteError("Error resetting SaveManager state: " + ex); }
-
-                            // Hide Loading Screen / Spinner
-                            try
-                            {
-                                if (LoadingScreen.Instance != null && LoadingScreen.Instance.gameObject.activeInHierarchy)
-                                {
-                                    LoadingScreen.Instance.gameObject.SetActive(false);
-                                    MMLog.WriteDebug("[LoadGamePatch] Disabled LoadingScreen instance.");
-                                }
-                            }
-                            catch (Exception ex) { MMLog.WriteError("Error hiding loading screen: " + ex); }
+                            CancelInterruptedLoad();
                         });
 
                         return false; // Pause loading
@@ -352,6 +333,72 @@ namespace ModAPI.Core
                 }
 
                 return true; // Continue with original method
+            }
+
+            private static void ShowBlockedLoadDetails(SaveData data, SaveManager.SaveType type, SaveVerification.VerificationState state)
+            {
+                _isWaitingForUser = true;
+                _loadingScreenAlreadyManaged = true;
+
+                var manifestForUI = new ModAPI.Saves.SlotManifest
+                {
+                    family_name = data.info != null ? data.info.m_familyName : "Unknown",
+                    lastLoadedMods = null
+                };
+
+                var entry = new ModAPI.Saves.SaveEntry
+                {
+                    id = "temp_blocked_entry",
+                    absoluteSlot = SaveRuntimeState.ActiveCustomSave != null ? SaveRuntimeState.ActiveCustomSave.absoluteSlot : (int)type,
+                    saveInfo = new ModAPI.Saves.SaveInfo
+                    {
+                        familyName = data.info != null ? data.info.m_familyName : "Unknown",
+                        daysSurvived = data.info != null ? data.info.m_daysSurvived : 0,
+                        saveTime = data.info != null ? data.info.m_saveTime : DateTime.Now.ToString()
+                    }
+                };
+
+                ModAPI.Hooks.Paging.SaveDetailsWindow.Show(entry, manifestForUI, state, true, () =>
+                {
+                    MMLog.WriteDebug("[LoadGamePatch] User opted to recover manifest and continue load.");
+                    _isWaitingForUser = false;
+                    _forceLoad = true;
+                }, () =>
+                {
+                    MMLog.WriteDebug("[LoadGamePatch] User acknowledged blocked load.");
+                    CancelInterruptedLoad();
+                });
+            }
+
+            private static void CancelInterruptedLoad()
+            {
+                MMLog.WriteDebug("[LoadGamePatch] User cancelled load.");
+                _isWaitingForUser = false;
+                
+                try 
+                {
+                    var saveStateEnum = typeof(SaveManager).GetNestedType("SaveState", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                    if (saveStateEnum != null)
+                    {
+                        var idleState = Enum.Parse(saveStateEnum, "Idle");
+                        var setStateMethod = AccessTools.Method(typeof(SaveManager), "SetState");
+                        if (setStateMethod != null)
+                        {
+                            setStateMethod.Invoke(SaveManager.instance, new object[] { idleState });
+                        }
+                    }
+                }
+                catch (Exception ex) { MMLog.WriteError("Error resetting SaveManager state: " + ex); }
+
+                try
+                {
+                    if (LoadingScreen.Instance != null && LoadingScreen.Instance.gameObject.activeInHierarchy)
+                    {
+                        LoadingScreen.Instance.gameObject.SetActive(false);
+                        MMLog.WriteDebug("[LoadGamePatch] Disabled LoadingScreen instance.");
+                    }
+                }
+                catch (Exception ex) { MMLog.WriteError("Error hiding loading screen: " + ex); }
             }
         }
     }

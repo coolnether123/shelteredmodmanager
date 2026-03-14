@@ -104,7 +104,7 @@ namespace ModAPI.Hooks
                     }
 
                     // Set this as the active save for the rest of the session
-                    SaveRuntimeState.ActiveCustomSave = entry;
+                    SaveRuntimeState.SetActiveCustomSession(type, entry);
 
                     // Clear the "Next" target so we don't get stuck
                     SaveRuntimeState.ClearPendingSave(type);
@@ -133,7 +133,7 @@ namespace ModAPI.Hooks
                     
                     if (result != null)
                     {
-                        SaveRuntimeState.ActiveCustomSave = result;
+                        SaveRuntimeState.SetActiveCustomSession(type, result);
                     }
                     if (PluginRunner.IsQuitting)
                     {
@@ -192,7 +192,7 @@ namespace ModAPI.Hooks
                         MMLog.WriteWarning(string.Format("[PlatformLoad] Pending custom target missing: scenario={0}, saveId={1}. Clearing redirect for {2}.", scenarioId, saveId, type));
                         SaveRuntimeState.ClearPendingLoad(type);
                         _customLoadedXml = null;
-                        SaveRuntimeState.ActiveCustomSave = null;
+                        SaveRuntimeState.ClearActiveCustomSession();
                         return false;
                     }
 
@@ -202,12 +202,12 @@ namespace ModAPI.Hooks
                         MMLog.WriteWarning(string.Format("[PlatformLoad] Pending custom save file missing: {0}. Clearing redirect for {1}.", path, type));
                         SaveRuntimeState.ClearPendingLoad(type);
                         _customLoadedXml = null;
-                        SaveRuntimeState.ActiveCustomSave = null;
+                        SaveRuntimeState.ClearActiveCustomSession();
                         return false;
                     }
 
                     _customLoadedXml = File.ReadAllText(path);
-                    SaveRuntimeState.ActiveCustomSave = entry;
+                    SaveRuntimeState.SetActiveCustomSession(type, entry);
                     SaveRuntimeState.ClearPendingLoad(type);
                     return true;
                 }
@@ -216,7 +216,7 @@ namespace ModAPI.Hooks
                     MMLog.WriteError("custom load error: " + ex);
                     SaveRuntimeState.ClearPendingLoad(type);
                     _customLoadedXml = null;
-                    SaveRuntimeState.ActiveCustomSave = null;
+                    SaveRuntimeState.ClearActiveCustomSession();
                     return false;
                 }
             }
@@ -226,7 +226,7 @@ namespace ModAPI.Hooks
             {
                 SaveExitTracker.Mark("PlatformLoad.FallbackVanilla", "type=" + type);
             }
-            SaveRuntimeState.ActiveCustomSave = null;
+            SaveRuntimeState.ClearActiveCustomSession();
             return _inner.PlatformLoad(type);
         }
 

@@ -4,6 +4,7 @@ using System.Linq;
 using System.IO;
 using UnityEngine;
 using ModAPI.Core;
+using ModAPI.InputServices;
 using ModAPI.Saves;
 using ModAPI.UI;
 
@@ -314,10 +315,11 @@ namespace ModAPI.Hooks.Paging
             bool hasMissing = comparison.Any(c => c.status == ModCompareStatus.Missing);
             bool hasVersionDiff = comparison.Any(c => c.status == ModCompareStatus.VersionDiff);
             bool hasExtra = comparison.Any(c => c.status == ModCompareStatus.Extra);
+            bool hasUnknownState = state == SaveVerification.VerificationState.Unknown;
             bool allMatch = !hasMissing && !hasVersionDiff && !hasExtra;
             
-            bool canReload = !allMatch;
-            if (hasMissing)
+            bool canReload = !allMatch && !hasUnknownState;
+            if (canReload && hasMissing)
             {
                 var missingEntries = comparison.Where(c => c.status == ModCompareStatus.Missing);
                 bool allMissingAvailable = true;
@@ -335,7 +337,8 @@ namespace ModAPI.Hooks.Paging
             // RELOAD WITH SAVE MODS button
             Color requestedBrown = new Color(113f/255f, 82f/255f, 62f/255f);
             int absoluteSlot = entry?.absoluteSlot ?? 0; 
-            
+            bool canRecoverUnknown = hasUnknownState && onLoadAnyway != null && absoluteSlot > 0;
+             
             var reloadBtn = CreateButton(root, "ReloadBtn", "AUTO-LOAD MODS",
                 new Vector3(-WINDOW_WIDTH/4, buttonY, 0), 18, Color.white, uiFont, ttfFont, 240, 45,
                 canReload ? (Action)(() => CreateRestartRequest(absoluteSlot, manifest, entry)) : null);
@@ -346,7 +349,8 @@ namespace ModAPI.Hooks.Paging
 
             if (!canReload)
             {
-                string reason = allMatch ? "(Already matching)" : 
+                string reason = hasUnknownState ? "(Save metadata missing)" :
+                                allMatch ? "(Already matching)" : 
                                 (hasVersionDiff || hasExtra) && !hasMissing ? "(Minor differences)" :
                                 "(Some mods missing)";
                 CreateLabel(root, "ReloadHint", reason,
@@ -358,15 +362,37 @@ namespace ModAPI.Hooks.Paging
             // Text changes based on whether mods match:
             // - "LOAD SAVE" when mods match (not an "anyway" situation)
             // - "LOAD ANYWAY" when mods differ (user is overriding warnings)
-            string loadButtonText = allMatch ? "LOAD SAVE" : "LOAD ANYWAY";
-            string loadHintText = allMatch ? "(Mods match)" : "(Override warnings)";
-            
+            Action loadButtonAction = null;
+            if (hasUnknownState)
+            {
+                if (canRecoverUnknown)
+                {
+                    loadButtonAction = () =>
+                    {
+                        if (TryRecoverManifestFromCurrentMods(absoluteSlot, entry))
+                        {
+                            onLoadAnyway?.Invoke();
+                            Close();
+                        }
+                    };
+                }
+            }
+            else if (onLoadAnyway != null)
+            {
+                loadButtonAction = () =>
+                {
+                    onLoadAnyway();
+                    Close();
+                };
+            }
+
+            bool canLoad = loadButtonAction != null;
+            string loadButtonText = hasUnknownState ? (canRecoverUnknown ? "RECOVER & LOAD" : "LOAD BLOCKED") : (allMatch ? "LOAD SAVE" : "LOAD ANYWAY");
+            string loadHintText = hasUnknownState ? (canRecoverUnknown ? "(Rebuild manifest from current mods)" : "(Metadata unavailable)") : (allMatch ? "(Mods match)" : "(Override warnings)");
+             
             var loadBtn = CreateButton(root, "LoadBtn", loadButtonText,
                 new Vector3(WINDOW_WIDTH/4, buttonY, 0), 18, Color.white, uiFont, ttfFont, 200, 45,
-                () => {
-                    onLoadAnyway?.Invoke();
-                    Close();
-                });
+                loadButtonAction);
 
             var loadTex = loadBtn.GetComponent<UITexture>();
             if (loadTex != null) loadTex.color = requestedBrown;
@@ -382,7 +408,14 @@ namespace ModAPI.Hooks.Paging
                                hasExtra && !hasMissing ? $"⚠ {comparison.Count(c => c.status == ModCompareStatus.Extra)} extra mod(s) active" :
                                $"~ {comparison.Count(c => c.status == ModCompareStatus.VersionDiff)} version difference(s)";
             
-            Color statusColor = allMatch ? COLOR_MATCH : (hasMissing ? COLOR_MISSING : COLOR_VERSION_DIFF);
+            if (hasUnknownState)
+            {
+                statusText = canRecoverUnknown
+                    ? "? Save metadata missing - you can regenerate it from the current mods"
+                    : "? Save metadata missing - load blocked";
+            }
+
+            Color statusColor = hasUnknownState ? COLOR_MISSING : (allMatch ? COLOR_MATCH : (hasMissing ? COLOR_MISSING : COLOR_VERSION_DIFF));
             var statusLabel = CreateLabel(root, "Status", statusText,
                 new Vector3(0, -WINDOW_HEIGHT/2 + 20, 0), 16, statusColor, uiFont, ttfFont, 100);
             statusLabel.alignment = NGUIText.Alignment.Center;
@@ -576,14 +609,65 @@ namespace ModAPI.Hooks.Paging
                 _instance = null;
             }
         }
+
+        private bool TryRecoverManifestFromCurrentMods(int slotNumber, SaveEntry entry)
+        {
+            if (slotNumber <= 0)
+            {
+                MMLog.WriteError("[SaveDetailsWindow] Cannot recover manifest for invalid slot number: " + slotNumber);
+                return false;
+            }
+
+            try
+            {
+                var manifest = SaveRegistryCore.CreateCurrentManifestSnapshot(entry != null ? entry.saveInfo : null);
+                string manifestPath;
+                string error;
+                if (!SaveRegistryCore.TryWriteSlotManifest("Standard", slotNumber, manifest, out manifestPath, out error))
+                {
+                    MMLog.WriteError("[SaveDetailsWindow] Failed to recover manifest from current mods: " + error);
+                    return false;
+                }
+
+                MMLog.Write("[SaveDetailsWindow] Recovered manifest from current mods at: " + manifestPath);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[SaveDetailsWindow] Unexpected error recovering manifest: " + ex);
+                return false;
+            }
+        }
         
         // === RESTART REQUEST LOGIC ===
         
+        [Serializable]
+        private class RestartRequest
+        {
+            public string Action;
+            public string LoadFromManifest;
+            public bool RequireExactManifest;
+        }
+
         private void CreateRestartRequest(int slotNumber, SlotManifest manifest, SaveEntry entry)
         {
             try
             {
+                // We don't overwrite loadorder.json. 
+                // We create a restart.json file in SMM/Bin for the Manager to handle.
+                
+                // Assuming standard path: Sheltered/SMM/Bin/restart.json
                 var gameRoot = Directory.GetParent(Application.dataPath).FullName;
+                var smmBin = Path.Combine(Path.Combine(gameRoot, "SMM"), "Bin");
+
+                if (!Directory.Exists(smmBin))
+                {
+                    // Fallback try - maybe SMM is elsewhere?
+                    // But usually mod tools are in root.
+                }
+                
+                // Construct path to manifest
+                // Determine path to the slot manifest: mods/ModAPI/Saves/Standard/Slot_X/manifest.json
                 var modsRoot = Path.Combine(gameRoot, "mods");
                 var slotDir = Path.Combine(Path.Combine(Path.Combine(modsRoot, "ModAPI"), "Saves"), Path.Combine("Standard", $"Slot_{slotNumber}"));
                 var manifestPath = Path.Combine(slotDir, "manifest.json");
@@ -592,42 +676,48 @@ namespace ModAPI.Hooks.Paging
                 
                 if (!File.Exists(manifestPath))
                 {
-                    MMLog.WriteDebug($"[SaveDetailsWindow] Manifest not found, generating minimal manifest for transition");
-                    Directory.CreateDirectory(slotDir);
-                    
-                    var minimalManifest = new SlotManifest
+                    if (manifest == null || manifest.lastLoadedMods == null)
                     {
-                        manifestVersion = 1,
-                        lastModified = DateTime.UtcNow.ToString("o"),
-                        family_name = entry?.saveInfo?.familyName ?? "Unknown",
-                        lastLoadedMods = new LoadedModInfo[0]
-                    };
-                    
-                    string manifestJson = JsonUtility.ToJson(minimalManifest, true);
-                    File.WriteAllText(manifestPath, manifestJson);
-                    MMLog.WriteDebug($"[SaveDetailsWindow] Wrote minimal manifest. Content:\n{manifestJson}");
-                    
-                    if (!File.Exists(manifestPath))
-                    {
-                        MMLog.WriteError($"[SaveDetailsWindow] Critical Error: Failed to write manifest to {manifestPath}");
+                        MMLog.WriteError("[SaveDetailsWindow] Manifest missing and no trusted manifest payload is available. Restart request aborted.");
                         return;
                     }
+
+                    manifest.lastModified = DateTime.UtcNow.ToString("o");
+                    if (string.IsNullOrEmpty(manifest.family_name))
+                        manifest.family_name = entry != null && entry.saveInfo != null ? entry.saveInfo.familyName : "Unknown";
+
+                    string writeError;
+                    if (!SaveRegistryCore.TryWriteSlotManifest("Standard", slotNumber, manifest, out manifestPath, out writeError))
+                    {
+                        MMLog.WriteError("[SaveDetailsWindow] Failed to persist trusted manifest for restart: " + writeError);
+                        return;
+                    }
+
+                    MMLog.WriteDebug($"[SaveDetailsWindow] Restored manifest for restart at: {manifestPath}");
                 }
                 else
                 {
                     MMLog.WriteDebug($"[SaveDetailsWindow] Manifest detected at: {manifestPath}");
                 }
 
-                var restartWriter = new ModAPI.Core.RestartRequestWriter();
-                string restartPath;
-                string errorMessage;
-                if (!restartWriter.WriteRequest(manifestPath, out restartPath, out errorMessage))
+                var req = new RestartRequest
                 {
-                    MMLog.WriteError("Failed to create restart request: " + errorMessage);
-                    return;
-                }
-
+                    Action = "Restart",
+                    LoadFromManifest = manifestPath,
+                    RequireExactManifest = true
+                };
+                
+                string json = JsonUtility.ToJson(req, true);
+                
+                // Write to SMM/Bin/restart.json
+                string restartPath = Path.Combine(smmBin, "restart.json");
+                
+                // Ensure directory exists
+                Directory.CreateDirectory(smmBin);
+                
+                File.WriteAllText(restartPath, json);
                 MMLog.Write($"[SaveDetailsWindow] Application restart requested for automated mod loading. Request saved to: {restartPath}");
+                MMLog.WriteDebug($"[SaveDetailsWindow] Restart Payload: {json}");
 
                 Application.Quit();
             }
@@ -691,7 +781,7 @@ namespace ModAPI.Hooks.Paging
             if (_maxOffset <= 0) return; // No scrolling needed
             
             float scroll;
-            if (!ScrollInputBridge.TryGetVerticalScroll(_minX, _maxX, out scroll))
+            if (!ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.ForUiRange(_minX, _maxX), out scroll))
             {
                 if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
                     scroll = 1f;
@@ -743,7 +833,7 @@ namespace ModAPI.Hooks.Paging
             if (contentHeight <= _clipHeight) return;
             
             float scroll;
-            if (!ScrollInputBridge.TryGetVerticalScroll(-400f, 400f, out scroll))
+            if (!ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.ForUiRange(-400f, 400f), out scroll))
             {
                 if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
                     scroll = 1f;

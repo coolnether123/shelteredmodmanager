@@ -68,6 +68,7 @@ namespace ShelteredAPI.Input
                 InputBinding binding;
                 if (!InputActionRegistry.TryGetBinding(action.Id, out binding)) continue;
                 if (!binding.ContainsKey(proposedKey)) continue;
+                if (ShouldAllowSharedDefault(targetActionId, action.Id, proposedKey)) continue;
 
                 InputContext otherContext = ShelteredVanillaInputActions.GetContextForActionId(action.Id);
                 if (otherContext == InputContext.Unknown)
@@ -221,6 +222,22 @@ namespace ShelteredAPI.Input
             if (affectedIds == null || string.IsNullOrEmpty(actionId)) return;
             if (!affectedIds.Contains(actionId))
                 affectedIds.Add(actionId);
+        }
+
+        private static bool ShouldAllowSharedDefault(string targetActionId, string otherActionId, KeyCode key)
+        {
+            if (key == KeyCode.None || string.IsNullOrEmpty(targetActionId) || string.IsNullOrEmpty(otherActionId))
+                return false;
+
+            ModInputAction targetAction;
+            if (!InputActionRegistry.TryGetAction(targetActionId, out targetAction) || targetAction == null)
+                return false;
+
+            ModInputAction otherAction;
+            if (!InputActionRegistry.TryGetAction(otherActionId, out otherAction) || otherAction == null)
+                return false;
+
+            return targetAction.DefaultBinding.ContainsKey(key) && otherAction.DefaultBinding.ContainsKey(key);
         }
     }
 }
