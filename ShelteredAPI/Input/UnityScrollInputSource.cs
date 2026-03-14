@@ -59,7 +59,10 @@ namespace ShelteredAPI.Input
                 }
             }
 
-            return UnityLegacyAxisReader.IsSignificant(strongest) ? strongest : 0f;
+            if (!UnityLegacyAxisReader.IsSignificant(strongest))
+                return 0f;
+
+            return strongest * ShelteredInputTuning.MouseScrollSpeed;
         }
 
         private static bool IsPointerWithinXRange(float minUiX, float maxUiX)

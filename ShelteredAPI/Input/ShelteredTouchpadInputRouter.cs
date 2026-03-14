@@ -12,6 +12,8 @@ namespace ShelteredAPI.Input
         private static readonly string[] CameraHorizontalAxes = { "PC_CameraHorizontal", "PC_UIhorizontal" };
         private static readonly string[] CameraVerticalAxes = { "PC_CameraVertical", "PC_UIvertical" };
         private static readonly string[] InfoPaneScrollAxes = { "PC_InfoPaneScroll", "PC_MouseScroll" };
+        private const string VanillaInfoPaneScrollAxis = "PC_InfoPaneScroll";
+        private const string VanillaMenuScrollAxis = "PC_MouseScroll";
         private static readonly string[] MenuHorizontalAxes = { "PC_UIhorizontal", "PC_CameraHorizontal" };
         private static readonly string[] MenuVerticalAxes = { "PC_UIvertical", "PC_CameraVertical" };
 
@@ -32,23 +34,30 @@ namespace ShelteredAPI.Input
 
         public static bool TryGetGameplayAxis(PlatformInput.InputAxis axis, bool raw, out float value)
         {
-            if (!ScrollInputService.IsIndirectScrollActive())
-            {
-                value = 0f;
-                return false;
-            }
-
             switch (axis)
             {
                 case PlatformInput.InputAxis.CameraHorizontal:
+                    if (!ScrollInputService.IsIndirectScrollActive())
+                    {
+                        value = 0f;
+                        return false;
+                    }
                     value = UnityTouchpadPanReader.ReadHorizontalPan(raw, CameraHorizontalAxes);
                     return true;
 
                 case PlatformInput.InputAxis.CameraVertical:
+                    if (!ScrollInputService.IsIndirectScrollActive())
+                    {
+                        value = 0f;
+                        return false;
+                    }
                     value = UnityTouchpadPanReader.ReadVerticalPan(raw, CameraVerticalAxes);
                     return true;
 
                 case PlatformInput.InputAxis.InfoPaneScroll:
+                    if (!ScrollInputService.IsIndirectScrollActive())
+                        return TryGetVanillaInfoPaneScroll(raw, out value);
+
                     TryGetInfoPaneScroll(raw, out value);
                     return true;
 
@@ -60,23 +69,30 @@ namespace ShelteredAPI.Input
 
         public static bool TryGetMenuAxis(PlatformInput.MenuInputAxis axis, bool raw, out float value)
         {
-            if (!ScrollInputService.IsIndirectScrollActive())
-            {
-                value = 0f;
-                return false;
-            }
-
             switch (axis)
             {
                 case PlatformInput.MenuInputAxis.UIhorizontal:
+                    if (!ScrollInputService.IsIndirectScrollActive())
+                    {
+                        value = 0f;
+                        return false;
+                    }
                     value = UnityTouchpadPanReader.ReadHorizontalPan(raw, MenuHorizontalAxes);
                     return true;
 
                 case PlatformInput.MenuInputAxis.UIvertical:
+                    if (!ScrollInputService.IsIndirectScrollActive())
+                    {
+                        value = 0f;
+                        return false;
+                    }
                     value = UnityTouchpadPanReader.ReadVerticalPan(raw, MenuVerticalAxes);
                     return true;
 
                 case PlatformInput.MenuInputAxis.UIscroll:
+                    if (!ScrollInputService.IsIndirectScrollActive())
+                        return TryGetVanillaMenuScroll(raw, out value);
+
                     TryGetMenuScroll(raw, out value);
                     return true;
 
@@ -98,7 +114,8 @@ namespace ShelteredAPI.Input
             if (!IsZoomModifierHeld())
                 return;
 
-            ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.Anywhere(raw), out value);
+            if (ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.Anywhere(raw), out value))
+                value *= ShelteredInputTuning.ZoomSpeed;
         }
 
         private static void TryGetInfoPaneScroll(bool raw, out float value)
@@ -108,6 +125,31 @@ namespace ShelteredAPI.Input
                 return;
 
             value = UnityLegacyAxisReader.ReadStrongest(raw, InfoPaneScrollAxes);
+            if (UnityLegacyAxisReader.IsSignificant(value))
+                value *= ShelteredInputTuning.MouseScrollSpeed;
+        }
+
+        private static bool TryGetVanillaInfoPaneScroll(bool raw, out float value)
+        {
+            value = UnityLegacyAxisReader.ReadStrongest(raw, VanillaInfoPaneScrollAxis);
+            if (!UnityLegacyAxisReader.IsSignificant(value))
+                return false;
+
+            value *= ShelteredInputTuning.MouseScrollSpeed;
+            return true;
+        }
+
+        private static bool TryGetVanillaMenuScroll(bool raw, out float value)
+        {
+            value = UnityLegacyAxisReader.ReadStrongest(raw, VanillaMenuScrollAxis);
+            if (!UnityLegacyAxisReader.IsSignificant(value))
+                return false;
+
+            value *= ShelteredInputTuning.MouseScrollSpeed;
+            if (IsPartyMapPanelOpen())
+                value *= ShelteredInputTuning.ZoomSpeed;
+
+            return true;
         }
 
         private static bool IsZoomModifierHeld()
@@ -128,6 +170,19 @@ namespace ShelteredAPI.Input
                 return false;
 
             return !string.Equals(topPanel.GetType().Name, "PartyMapPanel", StringComparison.Ordinal);
+        }
+
+        private static bool IsPartyMapPanelOpen()
+        {
+            var panelManager = UIPanelManager.instance;
+            if (panelManager == null)
+                return false;
+
+            BasePanel topPanel = panelManager.GetTopPanel();
+            if (topPanel == null)
+                return false;
+
+            return string.Equals(topPanel.GetType().Name, "PartyMapPanel", StringComparison.Ordinal);
         }
     }
 }

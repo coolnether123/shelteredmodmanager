@@ -63,6 +63,7 @@ namespace ModAPI.Spine.UI
 
         public void StartCapture()
         {
+            CancelOtherActiveCaptures();
             _state = CaptureState.Listening;
             _captureStartedAt = Time.realtimeSinceStartup;
             if (ValueLabel != null) ValueLabel.text = "PRESS KEY...";
@@ -82,10 +83,7 @@ namespace ModAPI.Spine.UI
 
             if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
             {
-                _state = CaptureState.Cancelled;
-                _lastEscapeConsumedFrame = Time.frameCount;
-                MMLog.WriteInfo("[KeybindCaptureListener] Capture cancelled via Escape on " + gameObject.name + ".");
-                if (OnCanceled != null) OnCanceled();
+                CancelCapture(true);
                 return;
             }
 
@@ -114,6 +112,26 @@ namespace ModAPI.Spine.UI
 
             _lastRenderedText = text;
             ValueLabel.text = text;
+        }
+
+        private void CancelOtherActiveCaptures()
+        {
+            for (int i = 0; i < ActiveListeners.Count; i++)
+            {
+                var listener = ActiveListeners[i];
+                if (listener == null || listener == this || !listener.IsCapturing) continue;
+                listener.CancelCapture(false);
+            }
+        }
+
+        private void CancelCapture(bool consumeEscape)
+        {
+            _state = CaptureState.Cancelled;
+            if (consumeEscape)
+                _lastEscapeConsumedFrame = Time.frameCount;
+
+            MMLog.WriteInfo("[KeybindCaptureListener] Capture cancelled on " + gameObject.name + ".");
+            if (OnCanceled != null) OnCanceled();
         }
     }
 }

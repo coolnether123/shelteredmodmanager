@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using ModAPI.Core;
 using ModAPI.InputActions;
 using ModAPI.Spine;
 using ModAPI.UI;
+using ShelteredAPI.UI;
 using UnityEngine;
 
 namespace ShelteredAPI.Input
@@ -17,6 +19,11 @@ namespace ShelteredAPI.Input
     public sealed class ShelteredKeybindsProvider : ISettingsProvider2
     {
         private const string PrefKeyPrefix = "ShelteredAPI.Keybind.";
+        private const string ZoomSpeedPrefKey = PrefKeyPrefix + "ZoomSpeed";
+        private const string TouchpadMovementSpeedPrefKey = PrefKeyPrefix + "TouchpadMovementSpeed";
+        private const string MouseScrollSpeedPrefKey = PrefKeyPrefix + "MouseScrollSpeed";
+        private const string TuningCategory = "Input";
+        private const int TuningSortBase = 10000;
 
         private readonly object _sync = new object();
         private List<SettingDefinition> _definitions;
@@ -25,6 +32,9 @@ namespace ShelteredAPI.Input
 
         public static ShelteredKeybindsProvider Instance { get { return _instance; } }
         public bool IsReady { get; private set; }
+        public float ZoomSpeed { get { return ShelteredInputTuning.ZoomSpeed; } set { ShelteredInputTuning.ZoomSpeed = value; } }
+        public float TouchpadMovementSpeed { get { return ShelteredInputTuning.TouchpadMovementSpeed; } set { ShelteredInputTuning.TouchpadMovementSpeed = value; } }
+        public float MouseScrollSpeed { get { return ShelteredInputTuning.MouseScrollSpeed; } set { ShelteredInputTuning.MouseScrollSpeed = value; } }
 
         private ShelteredKeybindsProvider()
         {
@@ -50,6 +60,7 @@ namespace ShelteredAPI.Input
         public void OnSettingsLoaded()
         {
             EnsureLoaded();
+            ApplyRuntimeTuning();
         }
 
         public void ResetToDefaults()
@@ -61,6 +72,10 @@ namespace ShelteredAPI.Input
                 InputActionRegistry.SetBinding(actions[i].Id, actions[i].DefaultBinding);
                 PersistActionBinding(actions[i].Id, actions[i].DefaultBinding);
             }
+            ZoomSpeed = ShelteredInputTuning.DefaultZoomSpeed;
+            TouchpadMovementSpeed = ShelteredInputTuning.DefaultTouchpadMovementSpeed;
+            MouseScrollSpeed = ShelteredInputTuning.DefaultMouseScrollSpeed;
+            PersistRuntimeTuning();
             ModPrefs.Save();
         }
 
@@ -73,8 +88,9 @@ namespace ShelteredAPI.Input
                 var action = actions[i];
                 PersistActionBinding(action.Id, InputActionRegistry.GetBinding(action.Id));
             }
+            PersistRuntimeTuning();
             ModPrefs.Save();
-            MMLog.WriteInfo("[ShelteredKeybindsProvider] Save persisted " + actions.Count + " managed keybind actions.");
+            MMLog.WriteInfo("[ShelteredKeybindsProvider] Save persisted " + actions.Count + " managed keybind actions and runtime input tuning.");
         }
 
         public string SerializeToJson()
@@ -96,6 +112,10 @@ namespace ShelteredAPI.Input
                 sb.Append("\"secondary\":\"").Append(Escape(binding.Secondary.ToString())).Append("\"}");
                 first = false;
             }
+
+            AppendFloatJsonProperty(sb, ref first, "zoomSpeed", ZoomSpeed);
+            AppendFloatJsonProperty(sb, ref first, "touchpadMovementSpeed", TouchpadMovementSpeed);
+            AppendFloatJsonProperty(sb, ref first, "mouseScrollSpeed", MouseScrollSpeed);
 
             sb.Append("}");
             return sb.ToString();
@@ -221,6 +241,10 @@ namespace ShelteredAPI.Input
 
                 InputActionRegistry.SetBinding(action.Id, loaded);
             }
+            ZoomSpeed = LoadFloatPref(ZoomSpeedPrefKey, ShelteredInputTuning.DefaultZoomSpeed);
+            TouchpadMovementSpeed = LoadFloatPref(TouchpadMovementSpeedPrefKey, ShelteredInputTuning.DefaultTouchpadMovementSpeed);
+            MouseScrollSpeed = LoadFloatPref(MouseScrollSpeedPrefKey, ShelteredInputTuning.DefaultMouseScrollSpeed);
+            ApplyRuntimeTuning();
             MMLog.WriteInfo("[ShelteredKeybindsProvider] Loaded " + actions.Count + " actions from ModPrefs. NormalizedDuplicates=" + normalizedCount + ".");
         }
 
@@ -236,6 +260,34 @@ namespace ShelteredAPI.Input
                 result.Add(CreateSlotDefinition(action, true, order++));
                 result.Add(CreateSlotDefinition(action, false, order++));
             }
+
+            result.Add(CreateSpeedSettingDefinition(
+                "sheltered.input.zoom_speed",
+                "Zoom Speed",
+                "ZoomSpeed",
+                "Scales routed zoom input. 1.00 matches the current in-game default.",
+                ShelteredInputTuning.DefaultZoomSpeed,
+                () => ZoomSpeed,
+                value => ZoomSpeed = value,
+                TuningSortBase));
+            result.Add(CreateSpeedSettingDefinition(
+                "sheltered.input.touchpad_movement_speed",
+                "Touchpad Movement Speed",
+                "TouchpadMovementSpeed",
+                "Scales indirect touchpad pan movement. 2.00 matches the current in-game default.",
+                ShelteredInputTuning.DefaultTouchpadMovementSpeed,
+                () => TouchpadMovementSpeed,
+                value => TouchpadMovementSpeed = value,
+                TuningSortBase + 1));
+            result.Add(CreateSpeedSettingDefinition(
+                "sheltered.input.mouse_scroll_speed",
+                "Mouse Scroll Speed",
+                "MouseScrollSpeed",
+                "Scales mouse wheel style scroll input. 1.00 matches the current in-game default.",
+                ShelteredInputTuning.DefaultMouseScrollSpeed,
+                () => MouseScrollSpeed,
+                value => MouseScrollSpeed = value,
+                TuningSortBase + 2));
 
             return result;
         }
@@ -277,6 +329,40 @@ namespace ShelteredAPI.Input
             };
         }
 
+        private SettingDefinition CreateSpeedSettingDefinition(
+            string id,
+            string label,
+            string fieldName,
+            string tooltip,
+            float defaultValue,
+            Func<float> getter,
+            Action<float> setter,
+            int sortOrder)
+        {
+            return new SettingDefinition
+            {
+                Id = id,
+                FieldName = fieldName,
+                Label = label,
+                Tooltip = tooltip,
+                Type = SettingType.Float,
+                Mode = SettingMode.Both,
+                Category = TuningCategory,
+                SortOrder = sortOrder,
+                Scope = SettingsScope.Global,
+                DefaultValue = defaultValue,
+                MinValue = ShelteredInputTuning.MinSpeedScale,
+                MaxValue = ShelteredInputTuning.MaxSpeedScale,
+                StepSize = ShelteredInputTuning.SpeedStep,
+                Getter = _ => getter(),
+                Setter = (_, value) =>
+                {
+                    setter(CoerceSpeedValue(value, defaultValue));
+                    ApplyRuntimeTuning();
+                }
+            };
+        }
+
         private bool TryPromptConflictAndApply(
             string actionId,
             bool primary,
@@ -291,25 +377,23 @@ namespace ShelteredAPI.Input
             {
                 string message = BuildConflictPrompt(actionId, proposedKey, detected);
                 ModSettingsPanel.PushExternalInputLock();
-                MessageBox.Show(
-                    MessageBoxButtons.YesNo_Buttons,
+                ShelteredKeybindConflictDialog.Show(
+                    "KEY CONFLICT",
                     message,
-                    delegate(int response)
+                    "OVERRIDE",
+                    "CANCEL",
+                    delegate
                     {
                         try
                         {
-                            MMLog.WriteInfo("[Keybinds] Conflict prompt response=" + response + " for " + actionId + ".");
-                            KeyConflictUserChoice choice = response == 1
-                                ? KeyConflictUserChoice.Override
-                                : KeyConflictUserChoice.Cancel;
-
+                            MMLog.WriteInfo("[Keybinds] Conflict prompt response=override for " + actionId + ".");
                             KeyConflictResolution resolution = KeyConflictResolver.ResolveConflict(
                                 actionId,
                                 primary ? KeyBindingSlot.Primary : KeyBindingSlot.Secondary,
                                 replacedKey,
                                 proposedKey,
                                 detected,
-                                choice);
+                                KeyConflictUserChoice.Override);
 
                             if (!resolution.Applied)
                             {
@@ -325,9 +409,27 @@ namespace ShelteredAPI.Input
                             ModSettingsPanel.PopExternalInputLock();
                         }
                     },
-                    null,
-                    null,
-                    false);
+                    delegate
+                    {
+                        try
+                        {
+                            MMLog.WriteInfo("[Keybinds] Conflict prompt response=cancel for " + actionId + ".");
+                            KeyConflictResolution resolution = KeyConflictResolver.ResolveConflict(
+                                actionId,
+                                primary ? KeyBindingSlot.Primary : KeyBindingSlot.Secondary,
+                                replacedKey,
+                                proposedKey,
+                                detected,
+                                KeyConflictUserChoice.Cancel);
+
+                            if (!resolution.Applied)
+                                MMLog.WriteInfo("[Keybinds] Conflict prompt cancelled for " + actionId + ".");
+                        }
+                        finally
+                        {
+                            ModSettingsPanel.PopExternalInputLock();
+                        }
+                    });
 
                 return true;
             }
@@ -369,6 +471,13 @@ namespace ShelteredAPI.Input
             ModPrefs.SetString(BuildPrefKey(actionId, false), binding.Secondary.ToString());
         }
 
+        private void PersistRuntimeTuning()
+        {
+            PersistFloat(ZoomSpeedPrefKey, ZoomSpeed);
+            PersistFloat(TouchpadMovementSpeedPrefKey, TouchpadMovementSpeed);
+            PersistFloat(MouseScrollSpeedPrefKey, MouseScrollSpeed);
+        }
+
         private static void NormalizeSelfOverlap(ref InputBinding binding, bool changedPrimary)
         {
             if (binding.Primary == KeyCode.None || binding.Secondary == KeyCode.None) return;
@@ -398,7 +507,7 @@ namespace ShelteredAPI.Input
                 sb.Append("- ...\n");
 
             sb.Append("\n").Append(detected.Recommendation).Append("\n");
-            sb.Append("Yes = Override conflicts\nNo = Cancel");
+            sb.Append("Override = clear conflicting bindings\nCancel = keep current binding");
             return sb.ToString();
         }
 
@@ -407,9 +516,48 @@ namespace ShelteredAPI.Input
             return PrefKeyPrefix + actionId + (primary ? ".Primary" : ".Secondary");
         }
 
+        private void ApplyRuntimeTuning()
+        {
+            ShelteredInputTuning.ZoomSpeed = ZoomSpeed;
+            ShelteredInputTuning.TouchpadMovementSpeed = TouchpadMovementSpeed;
+            ShelteredInputTuning.MouseScrollSpeed = MouseScrollSpeed;
+        }
+
+        private static float LoadFloatPref(string key, float defaultValue)
+        {
+            string raw = ModPrefs.GetString(key, defaultValue.ToString("0.###", CultureInfo.InvariantCulture));
+            float parsed;
+            if (!float.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
+                parsed = defaultValue;
+
+            return ShelteredInputTuning.NormalizeSpeedScale(parsed, defaultValue);
+        }
+
+        private static void PersistFloat(string key, float value)
+        {
+            ModPrefs.SetString(key, value.ToString("0.###", CultureInfo.InvariantCulture));
+        }
+
         private static KeyCode CoerceToKeyCode(object value, KeyCode fallback, string actionId, InputContext context)
         {
             return KeyValidationPolicy.ParseKeyCodeSafe(value, fallback, actionId, context);
+        }
+
+        private static float CoerceSpeedValue(object value, float fallback)
+        {
+            if (value == null)
+                return fallback;
+
+            try
+            {
+                return ShelteredInputTuning.NormalizeSpeedScale(
+                    Convert.ToSingle(value, CultureInfo.InvariantCulture),
+                    fallback);
+            }
+            catch
+            {
+                return fallback;
+            }
         }
 
         private static InputContext ResolveContext(string actionId, string category)
@@ -467,6 +615,14 @@ namespace ShelteredAPI.Input
         {
             if (string.IsNullOrEmpty(value)) return string.Empty;
             return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        }
+
+        private static void AppendFloatJsonProperty(StringBuilder sb, ref bool first, string key, float value)
+        {
+            if (!first) sb.Append(",");
+            sb.Append("\"").Append(Escape(key)).Append("\":");
+            sb.Append(value.ToString("0.###", CultureInfo.InvariantCulture));
+            first = false;
         }
     }
 }
