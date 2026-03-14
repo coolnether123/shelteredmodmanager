@@ -4,7 +4,6 @@ namespace ShelteredAPI.Input
 {
     internal static class UnityTouchpadPanReader
     {
-        private const float TouchpadPanSensitivity = 2f;
         private const float DiagonalAssistRatio = 0.7f;
         private const float DiagonalActivationThreshold = 0.08f;
         private const float DiagonalAssistFloor = 0.55f;
@@ -25,7 +24,7 @@ namespace ShelteredAPI.Input
 
         private static Vector2 ReadTouchpadPanVector()
         {
-            Vector2 pan = UnityEngine.Input.mouseScrollDelta * TouchpadPanSensitivity;
+            Vector2 pan = UnityEngine.Input.mouseScrollDelta * ShelteredInputTuning.TouchpadMovementSpeed;
             pan.x = Mathf.Clamp(pan.x, -1f, 1f);
             pan.y = Mathf.Clamp(pan.y, -1f, 1f);
 

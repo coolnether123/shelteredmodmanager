@@ -80,11 +80,13 @@
     <Compile Include="Input\KeyConflictResolver.cs" />
     <Compile Include="Input\UnityIndirectScrollClassifier.cs" />
     <Compile Include="Input\UnityLegacyAxisReader.cs" />
+    <Compile Include="Input\ShelteredInputTuning.cs" />
     <Compile Include="Input\UnityTouchpadPanReader.cs" />
     <Compile Include="Input\UnityScrollInputSource.cs" />
     <Compile Include="Input\UnityTouchDragTracker.cs" />
     <Compile Include="UI\UITakeover.cs" />
     <Compile Include="UI\UIPanelTakeover.cs" />
+    <Compile Include="UI\ShelteredKeybindConflictDialog.cs" />
     <Compile Include="Input\ShelteredKeybindsProvider.cs" />
     <Compile Include="UI\ShelteredKeybindsUI.cs" />
     <!-- IGameHelper interface is now in ModAPI; only the implementation lives here -->
