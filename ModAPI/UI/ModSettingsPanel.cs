@@ -44,6 +44,7 @@ namespace ModAPI.UI
         // State
         private List<List<GameObject>> _pages = new List<List<GameObject>>();
         private int _currentPageIndex = 0;
+        private int? _pageIndexBeforeSearch;
         private GameObject _sliderTemplate;
         private GameObject _buttonTemplate;
         private bool _isRebuilding = false;
@@ -204,7 +205,7 @@ namespace ModAPI.UI
             if (!_inputLockedExternally)
                 _searchController.HandleInput(MaxSearchLength, COLOR_SUBTEXT, delegate
                 {
-                    BuildMenu(_activeBitmapFont, _activeTtfFont, true);
+                    HandleSearchFilterChanged();
                 });
 
             if (Input.GetKeyDown(KeyCode.Escape))
@@ -560,10 +561,12 @@ namespace ModAPI.UI
             var hierarchy = new SettingsHierarchy(allDefs);
             var displayEntries = BuildDisplayEntries(visibleItems, allDefs, useWideKeybindLayout);
 
-            for (int i = 0; i < displayEntries.Count; i += itemsPerPage)
+            var pagedEntries = BuildPaginatedDisplayEntrySegments(displayEntries, itemsPerPage);
+
+            for (int i = 0; i < pagedEntries.Count; i++)
             {
                 var pageItems = new List<GameObject>();
-                var segment = displayEntries.Skip(i).Take(itemsPerPage).ToList();
+                var segment = pagedEntries[i];
                 int renderedRows = 0;
 
                 for (int j = 0; j < segment.Count; j++)
@@ -636,6 +639,171 @@ namespace ModAPI.UI
         private List<ModSettingsKeybindDisplayEntry> BuildDisplayEntries(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs, bool pairKeybinds)
         {
             return ModSettingsKeybindLayout.BuildDisplayEntries(visibleItems, allDefs, pairKeybinds);
+        }
+
+        private List<List<ModSettingsKeybindDisplayEntry>> BuildPaginatedDisplayEntrySegments(List<ModSettingsKeybindDisplayEntry> displayEntries, int itemsPerPage)
+        {
+            var pages = new List<List<ModSettingsKeybindDisplayEntry>>();
+            if (displayEntries == null || displayEntries.Count == 0)
+                return pages;
+
+            if (itemsPerPage <= 0)
+                itemsPerPage = 1;
+
+            bool hasSectionHeaders = displayEntries.Any(IsSectionHeaderEntry);
+            if (!hasSectionHeaders)
+            {
+                for (int i = 0; i < displayEntries.Count; i += itemsPerPage)
+                    pages.Add(displayEntries.Skip(i).Take(itemsPerPage).ToList());
+
+                return pages;
+            }
+
+            var currentPage = new List<ModSettingsKeybindDisplayEntry>();
+            int index = 0;
+
+            while (index < displayEntries.Count)
+            {
+                var sectionEntries = new List<ModSettingsKeybindDisplayEntry>();
+                int headerCount = 0;
+
+                while (index < displayEntries.Count && IsSectionHeaderEntry(displayEntries[index]))
+                {
+                    sectionEntries.Add(displayEntries[index]);
+                    headerCount++;
+                    index++;
+                }
+
+                while (index < displayEntries.Count && !IsSectionHeaderEntry(displayEntries[index]))
+                {
+                    sectionEntries.Add(displayEntries[index]);
+                    index++;
+                }
+
+                if (sectionEntries.Count == 0)
+                    continue;
+
+                if (headerCount == 0)
+                {
+                    AppendFlatEntries(pages, ref currentPage, sectionEntries, itemsPerPage);
+                    continue;
+                }
+
+                if (sectionEntries.Count <= itemsPerPage)
+                {
+                    if (currentPage.Count > 0 && currentPage.Count + sectionEntries.Count > itemsPerPage)
+                    {
+                        pages.Add(currentPage);
+                        currentPage = new List<ModSettingsKeybindDisplayEntry>();
+                    }
+
+                    currentPage.AddRange(sectionEntries);
+                    continue;
+                }
+
+                if (currentPage.Count > 0)
+                {
+                    pages.Add(currentPage);
+                    currentPage = new List<ModSettingsKeybindDisplayEntry>();
+                }
+
+                AppendOversizedSectionPages(pages, sectionEntries, headerCount, itemsPerPage);
+            }
+
+            if (currentPage.Count > 0)
+                pages.Add(currentPage);
+
+            return pages;
+        }
+
+        private static void AppendFlatEntries(
+            List<List<ModSettingsKeybindDisplayEntry>> pages,
+            ref List<ModSettingsKeybindDisplayEntry> currentPage,
+            List<ModSettingsKeybindDisplayEntry> entries,
+            int itemsPerPage)
+        {
+            if (entries == null || entries.Count == 0)
+                return;
+
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (currentPage.Count >= itemsPerPage)
+                {
+                    pages.Add(currentPage);
+                    currentPage = new List<ModSettingsKeybindDisplayEntry>();
+                }
+
+                currentPage.Add(entries[i]);
+            }
+        }
+
+        private void HandleSearchFilterChanged()
+        {
+            bool isSearching = !string.IsNullOrEmpty(_searchController.Filter);
+            if (isSearching)
+            {
+                if (!_pageIndexBeforeSearch.HasValue)
+                    _pageIndexBeforeSearch = _currentPageIndex;
+
+                BuildMenu(_activeBitmapFont, _activeTtfFont, true);
+                return;
+            }
+
+            if (_pageIndexBeforeSearch.HasValue)
+            {
+                _currentPageIndex = _pageIndexBeforeSearch.Value;
+                _pageIndexBeforeSearch = null;
+            }
+
+            BuildMenu(_activeBitmapFont, _activeTtfFont, true);
+        }
+
+        private static void AppendOversizedSectionPages(
+            List<List<ModSettingsKeybindDisplayEntry>> pages,
+            List<ModSettingsKeybindDisplayEntry> sectionEntries,
+            int headerCount,
+            int itemsPerPage)
+        {
+            if (pages == null || sectionEntries == null || sectionEntries.Count == 0)
+                return;
+
+            if (headerCount <= 0)
+            {
+                for (int i = 0; i < sectionEntries.Count; i += Math.Max(1, itemsPerPage))
+                    pages.Add(sectionEntries.Skip(i).Take(Math.Max(1, itemsPerPage)).ToList());
+
+                return;
+            }
+
+            if (itemsPerPage <= headerCount)
+            {
+                for (int i = 0; i < sectionEntries.Count; i++)
+                    pages.Add(new List<ModSettingsKeybindDisplayEntry> { sectionEntries[i] });
+
+                return;
+            }
+
+            var headers = sectionEntries.Take(headerCount).ToList();
+            int bodyIndex = headerCount;
+            int bodyItemsPerPage = itemsPerPage - headerCount;
+
+            if (sectionEntries.Count == headerCount)
+            {
+                pages.Add(new List<ModSettingsKeybindDisplayEntry>(headers));
+                return;
+            }
+
+            while (bodyIndex < sectionEntries.Count)
+            {
+                var page = new List<ModSettingsKeybindDisplayEntry>(headers);
+
+                int takeCount = Math.Min(bodyItemsPerPage, sectionEntries.Count - bodyIndex);
+                for (int i = 0; i < takeCount; i++)
+                    page.Add(sectionEntries[bodyIndex + i]);
+
+                bodyIndex += takeCount;
+                pages.Add(page);
+            }
         }
 
         private GameObject CreateDualKeybindWidget(SettingDefinition primaryDef, SettingDefinition secondaryDef, object data)
