@@ -13,7 +13,7 @@ using UnityEngine;
 namespace ShelteredAPI.Input
 {
     /// <summary>
-    /// Settings provider bridging Sheltered input actions into the shared Spine settings window.
+    /// Settings provider bridging Sheltered and mod-defined input actions into the shared Spine settings window.
     /// Applies a full validation/conflict/persist pipeline for every bind change.
     /// </summary>
     public sealed class ShelteredKeybindsProvider : ISettingsProvider2
@@ -23,6 +23,7 @@ namespace ShelteredAPI.Input
         private const string TouchpadMovementSpeedPrefKey = PrefKeyPrefix + "TouchpadMovementSpeed";
         private const string MouseScrollSpeedPrefKey = PrefKeyPrefix + "MouseScrollSpeed";
         private const string TuningCategory = "Input";
+        private const string ModActionsHeaderLabel = "Mods Keybindings";
         private const int TuningSortBase = 10000;
 
         private readonly object _sync = new object();
@@ -66,7 +67,7 @@ namespace ShelteredAPI.Input
         public void ResetToDefaults()
         {
             EnsureLoaded();
-            var actions = GetShelteredActions();
+            var actions = GetDisplayedActions();
             for (int i = 0; i < actions.Count; i++)
             {
                 InputActionRegistry.SetBinding(actions[i].Id, actions[i].DefaultBinding);
@@ -82,7 +83,7 @@ namespace ShelteredAPI.Input
         public void Save()
         {
             EnsureLoaded();
-            var actions = GetShelteredActions();
+            var actions = GetDisplayedActions();
             for (int i = 0; i < actions.Count; i++)
             {
                 var action = actions[i];
@@ -90,13 +91,13 @@ namespace ShelteredAPI.Input
             }
             PersistRuntimeTuning();
             ModPrefs.Save();
-            MMLog.WriteInfo("[ShelteredKeybindsProvider] Save persisted " + actions.Count + " managed keybind actions and runtime input tuning.");
+            MMLog.WriteInfo("[ShelteredKeybindsProvider] Save persisted " + actions.Count + " displayed keybind actions and runtime input tuning.");
         }
 
         public string SerializeToJson()
         {
             EnsureLoaded();
-            var actions = GetShelteredActions();
+            var actions = GetDisplayedActions();
             var sb = new StringBuilder();
             sb.Append("{");
 
@@ -213,7 +214,7 @@ namespace ShelteredAPI.Input
 
         private void LoadFromPrefs()
         {
-            var actions = GetShelteredActions();
+            var actions = GetDisplayedActions();
             int normalizedCount = 0;
             for (int i = 0; i < actions.Count; i++)
             {
@@ -251,21 +252,35 @@ namespace ShelteredAPI.Input
         private List<SettingDefinition> BuildDefinitions()
         {
             var result = new List<SettingDefinition>();
-            var actions = GetShelteredActions();
+            var actions = GetDisplayedActions();
+            var managedActions = actions.Where(a => IsManagedActionId(a.Id)).ToList();
+            var modActions = actions.Where(a => !IsManagedActionId(a.Id)).ToList();
             int order = 0;
 
-            for (int i = 0; i < actions.Count; i++)
+            for (int i = 0; i < managedActions.Count; i++)
             {
-                ModInputAction action = actions[i];
+                ModInputAction action = managedActions[i];
                 result.Add(CreateSlotDefinition(action, true, order++));
                 result.Add(CreateSlotDefinition(action, false, order++));
+            }
+
+            if (modActions.Count > 0)
+            {
+                result.Add(CreateHeaderDefinition("mods_keybindings", ModActionsHeaderLabel, order++));
+
+                for (int i = 0; i < modActions.Count; i++)
+                {
+                    ModInputAction action = modActions[i];
+                    result.Add(CreateSlotDefinition(action, true, order++));
+                    result.Add(CreateSlotDefinition(action, false, order++));
+                }
             }
 
             result.Add(CreateSpeedSettingDefinition(
                 "sheltered.input.zoom_speed",
                 "Zoom Speed",
                 "ZoomSpeed",
-                "Scales routed zoom input. 1.00 matches the current in-game default.",
+                "Changes how fast zoom input affects the map. 1.00 matches the current game default.",
                 ShelteredInputTuning.DefaultZoomSpeed,
                 () => ZoomSpeed,
                 value => ZoomSpeed = value,
@@ -274,7 +289,7 @@ namespace ShelteredAPI.Input
                 "sheltered.input.touchpad_movement_speed",
                 "Touchpad Movement Speed",
                 "TouchpadMovementSpeed",
-                "Scales indirect touchpad pan movement. 2.00 matches the current in-game default.",
+                "Changes how fast indirect touchpad movement pans the camera and menus. 2.00 matches the current game default.",
                 ShelteredInputTuning.DefaultTouchpadMovementSpeed,
                 () => TouchpadMovementSpeed,
                 value => TouchpadMovementSpeed = value,
@@ -283,7 +298,7 @@ namespace ShelteredAPI.Input
                 "sheltered.input.mouse_scroll_speed",
                 "Mouse Scroll Speed",
                 "MouseScrollSpeed",
-                "Scales mouse wheel style scroll input. 1.00 matches the current in-game default.",
+                "Changes how fast mouse wheel scrolling moves lists and zooms where supported. 1.00 matches the current game default.",
                 ShelteredInputTuning.DefaultMouseScrollSpeed,
                 () => MouseScrollSpeed,
                 value => MouseScrollSpeed = value,
@@ -294,7 +309,7 @@ namespace ShelteredAPI.Input
 
         private SettingDefinition CreateSlotDefinition(ModInputAction action, bool primary, int sortOrder)
         {
-            string slotLabel = primary ? action.Label : (action.Label + " (Alt)");
+            string slotLabel = primary ? action.Label : (action.Label + " (Alternate)");
             InputContext context = ResolveContext(action.Id, action.Category);
 
             return new SettingDefinition
@@ -303,11 +318,11 @@ namespace ShelteredAPI.Input
                 FieldName = action.Id + (primary ? ".primary" : ".secondary"),
                 Label = slotLabel,
                 Tooltip = string.IsNullOrEmpty(action.Description)
-                    ? (primary ? "Primary key binding." : "Secondary key binding.")
-                    : (action.Description + (primary ? " Primary key." : " Secondary key.")),
+                    ? "Key binding for this action."
+                    : action.Description,
                 Type = SettingType.Keybind,
                 Mode = SettingMode.Both,
-                Category = action.Category,
+                Category = GetDisplayCategory(action),
                 SortOrder = sortOrder,
                 Scope = SettingsScope.Global,
                 DefaultValue = primary ? action.DefaultBinding.Primary : action.DefaultBinding.Secondary,
@@ -326,6 +341,23 @@ namespace ShelteredAPI.Input
                 // Setter intentionally becomes a no-op for keybinds:
                 // validate phase executes the full apply pipeline.
                 Setter = (_, __) => { }
+            };
+        }
+
+        private static SettingDefinition CreateHeaderDefinition(string idSuffix, string label, int sortOrder)
+        {
+            return new SettingDefinition
+            {
+                Id = "header." + idSuffix,
+                FieldName = "header." + idSuffix,
+                Label = label,
+                Tooltip = string.Empty,
+                Type = SettingType.Header,
+                Mode = SettingMode.Both,
+                Category = null,
+                SortOrder = sortOrder,
+                Scope = SettingsScope.Global,
+                HeaderColor = new Color(0.7f, 0.9f, 1f)
             };
         }
 
@@ -579,13 +611,13 @@ namespace ShelteredAPI.Input
             return InputContext.Unknown;
         }
 
-        private static List<ModInputAction> GetShelteredActions()
+        private static List<ModInputAction> GetDisplayedActions()
         {
             EnsureActionsRegistered();
             return InputActionRegistry.GetAllActions()
-                .Where(a => IsManagedActionId(a.Id))
                 .OrderBy(a => GetActionSortWeight(a))
-                .ThenBy(a => a.Category)
+                .ThenBy(a => GetCategorySortWeight(a))
+                .ThenBy(a => GetDisplayCategory(a))
                 .ThenBy(a => a.Label)
                 .ToList();
         }
@@ -601,6 +633,27 @@ namespace ShelteredAPI.Input
             if (string.IsNullOrEmpty(actionId)) return false;
             if (ShelteredInputActions.IsShelteredAction(actionId)) return true;
             return ShelteredVanillaInputActions.GetContextForActionId(actionId) != InputContext.Unknown;
+        }
+
+        private static string GetDisplayCategory(ModInputAction action)
+        {
+            if (action == null) return string.Empty;
+            return string.IsNullOrEmpty(action.Category) ? "General" : action.Category;
+        }
+
+        private static int GetCategorySortWeight(ModInputAction action)
+        {
+            if (action == null) return 99;
+            if (!IsManagedActionId(action.Id)) return 0;
+
+            string category = GetDisplayCategory(action);
+            if (string.Equals(category, "Gameplay", StringComparison.OrdinalIgnoreCase)) return 0;
+            if (string.Equals(category, "Camera", StringComparison.OrdinalIgnoreCase)) return 1;
+            if (string.Equals(category, "Cinematics", StringComparison.OrdinalIgnoreCase)) return 2;
+            if (string.Equals(category, "Menu", StringComparison.OrdinalIgnoreCase)) return 3;
+            if (string.Equals(category, "System", StringComparison.OrdinalIgnoreCase)) return 4;
+            if (string.Equals(category, TuningCategory, StringComparison.OrdinalIgnoreCase)) return 5;
+            return 10;
         }
 
         private static int GetActionSortWeight(ModInputAction action)

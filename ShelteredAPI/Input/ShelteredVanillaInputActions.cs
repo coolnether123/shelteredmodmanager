@@ -143,31 +143,29 @@ namespace ShelteredAPI.Input
             string contextId = InputPrefix + "context";
             string goHereId = InputPrefix + "go_here";
 
-            AddInput(PlatformInput.InputButton.Action, "action", "Primary Action", "Gameplay", KeyCode.Mouse0, KeyCode.None, "Primary in-world action.");
-            AddInput(PlatformInput.InputButton.Interact, "interact", "Interact", "Gameplay", KeyCode.Mouse1, KeyCode.None, "Secondary interaction.");
-            AddInput(PlatformInput.InputButton.CancelJob, "cancel_job", "Cancel Job", "Gameplay", KeyCode.C, KeyCode.None, "Cancel current character job.");
-            AddInput(PlatformInput.InputButton.Context, "context", "Context Action", "Gameplay", KeyCode.Space, KeyCode.None, "Open contextual action.");
-            AddInput(PlatformInput.InputButton.Clipboard, "clipboard", "Clipboard", "UI", KeyCode.G, KeyCode.None, "Open clipboard view.");
-            AddInput(PlatformInput.InputButton.Cancel, "cancel", "Cancel / Back", "UI", KeyCode.Escape, KeyCode.None, "Back/cancel action.");
-            AddInput(PlatformInput.InputButton.Pause, "pause", "Pause", "System", KeyCode.Escape, KeyCode.None, "Pause game.", InputContext.System);
-            AddInput(PlatformInput.InputButton.Info, "info", "Info", "UI", KeyCode.I, KeyCode.None, "Open info panel.");
-            AddInput(PlatformInput.InputButton.Focus, "focus", "Focus", "Gameplay", KeyCode.Space, KeyCode.None, "Focus camera/object.");
-            AddInput(PlatformInput.InputButton.GoHere, "go_here", "Go Here", "Gameplay", KeyCode.Mouse0, KeyCode.None, "Move selected character.");
-            AddInput(PlatformInput.InputButton.NextChar, "next_character", "Next Character", "Gameplay", KeyCode.E, KeyCode.None, "Cycle to next character.");
-            AddInput(PlatformInput.InputButton.PrevChar, "previous_character", "Previous Character", "Gameplay", KeyCode.Q, KeyCode.None, "Cycle to previous character.");
-            AddInput(PlatformInput.InputButton.Zoom, "zoom_modifier", "Zoom Modifier", "Camera", KeyCode.LeftControl, KeyCode.None, "Zoom modifier key.");
-            AddInput(PlatformInput.InputButton.CameraSpeed, "camera_speed", "Camera Speed Modifier", "Camera", KeyCode.LeftShift, KeyCode.None, "Camera speed modifier.");
-            AddInput(PlatformInput.InputButton.ToggleAutomation, "toggle_automation", "Toggle Automation", "Gameplay", KeyCode.H, KeyCode.Home, "Toggle selected character automation.");
-            AddInput(PlatformInput.InputButton.AcceptTransmission, "accept_transmission", "Accept Transmission", "UI", KeyCode.R, KeyCode.None, "Accept incoming transmission.");
-            AddInput(PlatformInput.InputButton.Dismiss, "dismiss", "Dismiss", "UI", KeyCode.Mouse0, KeyCode.None, "Dismiss current prompt.");
-            AddInput(PlatformInput.InputButton.OpenMap, "open_map", "Open Map", "UI", KeyCode.M, KeyCode.None, "Open expedition map.");
-            AddInput(PlatformInput.InputButton.NudgePlacementLeft, "nudge_left", "Nudge Placement Left", "Placement", KeyCode.Mouse0, KeyCode.None, "Nudge placement ghost left.");
-            AddInput(PlatformInput.InputButton.NudgePlacementRight, "nudge_right", "Nudge Placement Right", "Placement", KeyCode.Mouse0, KeyCode.None, "Nudge placement ghost right.");
-            AddInput(PlatformInput.InputButton.SlowDown, "slow_down", "Slow Down", "System", KeyCode.CapsLock, KeyCode.None, "Slow simulation speed.", InputContext.System);
-            AddInput(PlatformInput.InputButton.SkipCutscene, "skip_cutscene", "Skip Cutscene", "Cinematics", KeyCode.Escape, KeyCode.None, "Skip active cutscene.", InputContext.System);
-            AddInput(PlatformInput.InputButton.SkipSpeech, "skip_speech", "Skip Speech", "Cinematics", KeyCode.Space, KeyCode.None, "Skip current speech.");
+            AddInput(PlatformInput.InputButton.Action, "action", "Primary Action", "Gameplay", KeyCode.Mouse0, KeyCode.None, "Used for the main in-world action, such as selecting, confirming, or interacting.");
+            AddInput(PlatformInput.InputButton.Interact, "interact", "Secondary Action", "Gameplay", KeyCode.Mouse1, KeyCode.None, "Used for secondary interactions in the world.");
+            AddInput(PlatformInput.InputButton.CancelJob, "cancel_job", "Cancel Assigned Task", "Gameplay", KeyCode.C, KeyCode.None, "Cancels the selected survivor's current task.");
+            AddInput(PlatformInput.InputButton.Context, "context", "Context Menu / Action", "Gameplay", KeyCode.Space, KeyCode.None, "Opens or confirms context-sensitive actions for the current selection.");
+            AddInput(PlatformInput.InputButton.Clipboard, "clipboard", "Open Clipboard", "UI", KeyCode.G, KeyCode.None, "Opens the clipboard screen.");
+            AddInput(PlatformInput.InputButton.Cancel, "cancel", "Back / Cancel", "UI", KeyCode.Escape, KeyCode.None, "Backs out of menus or cancels the current action.");
+            AddInput(PlatformInput.InputButton.Pause, "pause", "Pause Game", "System", KeyCode.Escape, KeyCode.None, "Pauses or unpauses the game.", InputContext.System);
+            AddInput(PlatformInput.InputButton.Info, "info", "Open Info Panel", "UI", KeyCode.I, KeyCode.None, "Opens the info panel for the current selection when available.");
+            AddInput(PlatformInput.InputButton.Focus, "focus", "Focus Camera", "Gameplay", KeyCode.Space, KeyCode.None, "Focuses the camera on the current selection or point of interest.");
+            AddInput(PlatformInput.InputButton.GoHere, "go_here", "Move Here", "Gameplay", KeyCode.Mouse0, KeyCode.None, "Sends the selected survivor to the chosen location.");
+            AddInput(PlatformInput.InputButton.NextChar, "next_character", "Next Survivor", "Gameplay", KeyCode.E, KeyCode.None, "Selects the next survivor.");
+            AddInput(PlatformInput.InputButton.PrevChar, "previous_character", "Previous Survivor", "Gameplay", KeyCode.Q, KeyCode.None, "Selects the previous survivor.");
+            AddInput(PlatformInput.InputButton.Zoom, "zoom_modifier", "Hold to Zoom", "Camera", KeyCode.LeftControl, KeyCode.None, "Hold this key to make scroll input zoom where supported.");
+            AddInput(PlatformInput.InputButton.CameraSpeed, "camera_speed", "Fast Camera Move", "Camera", KeyCode.LeftShift, KeyCode.None, "Hold this key to move the camera faster.");
+            AddInput(PlatformInput.InputButton.ToggleAutomation, "toggle_automation", "Toggle Automation", "Gameplay", KeyCode.H, KeyCode.Home, "Turns automation on or off for the selected survivor.");
+            AddInput(PlatformInput.InputButton.AcceptTransmission, "accept_transmission", "Accept Transmission", "UI", KeyCode.R, KeyCode.None, "Accepts an incoming radio transmission.");
+            AddInput(PlatformInput.InputButton.Dismiss, "dismiss", "Dismiss Prompt", "UI", KeyCode.Mouse0, KeyCode.None, "Dismisses the current popup or prompt.");
+            AddInput(PlatformInput.InputButton.OpenMap, "open_map", "Open Expedition Map", "UI", KeyCode.M, KeyCode.None, "Opens the expedition map.");
+            AddInput(PlatformInput.InputButton.SlowDown, "slow_down", "Slow Down Time", "System", KeyCode.CapsLock, KeyCode.None, "Slows down the simulation speed while active.", InputContext.System);
+            AddInput(PlatformInput.InputButton.SkipCutscene, "skip_cutscene", "Skip Cutscene", "Cinematics", KeyCode.Escape, KeyCode.None, "Skips the current cutscene when allowed.", InputContext.System);
+            AddInput(PlatformInput.InputButton.SkipSpeech, "skip_speech", "Skip Dialogue", "Cinematics", KeyCode.Space, KeyCode.None, "Advances or skips dialogue and speech scenes.");
 
-            AddMenu(PlatformInput.MenuInputButton.UIdragMap, "drag_map", "Drag Map", "Menu", KeyCode.Mouse1, KeyCode.None, "Drag map view.");
+            AddMenu(PlatformInput.MenuInputButton.UIdragMap, "drag_map", "Drag Map", "Menu", KeyCode.Mouse1, KeyCode.None, "Drags the map view while held.");
 
             // Internal menu aliases (not user-facing in keybind UI) to avoid redundant entries.
             AddMenuAlias(PlatformInput.MenuInputButton.UIselect, actionId);

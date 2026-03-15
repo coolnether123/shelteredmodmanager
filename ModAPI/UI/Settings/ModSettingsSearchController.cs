@@ -69,6 +69,7 @@ namespace ModAPI.Internal.UI
 
             _inputRoot = inputGO;
             _displayLabel = label;
+            Filter = string.Empty;
             _manualSearchEnabled = false;
             _hasFocus = false;
 
@@ -106,14 +107,15 @@ namespace ModAPI.Internal.UI
                 return;
 
             bool changed = false;
+            string currentFilter = Filter ?? string.Empty;
             for (int i = 0; i < typed.Length; i++)
             {
                 char c = typed[i];
                 if (c == '\b')
                 {
-                    if (!string.IsNullOrEmpty(Filter))
+                    if (!string.IsNullOrEmpty(currentFilter))
                     {
-                        Filter = Filter.Substring(0, Filter.Length - 1);
+                        currentFilter = currentFilter.Substring(0, currentFilter.Length - 1);
                         changed = true;
                     }
                     continue;
@@ -125,12 +127,15 @@ namespace ModAPI.Internal.UI
                     continue;
                 }
 
-                if (char.IsControl(c) || Filter.Length >= maxSearchLength)
+                if (char.IsControl(c) || currentFilter.Length >= maxSearchLength)
                     continue;
 
-                Filter += c;
+                currentFilter += c;
                 changed = true;
             }
+
+            if (changed)
+                Filter = currentFilter;
 
             if (changed && onFilterChanged != null)
                 onFilterChanged();
