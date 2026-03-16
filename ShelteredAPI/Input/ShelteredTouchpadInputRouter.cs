@@ -11,7 +11,7 @@ namespace ShelteredAPI.Input
     {
         private static readonly string[] CameraHorizontalAxes = { "PC_CameraHorizontal", "PC_UIhorizontal" };
         private static readonly string[] CameraVerticalAxes = { "PC_CameraVertical", "PC_UIvertical" };
-        private static readonly string[] InfoPaneScrollAxes = { "PC_InfoPaneScroll", "PC_MouseScroll" };
+        private static readonly string[] InfoPaneScrollAxes = { "PC_InfoPaneScroll" };
         private const string VanillaInfoPaneScrollAxis = "PC_InfoPaneScroll";
         private const string VanillaMenuScrollAxis = "PC_MouseScroll";
         private static readonly string[] MenuHorizontalAxes = { "PC_UIhorizontal", "PC_CameraHorizontal" };
@@ -56,6 +56,9 @@ namespace ShelteredAPI.Input
 
                 case PlatformInput.InputAxis.InfoPaneScroll:
                     if (!ScrollInputService.IsIndirectScrollActive())
+                        return TryGetVanillaInfoPaneScroll(raw, out value);
+
+                    if (ShouldSuppressIndirectInfoPaneScroll())
                         return TryGetVanillaInfoPaneScroll(raw, out value);
 
                     TryGetInfoPaneScroll(raw, out value);
@@ -157,6 +160,11 @@ namespace ShelteredAPI.Input
             InputBinding binding;
             return ShelteredVanillaInputActions.TryGetBinding(PlatformInput.InputButton.Zoom, out binding)
                 && binding.IsHeld();
+        }
+
+        private static bool ShouldSuppressIndirectInfoPaneScroll()
+        {
+            return IsPartyMapPanelOpen() || IsZoomModifierHeld();
         }
 
         private static bool ShouldRouteMenuScrollToUi()

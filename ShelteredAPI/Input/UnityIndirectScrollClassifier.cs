@@ -2,23 +2,37 @@ using UnityEngine;
 
 namespace ShelteredAPI.Input
 {
+    /// <summary>
+    /// Classifies Unity scroll delta once per frame so wheel and indirect-touchpad consumers
+    /// operate on the same source of truth.
+    /// </summary>
     internal static class UnityIndirectScrollClassifier
     {
         private const float HorizontalThreshold = 0.01f;
         private const float VerticalThreshold = 0.01f;
         private const float GestureLatchSeconds = 0.18f;
         private const float WholeStepThreshold = 0.95f;
-        private const int ConsecutiveVerticalFramesForIndirect = 2;
+        private const float WholeStepTolerance = 0.001f;
 
         private static int _lastFrame = -1;
-        private static int _lastVerticalScrollFrame = -10;
-        private static int _consecutiveVerticalFrames;
         private static float _gestureLatchUntil;
+        private static UnityScrollGestureSample _currentSample;
 
         public static bool IsIndirectScrollActive()
         {
             UpdateState();
             return Time.unscaledTime <= _gestureLatchUntil;
+        }
+
+        public static bool IsCurrentFrameIndirectScroll()
+        {
+            return GetCurrentSample().Kind == UnityScrollGestureKind.Indirect;
+        }
+
+        public static UnityScrollGestureSample GetCurrentSample()
+        {
+            UpdateState();
+            return _currentSample;
         }
 
         private static void UpdateState()
@@ -27,41 +41,37 @@ namespace ShelteredAPI.Input
                 return;
 
             _lastFrame = Time.frameCount;
+            _currentSample = Classify(UnityEngine.Input.mouseScrollDelta);
 
-            if (LooksLikeIndirectScroll(UnityEngine.Input.mouseScrollDelta))
+            if (_currentSample.Kind == UnityScrollGestureKind.Indirect)
                 _gestureLatchUntil = Time.unscaledTime + GestureLatchSeconds;
         }
 
-        private static bool LooksLikeIndirectScroll(Vector2 delta)
+        private static UnityScrollGestureSample Classify(Vector2 delta)
         {
             float absX = Mathf.Abs(delta.x);
             float absY = Mathf.Abs(delta.y);
+            if (absX <= HorizontalThreshold && absY <= VerticalThreshold)
+                return new UnityScrollGestureSample(delta, UnityScrollGestureKind.None);
+
+            if (LooksLikeIndirectGesture(absX, absY))
+                return new UnityScrollGestureSample(delta, UnityScrollGestureKind.Indirect);
+
+            return new UnityScrollGestureSample(delta, UnityScrollGestureKind.MouseWheel);
+        }
+
+        private static bool LooksLikeIndirectGesture(float absX, float absY)
+        {
             if (absX > HorizontalThreshold)
-            {
-                _consecutiveVerticalFrames = 0;
                 return true;
-            }
 
             if (absY <= VerticalThreshold)
-            {
-                _consecutiveVerticalFrames = 0;
                 return false;
-            }
-
-            if (_lastVerticalScrollFrame == Time.frameCount - 1)
-                _consecutiveVerticalFrames++;
-            else
-                _consecutiveVerticalFrames = 1;
-
-            _lastVerticalScrollFrame = Time.frameCount;
 
             if (absY < WholeStepThreshold)
                 return true;
 
-            if (Mathf.Abs(absY - Mathf.Round(absY)) > 0.001f)
-                return true;
-
-            return _consecutiveVerticalFrames >= ConsecutiveVerticalFramesForIndirect;
+            return Mathf.Abs(absY - Mathf.Round(absY)) > WholeStepTolerance;
         }
     }
 }

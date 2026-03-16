@@ -31,10 +31,29 @@ namespace ShelteredAPI.Input
         private bool _loaded;
         private static readonly ShelteredKeybindsProvider _instance = new ShelteredKeybindsProvider();
 
+        /// <summary>
+        /// Gets the singleton controls provider used by the Sheltered controls screen.
+        /// </summary>
         public static ShelteredKeybindsProvider Instance { get { return _instance; } }
+
+        /// <summary>
+        /// Gets a value indicating whether the provider can serve settings to the UI.
+        /// </summary>
         public bool IsReady { get; private set; }
+
+        /// <summary>
+        /// Gets or sets the runtime zoom-speed scale used by Sheltered input routing.
+        /// </summary>
         public float ZoomSpeed { get { return ShelteredInputTuning.ZoomSpeed; } set { ShelteredInputTuning.ZoomSpeed = value; } }
+
+        /// <summary>
+        /// Gets or sets the runtime movement-speed scale used for indirect touchpad panning.
+        /// </summary>
         public float TouchpadMovementSpeed { get { return ShelteredInputTuning.TouchpadMovementSpeed; } set { ShelteredInputTuning.TouchpadMovementSpeed = value; } }
+
+        /// <summary>
+        /// Gets or sets the runtime scale applied to mouse-wheel driven list and zoom input.
+        /// </summary>
         public float MouseScrollSpeed { get { return ShelteredInputTuning.MouseScrollSpeed; } set { ShelteredInputTuning.MouseScrollSpeed = value; } }
 
         private ShelteredKeybindsProvider()
@@ -42,6 +61,9 @@ namespace ShelteredAPI.Input
             IsReady = true;
         }
 
+        /// <summary>
+        /// Returns the current Sheltered controls definitions, including built-in, mod-defined, and tuning entries.
+        /// </summary>
         public IEnumerable<SettingDefinition> GetSettings()
         {
             EnsureLoaded();
@@ -53,17 +75,26 @@ namespace ShelteredAPI.Input
             }
         }
 
+        /// <summary>
+        /// Returns the provider instance used as the settings data object for the shared settings UI.
+        /// </summary>
         public object GetSettingsObject()
         {
             return this;
         }
 
+        /// <summary>
+        /// Applies persisted runtime tuning after the shared settings UI has finished loading definitions.
+        /// </summary>
         public void OnSettingsLoaded()
         {
             EnsureLoaded();
             ApplyRuntimeTuning();
         }
 
+        /// <summary>
+        /// Restores all displayed bindings and Sheltered input tuning values to their shipped defaults.
+        /// </summary>
         public void ResetToDefaults()
         {
             EnsureLoaded();
@@ -80,6 +111,9 @@ namespace ShelteredAPI.Input
             ModPrefs.Save();
         }
 
+        /// <summary>
+        /// Persists all displayed bindings and Sheltered input tuning values to ModPrefs.
+        /// </summary>
         public void Save()
         {
             EnsureLoaded();
@@ -94,6 +128,9 @@ namespace ShelteredAPI.Input
             MMLog.WriteInfo("[ShelteredKeybindsProvider] Save persisted " + actions.Count + " displayed keybind actions and runtime input tuning.");
         }
 
+        /// <summary>
+        /// Serializes the current binding and tuning state into a compact JSON object for export/debug workflows.
+        /// </summary>
         public string SerializeToJson()
         {
             EnsureLoaded();
@@ -122,6 +159,9 @@ namespace ShelteredAPI.Input
             return sb.ToString();
         }
 
+        /// <summary>
+        /// Registers Sheltered input actions, loads persisted values, and builds UI definitions on first use.
+        /// </summary>
         public void EnsureLoaded()
         {
             if (_loaded) return;
@@ -143,6 +183,14 @@ namespace ShelteredAPI.Input
         /// Input -> Validate -> Conflict Detection -> Conflict Prompt/Resolution -> Apply -> Persist.
         /// Returns true only when applied immediately in this call.
         /// </summary>
+        /// <param name="actionId">The registered input action identifier to update.</param>
+        /// <param name="primary"><see langword="true"/> to change the primary slot; otherwise the alternate slot.</param>
+        /// <param name="keyCode">The requested key to bind, or <see cref="KeyCode.None"/> to clear the slot.</param>
+        /// <param name="context">The logical context used for validation and conflict policy decisions.</param>
+        /// <returns>
+        /// <see langword="true"/> when the binding was applied immediately; otherwise <see langword="false"/>
+        /// when the request was rejected or deferred to a conflict prompt callback.
+        /// </returns>
         public bool ApplyBindingWithConflictFlow(string actionId, bool primary, KeyCode keyCode, InputContext context)
         {
             EnsureLoaded();

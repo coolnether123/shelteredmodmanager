@@ -33,6 +33,9 @@ namespace ShelteredAPI.Input
             BuildCatalog();
         }
 
+        /// <summary>
+        /// Registers the vanilla Sheltered action catalog with <see cref="InputActionRegistry"/> exactly once.
+        /// </summary>
         public static void EnsureRegistered()
         {
             if (_registered) return;
@@ -48,6 +51,9 @@ namespace ShelteredAPI.Input
             }
         }
 
+        /// <summary>
+        /// Ensures the action catalog is registered and the persisted Sheltered keybind state has been loaded.
+        /// </summary>
         public static void EnsureRuntimeLoaded()
         {
             EnsureRegistered();
@@ -62,6 +68,12 @@ namespace ShelteredAPI.Input
             }
         }
 
+        /// <summary>
+        /// Tries to resolve the active binding for a vanilla gameplay input button.
+        /// </summary>
+        /// <param name="button">The vanilla gameplay button identifier.</param>
+        /// <param name="binding">Receives the current active binding when the lookup succeeds.</param>
+        /// <returns><see langword="true"/> when the button is tracked by the catalog; otherwise <see langword="false"/>.</returns>
         public static bool TryGetBinding(PlatformInput.InputButton button, out InputBinding binding)
         {
             binding = new InputBinding(KeyCode.None, KeyCode.None);
@@ -72,6 +84,12 @@ namespace ShelteredAPI.Input
             return InputActionRegistry.TryGetBinding(def.Id, out binding);
         }
 
+        /// <summary>
+        /// Tries to resolve the active binding for a vanilla menu input button or alias.
+        /// </summary>
+        /// <param name="button">The vanilla menu button identifier.</param>
+        /// <param name="binding">Receives the current active binding when the lookup succeeds.</param>
+        /// <returns><see langword="true"/> when the button or alias is tracked by the catalog; otherwise <see langword="false"/>.</returns>
         public static bool TryGetBinding(PlatformInput.MenuInputButton button, out InputBinding binding)
         {
             binding = new InputBinding(KeyCode.None, KeyCode.None);
@@ -88,6 +106,9 @@ namespace ShelteredAPI.Input
             return false;
         }
 
+        /// <summary>
+        /// Returns a value indicating whether any registered vanilla Sheltered binding was pressed this frame.
+        /// </summary>
         public static bool IsAnyMappedKeyDown()
         {
             EnsureRuntimeLoaded();
@@ -109,6 +130,11 @@ namespace ShelteredAPI.Input
             return false;
         }
 
+        /// <summary>
+        /// Resolves the validation/conflict context for a registered Sheltered action identifier.
+        /// </summary>
+        /// <param name="actionId">The action identifier produced by the Sheltered input catalogs.</param>
+        /// <returns>The resolved input context, or <see cref="InputContext.Unknown"/> when the action is not known.</returns>
         public static InputContext GetContextForActionId(string actionId)
         {
             if (string.IsNullOrEmpty(actionId)) return InputContext.Unknown;

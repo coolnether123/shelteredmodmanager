@@ -1,10 +1,10 @@
 ![Mod Manager GUI](documentation/screenshots/mod_manager_gui.png)
-# Sheltered Mod Manager v1.2.1
+# Sheltered Mod Manager v1.3 Beta.2
 
 **A modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Unicube & Team17**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.2.1-blue)]()
+[![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.3_Beta.2-blue)]()
 
 > **Credit:** Originally created by benjaminfoo (2019)  
 > **Maintained by:** Coolnether123 (2025-Present)

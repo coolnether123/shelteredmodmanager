@@ -24,7 +24,11 @@ namespace ShelteredAPI.Input
 
         private static Vector2 ReadTouchpadPanVector()
         {
-            Vector2 pan = UnityEngine.Input.mouseScrollDelta * ShelteredInputTuning.TouchpadMovementSpeed;
+            UnityScrollGestureSample sample = UnityIndirectScrollClassifier.GetCurrentSample();
+            if (sample.Kind != UnityScrollGestureKind.Indirect)
+                return Vector2.zero;
+
+            Vector2 pan = sample.Delta * ShelteredInputTuning.TouchpadMovementSpeed;
             pan.x = Mathf.Clamp(pan.x, -1f, 1f);
             pan.y = Mathf.Clamp(pan.y, -1f, 1f);
 
