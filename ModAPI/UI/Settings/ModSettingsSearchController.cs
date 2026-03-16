@@ -3,6 +3,9 @@ using UnityEngine;
 
 namespace ModAPI.Internal.UI
 {
+    /// <summary>
+    /// Delegate used by the settings panel to create styled labels without coupling the search controller to a concrete UI factory.
+    /// </summary>
     internal delegate UILabel ModSettingsCreateLabelDelegate(
         Transform parent,
         string name,
@@ -14,6 +17,10 @@ namespace ModAPI.Internal.UI
         Font ttfFont,
         int depth);
 
+    /// <summary>
+    /// Owns the manual search-bar input state for the shared settings panel.
+    /// Handles focus, text entry, and display refresh independently from the main panel layout logic.
+    /// </summary>
     internal sealed class ModSettingsSearchController
     {
         private GameObject _inputRoot;
@@ -21,8 +28,14 @@ namespace ModAPI.Internal.UI
         private bool _manualSearchEnabled;
         private bool _hasFocus;
 
+        /// <summary>
+        /// Gets the active search filter text shown in the shared settings panel.
+        /// </summary>
         internal string Filter { get; private set; }
 
+        /// <summary>
+        /// Creates the search bar UI and initializes manual input handling when a usable font is available.
+        /// </summary>
         internal void CreateSearchBar(
             Transform parent,
             UIFont uiFont,
@@ -88,6 +101,9 @@ namespace ModAPI.Internal.UI
             EnableManualSearchInput(inputGO, label, subtextColor);
         }
 
+        /// <summary>
+        /// Consumes Unity text input for the search field and invokes the provided callback when the filter changes.
+        /// </summary>
         internal void HandleInput(int maxSearchLength, Color subtextColor, Action onFilterChanged)
         {
             if (!_manualSearchEnabled || _inputRoot == null || _displayLabel == null)
@@ -143,6 +159,9 @@ namespace ModAPI.Internal.UI
             RefreshDisplay(subtextColor);
         }
 
+        /// <summary>
+        /// Refreshes the search field text and placeholder state to match focus and filter content.
+        /// </summary>
         internal void RefreshDisplay(Color subtextColor)
         {
             if (_displayLabel == null)

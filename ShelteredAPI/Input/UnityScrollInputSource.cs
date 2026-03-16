@@ -42,8 +42,10 @@ namespace ShelteredAPI.Input
         private static float ReadWheelLikeScroll(bool raw)
         {
             float strongest = 0f;
+            UnityScrollGestureSample sample = UnityIndirectScrollClassifier.GetCurrentSample();
 
-            strongest = UnityLegacyAxisReader.PickStronger(strongest, UnityEngine.Input.mouseScrollDelta.y);
+            if (sample.HasScroll)
+                strongest = UnityLegacyAxisReader.PickStronger(strongest, sample.Delta.y);
 
             for (int i = 0; i < ScrollAxisNames.Length; i++)
             {
