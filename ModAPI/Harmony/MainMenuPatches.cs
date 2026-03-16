@@ -19,12 +19,14 @@ namespace ModAPI.Harmony
         public static bool PendingNewSave = false;
         public static bool ModeChosen = false;
         public static bool SlotChosen = false;
+        public static bool MainMenuAdvanceIssued = false;
 
         public static void BeginNewSave()
         {
             PendingNewSave = true;
             ModeChosen = false;
             SlotChosen = false;
+            MainMenuAdvanceIssued = false;
         }
 
         public static void Reset()
@@ -32,6 +34,7 @@ namespace ModAPI.Harmony
             PendingNewSave = false;
             ModeChosen = false;
             SlotChosen = false;
+            MainMenuAdvanceIssued = false;
         }
     }
 
@@ -148,7 +151,6 @@ namespace ModAPI.Harmony
                 {
                     MMLog.Write("Auto-new-save requested. Navigating to new game flow.");
                     AutoLoadFlow.BeginNewSave();
-                    __instance.OnPlayButtonPressed();
                     return;
                 }
 
@@ -231,6 +233,24 @@ namespace ModAPI.Harmony
                 return false; // Skip original logic (which would push GameModeSelectionPanel)
             }
             return true;
+        }
+
+        public static void Postfix(MainMenu __instance)
+        {
+            if (!AutoLoadFlow.PendingNewSave || AutoLoadFlow.MainMenuAdvanceIssued)
+                return;
+
+            var tweenField = typeof(MainMenu).GetField("m_tween", BindingFlags.NonPublic | BindingFlags.Instance);
+            var tween = (TweenAlpha)tweenField?.GetValue(__instance);
+            if (tween == null || tween.direction == AnimationOrTween.Direction.Reverse)
+                return;
+
+            if (!__instance.isInputEnabled)
+                return;
+
+            AutoLoadFlow.MainMenuAdvanceIssued = true;
+            MMLog.WriteDebug("[AutoLoad] Main menu ready. Triggering Play for auto-new-save.");
+            __instance.OnPlayButtonPressed();
         }
     }
 

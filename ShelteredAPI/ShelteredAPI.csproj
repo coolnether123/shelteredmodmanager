@@ -79,6 +79,7 @@
     <Compile Include="Input\KeyValidationPolicy.cs" />
     <Compile Include="Input\KeyConflictResolver.cs" />
     <Compile Include="Input\UnityIndirectScrollClassifier.cs" />
+    <Compile Include="Input\UnityScrollGestureSample.cs" />
     <Compile Include="Input\UnityLegacyAxisReader.cs" />
     <Compile Include="Input\ShelteredInputTuning.cs" />
     <Compile Include="Input\UnityTouchpadPanReader.cs" />
