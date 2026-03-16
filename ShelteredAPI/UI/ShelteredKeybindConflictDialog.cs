@@ -5,6 +5,9 @@ using UnityEngine;
 
 namespace ShelteredAPI.UI
 {
+    /// <summary>
+    /// Sheltered-specific modal dialog used by the controls UI when a requested keybind conflicts with another action.
+    /// </summary>
     public sealed class ShelteredKeybindConflictDialog : MonoBehaviour
     {
         private static GameObject _instance;
@@ -22,6 +25,15 @@ namespace ShelteredAPI.UI
         private Action _onCancel;
         private bool _closed;
 
+        /// <summary>
+        /// Displays the conflict dialog on the overlay panel and routes the user's choice to the provided callbacks.
+        /// </summary>
+        /// <param name="title">Dialog title text shown at the top of the modal.</param>
+        /// <param name="message">Body copy describing the conflict.</param>
+        /// <param name="confirmLabel">Text shown on the confirm button.</param>
+        /// <param name="cancelLabel">Text shown on the cancel button.</param>
+        /// <param name="onConfirm">Callback invoked after the dialog closes when the user confirms.</param>
+        /// <param name="onCancel">Callback invoked after the dialog closes when the user cancels or the dialog cannot be created.</param>
         public static void Show(string title, string message, string confirmLabel, string cancelLabel, Action onConfirm, Action onCancel)
         {
             if (_instance != null)

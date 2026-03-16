@@ -11,8 +11,15 @@ using ModAPI.Spine.UI;
 
 namespace ModAPI.UI
 {
+    /// <summary>
+    /// Shared runtime settings window used by ModAPI and ShelteredAPI providers.
+    /// Supports presets, search, pagination, keybind pairing, and external input locking for nested dialogs.
+    /// </summary>
     public class ModSettingsPanel : MonoBehaviour
     {
+        /// <summary>
+        /// Raised after the settings panel finishes closing and destroys its runtime root.
+        /// </summary>
         public static event Action Closed;
 
         private static GameObject _instance;
@@ -68,6 +75,10 @@ namespace ModAPI.UI
         private const float WideKeybindRowX = -420f;
         private const float SectionHeaderLocalX = 76f;
         
+        /// <summary>
+        /// Opens the shared settings window for the supplied mod entry and rebuilds the full UI from its provider.
+        /// </summary>
+        /// <param name="mod">The mod whose settings provider should be displayed.</param>
         public static void Show(ModEntry mod)
         {
             MMLog.Write($"Show() requested for mod: {mod?.Id ?? "NULL"}");
@@ -109,6 +120,10 @@ namespace ModAPI.UI
             script.ApplyExternalInputLock(_externalInputLockCount > 0);
         }
 
+        /// <summary>
+        /// Temporarily prevents the panel from consuming its own input while an overlay dialog or capture flow is active.
+        /// Calls may be nested and must be balanced with <see cref="PopExternalInputLock"/>.
+        /// </summary>
         public static void PushExternalInputLock()
         {
             _externalInputLockCount++;
@@ -116,6 +131,9 @@ namespace ModAPI.UI
                 _activeInstance.ApplyExternalInputLock(true);
         }
 
+        /// <summary>
+        /// Releases one layer of externally requested input lock previously applied through <see cref="PushExternalInputLock"/>.
+        /// </summary>
         public static void PopExternalInputLock()
         {
             _externalInputLockCount = Mathf.Max(0, _externalInputLockCount - 1);
