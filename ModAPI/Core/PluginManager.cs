@@ -149,7 +149,7 @@ namespace ModAPI.Core
                 return;
             }
 
-            MMLog.WriteInfo("Background startup preload beginning for " + orderedMods.Count + " mod(s).");
+            MMLog.WriteDebug("Background startup preload beginning for " + orderedMods.Count + " mod(s).");
             ModThreads.RunAsync(
                 delegate
                 {
