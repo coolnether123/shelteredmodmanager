@@ -132,7 +132,7 @@ namespace ShelteredAPI.Harmony
             if (!_loggedInputHook)
             {
                 _loggedInputHook = true;
-                MMLog.WriteInfo("[PlatformInputKeybindPatches] Gameplay input hook active.");
+                MMLog.WriteDebug("[PlatformInputKeybindPatches] Gameplay input hook active.");
             }
 
             if (button == PlatformInput.InputButton.Action
@@ -159,7 +159,7 @@ namespace ShelteredAPI.Harmony
             if (!_loggedMenuHook)
             {
                 _loggedMenuHook = true;
-                MMLog.WriteInfo("[PlatformInputKeybindPatches] Menu input hook active.");
+                MMLog.WriteDebug("[PlatformInputKeybindPatches] Menu input hook active.");
             }
 
             result = Evaluate(binding, state);
@@ -190,7 +190,7 @@ namespace ShelteredAPI.Harmony
             if (!_loggedTouchMapHook)
             {
                 _loggedTouchMapHook = true;
-                MMLog.WriteInfo("[PlatformInputKeybindPatches] Touch drag mapped to UIdragMap.");
+                MMLog.WriteDebug("[PlatformInputKeybindPatches] Touch drag mapped to UIdragMap.");
             }
 
             return true;
