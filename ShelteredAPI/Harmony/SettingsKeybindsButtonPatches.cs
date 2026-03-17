@@ -53,7 +53,7 @@ namespace ShelteredAPI.Harmony
             if (!LoggedPanelTypes.Contains(typeName))
             {
                 LoggedPanelTypes.Add(typeName);
-                MMLog.WriteInfo("[SettingsKeybindsButtonPatches] UIPanelManager.PushPanel saw panel type: " + typeName);
+                MMLog.WriteDebug("[SettingsKeybindsButtonPatches] UIPanelManager.PushPanel saw panel type: " + typeName);
             }
 
             if (!(panel is ControllerPanel)) return true;
@@ -76,7 +76,7 @@ namespace ShelteredAPI.Harmony
                     UIFontCache.SeedFromGameObject(sourcePanel.gameObject, source);
 
                 HidePanelsForKeybindOpen(sourcePanel, source);
-                MMLog.WriteInfo("[SettingsKeybindsButtonPatches] Opening ModAPI keybinds from " + source + ".");
+                MMLog.WriteDebug("[SettingsKeybindsButtonPatches] Opening ModAPI keybinds from " + source + ".");
                 ShelteredKeybindsUI.Show();
                 return false;
             }
@@ -167,7 +167,7 @@ namespace ShelteredAPI.Harmony
                 if (panel.gameObject != null)
                     TrackAndHide(panel.gameObject, source);
 
-                MMLog.WriteInfo("[SettingsKeybindsButtonPatches] Hid panel " + panel.GetType().Name + " before " + source + ".");
+                MMLog.WriteDebug("[SettingsKeybindsButtonPatches] Hid panel " + panel.GetType().Name + " before " + source + ".");
             }
             catch (Exception ex)
             {
@@ -201,7 +201,7 @@ namespace ShelteredAPI.Harmony
                 TemporarilyHiddenObjects.Add(obj);
 
             obj.SetActive(false);
-            MMLog.WriteInfo("[SettingsKeybindsButtonPatches] Temporarily hid object " + obj.name + " for " + source + ".");
+            MMLog.WriteDebug("[SettingsKeybindsButtonPatches] Temporarily hid object " + obj.name + " for " + source + ".");
         }
 
         private static void RestoreTemporarilyHiddenObjects()
@@ -223,7 +223,7 @@ namespace ShelteredAPI.Harmony
                 }
             }
 
-            MMLog.WriteInfo("[SettingsKeybindsButtonPatches] Restored " + TemporarilyHiddenObjects.Count + " temporarily hidden settings object(s).");
+            MMLog.WriteDebug("[SettingsKeybindsButtonPatches] Restored " + TemporarilyHiddenObjects.Count + " temporarily hidden settings object(s).");
             TemporarilyHiddenObjects.Clear();
         }
     }

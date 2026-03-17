@@ -245,12 +245,22 @@ namespace ModAPI.Harmony
             if (tween == null || tween.direction == AnimationOrTween.Direction.Reverse)
                 return;
 
-            if (!__instance.isInputEnabled)
+            if (!IsMainMenuInputEnabled(__instance))
                 return;
 
             AutoLoadFlow.MainMenuAdvanceIssued = true;
             MMLog.WriteDebug("[AutoLoad] Main menu ready. Triggering Play for auto-new-save.");
             __instance.OnPlayButtonPressed();
+        }
+
+        private static bool IsMainMenuInputEnabled(MainMenu instance)
+        {
+            if (instance == null)
+                return false;
+
+            bool inputEnabled = Traverse.Create(instance).Field("m_inputEnabled").GetValue<bool>();
+            bool userSignedOut = Traverse.Create(instance).Field("m_userSignedOut").GetValue<bool>();
+            return inputEnabled && !userSignedOut;
         }
     }
 
