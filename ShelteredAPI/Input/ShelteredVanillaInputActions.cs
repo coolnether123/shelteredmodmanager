@@ -64,7 +64,7 @@ namespace ShelteredAPI.Input
                 if (_runtimeLoaded) return;
                 ShelteredKeybindsProvider.Instance.EnsureLoaded();
                 _runtimeLoaded = true;
-                MMLog.WriteInfo("[ShelteredVanillaInputActions] Runtime keybinds loaded from provider.");
+                MMLog.WriteDebug("[ShelteredVanillaInputActions] Runtime keybinds loaded from provider.");
             }
         }
 

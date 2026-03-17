@@ -70,7 +70,7 @@ namespace ModAPI.Core
                 _apis[apiName] = implementation;
                 _apiProviders[apiName] = providerModId ?? "unknown";
                 
-                MMLog.WriteInfo($"Registered API: {apiName} (Provider: {_apiProviders[apiName]}, Type: {typeof(T).Name})");
+                MMLog.WriteDebug($"Registered API: {apiName} (Provider: {_apiProviders[apiName]}, Type: {typeof(T).Name})");
                 return true;
             }
         }

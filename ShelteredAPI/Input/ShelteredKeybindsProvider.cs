@@ -169,12 +169,12 @@ namespace ShelteredAPI.Input
             {
                 if (_loaded) return;
 
-                MMLog.WriteInfo("[ShelteredKeybindsProvider] EnsureLoaded starting.");
+                MMLog.WriteDebug("[ShelteredKeybindsProvider] EnsureLoaded starting.");
                 EnsureActionsRegistered();
                 LoadFromPrefs();
                 _definitions = BuildDefinitions();
                 _loaded = true;
-                MMLog.WriteInfo("[ShelteredKeybindsProvider] EnsureLoaded complete. Definitions=" + (_definitions != null ? _definitions.Count : 0));
+                MMLog.WriteDebug("[ShelteredKeybindsProvider] EnsureLoaded complete. Definitions=" + (_definitions != null ? _definitions.Count : 0));
             }
         }
 
@@ -294,7 +294,7 @@ namespace ShelteredAPI.Input
             TouchpadMovementSpeed = LoadFloatPref(TouchpadMovementSpeedPrefKey, ShelteredInputTuning.DefaultTouchpadMovementSpeed);
             MouseScrollSpeed = LoadFloatPref(MouseScrollSpeedPrefKey, ShelteredInputTuning.DefaultMouseScrollSpeed);
             ApplyRuntimeTuning();
-            MMLog.WriteInfo("[ShelteredKeybindsProvider] Loaded " + actions.Count + " actions from ModPrefs. NormalizedDuplicates=" + normalizedCount + ".");
+            MMLog.WriteDebug("[ShelteredKeybindsProvider] Loaded " + actions.Count + " actions from ModPrefs. NormalizedDuplicates=" + normalizedCount + ".");
         }
 
         private List<SettingDefinition> BuildDefinitions()

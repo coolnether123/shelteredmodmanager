@@ -220,7 +220,7 @@ namespace ModAPI.Harmony
                 Type targetType = AccessTools.TypeByName(typeName);
                 if (targetType == null)
                 {
-                    MMLog.WriteInfo("HarmonyBootstrap: patch verify target type missing: " + label);
+                    MMLog.WriteDebug("HarmonyBootstrap: patch verify target type missing: " + label);
                     return;
                 }
 
@@ -234,7 +234,7 @@ namespace ModAPI.Harmony
                     Type parameterType = AccessTools.TypeByName(parameterTypeName);
                     if (parameterType == null)
                     {
-                        MMLog.WriteInfo("HarmonyBootstrap: patch verify parameter type missing for " + label + ": " + parameterTypeName);
+                        MMLog.WriteDebug("HarmonyBootstrap: patch verify parameter type missing for " + label + ": " + parameterTypeName);
                         return;
                     }
                     target = AccessTools.Method(targetType, methodName, new[] { parameterType });
@@ -242,7 +242,7 @@ namespace ModAPI.Harmony
 
                 if (target == null)
                 {
-                    MMLog.WriteInfo("HarmonyBootstrap: patch verify target method missing: " + label);
+                    MMLog.WriteDebug("HarmonyBootstrap: patch verify target method missing: " + label);
                     return;
                 }
 
@@ -252,7 +252,7 @@ namespace ModAPI.Harmony
                     (info.Postfixes != null && info.Postfixes.Count > 0) ||
                     (info.Transpilers != null && info.Transpilers.Count > 0));
 
-                MMLog.WriteInfo("HarmonyBootstrap: patch verify " + label + " => " + (patched ? "patched" : "not patched"));
+                MMLog.WriteDebug("HarmonyBootstrap: patch verify " + label + " => " + (patched ? "patched" : "not patched"));
             }
             catch (Exception ex)
             {
