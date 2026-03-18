@@ -163,7 +163,6 @@ namespace Cortex
             _state.Workbench.EditorContainerId = NormalizeContainerId(persisted.EditorContainerId, CortexWorkbenchIds.EditorContainer);
             _state.Workbench.PanelContainerId = NormalizeContainerId(persisted.PanelContainerId, CortexWorkbenchIds.LogsContainer);
             _state.Logs.ShowDetachedWindow = persisted.ShowDetachedLogWindow;
-            _state.Documents.EditorUnlocked = persisted.EditorUnlocked;
             var assignments = persisted.ContainerHostAssignments ?? new ContainerHostAssignment[0];
             for (var i = 0; i < assignments.Length; i++)
             {
@@ -267,7 +266,6 @@ namespace Cortex
                 EditorContainerId = _state.Workbench.EditorContainerId,
                 PanelContainerId = _state.Workbench.PanelContainerId,
                 ShowDetachedLogWindow = _state.Logs.ShowDetachedWindow,
-                EditorUnlocked = _state.Documents.EditorUnlocked,
                 SelectedProjectModId = _state.SelectedProject != null ? (_state.SelectedProject.ModId ?? string.Empty) : string.Empty,
                 SelectedProjectSourceRoot = _state.SelectedProject != null ? (_state.SelectedProject.SourceRootPath ?? string.Empty) : string.Empty,
                 ActiveDocumentPath = _state.Documents.ActiveDocumentPath ?? string.Empty,
