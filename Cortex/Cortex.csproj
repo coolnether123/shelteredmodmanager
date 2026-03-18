@@ -55,14 +55,13 @@
     <Compile Include="Shell\CortexShellLayoutContext.cs" />
     <Compile Include="Shell\CortexShellLayoutHostRouter.cs" />
     <Compile Include="Shell\CortexShellLifecycleCoordinator.cs" />
-    <Compile Include="Shell\CortexShellModuleActivationContext.cs" />
     <Compile Include="Shell\CortexShellModuleActivationService.cs" />
+    <Compile Include="Shell\CortexShellBuiltInModuleContributions.cs" />
     <Compile Include="Shell\CortexShellModuleCapabilities.cs" />
     <Compile Include="Shell\CortexShellModuleCompositionService.cs" />
+    <Compile Include="Shell\CortexShellModuleContributionRegistry.cs" />
     <Compile Include="Shell\CortexShellModuleDescriptor.cs" />
-    <Compile Include="Shell\CortexShellModuleDescriptorCatalog.cs" />
     <Compile Include="Shell\CortexShellModuleRenderService.cs" />
-    <Compile Include="Shell\CortexShellModuleRenderContext.cs" />
     <Compile Include="CortexShell.Language.cs" />
     <Compile Include="CortexShell.Runtime.cs" />
     <Compile Include="CortexShell.cs" />
