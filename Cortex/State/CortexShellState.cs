@@ -88,7 +88,6 @@ namespace Cortex
     {
         public DocumentSession ActiveDocument;
         public string ActiveDocumentPath;
-        public bool EditorUnlocked;
         public readonly List<DocumentSession> OpenDocuments = new List<DocumentSession>();
     }
 
