@@ -108,6 +108,7 @@ namespace Cortex.Core.Models
     /// </summary>
     public sealed class EditorDocumentState
     {
+        public bool EditModeEnabled;
         public bool ScrollToCaretPending;
         public bool HasExplicitCaretPlacement;
         public int CachedTextVersion;
@@ -120,6 +121,7 @@ namespace Cortex.Core.Models
 
         public EditorDocumentState()
         {
+            EditModeEnabled = false;
             CachedTextVersion = -1;
             UndoLimit = 128;
             LineMap = new EditorLineMap();

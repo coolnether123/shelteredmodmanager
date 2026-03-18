@@ -4,6 +4,7 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
+using Cortex.Services;
 using ModAPI.Core;
 using UnityEngine;
 
@@ -71,6 +72,7 @@ namespace Cortex.Modules.Editor
         private readonly CodeViewSurface _codeViewSurface = new CodeViewSurface();
         private readonly EditableCodeViewSurface _editableCodeViewSurface = new EditableCodeViewSurface();
         private readonly IEditorService _editorService = new EditorService();
+        private readonly EditorDocumentModeService _documentModeService = new EditorDocumentModeService();
 
         public void Draw(
             IDocumentService documentService,
@@ -497,7 +499,10 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            var isEditable = IsEditingDocument(state, active);
+            _editorService.EnsureDocumentState(active);
+            var settings = state != null ? state.Settings : null;
+            var usesUnifiedSourceSurface = _documentModeService.UsesUnifiedSourceSurface(active);
+            var isEditable = _documentModeService.IsEditingEnabled(settings, active);
             var rect = GUILayoutUtility.GetRect(0f, 100000f, 0f, 100000f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             // IMGUI layout passes can report a placeholder 1x1 rect before the real
             // repaint bounds exist. Keep the last usable editor viewport so the find
@@ -509,18 +514,20 @@ namespace Cortex.Modules.Editor
 
             var overlayBlockRect = BuildActiveFindInputBlockRect(state, rect);
 
-            if (isEditable)
+            if (usesUnifiedSourceSurface)
             {
                 _editorScroll = _editableCodeViewSurface.Draw(
                     rect,
                     _editorScroll,
                     active,
+                    isEditable,
                     commandRegistry,
                     contributionRegistry,
                     state,
                     _appliedTheme,
                     _editorReadOnlyStyle,
                     _gutterReadOnlyStyle,
+                    _codeTooltipStyle,
                     _contextMenuStyle,
                     _contextMenuButtonStyle,
                     _contextMenuHeaderStyle,
@@ -623,16 +630,16 @@ namespace Cortex.Modules.Editor
             var caret = active.EditorState != null
                 ? _editorService.GetCaretPosition(active, active.EditorState.CaretIndex)
                 : new EditorCaretPosition();
-            var canEditDocument = CanToggleDocumentEditing(state, active);
-            var isEditing = IsEditingDocument(state, active);
-            var editingAllowed = state.Settings != null && state.Settings.EnableFileEditing;
+            var settings = state != null ? state.Settings : null;
+            var canEditDocument = _documentModeService.CanToggleEditing(settings, active);
+            var isEditing = _documentModeService.IsEditingEnabled(settings, active);
             var savingAllowed = state.Settings != null && state.Settings.EnableFileSaving;
             var analysis = active.LanguageAnalysis;
             var errorCount = CountDiagnostics(analysis, "Error");
             var warningCount = CountDiagnostics(analysis, "Warning");
             var roslynLabel = BuildRoslynLabel(state, analysis, errorCount, warningCount);
             var augmentationLabel = BuildCompletionAugmentationLabel(state, active);
-            var modeTooltip = BuildEditModeTooltip(active, editingAllowed, canEditDocument, isEditing);
+            var modeTooltip = _documentModeService.BuildEditModeTooltip(active, settings);
             var modeContent = new GUIContent(isEditing ? "EDIT" : "READ", modeTooltip);
             var tooltip = string.Empty;
             Rect modeRect;
@@ -642,10 +649,10 @@ namespace Cortex.Modules.Editor
             GUI.enabled = canToggleMode;
             if (GUILayout.Button(modeContent, ResolveStatusModeButtonStyle(canToggleMode, isEditing), GUILayout.Width(68f)))
             {
-                state.Documents.EditorUnlocked = !isEditing;
-                state.StatusMessage = state.Documents.EditorUnlocked
-                    ? "Edit mode enabled for writable source tabs."
-                    : "Read mode enabled.";
+                _documentModeService.SetEditingEnabled(settings, active, !isEditing);
+                state.StatusMessage = _documentModeService.IsEditingEnabled(settings, active)
+                    ? "Edit mode enabled for " + CortexModuleUtil.GetDocumentDisplayName(active) + "."
+                    : "Read mode enabled for " + CortexModuleUtil.GetDocumentDisplayName(active) + ".";
             }
             GUI.enabled = true;
 
@@ -816,41 +823,6 @@ namespace Cortex.Modules.Editor
             return isEditing
                 ? (_statusModeButtonActiveStyle ?? _toolbarButtonStyle ?? GUI.skin.button)
                 : (_statusModeButtonStyle ?? _toolbarButtonStyle ?? GUI.skin.button);
-        }
-
-        private static bool CanToggleDocumentEditing(CortexShellState state, DocumentSession session)
-        {
-            return state != null &&
-                state.Settings != null &&
-                state.Settings.EnableFileEditing &&
-                session != null &&
-                session.SupportsEditing;
-        }
-
-        private static bool IsEditingDocument(CortexShellState state, DocumentSession session)
-        {
-            return CanToggleDocumentEditing(state, session) &&
-                state.Documents != null &&
-                state.Documents.EditorUnlocked;
-        }
-
-        private static string BuildEditModeTooltip(DocumentSession session, bool editingAllowed, bool canEditDocument, bool isEditing)
-        {
-            if (!editingAllowed)
-            {
-                return "Enable File Editing in Settings to allow source tabs to switch into edit mode.";
-            }
-
-            if (!canEditDocument)
-            {
-                return session != null && session.Kind == DocumentKind.DecompiledCode
-                    ? "Decompiler output is read-only. Open the source file instead to edit code."
-                    : "This document type is read-only and cannot switch into edit mode.";
-            }
-
-            return isEditing
-                ? "Edit mode is already active for this tab."
-                : "Switch this source tab into in-memory edit mode.";
         }
 
         private void DrawStatusTooltip(Rect anchorRect, string tooltip)

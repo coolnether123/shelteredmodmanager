@@ -76,9 +76,12 @@
     <Compile Include="Services\CompletionRankingService.cs" />
     <Compile Include="Services\DocumentLanguageAnalysisService.cs" />
     <Compile Include="Services\EditorCompletionService.cs" />
+    <Compile Include="Services\EditorDocumentModeService.cs" />
     <Compile Include="Services\DocumentLanguageInteractionService.cs" />
     <Compile Include="Services\IEditorKeybindingService.cs" />
     <Compile Include="Services\EditorKeybindingService.cs" />
+    <Compile Include="Services\SourceEditorCommandRouterService.cs" />
+    <Compile Include="Services\SourceEditorHoverService.cs" />
     <Compile Include="Services\WorkbenchSearchService.cs" />
     <Compile Include="Services\CortexNavigationService.cs" />
     <Compile Include="State\CortexShellState.cs" />
