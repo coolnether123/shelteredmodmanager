@@ -4,6 +4,7 @@ using Cortex.Chrome;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
 using Cortex.Presentation.Models;
+using Cortex.Shell;
 using UnityEngine;
 
 namespace Cortex
@@ -426,51 +427,29 @@ namespace Cortex
 
         private bool HasHostItems(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation)
         {
-            return GetHostItems(snapshot, hostLocation).Count > 0;
+            return _layoutHostRouter.HasHostItems(GetLayoutContext(), snapshot, hostLocation);
         }
 
         private List<ToolRailItem> GetHostItems(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation)
         {
-            var items = new List<ToolRailItem>();
-            if (snapshot == null)
-            {
-                return items;
-            }
-
-            for (var i = 0; i < snapshot.ToolRailItems.Count; i++)
-            {
-                var item = snapshot.ToolRailItems[i];
-                if (item != null &&
-                    !_state.Workbench.IsHidden(item.ContainerId) &&
-                    ResolveHostLocation(item.ContainerId) == hostLocation)
-                {
-                    items.Add(item);
-                }
-            }
-
-            return items;
+            return _layoutHostRouter.GetHostItems(GetLayoutContext(), snapshot, hostLocation);
         }
 
         private string GetActiveContainerForHost(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation)
         {
-            switch (hostLocation)
+            return _layoutHostRouter.GetActiveContainerForHost(GetLayoutContext(), snapshot, hostLocation);
+        }
+
+        private CortexShellLayoutContext GetLayoutContext()
+        {
+            if (_layoutContext == null)
             {
-                case WorkbenchHostLocation.PanelHost:
-                    return !string.IsNullOrEmpty(_state.Workbench.PanelContainerId)
-                        ? _state.Workbench.PanelContainerId
-                        : FindFirstHostItem(snapshot, hostLocation);
-                case WorkbenchHostLocation.SecondarySideHost:
-                    return !string.IsNullOrEmpty(_state.Workbench.SecondarySideContainerId)
-                        ? _state.Workbench.SecondarySideContainerId
-                        : FindFirstHostItem(snapshot, hostLocation);
-                case WorkbenchHostLocation.DocumentHost:
-                    return _state.Workbench.EditorContainerId;
-                case WorkbenchHostLocation.PrimarySideHost:
-                default:
-                    return !string.IsNullOrEmpty(_state.Workbench.SideContainerId)
-                        ? _state.Workbench.SideContainerId
-                        : FindFirstHostItem(snapshot, hostLocation);
+                _layoutContext = new CortexShellLayoutContext(
+                    _state,
+                    delegate { return _workbenchRuntime; });
             }
+
+            return _layoutContext;
         }
 
         private string FindFirstHostItem(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation)

@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Cortex.Core.Models;
+using Cortex.Modules.Editor;
 using Cortex.Modules.Shared;
-using Cortex.Presentation.Models;
+using Cortex.Shell;
 using UnityEngine;
 
 namespace Cortex
@@ -14,484 +15,12 @@ namespace Cortex
 
         private void EnsureModuleActivated(string containerId)
         {
-            EnsureModuleBindingsInitialized();
-            if (string.IsNullOrEmpty(containerId) || _activatedContainers.Contains(containerId) || !CanActivateContainer(containerId))
-            {
-                return;
-            }
-
-            Action activator;
-            if (_moduleActivators.TryGetValue(containerId, out activator) && activator != null)
-            {
-                activator();
-            }
-
-            _activatedContainers.Add(containerId);
-        }
-
-        private void EnsureModuleBindingsInitialized()
-        {
-            if (_moduleActivators.Count > 0)
-            {
-                return;
-            }
-
-            RegisterModuleBinding(
-                CortexWorkbenchIds.LogsContainer,
-                delegate
-                {
-                    if (_logsModule == null) _logsModule = new Modules.Logs.LogsModule();
-                },
-                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
-                {
-                    if (_logsModule == null) return;
-                    _logsModule.Draw(_runtimeLogFeed, _sourcePathResolver, _navigationService, _state, detachedWindow);
-                });
-
-            RegisterModuleBinding(
-                CortexWorkbenchIds.ProjectsContainer,
-                delegate
-                {
-                    if (_projectsModule == null) _projectsModule = new Modules.Projects.ProjectsModule();
-                },
-                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
-                {
-                    if (_projectsModule == null) return;
-                    _projectsModule.Draw(_projectCatalog, _projectWorkspaceService, _loadedModCatalog, _state);
-                });
-
-            RegisterModuleBinding(
-                CortexWorkbenchIds.FileExplorerContainer,
-                delegate
-                {
-                    if (_fileExplorerModule == null) _fileExplorerModule = new Modules.FileExplorer.FileExplorerModule();
-                },
-                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
-                {
-                    if (_fileExplorerModule == null) return;
-                    _fileExplorerModule.Draw(_workspaceBrowserService, _decompilerExplorerService, _navigationService, _state);
-                });
-
-            RegisterModuleBinding(
-                CortexWorkbenchIds.EditorContainer,
-                delegate
-                {
-                    if (_editorModule == null) _editorModule = new Modules.Editor.EditorModule();
-                },
-                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
-                {
-                    if (_editorModule == null) return;
-                    _editorModule.Draw(
-                        _documentService,
-                        _navigationService,
-                        _workbenchRuntime != null ? _workbenchRuntime.CommandRegistry : null,
-                        _workbenchRuntime != null ? _workbenchRuntime.ContributionRegistry : null,
-                        _workbenchSearchService,
-                        _state);
-                });
-
-            RegisterModuleBinding(
-                CortexWorkbenchIds.BuildContainer,
-                delegate
-                {
-                    if (_buildModule == null) _buildModule = new Modules.Build.BuildModule();
-                },
-                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
-                {
-                    if (_buildModule == null) return;
-                    _buildModule.Draw(_buildCommandResolver, _buildExecutor, _restartCoordinator, _sourcePathResolver, _navigationService, _state);
-                });
-
-            RegisterModuleBinding(
-                CortexWorkbenchIds.ReferenceContainer,
-                delegate
-                {
-                    if (_referenceModule == null) _referenceModule = new Modules.Reference.ReferenceModule();
-                },
-                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
-                {
-                    if (_referenceModule == null) return;
-                    _referenceModule.Draw(_referenceCatalogService, _navigationService, _state);
-                });
-
-            RegisterModuleBinding(
-                CortexWorkbenchIds.SearchContainer,
-                delegate
-                {
-                    if (_searchModule == null) _searchModule = new Modules.Search.SearchModule();
-                },
-                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
-                {
-                    if (_searchModule == null) return;
-                    _searchModule.Draw(_workbenchSearchService, _navigationService, _state);
-                });
-
-            RegisterModuleBinding(
-                CortexWorkbenchIds.RuntimeContainer,
-                delegate
-                {
-                    if (_runtimeToolsModule == null) _runtimeToolsModule = new Modules.Runtime.RuntimeToolsModule();
-                },
-                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
-                {
-                    if (_runtimeToolsModule == null) return;
-                    _runtimeToolsModule.Draw(_runtimeToolBridge, _state);
-                });
-
-            RegisterModuleBinding(
-                CortexWorkbenchIds.SettingsContainer,
-                delegate
-                {
-                    if (_settingsModule == null) _settingsModule = new Modules.Settings.SettingsModule();
-                },
-                delegate(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
-                {
-                    if (_settingsModule == null) return;
-                    _settingsModule.Draw(_settingsStore, _projectCatalog, _projectWorkspaceService, _loadedModCatalog, snapshot, _workbenchRuntime != null ? _workbenchRuntime.ThemeState : null, _state);
-                });
-        }
-
-        private void RegisterModuleBinding(string containerId, Action activator, Action<WorkbenchPresentationSnapshot, bool> renderer)
-        {
-            if (string.IsNullOrEmpty(containerId) || activator == null || renderer == null)
-            {
-                return;
-            }
-
-            _moduleActivators[containerId] = activator;
-            _moduleRenderers[containerId] = renderer;
+            GetModuleActivationService().EnsureActivated(GetModuleActivationContext(), containerId);
         }
 
         private void RegisterCommandHandlers()
         {
-            if (_workbenchRuntime == null || _workbenchRuntime.CommandRegistry == null)
-            {
-                return;
-            }
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.shell.toggle",
-                delegate(CommandExecutionContext context)
-                {
-                    _visible = !_visible;
-                    if (!_visible)
-                    {
-                        PersistWorkbenchSession();
-                        PersistWindowSettings();
-                    }
-                    _state.StatusMessage = _visible ? "Cortex opened." : "Cortex closed.";
-                },
-                delegate(CommandExecutionContext context) { return true; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.logs.toggleWindow",
-                delegate(CommandExecutionContext context)
-                {
-                    _state.Logs.ShowDetachedWindow = !_state.Logs.ShowDetachedWindow;
-                    _state.StatusMessage = _state.Logs.ShowDetachedWindow ? "Detached logs opened." : "Detached logs hidden.";
-                },
-                delegate(CommandExecutionContext context) { return true; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.shell.fitWindow",
-                delegate(CommandExecutionContext context)
-                {
-                    FitMainWindowToScreen();
-                    _state.StatusMessage = "Workbench fitted to screen.";
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.build.execute",
-                delegate(CommandExecutionContext context)
-                {
-                    ActivateContainer(CortexWorkbenchIds.BuildContainer);
-                    _state.StatusMessage = "Build panel focused.";
-                },
-                delegate(CommandExecutionContext context)
-                {
-                    return _visible && _state.SelectedProject != null;
-                });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.file.saveAll",
-                delegate(CommandExecutionContext context)
-                {
-                    if (_state.Settings == null || !_state.Settings.EnableFileSaving)
-                    {
-                        _state.StatusMessage = "Enable file saving in Settings before saving source files.";
-                        return;
-                    }
-
-                    var saved = 0;
-                    var blocked = 0;
-                    for (var i = 0; i < _state.Documents.OpenDocuments.Count; i++)
-                    {
-                        var doc = _state.Documents.OpenDocuments[i];
-                        if (doc == null || !doc.IsDirty || !doc.SupportsSaving || _documentService == null)
-                        {
-                            continue;
-                        }
-
-                        if (_documentService.Save(doc))
-                        {
-                            saved++;
-                        }
-                        else
-                        {
-                            blocked++;
-                        }
-                    }
-
-                    _state.StatusMessage = blocked > 0
-                        ? "Saved " + saved + " file(s); " + blocked + " blocked by snapshot conflicts."
-                        : "Saved " + saved + " file(s).";
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.file.closeActive",
-                delegate(CommandExecutionContext context)
-                {
-                    if (_state.Documents.ActiveDocument != null)
-                    {
-                        var path = _state.Documents.ActiveDocument.FilePath;
-                        Modules.Shared.CortexModuleUtil.CloseDocument(_state, path);
-                        _state.StatusMessage = "Closed " + System.IO.Path.GetFileName(path);
-                    }
-                },
-                delegate(CommandExecutionContext context) { return _visible && _state.Documents.ActiveDocument != null; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.file.settings",
-                delegate(CommandExecutionContext context)
-                {
-                    OpenSettingsWindow();
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.view.fileExplorer",
-                delegate(CommandExecutionContext context)
-                {
-                    var isVisible = !_state.Workbench.IsHidden(CortexWorkbenchIds.FileExplorerContainer) &&
-                        ResolveHostLocation(CortexWorkbenchIds.FileExplorerContainer) == WorkbenchHostLocation.SecondarySideHost;
-                    if (isVisible)
-                    {
-                        HideContainer(CortexWorkbenchIds.FileExplorerContainer);
-                        _state.StatusMessage = "File Explorer hidden.";
-                    }
-                    else
-                    {
-                        ActivateContainer(CortexWorkbenchIds.FileExplorerContainer);
-                        _state.StatusMessage = "File Explorer shown.";
-                    }
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.window.explorer",
-                delegate(CommandExecutionContext context)
-                {
-                    ActivateContainer(CortexWorkbenchIds.FileExplorerContainer);
-                    _state.StatusMessage = "Explorer window shown.";
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.window.projects",
-                delegate(CommandExecutionContext context)
-                {
-                    ActivateContainer(CortexWorkbenchIds.ProjectsContainer);
-                    _state.StatusMessage = "Projects window shown.";
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.window.references",
-                delegate(CommandExecutionContext context)
-                {
-                    ActivateContainer(CortexWorkbenchIds.ReferenceContainer);
-                    _state.StatusMessage = "References window shown.";
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.window.search",
-                delegate(CommandExecutionContext context)
-                {
-                    ActivateContainer(CortexWorkbenchIds.SearchContainer);
-                    _state.StatusMessage = "Search window shown.";
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.window.logs",
-                delegate(CommandExecutionContext context)
-                {
-                    ActivateContainer(CortexWorkbenchIds.LogsContainer);
-                    _state.StatusMessage = "Logs window shown.";
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.window.build",
-                delegate(CommandExecutionContext context)
-                {
-                    ActivateContainer(CortexWorkbenchIds.BuildContainer);
-                    _state.StatusMessage = "Build window shown.";
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.window.runtime",
-                delegate(CommandExecutionContext context)
-                {
-                    ActivateContainer(CortexWorkbenchIds.RuntimeContainer);
-                    _state.StatusMessage = "Runtime window shown.";
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.window.settings",
-                delegate(CommandExecutionContext context)
-                {
-                    OpenSettingsWindow();
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.view.zoomIn",
-                delegate(CommandExecutionContext context) { _state.StatusMessage = "Font size increase (apply via Settings).";
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.view.zoomOut",
-                delegate(CommandExecutionContext context) { _state.StatusMessage = "Font size decrease (apply via Settings)."; },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.win.theme",
-                delegate(CommandExecutionContext context)
-                {
-                    if (_workbenchRuntime == null) return;
-                    var themes = _workbenchRuntime.ContributionRegistry.GetThemes();
-                    if (themes == null || themes.Count == 0) return;
-                    var current = _workbenchRuntime.ThemeState.ThemeId;
-                    var nextIndex = 0;
-                    for (var i = 0; i < themes.Count; i++)
-                    {
-                        if (string.Equals(themes[i].ThemeId, current, System.StringComparison.OrdinalIgnoreCase))
-                        {
-                            nextIndex = (i + 1) % themes.Count;
-                            break;
-                        }
-                    }
-
-                    _workbenchRuntime.ThemeState.ThemeId = themes[nextIndex].ThemeId;
-                    if (_state.Settings != null)
-                    {
-                        _state.Settings.ThemeId = _workbenchRuntime.ThemeState.ThemeId;
-                    }
-
-                    _state.StatusMessage = "Theme: " + themes[nextIndex].DisplayName;
-                },
-                delegate(CommandExecutionContext context) { return _visible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.editor.find",
-                delegate(CommandExecutionContext context)
-                {
-                    OpenFind();
-                },
-                delegate(CommandExecutionContext context) { return _visible && _state.Documents.ActiveDocument != null; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.search.next",
-                delegate(CommandExecutionContext context)
-                {
-                    ExecuteSearchOrAdvance(1);
-                },
-                delegate(CommandExecutionContext context) { return _visible && _state.Search != null && _state.Search.IsVisible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.search.previous",
-                delegate(CommandExecutionContext context)
-                {
-                    ExecuteSearchOrAdvance(-1);
-                },
-                delegate(CommandExecutionContext context) { return _visible && _state.Search != null && _state.Search.IsVisible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.search.close",
-                delegate(CommandExecutionContext context)
-                {
-                    CloseFind();
-                },
-                delegate(CommandExecutionContext context) { return _visible && _state.Search != null && _state.Search.IsVisible; });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.editor.goToDefinition",
-                delegate(CommandExecutionContext context)
-                {
-                    var target = GetEditorCommandTarget(context);
-                    if (target == null)
-                    {
-                        return;
-                    }
-
-                    _editorSymbolInteractionService.RequestDefinition(_state, target);
-                    _state.StatusMessage = "Go To Definition: " + (target.SymbolText ?? string.Empty);
-                },
-                delegate(CommandExecutionContext context)
-                {
-                    var target = GetEditorCommandTarget(context);
-                    return _visible && target != null && target.CanGoToDefinition;
-                });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.editor.copySymbol",
-                delegate(CommandExecutionContext context)
-                {
-                    var target = GetEditorCommandTarget(context);
-                    if (target == null)
-                    {
-                        return;
-                    }
-
-                    GUIUtility.systemCopyBuffer = target.SymbolText ?? string.Empty;
-                    _state.StatusMessage = "Copied symbol.";
-                },
-                delegate(CommandExecutionContext context)
-                {
-                    var target = GetEditorCommandTarget(context);
-                    return _visible && target != null && !string.IsNullOrEmpty(target.SymbolText);
-                });
-
-            _workbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.editor.copyHoverInfo",
-                delegate(CommandExecutionContext context)
-                {
-                    var target = GetEditorCommandTarget(context);
-                    if (target == null)
-                    {
-                        return;
-                    }
-
-                    GUIUtility.systemCopyBuffer = target.HoverText ?? string.Empty;
-                    _state.StatusMessage = "Copied hover info.";
-                },
-                delegate(CommandExecutionContext context)
-                {
-                    var target = GetEditorCommandTarget(context);
-                    return _visible && target != null && !string.IsNullOrEmpty(target.HoverText);
-                });
-        }
-
-        private static EditorCommandTarget GetEditorCommandTarget(CommandExecutionContext context)
-        {
-            return context != null ? context.Parameter as EditorCommandTarget : null;
+            _commandRouter.RegisterCommandHandlers(GetCommandContext());
         }
 
         private bool ExecuteCommand(string commandId, object parameter)
@@ -513,6 +42,98 @@ namespace Cortex
                 FocusedRegionId = _workbenchRuntime != null ? _workbenchRuntime.FocusState.FocusedRegionId : string.Empty,
                 Parameter = parameter
             };
+        }
+
+        private CortexShellCommandContext GetCommandContext()
+        {
+            if (_commandContext == null)
+            {
+                _commandContext = new CortexShellCommandContext(
+                    _state,
+                    delegate { return _workbenchRuntime; },
+                    delegate { return _documentService; },
+                    delegate { return _visible; },
+                    delegate(bool value) { _visible = value; },
+                    delegate { PersistWorkbenchSession(); },
+                    delegate { PersistWindowSettings(); },
+                    delegate { FitMainWindowToScreen(); },
+                    delegate(string containerId) { ActivateContainer(containerId); },
+                    delegate(string containerId) { return ResolveHostLocation(containerId); },
+                    delegate(string containerId) { HideContainer(containerId); },
+                    delegate { OpenSettingsWindow(); },
+                    delegate { OpenFind(); },
+                    delegate(int step) { ExecuteSearchOrAdvance(step); },
+                    delegate { CloseFind(); },
+                    delegate(EditorCommandTarget target) { _editorSymbolInteractionService.RequestDefinition(_state, target); });
+            }
+
+            return _commandContext;
+        }
+
+        private CortexShellModuleActivationContext GetModuleActivationContext()
+        {
+            if (_moduleActivationContext == null)
+            {
+                _moduleActivationContext = new CortexShellModuleActivationContext(
+                    delegate(string containerId) { return CanActivateContainer(containerId); });
+            }
+
+            return _moduleActivationContext;
+        }
+
+        private CortexShellModuleRenderContext GetModuleRenderContext()
+        {
+            if (_moduleRenderContext == null)
+            {
+                _moduleRenderContext = new CortexShellModuleRenderContext(
+                    GetModuleActivationContext(),
+                    _state,
+                    delegate { return _settingsStore; },
+                    delegate { return _projectCatalog; },
+                    delegate { return _loadedModCatalog; },
+                    delegate { return _projectWorkspaceService; },
+                    delegate { return _workspaceBrowserService; },
+                    delegate { return _decompilerExplorerService; },
+                    delegate { return _documentService; },
+                    delegate { return _buildCommandResolver; },
+                    delegate { return _buildExecutor; },
+                    delegate { return _referenceCatalogService; },
+                    delegate { return _sourcePathResolver; },
+                    delegate { return _runtimeLogFeed; },
+                    delegate { return _runtimeToolBridge; },
+                    delegate { return _restartCoordinator; },
+                    delegate { return _navigationService; },
+                    delegate { return _workbenchRuntime; },
+                    delegate { return _workbenchSearchService; },
+                    delegate(string containerId) { return BuildActivationBlockedMessage(containerId); });
+            }
+
+            return _moduleRenderContext;
+        }
+
+        private CortexShellModuleActivationService GetModuleActivationService()
+        {
+            if (_moduleActivationService == null)
+            {
+                _moduleActivationService = new CortexShellModuleActivationService(
+                    _moduleDescriptorCatalog,
+                    _moduleCompositionService);
+            }
+
+            return _moduleActivationService;
+        }
+
+        private CortexShellModuleRenderService GetModuleRenderService()
+        {
+            if (_moduleRenderService == null)
+            {
+                _moduleRenderService = new CortexShellModuleRenderService(
+                    _moduleDescriptorCatalog,
+                    _moduleCompositionService,
+                    GetModuleActivationService());
+            }
+
+            return _moduleRenderService;
         }
 
         private void RestoreWorkbenchSession()
