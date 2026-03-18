@@ -1,4 +1,4 @@
-    using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Cortex.Adapters;
@@ -8,16 +8,8 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Host.Unity.Runtime;
 using Cortex.Plugins.Abstractions;
-using Cortex.Modules.Build;
-using Cortex.Modules.Editor;
-using Cortex.Modules.FileExplorer;
-using Cortex.Modules.Logs;
-using Cortex.Modules.Projects;
-using Cortex.Modules.Reference;
-using Cortex.Modules.Runtime;
-using Cortex.Modules.Search;
-using Cortex.Modules.Settings;
 using Cortex.Presentation.Models;
+using Cortex.Shell;
 using Cortex.Services;
 using ModAPI.Core;
 using ModAPI.InputActions;
@@ -67,21 +59,25 @@ namespace Cortex
         private UnityWorkbenchRuntime _workbenchRuntime;
         private readonly EditorSymbolInteractionService _editorSymbolInteractionService = new EditorSymbolInteractionService();
         private readonly WorkbenchSearchService _workbenchSearchService = new WorkbenchSearchService();
-        private readonly HashSet<string> _activatedContainers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly CortexShellLifecycleCoordinator _lifecycleCoordinator = new CortexShellLifecycleCoordinator();
+        private readonly CortexShellModuleDescriptorCatalog _moduleDescriptorCatalog = new CortexShellModuleDescriptorCatalog();
+        private readonly CortexShellModuleCompositionService _moduleCompositionService = new CortexShellModuleCompositionService();
+        private readonly CortexShellCommandRouter _commandRouter = new CortexShellCommandRouter();
+        private readonly CortexShellLayoutHostRouter _layoutHostRouter = new CortexShellLayoutHostRouter();
+        private readonly CortexShellLanguageCoordinator _languageCoordinator = new CortexShellLanguageCoordinator();
+        private readonly CortexShellLanguageRequestDispatcher _languageRequestDispatcher = new CortexShellLanguageRequestDispatcher();
+        private readonly CortexShellLanguageResponseProcessor _languageResponseProcessor = new CortexShellLanguageResponseProcessor();
+        private readonly CortexShellLanguageRuntimeState _languageRuntime = new CortexShellLanguageRuntimeState();
 
         private readonly CortexShellState _state = new CortexShellState();
-        private readonly Dictionary<string, Action> _moduleActivators = new Dictionary<string, Action>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Action<WorkbenchPresentationSnapshot, bool>> _moduleRenderers = new Dictionary<string, Action<WorkbenchPresentationSnapshot, bool>>(StringComparer.OrdinalIgnoreCase);
-        private LogsModule _logsModule;
-        private ProjectsModule _projectsModule;
-        private EditorModule _editorModule;
-        private FileExplorerModule _fileExplorerModule;
-        private BuildModule _buildModule;
-        private ReferenceModule _referenceModule;
-        private SearchModule _searchModule;
-        private RuntimeToolsModule _runtimeToolsModule;
-        private SettingsModule _settingsModule;
         private ExternalWorkbenchPluginLoader _externalPluginLoader;
+        private CortexShellLayoutContext _layoutContext;
+        private CortexShellCommandContext _commandContext;
+        private CortexShellModuleActivationContext _moduleActivationContext;
+        private CortexShellModuleRenderContext _moduleRenderContext;
+        private CortexShellModuleActivationService _moduleActivationService;
+        private CortexShellModuleRenderService _moduleRenderService;
+        private CortexShellLanguageRuntimeContext _languageRuntimeContext;
 
         private GUIStyle _titleStyle;
         private GUIStyle _menuStyle;
@@ -106,31 +102,12 @@ namespace Cortex
 
         private void Awake()
         {
-            try
-            {
-                gameObject.name = "Cortex.Shell";
-                DontDestroyOnLoad(gameObject);
-                InitializeSettingsAndServices();
-                RestoreWorkbenchSession();
-                InitializeWorkbenchRuntime();
-                RegisterCommandHandlers();
-                RegisterToggleAction();
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteError("[Cortex] Awake failed: " + ex);
-                throw;
-            }
+            _lifecycleCoordinator.Awake(this);
         }
 
         private void OnDestroy()
         {
-            ReleaseOverlayInputCapture();
-            ShutdownLanguageService();
-            ShutdownCompletionAugmentation();
-            DisableMmLogRuntimeIntegration();
-            PersistWorkbenchSession();
-            PersistWindowSettings();
+            _lifecycleCoordinator.Destroy(this);
         }
 
         private void Update()
@@ -140,31 +117,15 @@ namespace Cortex
                 ReleaseOverlayInputCapture();
             }
 
-            if (InputActionRegistry.IsDown(ToggleActionId))
-            {
-                ExecuteCommand("cortex.shell.toggle", null);
-            }
-
-            if (_state.ReloadSettingsRequested)
-            {
-                ApplySettingsChanges();
-            }
-
-            UpdateLanguageService();
-
-            if (!string.IsNullOrEmpty(_state.Workbench.RequestedContainerId))
-            {
-                ActivateContainer(_state.Workbench.RequestedContainerId);
-                _state.Workbench.RequestedContainerId = string.Empty;
-            }
-            else if (_state.Workbench.RequestedTabIndex >= 0)
-            {
-                ActivateContainer(MapLegacyTabIndex(_state.Workbench.RequestedTabIndex));
-                _state.Workbench.RequestedTabIndex = -1;
-            }
+            _lifecycleCoordinator.Update(this);
         }
 
         private void OnGUI()
+        {
+            _lifecycleCoordinator.OnGui(this);
+        }
+
+        private void RenderVisibleShell()
         {
             if (!_visible)
             {
@@ -249,7 +210,7 @@ namespace Cortex
             EnsureModuleActivated(CortexWorkbenchIds.LogsContainer);
             GUILayout.BeginVertical();
             DrawLogsWindowHeaderActions();
-            _logsModule.Draw(_runtimeLogFeed, _sourcePathResolver, _navigationService, _state, true);
+            DrawActiveModule(_frameSnapshot, CortexWorkbenchIds.LogsContainer, true);
             GUILayout.EndVertical();
             ApplyWindowResize(windowId, ref _logWindowRect, 760f, 420f);
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));
@@ -260,11 +221,10 @@ namespace Cortex
             EnsureModuleActivated(CortexWorkbenchIds.SettingsContainer);
             GUILayout.BeginVertical();
             DrawSettingsWindowHeaderActions();
-            if (_settingsModule != null)
-            {
-                var snapshot = _frameSnapshot ?? (_workbenchRuntime != null ? _workbenchRuntime.CreateSnapshot() : new WorkbenchPresentationSnapshot());
-                _settingsModule.Draw(_settingsStore, _projectCatalog, _projectWorkspaceService, _loadedModCatalog, snapshot, _workbenchRuntime != null ? _workbenchRuntime.ThemeState : null, _state);
-            }
+            DrawActiveModule(
+                _frameSnapshot ?? (_workbenchRuntime != null ? _workbenchRuntime.CreateSnapshot() : new WorkbenchPresentationSnapshot()),
+                CortexWorkbenchIds.SettingsContainer,
+                false);
             GUILayout.EndVertical();
             ApplyWindowResize(windowId, ref _settingsWindowRect, 1120f, 720f);
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));
@@ -272,25 +232,7 @@ namespace Cortex
 
         private void DrawActiveModule(WorkbenchPresentationSnapshot snapshot, string containerId, bool detachedWindow)
         {
-            if (!CanActivateContainer(containerId))
-            {
-                GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandHeight(true));
-                GUILayout.Label(BuildActivationBlockedMessage(containerId));
-                GUILayout.EndVertical();
-                return;
-            }
-
-            EnsureModuleActivated(containerId);
-            Action<WorkbenchPresentationSnapshot, bool> renderer;
-            if (_moduleRenderers.TryGetValue(containerId, out renderer) && renderer != null)
-            {
-                renderer(snapshot, detachedWindow);
-                return;
-            }
-
-            GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandHeight(true));
-            GUILayout.Label("No renderer is registered for " + containerId + ".");
-            GUILayout.EndVertical();
+            GetModuleRenderService().DrawActiveModule(GetModuleRenderContext(), snapshot, containerId, detachedWindow);
         }
 
         private void InitializeSettingsAndServices()
@@ -380,7 +322,7 @@ namespace Cortex
                 ", Visible=" + _visible +
                 ", ExistingRuntimeFeed=" + (_runtimeLogFeed != null) +
                 ", ExistingLanguageClient=" + (_languageServiceClient != null) +
-                ", ExistingLanguageReady=" + _languageServiceReady + ".");
+                ", ExistingLanguageReady=" + _languageRuntime.ServiceReady + ".");
 
             var existingFeed = _runtimeLogFeed as MmLogRuntimeLogFeed;
             if (existingFeed != null)
@@ -1042,221 +984,32 @@ namespace Cortex
 
         private void ActivateContainer(string containerId)
         {
-            if (string.IsNullOrEmpty(containerId))
-            {
-                return;
-            }
-
-            _state.Workbench.HiddenContainerIds.Remove(containerId);
-            var hostLocation = ResolveHostLocation(containerId);
-            _state.Workbench.FocusedContainerId = containerId;
-            if (hostLocation == WorkbenchHostLocation.PanelHost)
-            {
-                _state.Workbench.PanelContainerId = containerId;
-            }
-            else if (hostLocation == WorkbenchHostLocation.SecondarySideHost)
-            {
-                _state.Workbench.SecondarySideContainerId = containerId;
-            }
-            else if (hostLocation == WorkbenchHostLocation.DocumentHost)
-            {
-                _state.Workbench.EditorContainerId = containerId;
-            }
-            else
-            {
-                _state.Workbench.SideContainerId = containerId;
-            }
-
-            if (_workbenchRuntime != null)
-            {
-                if (hostLocation == WorkbenchHostLocation.PanelHost)
-                {
-                    _workbenchRuntime.WorkbenchState.ActivePanelId = containerId;
-                }
-                else if (hostLocation == WorkbenchHostLocation.DocumentHost)
-                {
-                    _workbenchRuntime.WorkbenchState.ActiveEditorGroupId = containerId;
-                    _workbenchRuntime.WorkbenchState.ActiveContainerId = containerId;
-                }
-                else if (hostLocation == WorkbenchHostLocation.SecondarySideHost)
-                {
-                    _workbenchRuntime.WorkbenchState.ActiveContainerId = containerId;
-                    _workbenchRuntime.WorkbenchState.SecondarySideHostVisible = true;
-                }
-                else
-                {
-                    _workbenchRuntime.WorkbenchState.ActiveContainerId = containerId;
-                }
-
-                _workbenchRuntime.WorkbenchState.PrimarySideHostVisible = !string.IsNullOrEmpty(_state.Workbench.SideContainerId);
-                _workbenchRuntime.WorkbenchState.PanelHostVisible = !string.IsNullOrEmpty(_state.Workbench.PanelContainerId);
-                _workbenchRuntime.WorkbenchState.SecondarySideHostVisible = !string.IsNullOrEmpty(_state.Workbench.SecondarySideContainerId);
-                _workbenchRuntime.FocusState.FocusedRegionId = containerId;
-            }
+            _layoutHostRouter.ActivateContainer(GetLayoutContext(), containerId);
         }
 
         private WorkbenchHostLocation ResolveHostLocation(string containerId)
         {
-            var defaultHost = WorkbenchHostLocation.PrimarySideHost;
-            if (_workbenchRuntime != null)
-            {
-                var containers = _workbenchRuntime.ContributionRegistry.GetViewContainers();
-                for (var i = 0; i < containers.Count; i++)
-                {
-                    if (string.Equals(containers[i].ContainerId, containerId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        defaultHost = containers[i].DefaultHostLocation;
-                        break;
-                    }
-                }
-            }
-            else if (string.Equals(containerId, CortexWorkbenchIds.LogsContainer, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(containerId, CortexWorkbenchIds.BuildContainer, StringComparison.OrdinalIgnoreCase))
-            {
-                defaultHost = WorkbenchHostLocation.PanelHost;
-            }
-            else if (string.Equals(containerId, CortexWorkbenchIds.EditorContainer, StringComparison.OrdinalIgnoreCase))
-            {
-                defaultHost = WorkbenchHostLocation.DocumentHost;
-            }
-
-            return _state.Workbench.GetAssignedHost(containerId, defaultHost);
+            return _layoutHostRouter.ResolveHostLocation(GetLayoutContext(), containerId);
         }
 
         private void DockContainer(string containerId, WorkbenchHostLocation hostLocation)
         {
-            if (string.IsNullOrEmpty(containerId) || hostLocation == WorkbenchHostLocation.ToolRail)
-            {
-                return;
-            }
-
-            _state.Workbench.HiddenContainerIds.Remove(containerId);
-            _state.Workbench.AssignHost(containerId, hostLocation);
-            if (hostLocation == WorkbenchHostLocation.DocumentHost)
-            {
-                _state.Workbench.EditorContainerId = containerId;
-            }
-            else if (hostLocation == WorkbenchHostLocation.PanelHost)
-            {
-                _state.Workbench.PanelContainerId = containerId;
-            }
-            else if (hostLocation == WorkbenchHostLocation.SecondarySideHost)
-            {
-                _state.Workbench.SecondarySideContainerId = containerId;
-            }
-            else
-            {
-                _state.Workbench.SideContainerId = containerId;
-            }
-
-            if (string.Equals(_state.Workbench.SecondarySideContainerId, containerId, StringComparison.OrdinalIgnoreCase) &&
-                hostLocation != WorkbenchHostLocation.SecondarySideHost)
-            {
-                _state.Workbench.SecondarySideContainerId = FindFirstContainerForHost(WorkbenchHostLocation.SecondarySideHost, containerId);
-            }
-
-            if (string.Equals(_state.Workbench.EditorContainerId, containerId, StringComparison.OrdinalIgnoreCase) &&
-                hostLocation != WorkbenchHostLocation.DocumentHost)
-            {
-                _state.Workbench.EditorContainerId = FindFirstContainerForHost(WorkbenchHostLocation.DocumentHost, containerId);
-            }
-
-            if (string.Equals(_state.Workbench.PanelContainerId, containerId, StringComparison.OrdinalIgnoreCase) &&
-                hostLocation != WorkbenchHostLocation.PanelHost)
-            {
-                _state.Workbench.PanelContainerId = FindFirstContainerForHost(WorkbenchHostLocation.PanelHost, containerId);
-            }
-
-            if (string.Equals(_state.Workbench.SideContainerId, containerId, StringComparison.OrdinalIgnoreCase) &&
-                hostLocation != WorkbenchHostLocation.PrimarySideHost)
-            {
-                _state.Workbench.SideContainerId = FindFirstContainerForHost(WorkbenchHostLocation.PrimarySideHost, containerId);
-            }
-
-            ActivateContainer(containerId);
+            _layoutHostRouter.DockContainer(GetLayoutContext(), containerId, hostLocation);
         }
 
         private void HideContainer(string containerId)
         {
-            if (string.IsNullOrEmpty(containerId) || string.Equals(containerId, CortexWorkbenchIds.EditorContainer, StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-
-            _state.Workbench.HiddenContainerIds.Add(containerId);
-            if (string.Equals(_state.Workbench.PanelContainerId, containerId, StringComparison.OrdinalIgnoreCase))
-            {
-                _state.Workbench.PanelContainerId = FindFirstContainerForHost(WorkbenchHostLocation.PanelHost, containerId);
-            }
-
-            if (string.Equals(_state.Workbench.SecondarySideContainerId, containerId, StringComparison.OrdinalIgnoreCase))
-            {
-                _state.Workbench.SecondarySideContainerId = FindFirstContainerForHost(WorkbenchHostLocation.SecondarySideHost, containerId);
-            }
-
-            if (string.Equals(_state.Workbench.SideContainerId, containerId, StringComparison.OrdinalIgnoreCase))
-            {
-                _state.Workbench.SideContainerId = FindFirstContainerForHost(WorkbenchHostLocation.PrimarySideHost, containerId);
-            }
-
-            if (string.Equals(_state.Workbench.FocusedContainerId, containerId, StringComparison.OrdinalIgnoreCase))
-            {
-                _state.Workbench.FocusedContainerId = !string.IsNullOrEmpty(_state.Workbench.EditorContainerId)
-                    ? _state.Workbench.EditorContainerId
-                    : string.Empty;
-            }
-
-            if (_workbenchRuntime != null)
-            {
-                _workbenchRuntime.WorkbenchState.PrimarySideHostVisible = !string.IsNullOrEmpty(_state.Workbench.SideContainerId);
-                _workbenchRuntime.WorkbenchState.PanelHostVisible = !string.IsNullOrEmpty(_state.Workbench.PanelContainerId);
-                _workbenchRuntime.WorkbenchState.SecondarySideHostVisible = !string.IsNullOrEmpty(_state.Workbench.SecondarySideContainerId);
-            }
+            _layoutHostRouter.HideContainer(GetLayoutContext(), containerId);
         }
 
         private string FindFirstContainerForHost(WorkbenchHostLocation hostLocation, string excludedContainerId)
         {
-            if (_workbenchRuntime == null || _workbenchRuntime.ContributionRegistry == null)
-            {
-                return string.Empty;
-            }
-
-            var containers = _workbenchRuntime.ContributionRegistry.GetViewContainers();
-            for (var i = 0; i < containers.Count; i++)
-            {
-                var containerId = containers[i].ContainerId;
-                if (string.Equals(containerId, excludedContainerId, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (_state.Workbench.IsHidden(containerId))
-                {
-                    continue;
-                }
-
-                if (ResolveHostLocation(containerId) == hostLocation)
-                {
-                    return containerId;
-                }
-            }
-
-            return string.Empty;
+            return _layoutHostRouter.FindFirstContainerForHost(GetLayoutContext(), hostLocation, excludedContainerId);
         }
 
-        private static string MapLegacyTabIndex(int index)
+        private string MapLegacyTabIndex(int index)
         {
-            switch (index)
-            {
-                case 0: return CortexWorkbenchIds.LogsContainer;
-                case 1: return CortexWorkbenchIds.ProjectsContainer;
-                case 2: return CortexWorkbenchIds.EditorContainer;
-                case 3: return CortexWorkbenchIds.BuildContainer;
-                case 4: return CortexWorkbenchIds.ReferenceContainer;
-                case 5: return CortexWorkbenchIds.RuntimeContainer;
-                case 6: return CortexWorkbenchIds.ProjectsContainer;
-                default: return CortexWorkbenchIds.LogsContainer;
-            }
+            return _layoutHostRouter.MapLegacyTabIndex(index);
         }
 
     }
