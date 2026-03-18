@@ -24,7 +24,6 @@ namespace Cortex.Core.Models
         public string EditorContainerId;
         public string PanelContainerId;
         public bool ShowDetachedLogWindow;
-        public bool EditorUnlocked;
         public string SelectedProjectModId;
         public string SelectedProjectSourceRoot;
         public string ActiveDocumentPath;
@@ -40,7 +39,6 @@ namespace Cortex.Core.Models
             EditorContainerId = CortexWorkbenchIds.EditorContainer;
             PanelContainerId = CortexWorkbenchIds.LogsContainer;
             ShowDetachedLogWindow = false;
-            EditorUnlocked = false;
             SelectedProjectModId = string.Empty;
             SelectedProjectSourceRoot = string.Empty;
             ActiveDocumentPath = string.Empty;

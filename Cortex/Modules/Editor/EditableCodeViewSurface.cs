@@ -12,14 +12,14 @@ using UnityEngine;
 namespace Cortex.Modules.Editor
 {
     /// <summary>
-    /// Editable source-code surface used for real source files.
-    /// It keeps editing behavior isolated from the read-only symbol/hover viewer
-    /// so decompiled content never routes through the mutation pipeline.
+    /// Shared source surface for writable source files.
+    /// READ and EDIT both use this view; edit mode only enables mutation-specific behavior.
     /// </summary>
     internal sealed class EditableCodeViewSurface
     {
         private const float DefaultLineHeight = 18f;
         private const float SelectionPadding = 2f;
+        private const float TooltipWidth = 420f;
         private const double DoubleClickThresholdSeconds = 0.32d;
         private const int CompletionVisibleItemCount = 8;
 
@@ -29,6 +29,8 @@ namespace Cortex.Modules.Editor
         private readonly EditorCompletionService _editorCompletionService = new EditorCompletionService();
         private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
+        private readonly SourceEditorCommandRouterService _commandRouterService = new SourceEditorCommandRouterService();
+        private readonly SourceEditorHoverService _hoverService = new SourceEditorHoverService();
         private readonly PopupMenuSurface _popupMenuSurface = new PopupMenuSurface();
         private readonly GUIContent _measureContent = new GUIContent();
         private readonly List<NormalizedSpan> _orderedSpans = new List<NormalizedSpan>();
@@ -37,6 +39,10 @@ namespace Cortex.Modules.Editor
 
         private GUIStyle _codeStyle;
         private GUIStyle _gutterStyle;
+        private GUIStyle _tooltipContainerStyle;
+        private GUIStyle _tooltipTitleStyle;
+        private GUIStyle _tooltipQualifiedStyle;
+        private GUIStyle _tooltipDetailStyle;
         private GUIStyle _completionPopupStyle;
         private GUIStyle _completionItemStyle;
         private GUIStyle _completionItemSelectedStyle;
@@ -57,6 +63,8 @@ namespace Cortex.Modules.Editor
         private int _dragAnchorIndex;
         private int _lastClickIndex = -1;
         private DateTime _lastClickUtc = DateTime.MinValue;
+        private string _hoverCandidateKey = string.Empty;
+        private DateTime _hoverCandidateUtc = DateTime.MinValue;
         private bool _contextMenuOpen;
         private Vector2 _contextMenuPosition = Vector2.zero;
         private EditorCommandTarget _contextTarget;
@@ -92,12 +100,14 @@ namespace Cortex.Modules.Editor
             Rect rect,
             Vector2 scroll,
             DocumentSession session,
+            bool editingEnabled,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             CortexShellState state,
             string themeKey,
             GUIStyle codeStyle,
             GUIStyle gutterStyle,
+            GUIStyle tooltipStyle,
             GUIStyle contextMenuStyle,
             GUIStyle contextMenuButtonStyle,
             GUIStyle contextMenuHeaderStyle,
@@ -129,11 +139,15 @@ namespace Cortex.Modules.Editor
                         session.EditorState.HasExplicitCaretPlacement);
                 }
                 _editorService.SetUndoLimit(session, state != null && state.Settings != null ? state.Settings.EditorUndoHistoryLimit : 128);
-                EnsureStyles(themeKey, codeStyle, gutterStyle);
+                EnsureStyles(themeKey, codeStyle, gutterStyle, tooltipStyle);
                 EnsureLayout(session, themeKey, gutterWidth);
                 if (_layout == null || _codeStyle == null || _gutterStyle == null || _surfaceFill == null)
                 {
                     return scroll;
+                }
+                if (!editingEnabled)
+                {
+                    ClearCompletion(state);
                 }
                 var inputTextVersion = session.TextVersion;
                 var inputAnalysisTick = session.LastLanguageAnalysisUtc.Ticks;
@@ -142,7 +156,7 @@ namespace Cortex.Modules.Editor
                 var localMouse = current != null ? current.mousePosition - new Vector2(rect.x, rect.y) : Vector2.zero;
                 var mouseBlocked = current != null && blockedRect.width > 0f && blockedRect.height > 0f && blockedRect.Contains(current.mousePosition);
                 var hasMouse = current != null && rect.Contains(current.mousePosition) && !mouseBlocked;
-                HandleKeyboardInput(session, state, commandRegistry, current);
+                HandleKeyboardInput(session, state, editingEnabled, commandRegistry, current);
                 if (session.TextVersion != inputTextVersion)
                 {
                     _documentLanguageAnalysisService.ApplyProvisionalClassificationProjection(session);
@@ -160,7 +174,17 @@ namespace Cortex.Modules.Editor
 
                 scroll = EnsureCaretVisible(session, scroll, rect.height);
                 var pointerContext = BuildPointerContext(current, rect, hasMouse, localMouse, scroll, true);
-                HandlePointerInput(session, state, current, pointerContext, gutterWidth, commandRegistry, contributionRegistry);
+                HandlePointerInput(session, state, editingEnabled, current, pointerContext, gutterWidth, commandRegistry, contributionRegistry);
+                var hoverTarget = hasMouse && !_isDraggingSelection
+                    ? TryResolveHoverTarget(session, state, editingEnabled, pointerContext.ContentMouse, gutterWidth)
+                    : null;
+                _hoverService.UpdateHoverRequest(
+                    session,
+                    state,
+                    hoverTarget,
+                    hasMouse && !_contextMenuOpen && !_isDraggingSelection,
+                    ref _hoverCandidateKey,
+                    ref _hoverCandidateUtc);
 
                 GUI.BeginGroup(rect);
                 try
@@ -177,7 +201,11 @@ namespace Cortex.Modules.Editor
                         GUI.EndScrollView();
                     }
 
-                    DrawCompletionPopup(session, state, scroll, rect.size, gutterWidth);
+                    if (editingEnabled)
+                    {
+                        DrawCompletionPopup(session, state, scroll, rect.size, gutterWidth);
+                    }
+                    DrawHoverTooltip(state, hoverTarget, pointerContext.SurfaceMouse, rect.size);
                     DrawContextMenu(state, current, pointerContext.SurfaceMouse, rect.size, commandRegistry, contextMenuStyle, contextMenuButtonStyle, contextMenuHeaderStyle);
                 }
                 finally
@@ -210,14 +238,19 @@ namespace Cortex.Modules.Editor
             CloseContextMenu();
         }
 
-        private void EnsureStyles(string themeKey, GUIStyle codeStyle, GUIStyle gutterStyle)
+        private void EnsureStyles(string themeKey, GUIStyle codeStyle, GUIStyle gutterStyle, GUIStyle tooltipStyle)
         {
             var cacheKey = (themeKey ?? string.Empty) + "|" +
                 (codeStyle != null && codeStyle.font != null ? codeStyle.font.name : string.Empty) + "|" +
-                (codeStyle != null ? codeStyle.fontSize.ToString() : "0");
+                (codeStyle != null ? codeStyle.fontSize.ToString() : "0") + "|" +
+                (tooltipStyle != null && tooltipStyle.font != null ? tooltipStyle.font.name : string.Empty);
             if (string.Equals(cacheKey, _styleCacheKey, StringComparison.Ordinal) &&
                 _codeStyle != null &&
                 _gutterStyle != null &&
+                _tooltipContainerStyle != null &&
+                _tooltipTitleStyle != null &&
+                _tooltipQualifiedStyle != null &&
+                _tooltipDetailStyle != null &&
                 _completionPopupStyle != null &&
                 _completionItemStyle != null &&
                 _completionItemSelectedStyle != null &&
@@ -252,6 +285,21 @@ namespace Cortex.Modules.Editor
             _gutterStyle = new GUIStyle(gutterStyle ?? GUI.skin.label);
             _gutterStyle.wordWrap = false;
             _gutterStyle.clipping = TextClipping.Clip;
+            _tooltipContainerStyle = new GUIStyle(tooltipStyle ?? GUI.skin.box);
+            _tooltipContainerStyle.padding = new RectOffset(8, 8, 8, 8);
+            _tooltipContainerStyle.margin = new RectOffset(0, 0, 0, 0);
+            _tooltipContainerStyle.wordWrap = true;
+            _tooltipTitleStyle = new GUIStyle(_codeStyle);
+            _tooltipTitleStyle.wordWrap = false;
+            _tooltipTitleStyle.fontStyle = FontStyle.Bold;
+            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipTitleStyle, CortexIdeLayout.GetTextColor());
+            _tooltipQualifiedStyle = new GUIStyle(_codeStyle);
+            _tooltipQualifiedStyle.wordWrap = false;
+            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipQualifiedStyle, CortexIdeLayout.GetMutedTextColor());
+            _tooltipDetailStyle = new GUIStyle(_codeStyle);
+            _tooltipDetailStyle.wordWrap = true;
+            _tooltipDetailStyle.clipping = TextClipping.Clip;
+            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipDetailStyle, CortexIdeLayout.GetTextColor());
             _classificationStyles.Clear();
             _lineHeight = _codeStyle.lineHeight > 0f ? Mathf.Max(DefaultLineHeight, _codeStyle.lineHeight + 2f) : DefaultLineHeight;
             _selectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.30f));
@@ -819,6 +867,7 @@ namespace Cortex.Modules.Editor
         private void HandlePointerInput(
             DocumentSession session,
             CortexShellState state,
+            bool editingEnabled,
             Event current,
             PointerContext pointerContext,
             float gutterWidth,
@@ -840,7 +889,7 @@ namespace Cortex.Modules.Editor
                 }
 
                 var hitTest = GetCharacterIndexAt(session, pointerContext.ContentMouse, gutterWidth);
-                OpenContextMenu(session, state, hitTest.CharacterIndex, pointerContext.SurfaceMouse, commandRegistry, contributionRegistry);
+                OpenContextMenu(session, state, editingEnabled, hitTest.CharacterIndex, pointerContext.SurfaceMouse, commandRegistry, contributionRegistry);
                 current.Use();
                 return;
             }
@@ -866,7 +915,7 @@ namespace Cortex.Modules.Editor
                 if (string.Equals(selectionAction, "double-click", StringComparison.Ordinal))
                 {
                     EditorCommandTarget target;
-                    if (TryBuildCommandTarget(session, hitTest.CharacterIndex, out target) && target.CanGoToDefinition)
+                    if (TryBuildCommandTarget(session, state, editingEnabled, hitTest.CharacterIndex, out target) && target.CanGoToDefinition)
                     {
                         _symbolInteractionService.RequestDefinition(state, target);
                     }
@@ -921,6 +970,114 @@ namespace Cortex.Modules.Editor
             return "click";
         }
 
+        private SourceEditorHoverTarget TryResolveHoverTarget(
+            DocumentSession session,
+            CortexShellState state,
+            bool editingEnabled,
+            Vector2 contentMouse,
+            float gutterWidth)
+        {
+            var hitTest = GetCharacterIndexAt(session, contentMouse, gutterWidth);
+            SourceEditorHoverTarget hoverTarget;
+            if (!_hoverService.TryCreateHoverTarget(session, state, editingEnabled, hitTest.CharacterIndex, out hoverTarget))
+            {
+                return null;
+            }
+
+            return hoverTarget;
+        }
+
+        private void DrawHoverTooltip(CortexShellState state, SourceEditorHoverTarget hoverTarget, Vector2 localMouse, Vector2 viewportSize)
+        {
+            var response = hoverTarget != null ? _hoverService.ResolveHoverResponse(state, hoverTarget.HoverKey) : null;
+            if (hoverTarget == null || hoverTarget.Target == null || response == null || !response.Success || _tooltipContainerStyle == null)
+            {
+                _hoverService.ClearVisibleHover(state);
+                return;
+            }
+
+            var title = !string.IsNullOrEmpty(response.SymbolDisplay)
+                ? response.SymbolDisplay
+                : (hoverTarget.Target.SymbolText ?? string.Empty);
+            if (string.IsNullOrEmpty(title))
+            {
+                _hoverService.ClearVisibleHover(state);
+                return;
+            }
+
+            var qualified = response.QualifiedSymbolDisplay ?? string.Empty;
+            var detail = response.DocumentationText ?? string.Empty;
+            var titleHeight = Mathf.Max(18f, _tooltipTitleStyle.CalcHeight(new GUIContent(title), TooltipWidth - 16f));
+            var qualifiedHeight = string.IsNullOrEmpty(qualified)
+                ? 0f
+                : Mathf.Max(16f, _tooltipQualifiedStyle.CalcHeight(new GUIContent(qualified), TooltipWidth - 16f));
+            var detailHeight = string.IsNullOrEmpty(detail)
+                ? 0f
+                : Mathf.Max(18f, _tooltipDetailStyle.CalcHeight(new GUIContent(detail), TooltipWidth - 16f));
+            var tooltipHeight = 16f + titleHeight + qualifiedHeight + detailHeight +
+                (!string.IsNullOrEmpty(qualified) && detailHeight > 0f ? 4f : 0f);
+            var tooltipRect = ClampTooltipRect(
+                new Rect(localMouse.x + 18f, localMouse.y + 18f, TooltipWidth, tooltipHeight),
+                viewportSize);
+
+            GUI.Box(tooltipRect, GUIContent.none, _tooltipContainerStyle);
+
+            var contentRect = new Rect(tooltipRect.x + 8f, tooltipRect.y + 8f, tooltipRect.width - 16f, tooltipRect.height - 16f);
+            var titleRect = new Rect(contentRect.x, contentRect.y, contentRect.width, titleHeight);
+            GUI.Label(titleRect, title, _tooltipTitleStyle);
+
+            var nextY = titleRect.yMax;
+            if (!string.IsNullOrEmpty(qualified))
+            {
+                var qualifiedRect = new Rect(contentRect.x, nextY, contentRect.width, qualifiedHeight);
+                GUI.Label(qualifiedRect, qualified, _tooltipQualifiedStyle);
+                nextY = qualifiedRect.yMax;
+            }
+
+            if (!string.IsNullOrEmpty(detail))
+            {
+                if (nextY > titleRect.yMax)
+                {
+                    nextY += 4f;
+                }
+
+                var detailRect = new Rect(contentRect.x, nextY, contentRect.width, detailHeight);
+                GUI.Label(detailRect, detail, _tooltipDetailStyle);
+            }
+
+            _hoverService.SetVisibleHover(state, hoverTarget.HoverKey, response);
+        }
+
+        private static Rect ClampTooltipRect(Rect tooltipRect, Vector2 viewportSize)
+        {
+            if (viewportSize.x <= 0f || viewportSize.y <= 0f)
+            {
+                return tooltipRect;
+            }
+
+            if (tooltipRect.xMax > viewportSize.x - 8f)
+            {
+                tooltipRect.x = viewportSize.x - tooltipRect.width - 8f;
+            }
+
+            if (tooltipRect.yMax > viewportSize.y - 8f)
+            {
+                tooltipRect.y = viewportSize.y - tooltipRect.height - 8f;
+            }
+
+            if (tooltipRect.x < 8f)
+            {
+                tooltipRect.x = 8f;
+            }
+
+            if (tooltipRect.y < 8f)
+            {
+                tooltipRect.y = 8f;
+            }
+
+            return tooltipRect;
+        }
+
         private void DrawContextMenu(
             CortexShellState state,
             Event current,
@@ -963,13 +1120,14 @@ namespace Cortex.Modules.Editor
         private void OpenContextMenu(
             DocumentSession session,
             CortexShellState state,
+            bool editingEnabled,
             int absolutePosition,
             Vector2 localMouse,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry)
         {
             EditorCommandTarget target;
-            if (!TryBuildCommandTarget(session, absolutePosition, out target))
+            if (!TryBuildCommandTarget(session, state, editingEnabled, absolutePosition, out target))
             {
                 CloseContextMenu();
                 return;
@@ -988,9 +1146,9 @@ namespace Cortex.Modules.Editor
             PopulatePopupMenuItems(items);
         }
 
-        private bool TryBuildCommandTarget(DocumentSession session, int absolutePosition, out EditorCommandTarget target)
+        private bool TryBuildCommandTarget(DocumentSession session, CortexShellState state, bool editingEnabled, int absolutePosition, out EditorCommandTarget target)
         {
-            return _symbolInteractionService.TryCreateTargetFromPosition(session, absolutePosition, null, out target);
+            return _hoverService.TryCreateInteractionTarget(session, state, editingEnabled, absolutePosition, out target);
         }
 
         private void PopulatePopupMenuItems(IList<EditorContextMenuItem> items)
@@ -1088,7 +1246,7 @@ namespace Cortex.Modules.Editor
                 ", SelectedIndex=" + selection.CaretIndex + ".");
         }
 
-        private void HandleKeyboardInput(DocumentSession session, CortexShellState state, ICommandRegistry commandRegistry, Event current)
+        private void HandleKeyboardInput(DocumentSession session, CortexShellState state, bool editingEnabled, ICommandRegistry commandRegistry, Event current)
         {
             if (!_hasFocus || current == null || current.type != EventType.KeyDown)
             {
@@ -1102,7 +1260,7 @@ namespace Cortex.Modules.Editor
 
             var selectionCountBefore = session != null && session.EditorState != null ? session.EditorState.Selections.Count : 0;
             var caretIndexBefore = session != null && session.EditorState != null ? session.EditorState.CaretIndex : 0;
-            if (TryHandleCompletionInput(session, state, current))
+            if (TryHandleCompletionInput(session, state, current, editingEnabled))
             {
                 current.Use();
                 return;
@@ -1115,12 +1273,15 @@ namespace Cortex.Modules.Editor
             {
                 if (string.Equals(commandId, "edit.complete", StringComparison.Ordinal))
                 {
-                    QueueCompletionRequest(session, state, true, string.Empty);
-                    handled = true;
+                    if (editingEnabled)
+                    {
+                        QueueCompletionRequest(session, state, true, string.Empty);
+                        handled = true;
+                    }
                 }
                 else
                 {
-                    handled = ExecuteCommand(session, state, commandRegistry, commandId, current.shift);
+                    handled = ExecuteCommand(session, state, commandRegistry, commandId, current.shift, editingEnabled);
                 }
             }
 
@@ -1162,14 +1323,14 @@ namespace Cortex.Modules.Editor
                         break;
                     case KeyCode.Return:
                     case KeyCode.KeypadEnter:
-                        handled = _editorService.InsertNewLine(session);
+                        handled = editingEnabled && _editorService.InsertNewLine(session);
                         break;
                 }
             }
 
             if (!handled)
             {
-                handled = HandleTextInput(session, current.character);
+                handled = editingEnabled && HandleTextInput(session, current.character);
                 if (handled)
                 {
                     EditorInteractionLog.WriteEdit("Applied direct keyboard text input to the active document.");
@@ -1179,7 +1340,7 @@ namespace Cortex.Modules.Editor
             if (handled)
             {
                 LogKeyboardSelectionState(session, commandId, current.character, selectionCountBefore, caretIndexBefore);
-                HandleCompletionAfterKey(session, state, current, commandId, previousTextVersion);
+                HandleCompletionAfterKey(session, state, current, commandId, previousTextVersion, editingEnabled);
                 current.Use();
             }
         }
@@ -1206,91 +1367,17 @@ namespace Cortex.Modules.Editor
                 caret.Column + 1);
         }
 
-        private bool ExecuteCommand(DocumentSession session, CortexShellState state, ICommandRegistry commandRegistry, string commandId, bool extendSelection)
+        private bool ExecuteCommand(DocumentSession session, CortexShellState state, ICommandRegistry commandRegistry, string commandId, bool extendSelection, bool editingEnabled)
         {
-            var handled = false;
-            switch (commandId ?? string.Empty)
+            bool handled;
+            if (_commandRouterService.TryExecuteLocal(session, commandId, extendSelection, editingEnabled, out handled))
             {
-                case "select.all":
-                    _editorService.SelectAll(session);
-                    handled = true;
-                    break;
-                case "edit.undo":
-                    handled = _editorService.Undo(session);
-                    break;
-                case "edit.redo":
-                    handled = _editorService.Redo(session);
-                    break;
-                case "caret.left":
-                    _editorService.MoveCaretHorizontal(session, -1, extendSelection);
-                    handled = true;
-                    break;
-                case "caret.right":
-                    _editorService.MoveCaretHorizontal(session, 1, extendSelection);
-                    handled = true;
-                    break;
-                case "caret.up":
-                    _editorService.MoveCaretVertical(session, -1, extendSelection);
-                    handled = true;
-                    break;
-                case "caret.down":
-                    _editorService.MoveCaretVertical(session, 1, extendSelection);
-                    handled = true;
-                    break;
-                case "caret.line.start":
-                    _editorService.MoveCaretToLineBoundary(session, true, extendSelection);
-                    handled = true;
-                    break;
-                case "caret.line.end":
-                    _editorService.MoveCaretToLineBoundary(session, false, extendSelection);
-                    handled = true;
-                    break;
-                case "caret.document.start":
-                    _editorService.MoveCaretToDocumentBoundary(session, true, extendSelection);
-                    handled = true;
-                    break;
-                case "caret.document.end":
-                    _editorService.MoveCaretToDocumentBoundary(session, false, extendSelection);
-                    handled = true;
-                    break;
-                case "caret.page.up":
-                    _editorService.MoveCaretVertical(session, -16, extendSelection);
-                    handled = true;
-                    break;
-                case "caret.page.down":
-                    _editorService.MoveCaretVertical(session, 16, extendSelection);
-                    handled = true;
-                    break;
-                case "edit.backspace":
-                    handled = _editorService.Backspace(session);
-                    break;
-                case "edit.delete":
-                    handled = _editorService.Delete(session);
-                    break;
-                case "edit.indent":
-                    handled = _editorService.IndentSelection(session, false);
-                    break;
-                case "edit.outdent":
-                    handled = _editorService.IndentSelection(session, true);
-                    break;
-                case "edit.newline":
-                    handled = _editorService.InsertNewLine(session);
-                    break;
-                case "multi.above":
-                    handled = _editorService.AddCaretOnAdjacentLine(session, -1);
-                    break;
-                case "multi.below":
-                    handled = _editorService.AddCaretOnAdjacentLine(session, 1);
-                    break;
-                case "multi.clear":
-                    handled = _editorService.ClearSecondarySelections(session);
-                    break;
-                case "move.line.up":
-                    handled = _editorService.MoveSelectedLines(session, -1);
-                    break;
-                case "move.line.down":
-                    handled = _editorService.MoveSelectedLines(session, 1);
-                    break;
+                if (handled)
+                {
+                    EditorInteractionLog.WriteEdit("Executed editor command: " + (commandId ?? string.Empty) + ".");
+                }
+
+                return handled;
             }
 
             if (!handled && commandRegistry != null && !string.IsNullOrEmpty(commandId))
@@ -1312,8 +1399,13 @@ namespace Cortex.Modules.Editor
             return handled;
         }
 
-        private bool TryHandleCompletionInput(DocumentSession session, CortexShellState state, Event current)
+        private bool TryHandleCompletionInput(DocumentSession session, CortexShellState state, Event current, bool editingEnabled)
         {
+            if (!editingEnabled)
+            {
+                return false;
+            }
+
             var hasInlineSuggestion = _editorCompletionService.HasVisibleInlineSuggestion(state != null ? state.Editor : null, session);
             var response = state != null && state.Editor != null ? state.Editor.ActiveCompletionResponse : null;
             if (!hasInlineSuggestion && !_editorCompletionService.HasCompletionItems(response))
@@ -1376,9 +1468,9 @@ namespace Cortex.Modules.Editor
             return false;
         }
 
-        private void HandleCompletionAfterKey(DocumentSession session, CortexShellState state, Event current, string commandId, int previousTextVersion)
+        private void HandleCompletionAfterKey(DocumentSession session, CortexShellState state, Event current, string commandId, int previousTextVersion, bool editingEnabled)
         {
-            if (state == null || state.Editor == null || session == null || session.EditorState == null)
+            if (!editingEnabled || state == null || state.Editor == null || session == null || session.EditorState == null)
             {
                 return;
             }
