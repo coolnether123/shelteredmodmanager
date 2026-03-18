@@ -9,6 +9,7 @@ using Cortex.Modules.Reference;
 using Cortex.Modules.Runtime;
 using Cortex.Modules.Search;
 using Cortex.Modules.Settings;
+using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
 
 namespace Cortex.Shell
@@ -22,19 +23,19 @@ namespace Cortex.Shell
                 return;
             }
 
-            registry.Register(new LogsModuleContribution(services, services, services, services));
-            registry.Register(new ProjectsModuleContribution(services, services));
-            registry.Register(new FileExplorerModuleContribution(services, services, services));
-            registry.Register(new EditorModuleContribution(services, services, services, services, services));
-            registry.Register(new BuildModuleContribution(services, services, services, services));
-            registry.Register(new ReferenceModuleContribution(services, services, services));
-            registry.Register(new SearchModuleContribution(services, services, services));
-            registry.Register(new RuntimeToolsModuleContribution(services, services));
-            registry.Register(new SettingsModuleContribution(services, services, services, services));
+            registry.Register(new LogsModuleContribution(services));
+            registry.Register(new ProjectsModuleContribution(services));
+            registry.Register(new FileExplorerModuleContribution(services));
+            registry.Register(new EditorModuleContribution(services));
+            registry.Register(new BuildModuleContribution(services));
+            registry.Register(new ReferenceModuleContribution(services));
+            registry.Register(new SearchModuleContribution(services));
+            registry.Register(new RuntimeToolsModuleContribution(services));
+            registry.Register(new SettingsModuleContribution(services));
         }
     }
 
-    internal abstract class CortexShellModuleBase : ICortexShellModule
+    internal abstract class CortexShellModuleBase : IWorkbenchModule
     {
         private readonly string _containerId;
 
@@ -52,7 +53,7 @@ namespace Cortex.Shell
                 : string.Empty;
         }
 
-        public abstract void Render(WorkbenchPresentationSnapshot snapshot, bool detachedWindow);
+        public abstract void Render(WorkbenchModuleRenderContext context, bool detachedWindow);
 
         protected abstract void CollectMissingDependencies(List<string> missingDependencies);
 
@@ -67,571 +68,431 @@ namespace Cortex.Shell
         }
     }
 
-    internal sealed class LogsModuleContribution : ICortexShellModuleContribution
+    internal sealed class LogsModuleContribution : IWorkbenchModuleContribution
     {
-        private readonly ICortexShellStateCapability _state;
-        private readonly ICortexShellNavigationCapability _navigation;
-        private readonly ICortexShellSourceCapability _source;
-        private readonly ICortexShellRuntimeLogCapability _runtimeLogs;
+        private readonly ILogsModuleServices _services;
 
-        public LogsModuleContribution(
-            ICortexShellStateCapability state,
-            ICortexShellNavigationCapability navigation,
-            ICortexShellSourceCapability source,
-            ICortexShellRuntimeLogCapability runtimeLogs)
+        public LogsModuleContribution(ILogsModuleServices services)
         {
-            _state = state;
-            _navigation = navigation;
-            _source = source;
-            _runtimeLogs = runtimeLogs;
-            Descriptor = new CortexShellModuleDescriptor(CortexWorkbenchIds.LogsContainer, typeof(LogsShellModule));
+            _services = services;
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.LogsContainer, typeof(LogsShellModule));
         }
 
-        public CortexShellModuleDescriptor Descriptor { get; private set; }
+        public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public ICortexShellModule CreateModule()
+        public IWorkbenchModule CreateModule()
         {
-            return new LogsShellModule(_state, _navigation, _source, _runtimeLogs);
+            return new LogsShellModule(_services);
         }
 
         private sealed class LogsShellModule : CortexShellModuleBase
         {
             private readonly LogsModule _module = new LogsModule();
-            private readonly ICortexShellStateCapability _state;
-            private readonly ICortexShellNavigationCapability _navigation;
-            private readonly ICortexShellSourceCapability _source;
-            private readonly ICortexShellRuntimeLogCapability _runtimeLogs;
+            private readonly ILogsModuleServices _services;
 
-            public LogsShellModule(
-                ICortexShellStateCapability state,
-                ICortexShellNavigationCapability navigation,
-                ICortexShellSourceCapability source,
-                ICortexShellRuntimeLogCapability runtimeLogs)
+            public LogsShellModule(ILogsModuleServices services)
                 : base(CortexWorkbenchIds.LogsContainer)
             {
-                _state = state;
-                _navigation = navigation;
-                _source = source;
-                _runtimeLogs = runtimeLogs;
+                _services = services;
             }
 
-            public override void Render(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+            public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
             {
                 _module.Draw(
-                    _runtimeLogs != null ? _runtimeLogs.RuntimeLogFeed : null,
-                    _source != null ? _source.SourcePathResolver : null,
-                    _navigation != null ? _navigation.NavigationService : null,
-                    _state != null ? _state.State : null,
+                    _services != null ? _services.RuntimeLogFeed : null,
+                    _services != null ? _services.SourcePathResolver : null,
+                    _services != null ? _services.NavigationService : null,
+                    _services != null ? _services.State : null,
                     detachedWindow);
             }
 
             protected override void CollectMissingDependencies(List<string> missingDependencies)
             {
-                AddMissing(missingDependencies, "State", _state != null ? _state.State : null);
-                AddMissing(missingDependencies, "NavigationService", _navigation != null ? _navigation.NavigationService : null);
-                AddMissing(missingDependencies, "SourcePathResolver", _source != null ? _source.SourcePathResolver : null);
-                AddMissing(missingDependencies, "RuntimeLogFeed", _runtimeLogs != null ? _runtimeLogs.RuntimeLogFeed : null);
+                AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
+                AddMissing(missingDependencies, "NavigationService", _services != null ? _services.NavigationService : null);
+                AddMissing(missingDependencies, "SourcePathResolver", _services != null ? _services.SourcePathResolver : null);
+                AddMissing(missingDependencies, "RuntimeLogFeed", _services != null ? _services.RuntimeLogFeed : null);
             }
         }
     }
 
-    internal sealed class ProjectsModuleContribution : ICortexShellModuleContribution
+    internal sealed class ProjectsModuleContribution : IWorkbenchModuleContribution
     {
-        private readonly ICortexShellStateCapability _state;
-        private readonly ICortexShellProjectCapability _project;
+        private readonly IProjectsModuleServices _services;
 
-        public ProjectsModuleContribution(ICortexShellStateCapability state, ICortexShellProjectCapability project)
+        public ProjectsModuleContribution(IProjectsModuleServices services)
         {
-            _state = state;
-            _project = project;
-            Descriptor = new CortexShellModuleDescriptor(CortexWorkbenchIds.ProjectsContainer, typeof(ProjectsShellModule));
+            _services = services;
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.ProjectsContainer, typeof(ProjectsShellModule));
         }
 
-        public CortexShellModuleDescriptor Descriptor { get; private set; }
+        public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public ICortexShellModule CreateModule()
+        public IWorkbenchModule CreateModule()
         {
-            return new ProjectsShellModule(_state, _project);
+            return new ProjectsShellModule(_services);
         }
 
         private sealed class ProjectsShellModule : CortexShellModuleBase
         {
             private readonly ProjectsModule _module = new ProjectsModule();
-            private readonly ICortexShellStateCapability _state;
-            private readonly ICortexShellProjectCapability _project;
+            private readonly IProjectsModuleServices _services;
 
-            public ProjectsShellModule(ICortexShellStateCapability state, ICortexShellProjectCapability project)
+            public ProjectsShellModule(IProjectsModuleServices services)
                 : base(CortexWorkbenchIds.ProjectsContainer)
             {
-                _state = state;
-                _project = project;
+                _services = services;
             }
 
-            public override void Render(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+            public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
             {
                 _module.Draw(
-                    _project != null ? _project.ProjectCatalog : null,
-                    _project != null ? _project.ProjectWorkspaceService : null,
-                    _project != null ? _project.LoadedModCatalog : null,
-                    _state != null ? _state.State : null);
+                    _services != null ? _services.ProjectCatalog : null,
+                    _services != null ? _services.ProjectWorkspaceService : null,
+                    _services != null ? _services.LoadedModCatalog : null,
+                    _services != null ? _services.State : null);
             }
 
             protected override void CollectMissingDependencies(List<string> missingDependencies)
             {
-                AddMissing(missingDependencies, "State", _state != null ? _state.State : null);
-                AddMissing(missingDependencies, "ProjectCatalog", _project != null ? _project.ProjectCatalog : null);
-                AddMissing(missingDependencies, "ProjectWorkspaceService", _project != null ? _project.ProjectWorkspaceService : null);
-                AddMissing(missingDependencies, "LoadedModCatalog", _project != null ? _project.LoadedModCatalog : null);
+                AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
+                AddMissing(missingDependencies, "ProjectCatalog", _services != null ? _services.ProjectCatalog : null);
+                AddMissing(missingDependencies, "ProjectWorkspaceService", _services != null ? _services.ProjectWorkspaceService : null);
+                AddMissing(missingDependencies, "LoadedModCatalog", _services != null ? _services.LoadedModCatalog : null);
             }
         }
     }
 
-    internal sealed class FileExplorerModuleContribution : ICortexShellModuleContribution
+    internal sealed class FileExplorerModuleContribution : IWorkbenchModuleContribution
     {
-        private readonly ICortexShellStateCapability _state;
-        private readonly ICortexShellNavigationCapability _navigation;
-        private readonly ICortexShellWorkspaceBrowserCapability _workspace;
+        private readonly IFileExplorerModuleServices _services;
 
-        public FileExplorerModuleContribution(
-            ICortexShellStateCapability state,
-            ICortexShellNavigationCapability navigation,
-            ICortexShellWorkspaceBrowserCapability workspace)
+        public FileExplorerModuleContribution(IFileExplorerModuleServices services)
         {
-            _state = state;
-            _navigation = navigation;
-            _workspace = workspace;
-            Descriptor = new CortexShellModuleDescriptor(CortexWorkbenchIds.FileExplorerContainer, typeof(FileExplorerShellModule));
+            _services = services;
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.FileExplorerContainer, typeof(FileExplorerShellModule));
         }
 
-        public CortexShellModuleDescriptor Descriptor { get; private set; }
+        public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public ICortexShellModule CreateModule()
+        public IWorkbenchModule CreateModule()
         {
-            return new FileExplorerShellModule(_state, _navigation, _workspace);
+            return new FileExplorerShellModule(_services);
         }
 
         private sealed class FileExplorerShellModule : CortexShellModuleBase
         {
             private readonly FileExplorerModule _module = new FileExplorerModule();
-            private readonly ICortexShellStateCapability _state;
-            private readonly ICortexShellNavigationCapability _navigation;
-            private readonly ICortexShellWorkspaceBrowserCapability _workspace;
+            private readonly IFileExplorerModuleServices _services;
 
-            public FileExplorerShellModule(
-                ICortexShellStateCapability state,
-                ICortexShellNavigationCapability navigation,
-                ICortexShellWorkspaceBrowserCapability workspace)
+            public FileExplorerShellModule(IFileExplorerModuleServices services)
                 : base(CortexWorkbenchIds.FileExplorerContainer)
             {
-                _state = state;
-                _navigation = navigation;
-                _workspace = workspace;
+                _services = services;
             }
 
-            public override void Render(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+            public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
             {
                 _module.Draw(
-                    _workspace != null ? _workspace.WorkspaceBrowserService : null,
-                    _workspace != null ? _workspace.DecompilerExplorerService : null,
-                    _navigation != null ? _navigation.NavigationService : null,
-                    _state != null ? _state.State : null);
+                    _services != null ? _services.WorkspaceBrowserService : null,
+                    _services != null ? _services.DecompilerExplorerService : null,
+                    _services != null ? _services.NavigationService : null,
+                    _services != null ? _services.State : null);
             }
 
             protected override void CollectMissingDependencies(List<string> missingDependencies)
             {
-                AddMissing(missingDependencies, "State", _state != null ? _state.State : null);
-                AddMissing(missingDependencies, "NavigationService", _navigation != null ? _navigation.NavigationService : null);
-                AddMissing(missingDependencies, "WorkspaceBrowserService", _workspace != null ? _workspace.WorkspaceBrowserService : null);
-                AddMissing(missingDependencies, "DecompilerExplorerService", _workspace != null ? _workspace.DecompilerExplorerService : null);
+                AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
+                AddMissing(missingDependencies, "NavigationService", _services != null ? _services.NavigationService : null);
+                AddMissing(missingDependencies, "WorkspaceBrowserService", _services != null ? _services.WorkspaceBrowserService : null);
+                AddMissing(missingDependencies, "DecompilerExplorerService", _services != null ? _services.DecompilerExplorerService : null);
             }
         }
     }
 
-    internal sealed class EditorModuleContribution : ICortexShellModuleContribution
+    internal sealed class EditorModuleContribution : IWorkbenchModuleContribution
     {
-        private readonly ICortexShellStateCapability _state;
-        private readonly ICortexShellNavigationCapability _navigation;
-        private readonly ICortexShellDocumentCapability _document;
-        private readonly ICortexShellWorkbenchCapability _workbench;
-        private readonly ICortexShellSearchCapability _search;
+        private readonly IEditorModuleServices _services;
 
-        public EditorModuleContribution(
-            ICortexShellStateCapability state,
-            ICortexShellNavigationCapability navigation,
-            ICortexShellDocumentCapability document,
-            ICortexShellWorkbenchCapability workbench,
-            ICortexShellSearchCapability search)
+        public EditorModuleContribution(IEditorModuleServices services)
         {
-            _state = state;
-            _navigation = navigation;
-            _document = document;
-            _workbench = workbench;
-            _search = search;
-            Descriptor = new CortexShellModuleDescriptor(CortexWorkbenchIds.EditorContainer, typeof(EditorShellModule));
+            _services = services;
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.EditorContainer, typeof(EditorShellModule));
         }
 
-        public CortexShellModuleDescriptor Descriptor { get; private set; }
+        public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public ICortexShellModule CreateModule()
+        public IWorkbenchModule CreateModule()
         {
-            return new EditorShellModule(_state, _navigation, _document, _workbench, _search);
+            return new EditorShellModule(_services);
         }
 
         private sealed class EditorShellModule : CortexShellModuleBase
         {
             private readonly EditorModule _module = new EditorModule();
-            private readonly ICortexShellStateCapability _state;
-            private readonly ICortexShellNavigationCapability _navigation;
-            private readonly ICortexShellDocumentCapability _document;
-            private readonly ICortexShellWorkbenchCapability _workbench;
-            private readonly ICortexShellSearchCapability _search;
+            private readonly IEditorModuleServices _services;
 
-            public EditorShellModule(
-                ICortexShellStateCapability state,
-                ICortexShellNavigationCapability navigation,
-                ICortexShellDocumentCapability document,
-                ICortexShellWorkbenchCapability workbench,
-                ICortexShellSearchCapability search)
+            public EditorShellModule(IEditorModuleServices services)
                 : base(CortexWorkbenchIds.EditorContainer)
             {
-                _state = state;
-                _navigation = navigation;
-                _document = document;
-                _workbench = workbench;
-                _search = search;
+                _services = services;
             }
 
-            public override void Render(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+            public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
             {
                 _module.Draw(
-                    _document != null ? _document.DocumentService : null,
-                    _navigation != null ? _navigation.NavigationService : null,
-                    _workbench != null ? _workbench.CommandRegistry : null,
-                    _workbench != null ? _workbench.ContributionRegistry : null,
-                    _search != null ? _search.WorkbenchSearchService : null,
-                    _state != null ? _state.State : null);
+                    _services != null ? _services.DocumentService : null,
+                    _services != null ? _services.NavigationService : null,
+                    _services != null ? _services.CommandRegistry : null,
+                    _services != null ? _services.ContributionRegistry : null,
+                    _services != null ? _services.WorkbenchSearchService : null,
+                    _services != null ? _services.State : null);
             }
 
             protected override void CollectMissingDependencies(List<string> missingDependencies)
             {
-                AddMissing(missingDependencies, "State", _state != null ? _state.State : null);
-                AddMissing(missingDependencies, "NavigationService", _navigation != null ? _navigation.NavigationService : null);
-                AddMissing(missingDependencies, "DocumentService", _document != null ? _document.DocumentService : null);
-                AddMissing(missingDependencies, "CommandRegistry", _workbench != null ? _workbench.CommandRegistry : null);
-                AddMissing(missingDependencies, "ContributionRegistry", _workbench != null ? _workbench.ContributionRegistry : null);
-                AddMissing(missingDependencies, "WorkbenchSearchService", _search != null ? _search.WorkbenchSearchService : null);
+                AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
+                AddMissing(missingDependencies, "NavigationService", _services != null ? _services.NavigationService : null);
+                AddMissing(missingDependencies, "DocumentService", _services != null ? _services.DocumentService : null);
+                AddMissing(missingDependencies, "CommandRegistry", _services != null ? _services.CommandRegistry : null);
+                AddMissing(missingDependencies, "ContributionRegistry", _services != null ? _services.ContributionRegistry : null);
+                AddMissing(missingDependencies, "WorkbenchSearchService", _services != null ? _services.WorkbenchSearchService : null);
             }
         }
     }
 
-    internal sealed class BuildModuleContribution : ICortexShellModuleContribution
+    internal sealed class BuildModuleContribution : IWorkbenchModuleContribution
     {
-        private readonly ICortexShellStateCapability _state;
-        private readonly ICortexShellNavigationCapability _navigation;
-        private readonly ICortexShellSourceCapability _source;
-        private readonly ICortexShellBuildCapability _build;
+        private readonly IBuildModuleServices _services;
 
-        public BuildModuleContribution(
-            ICortexShellStateCapability state,
-            ICortexShellNavigationCapability navigation,
-            ICortexShellSourceCapability source,
-            ICortexShellBuildCapability build)
+        public BuildModuleContribution(IBuildModuleServices services)
         {
-            _state = state;
-            _navigation = navigation;
-            _source = source;
-            _build = build;
-            Descriptor = new CortexShellModuleDescriptor(CortexWorkbenchIds.BuildContainer, typeof(BuildShellModule));
+            _services = services;
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.BuildContainer, typeof(BuildShellModule));
         }
 
-        public CortexShellModuleDescriptor Descriptor { get; private set; }
+        public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public ICortexShellModule CreateModule()
+        public IWorkbenchModule CreateModule()
         {
-            return new BuildShellModule(_state, _navigation, _source, _build);
+            return new BuildShellModule(_services);
         }
 
         private sealed class BuildShellModule : CortexShellModuleBase
         {
             private readonly BuildModule _module = new BuildModule();
-            private readonly ICortexShellStateCapability _state;
-            private readonly ICortexShellNavigationCapability _navigation;
-            private readonly ICortexShellSourceCapability _source;
-            private readonly ICortexShellBuildCapability _build;
+            private readonly IBuildModuleServices _services;
 
-            public BuildShellModule(
-                ICortexShellStateCapability state,
-                ICortexShellNavigationCapability navigation,
-                ICortexShellSourceCapability source,
-                ICortexShellBuildCapability build)
+            public BuildShellModule(IBuildModuleServices services)
                 : base(CortexWorkbenchIds.BuildContainer)
             {
-                _state = state;
-                _navigation = navigation;
-                _source = source;
-                _build = build;
+                _services = services;
             }
 
-            public override void Render(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+            public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
             {
                 _module.Draw(
-                    _build != null ? _build.BuildCommandResolver : null,
-                    _build != null ? _build.BuildExecutor : null,
-                    _build != null ? _build.RestartCoordinator : null,
-                    _source != null ? _source.SourcePathResolver : null,
-                    _navigation != null ? _navigation.NavigationService : null,
-                    _state != null ? _state.State : null);
+                    _services != null ? _services.BuildCommandResolver : null,
+                    _services != null ? _services.BuildExecutor : null,
+                    _services != null ? _services.RestartCoordinator : null,
+                    _services != null ? _services.SourcePathResolver : null,
+                    _services != null ? _services.NavigationService : null,
+                    _services != null ? _services.State : null);
             }
 
             protected override void CollectMissingDependencies(List<string> missingDependencies)
             {
-                AddMissing(missingDependencies, "State", _state != null ? _state.State : null);
-                AddMissing(missingDependencies, "NavigationService", _navigation != null ? _navigation.NavigationService : null);
-                AddMissing(missingDependencies, "SourcePathResolver", _source != null ? _source.SourcePathResolver : null);
-                AddMissing(missingDependencies, "BuildCommandResolver", _build != null ? _build.BuildCommandResolver : null);
-                AddMissing(missingDependencies, "BuildExecutor", _build != null ? _build.BuildExecutor : null);
-                AddMissing(missingDependencies, "RestartCoordinator", _build != null ? _build.RestartCoordinator : null);
+                AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
+                AddMissing(missingDependencies, "NavigationService", _services != null ? _services.NavigationService : null);
+                AddMissing(missingDependencies, "SourcePathResolver", _services != null ? _services.SourcePathResolver : null);
+                AddMissing(missingDependencies, "BuildCommandResolver", _services != null ? _services.BuildCommandResolver : null);
+                AddMissing(missingDependencies, "BuildExecutor", _services != null ? _services.BuildExecutor : null);
+                AddMissing(missingDependencies, "RestartCoordinator", _services != null ? _services.RestartCoordinator : null);
             }
         }
     }
 
-    internal sealed class ReferenceModuleContribution : ICortexShellModuleContribution
+    internal sealed class ReferenceModuleContribution : IWorkbenchModuleContribution
     {
-        private readonly ICortexShellStateCapability _state;
-        private readonly ICortexShellNavigationCapability _navigation;
-        private readonly ICortexShellReferenceCapability _reference;
+        private readonly IReferenceModuleServices _services;
 
-        public ReferenceModuleContribution(
-            ICortexShellStateCapability state,
-            ICortexShellNavigationCapability navigation,
-            ICortexShellReferenceCapability reference)
+        public ReferenceModuleContribution(IReferenceModuleServices services)
         {
-            _state = state;
-            _navigation = navigation;
-            _reference = reference;
-            Descriptor = new CortexShellModuleDescriptor(CortexWorkbenchIds.ReferenceContainer, typeof(ReferenceShellModule));
+            _services = services;
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.ReferenceContainer, typeof(ReferenceShellModule));
         }
 
-        public CortexShellModuleDescriptor Descriptor { get; private set; }
+        public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public ICortexShellModule CreateModule()
+        public IWorkbenchModule CreateModule()
         {
-            return new ReferenceShellModule(_state, _navigation, _reference);
+            return new ReferenceShellModule(_services);
         }
 
         private sealed class ReferenceShellModule : CortexShellModuleBase
         {
             private readonly ReferenceModule _module = new ReferenceModule();
-            private readonly ICortexShellStateCapability _state;
-            private readonly ICortexShellNavigationCapability _navigation;
-            private readonly ICortexShellReferenceCapability _reference;
+            private readonly IReferenceModuleServices _services;
 
-            public ReferenceShellModule(
-                ICortexShellStateCapability state,
-                ICortexShellNavigationCapability navigation,
-                ICortexShellReferenceCapability reference)
+            public ReferenceShellModule(IReferenceModuleServices services)
                 : base(CortexWorkbenchIds.ReferenceContainer)
             {
-                _state = state;
-                _navigation = navigation;
-                _reference = reference;
+                _services = services;
             }
 
-            public override void Render(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+            public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
             {
                 _module.Draw(
-                    _reference != null ? _reference.ReferenceCatalogService : null,
-                    _navigation != null ? _navigation.NavigationService : null,
-                    _state != null ? _state.State : null);
+                    _services != null ? _services.ReferenceCatalogService : null,
+                    _services != null ? _services.NavigationService : null,
+                    _services != null ? _services.State : null);
             }
 
             protected override void CollectMissingDependencies(List<string> missingDependencies)
             {
-                AddMissing(missingDependencies, "State", _state != null ? _state.State : null);
-                AddMissing(missingDependencies, "NavigationService", _navigation != null ? _navigation.NavigationService : null);
-                AddMissing(missingDependencies, "ReferenceCatalogService", _reference != null ? _reference.ReferenceCatalogService : null);
+                AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
+                AddMissing(missingDependencies, "NavigationService", _services != null ? _services.NavigationService : null);
+                AddMissing(missingDependencies, "ReferenceCatalogService", _services != null ? _services.ReferenceCatalogService : null);
             }
         }
     }
 
-    internal sealed class SearchModuleContribution : ICortexShellModuleContribution
+    internal sealed class SearchModuleContribution : IWorkbenchModuleContribution
     {
-        private readonly ICortexShellStateCapability _state;
-        private readonly ICortexShellNavigationCapability _navigation;
-        private readonly ICortexShellSearchCapability _search;
+        private readonly ISearchModuleServices _services;
 
-        public SearchModuleContribution(
-            ICortexShellStateCapability state,
-            ICortexShellNavigationCapability navigation,
-            ICortexShellSearchCapability search)
+        public SearchModuleContribution(ISearchModuleServices services)
         {
-            _state = state;
-            _navigation = navigation;
-            _search = search;
-            Descriptor = new CortexShellModuleDescriptor(CortexWorkbenchIds.SearchContainer, typeof(SearchShellModule));
+            _services = services;
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.SearchContainer, typeof(SearchShellModule));
         }
 
-        public CortexShellModuleDescriptor Descriptor { get; private set; }
+        public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public ICortexShellModule CreateModule()
+        public IWorkbenchModule CreateModule()
         {
-            return new SearchShellModule(_state, _navigation, _search);
+            return new SearchShellModule(_services);
         }
 
         private sealed class SearchShellModule : CortexShellModuleBase
         {
             private readonly SearchModule _module = new SearchModule();
-            private readonly ICortexShellStateCapability _state;
-            private readonly ICortexShellNavigationCapability _navigation;
-            private readonly ICortexShellSearchCapability _search;
+            private readonly ISearchModuleServices _services;
 
-            public SearchShellModule(
-                ICortexShellStateCapability state,
-                ICortexShellNavigationCapability navigation,
-                ICortexShellSearchCapability search)
+            public SearchShellModule(ISearchModuleServices services)
                 : base(CortexWorkbenchIds.SearchContainer)
             {
-                _state = state;
-                _navigation = navigation;
-                _search = search;
+                _services = services;
             }
 
-            public override void Render(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+            public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
             {
                 _module.Draw(
-                    _search != null ? _search.WorkbenchSearchService : null,
-                    _navigation != null ? _navigation.NavigationService : null,
-                    _state != null ? _state.State : null);
+                    _services != null ? _services.WorkbenchSearchService : null,
+                    _services != null ? _services.NavigationService : null,
+                    _services != null ? _services.State : null);
             }
 
             protected override void CollectMissingDependencies(List<string> missingDependencies)
             {
-                AddMissing(missingDependencies, "State", _state != null ? _state.State : null);
-                AddMissing(missingDependencies, "NavigationService", _navigation != null ? _navigation.NavigationService : null);
-                AddMissing(missingDependencies, "WorkbenchSearchService", _search != null ? _search.WorkbenchSearchService : null);
+                AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
+                AddMissing(missingDependencies, "NavigationService", _services != null ? _services.NavigationService : null);
+                AddMissing(missingDependencies, "WorkbenchSearchService", _services != null ? _services.WorkbenchSearchService : null);
             }
         }
     }
 
-    internal sealed class RuntimeToolsModuleContribution : ICortexShellModuleContribution
+    internal sealed class RuntimeToolsModuleContribution : IWorkbenchModuleContribution
     {
-        private readonly ICortexShellStateCapability _state;
-        private readonly ICortexShellRuntimeToolCapability _runtimeTools;
+        private readonly IRuntimeToolsModuleServices _services;
 
-        public RuntimeToolsModuleContribution(
-            ICortexShellStateCapability state,
-            ICortexShellRuntimeToolCapability runtimeTools)
+        public RuntimeToolsModuleContribution(IRuntimeToolsModuleServices services)
         {
-            _state = state;
-            _runtimeTools = runtimeTools;
-            Descriptor = new CortexShellModuleDescriptor(CortexWorkbenchIds.RuntimeContainer, typeof(RuntimeToolsShellModule));
+            _services = services;
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.RuntimeContainer, typeof(RuntimeToolsShellModule));
         }
 
-        public CortexShellModuleDescriptor Descriptor { get; private set; }
+        public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public ICortexShellModule CreateModule()
+        public IWorkbenchModule CreateModule()
         {
-            return new RuntimeToolsShellModule(_state, _runtimeTools);
+            return new RuntimeToolsShellModule(_services);
         }
 
         private sealed class RuntimeToolsShellModule : CortexShellModuleBase
         {
             private readonly RuntimeToolsModule _module = new RuntimeToolsModule();
-            private readonly ICortexShellStateCapability _state;
-            private readonly ICortexShellRuntimeToolCapability _runtimeTools;
+            private readonly IRuntimeToolsModuleServices _services;
 
-            public RuntimeToolsShellModule(
-                ICortexShellStateCapability state,
-                ICortexShellRuntimeToolCapability runtimeTools)
+            public RuntimeToolsShellModule(IRuntimeToolsModuleServices services)
                 : base(CortexWorkbenchIds.RuntimeContainer)
             {
-                _state = state;
-                _runtimeTools = runtimeTools;
+                _services = services;
             }
 
-            public override void Render(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+            public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
             {
                 _module.Draw(
-                    _runtimeTools != null ? _runtimeTools.RuntimeToolBridge : null,
-                    _state != null ? _state.State : null);
+                    _services != null ? _services.RuntimeToolBridge : null,
+                    _services != null ? _services.State : null);
             }
 
             protected override void CollectMissingDependencies(List<string> missingDependencies)
             {
-                AddMissing(missingDependencies, "State", _state != null ? _state.State : null);
-                AddMissing(missingDependencies, "RuntimeToolBridge", _runtimeTools != null ? _runtimeTools.RuntimeToolBridge : null);
+                AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
+                AddMissing(missingDependencies, "RuntimeToolBridge", _services != null ? _services.RuntimeToolBridge : null);
             }
         }
     }
 
-    internal sealed class SettingsModuleContribution : ICortexShellModuleContribution
+    internal sealed class SettingsModuleContribution : IWorkbenchModuleContribution
     {
-        private readonly ICortexShellStateCapability _state;
-        private readonly ICortexShellSettingsCapability _settings;
-        private readonly ICortexShellProjectCapability _project;
-        private readonly ICortexShellWorkbenchCapability _workbench;
+        private readonly ISettingsModuleServices _services;
 
-        public SettingsModuleContribution(
-            ICortexShellStateCapability state,
-            ICortexShellSettingsCapability settings,
-            ICortexShellProjectCapability project,
-            ICortexShellWorkbenchCapability workbench)
+        public SettingsModuleContribution(ISettingsModuleServices services)
         {
-            _state = state;
-            _settings = settings;
-            _project = project;
-            _workbench = workbench;
-            Descriptor = new CortexShellModuleDescriptor(CortexWorkbenchIds.SettingsContainer, typeof(SettingsShellModule));
+            _services = services;
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.SettingsContainer, typeof(SettingsShellModule));
         }
 
-        public CortexShellModuleDescriptor Descriptor { get; private set; }
+        public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public ICortexShellModule CreateModule()
+        public IWorkbenchModule CreateModule()
         {
-            return new SettingsShellModule(_state, _settings, _project, _workbench);
+            return new SettingsShellModule(_services);
         }
 
         private sealed class SettingsShellModule : CortexShellModuleBase
         {
             private readonly SettingsModule _module = new SettingsModule();
-            private readonly ICortexShellStateCapability _state;
-            private readonly ICortexShellSettingsCapability _settings;
-            private readonly ICortexShellProjectCapability _project;
-            private readonly ICortexShellWorkbenchCapability _workbench;
+            private readonly ISettingsModuleServices _services;
 
-            public SettingsShellModule(
-                ICortexShellStateCapability state,
-                ICortexShellSettingsCapability settings,
-                ICortexShellProjectCapability project,
-                ICortexShellWorkbenchCapability workbench)
+            public SettingsShellModule(ISettingsModuleServices services)
                 : base(CortexWorkbenchIds.SettingsContainer)
             {
-                _state = state;
-                _settings = settings;
-                _project = project;
-                _workbench = workbench;
+                _services = services;
             }
 
-            public override void Render(WorkbenchPresentationSnapshot snapshot, bool detachedWindow)
+            public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
             {
                 _module.Draw(
-                    _settings != null ? _settings.SettingsStore : null,
-                    _project != null ? _project.ProjectCatalog : null,
-                    _project != null ? _project.ProjectWorkspaceService : null,
-                    _project != null ? _project.LoadedModCatalog : null,
-                    snapshot,
-                    _workbench != null ? _workbench.ThemeState : null,
-                    _state != null ? _state.State : null);
+                    _services != null ? _services.SettingsStore : null,
+                    _services != null ? _services.ProjectCatalog : null,
+                    _services != null ? _services.ProjectWorkspaceService : null,
+                    _services != null ? _services.LoadedModCatalog : null,
+                    context != null ? context.Snapshot : new WorkbenchPresentationSnapshot(),
+                    _services != null ? _services.ThemeState : null,
+                    _services != null ? _services.State : null);
             }
 
             protected override void CollectMissingDependencies(List<string> missingDependencies)
             {
-                AddMissing(missingDependencies, "State", _state != null ? _state.State : null);
-                AddMissing(missingDependencies, "SettingsStore", _settings != null ? _settings.SettingsStore : null);
-                AddMissing(missingDependencies, "ProjectCatalog", _project != null ? _project.ProjectCatalog : null);
-                AddMissing(missingDependencies, "ProjectWorkspaceService", _project != null ? _project.ProjectWorkspaceService : null);
-                AddMissing(missingDependencies, "LoadedModCatalog", _project != null ? _project.LoadedModCatalog : null);
-                AddMissing(missingDependencies, "ThemeState", _workbench != null ? _workbench.ThemeState : null);
+                AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
+                AddMissing(missingDependencies, "SettingsStore", _services != null ? _services.SettingsStore : null);
+                AddMissing(missingDependencies, "ProjectCatalog", _services != null ? _services.ProjectCatalog : null);
+                AddMissing(missingDependencies, "ProjectWorkspaceService", _services != null ? _services.ProjectWorkspaceService : null);
+                AddMissing(missingDependencies, "LoadedModCatalog", _services != null ? _services.LoadedModCatalog : null);
+                AddMissing(missingDependencies, "ThemeState", _services != null ? _services.ThemeState : null);
             }
         }
     }

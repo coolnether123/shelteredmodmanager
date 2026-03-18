@@ -140,7 +140,9 @@ namespace Cortex
                     GetModuleCompositionService(),
                     GetModuleActivationService(),
                     delegate(string containerId) { return CanActivateContainer(containerId); },
-                    delegate(string containerId) { return BuildActivationBlockedMessage(containerId); });
+                    delegate(string containerId) { return BuildActivationBlockedMessage(containerId); },
+                    delegate { return _workbenchRuntime != null ? _workbenchRuntime.CommandRegistry : null; },
+                    delegate { return _workbenchRuntime != null ? _workbenchRuntime.ContributionRegistry : null; });
             }
 
             return _moduleRenderService;

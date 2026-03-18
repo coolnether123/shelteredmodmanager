@@ -17,13 +17,14 @@ namespace Cortex
         public IList<ExternalWorkbenchPluginLoadResult> LoadPlugins(
             CortexSettings settings,
             ICommandRegistry commandRegistry,
-            IContributionRegistry contributionRegistry)
+            IContributionRegistry contributionRegistry,
+            IWorkbenchModuleRegistry moduleRegistry)
         {
             var results = new List<ExternalWorkbenchPluginLoadResult>();
             var descriptors = DiscoverPluginDescriptors(settings);
             for (var i = 0; i < descriptors.Count; i++)
             {
-                LoadDescriptor(descriptors[i], commandRegistry, contributionRegistry, results);
+                LoadDescriptor(descriptors[i], commandRegistry, contributionRegistry, moduleRegistry, results);
             }
 
             return results;
@@ -227,6 +228,7 @@ namespace Cortex
             ExternalWorkbenchPluginDescriptor descriptor,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
+            IWorkbenchModuleRegistry moduleRegistry,
             IList<ExternalWorkbenchPluginLoadResult> results)
         {
             if (descriptor == null || string.IsNullOrEmpty(descriptor.AssemblyPath))
@@ -255,7 +257,14 @@ namespace Cortex
                 for (var i = 0; i < pluginTypes.Length; i++)
                 {
                     var type = pluginTypes[i];
-                    if (type == null || type.IsAbstract || !typeof(IWorkbenchPlugin).IsAssignableFrom(type))
+                    if (type == null || type.IsAbstract)
+                    {
+                        continue;
+                    }
+
+                    var supportsContextRegistration = typeof(IWorkbenchPluginContributor).IsAssignableFrom(type);
+                    var supportsLegacyRegistration = typeof(IWorkbenchPlugin).IsAssignableFrom(type);
+                    if (!supportsContextRegistration && !supportsLegacyRegistration)
                     {
                         continue;
                     }
@@ -266,19 +275,36 @@ namespace Cortex
                         continue;
                     }
 
-                    var plugin = Activator.CreateInstance(type) as IWorkbenchPlugin;
-                    if (plugin == null)
+                    var instance = Activator.CreateInstance(type);
+                    var pluginId = descriptor.DeclaredPluginId;
+                    var displayName = type.Name;
+
+                    var contextPlugin = instance as IWorkbenchPluginContributor;
+                    if (contextPlugin != null)
                     {
-                        continue;
+                        contextPlugin.Register(new WorkbenchPluginContext(commandRegistry, contributionRegistry, moduleRegistry));
+                        pluginId = string.IsNullOrEmpty(contextPlugin.PluginId) ? pluginId : contextPlugin.PluginId;
+                        displayName = string.IsNullOrEmpty(contextPlugin.DisplayName) ? displayName : contextPlugin.DisplayName;
+                    }
+                    else
+                    {
+                        var legacyPlugin = instance as IWorkbenchPlugin;
+                        if (legacyPlugin == null)
+                        {
+                            continue;
+                        }
+
+                        legacyPlugin.Register(commandRegistry, contributionRegistry);
+                        pluginId = string.IsNullOrEmpty(legacyPlugin.PluginId) ? pluginId : legacyPlugin.PluginId;
+                        displayName = string.IsNullOrEmpty(legacyPlugin.DisplayName) ? displayName : legacyPlugin.DisplayName;
                     }
 
-                    plugin.Register(commandRegistry, contributionRegistry);
                     loadedAny = true;
                     results.Add(new ExternalWorkbenchPluginLoadResult
                     {
                         AssemblyPath = descriptor.AssemblyPath,
-                        PluginId = string.IsNullOrEmpty(plugin.PluginId) ? descriptor.DeclaredPluginId : plugin.PluginId,
-                        DisplayName = string.IsNullOrEmpty(plugin.DisplayName) ? type.Name : plugin.DisplayName,
+                        PluginId = pluginId,
+                        DisplayName = displayName,
                         Loaded = true,
                         StatusMessage = "Loaded."
                     });
@@ -293,7 +319,7 @@ namespace Cortex
                         PluginId = descriptor.DeclaredPluginId,
                         DisplayName = Path.GetFileNameWithoutExtension(descriptor.AssemblyPath),
                         Loaded = false,
-                        StatusMessage = "No IWorkbenchPlugin implementations were found in " + descriptor.AssemblyPath + "."
+                        StatusMessage = "No workbench plugin entry points were found in " + descriptor.AssemblyPath + "."
                     });
                 }
             }

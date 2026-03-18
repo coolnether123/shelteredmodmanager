@@ -1,11 +1,12 @@
 using System.Collections.Generic;
+using Cortex.Plugins.Abstractions;
 
 namespace Cortex.Shell
 {
     internal sealed class CortexShellModuleCompositionService
     {
         private readonly CortexShellModuleContributionRegistry _contributionRegistry;
-        private readonly Dictionary<string, ICortexShellModule> _instances = new Dictionary<string, ICortexShellModule>(System.StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, IWorkbenchModule> _instances = new Dictionary<string, IWorkbenchModule>(System.StringComparer.OrdinalIgnoreCase);
 
         public CortexShellModuleCompositionService(CortexShellModuleContributionRegistry contributionRegistry)
         {
@@ -17,14 +18,14 @@ namespace Cortex.Shell
         /// </summary>
         /// <param name="containerId">The owning workbench container identifier.</param>
         /// <returns>The cached or newly created module instance, or <c>null</c> when no contribution is registered.</returns>
-        public ICortexShellModule GetOrCreate(string containerId)
+        public IWorkbenchModule GetOrCreate(string containerId)
         {
             if (string.IsNullOrEmpty(containerId))
             {
                 return null;
             }
 
-            ICortexShellModule existing;
+            IWorkbenchModule existing;
             if (_instances.TryGetValue(containerId, out existing))
             {
                 return existing;

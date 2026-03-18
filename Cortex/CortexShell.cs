@@ -294,7 +294,8 @@ namespace Cortex
             var results = _externalPluginLoader.LoadPlugins(
                 _state.Settings,
                 _workbenchRuntime.CommandRegistry,
-                _workbenchRuntime.ContributionRegistry);
+                _workbenchRuntime.ContributionRegistry,
+                _moduleContributionRegistry);
 
             for (var i = 0; i < results.Count; i++)
             {
