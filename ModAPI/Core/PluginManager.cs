@@ -207,6 +207,15 @@ namespace ModAPI.Core
             runner.Manager = this;
 
             SharedAssemblyResolver.ResolveSharedAssembly("ShelteredAPI");
+            var cortexAssembly = SharedAssemblyResolver.ResolveSharedAssembly("Cortex");
+            if (cortexAssembly != null)
+            {
+                MMLog.WriteInfo("[PluginManager] Optional runtime assembly available: " + cortexAssembly.GetName().Name + " @ " + cortexAssembly.Location);
+            }
+            else
+            {
+                MMLog.WriteWarning("[PluginManager] Optional runtime assembly 'Cortex' was not resolved. Cortex shell bootstrap will be unavailable.");
+            }
             HarmonyBootstrap.EnsurePatched();
             
             // Force injection in case SaveManager.Awake already ran before we could patch it

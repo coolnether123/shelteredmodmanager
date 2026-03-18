@@ -1,30 +1,18 @@
 using System;
 using System.Collections.Generic;
-using Cortex.Presentation.Models;
+using Cortex.Plugins.Abstractions;
 
 namespace Cortex.Shell
 {
-    internal interface ICortexShellModule
+    internal sealed class CortexShellModuleContributionRegistry : IWorkbenchModuleRegistry
     {
-        string GetUnavailableMessage();
-        void Render(WorkbenchPresentationSnapshot snapshot, bool detachedWindow);
-    }
-
-    internal interface ICortexShellModuleContribution
-    {
-        CortexShellModuleDescriptor Descriptor { get; }
-        ICortexShellModule CreateModule();
-    }
-
-    internal sealed class CortexShellModuleContributionRegistry
-    {
-        private readonly Dictionary<string, ICortexShellModuleContribution> _contributions = new Dictionary<string, ICortexShellModuleContribution>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, IWorkbenchModuleContribution> _contributions = new Dictionary<string, IWorkbenchModuleContribution>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Registers a module contribution for a workbench container.
         /// </summary>
         /// <param name="contribution">The contribution to register.</param>
-        public void Register(ICortexShellModuleContribution contribution)
+        public void Register(IWorkbenchModuleContribution contribution)
         {
             if (contribution == null || contribution.Descriptor == null || string.IsNullOrEmpty(contribution.Descriptor.ContainerId))
             {
@@ -39,14 +27,14 @@ namespace Cortex.Shell
         /// </summary>
         /// <param name="containerId">The target workbench container identifier.</param>
         /// <returns>The registered contribution when one exists; otherwise <c>null</c>.</returns>
-        public ICortexShellModuleContribution FindContribution(string containerId)
+        public IWorkbenchModuleContribution FindContribution(string containerId)
         {
             if (string.IsNullOrEmpty(containerId))
             {
                 return null;
             }
 
-            ICortexShellModuleContribution contribution;
+            IWorkbenchModuleContribution contribution;
             return _contributions.TryGetValue(containerId, out contribution) ? contribution : null;
         }
 
@@ -55,7 +43,7 @@ namespace Cortex.Shell
         /// </summary>
         /// <param name="containerId">The target workbench container identifier.</param>
         /// <returns>The matching descriptor when one exists; otherwise <c>null</c>.</returns>
-        public CortexShellModuleDescriptor FindDescriptor(string containerId)
+        public WorkbenchModuleDescriptor FindDescriptor(string containerId)
         {
             var contribution = FindContribution(containerId);
             return contribution != null ? contribution.Descriptor : null;

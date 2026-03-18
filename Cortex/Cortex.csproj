@@ -41,6 +41,7 @@
   <ItemGroup>
     <Compile Include="Adapters\RuntimeAdapters.cs" />
     <Compile Include="Chrome\CortexWindowChromeController.cs" />
+    <Compile Include="CortexRuntimeBootstrap.cs" />
     <Compile Include="CortexShell.Chrome.cs" />
     <Compile Include="CortexShell.CompletionAugmentation.cs" />
     <Compile Include="Shell\CortexShell.HostAdapters.cs" />
@@ -60,7 +61,6 @@
     <Compile Include="Shell\CortexShellModuleCapabilities.cs" />
     <Compile Include="Shell\CortexShellModuleCompositionService.cs" />
     <Compile Include="Shell\CortexShellModuleContributionRegistry.cs" />
-    <Compile Include="Shell\CortexShellModuleDescriptor.cs" />
     <Compile Include="Shell\CortexShellModuleRenderService.cs" />
     <Compile Include="CortexShell.Language.cs" />
     <Compile Include="CortexShell.Runtime.cs" />

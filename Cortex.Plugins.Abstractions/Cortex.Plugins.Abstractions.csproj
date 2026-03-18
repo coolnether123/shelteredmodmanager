@@ -36,12 +36,19 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="IWorkbenchPlugin.cs" />
+    <Compile Include="WorkbenchModuleAbstractions.cs" />
+    <Compile Include="WorkbenchPluginContext.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Cortex.Core\Cortex.Core.csproj">
       <Project>{A5F28666-878B-4C48-A7DA-4A19BFC79F02}</Project>
       <Name>Cortex.Core</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Presentation\Cortex.Presentation.csproj">
+      <Project>{ADAEC1F0-6882-42D6-9016-E79C9EBA1605}</Project>
+      <Name>Cortex.Presentation</Name>
       <Private>False</Private>
     </ProjectReference>
   </ItemGroup>

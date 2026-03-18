@@ -12,7 +12,8 @@ namespace ModAPI.Core
             "ModAPI",
             "ModAPI.Core",
             "ShelteredAPI",
-            "0Harmony"
+            "0Harmony",
+            "Cortex"
         };
 
         internal static bool IsSharedRuntimeAssemblyName(string simpleName)
@@ -86,6 +87,7 @@ namespace ModAPI.Core
                 string[] candidates = new[]
                 {
                     Path.Combine(Path.Combine(smmDir, "bin"), simpleName + ".dll"),
+                    Path.Combine(Path.Combine(Path.Combine(smmDir, "bin"), "decompiler"), simpleName + ".dll"),
                     Path.Combine(smmDir, simpleName + ".dll")
                 };
 

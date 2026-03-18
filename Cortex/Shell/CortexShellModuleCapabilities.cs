@@ -6,92 +6,90 @@ using Cortex.Services;
 
 namespace Cortex.Shell
 {
-    internal interface ICortexShellStateCapability
+    internal interface ILogsModuleServices
     {
         CortexShellState State { get; }
-    }
-
-    internal interface ICortexShellNavigationCapability
-    {
         CortexNavigationService NavigationService { get; }
-    }
-
-    internal interface ICortexShellSourceCapability
-    {
         ISourcePathResolver SourcePathResolver { get; }
-    }
-
-    internal interface ICortexShellRuntimeLogCapability
-    {
         IRuntimeLogFeed RuntimeLogFeed { get; }
     }
 
-    internal interface ICortexShellProjectCapability
+    internal interface IProjectsModuleServices
     {
+        CortexShellState State { get; }
         IProjectCatalog ProjectCatalog { get; }
         IProjectWorkspaceService ProjectWorkspaceService { get; }
         ILoadedModCatalog LoadedModCatalog { get; }
     }
 
-    internal interface ICortexShellWorkspaceBrowserCapability
+    internal interface IFileExplorerModuleServices
     {
+        CortexShellState State { get; }
+        CortexNavigationService NavigationService { get; }
         IWorkspaceBrowserService WorkspaceBrowserService { get; }
         IDecompilerExplorerService DecompilerExplorerService { get; }
     }
 
-    internal interface ICortexShellDocumentCapability
+    internal interface IEditorModuleServices
     {
+        CortexShellState State { get; }
+        CortexNavigationService NavigationService { get; }
         IDocumentService DocumentService { get; }
-    }
-
-    internal interface ICortexShellWorkbenchCapability
-    {
         ICommandRegistry CommandRegistry { get; }
         IContributionRegistry ContributionRegistry { get; }
-        ThemeState ThemeState { get; }
-    }
-
-    internal interface ICortexShellSearchCapability
-    {
         WorkbenchSearchService WorkbenchSearchService { get; }
     }
 
-    internal interface ICortexShellBuildCapability
+    internal interface IBuildModuleServices
     {
+        CortexShellState State { get; }
+        CortexNavigationService NavigationService { get; }
+        ISourcePathResolver SourcePathResolver { get; }
         IBuildCommandResolver BuildCommandResolver { get; }
         IBuildExecutor BuildExecutor { get; }
         IRestartCoordinator RestartCoordinator { get; }
     }
 
-    internal interface ICortexShellReferenceCapability
+    internal interface IReferenceModuleServices
     {
+        CortexShellState State { get; }
+        CortexNavigationService NavigationService { get; }
         IReferenceCatalogService ReferenceCatalogService { get; }
     }
 
-    internal interface ICortexShellRuntimeToolCapability
+    internal interface ISearchModuleServices
     {
+        CortexShellState State { get; }
+        CortexNavigationService NavigationService { get; }
+        WorkbenchSearchService WorkbenchSearchService { get; }
+    }
+
+    internal interface IRuntimeToolsModuleServices
+    {
+        CortexShellState State { get; }
         IRuntimeToolBridge RuntimeToolBridge { get; }
     }
 
-    internal interface ICortexShellSettingsCapability
+    internal interface ISettingsModuleServices
     {
+        CortexShellState State { get; }
         ICortexSettingsStore SettingsStore { get; }
+        IProjectCatalog ProjectCatalog { get; }
+        IProjectWorkspaceService ProjectWorkspaceService { get; }
+        ILoadedModCatalog LoadedModCatalog { get; }
+        ThemeState ThemeState { get; }
     }
 
     internal sealed class CortexShellModuleServices :
-        ICortexShellStateCapability,
-        ICortexShellNavigationCapability,
-        ICortexShellSourceCapability,
-        ICortexShellRuntimeLogCapability,
-        ICortexShellProjectCapability,
-        ICortexShellWorkspaceBrowserCapability,
-        ICortexShellDocumentCapability,
-        ICortexShellWorkbenchCapability,
-        ICortexShellSearchCapability,
-        ICortexShellBuildCapability,
-        ICortexShellReferenceCapability,
-        ICortexShellRuntimeToolCapability,
-        ICortexShellSettingsCapability
+        ILogsModuleServices,
+        IProjectsModuleServices,
+        IFileExplorerModuleServices,
+        IEditorModuleServices,
+        IBuildModuleServices,
+        IReferenceModuleServices,
+        ISearchModuleServices,
+        IRuntimeToolsModuleServices,
+        ISettingsModuleServices
     {
         private readonly CortexShellState _state;
         private readonly Func<ICortexSettingsStore> _settingsStoreAccessor;
