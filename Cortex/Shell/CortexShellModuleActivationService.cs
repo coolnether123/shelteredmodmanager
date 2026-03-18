@@ -5,39 +5,33 @@ namespace Cortex.Shell
 {
     internal sealed class CortexShellModuleActivationService
     {
-        private readonly CortexShellModuleDescriptorCatalog _descriptorCatalog;
         private readonly CortexShellModuleCompositionService _compositionService;
+        private readonly Func<string, bool> _canActivateContainer;
         private readonly HashSet<string> _activatedContainers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public CortexShellModuleActivationService(
-            CortexShellModuleDescriptorCatalog descriptorCatalog,
-            CortexShellModuleCompositionService compositionService)
+            CortexShellModuleCompositionService compositionService,
+            Func<string, bool> canActivateContainer)
         {
-            _descriptorCatalog = descriptorCatalog;
             _compositionService = compositionService;
+            _canActivateContainer = canActivateContainer;
         }
 
         /// <summary>
         /// Ensures that the module backing a workbench container has been composed and marked active.
         /// </summary>
-        /// <param name="context">The activation context that decides whether a container may activate.</param>
         /// <param name="containerId">The target workbench container identifier.</param>
-        public void EnsureActivated(CortexShellModuleActivationContext context, string containerId)
+        public void EnsureActivated(string containerId)
         {
-            if (context == null || string.IsNullOrEmpty(containerId) || _activatedContainers.Contains(containerId) || !context.CanActivateContainer(containerId))
+            if (string.IsNullOrEmpty(containerId) || _activatedContainers.Contains(containerId) || (_canActivateContainer != null && !_canActivateContainer(containerId)))
             {
                 return;
             }
 
-            var descriptor = _descriptorCatalog != null ? _descriptorCatalog.FindDescriptor(containerId) : null;
-            if (descriptor == null)
+            var module = _compositionService != null ? _compositionService.GetOrCreate(containerId) : null;
+            if (module == null)
             {
                 return;
-            }
-
-            if (descriptor.EnsureComposed != null)
-            {
-                descriptor.EnsureComposed(_compositionService);
             }
 
             _activatedContainers.Add(containerId);

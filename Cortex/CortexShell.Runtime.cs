@@ -15,7 +15,7 @@ namespace Cortex
 
         private void EnsureModuleActivated(string containerId)
         {
-            GetModuleActivationService().EnsureActivated(GetModuleActivationContext(), containerId);
+            GetModuleActivationService().EnsureActivated(containerId);
         }
 
         private void RegisterCommandHandlers()
@@ -70,23 +70,11 @@ namespace Cortex
             return _commandContext;
         }
 
-        private CortexShellModuleActivationContext GetModuleActivationContext()
+        private CortexShellModuleServices GetModuleServices()
         {
-            if (_moduleActivationContext == null)
+            if (_moduleServices == null)
             {
-                _moduleActivationContext = new CortexShellModuleActivationContext(
-                    delegate(string containerId) { return CanActivateContainer(containerId); });
-            }
-
-            return _moduleActivationContext;
-        }
-
-        private CortexShellModuleRenderContext GetModuleRenderContext()
-        {
-            if (_moduleRenderContext == null)
-            {
-                _moduleRenderContext = new CortexShellModuleRenderContext(
-                    GetModuleActivationContext(),
+                _moduleServices = new CortexShellModuleServices(
                     _state,
                     delegate { return _settingsStore; },
                     delegate { return _projectCatalog; },
@@ -104,11 +92,32 @@ namespace Cortex
                     delegate { return _restartCoordinator; },
                     delegate { return _navigationService; },
                     delegate { return _workbenchRuntime; },
-                    delegate { return _workbenchSearchService; },
-                    delegate(string containerId) { return BuildActivationBlockedMessage(containerId); });
+                    delegate { return _workbenchSearchService; });
             }
 
-            return _moduleRenderContext;
+            return _moduleServices;
+        }
+
+        private void EnsureModuleContributionsRegistered()
+        {
+            if (_moduleContributionsRegistered)
+            {
+                return;
+            }
+
+            _moduleRegistrar.RegisterBuiltIns(_moduleContributionRegistry, GetModuleServices());
+            _moduleContributionsRegistered = true;
+        }
+
+        private CortexShellModuleCompositionService GetModuleCompositionService()
+        {
+            EnsureModuleContributionsRegistered();
+            if (_moduleCompositionService == null)
+            {
+                _moduleCompositionService = new CortexShellModuleCompositionService(_moduleContributionRegistry);
+            }
+
+            return _moduleCompositionService;
         }
 
         private CortexShellModuleActivationService GetModuleActivationService()
@@ -116,8 +125,8 @@ namespace Cortex
             if (_moduleActivationService == null)
             {
                 _moduleActivationService = new CortexShellModuleActivationService(
-                    _moduleDescriptorCatalog,
-                    _moduleCompositionService);
+                    GetModuleCompositionService(),
+                    delegate(string containerId) { return CanActivateContainer(containerId); });
             }
 
             return _moduleActivationService;
@@ -128,9 +137,10 @@ namespace Cortex
             if (_moduleRenderService == null)
             {
                 _moduleRenderService = new CortexShellModuleRenderService(
-                    _moduleDescriptorCatalog,
-                    _moduleCompositionService,
-                    GetModuleActivationService());
+                    GetModuleCompositionService(),
+                    GetModuleActivationService(),
+                    delegate(string containerId) { return CanActivateContainer(containerId); },
+                    delegate(string containerId) { return BuildActivationBlockedMessage(containerId); });
             }
 
             return _moduleRenderService;

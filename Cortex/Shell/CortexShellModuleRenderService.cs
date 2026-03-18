@@ -1,3 +1,4 @@
+using System;
 using Cortex.Presentation.Models;
 using UnityEngine;
 
@@ -5,56 +6,53 @@ namespace Cortex.Shell
 {
     internal sealed class CortexShellModuleRenderService
     {
-        private readonly CortexShellModuleDescriptorCatalog _descriptorCatalog;
         private readonly CortexShellModuleCompositionService _compositionService;
         private readonly CortexShellModuleActivationService _activationService;
+        private readonly Func<string, bool> _canActivateContainer;
+        private readonly Func<string, string> _buildActivationBlockedMessage;
 
         public CortexShellModuleRenderService(
-            CortexShellModuleDescriptorCatalog descriptorCatalog,
             CortexShellModuleCompositionService compositionService,
-            CortexShellModuleActivationService activationService)
+            CortexShellModuleActivationService activationService,
+            Func<string, bool> canActivateContainer,
+            Func<string, string> buildActivationBlockedMessage)
         {
-            _descriptorCatalog = descriptorCatalog;
             _compositionService = compositionService;
             _activationService = activationService;
+            _canActivateContainer = canActivateContainer;
+            _buildActivationBlockedMessage = buildActivationBlockedMessage;
         }
 
         /// <summary>
         /// Renders the active module for a container, including activation and blocked-state fallback handling.
         /// </summary>
-        /// <param name="context">The render context containing the services and state visible to modules.</param>
         /// <param name="snapshot">The current workbench presentation snapshot.</param>
         /// <param name="containerId">The target workbench container identifier.</param>
         /// <param name="detachedWindow">Whether the module is being rendered in a detached host window.</param>
-        public void DrawActiveModule(CortexShellModuleRenderContext context, WorkbenchPresentationSnapshot snapshot, string containerId, bool detachedWindow)
+        public void DrawActiveModule(WorkbenchPresentationSnapshot snapshot, string containerId, bool detachedWindow)
         {
-            if (context == null)
+            if (_canActivateContainer != null && !_canActivateContainer(containerId))
             {
-                return;
-            }
-
-            if (!context.CanActivateContainer(containerId))
-            {
-                DrawBlockedMessage(context.BuildActivationBlockedMessage(containerId));
+                DrawBlockedMessage(_buildActivationBlockedMessage != null ? _buildActivationBlockedMessage(containerId) : string.Empty);
                 return;
             }
 
             if (_activationService != null)
             {
-                _activationService.EnsureActivated(context.ActivationContext, containerId);
+                _activationService.EnsureActivated(containerId);
             }
 
-            var descriptor = _descriptorCatalog != null ? _descriptorCatalog.FindDescriptor(containerId) : null;
-            if (descriptor != null && descriptor.Render != null)
+            var module = _compositionService != null ? _compositionService.GetOrCreate(containerId) : null;
+            if (module != null)
             {
-                var missingCapabilityMessage = BuildMissingCapabilityMessage(context, descriptor);
-                if (!string.IsNullOrEmpty(missingCapabilityMessage))
+                var unavailableMessage = module.GetUnavailableMessage();
+                if (!string.IsNullOrEmpty(unavailableMessage))
                 {
-                    DrawBlockedMessage(missingCapabilityMessage);
+                    DrawBlockedMessage(unavailableMessage);
                     return;
                 }
 
-                descriptor.Render(_compositionService, context, snapshot, detachedWindow);
+                module.Render(snapshot, detachedWindow);
                 return;
             }
 
@@ -66,28 +64,6 @@ namespace Cortex.Shell
             GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandHeight(true));
             GUILayout.Label(message ?? string.Empty);
             GUILayout.EndVertical();
-        }
-
-        private static string BuildMissingCapabilityMessage(CortexShellModuleRenderContext context, CortexShellModuleDescriptor descriptor)
-        {
-            if (context == null || descriptor == null || descriptor.RequiredCapabilityTypes == null || descriptor.RequiredCapabilityTypes.Length == 0)
-            {
-                return string.Empty;
-            }
-
-            var missing = new System.Collections.Generic.List<string>();
-            for (var i = 0; i < descriptor.RequiredCapabilityTypes.Length; i++)
-            {
-                var capabilityType = descriptor.RequiredCapabilityTypes[i];
-                if (capabilityType != null && (context.Capabilities == null || !context.Capabilities.Has(capabilityType)))
-                {
-                    missing.Add(capabilityType.Name);
-                }
-            }
-
-            return missing.Count > 0
-                ? "Module '" + descriptor.ContainerId + "' is missing required capabilities: " + string.Join(", ", missing.ToArray()) + "."
-                : string.Empty;
         }
     }
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Host.Unity.Runtime;
@@ -47,7 +46,9 @@ namespace Cortex.Shell
 
     internal interface ICortexShellWorkbenchCapability
     {
-        UnityWorkbenchRuntime WorkbenchRuntime { get; }
+        ICommandRegistry CommandRegistry { get; }
+        IContributionRegistry ContributionRegistry { get; }
+        ThemeState ThemeState { get; }
     }
 
     internal interface ICortexShellSearchCapability
@@ -77,59 +78,123 @@ namespace Cortex.Shell
         ICortexSettingsStore SettingsStore { get; }
     }
 
-    internal sealed class CortexShellModuleCapabilityCollection
+    internal sealed class CortexShellModuleServices :
+        ICortexShellStateCapability,
+        ICortexShellNavigationCapability,
+        ICortexShellSourceCapability,
+        ICortexShellRuntimeLogCapability,
+        ICortexShellProjectCapability,
+        ICortexShellWorkspaceBrowserCapability,
+        ICortexShellDocumentCapability,
+        ICortexShellWorkbenchCapability,
+        ICortexShellSearchCapability,
+        ICortexShellBuildCapability,
+        ICortexShellReferenceCapability,
+        ICortexShellRuntimeToolCapability,
+        ICortexShellSettingsCapability
     {
-        private readonly Dictionary<Type, object> _capabilities = new Dictionary<Type, object>();
+        private readonly CortexShellState _state;
+        private readonly Func<ICortexSettingsStore> _settingsStoreAccessor;
+        private readonly Func<IProjectCatalog> _projectCatalogAccessor;
+        private readonly Func<ILoadedModCatalog> _loadedModCatalogAccessor;
+        private readonly Func<IProjectWorkspaceService> _projectWorkspaceServiceAccessor;
+        private readonly Func<IWorkspaceBrowserService> _workspaceBrowserServiceAccessor;
+        private readonly Func<IDecompilerExplorerService> _decompilerExplorerServiceAccessor;
+        private readonly Func<IDocumentService> _documentServiceAccessor;
+        private readonly Func<IBuildCommandResolver> _buildCommandResolverAccessor;
+        private readonly Func<IBuildExecutor> _buildExecutorAccessor;
+        private readonly Func<IReferenceCatalogService> _referenceCatalogServiceAccessor;
+        private readonly Func<ISourcePathResolver> _sourcePathResolverAccessor;
+        private readonly Func<IRuntimeLogFeed> _runtimeLogFeedAccessor;
+        private readonly Func<IRuntimeToolBridge> _runtimeToolBridgeAccessor;
+        private readonly Func<IRestartCoordinator> _restartCoordinatorAccessor;
+        private readonly Func<CortexNavigationService> _navigationServiceAccessor;
+        private readonly Func<UnityWorkbenchRuntime> _workbenchRuntimeAccessor;
+        private readonly Func<WorkbenchSearchService> _workbenchSearchServiceAccessor;
 
-        /// <summary>
-        /// Registers a capability implementation under its contract type.
-        /// </summary>
-        /// <typeparam name="TCapability">The capability contract type.</typeparam>
-        /// <param name="capability">The capability implementation to expose.</param>
-        public void Add<TCapability>(TCapability capability)
-            where TCapability : class
+        public CortexShellModuleServices(
+            CortexShellState state,
+            Func<ICortexSettingsStore> settingsStoreAccessor,
+            Func<IProjectCatalog> projectCatalogAccessor,
+            Func<ILoadedModCatalog> loadedModCatalogAccessor,
+            Func<IProjectWorkspaceService> projectWorkspaceServiceAccessor,
+            Func<IWorkspaceBrowserService> workspaceBrowserServiceAccessor,
+            Func<IDecompilerExplorerService> decompilerExplorerServiceAccessor,
+            Func<IDocumentService> documentServiceAccessor,
+            Func<IBuildCommandResolver> buildCommandResolverAccessor,
+            Func<IBuildExecutor> buildExecutorAccessor,
+            Func<IReferenceCatalogService> referenceCatalogServiceAccessor,
+            Func<ISourcePathResolver> sourcePathResolverAccessor,
+            Func<IRuntimeLogFeed> runtimeLogFeedAccessor,
+            Func<IRuntimeToolBridge> runtimeToolBridgeAccessor,
+            Func<IRestartCoordinator> restartCoordinatorAccessor,
+            Func<CortexNavigationService> navigationServiceAccessor,
+            Func<UnityWorkbenchRuntime> workbenchRuntimeAccessor,
+            Func<WorkbenchSearchService> workbenchSearchServiceAccessor)
         {
-            if (capability == null)
+            _state = state;
+            _settingsStoreAccessor = settingsStoreAccessor;
+            _projectCatalogAccessor = projectCatalogAccessor;
+            _loadedModCatalogAccessor = loadedModCatalogAccessor;
+            _projectWorkspaceServiceAccessor = projectWorkspaceServiceAccessor;
+            _workspaceBrowserServiceAccessor = workspaceBrowserServiceAccessor;
+            _decompilerExplorerServiceAccessor = decompilerExplorerServiceAccessor;
+            _documentServiceAccessor = documentServiceAccessor;
+            _buildCommandResolverAccessor = buildCommandResolverAccessor;
+            _buildExecutorAccessor = buildExecutorAccessor;
+            _referenceCatalogServiceAccessor = referenceCatalogServiceAccessor;
+            _sourcePathResolverAccessor = sourcePathResolverAccessor;
+            _runtimeLogFeedAccessor = runtimeLogFeedAccessor;
+            _runtimeToolBridgeAccessor = runtimeToolBridgeAccessor;
+            _restartCoordinatorAccessor = restartCoordinatorAccessor;
+            _navigationServiceAccessor = navigationServiceAccessor;
+            _workbenchRuntimeAccessor = workbenchRuntimeAccessor;
+            _workbenchSearchServiceAccessor = workbenchSearchServiceAccessor;
+        }
+
+        public CortexShellState State { get { return _state; } }
+        public CortexNavigationService NavigationService { get { return _navigationServiceAccessor != null ? _navigationServiceAccessor() : null; } }
+        public ISourcePathResolver SourcePathResolver { get { return _sourcePathResolverAccessor != null ? _sourcePathResolverAccessor() : null; } }
+        public IRuntimeLogFeed RuntimeLogFeed { get { return _runtimeLogFeedAccessor != null ? _runtimeLogFeedAccessor() : null; } }
+        public IProjectCatalog ProjectCatalog { get { return _projectCatalogAccessor != null ? _projectCatalogAccessor() : null; } }
+        public IProjectWorkspaceService ProjectWorkspaceService { get { return _projectWorkspaceServiceAccessor != null ? _projectWorkspaceServiceAccessor() : null; } }
+        public ILoadedModCatalog LoadedModCatalog { get { return _loadedModCatalogAccessor != null ? _loadedModCatalogAccessor() : null; } }
+        public IWorkspaceBrowserService WorkspaceBrowserService { get { return _workspaceBrowserServiceAccessor != null ? _workspaceBrowserServiceAccessor() : null; } }
+        public IDecompilerExplorerService DecompilerExplorerService { get { return _decompilerExplorerServiceAccessor != null ? _decompilerExplorerServiceAccessor() : null; } }
+        public IDocumentService DocumentService { get { return _documentServiceAccessor != null ? _documentServiceAccessor() : null; } }
+        public WorkbenchSearchService WorkbenchSearchService { get { return _workbenchSearchServiceAccessor != null ? _workbenchSearchServiceAccessor() : null; } }
+        public IBuildCommandResolver BuildCommandResolver { get { return _buildCommandResolverAccessor != null ? _buildCommandResolverAccessor() : null; } }
+        public IBuildExecutor BuildExecutor { get { return _buildExecutorAccessor != null ? _buildExecutorAccessor() : null; } }
+        public IRestartCoordinator RestartCoordinator { get { return _restartCoordinatorAccessor != null ? _restartCoordinatorAccessor() : null; } }
+        public IReferenceCatalogService ReferenceCatalogService { get { return _referenceCatalogServiceAccessor != null ? _referenceCatalogServiceAccessor() : null; } }
+        public IRuntimeToolBridge RuntimeToolBridge { get { return _runtimeToolBridgeAccessor != null ? _runtimeToolBridgeAccessor() : null; } }
+        public ICortexSettingsStore SettingsStore { get { return _settingsStoreAccessor != null ? _settingsStoreAccessor() : null; } }
+
+        public ICommandRegistry CommandRegistry
+        {
+            get
             {
-                return;
+                var runtime = _workbenchRuntimeAccessor != null ? _workbenchRuntimeAccessor() : null;
+                return runtime != null ? runtime.CommandRegistry : null;
             }
-
-            _capabilities[typeof(TCapability)] = capability;
         }
 
-        /// <summary>
-        /// Resolves a capability implementation by contract type.
-        /// </summary>
-        /// <typeparam name="TCapability">The capability contract type.</typeparam>
-        /// <returns>The registered capability implementation, or <c>null</c> when unavailable.</returns>
-        public TCapability Get<TCapability>()
-            where TCapability : class
+        public IContributionRegistry ContributionRegistry
         {
-            object capability;
-            return _capabilities.TryGetValue(typeof(TCapability), out capability) ? capability as TCapability : null;
+            get
+            {
+                var runtime = _workbenchRuntimeAccessor != null ? _workbenchRuntimeAccessor() : null;
+                return runtime != null ? runtime.ContributionRegistry : null;
+            }
         }
 
-        /// <summary>
-        /// Determines whether a capability contract has been registered.
-        /// </summary>
-        /// <param name="capabilityType">The capability contract type to test.</param>
-        /// <returns><c>true</c> when a matching capability is registered; otherwise <c>false</c>.</returns>
-        public bool Has(Type capabilityType)
+        public ThemeState ThemeState
         {
-            return capabilityType != null && _capabilities.ContainsKey(capabilityType);
-        }
-
-        /// <summary>
-        /// Attempts to resolve a capability implementation by contract type.
-        /// </summary>
-        /// <typeparam name="TCapability">The capability contract type.</typeparam>
-        /// <param name="capability">Receives the registered capability when found.</param>
-        /// <returns><c>true</c> when the capability exists; otherwise <c>false</c>.</returns>
-        public bool TryGet<TCapability>(out TCapability capability)
-            where TCapability : class
-        {
-            capability = Get<TCapability>();
-            return capability != null;
+            get
+            {
+                var runtime = _workbenchRuntimeAccessor != null ? _workbenchRuntimeAccessor() : null;
+                return runtime != null ? runtime.ThemeState : null;
+            }
         }
     }
 }

@@ -1,34 +1,37 @@
-using System;
 using System.Collections.Generic;
 
 namespace Cortex.Shell
 {
     internal sealed class CortexShellModuleCompositionService
     {
-        private readonly Dictionary<string, object> _instances = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        private readonly CortexShellModuleContributionRegistry _contributionRegistry;
+        private readonly Dictionary<string, ICortexShellModule> _instances = new Dictionary<string, ICortexShellModule>(System.StringComparer.OrdinalIgnoreCase);
+
+        public CortexShellModuleCompositionService(CortexShellModuleContributionRegistry contributionRegistry)
+        {
+            _contributionRegistry = contributionRegistry;
+        }
 
         /// <summary>
         /// Returns a cached module instance for the specified container, creating it on first access.
         /// </summary>
-        /// <typeparam name="TModule">The concrete module type stored for the container.</typeparam>
         /// <param name="containerId">The owning workbench container identifier.</param>
-        /// <param name="factory">The factory used to create the module when it has not been composed yet.</param>
-        /// <returns>The cached or newly created module instance, or <c>null</c> when creation was not possible.</returns>
-        public TModule GetOrCreate<TModule>(string containerId, Func<TModule> factory)
-            where TModule : class
+        /// <returns>The cached or newly created module instance, or <c>null</c> when no contribution is registered.</returns>
+        public ICortexShellModule GetOrCreate(string containerId)
         {
             if (string.IsNullOrEmpty(containerId))
             {
                 return null;
             }
 
-            object existing;
+            ICortexShellModule existing;
             if (_instances.TryGetValue(containerId, out existing))
             {
-                return existing as TModule;
+                return existing;
             }
 
-            var created = factory != null ? factory() : null;
+            var contribution = _contributionRegistry != null ? _contributionRegistry.FindContribution(containerId) : null;
+            var created = contribution != null ? contribution.CreateModule() : null;
             if (created != null)
             {
                 _instances[containerId] = created;

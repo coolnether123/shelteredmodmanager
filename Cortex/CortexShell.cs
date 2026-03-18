@@ -60,8 +60,8 @@ namespace Cortex
         private readonly EditorSymbolInteractionService _editorSymbolInteractionService = new EditorSymbolInteractionService();
         private readonly WorkbenchSearchService _workbenchSearchService = new WorkbenchSearchService();
         private readonly CortexShellLifecycleCoordinator _lifecycleCoordinator = new CortexShellLifecycleCoordinator();
-        private readonly CortexShellModuleDescriptorCatalog _moduleDescriptorCatalog = new CortexShellModuleDescriptorCatalog();
-        private readonly CortexShellModuleCompositionService _moduleCompositionService = new CortexShellModuleCompositionService();
+        private readonly CortexShellModuleContributionRegistry _moduleContributionRegistry = new CortexShellModuleContributionRegistry();
+        private readonly CortexShellBuiltInModuleRegistrar _moduleRegistrar = new CortexShellBuiltInModuleRegistrar();
         private readonly CortexShellCommandRouter _commandRouter = new CortexShellCommandRouter();
         private readonly CortexShellLayoutHostRouter _layoutHostRouter = new CortexShellLayoutHostRouter();
         private readonly CortexShellLanguageCoordinator _languageCoordinator = new CortexShellLanguageCoordinator();
@@ -73,11 +73,12 @@ namespace Cortex
         private ExternalWorkbenchPluginLoader _externalPluginLoader;
         private CortexShellLayoutContext _layoutContext;
         private CortexShellCommandContext _commandContext;
-        private CortexShellModuleActivationContext _moduleActivationContext;
-        private CortexShellModuleRenderContext _moduleRenderContext;
+        private CortexShellModuleServices _moduleServices;
+        private CortexShellModuleCompositionService _moduleCompositionService;
         private CortexShellModuleActivationService _moduleActivationService;
         private CortexShellModuleRenderService _moduleRenderService;
         private CortexShellLanguageRuntimeContext _languageRuntimeContext;
+        private bool _moduleContributionsRegistered;
 
         private GUIStyle _titleStyle;
         private GUIStyle _menuStyle;
@@ -232,7 +233,7 @@ namespace Cortex
 
         private void DrawActiveModule(WorkbenchPresentationSnapshot snapshot, string containerId, bool detachedWindow)
         {
-            GetModuleRenderService().DrawActiveModule(GetModuleRenderContext(), snapshot, containerId, detachedWindow);
+            GetModuleRenderService().DrawActiveModule(snapshot, containerId, detachedWindow);
         }
 
         private void InitializeSettingsAndServices()

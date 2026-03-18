@@ -1,5 +1,4 @@
 using System;
-using Cortex.Presentation.Models;
 
 namespace Cortex.Shell
 {
@@ -7,22 +6,14 @@ namespace Cortex.Shell
     {
         public CortexShellModuleDescriptor(
             string containerId,
-            Type[] requiredCapabilityTypes,
-            Action<CortexShellModuleCompositionService> ensureComposed,
-            Action<CortexShellModuleCompositionService, CortexShellModuleRenderContext, WorkbenchPresentationSnapshot, bool> render)
+            Type moduleType)
         {
             ContainerId = containerId ?? string.Empty;
-            RequiredCapabilityTypes = requiredCapabilityTypes ?? new Type[0];
-            EnsureComposed = ensureComposed;
-            Render = render;
+            ModuleType = moduleType;
         }
 
         public string ContainerId { get; private set; }
 
-        public Type[] RequiredCapabilityTypes { get; private set; }
-
-        public Action<CortexShellModuleCompositionService> EnsureComposed { get; private set; }
-
-        public Action<CortexShellModuleCompositionService, CortexShellModuleRenderContext, WorkbenchPresentationSnapshot, bool> Render { get; private set; }
+        public Type ModuleType { get; private set; }
     }
 }
