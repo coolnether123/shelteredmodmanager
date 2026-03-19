@@ -428,12 +428,17 @@ namespace Cortex
 
         private void OpenSettingsWindow()
         {
-            _showSettingsWindow = true;
-            _settingsWindowRect.width = Mathf.Max(1180f, _windowRect.width - 40f);
-            _settingsWindowRect.height = Mathf.Max(760f, _windowRect.height - 20f);
-            _settingsWindowRect.x = Mathf.Clamp(_windowRect.x + 20f, 0f, Mathf.Max(0f, Screen.width - _settingsWindowRect.width));
-            _settingsWindowRect.y = Mathf.Clamp(_windowRect.y + 20f, 0f, Mathf.Max(0f, Screen.height - _settingsWindowRect.height));
-            _state.StatusMessage = "Settings window opened.";
+            EnsureModuleActivated(CortexWorkbenchIds.SettingsContainer);
+            _state.Workbench.EditorContainerId = CortexWorkbenchIds.SettingsContainer;
+            _state.Workbench.FocusedContainerId = CortexWorkbenchIds.SettingsContainer;
+            if (_workbenchRuntime != null)
+            {
+                _workbenchRuntime.WorkbenchState.ActiveContainerId = CortexWorkbenchIds.SettingsContainer;
+                _workbenchRuntime.WorkbenchState.ActiveEditorGroupId = CortexWorkbenchIds.SettingsContainer;
+                _workbenchRuntime.FocusState.FocusedRegionId = CortexWorkbenchIds.SettingsContainer;
+            }
+
+            _state.StatusMessage = "Settings opened in the editor surface.";
         }
 
         private static string NormalizeWorkspaceContainer(string containerId, string fallback)

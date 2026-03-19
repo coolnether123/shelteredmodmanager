@@ -23,14 +23,11 @@ namespace Cortex
         private const KeyCode ToggleKey = KeyCode.F8;
         private const int MainWindowId = 0xC07E;
         private const int LogsWindowId = 0xC07F;
-        private const int SettingsWindowId = 0xC080;
         private const string OverlayInputCaptureOwnerId = "Cortex.Shell";
 
         private Rect _windowRect = new Rect(70f, 70f, 1180f, 760f);
         private Rect _logWindowRect = new Rect(100f, 100f, 980f, 620f);
-        private Rect _settingsWindowRect = new Rect(80f, 60f, 1320f, 860f);
         private bool _visible;
-        private bool _showSettingsWindow;
         private Vector2 _windowScroll = Vector2.zero;
         private string _draggingContainerId = string.Empty;
         private WorkbenchHostLocation _draggingContainerSourceHost = WorkbenchHostLocation.PrimarySideHost;
@@ -164,12 +161,6 @@ namespace Cortex
                 }
             }
 
-            if (_showSettingsWindow)
-            {
-                _settingsWindowRect = ClampRectToScreen(_settingsWindowRect, 1120f, 720f);
-                _settingsWindowRect = GUI.Window(SettingsWindowId, _settingsWindowRect, DrawSettingsWindow, "Cortex Settings", _windowStyle);
-            }
-
             _frameSnapshot = null;
             GUI.skin = previousSkin;
         }
@@ -214,20 +205,6 @@ namespace Cortex
             DrawActiveModule(_frameSnapshot, CortexWorkbenchIds.LogsContainer, true);
             GUILayout.EndVertical();
             ApplyWindowResize(windowId, ref _logWindowRect, 760f, 420f);
-            GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));
-        }
-
-        private void DrawSettingsWindow(int windowId)
-        {
-            EnsureModuleActivated(CortexWorkbenchIds.SettingsContainer);
-            GUILayout.BeginVertical();
-            DrawSettingsWindowHeaderActions();
-            DrawActiveModule(
-                _frameSnapshot ?? (_workbenchRuntime != null ? _workbenchRuntime.CreateSnapshot() : new WorkbenchPresentationSnapshot()),
-                CortexWorkbenchIds.SettingsContainer,
-                false);
-            GUILayout.EndVertical();
-            ApplyWindowResize(windowId, ref _settingsWindowRect, 1120f, 720f);
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));
         }
 
@@ -477,7 +454,7 @@ namespace Cortex
                 }
             }
 
-            return _showSettingsWindow && _settingsWindowRect.Contains(guiPoint);
+            return false;
         }
 
         private void ApplySettingsChanges()
@@ -709,7 +686,6 @@ namespace Cortex
         {
             _windowRect = ClampRectToScreen(_windowRect, 920f, 580f);
             _logWindowRect = ClampRectToScreen(_logWindowRect, 760f, 420f);
-            _settingsWindowRect = ClampRectToScreen(_settingsWindowRect, 1120f, 720f);
             _state.Chrome.Main.ExpandedRect = ClampRectToScreen(_state.Chrome.Main.ExpandedRect.width > 0f ? _state.Chrome.Main.ExpandedRect : _windowRect, 920f, 580f);
             _state.Chrome.Logs.ExpandedRect = ClampRectToScreen(_state.Chrome.Logs.ExpandedRect.width > 0f ? _state.Chrome.Logs.ExpandedRect : _logWindowRect, 760f, 420f);
             _state.Chrome.Main.CollapsedRect = ClampRectToScreen(
@@ -914,23 +890,6 @@ namespace Cortex
                 {
                     _state.Logs.ShowDetachedWindow = false;
                     _state.Chrome.Logs.IsCollapsed = false;
-                }));
-            CortexWindowChromeController.DrawActions(actions);
-            GUILayout.EndHorizontal();
-        }
-
-        private void DrawSettingsWindowHeaderActions()
-        {
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            var actions = new List<CortexWindowAction>();
-            actions.Add(BuildGlyphWindowAction(
-                "settings.close",
-                "X",
-                "Close settings window",
-                delegate
-                {
-                    _showSettingsWindow = false;
                 }));
             CortexWindowChromeController.DrawActions(actions);
             GUILayout.EndHorizontal();

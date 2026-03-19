@@ -18,7 +18,7 @@ namespace Cortex.Host.Unity.Composition
             context.RegisterCommand("cortex.build.execute", "Build Project", "Build", "Focus the build panel and trigger a build.", string.Empty, 0, true, false);
             context.RegisterCommand("cortex.file.saveAll", "Save All", "File", "Save all open documents.", string.Empty, 0, true, false);
             context.RegisterCommand("cortex.file.closeActive", "Close", "File", "Close the active document.", string.Empty, 10, true, false);
-            context.RegisterCommand("cortex.file.settings", "Settings", "File", "Open the Cortex settings window.", string.Empty, 20, true, false);
+            context.RegisterCommand("cortex.file.settings", "Settings", "File", "Open Cortex settings in the editor surface.", string.Empty, 20, true, false);
             context.RegisterCommand("cortex.view.fileExplorer", "Toggle File Explorer", "View", "Show or hide the file explorer pane.", string.Empty, 0, true, false);
             context.RegisterCommand("cortex.view.zoomIn", "Increase Font Size", "View", "Increase the editor font size.", string.Empty, 10, true, false);
             context.RegisterCommand("cortex.view.zoomOut", "Decrease Font Size", "View", "Decrease the editor font size.", string.Empty, 20, true, false);
@@ -30,7 +30,7 @@ namespace Cortex.Host.Unity.Composition
             context.RegisterCommand("cortex.window.logs", "Logs", "Window", "Show the logs tool window.", string.Empty, 40, true, false);
             context.RegisterCommand("cortex.window.build", "Build", "Window", "Show the build tool window.", string.Empty, 50, true, false);
             context.RegisterCommand("cortex.window.runtime", "Runtime", "Window", "Show the runtime tool window.", string.Empty, 60, true, false);
-            context.RegisterCommand("cortex.window.settings", "Settings", "Window", "Show the Cortex settings window.", string.Empty, 70, true, false);
+            context.RegisterCommand("cortex.window.settings", "Settings", "Window", "Show Cortex settings in the editor surface.", string.Empty, 70, true, false);
             context.RegisterCommand("cortex.editor.find", "Find...", "Editor", "Open the find bar for text search.", "Ctrl+F", 0, true, false);
             context.RegisterCommand("cortex.search.next", "Find Next", "Editor", "Advance to the next search result.", "F3", 110, true, false);
             context.RegisterCommand("cortex.search.previous", "Find Previous", "Editor", "Move to the previous search result.", "Shift+F3", 120, true, false);

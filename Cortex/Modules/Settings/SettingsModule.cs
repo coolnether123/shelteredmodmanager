@@ -11,25 +11,27 @@ namespace Cortex.Modules.Settings
 {
     public sealed class SettingsModule
     {
-        private const string SourceSetupPageId = "source.setup";
-        private const string ThemesPageId = "themes";
-        private const string KeybindingsPageId = "keybindings";
-        private const string EditorsPageId = "editors";
-        private const string ActionsPageId = "actions";
+        private const string SourceSetupSectionId = "settings.sourceSetup";
+        private const string ThemesSectionId = "settings.themes";
+        private const string KeybindingsSectionId = "settings.keybindings";
+        private const string EditorsSectionId = "settings.editors";
+        private const string ActionsSectionId = "settings.actions";
         private const string WorkspaceRootSettingId = "WorkspaceRootPath";
         private const string ModsRootSettingId = "ModsRootPath";
         private const string ManagedAssemblyRootSettingId = "ManagedAssemblyRootPath";
         private const string AdditionalSourceRootsSettingId = "AdditionalSourceRoots";
+        private const float NavigationWidth = 250f;
 
         private bool _loaded;
         private Vector2 _navigationScroll = Vector2.zero;
         private Vector2 _contentScroll = Vector2.zero;
         private readonly Dictionary<string, string> _textValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, bool> _toggleValues = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, bool> _expandedGroups = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _loadedModPathDrafts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, float> _sectionAnchors = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         private string _selectedThemeId = string.Empty;
-        private string _selectedPageId = SourceSetupPageId;
+        private string _activeSectionId = SourceSetupSectionId;
+        private string _pendingSectionJumpId = string.Empty;
         private IProjectCatalog _projectCatalog;
         private IProjectWorkspaceService _workspaceService;
         private ILoadedModCatalog _loadedModCatalog;
@@ -49,13 +51,16 @@ namespace Cortex.Modules.Settings
             _loadedModCatalog = loadedModCatalog;
             EnsureLoaded(snapshot, themeState, state);
 
+            var document = BuildDocument(snapshot);
+            UpdateActiveSection(document);
+
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             DrawToolbar(settingsStore, snapshot, themeState, state);
             GUILayout.Space(6f);
             GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-            DrawNavigation(snapshot);
+            DrawNavigation(document);
             GUILayout.Space(8f);
-            DrawContentSurface(settingsStore, snapshot, themeState, state);
+            DrawContentSurface(settingsStore, snapshot, themeState, state, document);
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
         }
@@ -66,14 +71,28 @@ namespace Cortex.Modules.Settings
             {
                 GUILayout.BeginHorizontal();
                 GUILayout.Label("Cortex Settings", GUILayout.Height(24f), GUILayout.Width(180f));
-                GUILayout.Label("Property pages for workspace, tooling, appearance, and shell behavior.", GUILayout.ExpandWidth(true));
+                GUILayout.Label("One continuous settings document with section checkpoints, contribution-driven groups, and no page swapping.", GUILayout.ExpandWidth(true));
                 GUILayout.FlexibleSpace();
+
+                if (state != null &&
+                    state.Workbench != null &&
+                    string.Equals(state.Workbench.EditorContainerId, CortexWorkbenchIds.SettingsContainer, StringComparison.OrdinalIgnoreCase) &&
+                    GUILayout.Button("Return To Editor", GUILayout.Width(140f), GUILayout.Height(24f)))
+                {
+                    state.Workbench.EditorContainerId = CortexWorkbenchIds.EditorContainer;
+                    state.Workbench.FocusedContainerId = CortexWorkbenchIds.EditorContainer;
+                    state.StatusMessage = "Returned to the editor surface.";
+                }
 
                 if (GUILayout.Button("Save", GUILayout.Width(100f), GUILayout.Height(24f)))
                 {
                     Apply(snapshot, themeState, state);
                     ApplyLoadedModMappings(state);
-                    settingsStore.Save(state.Settings);
+                    if (settingsStore != null)
+                    {
+                        settingsStore.Save(state.Settings);
+                    }
+
                     state.ReloadSettingsRequested = true;
                     _loaded = false;
                     state.StatusMessage = "Saved Cortex settings.";
@@ -88,6 +107,8 @@ namespace Cortex.Modules.Settings
                     }
 
                     _loaded = false;
+                    _contentScroll = Vector2.zero;
+                    _pendingSectionJumpId = SourceSetupSectionId;
                     EnsureLoaded(snapshot, themeState, state);
                     state.StatusMessage = "Reset settings fields to defaults.";
                 }
@@ -96,39 +117,62 @@ namespace Cortex.Modules.Settings
             }, GUILayout.Height(56f), GUILayout.ExpandWidth(true));
         }
 
-        private void DrawNavigation(WorkbenchPresentationSnapshot snapshot)
+        private void DrawNavigation(SettingsDocument document)
         {
-            var pages = BuildPages(snapshot);
             CortexIdeLayout.DrawGroup(null, delegate
             {
-                GUILayout.Label("Pages", GUILayout.Height(22f));
-                _navigationScroll = GUILayout.BeginScrollView(_navigationScroll, GUI.skin.box, GUILayout.Width(220f), GUILayout.ExpandHeight(true));
-                for (var i = 0; i < pages.Count; i++)
+                GUILayout.Label("Checkpoints", GUILayout.Height(22f));
+                GUILayout.Label("Jump between sections while keeping the full settings document in one scrollable surface.");
+                GUILayout.Space(6f);
+                _navigationScroll = GUILayout.BeginScrollView(_navigationScroll, GUI.skin.box, GUILayout.Width(NavigationWidth), GUILayout.ExpandHeight(true));
+                for (var i = 0; i < document.Groups.Count; i++)
                 {
-                    DrawNavigationButton(pages[i]);
+                    DrawNavigationGroup(document.Groups[i]);
                 }
                 GUILayout.EndScrollView();
-            }, GUILayout.Width(236f), GUILayout.ExpandHeight(true));
+            }, GUILayout.Width(NavigationWidth + 16f), GUILayout.ExpandHeight(true));
         }
 
-        private void DrawNavigationButton(SettingsPage page)
+        private void DrawNavigationGroup(SettingsNavigationGroup group)
         {
-            if (page == null)
+            if (group == null || group.Sections.Count == 0)
             {
                 return;
             }
 
-            var isSelected = string.Equals(_selectedPageId, page.PageId, StringComparison.OrdinalIgnoreCase);
+            var showTitle = group.Sections.Count > 1 ||
+                !string.Equals(group.Title, group.Sections[0].Title, StringComparison.OrdinalIgnoreCase);
+            if (showTitle)
+            {
+                GUILayout.Label(group.Title, GUILayout.Height(20f));
+            }
+
+            for (var i = 0; i < group.Sections.Count; i++)
+            {
+                DrawNavigationButton(group.Sections[i]);
+            }
+
+            GUILayout.Space(8f);
+        }
+
+        private void DrawNavigationButton(SettingsSection section)
+        {
+            if (section == null)
+            {
+                return;
+            }
+
+            var isSelected = string.Equals(_activeSectionId, section.SectionId, StringComparison.OrdinalIgnoreCase);
             var previousBackground = GUI.backgroundColor;
             var previousContent = GUI.contentColor;
             GUI.backgroundColor = isSelected
                 ? CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetHeaderColor(), 0.2f)
                 : CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.65f);
             GUI.contentColor = isSelected ? Color.white : CortexIdeLayout.GetTextColor();
-            if (GUILayout.Button(page.Title, GUILayout.Height(28f), GUILayout.ExpandWidth(true)))
+            if (GUILayout.Button(section.Title, GUILayout.Height(28f), GUILayout.ExpandWidth(true)))
             {
-                _selectedPageId = page.PageId;
-                _contentScroll = Vector2.zero;
+                _activeSectionId = section.SectionId;
+                _pendingSectionJumpId = section.SectionId;
             }
 
             GUI.backgroundColor = previousBackground;
@@ -136,43 +180,63 @@ namespace Cortex.Modules.Settings
             GUILayout.Space(2f);
         }
 
-        private void DrawContentSurface(ICortexSettingsStore settingsStore, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
+        private void DrawContentSurface(
+            ICortexSettingsStore settingsStore,
+            WorkbenchPresentationSnapshot snapshot,
+            ThemeState themeState,
+            CortexShellState state,
+            SettingsDocument document)
         {
-            var selectedPage = FindSelectedPage(snapshot);
             CortexIdeLayout.DrawGroup(null, delegate
             {
-                GUILayout.Label(selectedPage.Title, GUILayout.Height(24f));
-                if (!string.IsNullOrEmpty(selectedPage.Description))
-                {
-                    GUILayout.Label(selectedPage.Description);
-                    GUILayout.Space(6f);
-                }
+                GUILayout.Label("All Settings", GUILayout.Height(24f));
+                GUILayout.Label("Scroll the full document end-to-end or use the checkpoints to jump directly to a section. Modules can contribute their own settings scopes and they appear here automatically.");
+                GUILayout.Space(6f);
 
+                _sectionAnchors.Clear();
                 _contentScroll = GUILayout.BeginScrollView(_contentScroll, GUI.skin.box, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-                selectedPage.DrawBody(settingsStore, snapshot, themeState, state);
+                for (var i = 0; i < document.Sections.Count; i++)
+                {
+                    DrawDocumentSection(document.Sections[i], settingsStore, snapshot, themeState, state);
+                }
                 GUILayout.EndScrollView();
+
+                ApplyPendingSectionJump();
+                UpdateActiveSection(document);
             }, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
         }
 
-        private SettingsPage FindSelectedPage(WorkbenchPresentationSnapshot snapshot)
+        private void DrawDocumentSection(
+            SettingsSection section,
+            ICortexSettingsStore settingsStore,
+            WorkbenchPresentationSnapshot snapshot,
+            ThemeState themeState,
+            CortexShellState state)
         {
-            var pages = BuildPages(snapshot);
-            for (var i = 0; i < pages.Count; i++)
+            CortexIdeLayout.DrawGroup(section.Title, delegate
             {
-                if (string.Equals(pages[i].PageId, _selectedPageId, StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrEmpty(section.Description))
                 {
-                    return pages[i];
+                    GUILayout.Label(section.Description);
+                    GUILayout.Space(6f);
                 }
-            }
 
-            _selectedPageId = pages.Count > 0 ? pages[0].PageId : SourceSetupPageId;
-            return pages.Count > 0 ? pages[0] : CreateSourceSetupPage();
+                if (section.DrawBody != null)
+                {
+                    section.DrawBody(settingsStore, snapshot, themeState, state);
+                }
+            }, GUILayout.ExpandWidth(true));
+
+            var rect = GUILayoutUtility.GetLastRect();
+            _sectionAnchors[section.SectionId] = rect.y;
+            GUILayout.Space(10f);
         }
 
-        private List<SettingsPage> BuildPages(WorkbenchPresentationSnapshot snapshot)
+        private SettingsDocument BuildDocument(WorkbenchPresentationSnapshot snapshot)
         {
-            var pages = new List<SettingsPage>();
-            pages.Add(CreateSourceSetupPage());
+            var document = new SettingsDocument();
+            document.Sections.Add(CreateSourceSetupSection());
+            var contributedSections = new List<SettingsSection>();
 
             var seenScopes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (snapshot != null)
@@ -185,32 +249,86 @@ namespace Cortex.Modules.Settings
                         continue;
                     }
 
-                    var scope = string.IsNullOrEmpty(contribution.Scope) ? "General" : contribution.Scope;
-                    if (seenScopes.Add(scope))
+                    var scope = GetContributionScope(contribution);
+                    if (!seenScopes.Add(scope) || !HasVisibleContributionsForScope(snapshot, scope))
                     {
-                        pages.Add(CreateScopePage(scope));
+                        continue;
                     }
+
+                    contributedSections.Add(CreateContributionSection(scope));
                 }
             }
 
-            pages.Add(CreateThemesPage());
-            pages.Add(CreateKeybindingsPage());
-            pages.Add(CreateEditorsPage());
-            pages.Add(CreateActionsPage());
-            return pages;
+            contributedSections.Sort(delegate(SettingsSection left, SettingsSection right)
+            {
+                var order = GetGroupSortOrder(left != null ? left.GroupId : string.Empty)
+                    .CompareTo(GetGroupSortOrder(right != null ? right.GroupId : string.Empty));
+                if (order != 0)
+                {
+                    return order;
+                }
+
+                return string.Compare(
+                    left != null ? left.Title : string.Empty,
+                    right != null ? right.Title : string.Empty,
+                    StringComparison.OrdinalIgnoreCase);
+            });
+
+            for (var i = 0; i < contributedSections.Count; i++)
+            {
+                document.Sections.Add(contributedSections[i]);
+            }
+
+            document.Sections.Add(CreateThemesSection());
+            document.Sections.Add(CreateKeybindingsSection());
+            document.Sections.Add(CreateEditorsSection());
+            document.Sections.Add(CreateActionsSection());
+            BuildNavigationGroups(document);
+            return document;
         }
 
-        private SettingsPage CreateSourceSetupPage()
+        private void BuildNavigationGroups(SettingsDocument document)
         {
-            return new SettingsPage(
-                SourceSetupPageId,
+            var groupsById = new Dictionary<string, SettingsNavigationGroup>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < document.Sections.Count; i++)
+            {
+                var section = document.Sections[i];
+                var groupId = string.IsNullOrEmpty(section.GroupId) ? "general" : section.GroupId;
+                SettingsNavigationGroup group;
+                if (!groupsById.TryGetValue(groupId, out group))
+                {
+                    group = new SettingsNavigationGroup(groupId, section.GroupTitle, GetGroupSortOrder(groupId));
+                    groupsById[groupId] = group;
+                    document.Groups.Add(group);
+                }
+
+                group.Sections.Add(section);
+            }
+
+            document.Groups.Sort(delegate(SettingsNavigationGroup left, SettingsNavigationGroup right)
+            {
+                var order = left.SortOrder.CompareTo(right.SortOrder);
+                return order != 0
+                    ? order
+                    : string.Compare(left.Title, right.Title, StringComparison.OrdinalIgnoreCase);
+            });
+        }
+
+        private SettingsSection CreateSourceSetupSection()
+        {
+            return new SettingsSection(
+                SourceSetupSectionId,
+                "workspace",
+                "Workspace",
                 "Source Setup",
-                "Configure where Cortex finds editable sources, live mods, and related assets.",
+                "Configure where Cortex finds editable sources, live mods, and related workspace assets.",
                 delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
                 {
-                    DrawSourceSetupGuide(state);
+                    DrawSourceSetupGuide();
                     GUILayout.Space(10f);
                     DrawWorkspacePathEditors(snapshot, state);
+                    GUILayout.Space(10f);
+                    DrawWorkspaceContributionEditors(snapshot, state);
                     GUILayout.Space(10f);
                     DrawLoadedModMappings(state);
                     GUILayout.Space(10f);
@@ -218,22 +336,26 @@ namespace Cortex.Modules.Settings
                 });
         }
 
-        private SettingsPage CreateScopePage(string scope)
+        private SettingsSection CreateContributionSection(string scope)
         {
-            return new SettingsPage(
+            return new SettingsSection(
                 "scope." + scope.ToLowerInvariant(),
+                ClassifySectionGroupId(scope),
+                ClassifySectionGroupTitle(scope),
                 scope,
-                "Configure " + scope.ToLowerInvariant() + " behavior for the Cortex shell.",
+                BuildScopeDescription(scope),
                 delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
                 {
-                    DrawSettingsScope(snapshot, scope, state);
+                    DrawContributionScope(snapshot, scope, state);
                 });
         }
 
-        private SettingsPage CreateThemesPage()
+        private SettingsSection CreateThemesSection()
         {
-            return new SettingsPage(
-                ThemesPageId,
+            return new SettingsSection(
+                ThemesSectionId,
+                "appearance",
+                "Appearance",
                 "Themes",
                 "Manage the registered workbench themes and choose the active shell theme.",
                 delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
@@ -242,10 +364,12 @@ namespace Cortex.Modules.Settings
                 });
         }
 
-        private SettingsPage CreateKeybindingsPage()
+        private SettingsSection CreateKeybindingsSection()
         {
-            return new SettingsPage(
-                KeybindingsPageId,
+            return new SettingsSection(
+                KeybindingsSectionId,
+                "editor",
+                "Editor",
                 "Keybindings",
                 "Configure editor shortcuts, multi-caret commands, and undo history.",
                 delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
@@ -254,38 +378,42 @@ namespace Cortex.Modules.Settings
                 });
         }
 
-        private SettingsPage CreateEditorsPage()
+        private SettingsSection CreateEditorsSection()
         {
-            return new SettingsPage(
-                EditorsPageId,
-                "Editors",
-                "Registered editors describe the available file handlers and content types.",
+            return new SettingsSection(
+                EditorsSectionId,
+                "editor",
+                "Editor",
+                "Registered Editors",
+                "Review the editors and content handlers currently available in Cortex.",
                 delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
                 {
                     DrawEditorRegistry(snapshot);
                 });
         }
 
-        private SettingsPage CreateActionsPage()
+        private SettingsSection CreateActionsSection()
         {
-            return new SettingsPage(
-                ActionsPageId,
+            return new SettingsSection(
+                ActionsSectionId,
+                "shell",
+                "Shell",
                 "Actions",
-                "Convenience actions related to settings, logs, and the shell.",
+                "Convenience actions related to windows, logs, and the shell.",
                 delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
                 {
                     DrawActionsPanel(state);
                 });
         }
 
-        private static void DrawSourceSetupGuide(CortexShellState state)
+        private static void DrawSourceSetupGuide()
         {
             DrawSectionPanel("Overview", delegate
             {
-                GUILayout.Label("Use this page to configure the source roots Cortex should search and to link loaded in-game mods back to your editable source folders.");
+                GUILayout.Label("Use this section to configure the source roots Cortex should search and to link loaded in-game mods back to editable source folders.");
                 GUILayout.Label("Workspace Scan Root should point at the folder that contains your local mod projects.");
                 GUILayout.Label("Loaded Mods Root should point at the live mod installs currently being used by the game.");
-                GUILayout.Label("Use the loaded-mod mapping section below to bind a running mod directly to its source root.");
+                GUILayout.Label("Modules can contribute additional settings scopes below, and they will be merged into this same document automatically.");
             });
         }
 
@@ -297,6 +425,23 @@ namespace Cortex.Modules.Settings
                 DrawSettingPathEditor(snapshot, ModsRootSettingId, "Loaded Mods Root", "Folder containing the live installed mods used in-game.");
                 DrawSettingPathEditor(snapshot, ManagedAssemblyRootSettingId, "Managed DLL Root", "Folder containing the game's managed assemblies for reference browsing.");
                 DrawSettingPathEditor(snapshot, AdditionalSourceRootsSettingId, "Additional Source Roots", "Semicolon-separated fallback roots used during source resolution.");
+            });
+        }
+
+        private void DrawWorkspaceContributionEditors(WorkbenchPresentationSnapshot snapshot, CortexShellState state)
+        {
+            var contributions = CollectContributionsForScope(snapshot, "Workspace");
+            if (contributions.Count == 0)
+            {
+                return;
+            }
+
+            DrawSectionPanel("Workspace Settings", delegate
+            {
+                for (var i = 0; i < contributions.Count; i++)
+                {
+                    DrawSettingContribution(contributions[i], state);
+                }
             });
         }
 
@@ -341,6 +486,95 @@ namespace Cortex.Modules.Settings
                 DrawReadOnlyField("Managed assemblies", state != null && state.Settings != null ? state.Settings.ManagedAssemblyRootPath : string.Empty);
                 DrawReadOnlyField("Project catalog", state != null && state.Settings != null ? state.Settings.ProjectCatalogPath : string.Empty);
             });
+        }
+
+        private void DrawContributionScope(WorkbenchPresentationSnapshot snapshot, string scope, CortexShellState state)
+        {
+            var contributions = CollectContributionsForScope(snapshot, scope);
+            if (contributions.Count == 0)
+            {
+                GUILayout.Label("No settings were registered for this scope.");
+                return;
+            }
+
+            for (var i = 0; i < contributions.Count; i++)
+            {
+                DrawSettingContribution(contributions[i], state);
+            }
+        }
+
+        private List<SettingContribution> CollectContributionsForScope(WorkbenchPresentationSnapshot snapshot, string scope)
+        {
+            var results = new List<SettingContribution>();
+            if (snapshot == null || snapshot.Settings.Count == 0)
+            {
+                return results;
+            }
+
+            for (var i = 0; i < snapshot.Settings.Count; i++)
+            {
+                var contribution = snapshot.Settings[i];
+                if (!ShouldRenderContribution(scope, contribution))
+                {
+                    continue;
+                }
+
+                results.Add(contribution);
+            }
+
+            return results;
+        }
+
+        private bool HasVisibleContributionsForScope(WorkbenchPresentationSnapshot snapshot, string scope)
+        {
+            if (snapshot == null || snapshot.Settings.Count == 0)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < snapshot.Settings.Count; i++)
+            {
+                if (ShouldRenderContribution(scope, snapshot.Settings[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ShouldRenderContribution(string scope, SettingContribution contribution)
+        {
+            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId) || IsThemeSetting(contribution))
+            {
+                return false;
+            }
+
+            if (!string.Equals(GetContributionScope(contribution), scope, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (string.Equals(scope, "Workspace", StringComparison.OrdinalIgnoreCase) &&
+                IsWorkspacePathContribution(contribution))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool IsWorkspacePathContribution(SettingContribution contribution)
+        {
+            if (contribution == null)
+            {
+                return false;
+            }
+
+            return string.Equals(contribution.SettingId, WorkspaceRootSettingId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(contribution.SettingId, ModsRootSettingId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(contribution.SettingId, ManagedAssemblyRootSettingId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(contribution.SettingId, AdditionalSourceRootsSettingId, StringComparison.OrdinalIgnoreCase);
         }
 
         private void DrawSettingPathEditor(WorkbenchPresentationSnapshot snapshot, string settingId, string label, string description)
@@ -425,7 +659,6 @@ namespace Cortex.Modules.Settings
 
             _textValues.Clear();
             _toggleValues.Clear();
-            _expandedGroups.Clear();
             _loadedModPathDrafts.Clear();
 
             var settings = state.Settings ?? new CortexSettings();
@@ -433,53 +666,18 @@ namespace Cortex.Modules.Settings
             {
                 for (var i = 0; i < snapshot.Settings.Count; i++)
                 {
-                    var contribution = snapshot.Settings[i];
-                    LoadContributionValue(contribution, settings);
-                    if (contribution != null)
-                    {
-                        var scope = string.IsNullOrEmpty(contribution.Scope) ? "General" : contribution.Scope;
-                        _expandedGroups[scope] = true;
-                    }
+                    LoadContributionValue(snapshot.Settings[i], settings);
                 }
             }
 
             _textValues["editor.undo.limit"] = settings.EditorUndoHistoryLimit.ToString();
-
             _selectedThemeId = !string.IsNullOrEmpty(settings.ThemeId)
                 ? settings.ThemeId
                 : themeState != null && !string.IsNullOrEmpty(themeState.ThemeId)
                     ? themeState.ThemeId
                     : "cortex.vs-dark";
+            _activeSectionId = SourceSetupSectionId;
             _loaded = true;
-        }
-
-        private void DrawSettingsScope(WorkbenchPresentationSnapshot snapshot, string scope, CortexShellState state)
-        {
-            if (snapshot == null || snapshot.Settings.Count == 0)
-            {
-                GUILayout.Label("No settings contributions were registered.");
-                return;
-            }
-
-            DrawExpandableSection(scope, true, delegate
-            {
-                for (var i = 0; i < snapshot.Settings.Count; i++)
-                {
-                    var contribution = snapshot.Settings[i];
-                    if (contribution == null || string.IsNullOrEmpty(contribution.SettingId) || IsThemeSetting(contribution))
-                    {
-                        continue;
-                    }
-
-                    var contributionScope = string.IsNullOrEmpty(contribution.Scope) ? "General" : contribution.Scope;
-                    if (!string.Equals(contributionScope, scope, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    DrawSettingContribution(contribution, state);
-                }
-            });
         }
 
         private void DrawThemeRegistry(WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
@@ -601,6 +799,12 @@ namespace Cortex.Modules.Settings
             DrawSectionPanel("Window Actions", delegate
             {
                 GUILayout.BeginHorizontal();
+                if (GUILayout.Button("Return To Editor", GUILayout.Width(180f), GUILayout.Height(24f)))
+                {
+                    state.Workbench.EditorContainerId = CortexWorkbenchIds.EditorContainer;
+                    state.Workbench.FocusedContainerId = CortexWorkbenchIds.EditorContainer;
+                    state.StatusMessage = "Returned to the editor surface.";
+                }
                 if (GUILayout.Button("Show Logs Window", GUILayout.Width(180f), GUILayout.Height(24f)))
                 {
                     state.Logs.ShowDetachedWindow = true;
@@ -773,34 +977,6 @@ namespace Cortex.Modules.Settings
             {
                 GUILayout.Label("Default: " + contribution.DefaultValue);
             }
-        }
-
-        private void DrawExpandableSection(string key, bool defaultExpanded, Action drawBody)
-        {
-            bool isExpanded;
-            if (!_expandedGroups.TryGetValue(key, out isExpanded))
-            {
-                isExpanded = defaultExpanded;
-                _expandedGroups[key] = isExpanded;
-            }
-
-            GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.BeginHorizontal();
-            var label = (isExpanded ? "▼ " : "► ") + key;
-            if (GUILayout.Button(label, GUILayout.Height(24f), GUILayout.ExpandWidth(true)))
-            {
-                isExpanded = !isExpanded;
-                _expandedGroups[key] = isExpanded;
-            }
-            GUILayout.EndHorizontal();
-
-            if (isExpanded && drawBody != null)
-            {
-                GUILayout.Space(4f);
-                drawBody();
-            }
-
-            GUILayout.EndVertical();
         }
 
         private static void DrawSectionPanel(string title, Action drawBody)
@@ -1033,9 +1209,198 @@ namespace Cortex.Modules.Settings
             return contribution != null && string.Equals(contribution.DefaultValue, "true", StringComparison.OrdinalIgnoreCase);
         }
 
+        private void UpdateActiveSection(SettingsDocument document)
+        {
+            if (document == null || document.Sections.Count == 0 || _sectionAnchors.Count == 0)
+            {
+                return;
+            }
+
+            var threshold = _contentScroll.y + 32f;
+            var active = document.Sections[0].SectionId;
+            var bestAnchor = float.MinValue;
+            for (var i = 0; i < document.Sections.Count; i++)
+            {
+                var section = document.Sections[i];
+                float anchor;
+                if (!_sectionAnchors.TryGetValue(section.SectionId, out anchor))
+                {
+                    continue;
+                }
+
+                if (anchor <= threshold && anchor >= bestAnchor)
+                {
+                    bestAnchor = anchor;
+                    active = section.SectionId;
+                }
+            }
+
+            _activeSectionId = active;
+        }
+
+        private void ApplyPendingSectionJump()
+        {
+            if (string.IsNullOrEmpty(_pendingSectionJumpId))
+            {
+                return;
+            }
+
+            float anchor;
+            if (_sectionAnchors.TryGetValue(_pendingSectionJumpId, out anchor))
+            {
+                _contentScroll.y = Mathf.Max(0f, anchor - 8f);
+                _pendingSectionJumpId = string.Empty;
+            }
+        }
+
         private static bool IsThemeSetting(SettingContribution contribution)
         {
             return contribution != null && string.Equals(contribution.SettingId, nameof(CortexSettings.ThemeId), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetContributionScope(SettingContribution contribution)
+        {
+            return string.IsNullOrEmpty(contribution != null ? contribution.Scope : string.Empty)
+                ? "General"
+                : contribution.Scope;
+        }
+
+        private static string BuildScopeDescription(string scope)
+        {
+            if (string.Equals(scope, "Workspace", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Additional workspace and project discovery settings.";
+            }
+            if (string.Equals(scope, "Logs", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Live log feed settings and file tail behavior.";
+            }
+            if (string.Equals(scope, "Decompiler", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Decompiler executable and cache behavior.";
+            }
+            if (string.Equals(scope, "Language Service", StringComparison.OrdinalIgnoreCase))
+            {
+                return "External language worker configuration and request limits.";
+            }
+            if (scope.StartsWith("AI", StringComparison.OrdinalIgnoreCase))
+            {
+                return "AI completion settings contributed under the " + scope + " scope.";
+            }
+            if (string.Equals(scope, "Editing", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Editing permissions and write-back behavior.";
+            }
+            if (string.Equals(scope, "Layout", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scope, "Window", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Workbench layout and shell window persistence settings.";
+            }
+            if (string.Equals(scope, "Build", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Build defaults and execution limits.";
+            }
+
+            return "Settings contributed under the " + scope + " scope.";
+        }
+
+        private static string ClassifySectionGroupId(string scope)
+        {
+            if (scope.StartsWith("AI", StringComparison.OrdinalIgnoreCase))
+            {
+                return "ai";
+            }
+            if (string.Equals(scope, "Workspace", StringComparison.OrdinalIgnoreCase))
+            {
+                return "workspace";
+            }
+            if (string.Equals(scope, "Logs", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scope, "Decompiler", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scope, "Language Service", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scope, "Build", StringComparison.OrdinalIgnoreCase))
+            {
+                return "tooling";
+            }
+            if (string.Equals(scope, "Editing", StringComparison.OrdinalIgnoreCase))
+            {
+                return "editor";
+            }
+            if (string.Equals(scope, "Appearance", StringComparison.OrdinalIgnoreCase))
+            {
+                return "appearance";
+            }
+            if (string.Equals(scope, "Layout", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scope, "Window", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scope, "General", StringComparison.OrdinalIgnoreCase))
+            {
+                return "shell";
+            }
+
+            var scopePrefix = GetScopePrefix(scope);
+            return string.IsNullOrEmpty(scopePrefix) ? "extensions" : "ext." + scopePrefix.ToLowerInvariant();
+        }
+
+        private static string ClassifySectionGroupTitle(string scope)
+        {
+            if (scope.StartsWith("AI", StringComparison.OrdinalIgnoreCase))
+            {
+                return "AI";
+            }
+            if (string.Equals(scope, "Workspace", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Workspace";
+            }
+            if (string.Equals(scope, "Logs", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scope, "Decompiler", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scope, "Language Service", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scope, "Build", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Tooling";
+            }
+            if (string.Equals(scope, "Editing", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Editor";
+            }
+            if (string.Equals(scope, "Appearance", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Appearance";
+            }
+            if (string.Equals(scope, "Layout", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scope, "Window", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scope, "General", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Shell";
+            }
+
+            var scopePrefix = GetScopePrefix(scope);
+            return string.IsNullOrEmpty(scopePrefix) ? "Extensions" : scopePrefix;
+        }
+
+        private static string GetScopePrefix(string scope)
+        {
+            if (string.IsNullOrEmpty(scope))
+            {
+                return string.Empty;
+            }
+
+            var separatorIndex = scope.IndexOf(" - ", StringComparison.Ordinal);
+            return separatorIndex > 0 ? scope.Substring(0, separatorIndex) : scope;
+        }
+
+        private static int GetGroupSortOrder(string groupId)
+        {
+            switch (groupId)
+            {
+                case "workspace": return 0;
+                case "tooling": return 10;
+                case "ai": return 20;
+                case "appearance": return 30;
+                case "editor": return 40;
+                case "shell": return 50;
+                case "extensions": return 60;
+                default:
+                    return groupId != null && groupId.StartsWith("ext.", StringComparison.OrdinalIgnoreCase) ? 60 : 70;
+            }
         }
 
         private static SettingContribution FindSettingContribution(WorkbenchPresentationSnapshot snapshot, string settingId)
@@ -1198,20 +1563,47 @@ namespace Cortex.Modules.Settings
             return float.TryParse(raw, out value) ? value : fallback;
         }
 
-        private sealed class SettingsPage
+        private sealed class SettingsDocument
         {
-            public readonly string PageId;
+            public readonly List<SettingsSection> Sections = new List<SettingsSection>();
+            public readonly List<SettingsNavigationGroup> Groups = new List<SettingsNavigationGroup>();
+        }
+
+        private sealed class SettingsNavigationGroup
+        {
+            public readonly string GroupId;
+            public readonly string Title;
+            public readonly int SortOrder;
+            public readonly List<SettingsSection> Sections = new List<SettingsSection>();
+
+            public SettingsNavigationGroup(string groupId, string title, int sortOrder)
+            {
+                GroupId = groupId ?? string.Empty;
+                Title = string.IsNullOrEmpty(title) ? "General" : title;
+                SortOrder = sortOrder;
+            }
+        }
+
+        private sealed class SettingsSection
+        {
+            public readonly string SectionId;
+            public readonly string GroupId;
+            public readonly string GroupTitle;
             public readonly string Title;
             public readonly string Description;
             public readonly Action<ICortexSettingsStore, WorkbenchPresentationSnapshot, ThemeState, CortexShellState> DrawBody;
 
-            public SettingsPage(
-                string pageId,
+            public SettingsSection(
+                string sectionId,
+                string groupId,
+                string groupTitle,
                 string title,
                 string description,
                 Action<ICortexSettingsStore, WorkbenchPresentationSnapshot, ThemeState, CortexShellState> drawBody)
             {
-                PageId = pageId;
+                SectionId = sectionId;
+                GroupId = groupId;
+                GroupTitle = groupTitle;
                 Title = title;
                 Description = description;
                 DrawBody = drawBody;
