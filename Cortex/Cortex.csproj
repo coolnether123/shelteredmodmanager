@@ -68,6 +68,7 @@
     <Compile Include="ExternalWorkbenchPluginLoader.cs" />
     <Compile Include="GuiStyleUtil.cs" />
     <Compile Include="Layout\CortexIdeLayout.cs" />
+    <Compile Include="Layout\CortexUi.cs" />
     <Compile Include="Modules\Build\BuildModule.cs" />
     <Compile Include="Modules\Editor\CodeViewSurface.cs" />
     <Compile Include="Modules\Editor\EditableCodeViewSurface.cs" />

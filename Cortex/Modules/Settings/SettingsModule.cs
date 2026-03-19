@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Reflection;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
 using Cortex.Services;
 using UnityEngine;
@@ -23,26 +26,42 @@ namespace Cortex.Modules.Settings
         private const string AdditionalSourceRootsSettingId = "AdditionalSourceRoots";
         private const float NavigationWidth = 268f;
         private const float CompactEditorWidth = 380f;
+        private const string SettingGearGlyph = "\u2699";
 
         private bool _loaded;
         private Vector2 _navigationScroll = Vector2.zero;
         private Vector2 _contentScroll = Vector2.zero;
         private readonly Dictionary<string, string> _textValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, bool> _toggleValues = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _loadedSerializedValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, SettingValidationResult> _validationResults = new Dictionary<string, SettingValidationResult>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Vector2> _multilineEditorScrolls = new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
+        private bool _preserveContentScrollForNestedEditor;
         private readonly Dictionary<string, string> _loadedModPathDrafts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, float> _sectionAnchors = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, float> _navigationAnchors = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, bool> _navigationGroupExpanded = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _collapsedNavigationGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private string _selectedThemeId = string.Empty;
         private string _activeSectionId = WorkspaceOverviewSectionId;
         private string _pendingSectionJumpId = string.Empty;
         private string _settingsSearchQuery = string.Empty;
+        private string _appliedSettingsSearchQuery = string.Empty;
         private string _lastNormalizedSearchQuery = string.Empty;
+        private string _openSettingActionMenuId = string.Empty;
+        private bool _showModifiedOnly;
         private IProjectCatalog _projectCatalog;
         private IProjectWorkspaceService _workspaceService;
         private ILoadedModCatalog _loadedModCatalog;
+        private WorkbenchPresentationSnapshot _snapshot;
         private CortexShellState _shellState;
+        private IWorkbenchUiSurface _uiSurface;
         private readonly IEditorKeybindingService _editorKeybindingService = new EditorKeybindingService();
+
+        private IWorkbenchUiSurface UiSurface
+        {
+            get { return _uiSurface ?? CortexUi.DefaultSurface; }
+        }
 
         public void Draw(
             ICortexSettingsStore settingsStore,
@@ -51,29 +70,36 @@ namespace Cortex.Modules.Settings
             ILoadedModCatalog loadedModCatalog,
             WorkbenchPresentationSnapshot snapshot,
             ThemeState themeState,
-            CortexShellState state)
+            CortexShellState state,
+            IWorkbenchUiSurface uiSurface)
         {
             _projectCatalog = projectCatalog;
             _workspaceService = workspaceService;
             _loadedModCatalog = loadedModCatalog;
+            _snapshot = snapshot;
             _shellState = state;
+            _uiSurface = uiSurface ?? CortexUi.DefaultSurface;
             EnsureLoaded(snapshot, themeState, state);
 
             var document = BuildDocument(snapshot);
-            UpdateActiveSection(document);
+            var renderActiveSectionId = ResolveRenderActiveSectionId(document);
+            var navigationInteraction = new NavigationInteraction();
 
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             DrawToolbar(settingsStore, snapshot, themeState, state);
             GUILayout.Space(6f);
-            DrawSearchBar();
+            DrawSearchBar(document);
             GUILayout.Space(6f);
             HandleSearchQueryChanged(document);
             GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-            DrawNavigation(document);
+            DrawNavigation(document, renderActiveSectionId, navigationInteraction);
             GUILayout.Space(8f);
-            DrawContentSurface(settingsStore, snapshot, themeState, state, document);
+            DrawContentSurface(settingsStore, snapshot, themeState, state, document, renderActiveSectionId);
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
+
+            CommitNavigationInteraction(navigationInteraction);
+            FinalizeNavigationState(document);
         }
 
         private void DrawToolbar(ICortexSettingsStore settingsStore, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
@@ -128,27 +154,28 @@ namespace Cortex.Modules.Settings
             }, GUILayout.Height(56f), GUILayout.ExpandWidth(true));
         }
 
-        private void DrawSearchBar()
+        private void DrawSearchBar(SettingsDocument document)
         {
+            _settingsSearchQuery = UiSurface
+                .DrawSearchToolbar("Search properties", _settingsSearchQuery, 42f, true);
+
             CortexIdeLayout.DrawGroup(null, delegate
             {
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("Search properties", GUILayout.Width(130f), GUILayout.Height(22f));
-                _settingsSearchQuery = GUILayout.TextField(_settingsSearchQuery ?? string.Empty, GUILayout.Height(24f), GUILayout.ExpandWidth(true));
-                if (GUILayout.Button("Clear", GUILayout.Width(64f), GUILayout.Height(24f)))
-                {
-                    _settingsSearchQuery = string.Empty;
-                }
+                _showModifiedOnly = GUILayout.Toggle(_showModifiedOnly, "Show modified only", GUILayout.Width(140f));
+                GUILayout.Space(8f);
+                GUILayout.Label(BuildSearchSummary(document), GUILayout.ExpandWidth(true));
                 GUILayout.EndHorizontal();
-            }, GUILayout.Height(42f), GUILayout.ExpandWidth(true));
+            }, GUILayout.Height(34f), GUILayout.ExpandWidth(true));
         }
 
-        private void DrawNavigation(SettingsDocument document)
+        private void DrawNavigation(SettingsDocument document, string renderActiveSectionId, NavigationInteraction interaction)
         {
             CortexIdeLayout.DrawGroup(null, delegate
             {
                 GUILayout.Label("Property Pages", GUILayout.Height(22f));
                 GUILayout.Space(4f);
+                _navigationAnchors.Clear();
                 _navigationScroll = GUILayout.BeginScrollView(_navigationScroll, GUI.skin.box, GUILayout.Width(NavigationWidth), GUILayout.ExpandHeight(true));
                 var visibleGroupCount = 0;
                 for (var i = 0; i < document.Groups.Count; i++)
@@ -160,7 +187,7 @@ namespace Cortex.Modules.Settings
                     }
 
                     visibleGroupCount++;
-                    DrawNavigationGroup(document.Groups[i]);
+                    DrawNavigationGroup(document.Groups[i], renderActiveSectionId, interaction);
                 }
 
                 if (visibleGroupCount == 0)
@@ -171,7 +198,7 @@ namespace Cortex.Modules.Settings
             }, GUILayout.Width(NavigationWidth + 16f), GUILayout.ExpandHeight(true));
         }
 
-        private void DrawNavigationGroup(SettingsNavigationGroup group)
+        private void DrawNavigationGroup(SettingsNavigationGroup group, string renderActiveSectionId, NavigationInteraction interaction)
         {
             if (group == null || group.Sections.Count == 0)
             {
@@ -187,75 +214,74 @@ namespace Cortex.Modules.Settings
             bool expanded;
             if (!_navigationGroupExpanded.TryGetValue(group.GroupId, out expanded))
             {
-                expanded = !_collapsedNavigationGroups.Contains(group.GroupId);
+                expanded = ShouldDefaultGroupExpanded(group.GroupId);
                 _navigationGroupExpanded[group.GroupId] = expanded;
             }
 
             var searchActive = !string.IsNullOrEmpty(GetNormalizedSearchQuery());
-            var effectiveExpanded = searchActive ? true : expanded;
+            var activeSection = GetActiveSection(group, renderActiveSectionId);
+            var groupHasActiveSection = activeSection != null;
+            var effectiveExpanded = IsNavigationGroupExpandedForDisplay(group, expanded, renderActiveSectionId);
+            var groupTitle = group.Title;
+            if (searchActive || _showModifiedOnly)
+            {
+                groupTitle += " (" + CountVisibleSections(group).ToString(CultureInfo.InvariantCulture) + ")";
+            }
 
-            var previousBackground = GUI.backgroundColor;
-            var previousContent = GUI.contentColor;
-            GUI.backgroundColor = CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.72f);
-            GUI.contentColor = CortexIdeLayout.GetTextColor();
-            var headerLabel = (expanded ? "▼ " : "▶ ") + group.Title;
-            headerLabel = (effectiveExpanded ? "v " : "> ") + group.Title;
-            if (GUILayout.Button(headerLabel, GUILayout.Height(26f), GUILayout.ExpandWidth(true)))
+            if (UiSurface.DrawNavigationGroupHeader(groupTitle, groupHasActiveSection, effectiveExpanded))
             {
                 if (searchActive)
                 {
-                    _activeSectionId = visibleSections[0].SectionId;
-                    _pendingSectionJumpId = visibleSections[0].SectionId;
+                    interaction.RequestSectionReveal(visibleSections[0].SectionId);
                 }
                 else
                 {
-                    expanded = !expanded;
-                    _navigationGroupExpanded[group.GroupId] = expanded;
-                    PersistNavigationGroupState();
-                    effectiveExpanded = expanded;
+                    interaction.ToggleGroup(group.GroupId);
                 }
             }
-            GUI.backgroundColor = previousBackground;
-            GUI.contentColor = previousContent;
+            _navigationAnchors[group.GroupId] = GUILayoutUtility.GetLastRect().y;
+
+            if (!effectiveExpanded && groupHasActiveSection)
+            {
+                DrawCollapsedActiveSection(activeSection);
+            }
 
             if (effectiveExpanded)
             {
                 GUILayout.Space(2f);
                 for (var i = 0; i < visibleSections.Count; i++)
                 {
-                    DrawNavigationButton(visibleSections[i], 14f);
+                    DrawNavigationButton(visibleSections[i], 14f, renderActiveSectionId, interaction);
                 }
             }
 
             GUILayout.Space(8f);
         }
 
-        private void DrawNavigationButton(SettingsSection section, float indent)
+        private void DrawNavigationButton(SettingsSection section, float indent, string renderActiveSectionId, NavigationInteraction interaction)
         {
             if (section == null)
             {
                 return;
             }
 
-            var isSelected = string.Equals(_activeSectionId, section.SectionId, StringComparison.OrdinalIgnoreCase);
-            var previousBackground = GUI.backgroundColor;
-            var previousContent = GUI.contentColor;
-            GUILayout.BeginHorizontal();
-            GUILayout.Space(indent);
-            GUI.backgroundColor = isSelected
-                ? CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetHeaderColor(), 0.16f)
-                : CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.82f);
-            GUI.contentColor = isSelected ? Color.white : CortexIdeLayout.GetTextColor();
-            if (GUILayout.Button(section.Title, GUILayout.Height(24f), GUILayout.ExpandWidth(true)))
+            var isSelected = string.Equals(renderActiveSectionId, section.SectionId, StringComparison.OrdinalIgnoreCase);
+            if (UiSurface.DrawNavigationItem(BuildSectionNavigationLabel(section), isSelected, indent))
             {
-                _activeSectionId = section.SectionId;
-                _pendingSectionJumpId = section.SectionId;
+                interaction.RequestSectionReveal(section.SectionId);
             }
-            GUILayout.EndHorizontal();
-
-            GUI.backgroundColor = previousBackground;
-            GUI.contentColor = previousContent;
+            _navigationAnchors[section.SectionId] = GUILayoutUtility.GetLastRect().y;
             GUILayout.Space(2f);
+        }
+
+        private void DrawCollapsedActiveSection(SettingsSection activeSection)
+        {
+            if (activeSection == null)
+            {
+                return;
+            }
+
+            UiSurface.DrawCollapsedNavigationItem(BuildSectionNavigationLabel(activeSection), 18f);
         }
 
         private void DrawContentSurface(
@@ -263,21 +289,27 @@ namespace Cortex.Modules.Settings
             WorkbenchPresentationSnapshot snapshot,
             ThemeState themeState,
             CortexShellState state,
-            SettingsDocument document)
+            SettingsDocument document,
+            string renderActiveSectionId)
         {
             CortexIdeLayout.DrawGroup(null, delegate
             {
                 GUILayout.Label("Properties", GUILayout.Height(24f));
                 GUILayout.Space(4f);
+                DrawActiveSectionBanner(document, renderActiveSectionId);
+                GUILayout.Space(4f);
 
                 _sectionAnchors.Clear();
+                var contentScrollBeforeDraw = _contentScroll;
+                _preserveContentScrollForNestedEditor = false;
                 _contentScroll = GUILayout.BeginScrollView(_contentScroll, GUI.skin.box, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
                 var visibleCount = 0;
-                for (var i = 0; i < document.Sections.Count; i++)
+                var orderedSections = GetOrderedSections(document);
+                for (var i = 0; i < orderedSections.Count; i++)
                 {
-                    if (IsSectionVisible(document.Sections[i]))
+                    if (IsSectionVisible(orderedSections[i]))
                     {
-                        DrawDocumentSection(document.Sections[i], settingsStore, snapshot, themeState, state);
+                        DrawDocumentSection(orderedSections[i], settingsStore, snapshot, themeState, state);
                         visibleCount++;
                     }
                 }
@@ -287,9 +319,10 @@ namespace Cortex.Modules.Settings
                     GUILayout.Label("No settings match the current search.");
                 }
                 GUILayout.EndScrollView();
-
-                ApplyPendingSectionJump();
-                UpdateActiveSection(document);
+                if (_preserveContentScrollForNestedEditor)
+                {
+                    _contentScroll = contentScrollBeforeDraw;
+                }
             }, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
         }
 
@@ -301,19 +334,7 @@ namespace Cortex.Modules.Settings
             CortexShellState state)
         {
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
-            GUILayout.Label(section.Title, GUILayout.Height(34f));
-            var lineRect = GUILayoutUtility.GetRect(0f, 0f, 1f, 1f, GUILayout.ExpandWidth(true), GUILayout.Height(1f));
-            var previousColor = GUI.color;
-            GUI.color = CortexIdeLayout.Blend(CortexIdeLayout.GetBorderColor(), CortexIdeLayout.GetTextColor(), 0.2f);
-            GUI.Box(lineRect, GUIContent.none);
-            GUI.color = previousColor;
-            if (!string.IsNullOrEmpty(section.Description))
-            {
-                GUILayout.Space(4f);
-                GUILayout.Label(section.Description);
-            }
-
-            GUILayout.Space(10f);
+            UiSurface.DrawSectionHeader(section.Title, section.Description);
             if (section.DrawBody != null)
             {
                 section.DrawBody(settingsStore, snapshot, themeState, state);
@@ -391,6 +412,7 @@ namespace Cortex.Modules.Settings
             document.Sections.Add(CreateEditorsSection());
             document.Sections.Add(CreateActionsSection());
             BuildNavigationGroups(document);
+            SynchronizeDocumentSectionOrder(document);
             return document;
         }
 
@@ -433,11 +455,101 @@ namespace Cortex.Modules.Settings
             });
         }
 
+        private static void SynchronizeDocumentSectionOrder(SettingsDocument document)
+        {
+            if (document == null || document.Groups.Count == 0)
+            {
+                return;
+            }
+
+            var orderedSections = new List<SettingsSection>();
+            for (var i = 0; i < document.Groups.Count; i++)
+            {
+                var group = document.Groups[i];
+                if (group == null || group.Sections == null)
+                {
+                    continue;
+                }
+
+                for (var j = 0; j < group.Sections.Count; j++)
+                {
+                    if (group.Sections[j] != null)
+                    {
+                        orderedSections.Add(group.Sections[j]);
+                    }
+                }
+            }
+
+            document.Sections.Clear();
+            for (var i = 0; i < orderedSections.Count; i++)
+            {
+                document.Sections.Add(orderedSections[i]);
+            }
+        }
+
+        private static List<SettingsSection> GetOrderedSections(SettingsDocument document)
+        {
+            var orderedSections = new List<SettingsSection>();
+            if (document == null)
+            {
+                return orderedSections;
+            }
+
+            var seenSectionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (document.Groups != null && document.Groups.Count > 0)
+            {
+                for (var i = 0; i < document.Groups.Count; i++)
+                {
+                    var group = document.Groups[i];
+                    if (group == null || group.Sections == null)
+                    {
+                        continue;
+                    }
+
+                    for (var j = 0; j < group.Sections.Count; j++)
+                    {
+                        var section = group.Sections[j];
+                        if (section == null)
+                        {
+                            continue;
+                        }
+
+                        var sectionId = section.SectionId ?? string.Empty;
+                        if (seenSectionIds.Add(sectionId))
+                        {
+                            orderedSections.Add(section);
+                        }
+                    }
+                }
+            }
+
+            if (orderedSections.Count > 0)
+            {
+                return orderedSections;
+            }
+
+            if (document.Sections == null)
+            {
+                return orderedSections;
+            }
+
+            for (var i = 0; i < document.Sections.Count; i++)
+            {
+                if (document.Sections[i] != null)
+                {
+                    orderedSections.Add(document.Sections[i]);
+                }
+            }
+
+            return orderedSections;
+        }
+
         private SettingsSection CreateWorkspaceOverviewSection()
         {
             return new SettingsSection(
                 WorkspaceOverviewSectionId,
                 "workspace",
+                "Workspace",
                 "Workspace",
                 "General",
                 "Configure where Cortex finds editable sources and how the settings document is organized.",
@@ -455,6 +567,7 @@ namespace Cortex.Modules.Settings
                 SourceSetupSectionId + ".paths",
                 "workspace",
                 "Workspace",
+                "Workspace",
                 "Paths",
                 "Configure the main folders Cortex uses for source resolution, mod discovery, and reference browsing.",
                 "workspace paths folders source roots mods root managed assemblies additional roots",
@@ -470,6 +583,7 @@ namespace Cortex.Modules.Settings
             return new SettingsSection(
                 SourceSetupSectionId + ".settings",
                 "workspace",
+                "Workspace",
                 "Workspace",
                 "Advanced",
                 "Additional workspace settings contributed by Cortex modules and extensions.",
@@ -487,6 +601,7 @@ namespace Cortex.Modules.Settings
                 SourceSetupSectionId + ".mods",
                 "workspace",
                 "Workspace",
+                "Workspace",
                 "Loaded Mods",
                 "Bind running mods to editable source roots so navigation and project discovery can resolve correctly.",
                 "workspace loaded mods links source links running mods mod mapping",
@@ -502,6 +617,7 @@ namespace Cortex.Modules.Settings
             return new SettingsSection(
                 SourceSetupSectionId + ".facts",
                 "workspace",
+                "Workspace",
                 "Workspace",
                 "Current Values",
                 "Review the effective workspace-related paths currently loaded into the shell.",
@@ -526,6 +642,7 @@ namespace Cortex.Modules.Settings
                 sectionContribution != null && !string.IsNullOrEmpty(sectionContribution.GroupTitle)
                     ? sectionContribution.GroupTitle
                     : ClassifySectionGroupTitle(scope),
+                scope,
                 sectionContribution != null && !string.IsNullOrEmpty(sectionContribution.SectionTitle)
                     ? sectionContribution.SectionTitle
                     : scope,
@@ -546,6 +663,7 @@ namespace Cortex.Modules.Settings
                 ThemesSectionId,
                 "appearance",
                 "Appearance",
+                "Appearance",
                 "Themes",
                 "Manage the registered workbench themes and choose the active shell theme.",
                 "appearance themes colors theme catalog shell theme",
@@ -561,6 +679,7 @@ namespace Cortex.Modules.Settings
             return new SettingsSection(
                 KeybindingsSectionId,
                 "editor",
+                "Editor",
                 "Editor",
                 "Keybindings",
                 "Configure editor shortcuts, multi-caret commands, and undo history.",
@@ -578,6 +697,7 @@ namespace Cortex.Modules.Settings
                 EditorsSectionId,
                 "editor",
                 "Editor",
+                "Editor",
                 "Registered Editors",
                 "Review the editors and content handlers currently available in Cortex.",
                 "editor registered editors content handlers extensions content types",
@@ -594,6 +714,7 @@ namespace Cortex.Modules.Settings
                 ActionsSectionId,
                 "shell",
                 "Shell",
+                "Shell",
                 "Actions",
                 "Convenience actions related to windows, logs, and the shell.",
                 "shell actions logs return to editor window actions",
@@ -604,7 +725,7 @@ namespace Cortex.Modules.Settings
                 });
         }
 
-        private static void DrawSourceSetupGuide()
+        private void DrawSourceSetupGuide()
         {
             DrawSectionPanel("Overview", delegate
             {
@@ -675,7 +796,7 @@ namespace Cortex.Modules.Settings
             });
         }
 
-        private static void DrawQuickFacts(CortexShellState state)
+        private void DrawQuickFacts(CortexShellState state)
         {
             DrawSectionPanel("Current Paths", delegate
             {
@@ -712,7 +833,7 @@ namespace Cortex.Modules.Settings
             for (var i = 0; i < snapshot.Settings.Count; i++)
             {
                 var contribution = snapshot.Settings[i];
-                if (!ShouldRenderContribution(scope, contribution) || !MatchesContributionQuery(contribution))
+                if (!ShouldRenderContribution(scope, contribution) || !IsContributionVisible(contribution))
                 {
                     continue;
                 }
@@ -732,7 +853,7 @@ namespace Cortex.Modules.Settings
 
             for (var i = 0; i < snapshot.Settings.Count; i++)
             {
-                if (ShouldRenderContribution(scope, snapshot.Settings[i]))
+                if (ShouldRenderContribution(scope, snapshot.Settings[i]) && IsContributionVisible(snapshot.Settings[i]))
                 {
                     return true;
                 }
@@ -860,9 +981,12 @@ namespace Cortex.Modules.Settings
 
             _textValues.Clear();
             _toggleValues.Clear();
+            _loadedSerializedValues.Clear();
+            _validationResults.Clear();
             _loadedModPathDrafts.Clear();
             _navigationGroupExpanded.Clear();
             _collapsedNavigationGroups.Clear();
+            _openSettingActionMenuId = string.Empty;
             _lastNormalizedSearchQuery = string.Empty;
 
             var settings = state.Settings ?? new CortexSettings();
@@ -881,7 +1005,14 @@ namespace Cortex.Modules.Settings
                     ? themeState.ThemeId
                     : "cortex.vs-dark";
             LoadNavigationGroupState(settings);
-            _activeSectionId = WorkspaceOverviewSectionId;
+            _settingsSearchQuery = settings.SettingsSearchQuery ?? string.Empty;
+            _appliedSettingsSearchQuery = settings.SettingsSearchQuery ?? string.Empty;
+            _showModifiedOnly = settings.SettingsShowModifiedOnly;
+            _navigationScroll.y = Mathf.Max(0f, settings.SettingsNavigationScrollY);
+            _contentScroll.y = Mathf.Max(0f, settings.SettingsContentScrollY);
+            _activeSectionId = !string.IsNullOrEmpty(settings.SettingsActiveSectionId)
+                ? settings.SettingsActiveSectionId
+                : WorkspaceOverviewSectionId;
             _loaded = true;
         }
 
@@ -900,6 +1031,11 @@ namespace Cortex.Modules.Settings
                 var shown = 0;
                 for (var i = 0; i < snapshot.Themes.Count; i++)
                 {
+                    if (_showModifiedOnly && !string.Equals(snapshot.Themes[i].ThemeId, _selectedThemeId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
                     if (!MatchesThemeQuery(snapshot.Themes[i]))
                     {
                         continue;
@@ -925,6 +1061,12 @@ namespace Cortex.Modules.Settings
 
             DrawSectionPanel("Editor Input", delegate
             {
+                var showUndoLimit = !_showModifiedOnly || IsUndoHistoryModified();
+                if (!showUndoLimit)
+                {
+                    return;
+                }
+
                 GUILayout.Label("These bindings apply to the Cortex source editor. Key values use Unity KeyCode names such as LeftArrow, Home, Tab, Return, or A.");
                 GUILayout.Space(6f);
                 GUILayout.BeginHorizontal();
@@ -957,6 +1099,11 @@ namespace Cortex.Modules.Settings
                     continue;
                 }
 
+                if (_showModifiedOnly && !IsBindingModified(state.Settings, bindings[i]))
+                {
+                    continue;
+                }
+
                 if (!string.Equals(currentCategory, bindings[i].Category, StringComparison.Ordinal))
                 {
                     currentCategory = bindings[i].Category;
@@ -982,7 +1129,14 @@ namespace Cortex.Modules.Settings
             BeginPropertyRow();
             GUILayout.BeginHorizontal();
             GUILayout.BeginVertical(GUILayout.Width(280f));
+            GUILayout.BeginHorizontal();
             GUILayout.Label(definition.DisplayName, GUILayout.Height(20f));
+            GUILayout.FlexibleSpace();
+            if (IsBindingModified(settings, definition))
+            {
+                DrawSettingTag("Modified", CortexIdeLayout.GetWarningColor());
+            }
+            GUILayout.EndHorizontal();
             if (!string.IsNullOrEmpty(definition.Description))
             {
                 GUILayout.Label(definition.Description);
@@ -1085,8 +1239,8 @@ namespace Cortex.Modules.Settings
 
             var isSelected = string.Equals(_selectedThemeId, theme.ThemeId, StringComparison.OrdinalIgnoreCase);
             BeginPropertyRow();
-            GUILayout.BeginHorizontal();
-            GUILayout.BeginVertical(GUILayout.Width(280f));
+            GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
+            GUILayout.BeginVertical(GUILayout.MinWidth(240f), GUILayout.MaxWidth(320f), GUILayout.ExpandWidth(true));
             GUILayout.Label(theme.DisplayName ?? theme.ThemeId, GUILayout.Height(20f));
             GUILayout.Label(theme.ThemeId ?? string.Empty);
             if (!string.IsNullOrEmpty(theme.Description))
@@ -1095,9 +1249,10 @@ namespace Cortex.Modules.Settings
             }
             GUILayout.EndVertical();
 
-            GUILayout.BeginVertical(GUILayout.Width(CompactEditorWidth));
+            GUILayout.Space(18f);
+            GUILayout.BeginVertical(GUILayout.MinWidth(220f), GUILayout.MaxWidth(360f), GUILayout.ExpandWidth(true));
             var label = isSelected ? "Selected" : "Use Theme";
-            if (GUILayout.Toggle(isSelected, label, "button", GUILayout.Width(120f), GUILayout.Height(24f)))
+            if (GUILayout.Toggle(isSelected, label, "button", GUILayout.Width(148f), GUILayout.Height(24f)))
             {
                 _selectedThemeId = string.IsNullOrEmpty(theme.ThemeId) ? "cortex.vs-dark" : theme.ThemeId;
                 if (themeState != null)
@@ -1115,6 +1270,9 @@ namespace Cortex.Modules.Settings
             GUILayout.BeginHorizontal();
             DrawThemeSwatch(theme.BackgroundColor, "BG");
             DrawThemeSwatch(theme.SurfaceColor, "Surface");
+            GUILayout.EndHorizontal();
+            GUILayout.Space(2f);
+            GUILayout.BeginHorizontal();
             DrawThemeSwatch(theme.HeaderColor, "Header");
             DrawThemeSwatch(theme.AccentColor, "Accent");
             GUILayout.EndHorizontal();
@@ -1200,7 +1358,7 @@ namespace Cortex.Modules.Settings
             GUILayout.BeginHorizontal();
             DrawSettingLabelColumn(contribution);
             GUILayout.BeginVertical(GUILayout.Width(CompactEditorWidth + 132f));
-            DrawCompactTextValueEditor(contribution.SettingId, contribution.DefaultValue, allowPaste, allowClear);
+            DrawCompactTextValueEditor(contribution.SettingId, GetDefaultSerializedValue(contribution), allowPaste, allowClear);
             if (showPathActions)
             {
                 DrawClipboardActions(contribution.SettingId);
@@ -1216,13 +1374,50 @@ namespace Cortex.Modules.Settings
             GUILayout.BeginHorizontal();
             DrawSettingLabelColumn(contribution);
             GUILayout.BeginVertical(GUILayout.Width(CompactEditorWidth + 80f));
-            var value = GetTextValue(contribution);
-            value = GUILayout.TextArea(value, GUILayout.Width(CompactEditorWidth + 80f), GUILayout.MinHeight(88f));
-            _textValues[contribution.SettingId] = value ?? string.Empty;
+            _textValues[contribution.SettingId] = DrawScrollableTextArea(
+                contribution.SettingId,
+                GetTextValue(contribution),
+                CompactEditorWidth + 80f,
+                112f);
             DrawSettingFooter(contribution);
             GUILayout.EndVertical();
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
+        }
+
+        private string DrawScrollableTextArea(string settingId, string value, float width, float height)
+        {
+            Vector2 scroll;
+            if (!_multilineEditorScrolls.TryGetValue(settingId, out scroll))
+            {
+                scroll = Vector2.zero;
+            }
+
+            scroll = GUILayout.BeginScrollView(
+                scroll,
+                GUI.skin.box,
+                GUILayout.Width(width),
+                GUILayout.Height(height));
+
+            var nextValue = GUILayout.TextArea(
+                value ?? string.Empty,
+                GUILayout.Width(width - 18f),
+                GUILayout.ExpandHeight(true));
+
+            GUILayout.EndScrollView();
+            var scrollRect = GUILayoutUtility.GetLastRect();
+
+            if (Event.current != null &&
+                Event.current.type == EventType.ScrollWheel &&
+                scrollRect.Contains(Event.current.mousePosition))
+            {
+                scroll.y = Mathf.Max(0f, scroll.y + (Event.current.delta.y * 18f));
+                _preserveContentScrollForNestedEditor = true;
+                Event.current.Use();
+            }
+
+            _multilineEditorScrolls[settingId] = scroll;
+            return nextValue ?? string.Empty;
         }
 
         private void DrawSecretSettingEditor(SettingContribution contribution)
@@ -1351,31 +1546,360 @@ namespace Cortex.Modules.Settings
             return -1;
         }
 
-        private static void DrawSettingLabelColumn(SettingContribution contribution)
+        private void DrawSettingLabelColumn(SettingContribution contribution)
         {
             GUILayout.BeginVertical(GUILayout.Width(280f));
-            GUILayout.Label(contribution.DisplayName ?? contribution.SettingId, GUILayout.Height(20f));
-            if (!string.IsNullOrEmpty(contribution.Description))
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(contribution != null ? contribution.DisplayName ?? contribution.SettingId : string.Empty, GUILayout.Height(20f));
+            GUILayout.FlexibleSpace();
+            if (contribution != null && IsSearchActive() && MatchesContributionQuery(contribution))
+            {
+                DrawSettingTag("Match", CortexIdeLayout.GetAccentColor());
+            }
+            if (contribution != null && IsSettingModified(contribution))
+            {
+                DrawSettingTag("Modified", CortexIdeLayout.GetWarningColor());
+            }
+            if (contribution != null && HasSettingActions(contribution))
+            {
+                var isMenuOpen = string.Equals(_openSettingActionMenuId, contribution.SettingId, StringComparison.OrdinalIgnoreCase);
+                if (GUILayout.Button(SettingGearGlyph, GUILayout.Width(26f), GUILayout.Height(20f)))
+                {
+                    _openSettingActionMenuId = isMenuOpen ? string.Empty : contribution.SettingId;
+                }
+            }
+            GUILayout.EndHorizontal();
+
+            if (contribution != null && !string.IsNullOrEmpty(contribution.Description))
             {
                 GUILayout.Label(contribution.Description);
             }
+
             GUILayout.EndVertical();
         }
 
-        private static void DrawSettingFooter(SettingContribution contribution)
+        private void DrawSettingFooter(SettingContribution contribution)
         {
+            if (contribution == null)
+            {
+                return;
+            }
+
             if (!string.IsNullOrEmpty(contribution.HelpText))
             {
                 GUILayout.Label(contribution.HelpText);
             }
-            else if (!string.IsNullOrEmpty(contribution.PlaceholderText) && string.IsNullOrEmpty(contribution.DefaultValue))
+            else if (!string.IsNullOrEmpty(contribution.PlaceholderText) && string.IsNullOrEmpty(GetDefaultSerializedValue(contribution)))
             {
                 GUILayout.Label("Example: " + contribution.PlaceholderText);
             }
 
-            if (!string.IsNullOrEmpty(contribution.DefaultValue))
+            var validation = GetValidationResult(contribution);
+            if (validation != null && validation.Severity != SettingValidationSeverity.None && !string.IsNullOrEmpty(validation.Message))
             {
-                GUILayout.Label("Default: " + contribution.DefaultValue);
+                DrawValidationMessage(validation);
+            }
+
+            var defaultValue = GetDefaultSerializedValue(contribution);
+            if (!string.IsNullOrEmpty(defaultValue))
+            {
+                GUILayout.Label("Default: " + defaultValue);
+            }
+
+            if (string.Equals(_openSettingActionMenuId, contribution.SettingId, StringComparison.OrdinalIgnoreCase))
+            {
+                DrawSettingActionsMenu(contribution);
+            }
+        }
+
+        private static void DrawSettingTag(string text, Color color)
+        {
+            var previousBackground = GUI.backgroundColor;
+            var previousContent = GUI.contentColor;
+            GUI.backgroundColor = color;
+            GUI.contentColor = GetReadableSwatchTextColor(color);
+            GUILayout.Box(text ?? string.Empty, GUILayout.Height(18f));
+            GUI.backgroundColor = previousBackground;
+            GUI.contentColor = previousContent;
+            GUILayout.Space(4f);
+        }
+
+        private bool HasSettingActions(SettingContribution contribution)
+        {
+            return contribution != null;
+        }
+
+        private void DrawSettingActionsMenu(SettingContribution contribution)
+        {
+            GUILayout.Space(4f);
+            UiSurface.DrawPopupMenuPanel(220f, delegate
+            {
+                DrawSettingActionButton("Reset to default", delegate
+                {
+                    ResetSettingToDefault(contribution);
+                    SetStatusMessage("Reset '" + (contribution.DisplayName ?? contribution.SettingId) + "' to its default value.");
+                });
+                DrawSettingActionButton("Copy setting id", delegate
+                {
+                    GUIUtility.systemCopyBuffer = contribution.SettingId ?? string.Empty;
+                    SetStatusMessage("Copied setting id '" + (contribution.SettingId ?? string.Empty) + "'.");
+                });
+                DrawSettingActionButton("Copy current value", delegate
+                {
+                    GUIUtility.systemCopyBuffer = GetSerializedDraftValue(contribution);
+                    SetStatusMessage("Copied current value for '" + (contribution.DisplayName ?? contribution.SettingId) + "'.");
+                });
+
+                var actions = contribution.Actions ?? new SettingActionContribution[0];
+                for (var i = 0; i < actions.Length; i++)
+                {
+                    var action = actions[i];
+                    if (action == null || action.Execute == null)
+                    {
+                        continue;
+                    }
+
+                    var capturedAction = action;
+                    DrawSettingActionButton(capturedAction.DisplayName ?? capturedAction.ActionId, delegate
+                    {
+                        capturedAction.Execute(new SettingActionInvocation
+                        {
+                            SettingId = contribution.SettingId,
+                            CurrentValue = GetSerializedDraftValue(contribution),
+                            DefaultValue = GetDefaultSerializedValue(contribution),
+                            SetDraftValue = delegate(string nextValue) { SetDraftSerializedValue(contribution, nextValue); },
+                            SetStatusMessage = SetStatusMessage
+                        });
+                    });
+                }
+            });
+        }
+
+        private void DrawSettingActionButton(string label, Action onClick)
+        {
+            if (GUILayout.Button(label ?? string.Empty, GUILayout.Height(22f), GUILayout.ExpandWidth(true)) && onClick != null)
+            {
+                _openSettingActionMenuId = string.Empty;
+                onClick();
+            }
+        }
+
+        private void ResetSettingToDefault(SettingContribution contribution)
+        {
+            SetDraftSerializedValue(contribution, GetDefaultSerializedValue(contribution));
+        }
+
+        private void SetDraftSerializedValue(SettingContribution contribution, string serializedValue)
+        {
+            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
+            {
+                return;
+            }
+
+            serializedValue = NormalizeSerializedValue(contribution, serializedValue);
+            if (contribution.ValueKind == SettingValueKind.Boolean)
+            {
+                _toggleValues[contribution.SettingId] = string.Equals(serializedValue, "true", StringComparison.OrdinalIgnoreCase);
+                return;
+            }
+
+            _textValues[contribution.SettingId] = serializedValue;
+        }
+
+        private bool IsSearchActive()
+        {
+            return !string.IsNullOrEmpty(GetNormalizedSearchQuery());
+        }
+
+        private bool IsSettingModified(SettingContribution contribution)
+        {
+            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
+            {
+                return false;
+            }
+
+            string loadedValue;
+            if (!_loadedSerializedValues.TryGetValue(contribution.SettingId, out loadedValue))
+            {
+                loadedValue = ReadPersistedContributionValue(contribution, _shellState != null ? _shellState.Settings : null);
+                _loadedSerializedValues[contribution.SettingId] = loadedValue;
+            }
+
+            return !string.Equals(
+                NormalizeSerializedValue(contribution, loadedValue),
+                GetSerializedDraftValue(contribution),
+                StringComparison.Ordinal);
+        }
+
+        private SettingValidationResult GetValidationResult(SettingContribution contribution)
+        {
+            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
+            {
+                return null;
+            }
+
+            var serializedValue = GetSerializedDraftValue(contribution);
+            var result = contribution.ValidateValue != null
+                ? contribution.ValidateValue(serializedValue)
+                : BuildDefaultValidationResult(contribution, serializedValue);
+
+            _validationResults[contribution.SettingId] = result ?? new SettingValidationResult
+            {
+                Severity = SettingValidationSeverity.None,
+                Message = string.Empty
+            };
+
+            return result;
+        }
+
+        private SettingValidationResult BuildDefaultValidationResult(SettingContribution contribution, string serializedValue)
+        {
+            if (contribution == null)
+            {
+                return null;
+            }
+
+            if (contribution.IsRequired && IsNullOrWhiteSpaceCompat(serializedValue))
+            {
+                return CreateValidation(SettingValidationSeverity.Error, "A value is required.");
+            }
+
+            if (IsNullOrWhiteSpaceCompat(serializedValue))
+            {
+                return null;
+            }
+
+            switch (contribution.ValueKind)
+            {
+                case SettingValueKind.Integer:
+                    int integerValue;
+                    if (!int.TryParse(serializedValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out integerValue))
+                    {
+                        return CreateValidation(SettingValidationSeverity.Error, "Enter a valid integer value.");
+                    }
+                    break;
+                case SettingValueKind.Float:
+                    float floatValue;
+                    if (!float.TryParse(serializedValue, NumberStyles.Float, CultureInfo.InvariantCulture, out floatValue))
+                    {
+                        return CreateValidation(SettingValidationSeverity.Error, "Enter a valid numeric value.");
+                    }
+                    break;
+            }
+
+            var options = contribution.Options ?? new SettingChoiceOption[0];
+            if (options.Length > 0 && FindChoiceIndex(options, serializedValue) < 0)
+            {
+                return CreateValidation(SettingValidationSeverity.Error, "Select one of the registered values.");
+            }
+
+            if (GetSettingEditorKind(contribution) == SettingEditorKind.Path &&
+                !Directory.Exists(serializedValue) &&
+                !File.Exists(serializedValue))
+            {
+                return CreateValidation(SettingValidationSeverity.Warning, "The path does not exist on disk.");
+            }
+
+            if (LooksLikeUrlSetting(contribution))
+            {
+                Uri uri;
+                if (!Uri.TryCreate(serializedValue, UriKind.Absolute, out uri))
+                {
+                    return CreateValidation(SettingValidationSeverity.Warning, "Enter a valid absolute URL.");
+                }
+            }
+
+            return null;
+        }
+
+        private static bool LooksLikeUrlSetting(SettingContribution contribution)
+        {
+            if (contribution == null)
+            {
+                return false;
+            }
+
+            return EndsWithOrdinalIgnoreCase(contribution.SettingId, "Url") ||
+                EndsWithOrdinalIgnoreCase(contribution.SettingId, "Uri") ||
+                StartsWithOrdinalIgnoreCase(contribution.PlaceholderText, "http://") ||
+                StartsWithOrdinalIgnoreCase(contribution.PlaceholderText, "https://");
+        }
+
+        private static bool EndsWithOrdinalIgnoreCase(string value, string suffix)
+        {
+            return !string.IsNullOrEmpty(value) &&
+                !string.IsNullOrEmpty(suffix) &&
+                value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool StartsWithOrdinalIgnoreCase(string value, string prefix)
+        {
+            return !string.IsNullOrEmpty(value) &&
+                !string.IsNullOrEmpty(prefix) &&
+                value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static SettingValidationResult CreateValidation(SettingValidationSeverity severity, string message)
+        {
+            return new SettingValidationResult
+            {
+                Severity = severity,
+                Message = message ?? string.Empty
+            };
+        }
+
+        private static bool IsNullOrWhiteSpaceCompat(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return true;
+            }
+
+            for (var i = 0; i < value.Length; i++)
+            {
+                if (!char.IsWhiteSpace(value[i]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void DrawValidationMessage(SettingValidationResult validation)
+        {
+            if (validation == null || validation.Severity == SettingValidationSeverity.None || string.IsNullOrEmpty(validation.Message))
+            {
+                return;
+            }
+
+            var previousColor = GUI.contentColor;
+            GUI.contentColor = GetValidationColor(validation.Severity);
+            GUILayout.Label(validation.Message);
+            GUI.contentColor = previousColor;
+        }
+
+        private static Color GetValidationColor(SettingValidationSeverity severity)
+        {
+            switch (severity)
+            {
+                case SettingValidationSeverity.Error:
+                    return CortexIdeLayout.GetErrorColor();
+                case SettingValidationSeverity.Warning:
+                    return CortexIdeLayout.GetWarningColor();
+                case SettingValidationSeverity.Info:
+                    return CortexIdeLayout.GetAccentColor();
+                case SettingValidationSeverity.None:
+                default:
+                    return CortexIdeLayout.GetTextColor();
+            }
+        }
+
+        private void SetStatusMessage(string message)
+        {
+            if (_shellState != null)
+            {
+                _shellState.StatusMessage = message ?? string.Empty;
             }
         }
 
@@ -1402,54 +1926,22 @@ namespace Cortex.Modules.Settings
 
             _toggleValues[contribution.SettingId] = value;
 
-            if (state != null && state.Settings != null)
-            {
-                var field = GetSettingField(contribution);
-                if (field != null && field.FieldType == typeof(bool))
-                {
-                    field.SetValue(state.Settings, value);
-                }
-            }
-
             return value;
         }
 
-        private static void DrawSectionPanel(string title, Action drawBody)
+        private void DrawSectionPanel(string title, Action drawBody)
         {
-            GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
-            GUILayout.Label(title, GUILayout.Height(24f));
-            GUILayout.BeginHorizontal();
-            var previousColor = GUI.color;
-            GUI.color = CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetBorderColor(), 0.4f);
-            GUILayout.Box(GUIContent.none, GUILayout.Width(2f), GUILayout.MinHeight(56f), GUILayout.ExpandHeight(true));
-            GUI.color = previousColor;
-            GUILayout.Space(14f);
-            GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
-            if (drawBody != null)
-            {
-                drawBody();
-            }
-            GUILayout.EndVertical();
-            GUILayout.EndHorizontal();
-            GUILayout.EndVertical();
-            GUILayout.Space(10f);
+            UiSurface.DrawSectionPanel(title, drawBody);
         }
 
-        private static void BeginPropertyRow()
+        private void BeginPropertyRow()
         {
-            GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
-            var previousColor = GUI.color;
-            GUI.color = CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetBorderColor(), 0.45f);
-            GUILayout.Box(GUIContent.none, GUILayout.Width(2f), GUILayout.MinHeight(44f), GUILayout.ExpandHeight(true));
-            GUI.color = previousColor;
-            GUILayout.Space(14f);
-            GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
+            UiSurface.BeginPropertyRow();
         }
 
-        private static void EndPropertyRow()
+        private void EndPropertyRow()
         {
-            GUILayout.EndVertical();
-            GUILayout.EndHorizontal();
+            UiSurface.EndPropertyRow();
         }
 
         private static void DrawReadOnlyField(string label, string value)
@@ -1468,7 +1960,7 @@ namespace Cortex.Modules.Settings
             var swatchColor = CortexIdeLayout.ParseColor(hex, Color.white);
             GUI.backgroundColor = swatchColor;
             GUI.contentColor = GetReadableSwatchTextColor(swatchColor);
-            GUILayout.Box(label, GUILayout.Width(70f), GUILayout.Height(18f));
+            GUILayout.Box(label, GUILayout.Width(82f), GUILayout.Height(18f));
             GUI.backgroundColor = previousBackground;
             GUI.contentColor = previousContent;
             GUILayout.Space(4f);
@@ -1573,6 +2065,11 @@ namespace Cortex.Modules.Settings
             }
 
             state.Settings.ThemeId = string.IsNullOrEmpty(_selectedThemeId) ? "cortex.vs-dark" : _selectedThemeId;
+            state.Settings.SettingsActiveSectionId = _activeSectionId ?? string.Empty;
+            state.Settings.SettingsNavigationScrollY = _navigationScroll.y;
+            state.Settings.SettingsContentScrollY = _contentScroll.y;
+            state.Settings.SettingsSearchQuery = _appliedSettingsSearchQuery ?? string.Empty;
+            state.Settings.SettingsShowModifiedOnly = _showModifiedOnly;
             if (themeState != null)
             {
                 themeState.ThemeId = state.Settings.ThemeId;
@@ -1581,58 +2078,30 @@ namespace Cortex.Modules.Settings
 
         private void LoadContributionValue(SettingContribution contribution, CortexSettings settings)
         {
-            var field = GetSettingField(contribution);
-            if (field == null)
+            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
             {
                 return;
             }
 
-            var value = field.GetValue(settings);
+            var serializedValue = ReadPersistedContributionValue(contribution, settings);
+            _loadedSerializedValues[contribution.SettingId] = serializedValue;
             if (contribution.ValueKind == SettingValueKind.Boolean)
             {
-                _toggleValues[contribution.SettingId] = value is bool && (bool)value;
+                _toggleValues[contribution.SettingId] = string.Equals(serializedValue, "true", StringComparison.OrdinalIgnoreCase);
                 return;
             }
 
-            if (value == null)
-            {
-                _textValues[contribution.SettingId] = contribution.DefaultValue ?? string.Empty;
-                return;
-            }
-
-            if (contribution.ValueKind == SettingValueKind.Float)
-            {
-                _textValues[contribution.SettingId] = ((float)value).ToString("F0");
-                return;
-            }
-
-            _textValues[contribution.SettingId] = value.ToString();
+            _textValues[contribution.SettingId] = serializedValue;
         }
 
         private void ApplyContributionValue(SettingContribution contribution, CortexSettings settings)
         {
-            var field = GetSettingField(contribution);
-            if (field == null)
+            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
             {
                 return;
             }
 
-            switch (contribution.ValueKind)
-            {
-                case SettingValueKind.Boolean:
-                    field.SetValue(settings, GetToggleValue(contribution));
-                    break;
-                case SettingValueKind.Integer:
-                    field.SetValue(settings, ParseInt(GetTextValue(contribution), ParseInt(contribution.DefaultValue, (int)field.GetValue(settings))));
-                    break;
-                case SettingValueKind.Float:
-                    field.SetValue(settings, ParseFloat(GetTextValue(contribution), ParseFloat(contribution.DefaultValue, (float)field.GetValue(settings))));
-                    break;
-                case SettingValueKind.String:
-                default:
-                    field.SetValue(settings, GetTextValue(contribution));
-                    break;
-            }
+            WritePersistedContributionValue(contribution, settings, GetSerializedDraftValue(contribution));
         }
 
         private static FieldInfo GetSettingField(SettingContribution contribution)
@@ -1645,10 +2114,211 @@ namespace Cortex.Modules.Settings
             return typeof(CortexSettings).GetField(contribution.SettingId, BindingFlags.Public | BindingFlags.Instance);
         }
 
+        private string GetDefaultSerializedValue(SettingContribution contribution)
+        {
+            if (contribution == null)
+            {
+                return string.Empty;
+            }
+
+            if (contribution.ReadDefaultValue != null)
+            {
+                return NormalizeSerializedValue(contribution, contribution.ReadDefaultValue());
+            }
+
+            return NormalizeSerializedValue(contribution, contribution.DefaultValue);
+        }
+
+        private string ReadPersistedContributionValue(SettingContribution contribution, CortexSettings settings)
+        {
+            if (contribution == null)
+            {
+                return string.Empty;
+            }
+
+            if (contribution.ReadValue != null)
+            {
+                return NormalizeSerializedValue(contribution, contribution.ReadValue());
+            }
+
+            var field = GetSettingField(contribution);
+            if (field == null)
+            {
+                return ReadModuleSettingValue(settings, contribution.SettingId, GetDefaultSerializedValue(contribution));
+            }
+
+            if (settings == null)
+            {
+                return GetDefaultSerializedValue(contribution);
+            }
+
+            var value = field.GetValue(settings);
+            if (value == null)
+            {
+                return GetDefaultSerializedValue(contribution);
+            }
+
+            switch (contribution.ValueKind)
+            {
+                case SettingValueKind.Boolean:
+                    return NormalizeSerializedValue(contribution, ((bool)value) ? "true" : "false");
+                case SettingValueKind.Integer:
+                    return NormalizeSerializedValue(contribution, ((int)value).ToString(CultureInfo.InvariantCulture));
+                case SettingValueKind.Float:
+                    return NormalizeSerializedValue(contribution, ((float)value).ToString(CultureInfo.InvariantCulture));
+                case SettingValueKind.String:
+                default:
+                    return NormalizeSerializedValue(contribution, value.ToString());
+            }
+        }
+
+        private void WritePersistedContributionValue(SettingContribution contribution, CortexSettings settings, string serializedValue)
+        {
+            if (contribution == null)
+            {
+                return;
+            }
+
+            serializedValue = NormalizeSerializedValue(contribution, serializedValue);
+            if (contribution.WriteValue != null)
+            {
+                contribution.WriteValue(serializedValue);
+                return;
+            }
+
+            var field = GetSettingField(contribution);
+            if (field == null)
+            {
+                WriteModuleSettingValue(settings, contribution.SettingId, serializedValue);
+                return;
+            }
+
+            if (settings == null)
+            {
+                return;
+            }
+
+            switch (contribution.ValueKind)
+            {
+                case SettingValueKind.Boolean:
+                    field.SetValue(settings, string.Equals(serializedValue, "true", StringComparison.OrdinalIgnoreCase));
+                    break;
+                case SettingValueKind.Integer:
+                    field.SetValue(settings, ParseInt(serializedValue, ParseInt(GetDefaultSerializedValue(contribution), (int)field.GetValue(settings))));
+                    break;
+                case SettingValueKind.Float:
+                    field.SetValue(settings, ParseFloat(serializedValue, ParseFloat(GetDefaultSerializedValue(contribution), (float)field.GetValue(settings))));
+                    break;
+                case SettingValueKind.String:
+                default:
+                    field.SetValue(settings, serializedValue);
+                    break;
+            }
+        }
+
+        private static string ReadModuleSettingValue(CortexSettings settings, string settingId, string fallback)
+        {
+            if (settings == null || string.IsNullOrEmpty(settingId) || settings.ModuleSettings == null)
+            {
+                return fallback ?? string.Empty;
+            }
+
+            for (var i = 0; i < settings.ModuleSettings.Length; i++)
+            {
+                var entry = settings.ModuleSettings[i];
+                if (entry != null && string.Equals(entry.SettingId, settingId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return entry.Value ?? string.Empty;
+                }
+            }
+
+            return fallback ?? string.Empty;
+        }
+
+        private static void WriteModuleSettingValue(CortexSettings settings, string settingId, string serializedValue)
+        {
+            if (settings == null || string.IsNullOrEmpty(settingId))
+            {
+                return;
+            }
+
+            var entries = new List<ModuleSettingValue>();
+            if (settings.ModuleSettings != null)
+            {
+                for (var i = 0; i < settings.ModuleSettings.Length; i++)
+                {
+                    if (settings.ModuleSettings[i] != null)
+                    {
+                        entries.Add(settings.ModuleSettings[i]);
+                    }
+                }
+            }
+
+            for (var i = 0; i < entries.Count; i++)
+            {
+                if (string.Equals(entries[i].SettingId, settingId, StringComparison.OrdinalIgnoreCase))
+                {
+                    entries[i].Value = serializedValue ?? string.Empty;
+                    settings.ModuleSettings = entries.ToArray();
+                    return;
+                }
+            }
+
+            entries.Add(new ModuleSettingValue
+            {
+                SettingId = settingId,
+                Value = serializedValue ?? string.Empty
+            });
+            settings.ModuleSettings = entries.ToArray();
+        }
+
+        private string GetSerializedDraftValue(SettingContribution contribution)
+        {
+            if (contribution == null)
+            {
+                return string.Empty;
+            }
+
+            if (contribution.ValueKind == SettingValueKind.Boolean)
+            {
+                return GetToggleValue(contribution) ? "true" : "false";
+            }
+
+            return NormalizeSerializedValue(contribution, GetTextValue(contribution.SettingId, GetDefaultSerializedValue(contribution)));
+        }
+
+        private static string NormalizeSerializedValue(SettingContribution contribution, string rawValue)
+        {
+            var value = rawValue ?? string.Empty;
+            if (contribution == null)
+            {
+                return value;
+            }
+
+            switch (contribution.ValueKind)
+            {
+                case SettingValueKind.Boolean:
+                    return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ? "true" : "false";
+                case SettingValueKind.Integer:
+                    int integerValue;
+                    return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out integerValue)
+                        ? integerValue.ToString(CultureInfo.InvariantCulture)
+                        : value.Trim();
+                case SettingValueKind.Float:
+                    float floatValue;
+                    return float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out floatValue)
+                        ? floatValue.ToString(CultureInfo.InvariantCulture)
+                        : value.Trim();
+                case SettingValueKind.String:
+                default:
+                    return value;
+            }
+        }
+
         private string GetTextValue(SettingContribution contribution)
         {
             return contribution != null
-                ? GetTextValue(contribution.SettingId, contribution.DefaultValue)
+                ? GetTextValue(contribution.SettingId, GetDefaultSerializedValue(contribution))
                 : string.Empty;
         }
 
@@ -1668,7 +2338,7 @@ namespace Cortex.Modules.Settings
                 return value;
             }
 
-            return contribution != null && string.Equals(contribution.DefaultValue, "true", StringComparison.OrdinalIgnoreCase);
+            return contribution != null && string.Equals(GetDefaultSerializedValue(contribution), "true", StringComparison.OrdinalIgnoreCase);
         }
 
         private List<SettingsSection> GetVisibleSections(SettingsNavigationGroup group)
@@ -1692,7 +2362,342 @@ namespace Cortex.Modules.Settings
 
         private bool IsSectionVisible(SettingsSection section)
         {
-            return section != null && MatchesSearch(section.SearchText);
+            if (section == null)
+            {
+                return false;
+            }
+
+            if (_showModifiedOnly)
+            {
+                return GetSectionVisibleItemCount(section) > 0;
+            }
+
+            return MatchesSearch(section.SearchText) || GetSectionVisibleItemCount(section) > 0;
+        }
+
+        private int GetSectionVisibleItemCount(SettingsSection section)
+        {
+            if (section == null)
+            {
+                return 0;
+            }
+
+            if (string.Equals(section.SectionId, SourceSetupSectionId + ".paths", StringComparison.OrdinalIgnoreCase))
+            {
+                return CountVisibleSettingsForIds(WorkspaceRootSettingId, ModsRootSettingId, ManagedAssemblyRootSettingId, AdditionalSourceRootsSettingId);
+            }
+
+            if (!string.IsNullOrEmpty(section.Scope) &&
+                (string.Equals(section.SectionId, SourceSetupSectionId + ".settings", StringComparison.OrdinalIgnoreCase) ||
+                 section.SectionId.StartsWith("scope.", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(section.Scope, "Workspace", StringComparison.OrdinalIgnoreCase) ||
+                 (_snapshot != null && FindSettingSectionContribution(_snapshot, section.Scope) != null)))
+            {
+                return CountVisibleContributionsForScope(_snapshot, section.Scope);
+            }
+
+            if (string.Equals(section.SectionId, ThemesSectionId, StringComparison.OrdinalIgnoreCase))
+            {
+                return CountVisibleThemes();
+            }
+
+            if (string.Equals(section.SectionId, KeybindingsSectionId, StringComparison.OrdinalIgnoreCase))
+            {
+                return _showModifiedOnly ? CountModifiedKeybindingRows() : CountVisibleKeybindings();
+            }
+
+            if (string.Equals(section.SectionId, EditorsSectionId, StringComparison.OrdinalIgnoreCase))
+            {
+                return _showModifiedOnly ? 0 : CountVisibleEditors();
+            }
+
+            if (_showModifiedOnly)
+            {
+                return 0;
+            }
+
+            return MatchesSearch(section.SearchText) ? 1 : 0;
+        }
+
+        private int CountVisibleSettingsForIds(params string[] settingIds)
+        {
+            if (settingIds == null || settingIds.Length == 0 || _snapshot == null)
+            {
+                return 0;
+            }
+
+            var count = 0;
+            for (var i = 0; i < settingIds.Length; i++)
+            {
+                var contribution = FindSettingContribution(_snapshot, settingIds[i]);
+                if (contribution != null && IsContributionVisible(contribution))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int CountVisibleContributionsForScope(WorkbenchPresentationSnapshot snapshot, string scope)
+        {
+            if (snapshot == null || string.IsNullOrEmpty(scope))
+            {
+                return 0;
+            }
+
+            var count = 0;
+            for (var i = 0; i < snapshot.Settings.Count; i++)
+            {
+                var contribution = snapshot.Settings[i];
+                if (ShouldRenderContribution(scope, contribution) && IsContributionVisible(contribution))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int CountVisibleSections(SettingsNavigationGroup group)
+        {
+            if (group == null)
+            {
+                return 0;
+            }
+
+            var count = 0;
+            for (var i = 0; i < group.Sections.Count; i++)
+            {
+                if (IsSectionVisible(group.Sections[i]))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int CountVisibleThemes()
+        {
+            if (_snapshot == null)
+            {
+                return 0;
+            }
+
+            if (_showModifiedOnly)
+            {
+                return IsThemeModified() ? 1 : 0;
+            }
+
+            var count = 0;
+            for (var i = 0; i < _snapshot.Themes.Count; i++)
+            {
+                if (MatchesThemeQuery(_snapshot.Themes[i]))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private bool IsThemeModified()
+        {
+            var loadedThemeId = _shellState != null && _shellState.Settings != null
+                ? _shellState.Settings.ThemeId
+                : "cortex.vs-dark";
+            return !string.Equals(loadedThemeId ?? "cortex.vs-dark", _selectedThemeId ?? "cortex.vs-dark", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private int CountVisibleEditors()
+        {
+            if (_snapshot == null)
+            {
+                return 0;
+            }
+
+            var count = 0;
+            for (var i = 0; i < _snapshot.Editors.Count; i++)
+            {
+                if (MatchesEditorQuery(_snapshot.Editors[i]))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int CountVisibleKeybindings()
+        {
+            var definitions = _editorKeybindingService.GetCommandBindings();
+            if (definitions == null)
+            {
+                return 0;
+            }
+
+            var count = 1;
+            for (var i = 0; i < definitions.Count; i++)
+            {
+                if (MatchesKeybindingQuery(definitions[i]))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int CountModifiedKeybindingRows()
+        {
+            var count = 0;
+            if (IsUndoHistoryModified())
+            {
+                count++;
+            }
+
+            var settings = _shellState != null ? _shellState.Settings : null;
+            var definitions = _editorKeybindingService.GetCommandBindings();
+            if (settings == null || definitions == null)
+            {
+                return count;
+            }
+
+            for (var i = 0; i < definitions.Count; i++)
+            {
+                var binding = GetEditableBinding(settings, definitions[i]);
+                var defaultBinding = definitions[i].DefaultBinding;
+                if (binding == null || defaultBinding == null)
+                {
+                    continue;
+                }
+
+                if (IsBindingModified(settings, definitions[i]))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private bool IsUndoHistoryModified()
+        {
+            var undoLimit = GetTextValue("editor.undo.limit", "128");
+            return !string.Equals(undoLimit ?? "128", "128", StringComparison.Ordinal);
+        }
+
+        private bool IsBindingModified(CortexSettings settings, EditorCommandBindingDefinition definition)
+        {
+            if (settings == null || definition == null || definition.DefaultBinding == null)
+            {
+                return false;
+            }
+
+            var binding = GetEditableBinding(settings, definition);
+            if (binding == null)
+            {
+                return false;
+            }
+
+            return !string.Equals(binding.Key ?? string.Empty, definition.DefaultBinding.Key ?? string.Empty, StringComparison.OrdinalIgnoreCase) ||
+                binding.Control != definition.DefaultBinding.Control ||
+                binding.Shift != definition.DefaultBinding.Shift ||
+                binding.Alt != definition.DefaultBinding.Alt;
+        }
+
+        private string BuildSearchSummary(SettingsDocument document)
+        {
+            var visibleSections = 0;
+            var visibleItems = 0;
+            if (document != null)
+            {
+                var orderedSections = GetOrderedSections(document);
+                for (var i = 0; i < orderedSections.Count; i++)
+                {
+                    var section = orderedSections[i];
+                    if (!IsSectionVisible(section))
+                    {
+                        continue;
+                    }
+
+                    visibleSections++;
+                    visibleItems += Mathf.Max(1, GetSectionVisibleItemCount(section));
+                }
+            }
+
+            if (_showModifiedOnly)
+            {
+                return visibleItems.ToString(CultureInfo.InvariantCulture) + " modified item(s) across " +
+                    visibleSections.ToString(CultureInfo.InvariantCulture) + " section(s).";
+            }
+
+            if (IsSearchActive())
+            {
+                return visibleItems.ToString(CultureInfo.InvariantCulture) + " match(es) across " +
+                    visibleSections.ToString(CultureInfo.InvariantCulture) + " section(s).";
+            }
+
+            return visibleSections.ToString(CultureInfo.InvariantCulture) + " section(s) available.";
+        }
+
+        private void DrawActiveSectionBanner(SettingsDocument document, string renderActiveSectionId)
+        {
+            var section = FindSection(document, renderActiveSectionId);
+            if (section == null)
+            {
+                return;
+            }
+
+            CortexIdeLayout.DrawGroup(null, delegate
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
+                GUILayout.Label(section.Title, GUILayout.Height(22f));
+                GUILayout.Label((string.IsNullOrEmpty(section.GroupTitle) ? "Settings" : section.GroupTitle) +
+                    "  |  " +
+                    GetSectionVisibleItemCount(section).ToString(CultureInfo.InvariantCulture) +
+                    " item(s)", GUILayout.ExpandWidth(true));
+                GUILayout.EndVertical();
+                GUILayout.EndHorizontal();
+            }, GUILayout.Height(48f), GUILayout.ExpandWidth(true));
+        }
+
+        private static SettingsSection FindSection(SettingsDocument document, string sectionId)
+        {
+            if (document == null || string.IsNullOrEmpty(sectionId))
+            {
+                return null;
+            }
+
+            var orderedSections = GetOrderedSections(document);
+            for (var i = 0; i < orderedSections.Count; i++)
+            {
+                if (orderedSections[i] != null &&
+                    string.Equals(orderedSections[i].SectionId, sectionId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return orderedSections[i];
+                }
+            }
+
+            return null;
+        }
+
+        private string BuildSectionNavigationLabel(SettingsSection section)
+        {
+            if (section == null)
+            {
+                return string.Empty;
+            }
+
+            var label = section.Title ?? string.Empty;
+            if (IsSearchActive() || _showModifiedOnly)
+            {
+                label += " (" + GetSectionVisibleItemCount(section).ToString(CultureInfo.InvariantCulture) + ")";
+            }
+
+            return label;
         }
 
         private bool MatchesContributionQuery(SettingContribution contribution)
@@ -1703,6 +2708,21 @@ namespace Cortex.Modules.Settings
             }
 
             return MatchesSearch(BuildContributionSearchText(contribution));
+        }
+
+        private bool IsContributionVisible(SettingContribution contribution)
+        {
+            if (contribution == null)
+            {
+                return false;
+            }
+
+            if (_showModifiedOnly && !IsSettingModified(contribution))
+            {
+                return false;
+            }
+
+            return MatchesContributionQuery(contribution);
         }
 
         private bool MatchesThemeQuery(ThemeContribution theme)
@@ -1768,7 +2788,7 @@ namespace Cortex.Modules.Settings
 
         private string GetNormalizedSearchQuery()
         {
-            return (_settingsSearchQuery ?? string.Empty).Trim().ToLowerInvariant();
+            return (_appliedSettingsSearchQuery ?? string.Empty).Trim().ToLowerInvariant();
         }
 
         private void HandleSearchQueryChanged(SettingsDocument document)
@@ -1785,27 +2805,129 @@ namespace Cortex.Modules.Settings
                 return;
             }
 
-            for (var i = 0; i < document.Sections.Count; i++)
+            var orderedSections = GetOrderedSections(document);
+            for (var i = 0; i < orderedSections.Count; i++)
             {
-                if (IsSectionVisible(document.Sections[i]))
+                if (IsSectionVisible(orderedSections[i]))
                 {
-                    _activeSectionId = document.Sections[i].SectionId;
-                    _pendingSectionJumpId = document.Sections[i].SectionId;
+                    _activeSectionId = orderedSections[i].SectionId;
+                    _pendingSectionJumpId = orderedSections[i].SectionId;
                     break;
                 }
             }
         }
 
+        private bool ShouldDefaultGroupExpanded(string groupId)
+        {
+            if (_collapsedNavigationGroups.Contains(groupId))
+            {
+                return false;
+            }
+
+            var serialized = _shellState != null && _shellState.Settings != null
+                ? _shellState.Settings.SettingsCollapsedGroupIds
+                : string.Empty;
+            if (string.IsNullOrEmpty(serialized))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool IsNavigationGroupExpandedForDisplay(SettingsNavigationGroup group, bool storedExpanded, string activeSectionId)
+        {
+            if (!string.IsNullOrEmpty(GetNormalizedSearchQuery()))
+            {
+                return true;
+            }
+
+            return storedExpanded || GetActiveSection(group, activeSectionId) != null;
+        }
+
+        private SettingsSection GetActiveSection(SettingsNavigationGroup group, string activeSectionId)
+        {
+            if (group == null || string.IsNullOrEmpty(activeSectionId))
+            {
+                return null;
+            }
+
+            for (var i = 0; i < group.Sections.Count; i++)
+            {
+                if (group.Sections[i] != null &&
+                    string.Equals(group.Sections[i].SectionId, activeSectionId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return group.Sections[i];
+                }
+            }
+
+            return null;
+        }
+
+        private void RevealActiveNavigationTarget(SettingsDocument document)
+        {
+            var targetId = GetNavigationTargetId(document);
+            if (string.IsNullOrEmpty(targetId))
+            {
+                return;
+            }
+
+            float anchor;
+            if (!_navigationAnchors.TryGetValue(targetId, out anchor))
+            {
+                return;
+            }
+
+            var top = _navigationScroll.y;
+            var bottom = _navigationScroll.y + 220f;
+            if (anchor < top + 28f || anchor > bottom)
+            {
+                _navigationScroll.y = Mathf.Max(0f, anchor - 36f);
+            }
+        }
+
+        private string GetNavigationTargetId(SettingsDocument document)
+        {
+            if (document == null || string.IsNullOrEmpty(_activeSectionId))
+            {
+                return string.Empty;
+            }
+
+            for (var i = 0; i < document.Groups.Count; i++)
+            {
+                var group = document.Groups[i];
+                var activeSection = GetActiveSection(group, _activeSectionId);
+                if (activeSection == null)
+                {
+                    continue;
+                }
+
+                bool expanded;
+                if (!_navigationGroupExpanded.TryGetValue(group.GroupId, out expanded))
+                {
+                    expanded = ShouldDefaultGroupExpanded(group.GroupId);
+                }
+
+                return IsNavigationGroupExpandedForDisplay(group, expanded, _activeSectionId)
+                    ? activeSection.SectionId
+                    : group.GroupId;
+            }
+
+            return string.Empty;
+        }
+
         private void LoadNavigationGroupState(CortexSettings settings)
         {
             var serialized = settings != null ? settings.SettingsCollapsedGroupIds : string.Empty;
-            if (!string.IsNullOrEmpty(serialized))
+            if (string.IsNullOrEmpty(serialized))
             {
-                var parts = serialized.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
-                for (var i = 0; i < parts.Length; i++)
-                {
-                    _collapsedNavigationGroups.Add(parts[i]);
-                }
+                return;
+            }
+
+            var parts = serialized.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            for (var i = 0; i < parts.Length; i++)
+            {
+                _collapsedNavigationGroups.Add(parts[i]);
             }
         }
 
@@ -1832,7 +2954,8 @@ namespace Cortex.Modules.Settings
 
         private void UpdateActiveSection(SettingsDocument document)
         {
-            if (document == null || document.Sections.Count == 0 || _sectionAnchors.Count == 0)
+            var orderedSections = GetOrderedSections(document);
+            if (orderedSections.Count == 0 || _sectionAnchors.Count == 0)
             {
                 return;
             }
@@ -1840,9 +2963,9 @@ namespace Cortex.Modules.Settings
             var threshold = _contentScroll.y + 32f;
             var active = string.Empty;
             var bestAnchor = float.MinValue;
-            for (var i = 0; i < document.Sections.Count; i++)
+            for (var i = 0; i < orderedSections.Count; i++)
             {
-                var section = document.Sections[i];
+                var section = orderedSections[i];
                 if (!IsSectionVisible(section))
                 {
                     continue;
@@ -1867,11 +2990,88 @@ namespace Cortex.Modules.Settings
             }
         }
 
-        private void ApplyPendingSectionJump()
+        private string ResolveRenderActiveSectionId(SettingsDocument document)
+        {
+            var orderedSections = GetOrderedSections(document);
+            if (orderedSections.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            for (var i = 0; i < orderedSections.Count; i++)
+            {
+                var section = orderedSections[i];
+                if (!IsSectionVisible(section))
+                {
+                    continue;
+                }
+
+                if (string.Equals(section.SectionId, _activeSectionId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return _activeSectionId;
+                }
+            }
+
+            for (var i = 0; i < orderedSections.Count; i++)
+            {
+                if (IsSectionVisible(orderedSections[i]))
+                {
+                    return orderedSections[i].SectionId;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private void CommitNavigationInteraction(NavigationInteraction interaction)
+        {
+            if (interaction == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(interaction.ToggledGroupId))
+            {
+                bool expanded;
+                if (!_navigationGroupExpanded.TryGetValue(interaction.ToggledGroupId, out expanded))
+                {
+                    expanded = ShouldDefaultGroupExpanded(interaction.ToggledGroupId);
+                }
+
+                _navigationGroupExpanded[interaction.ToggledGroupId] = !expanded;
+                PersistNavigationGroupState();
+            }
+
+            if (!string.IsNullOrEmpty(interaction.RequestedSectionId))
+            {
+                _activeSectionId = interaction.RequestedSectionId;
+                _pendingSectionJumpId = interaction.RequestedSectionId;
+            }
+        }
+
+        private void FinalizeNavigationState(SettingsDocument document)
+        {
+            if (Event.current == null || Event.current.type != EventType.Repaint)
+            {
+                return;
+            }
+
+            CommitSearchQuery();
+            var jumpedToSection = ApplyPendingSectionJump();
+            if (!jumpedToSection)
+            {
+                UpdateActiveSection(document);
+            }
+
+            RevealActiveNavigationTarget(document);
+            PersistUiState();
+        }
+
+        private bool ApplyPendingSectionJump()
         {
             if (string.IsNullOrEmpty(_pendingSectionJumpId))
             {
-                return;
+                return false;
             }
 
             float anchor;
@@ -1879,7 +3079,40 @@ namespace Cortex.Modules.Settings
             {
                 _contentScroll.y = Mathf.Max(0f, anchor - 8f);
                 _pendingSectionJumpId = string.Empty;
+                return true;
             }
+
+            return false;
+        }
+
+        private void CommitSearchQuery()
+        {
+            var nextQuery = (_settingsSearchQuery ?? string.Empty).Trim();
+            if (string.Equals(_appliedSettingsSearchQuery ?? string.Empty, nextQuery, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _appliedSettingsSearchQuery = nextQuery;
+        }
+
+        private void PersistUiState()
+        {
+            if (_shellState == null)
+            {
+                return;
+            }
+
+            if (_shellState.Settings == null)
+            {
+                _shellState.Settings = new CortexSettings();
+            }
+
+            _shellState.Settings.SettingsActiveSectionId = _activeSectionId ?? string.Empty;
+            _shellState.Settings.SettingsNavigationScrollY = _navigationScroll.y;
+            _shellState.Settings.SettingsContentScrollY = _contentScroll.y;
+            _shellState.Settings.SettingsSearchQuery = _appliedSettingsSearchQuery ?? string.Empty;
+            _shellState.Settings.SettingsShowModifiedOnly = _showModifiedOnly;
         }
 
         private static bool IsThemeSetting(SettingContribution contribution)
@@ -2302,6 +3535,22 @@ namespace Cortex.Modules.Settings
             public readonly List<SettingsNavigationGroup> Groups = new List<SettingsNavigationGroup>();
         }
 
+        private sealed class NavigationInteraction
+        {
+            public string RequestedSectionId;
+            public string ToggledGroupId;
+
+            public void RequestSectionReveal(string sectionId)
+            {
+                RequestedSectionId = sectionId ?? string.Empty;
+            }
+
+            public void ToggleGroup(string groupId)
+            {
+                ToggledGroupId = groupId ?? string.Empty;
+            }
+        }
+
         private sealed class SettingsNavigationGroup
         {
             public readonly string GroupId;
@@ -2322,6 +3571,7 @@ namespace Cortex.Modules.Settings
             public readonly string SectionId;
             public readonly string GroupId;
             public readonly string GroupTitle;
+            public readonly string Scope;
             public readonly string Title;
             public readonly string Description;
             public readonly string SearchText;
@@ -2332,6 +3582,7 @@ namespace Cortex.Modules.Settings
                 string sectionId,
                 string groupId,
                 string groupTitle,
+                string scope,
                 string title,
                 string description,
                 string searchText,
@@ -2341,6 +3592,7 @@ namespace Cortex.Modules.Settings
                 SectionId = sectionId;
                 GroupId = groupId;
                 GroupTitle = groupTitle;
+                Scope = scope;
                 Title = title;
                 Description = description;
                 SearchText = searchText;

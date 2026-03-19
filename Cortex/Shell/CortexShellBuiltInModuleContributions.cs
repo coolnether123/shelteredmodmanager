@@ -482,7 +482,8 @@ namespace Cortex
                     _services != null ? _services.LoadedModCatalog : null,
                     context != null ? context.Snapshot : new WorkbenchPresentationSnapshot(),
                     _services != null ? _services.ThemeState : null,
-                    _services != null ? _services.State : null);
+                    _services != null ? _services.State : null,
+                    context != null ? context.Ui : null);
             }
 
             protected override void CollectMissingDependencies(List<string> missingDependencies)

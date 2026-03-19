@@ -65,7 +65,8 @@ namespace Cortex
                         containerId,
                         snapshot,
                         _commandRegistryAccessor != null ? _commandRegistryAccessor() : null,
-                        _contributionRegistryAccessor != null ? _contributionRegistryAccessor() : null),
+                        _contributionRegistryAccessor != null ? _contributionRegistryAccessor() : null,
+                        CortexUi.DefaultSurface),
                     detachedWindow);
                 return;
             }
