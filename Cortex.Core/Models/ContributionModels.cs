@@ -1,3 +1,5 @@
+using System;
+
 namespace Cortex.Core.Models
 {
     public enum ModuleActivationKind
@@ -41,6 +43,14 @@ namespace Cortex.Core.Models
         MultilineText,
         Choice,
         Secret
+    }
+
+    public enum SettingValidationSeverity
+    {
+        None,
+        Info,
+        Warning,
+        Error
     }
 
     public sealed class ViewContainerContribution
@@ -132,6 +142,12 @@ namespace Cortex.Core.Models
         public string[] Keywords;
         public SettingChoiceOption[] Options;
         public bool IsSecret;
+        public bool IsRequired;
+        public Func<string> ReadValue;
+        public Action<string> WriteValue;
+        public Func<string> ReadDefaultValue;
+        public Func<string, SettingValidationResult> ValidateValue;
+        public SettingActionContribution[] Actions;
         public int SortOrder;
     }
 
@@ -140,6 +156,29 @@ namespace Cortex.Core.Models
         public string Value;
         public string DisplayName;
         public string Description;
+    }
+
+    public sealed class SettingValidationResult
+    {
+        public SettingValidationSeverity Severity;
+        public string Message;
+    }
+
+    public sealed class SettingActionContribution
+    {
+        public string ActionId;
+        public string DisplayName;
+        public string Description;
+        public Action<SettingActionInvocation> Execute;
+    }
+
+    public sealed class SettingActionInvocation
+    {
+        public string SettingId;
+        public string CurrentValue;
+        public string DefaultValue;
+        public Action<string> SetDraftValue;
+        public Action<string> SetStatusMessage;
     }
 
     public sealed class SettingSectionContribution

@@ -148,7 +148,17 @@ namespace Example.CortexPlugin
 
         public void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
         {
-            GUILayout.Label("Hello from Cortex.");
+            if (context != null && context.Ui != null)
+            {
+                context.Ui.DrawSectionPanel("Example", delegate
+                {
+                    GUILayout.Label("Hello from Cortex.");
+                });
+            }
+            else
+            {
+                GUILayout.Label("Hello from Cortex.");
+            }
 
             if (GUILayout.Button("Run Command") &&
                 context.CommandRegistry != null)
@@ -178,8 +188,12 @@ Modules currently receive:
 - `Snapshot`
 - `CommandRegistry`
 - `ContributionRegistry`
+- `Ui`
 
 This is deliberate. The public module API is meant to be workbench-facing, not shell-facing.
+
+`Ui` is the host-owned workbench surface for shared Cortex chrome such as search bars, section headers, property rows, and property-page navigation widgets.
+Prefer it for reusable shell patterns instead of copy/pasting raw IMGUI blocks.
 
 ## Current limits
 
@@ -187,10 +201,12 @@ This is a foundation layer, not a full VS Code extension host.
 
 Current public module contributions should assume:
 
-- rendering is Unity IMGUI-based
+- the current backend implementation is Unity IMGUI-based
 - module UI should be self-contained
 - command execution is the preferred integration path
 - internal shell services are not public plugin contracts yet
+
+For shared module chrome, prefer `context.Ui` over directly reproducing the same `GUILayout` patterns in multiple modules.
 
 That means built-in Cortex modules still have richer internal dependencies than external modules. This is intentional for now. The public API is being kept narrow until those service contracts are ready to be made stable.
 
@@ -201,8 +217,11 @@ When authoring modules and contributions:
 - Prefer commands over direct cross-module calls.
 - Keep container/view registration declarative.
 - Keep module rendering focused on UI and user interaction.
+- Use `context.Ui` for shared workbench patterns and raw IMGUI only for custom widgets.
 - Avoid storing global mutable state inside modules when a command or persisted setting can represent it.
 - Treat `WorkbenchPluginContext` as the composition boundary, not as a place to hide runtime logic.
+
+Full UI-surface guidance and examples live in [Cortex_UI_Surface_Guide.md](/D:/Projects/_Archived/Sheltered%20Modding/shelteredmodmanager/documentation/Cortex_UI_Surface_Guide.md).
 
 ## Registering settings
 
@@ -212,7 +231,8 @@ Recommended pattern:
 
 1. Register one section with `RegisterSettingSection(...)`
 2. Register one or more settings under the same `Scope`
-3. Let Cortex build the property-page grouping, left-nav anchors, search indexing, and editor controls
+3. Use callback-backed settings when your module owns persistence or validation
+4. Let Cortex build the property-page grouping, left-nav anchors, search indexing, validation chrome, and per-setting gear actions
 
 Full guidance and examples live in [Cortex_Settings_Authoring_Guide.md](/D:/Projects/_Archived/Sheltered%20Modding/shelteredmodmanager/documentation/Cortex_Settings_Authoring_Guide.md).
 

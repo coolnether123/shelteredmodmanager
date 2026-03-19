@@ -3,6 +3,13 @@ using System;
 namespace Cortex.Core.Models
 {
     [Serializable]
+    public sealed class ModuleSettingValue
+    {
+        public string SettingId;
+        public string Value;
+    }
+
+    [Serializable]
     public sealed class CortexSettings
     {
         public string WorkspaceRootPath;
@@ -58,6 +65,12 @@ namespace Cortex.Core.Models
         public float WindowWidth;
         public float WindowHeight;
         public string SettingsCollapsedGroupIds;
+        public string SettingsActiveSectionId;
+        public float SettingsNavigationScrollY;
+        public float SettingsContentScrollY;
+        public string SettingsSearchQuery;
+        public bool SettingsShowModifiedOnly;
+        public ModuleSettingValue[] ModuleSettings;
 
         public CortexSettings()
         {
@@ -114,6 +127,12 @@ namespace Cortex.Core.Models
             WindowWidth = 1180f;
             WindowHeight = 760f;
             SettingsCollapsedGroupIds = string.Empty;
+            SettingsActiveSectionId = string.Empty;
+            SettingsNavigationScrollY = 0f;
+            SettingsContentScrollY = 0f;
+            SettingsSearchQuery = string.Empty;
+            SettingsShowModifiedOnly = false;
+            ModuleSettings = new ModuleSettingValue[0];
         }
     }
 }

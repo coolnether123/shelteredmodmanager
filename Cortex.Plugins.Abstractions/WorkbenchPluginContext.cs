@@ -1,3 +1,4 @@
+using System;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 
@@ -414,7 +415,13 @@ namespace Cortex.Plugins.Abstractions
             string helpText,
             string[] keywords,
             SettingChoiceOption[] options,
-            bool isSecret)
+            bool isSecret,
+            bool isRequired = false,
+            Func<string> readValue = null,
+            Action<string> writeValue = null,
+            Func<string> readDefaultValue = null,
+            Func<string, SettingValidationResult> validateValue = null,
+            SettingActionContribution[] actions = null)
         {
             RegisterSetting(new SettingContribution
             {
@@ -430,6 +437,12 @@ namespace Cortex.Plugins.Abstractions
                 Keywords = keywords ?? new string[0],
                 Options = options ?? new SettingChoiceOption[0],
                 IsSecret = isSecret,
+                IsRequired = isRequired,
+                ReadValue = readValue,
+                WriteValue = writeValue,
+                ReadDefaultValue = readDefaultValue,
+                ValidateValue = validateValue,
+                Actions = actions ?? new SettingActionContribution[0],
                 SortOrder = sortOrder
             });
         }

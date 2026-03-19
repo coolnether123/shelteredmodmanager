@@ -91,16 +91,19 @@ namespace Cortex.Plugins.Abstractions
         /// <param name="snapshot">The current workbench presentation snapshot.</param>
         /// <param name="commandRegistry">The workbench command registry.</param>
         /// <param name="contributionRegistry">The declarative workbench contribution registry.</param>
+        /// <param name="ui">The host-owned UI surface for shared workbench controls.</param>
         public WorkbenchModuleRenderContext(
             string containerId,
             WorkbenchPresentationSnapshot snapshot,
             ICommandRegistry commandRegistry,
-            IContributionRegistry contributionRegistry)
+            IContributionRegistry contributionRegistry,
+            IWorkbenchUiSurface ui)
         {
             ContainerId = containerId ?? string.Empty;
             Snapshot = snapshot ?? new WorkbenchPresentationSnapshot();
             CommandRegistry = commandRegistry;
             ContributionRegistry = contributionRegistry;
+            Ui = ui;
         }
 
         /// <summary>
@@ -122,5 +125,10 @@ namespace Cortex.Plugins.Abstractions
         /// Gets the declarative contribution registry available to the module.
         /// </summary>
         public IContributionRegistry ContributionRegistry { get; private set; }
+
+        /// <summary>
+        /// Gets the host-owned UI surface for shared workbench controls.
+        /// </summary>
+        public IWorkbenchUiSurface Ui { get; private set; }
     }
 }
