@@ -1,4 +1,4 @@
-namespace Cortex.Shell
+namespace Cortex
 {
     internal sealed class PendingLanguageHoverRequest
     {

@@ -2,7 +2,7 @@ using System;
 using Cortex.Core.Models;
 using Cortex.Host.Unity.Runtime;
 
-namespace Cortex.Shell
+namespace Cortex
 {
     internal sealed class CortexShellLayoutContext
     {

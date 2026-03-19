@@ -14,6 +14,7 @@ namespace Cortex.Core.Services
         private readonly Dictionary<string, StatusItemContribution> _statusItems;
         private readonly Dictionary<string, ThemeContribution> _themes;
         private readonly Dictionary<string, IconContribution> _icons;
+        private readonly Dictionary<string, SettingSectionContribution> _settingSections;
         private readonly Dictionary<string, SettingContribution> _settings;
 
         public ContributionRegistry()
@@ -25,6 +26,7 @@ namespace Cortex.Core.Services
             _statusItems = new Dictionary<string, StatusItemContribution>(StringComparer.OrdinalIgnoreCase);
             _themes = new Dictionary<string, ThemeContribution>(StringComparer.OrdinalIgnoreCase);
             _icons = new Dictionary<string, IconContribution>(StringComparer.OrdinalIgnoreCase);
+            _settingSections = new Dictionary<string, SettingSectionContribution>(StringComparer.OrdinalIgnoreCase);
             _settings = new Dictionary<string, SettingContribution>(StringComparer.OrdinalIgnoreCase);
         }
 
@@ -132,6 +134,16 @@ namespace Cortex.Core.Services
             }
 
             _settings[contribution.SettingId] = contribution;
+        }
+
+        public void RegisterSettingSection(SettingSectionContribution contribution)
+        {
+            if (contribution == null || string.IsNullOrEmpty(contribution.Scope))
+            {
+                return;
+            }
+
+            _settingSections[contribution.Scope] = contribution;
         }
 
         public IList<ViewContainerContribution> GetViewContainers()
@@ -243,6 +255,19 @@ namespace Cortex.Core.Services
                 return order != 0
                     ? order
                     : string.Compare(left.IconId, right.IconId, StringComparison.OrdinalIgnoreCase);
+            });
+            return results;
+        }
+
+        public IList<SettingSectionContribution> GetSettingSections()
+        {
+            var results = new List<SettingSectionContribution>(_settingSections.Values);
+            results.Sort(delegate(SettingSectionContribution left, SettingSectionContribution right)
+            {
+                var order = left.SortOrder.CompareTo(right.SortOrder);
+                return order != 0
+                    ? order
+                    : string.Compare(left.SectionTitle, right.SectionTitle, StringComparison.OrdinalIgnoreCase);
             });
             return results;
         }

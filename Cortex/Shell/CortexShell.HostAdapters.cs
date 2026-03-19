@@ -4,56 +4,56 @@ using UnityEngine;
 namespace Cortex
 {
     public sealed partial class CortexShell :
-        Shell.ICortexShellLifecycleHost
+        ICortexShellLifecycleHost
     {
-        GameObject Shell.ICortexShellLifecycleHost.ShellGameObject
+        GameObject ICortexShellLifecycleHost.ShellGameObject
         {
             get { return gameObject; }
         }
 
-        bool Shell.ICortexShellLifecycleHost.ReloadSettingsRequested
+        bool ICortexShellLifecycleHost.ReloadSettingsRequested
         {
             get { return _state.ReloadSettingsRequested; }
         }
 
-        string Shell.ICortexShellLifecycleHost.RequestedContainerId
+        string ICortexShellLifecycleHost.RequestedContainerId
         {
             get { return _state.Workbench.RequestedContainerId; }
             set { _state.Workbench.RequestedContainerId = value; }
         }
 
-        int Shell.ICortexShellLifecycleHost.RequestedTabIndex
+        int ICortexShellLifecycleHost.RequestedTabIndex
         {
             get { return _state.Workbench.RequestedTabIndex; }
             set { _state.Workbench.RequestedTabIndex = value; }
         }
 
-        void Shell.ICortexShellLifecycleHost.InitializeSettingsAndServices() { InitializeSettingsAndServices(); }
-        void Shell.ICortexShellLifecycleHost.RestoreWorkbenchSession() { RestoreWorkbenchSession(); }
-        void Shell.ICortexShellLifecycleHost.InitializeWorkbenchRuntime() { InitializeWorkbenchRuntime(); }
-        void Shell.ICortexShellLifecycleHost.RegisterCommandHandlers() { RegisterCommandHandlers(); }
-        void Shell.ICortexShellLifecycleHost.RegisterToggleAction() { RegisterToggleAction(); }
-        void Shell.ICortexShellLifecycleHost.ReleaseOverlayInputCapture() { ReleaseOverlayInputCapture(); }
-        void Shell.ICortexShellLifecycleHost.ShutdownLanguageService() { ShutdownLanguageService(); }
-        void Shell.ICortexShellLifecycleHost.ShutdownCompletionAugmentation() { ShutdownCompletionAugmentation(); }
-        void Shell.ICortexShellLifecycleHost.DisableMmLogRuntimeIntegration() { DisableMmLogRuntimeIntegration(); }
-        void Shell.ICortexShellLifecycleHost.PersistWorkbenchSession() { PersistWorkbenchSession(); }
-        void Shell.ICortexShellLifecycleHost.PersistWindowSettings() { PersistWindowSettings(); }
+        void ICortexShellLifecycleHost.InitializeSettingsAndServices() { InitializeSettingsAndServices(); }
+        void ICortexShellLifecycleHost.RestoreWorkbenchSession() { RestoreWorkbenchSession(); }
+        void ICortexShellLifecycleHost.InitializeWorkbenchRuntime() { InitializeWorkbenchRuntime(); }
+        void ICortexShellLifecycleHost.RegisterCommandHandlers() { RegisterCommandHandlers(); }
+        void ICortexShellLifecycleHost.RegisterToggleAction() { RegisterToggleAction(); }
+        void ICortexShellLifecycleHost.ReleaseOverlayInputCapture() { ReleaseOverlayInputCapture(); }
+        void ICortexShellLifecycleHost.ShutdownLanguageService() { ShutdownLanguageService(); }
+        void ICortexShellLifecycleHost.ShutdownCompletionAugmentation() { ShutdownCompletionAugmentation(); }
+        void ICortexShellLifecycleHost.DisableMmLogRuntimeIntegration() { DisableMmLogRuntimeIntegration(); }
+        void ICortexShellLifecycleHost.PersistWorkbenchSession() { PersistWorkbenchSession(); }
+        void ICortexShellLifecycleHost.PersistWindowSettings() { PersistWindowSettings(); }
 
-        bool Shell.ICortexShellLifecycleHost.IsToggleActionPressed()
+        bool ICortexShellLifecycleHost.IsToggleActionPressed()
         {
             return InputActionRegistry.IsDown(ToggleActionId);
         }
 
-        void Shell.ICortexShellLifecycleHost.ExecuteShellToggle()
+        void ICortexShellLifecycleHost.ExecuteShellToggle()
         {
             ExecuteCommand("cortex.shell.toggle", null);
         }
 
-        void Shell.ICortexShellLifecycleHost.ApplySettingsChanges() { ApplySettingsChanges(); }
-        void Shell.ICortexShellLifecycleHost.UpdateLanguageService() { UpdateLanguageService(); }
-        void Shell.ICortexShellLifecycleHost.ActivateContainer(string containerId) { ActivateContainer(containerId); }
-        string Shell.ICortexShellLifecycleHost.MapLegacyTabIndex(int index) { return MapLegacyTabIndex(index); }
-        void Shell.ICortexShellLifecycleHost.RenderVisibleShell() { RenderVisibleShell(); }
+        void ICortexShellLifecycleHost.ApplySettingsChanges() { ApplySettingsChanges(); }
+        void ICortexShellLifecycleHost.UpdateLanguageService() { UpdateLanguageService(); }
+        void ICortexShellLifecycleHost.ActivateContainer(string containerId) { ActivateContainer(containerId); }
+        string ICortexShellLifecycleHost.MapLegacyTabIndex(int index) { return MapLegacyTabIndex(index); }
+        void ICortexShellLifecycleHost.RenderVisibleShell() { RenderVisibleShell(); }
     }
 }

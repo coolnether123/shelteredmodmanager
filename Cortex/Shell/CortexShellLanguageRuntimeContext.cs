@@ -4,7 +4,7 @@ using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
 using Cortex.Services;
 
-namespace Cortex.Shell
+namespace Cortex
 {
     internal sealed class CortexShellLanguageRuntimeContext
     {

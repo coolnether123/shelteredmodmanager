@@ -4,7 +4,7 @@ using Cortex.Core.Models;
 using Cortex.Host.Unity.Runtime;
 using Cortex.Presentation.Models;
 
-namespace Cortex.Shell
+namespace Cortex
 {
     internal sealed class CortexShellLayoutHostRouter
     {

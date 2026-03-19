@@ -5,7 +5,7 @@ using Cortex.LanguageService.Protocol;
 using Cortex.Services;
 using ModAPI.Core;
 
-namespace Cortex.Shell
+namespace Cortex
 {
     internal sealed class CortexShellLanguageRequestDispatcher
     {

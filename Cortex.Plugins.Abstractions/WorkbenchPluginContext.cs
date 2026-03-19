@@ -314,6 +314,46 @@ namespace Cortex.Plugins.Abstractions
         }
 
         /// <summary>
+        /// Registers section metadata for a settings scope.
+        /// </summary>
+        /// <param name="contribution">The settings section contribution.</param>
+        public void RegisterSettingSection(SettingSectionContribution contribution)
+        {
+            if (ContributionRegistry == null || contribution == null)
+            {
+                return;
+            }
+
+            ContributionRegistry.RegisterSettingSection(contribution);
+        }
+
+        /// <summary>
+        /// Registers section metadata for a settings scope using common fields.
+        /// </summary>
+        public void RegisterSettingSection(
+            string scope,
+            string groupId,
+            string groupTitle,
+            string sectionId,
+            string sectionTitle,
+            string description,
+            string[] keywords,
+            int sortOrder)
+        {
+            RegisterSettingSection(new SettingSectionContribution
+            {
+                Scope = scope,
+                GroupId = groupId,
+                GroupTitle = groupTitle,
+                SectionId = sectionId,
+                SectionTitle = sectionTitle,
+                Description = description,
+                Keywords = keywords ?? new string[0],
+                SortOrder = sortOrder
+            });
+        }
+
+        /// <summary>
         /// Registers a settings contribution.
         /// </summary>
         /// <param name="contribution">The setting contribution.</param>
@@ -354,6 +394,42 @@ namespace Cortex.Plugins.Abstractions
                 Scope = scope,
                 DefaultValue = defaultValue,
                 ValueKind = valueKind,
+                SortOrder = sortOrder
+            });
+        }
+
+        /// <summary>
+        /// Registers a setting using extended metadata so Cortex can build groups, search, and editors automatically.
+        /// </summary>
+        public void RegisterSetting(
+            string settingId,
+            string displayName,
+            string description,
+            string scope,
+            string defaultValue,
+            SettingValueKind valueKind,
+            int sortOrder,
+            SettingEditorKind editorKind,
+            string placeholderText,
+            string helpText,
+            string[] keywords,
+            SettingChoiceOption[] options,
+            bool isSecret)
+        {
+            RegisterSetting(new SettingContribution
+            {
+                SettingId = settingId,
+                DisplayName = displayName,
+                Description = description,
+                Scope = scope,
+                DefaultValue = defaultValue,
+                ValueKind = valueKind,
+                EditorKind = editorKind,
+                PlaceholderText = placeholderText,
+                HelpText = helpText,
+                Keywords = keywords ?? new string[0],
+                Options = options ?? new SettingChoiceOption[0],
+                IsSecret = isSecret,
                 SortOrder = sortOrder
             });
         }

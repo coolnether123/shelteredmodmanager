@@ -33,6 +33,16 @@ namespace Cortex.Core.Models
         Boolean
     }
 
+    public enum SettingEditorKind
+    {
+        Auto,
+        Text,
+        Path,
+        MultilineText,
+        Choice,
+        Secret
+    }
+
     public sealed class ViewContainerContribution
     {
         public string ContainerId;
@@ -116,6 +126,31 @@ namespace Cortex.Core.Models
         public string Scope;
         public string DefaultValue;
         public SettingValueKind ValueKind;
+        public SettingEditorKind EditorKind;
+        public string PlaceholderText;
+        public string HelpText;
+        public string[] Keywords;
+        public SettingChoiceOption[] Options;
+        public bool IsSecret;
+        public int SortOrder;
+    }
+
+    public sealed class SettingChoiceOption
+    {
+        public string Value;
+        public string DisplayName;
+        public string Description;
+    }
+
+    public sealed class SettingSectionContribution
+    {
+        public string Scope;
+        public string GroupId;
+        public string GroupTitle;
+        public string SectionId;
+        public string SectionTitle;
+        public string Description;
+        public string[] Keywords;
         public int SortOrder;
     }
 }

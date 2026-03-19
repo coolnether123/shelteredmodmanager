@@ -7,7 +7,7 @@ using Cortex.Services;
 using GameModding.Shared.Serialization;
 using ModAPI.Core;
 
-namespace Cortex.Shell
+namespace Cortex
 {
     internal sealed class CortexShellLanguageResponseProcessor
     {

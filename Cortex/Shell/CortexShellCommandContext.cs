@@ -4,7 +4,7 @@ using Cortex.Core.Models;
 using Cortex.Host.Unity.Runtime;
 using Cortex.Modules.Editor;
 
-namespace Cortex.Shell
+namespace Cortex
 {
     internal sealed class CortexShellCommandContext
     {

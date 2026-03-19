@@ -4,7 +4,7 @@ using Cortex.Modules.Editor;
 using Cortex.Modules.Shared;
 using UnityEngine;
 
-namespace Cortex.Shell
+namespace Cortex
 {
     internal sealed class CortexShellCommandRouter
     {

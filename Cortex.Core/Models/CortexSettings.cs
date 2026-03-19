@@ -57,6 +57,7 @@ namespace Cortex.Core.Models
         public float WindowY;
         public float WindowWidth;
         public float WindowHeight;
+        public string SettingsCollapsedGroupIds;
 
         public CortexSettings()
         {
@@ -112,6 +113,7 @@ namespace Cortex.Core.Models
             WindowY = 70f;
             WindowWidth = 1180f;
             WindowHeight = 760f;
+            SettingsCollapsedGroupIds = string.Empty;
         }
     }
 }
