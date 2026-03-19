@@ -204,6 +204,18 @@ When authoring modules and contributions:
 - Avoid storing global mutable state inside modules when a command or persisted setting can represent it.
 - Treat `WorkbenchPluginContext` as the composition boundary, not as a place to hide runtime logic.
 
+## Registering settings
+
+Modules can also contribute settings metadata through `WorkbenchPluginContext`.
+
+Recommended pattern:
+
+1. Register one section with `RegisterSettingSection(...)`
+2. Register one or more settings under the same `Scope`
+3. Let Cortex build the property-page grouping, left-nav anchors, search indexing, and editor controls
+
+Full guidance and examples live in [Cortex_Settings_Authoring_Guide.md](/D:/Projects/_Archived/Sheltered%20Modding/shelteredmodmanager/documentation/Cortex_Settings_Authoring_Guide.md).
+
 ## Legacy plugin interface
 
 `IWorkbenchPlugin` is still supported for compatibility:

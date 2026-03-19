@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Cortex.Shell
+namespace Cortex
 {
     internal sealed class CortexShellModuleActivationService
     {

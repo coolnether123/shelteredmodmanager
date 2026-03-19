@@ -12,7 +12,7 @@ using Cortex.Modules.Settings;
 using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
 
-namespace Cortex.Shell
+namespace Cortex
 {
     internal sealed class CortexShellBuiltInModuleRegistrar
     {

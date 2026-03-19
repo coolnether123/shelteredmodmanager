@@ -4,7 +4,6 @@ using Cortex.Chrome;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
 using Cortex.Presentation.Models;
-using Cortex.Shell;
 using UnityEngine;
 
 namespace Cortex

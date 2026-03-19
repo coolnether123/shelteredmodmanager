@@ -161,6 +161,12 @@ namespace Cortex.Presentation.Services
                 snapshot.Editors.Add(editors[i]);
             }
 
+            IList<SettingSectionContribution> settingSections = contributionRegistry.GetSettingSections();
+            for (var i = 0; i < settingSections.Count; i++)
+            {
+                snapshot.SettingSections.Add(settingSections[i]);
+            }
+
             IList<SettingContribution> settings = contributionRegistry.GetSettings();
             for (var i = 0; i < settings.Count; i++)
             {

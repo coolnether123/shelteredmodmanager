@@ -9,7 +9,6 @@ using Cortex.Core.Services;
 using Cortex.Host.Unity.Runtime;
 using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
-using Cortex.Shell;
 using Cortex.Services;
 using ModAPI.Core;
 using ModAPI.InputActions;

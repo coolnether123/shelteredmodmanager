@@ -78,6 +78,7 @@ namespace Cortex.Presentation.Models
         public readonly List<StatusItemContribution> RightStatusItems;
         public readonly List<ThemeContribution> Themes;
         public readonly List<EditorContribution> Editors;
+        public readonly List<SettingSectionContribution> SettingSections;
         public readonly List<SettingContribution> Settings;
         public readonly ThemeTokenSet ThemeTokens;
         public string ActiveContainerId;
@@ -94,6 +95,7 @@ namespace Cortex.Presentation.Models
             RightStatusItems = new List<StatusItemContribution>();
             Themes = new List<ThemeContribution>();
             Editors = new List<EditorContribution>();
+            SettingSections = new List<SettingSectionContribution>();
             Settings = new List<SettingContribution>();
             ThemeTokens = new ThemeTokenSet();
             ActiveContainerId = string.Empty;

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Cortex.Plugins.Abstractions;
 
-namespace Cortex.Shell
+namespace Cortex
 {
     internal sealed class CortexShellModuleContributionRegistry : IWorkbenchModuleRegistry
     {

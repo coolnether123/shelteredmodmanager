@@ -4,7 +4,7 @@ using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
 using UnityEngine;
 
-namespace Cortex.Shell
+namespace Cortex
 {
     internal sealed class CortexShellModuleRenderService
     {

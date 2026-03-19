@@ -4,7 +4,6 @@ using System.IO;
 using Cortex.Core.Models;
 using Cortex.Modules.Editor;
 using Cortex.Modules.Shared;
-using Cortex.Shell;
 using UnityEngine;
 
 namespace Cortex

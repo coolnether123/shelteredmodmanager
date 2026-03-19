@@ -2,7 +2,7 @@ using System;
 using ModAPI.Core;
 using UnityEngine;
 
-namespace Cortex.Shell
+namespace Cortex
 {
     internal interface ICortexShellLifecycleHost
     {

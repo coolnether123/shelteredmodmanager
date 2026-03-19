@@ -22,6 +22,7 @@ namespace Cortex.Core.Abstractions
         void RegisterStatusItem(StatusItemContribution contribution);
         void RegisterTheme(ThemeContribution contribution);
         void RegisterIcon(IconContribution contribution);
+        void RegisterSettingSection(SettingSectionContribution contribution);
         void RegisterSetting(SettingContribution contribution);
 
         IList<ViewContainerContribution> GetViewContainers();
@@ -31,6 +32,7 @@ namespace Cortex.Core.Abstractions
         IList<StatusItemContribution> GetStatusItems();
         IList<ThemeContribution> GetThemes();
         IList<IconContribution> GetIcons();
+        IList<SettingSectionContribution> GetSettingSections();
         IList<SettingContribution> GetSettings();
     }
 

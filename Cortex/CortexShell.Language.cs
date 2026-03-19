@@ -9,7 +9,6 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
-using Cortex.Shell;
 using Cortex.Services;
 using ModAPI.Core;
 
