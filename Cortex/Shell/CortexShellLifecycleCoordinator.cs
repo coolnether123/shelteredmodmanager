@@ -1,5 +1,4 @@
 using System;
-using ModAPI.Core;
 using UnityEngine;
 
 namespace Cortex
@@ -19,7 +18,7 @@ namespace Cortex
         void ReleaseOverlayInputCapture();
         void ShutdownLanguageService();
         void ShutdownCompletionAugmentation();
-        void DisableMmLogRuntimeIntegration();
+        void DisableRuntimeLogIntegration();
         void PersistWorkbenchSession();
         void PersistWindowSettings();
         bool IsToggleActionPressed();
@@ -74,7 +73,7 @@ namespace Cortex
             host.ReleaseOverlayInputCapture();
             host.ShutdownLanguageService();
             host.ShutdownCompletionAugmentation();
-            host.DisableMmLogRuntimeIntegration();
+            host.DisableRuntimeLogIntegration();
             host.PersistWorkbenchSession();
             host.PersistWindowSettings();
         }

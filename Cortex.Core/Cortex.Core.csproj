@@ -38,6 +38,7 @@
   <ItemGroup>
     <Compile Include="Abstractions\EditorInterfaces.cs" />
     <Compile Include="Abstractions\Interfaces.cs" />
+    <Compile Include="Abstractions\PlatformInterfaces.cs" />
     <Compile Include="Abstractions\WorkbenchInterfaces.cs" />
     <Compile Include="Diagnostics\CortexLog.cs" />
     <Compile Include="Models\CommandModels.cs" />

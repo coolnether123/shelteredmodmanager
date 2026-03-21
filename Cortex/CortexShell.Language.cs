@@ -10,8 +10,6 @@ using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
 using Cortex.Services;
-using ModAPI.Core;
-
 namespace Cortex
 {
     public sealed partial class CortexShell

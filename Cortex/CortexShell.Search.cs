@@ -1,7 +1,5 @@
 using System;
 using Cortex.Core.Models;
-using ModAPI.Core;
-
 namespace Cortex
 {
     public sealed partial class CortexShell

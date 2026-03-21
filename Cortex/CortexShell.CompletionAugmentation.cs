@@ -4,7 +4,6 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
 using Cortex.Services;
-using ModAPI.Core;
 
 namespace Cortex
 {

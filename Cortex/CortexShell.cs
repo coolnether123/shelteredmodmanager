@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Cortex.Adapters;
 using Cortex.Chrome;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
@@ -11,8 +10,6 @@ using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
 using Cortex.Shell;
 using Cortex.Services;
-using ModAPI.Core;
-using ModAPI.InputActions;
 using UnityEngine;
 
 namespace Cortex
@@ -20,7 +17,6 @@ namespace Cortex
     public sealed partial class CortexShell : MonoBehaviour
     {
         private const string ToggleActionId = "cortex.toggle";
-        private const KeyCode ToggleKey = KeyCode.F8;
         private const int MainWindowId = 0xC07E;
         private const int LogsWindowId = 0xC07F;
         private const int OnboardingWindowId = 0xC080;
@@ -53,6 +49,7 @@ namespace Cortex
         private IRuntimeToolBridge _runtimeToolBridge;
         private IRestartCoordinator _restartCoordinator;
         private IOverlayInputCaptureService _overlayInputCaptureService;
+        private ICortexPlatformModule _platformModule;
         private ITextSearchService _textSearchService;
         private CortexNavigationService _navigationService;
         private IWorkbenchRuntime _workbenchRuntime;
@@ -315,10 +312,14 @@ namespace Cortex
             }
         }
 
-        public void ConfigureHostServices(IPathInteractionService pathInteractionService, IWorkbenchRuntimeFactory workbenchRuntimeFactory)
+        public void ConfigureHostServices(
+            IPathInteractionService pathInteractionService,
+            IWorkbenchRuntimeFactory workbenchRuntimeFactory,
+            ICortexPlatformModule platformModule)
         {
             _pathInteractionService = pathInteractionService;
             _workbenchRuntimeFactory = workbenchRuntimeFactory;
+            _platformModule = platformModule ?? NullCortexPlatformModule.Instance;
         }
 
         private void RegisterExternalWorkbenchPlugins()
@@ -361,26 +362,19 @@ namespace Cortex
                 ", LanguageServiceEnabled=" + (settings != null && settings.EnableRoslynLanguageService) +
                 ", CompletionProvider=" + (settings != null ? settings.CompletionAugmentationProviderId ?? string.Empty : string.Empty) + ".");
 
-            var existingFeed = _runtimeLogFeed as MmLogRuntimeLogFeed;
-            if (existingFeed != null)
-            {
-                existingFeed.Detach();
-            }
-
             var projectCatalogPath = string.IsNullOrEmpty(settings.ProjectCatalogPath)
                 ? Path.Combine(smmBin, "cortex_projects.json")
                 : settings.ProjectCatalogPath;
 
-            var decompilerPath = string.IsNullOrEmpty(settings.DecompilerPathOverride)
-                ? new ModAPI.Inspector.ExternalProcessManager().ResolveDecompilerPath()
-                : settings.DecompilerPathOverride;
+            var platformModule = _platformModule ?? NullCortexPlatformModule.Instance;
+            var decompilerPath = platformModule.ResolveDecompilerPath(settings.DecompilerPathOverride);
 
             MMLog.WriteDebug("[Cortex] Service inputs resolved. ProjectCatalogPath=" + projectCatalogPath +
                 ", DecompilerPath=" + decompilerPath +
                 ", DecompilerCachePath=" + (settings != null ? settings.DecompilerCachePath ?? string.Empty : string.Empty) + ".");
 
             _projectCatalog = new ProjectCatalog(new JsonProjectConfigurationStore(projectCatalogPath));
-            _loadedModCatalog = new ModApiLoadedModCatalog();
+            _loadedModCatalog = platformModule.LoadedModCatalog;
             _sourceLookupIndex = new SourceLookupIndexService();
             _projectWorkspaceService = new ProjectWorkspaceService(_sourceLookupIndex);
             _workspaceBrowserService = new WorkspaceBrowserService(_sourceLookupIndex);
@@ -391,17 +385,15 @@ namespace Cortex
             _buildExecutor = new ProcessBuildExecutor();
             _sourcePathResolver = new SourcePathResolver(_sourceLookupIndex);
             _sourceReferenceService = new SourceReferenceService(new DecompilerCliClient(decompilerPath, settings.DecompilerCachePath, 15000));
-            var runtimeLogFeed = new MmLogRuntimeLogFeed();
-            runtimeLogFeed.Attach();
-            _runtimeLogFeed = runtimeLogFeed;
-            _runtimeSourceNavigationService = new RuntimeSourceNavigationService(new ModApiRuntimeSymbolResolver(_sourcePathResolver), _sourcePathResolver);
-            _runtimeToolBridge = new ModApiRuntimeToolBridge();
-            _restartCoordinator = new ModApiRestartCoordinator(new RestartRequestWriter());
+            _runtimeLogFeed = platformModule.RuntimeLogFeed;
+            _runtimeSourceNavigationService = platformModule.CreateRuntimeSourceNavigationService(_sourcePathResolver);
+            _runtimeToolBridge = platformModule.RuntimeToolBridge;
+            _restartCoordinator = platformModule.RestartCoordinator;
+            _overlayInputCaptureService = platformModule.OverlayInputCaptureService;
             _textSearchService = new TextSearchService();
             _navigationService = new CortexNavigationService(_documentService, _sourceReferenceService, _runtimeSourceNavigationService, _sourceLookupIndex);
-            _overlayInputCaptureService = null;
             InitializeLanguageService(smmBin, settings);
-            EnableMmLogRuntimeIntegration();
+            EnableRuntimeLogIntegration();
         }
 
         private void UpdateOverlayInputCapture(Event currentEvent)
@@ -469,23 +461,6 @@ namespace Cortex
 
         private IOverlayInputCaptureService ResolveOverlayInputCaptureService()
         {
-            if (_overlayInputCaptureService != null)
-            {
-                return _overlayInputCaptureService;
-            }
-
-            if (!ModAPIRegistry.IsAPIRegistered(OverlayInputCaptureApi.Name))
-            {
-                return null;
-            }
-
-            IOverlayInputCaptureService captureService;
-            if (!ModAPIRegistry.TryGetAPI<IOverlayInputCaptureService>(OverlayInputCaptureApi.Name, out captureService))
-            {
-                return null;
-            }
-
-            _overlayInputCaptureService = captureService;
             return _overlayInputCaptureService;
         }
 
@@ -802,20 +777,14 @@ namespace Cortex
             _state.Chrome.Main.ExpandedRect = _windowRect;
         }
 
-        private static void EnableMmLogRuntimeIntegration()
+        private void EnableRuntimeLogIntegration()
         {
-            ModAPI.Core.MMLog.ConfigureRuntimeIntegration(MMLogRuntimeOptions.CortexDefaults());
+            (_platformModule ?? NullCortexPlatformModule.Instance).ConfigureRuntimeLogging(true);
         }
 
-        private void DisableMmLogRuntimeIntegration()
+        private void DisableRuntimeLogIntegration()
         {
-            var runtimeLogFeed = _runtimeLogFeed as MmLogRuntimeLogFeed;
-            if (runtimeLogFeed != null)
-            {
-                runtimeLogFeed.Detach();
-            }
-
-            ModAPI.Core.MMLog.ConfigureRuntimeIntegration(MMLogRuntimeOptions.Disabled());
+            (_platformModule ?? NullCortexPlatformModule.Instance).ConfigureRuntimeLogging(false);
         }
 
         private void EnsureStyles(ThemeTokenSet themeTokens, string themeId)
@@ -1015,17 +984,9 @@ namespace Cortex
             windowRect.height = localRect.height;
         }
 
-        private static void RegisterToggleAction()
+        private void RegisterToggleAction()
         {
-            if (!InputActionRegistry.IsRegistered(ToggleActionId))
-            {
-                InputActionRegistry.Register(new ModInputAction(
-                    ToggleActionId,
-                    "Toggle Cortex",
-                    "Cortex",
-                    new InputBinding(ToggleKey, KeyCode.None),
-                    "Open or close the Cortex IDE shell."));
-            }
+            (_platformModule ?? NullCortexPlatformModule.Instance).EnsureShellToggleRegistered(ToggleActionId);
         }
 
         private void ActivateContainer(string containerId)

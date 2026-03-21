@@ -1,5 +1,6 @@
 using System;
 using Cortex.Core.Diagnostics;
+using Cortex.Platform.ModAPI.Runtime;
 using ModAPI.Core;
 using UnityEngine;
 
@@ -29,7 +30,7 @@ namespace Cortex.Host.Unity.Runtime
                 var shellRoot = new GameObject("Cortex.Shell");
                 UnityEngine.Object.DontDestroyOnLoad(shellRoot);
                 var shell = shellRoot.AddComponent<CortexShell>();
-                shell.ConfigureHostServices(new WindowsPathInteractionService(), new UnityWorkbenchRuntimeFactory());
+                shell.ConfigureHostServices(new WindowsPathInteractionService(), new UnityWorkbenchRuntimeFactory(), new ModApiCortexPlatformModule());
                 MMLog.WriteInfo("[Cortex] Runtime bootstrap created shell root '" + shellRoot.name + "'.");
             }
             catch (Exception ex)

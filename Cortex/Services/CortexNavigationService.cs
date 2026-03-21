@@ -5,8 +5,6 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
-using ModAPI.Core;
-
 namespace Cortex.Services
 {
     public sealed class CortexNavigationService

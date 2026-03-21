@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using Cortex.Core.Abstractions;
+using Cortex.Core.Diagnostics;
 using Cortex.Core.Models;
 using ModAPI.Core;
 using ModAPI.Inspector;
@@ -10,7 +11,7 @@ using GameModding.Shared.Restart;
 using UnityEngine;
 using ModApiMMLog = ModAPI.Core.MMLog;
 
-namespace Cortex.Adapters
+namespace Cortex.Platform.ModAPI.Runtime
 {
     public sealed class MmLogRuntimeLogFeed : IRuntimeLogFeed, IMMLogRuntimeSink
     {
@@ -918,7 +919,7 @@ namespace Cortex.Adapters
             MonoBehaviour component;
             if (!TryFindComponent(typeName, out component))
             {
-                MMLog.WriteWarning("Cortex could not find runtime tool: " + typeName);
+                CortexLog.WriteWarning("[Cortex.RuntimeTools] Runtime tool was not found. Type=" + typeName + ".");
                 return;
             }
 

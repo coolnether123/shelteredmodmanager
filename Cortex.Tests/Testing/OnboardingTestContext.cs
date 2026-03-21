@@ -22,6 +22,8 @@ namespace Cortex.Tests.Testing
         public readonly IProjectCatalog ProjectCatalog;
         public readonly IProjectWorkspaceService ProjectWorkspaceService;
         public readonly ILoadedModCatalog LoadedModCatalog;
+        public readonly ICortexPlatformModule PlatformModule;
+        public readonly IOverlayInputCaptureService OverlayInputCaptureService;
         public readonly string WorkspaceRootPath;
         public readonly string ModSourceRootPath;
 
@@ -49,6 +51,8 @@ namespace Cortex.Tests.Testing
                     RootPath = Path.Combine(WorkspaceRootPath, "LiveMods", "TestMod")
                 }
             });
+            OverlayInputCaptureService = new TestOverlayInputCaptureService();
+            PlatformModule = new TestCortexPlatformModule(LoadedModCatalog, OverlayInputCaptureService);
             ShellState.Settings.WorkspaceRootPath = WorkspaceRootPath;
         }
 
@@ -91,34 +95,6 @@ namespace Cortex.Tests.Testing
             public void SaveProjects(IList<CortexProjectDefinition> projects)
             {
                 _definitions = projects != null ? new List<CortexProjectDefinition>(projects) : new List<CortexProjectDefinition>();
-            }
-        }
-
-        private sealed class InMemoryLoadedModCatalog : ILoadedModCatalog
-        {
-            private readonly IList<LoadedModInfo> _mods;
-
-            public InMemoryLoadedModCatalog(IList<LoadedModInfo> mods)
-            {
-                _mods = mods ?? new List<LoadedModInfo>();
-            }
-
-            public IList<LoadedModInfo> GetLoadedMods()
-            {
-                return new List<LoadedModInfo>(_mods);
-            }
-
-            public LoadedModInfo GetMod(string modId)
-            {
-                for (var i = 0; i < _mods.Count; i++)
-                {
-                    if (string.Equals(_mods[i].ModId, modId, System.StringComparison.OrdinalIgnoreCase))
-                    {
-                        return _mods[i];
-                    }
-                }
-
-                return null;
             }
         }
     }

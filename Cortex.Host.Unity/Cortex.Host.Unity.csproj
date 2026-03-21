@@ -68,6 +68,11 @@
       <Name>Cortex.Presentation</Name>
       <Private>False</Private>
     </ProjectReference>
+    <ProjectReference Include="..\Cortex.Platform.ModAPI\Cortex.Platform.ModAPI.csproj">
+      <Project>{2343835F-8DA6-4CAB-B5A9-D86C83A9A40D}</Project>
+      <Name>Cortex.Platform.ModAPI</Name>
+      <Private>False</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj">
       <Project>{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1}</Project>
       <Name>Cortex.Plugins.Abstractions</Name>
