@@ -19,6 +19,7 @@ namespace Cortex
         private readonly Func<string, WorkbenchHostLocation> _resolveHostLocation;
         private readonly Action<string> _hideContainer;
         private readonly Action _openSettingsWindow;
+        private readonly Action _openOnboarding;
         private readonly Action _openFind;
         private readonly Action<int> _executeSearchOrAdvance;
         private readonly Action _closeFind;
@@ -37,6 +38,7 @@ namespace Cortex
             Func<string, WorkbenchHostLocation> resolveHostLocation,
             Action<string> hideContainer,
             Action openSettingsWindow,
+            Action openOnboarding,
             Action openFind,
             Action<int> executeSearchOrAdvance,
             Action closeFind,
@@ -54,6 +56,7 @@ namespace Cortex
             _resolveHostLocation = resolveHostLocation;
             _hideContainer = hideContainer;
             _openSettingsWindow = openSettingsWindow;
+            _openOnboarding = openOnboarding;
             _openFind = openFind;
             _executeSearchOrAdvance = executeSearchOrAdvance;
             _closeFind = closeFind;
@@ -142,6 +145,14 @@ namespace Cortex
             if (_openFind != null)
             {
                 _openFind();
+            }
+        }
+
+        public void OpenOnboarding()
+        {
+            if (_openOnboarding != null)
+            {
+                _openOnboarding();
             }
         }
 

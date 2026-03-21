@@ -44,6 +44,7 @@
     <Compile Include="CortexRuntimeBootstrap.cs" />
     <Compile Include="CortexShell.Chrome.cs" />
     <Compile Include="CortexShell.CompletionAugmentation.cs" />
+    <Compile Include="CortexShell.Onboarding.cs" />
     <Compile Include="Shell\CortexShell.HostAdapters.cs" />
     <Compile Include="Shell\CortexShellCommandContext.cs" />
     <Compile Include="Shell\CortexShellCommandRouter.cs" />
@@ -61,6 +62,7 @@
     <Compile Include="Shell\CortexShellModuleCapabilities.cs" />
     <Compile Include="Shell\CortexShellModuleCompositionService.cs" />
     <Compile Include="Shell\CortexShellModuleContributionRegistry.cs" />
+    <Compile Include="Shell\CortexShellOnboardingLifecycle.cs" />
     <Compile Include="Shell\CortexShellModuleRenderService.cs" />
     <Compile Include="CortexShell.Language.cs" />
     <Compile Include="CortexShell.Runtime.cs" />
@@ -77,6 +79,7 @@
     <Compile Include="Modules\Editor\EditorSyntaxHighlighter.cs" />
     <Compile Include="Modules\FileExplorer\FileExplorerModule.cs" />
     <Compile Include="Modules\Logs\LogsModule.cs" />
+    <Compile Include="Modules\Onboarding\OnboardingModule.cs" />
     <Compile Include="Modules\Projects\ProjectsModule.cs" />
     <Compile Include="Modules\Reference\ReferenceModule.cs" />
     <Compile Include="Modules\Runtime\RuntimeToolsModule.cs" />
@@ -104,6 +107,10 @@
     <Compile Include="Services\SourceEditorHoverService.cs" />
     <Compile Include="Services\WorkbenchSearchService.cs" />
     <Compile Include="Services\CortexNavigationService.cs" />
+    <Compile Include="Services\CortexOnboardingCoordinator.cs" />
+    <Compile Include="Services\CortexOnboardingService.cs" />
+    <Compile Include="Services\CortexOnboardingWorkspaceApplier.cs" />
+    <Compile Include="State\CortexOnboardingState.cs" />
     <Compile Include="State\CortexShellState.cs" />
     <Compile Include="CortexShell.Search.cs" />
   </ItemGroup>

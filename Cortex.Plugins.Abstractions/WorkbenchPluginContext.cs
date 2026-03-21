@@ -301,6 +301,34 @@ namespace Cortex.Plugins.Abstractions
         }
 
         /// <summary>
+        /// Registers an onboarding profile contribution.
+        /// </summary>
+        /// <param name="contribution">The onboarding profile contribution.</param>
+        public void RegisterOnboardingProfile(OnboardingProfileContribution contribution)
+        {
+            if (ContributionRegistry == null || contribution == null)
+            {
+                return;
+            }
+
+            ContributionRegistry.RegisterOnboardingProfile(contribution);
+        }
+
+        /// <summary>
+        /// Registers an onboarding layout preset contribution.
+        /// </summary>
+        /// <param name="contribution">The onboarding layout preset contribution.</param>
+        public void RegisterOnboardingLayoutPreset(OnboardingLayoutPresetContribution contribution)
+        {
+            if (ContributionRegistry == null || contribution == null)
+            {
+                return;
+            }
+
+            ContributionRegistry.RegisterOnboardingLayoutPreset(contribution);
+        }
+
+        /// <summary>
         /// Registers an icon contribution.
         /// </summary>
         /// <param name="contribution">The icon contribution.</param>

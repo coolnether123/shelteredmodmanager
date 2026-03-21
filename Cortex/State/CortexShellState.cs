@@ -180,6 +180,7 @@ namespace Cortex
     {
         public readonly CortexWindowChromeWorkspaceState Chrome = new CortexWindowChromeWorkspaceState();
         public readonly CortexWorkbenchSelectionState Workbench = new CortexWorkbenchSelectionState();
+        public readonly CortexOnboardingState Onboarding = new CortexOnboardingState();
         public readonly CortexDocumentWorkspaceState Documents = new CortexDocumentWorkspaceState();
         public readonly CortexEditorInteractionState Editor = new CortexEditorInteractionState();
         public readonly CortexSearchInteractionState Search = new CortexSearchInteractionState();
@@ -192,5 +193,6 @@ namespace Cortex
         public CortexSettings Settings;
         public string StatusMessage;
         public bool ReloadSettingsRequested;
+        public bool OpenOnboardingRequested;
     }
 }

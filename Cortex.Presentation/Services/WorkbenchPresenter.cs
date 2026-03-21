@@ -155,6 +155,18 @@ namespace Cortex.Presentation.Services
                 snapshot.Themes.Add(themes[i]);
             }
 
+            IList<OnboardingProfileContribution> profiles = contributionRegistry.GetOnboardingProfiles();
+            for (var i = 0; i < profiles.Count; i++)
+            {
+                snapshot.OnboardingProfiles.Add(profiles[i]);
+            }
+
+            IList<OnboardingLayoutPresetContribution> layoutPresets = contributionRegistry.GetOnboardingLayoutPresets();
+            for (var i = 0; i < layoutPresets.Count; i++)
+            {
+                snapshot.OnboardingLayoutPresets.Add(layoutPresets[i]);
+            }
+
             IList<EditorContribution> editors = contributionRegistry.GetEditors();
             for (var i = 0; i < editors.Count; i++)
             {

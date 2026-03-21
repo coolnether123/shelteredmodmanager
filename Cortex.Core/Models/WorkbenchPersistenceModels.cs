@@ -30,6 +30,9 @@ namespace Cortex.Core.Models
         public string[] OpenDocumentPaths;
         public ContainerHostAssignment[] ContainerHostAssignments;
         public string[] HiddenContainerIds;
+        public string ActiveOnboardingProfileId;
+        public string ActiveOnboardingLayoutPresetId;
+        public string ActiveOnboardingThemeId;
 
         public PersistedWorkbenchState()
         {
@@ -45,6 +48,9 @@ namespace Cortex.Core.Models
             OpenDocumentPaths = new string[0];
             ContainerHostAssignments = new ContainerHostAssignment[0];
             HiddenContainerIds = new string[0];
+            ActiveOnboardingProfileId = string.Empty;
+            ActiveOnboardingLayoutPresetId = string.Empty;
+            ActiveOnboardingThemeId = string.Empty;
         }
     }
 }

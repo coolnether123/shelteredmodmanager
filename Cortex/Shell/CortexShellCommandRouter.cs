@@ -153,6 +153,14 @@ namespace Cortex
                 delegate(CommandExecutionContext context) { return commandContext.Visible; });
 
             commandContext.WorkbenchRuntime.CommandRegistry.RegisterHandler(
+                "cortex.onboarding.reopen",
+                delegate(CommandExecutionContext context)
+                {
+                    commandContext.OpenOnboarding();
+                },
+                delegate(CommandExecutionContext context) { return commandContext.Visible; });
+
+            commandContext.WorkbenchRuntime.CommandRegistry.RegisterHandler(
                 "cortex.view.zoomIn",
                 delegate(CommandExecutionContext context)
                 {

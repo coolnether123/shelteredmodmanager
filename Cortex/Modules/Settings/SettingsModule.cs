@@ -17,6 +17,7 @@ namespace Cortex.Modules.Settings
         private const string SourceSetupSectionId = "settings.sourceSetup";
         private const string WorkspaceOverviewSectionId = "settings.sourceSetup.overview";
         private const string ThemesSectionId = "settings.themes";
+        private const string OnboardingSectionId = "settings.onboarding";
         private const string KeybindingsSectionId = "settings.keybindings";
         private const string EditorsSectionId = "settings.editors";
         private const string ActionsSectionId = "settings.actions";
@@ -407,6 +408,7 @@ namespace Cortex.Modules.Settings
                 document.Sections.Add(contributedSections[i]);
             }
 
+            document.Sections.Add(CreateOnboardingSection());
             document.Sections.Add(CreateThemesSection());
             document.Sections.Add(CreateKeybindingsSection());
             document.Sections.Add(CreateEditorsSection());
@@ -671,6 +673,23 @@ namespace Cortex.Modules.Settings
                 delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
                 {
                     DrawThemeRegistry(snapshot, themeState, state);
+                });
+        }
+
+        private SettingsSection CreateOnboardingSection()
+        {
+            return new SettingsSection(
+                OnboardingSectionId,
+                "shell",
+                "Shell",
+                "Shell",
+                "Onboarding",
+                "Reopen the Cortex onboarding flow and review the current startup selections.",
+                "onboarding setup welcome wizard profile layout theme reopen rerun defaults",
+                -10,
+                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
+                {
+                    DrawOnboardingSettings(state);
                 });
         }
 
@@ -1226,6 +1245,29 @@ namespace Cortex.Modules.Settings
                 {
                     state.Logs.ShowDetachedWindow = true;
                 }
+                GUILayout.EndHorizontal();
+            });
+        }
+
+        private void DrawOnboardingSettings(CortexShellState state)
+        {
+            DrawSectionPanel("Onboarding", delegate
+            {
+                GUILayout.Label("Run the onboarding flow again to pick a different starting profile, layout, or theme.");
+                GUILayout.Label("The onboarding overlay opens above Cortex and keeps the shell blocked while you preview the current workspace behind it.");
+                GUILayout.Space(6f);
+                DrawReadOnlyField("Current Profile", ResolveOnboardingValue(state != null ? state.Settings : null, delegate(CortexSettings settings) { return settings.DefaultOnboardingProfileId; }, "cortex.onboarding.profile.ide"));
+                DrawReadOnlyField("Current Layout", ResolveOnboardingValue(state != null ? state.Settings : null, delegate(CortexSettings settings) { return settings.DefaultOnboardingLayoutPresetId; }, "cortex.onboarding.layout.visual-studio"));
+                DrawReadOnlyField("Current Theme", ResolveOnboardingValue(state != null ? state.Settings : null, delegate(CortexSettings settings) { return settings.DefaultOnboardingThemeId; }, "cortex.vs-dark"));
+                GUILayout.Space(4f);
+
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("Run Onboarding Again", GUILayout.Width(188f), GUILayout.Height(24f)))
+                {
+                    RequestOnboardingReopen(state);
+                }
+
+                GUILayout.FlexibleSpace();
                 GUILayout.EndHorizontal();
             });
         }
@@ -1951,6 +1993,31 @@ namespace Cortex.Modules.Settings
             GUILayout.TextField(string.IsNullOrEmpty(value) ? "Not configured" : value, GUILayout.Height(22f), GUILayout.ExpandWidth(true));
             GUILayout.EndHorizontal();
             GUILayout.Space(4f);
+        }
+
+        private static string ResolveOnboardingValue(CortexSettings settings, Func<CortexSettings, string> accessor, string fallback)
+        {
+            if (settings == null || accessor == null)
+            {
+                return fallback;
+            }
+
+            var value = accessor(settings);
+            return string.IsNullOrEmpty(value) ? fallback : value;
+        }
+
+        private static void RequestOnboardingReopen(CortexShellState state)
+        {
+            if (state == null || state.Workbench == null)
+            {
+                return;
+            }
+
+            state.Workbench.EditorContainerId = CortexWorkbenchIds.EditorContainer;
+            state.Workbench.FocusedContainerId = CortexWorkbenchIds.EditorContainer;
+            state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
+            state.OpenOnboardingRequested = true;
+            state.StatusMessage = "Reopening onboarding.";
         }
 
         private static void DrawThemeSwatch(string hex, string label)

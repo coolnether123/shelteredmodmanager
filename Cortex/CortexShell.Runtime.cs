@@ -60,6 +60,7 @@ namespace Cortex
                     delegate(string containerId) { return ResolveHostLocation(containerId); },
                     delegate(string containerId) { HideContainer(containerId); },
                     delegate { OpenSettingsWindow(); },
+                    delegate { OpenOnboarding(); },
                     delegate { OpenFind(); },
                     delegate(int step) { ExecuteSearchOrAdvance(step); },
                     delegate { CloseFind(); },
@@ -162,6 +163,10 @@ namespace Cortex
             _state.Workbench.EditorContainerId = NormalizeContainerId(persisted.EditorContainerId, CortexWorkbenchIds.EditorContainer);
             _state.Workbench.PanelContainerId = NormalizeContainerId(persisted.PanelContainerId, CortexWorkbenchIds.LogsContainer);
             _state.Logs.ShowDetachedWindow = persisted.ShowDetachedLogWindow;
+            RestoreOnboardingSessionState(persisted);
+            _state.Onboarding.SelectedProfileId = _state.Onboarding.ActiveProfileId;
+            _state.Onboarding.SelectedLayoutPresetId = _state.Onboarding.ActiveLayoutPresetId;
+            _state.Onboarding.SelectedThemeId = _state.Onboarding.ActiveThemeId;
             var assignments = persisted.ContainerHostAssignments ?? new ContainerHostAssignment[0];
             for (var i = 0; i < assignments.Length; i++)
             {
@@ -257,7 +262,7 @@ namespace Cortex
                 });
             }
 
-            _workbenchPersistenceService.Save(DefaultWorkspaceId, new PersistedWorkbenchState
+            var persistedState = new PersistedWorkbenchState
             {
                 FocusedContainerId = _state.Workbench.FocusedContainerId,
                 SideContainerId = _state.Workbench.SideContainerId,
@@ -271,7 +276,10 @@ namespace Cortex
                 OpenDocumentPaths = openPaths.ToArray(),
                 ContainerHostAssignments = assignments.ToArray(),
                 HiddenContainerIds = new List<string>(_state.Workbench.HiddenContainerIds).ToArray()
-            });
+            };
+
+            PersistOnboardingSessionState(persistedState);
+            _workbenchPersistenceService.Save(DefaultWorkspaceId, persistedState);
         }
 
         private void RestoreSelectedProject(PersistedWorkbenchState persisted)
@@ -439,7 +447,6 @@ namespace Cortex
 
             _state.StatusMessage = "Settings opened in the editor surface.";
         }
-
         private static string NormalizeWorkspaceContainer(string containerId, string fallback)
         {
             if (string.IsNullOrEmpty(containerId) ||
