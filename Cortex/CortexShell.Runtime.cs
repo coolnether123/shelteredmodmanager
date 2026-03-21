@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Cortex
 {
-    public sealed partial class CortexShell
+    public sealed partial class CortexShellController
     {
         private const string DefaultWorkspaceId = "default";
 

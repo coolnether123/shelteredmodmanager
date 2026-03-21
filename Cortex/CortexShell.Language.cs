@@ -12,7 +12,7 @@ using Cortex.Modules.Shared;
 using Cortex.Services;
 namespace Cortex
 {
-    public sealed partial class CortexShell
+    public sealed partial class CortexShellController
     {
         private ILanguageServiceClient _languageServiceClient;
         private readonly DocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
