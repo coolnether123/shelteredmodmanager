@@ -1,5 +1,4 @@
 using System.IO;
-using ModAPI.Core;
 using UnityEngine;
 
 namespace Cortex.Modules.Editor

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
-using ModAPI.Core;
 using UnityEngine;
 
 namespace Cortex.Modules.Shared

@@ -39,7 +39,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Adapters\RuntimeAdapters.cs" />
     <Compile Include="Chrome\CortexWindowChromeController.cs" />
     <Compile Include="MMLog.cs" />
     <Compile Include="CortexShell.Chrome.cs" />
@@ -113,6 +112,7 @@
     <Compile Include="Services\CortexOnboardingProjectSetupService.cs" />
     <Compile Include="Services\CortexOnboardingService.cs" />
     <Compile Include="Services\CortexOnboardingWorkspaceApplier.cs" />
+    <Compile Include="Services\NullCortexPlatformModule.cs" />
     <Compile Include="State\CortexOnboardingState.cs" />
     <Compile Include="State\CortexShellState.cs" />
     <Compile Include="CortexShell.Search.cs" />
@@ -136,11 +136,6 @@
     <ProjectReference Include="..\Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj">
       <Project>{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1}</Project>
       <Name>Cortex.Plugins.Abstractions</Name>
-      <Private>False</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\ModAPI\ModAPI.csproj">
-      <Project>{3C99D6BF-A4A9-45DC-BEF1-5717ECE2A687}</Project>
-      <Name>ModAPI</Name>
       <Private>False</Private>
     </ProjectReference>
     <ProjectReference Include="..\GameModding.Shared\GameModding.Shared.csproj">

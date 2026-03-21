@@ -5,7 +5,6 @@ using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
 using Cortex.Services;
-using ModAPI.Core;
 using UnityEngine;
 
 namespace Cortex.Modules.Editor

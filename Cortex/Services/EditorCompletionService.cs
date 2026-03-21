@@ -4,7 +4,6 @@ using System.Text;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using ModAPI.Core;
 using UnityEngine;
 
 namespace Cortex.Services

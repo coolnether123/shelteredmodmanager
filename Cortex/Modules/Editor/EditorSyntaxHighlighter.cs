@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Text;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using ModAPI.Core;
 using UnityEngine;
 
 namespace Cortex.Modules.Editor

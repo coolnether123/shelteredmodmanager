@@ -1,4 +1,4 @@
-using ModAPI.InputActions;
+using Cortex.Services;
 using UnityEngine;
 
 namespace Cortex
@@ -36,13 +36,13 @@ namespace Cortex
         void ICortexShellLifecycleHost.ReleaseOverlayInputCapture() { ReleaseOverlayInputCapture(); }
         void ICortexShellLifecycleHost.ShutdownLanguageService() { ShutdownLanguageService(); }
         void ICortexShellLifecycleHost.ShutdownCompletionAugmentation() { ShutdownCompletionAugmentation(); }
-        void ICortexShellLifecycleHost.DisableMmLogRuntimeIntegration() { DisableMmLogRuntimeIntegration(); }
+        void ICortexShellLifecycleHost.DisableRuntimeLogIntegration() { DisableRuntimeLogIntegration(); }
         void ICortexShellLifecycleHost.PersistWorkbenchSession() { PersistWorkbenchSession(); }
         void ICortexShellLifecycleHost.PersistWindowSettings() { PersistWindowSettings(); }
 
         bool ICortexShellLifecycleHost.IsToggleActionPressed()
         {
-            return InputActionRegistry.IsDown(ToggleActionId);
+            return (_platformModule ?? NullCortexPlatformModule.Instance).IsShellTogglePressed(ToggleActionId);
         }
 
         void ICortexShellLifecycleHost.ExecuteShellToggle()
