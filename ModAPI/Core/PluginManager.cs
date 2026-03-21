@@ -216,6 +216,16 @@ namespace ModAPI.Core
             {
                 MMLog.WriteWarning("[PluginManager] Optional runtime assembly 'Cortex' was not resolved. Cortex shell bootstrap will be unavailable.");
             }
+
+            var cortexHostAssembly = SharedAssemblyResolver.ResolveSharedAssembly("Cortex.Host.Unity");
+            if (cortexHostAssembly != null)
+            {
+                MMLog.WriteInfo("[PluginManager] Optional runtime assembly available: " + cortexHostAssembly.GetName().Name + " @ " + cortexHostAssembly.Location);
+            }
+            else
+            {
+                MMLog.WriteWarning("[PluginManager] Optional runtime assembly 'Cortex.Host.Unity' was not resolved. Unity host bootstrap will be unavailable.");
+            }
             HarmonyBootstrap.EnsurePatched();
             
             // Force injection in case SaveManager.Awake already ran before we could patch it

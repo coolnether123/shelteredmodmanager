@@ -8,6 +8,7 @@ using ModAPI.Core;
 using ModAPI.Inspector;
 using GameModding.Shared.Restart;
 using UnityEngine;
+using ModApiMMLog = ModAPI.Core.MMLog;
 
 namespace Cortex.Adapters
 {
@@ -28,7 +29,7 @@ namespace Cortex.Adapters
                     return;
                 }
 
-                MMLog.RegisterRuntimeSink(this);
+                ModApiMMLog.RegisterRuntimeSink(this);
                 _attached = true;
                 RebuildSnapshot_NoLock(_bufferSize);
             }
@@ -43,7 +44,7 @@ namespace Cortex.Adapters
                     return;
                 }
 
-                MMLog.UnregisterRuntimeSink(this);
+                ModApiMMLog.UnregisterRuntimeSink(this);
                 _attached = false;
             }
         }
@@ -52,14 +53,14 @@ namespace Cortex.Adapters
         {
             EnsureAttached();
 
-            MMLog.LogLevel level;
+            ModApiMMLog.LogLevel level;
             try
             {
-                level = (MMLog.LogLevel)Enum.Parse(typeof(MMLog.LogLevel), minimumLevel ?? "Info", true);
+                level = (ModApiMMLog.LogLevel)Enum.Parse(typeof(ModApiMMLog.LogLevel), minimumLevel ?? "Info", true);
             }
             catch
             {
-                level = MMLog.LogLevel.Info;
+                level = ModApiMMLog.LogLevel.Info;
             }
 
             lock (_sync)
@@ -113,7 +114,7 @@ namespace Cortex.Adapters
             return lines;
         }
 
-        public void OnLogEntry(MMLog.LogEntry entry)
+        public void OnLogEntry(ModApiMMLog.LogEntry entry)
         {
             if (entry == null)
             {
@@ -141,7 +142,7 @@ namespace Cortex.Adapters
         {
             _recentEntries.Clear();
 
-            var raw = MMLog.GetRecentEntries(MMLog.LogLevel.Debug, Math.Max(1, maxCount));
+            var raw = ModApiMMLog.GetRecentEntries(ModApiMMLog.LogLevel.Debug, Math.Max(1, maxCount));
             for (var i = 0; i < raw.Count; i++)
             {
                 _recentEntries.Add(MapEntry(raw[i]));
@@ -158,22 +159,22 @@ namespace Cortex.Adapters
             }
         }
 
-        private static bool MatchesLevel(string levelName, MMLog.LogLevel minimumLevel)
+        private static bool MatchesLevel(string levelName, ModApiMMLog.LogLevel minimumLevel)
         {
-            MMLog.LogLevel level;
+            ModApiMMLog.LogLevel level;
             try
             {
-                level = (MMLog.LogLevel)Enum.Parse(typeof(MMLog.LogLevel), levelName ?? "Info", true);
+                level = (ModApiMMLog.LogLevel)Enum.Parse(typeof(ModApiMMLog.LogLevel), levelName ?? "Info", true);
             }
             catch
             {
-                level = MMLog.LogLevel.Info;
+                level = ModApiMMLog.LogLevel.Info;
             }
 
             return level >= minimumLevel;
         }
 
-        private static RuntimeLogEntry MapEntry(MMLog.LogEntry item)
+        private static RuntimeLogEntry MapEntry(ModApiMMLog.LogEntry item)
         {
             return new RuntimeLogEntry
             {
@@ -247,7 +248,7 @@ namespace Cortex.Adapters
             return frames;
         }
 
-        private static List<RuntimeStackFrame> MapStackFrames(List<MMLog.RuntimeStackFrameInfo> stackFrames)
+        private static List<RuntimeStackFrame> MapStackFrames(List<ModApiMMLog.RuntimeStackFrameInfo> stackFrames)
         {
             var frames = new List<RuntimeStackFrame>();
             if (stackFrames == null || stackFrames.Count == 0)

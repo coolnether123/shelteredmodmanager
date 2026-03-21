@@ -10,7 +10,7 @@ using Cortex.Rendering.Abstractions;
 
 namespace Cortex.Host.Unity.Runtime
 {
-    public sealed class UnityWorkbenchRuntime
+    public sealed class UnityWorkbenchRuntime : IWorkbenchRuntime
     {
         public readonly ICommandRegistry CommandRegistry;
         public readonly IContributionRegistry ContributionRegistry;
@@ -42,5 +42,13 @@ namespace Cortex.Host.Unity.Runtime
             snapshot.RendererSummary = Renderer.DisplayName + " | Capabilities v" + Renderer.Capabilities.CapabilityVersion;
             return snapshot;
         }
+
+        ICommandRegistry IWorkbenchRuntime.CommandRegistry { get { return CommandRegistry; } }
+        IContributionRegistry IWorkbenchRuntime.ContributionRegistry { get { return ContributionRegistry; } }
+        WorkbenchState IWorkbenchRuntime.WorkbenchState { get { return WorkbenchState; } }
+        LayoutState IWorkbenchRuntime.LayoutState { get { return LayoutState; } }
+        StatusState IWorkbenchRuntime.StatusState { get { return StatusState; } }
+        ThemeState IWorkbenchRuntime.ThemeState { get { return ThemeState; } }
+        FocusState IWorkbenchRuntime.FocusState { get { return FocusState; } }
     }
 }

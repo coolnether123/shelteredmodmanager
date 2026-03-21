@@ -150,6 +150,7 @@ namespace Cortex
                     _services != null ? _services.ProjectCatalog : null,
                     _services != null ? _services.ProjectWorkspaceService : null,
                     _services != null ? _services.LoadedModCatalog : null,
+                    _services != null ? _services.PathInteractionService : null,
                     _services != null ? _services.State : null);
             }
 
@@ -480,6 +481,7 @@ namespace Cortex
                     _services != null ? _services.ProjectCatalog : null,
                     _services != null ? _services.ProjectWorkspaceService : null,
                     _services != null ? _services.LoadedModCatalog : null,
+                    _services != null ? _services.PathInteractionService : null,
                     context != null ? context.Snapshot : new WorkbenchPresentationSnapshot(),
                     _services != null ? _services.ThemeState : null,
                     _services != null ? _services.State : null,

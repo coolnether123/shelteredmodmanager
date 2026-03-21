@@ -1,13 +1,14 @@
 using System;
+using Cortex.Core.Diagnostics;
 using ModAPI.Core;
 using UnityEngine;
 
-namespace Cortex
+namespace Cortex.Host.Unity.Runtime
 {
     /// <summary>
-    /// Boots the Cortex shell into the live Unity runtime when the shared Cortex assembly is present.
+    /// Boots the Cortex shell into the live Unity runtime when the Unity host assembly is present.
     /// </summary>
-    public sealed class CortexRuntimeBootstrap : IGameRuntimeBootstrap
+    public sealed class CortexUnityRuntimeBootstrap : IGameRuntimeBootstrap
     {
         /// <summary>
         /// Ensures a single persistent Cortex shell exists in the active Unity runtime.
@@ -16,6 +17,8 @@ namespace Cortex
         {
             try
             {
+                CortexLog.Configure(new MmLogCortexLogSink());
+
                 var existingShell = UnityEngine.Object.FindObjectOfType<CortexShell>();
                 if (existingShell != null)
                 {
@@ -25,7 +28,8 @@ namespace Cortex
 
                 var shellRoot = new GameObject("Cortex.Shell");
                 UnityEngine.Object.DontDestroyOnLoad(shellRoot);
-                shellRoot.AddComponent<CortexShell>();
+                var shell = shellRoot.AddComponent<CortexShell>();
+                shell.ConfigureHostServices(new WindowsPathInteractionService(), new UnityWorkbenchRuntimeFactory());
                 MMLog.WriteInfo("[Cortex] Runtime bootstrap created shell root '" + shellRoot.name + "'.");
             }
             catch (Exception ex)

@@ -1,6 +1,6 @@
 using System;
 using Cortex.Core.Abstractions;
-using Cortex.Host.Unity.Runtime;
+using Cortex.Presentation.Abstractions;
 using Cortex.Services;
 
 namespace Cortex.Shell
@@ -10,7 +10,7 @@ namespace Cortex.Shell
         public CortexOnboardingWorkspaceApplicationResult Preview(
             CortexOnboardingCoordinator onboardingCoordinator,
             CortexShellState shellState,
-            UnityWorkbenchRuntime workbenchRuntime,
+            IWorkbenchRuntime workbenchRuntime,
             IContributionRegistry contributionRegistry,
             Action<CortexOnboardingWorkspaceApplicationResult> activateContainers)
         {
@@ -32,8 +32,10 @@ namespace Cortex.Shell
         public CortexOnboardingWorkspaceApplicationResult Complete(
             CortexOnboardingCoordinator onboardingCoordinator,
             CortexShellState shellState,
-            UnityWorkbenchRuntime workbenchRuntime,
+            IWorkbenchRuntime workbenchRuntime,
             IContributionRegistry contributionRegistry,
+            IProjectCatalog projectCatalog,
+            IProjectWorkspaceService workspaceService,
             Action persistWorkbenchSession,
             Action persistWindowSettings,
             Action<CortexOnboardingWorkspaceApplicationResult> activateContainers)
@@ -43,7 +45,12 @@ namespace Cortex.Shell
                 return CortexOnboardingWorkspaceApplicationResult.Empty;
             }
 
-            var result = onboardingCoordinator.Complete(shellState, workbenchRuntime, contributionRegistry);
+            var result = onboardingCoordinator.Complete(
+                shellState,
+                workbenchRuntime,
+                contributionRegistry,
+                projectCatalog,
+                workspaceService);
             if (!result.WasApplied)
             {
                 return result;

@@ -30,7 +30,7 @@ namespace Cortex
                 ", OllamaModel=" + (settings != null ? settings.OllamaModel ?? string.Empty : string.Empty) + ".");
             _completionAugmentationClient = CompletionAugmentationBootstrapper.Create(settings, delegate(string message)
             {
-                MMLog.WriteInfo(message);
+                MMLog.WriteDebug(message);
             });
             SetCompletionAugmentationStatus(
                 _completionAugmentationClient != null && _completionAugmentationClient.IsEnabled ? "ready" : "offline",
@@ -88,7 +88,7 @@ namespace Cortex
             var preQueueReason = CompletionAugmentationDispatchPolicy.GetPreQueueReason(request);
             if (!string.IsNullOrEmpty(preQueueReason))
             {
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue skipped. Reason=" +
+                MMLog.WriteDebug("[Cortex.Completion.Augmentation] Queue skipped. Reason=" +
                     preQueueReason +
                     ", Document=" + (request != null ? request.DocumentPath ?? string.Empty : string.Empty) + ".");
                 return true;
@@ -101,7 +101,7 @@ namespace Cortex
                 _editorCompletionService);
             if (!string.IsNullOrEmpty(skipReason))
             {
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue skipped. Reason=" +
+                MMLog.WriteDebug("[Cortex.Completion.Augmentation] Queue skipped. Reason=" +
                     skipReason +
                     ", Document=" + (request != null ? request.DocumentPath ?? string.Empty : string.Empty) + ".");
                 return true;
@@ -109,14 +109,14 @@ namespace Cortex
 
             if (_completionAugmentationClient == null)
             {
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue skipped. Reason=NoClient.");
+                MMLog.WriteDebug("[Cortex.Completion.Augmentation] Queue skipped. Reason=NoClient.");
                 SetCompletionAugmentationStatus("offline", string.Empty, string.Empty);
                 return false;
             }
 
             if (!_completionAugmentationClient.IsEnabled)
             {
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue skipped. Reason=ClientDisabled, Provider=" +
+                MMLog.WriteDebug("[Cortex.Completion.Augmentation] Queue skipped. Reason=ClientDisabled, Provider=" +
                     (_completionAugmentationClient.ProviderId ?? string.Empty) +
                     ", LastError=" + (_completionAugmentationClient.LastError ?? string.Empty) + ".");
                 SetCompletionAugmentationStatus("error",
@@ -134,7 +134,7 @@ namespace Cortex
                     PreferredReplacementRange = primaryResponse != null ? CloneRange(primaryResponse.ReplacementRange) : null,
                     EarliestDispatchUtc = CompletionAugmentationDispatchPolicy.GetDeferredDispatchUtc(request, CompletionAugmentationDebounceMs)
                 };
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue deferred. Reason=InFlight, PendingRequestId=" +
+                MMLog.WriteDebug("[Cortex.Completion.Augmentation] Queue deferred. Reason=InFlight, PendingRequestId=" +
                     (_pendingCompletionAugmentation != null ? _pendingCompletionAugmentation.RequestId ?? string.Empty : string.Empty) +
                     ", DeferredRequestKey=" + (pending != null ? pending.RequestKey ?? string.Empty : string.Empty) + ".");
                 SetCompletionAugmentationStatus("thinking",
@@ -145,13 +145,13 @@ namespace Cortex
 
             if (pending == null)
             {
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue skipped. Reason=PendingStateMissing.");
+                MMLog.WriteDebug("[Cortex.Completion.Augmentation] Queue skipped. Reason=PendingStateMissing.");
                 return false;
             }
 
             if (request == null)
             {
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue skipped. Reason=RequestMissing, Document=" +
+                MMLog.WriteDebug("[Cortex.Completion.Augmentation] Queue skipped. Reason=RequestMissing, Document=" +
                     (pending.DocumentPath ?? string.Empty) +
                     ", Position=" + pending.AbsolutePosition + ".");
                 return false;
@@ -175,7 +175,7 @@ namespace Cortex
                     PreferredReplacementRange = primaryResponse != null ? CloneRange(primaryResponse.ReplacementRange) : null,
                     EarliestDispatchUtc = CompletionAugmentationDispatchPolicy.GetDeferredDispatchUtc(request, CompletionAugmentationDebounceMs)
                 };
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queue deferred. Reason=Debounce, DeferredRequestKey=" +
+                MMLog.WriteDebug("[Cortex.Completion.Augmentation] Queue deferred. Reason=Debounce, DeferredRequestKey=" +
                     (pending != null ? pending.RequestKey ?? string.Empty : string.Empty) + ".");
                 SetCompletionAugmentationStatus("thinking",
                     _completionAugmentationClient.ProviderId ?? string.Empty,
@@ -197,7 +197,7 @@ namespace Cortex
             var requestId = _completionAugmentationClient.QueueCompletion(request);
             if (string.IsNullOrEmpty(requestId))
             {
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Request was not queued. Provider=" +
+                MMLog.WriteDebug("[Cortex.Completion.Augmentation] Request was not queued. Provider=" +
                     (_completionAugmentationClient.ProviderId ?? string.Empty) +
                     ", LastError=" + (_completionAugmentationClient.LastError ?? string.Empty) + ".");
                 SetCompletionAugmentationStatus("error",
@@ -219,7 +219,7 @@ namespace Cortex
                 AbsolutePosition = pending.AbsolutePosition,
                 PreferredReplacementRange = preferredReplacementRange
             };
-            MMLog.WriteInfo("[Cortex.Completion.Augmentation] Queued request " + requestId +
+            MMLog.WriteDebug("[Cortex.Completion.Augmentation] Queued request " + requestId +
                 ". Provider=" + (_completionAugmentationClient.ProviderId ?? string.Empty) +
                 ", Document=" + (request.DocumentPath ?? string.Empty) +
                 ", Position=" + request.AbsolutePosition + ".");
@@ -239,7 +239,7 @@ namespace Cortex
             var target = FindOpenDocument(result.Response != null ? result.Response.DocumentPath : pending.DocumentPath);
             if (target == null || result.Response == null || !result.Response.Success)
             {
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Response was not applied. Provider=" +
+                MMLog.WriteDebug("[Cortex.Completion.Augmentation] Response was not applied. Provider=" +
                     (result != null ? result.ProviderId ?? string.Empty : string.Empty) +
                     ", HasTarget=" + (target != null) +
                     ", Success=" + (result != null && result.Response != null && result.Response.Success) +
@@ -259,7 +259,7 @@ namespace Cortex
                 target.TextVersion > 0 &&
                 target.TextVersion != pending.DocumentVersion)
             {
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Accepting version-shifted response. Provider=" +
+                MMLog.WriteDebug("[Cortex.Completion.Augmentation] Accepting version-shifted response. Provider=" +
                     (result != null ? result.ProviderId ?? string.Empty : string.Empty) +
                     ", PendingVersion=" + pending.DocumentVersion +
                     ", LiveVersion=" + target.TextVersion +
@@ -292,7 +292,7 @@ namespace Cortex
                 },
                 result.Response,
                 result != null ? result.ProviderId ?? string.Empty : string.Empty);
-            MMLog.WriteInfo("[Cortex.Completion.Augmentation] Inline suggestion updated. Provider=" +
+            MMLog.WriteDebug("[Cortex.Completion.Augmentation] Inline suggestion updated. Provider=" +
                 (result != null ? result.ProviderId ?? string.Empty : string.Empty) +
                 ", Visible=" + inlineSet +
                 ", Items=" + (result != null && result.Response != null && result.Response.Items != null ? result.Response.Items.Length : 0) +
@@ -313,7 +313,7 @@ namespace Cortex
                     AbsolutePosition = pending.AbsolutePosition
                 },
                 result.Response);
-            MMLog.WriteInfo("[Cortex.Completion.Augmentation] Response processed. Provider=" +
+            MMLog.WriteDebug("[Cortex.Completion.Augmentation] Response processed. Provider=" +
                 (result != null ? result.ProviderId ?? string.Empty : string.Empty) +
                 ", Merged=" + merged +
                 ", Items=" + (result != null && result.Response != null && result.Response.Items != null ? result.Response.Items.Length : 0) +
@@ -366,7 +366,7 @@ namespace Cortex
                 {
                     deferred.CancelRequested = true;
                     _deferredCompletionAugmentation = deferred;
-                    MMLog.WriteInfo("[Cortex.Completion.Augmentation] Superseding in-flight request. RequestId=" +
+                    MMLog.WriteDebug("[Cortex.Completion.Augmentation] Superseding in-flight request. RequestId=" +
                         (_pendingCompletionAugmentation.RequestId ?? string.Empty) +
                         ", NewRequestKey=" + (deferred.Pending.RequestKey ?? string.Empty) + ".");
                 }
@@ -383,14 +383,14 @@ namespace Cortex
                 _editorCompletionService);
             if (!string.IsNullOrEmpty(skipReason))
             {
-                MMLog.WriteInfo("[Cortex.Completion.Augmentation] Deferred request skipped. Reason=" +
+                MMLog.WriteDebug("[Cortex.Completion.Augmentation] Deferred request skipped. Reason=" +
                     skipReason +
                     ", RequestKey=" + (deferred.Pending.RequestKey ?? string.Empty) +
                     ", Document=" + (deferred.Request.DocumentPath ?? string.Empty) + ".");
                 return;
             }
 
-            MMLog.WriteInfo("[Cortex.Completion.Augmentation] Dispatching deferred request. RequestKey=" +
+            MMLog.WriteDebug("[Cortex.Completion.Augmentation] Dispatching deferred request. RequestKey=" +
                 (deferred.Pending.RequestKey ?? string.Empty) +
                 ", Document=" + (deferred.Request.DocumentPath ?? string.Empty) + ".");
             QueueCompletionAugmentationCore(deferred.Pending, deferred.Request, deferred.PreferredReplacementRange);

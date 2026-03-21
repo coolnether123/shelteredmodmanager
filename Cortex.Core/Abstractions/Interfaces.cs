@@ -55,6 +55,14 @@ namespace Cortex.Core.Abstractions
         TextSearchResultSet Search(TextSearchQuery query, IList<TextSearchDocumentInput> documents);
     }
 
+    public interface IPathInteractionService
+    {
+        bool TryBeginSelectPath(PathSelectionRequest request, out string requestId);
+        bool TryGetCompletedSelection(string requestId, out PathSelectionResult result);
+        bool TryOpenPath(string path);
+        bool TryRevealPath(string path);
+    }
+
     public interface IDecompilerExplorerService
     {
         WorkspaceTreeNode BuildTree(string preferredRootPath);

@@ -33,27 +33,44 @@ namespace Cortex
 
     internal sealed class CortexShellLifecycleCoordinator
     {
+        private bool _initialized;
+
         public void Awake(ICortexShellLifecycleHost host)
         {
+            host.ShellGameObject.name = "Cortex.Shell";
+            UnityEngine.Object.DontDestroyOnLoad(host.ShellGameObject);
+        }
+
+        public void Start(ICortexShellLifecycleHost host)
+        {
+            if (_initialized)
+            {
+                return;
+            }
+
             try
             {
-                host.ShellGameObject.name = "Cortex.Shell";
-                UnityEngine.Object.DontDestroyOnLoad(host.ShellGameObject);
                 host.InitializeSettingsAndServices();
                 host.RestoreWorkbenchSession();
                 host.InitializeWorkbenchRuntime();
                 host.RegisterCommandHandlers();
                 host.RegisterToggleAction();
+                _initialized = true;
             }
             catch (Exception ex)
             {
-                MMLog.WriteError("[Cortex] Awake failed: " + ex);
+                MMLog.WriteError("[Cortex] Start failed: " + ex);
                 throw;
             }
         }
 
         public void Destroy(ICortexShellLifecycleHost host)
         {
+            if (!_initialized)
+            {
+                return;
+            }
+
             host.ReleaseOverlayInputCapture();
             host.ShutdownLanguageService();
             host.ShutdownCompletionAugmentation();
@@ -64,6 +81,11 @@ namespace Cortex
 
         public void Update(ICortexShellLifecycleHost host)
         {
+            if (!_initialized)
+            {
+                return;
+            }
+
             if (host.IsToggleActionPressed())
             {
                 host.ExecuteShellToggle();
@@ -90,6 +112,11 @@ namespace Cortex
 
         public void OnGui(ICortexShellLifecycleHost host)
         {
+            if (!_initialized)
+            {
+                return;
+            }
+
             host.RenderVisibleShell();
         }
     }

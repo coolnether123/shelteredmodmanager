@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Cortex.Core.Models;
-using Cortex.Host.Unity.Runtime;
+using Cortex.Presentation.Abstractions;
 
 namespace Cortex.Services
 {
@@ -22,7 +22,7 @@ namespace Cortex.Services
     {
         public CortexOnboardingWorkspaceApplicationResult Preview(
             CortexShellState shellState,
-            UnityWorkbenchRuntime workbenchRuntime,
+            IWorkbenchRuntime workbenchRuntime,
             CortexOnboardingResolvedSelection selection)
         {
             return ApplyResolvedSelection(shellState, workbenchRuntime, selection, false);
@@ -30,7 +30,7 @@ namespace Cortex.Services
 
         public CortexOnboardingWorkspaceApplicationResult Apply(
             CortexShellState shellState,
-            UnityWorkbenchRuntime workbenchRuntime,
+            IWorkbenchRuntime workbenchRuntime,
             CortexOnboardingResolvedSelection selection)
         {
             return ApplyResolvedSelection(shellState, workbenchRuntime, selection, true);
@@ -38,7 +38,7 @@ namespace Cortex.Services
 
         private static CortexOnboardingWorkspaceApplicationResult ApplyResolvedSelection(
             CortexShellState shellState,
-            UnityWorkbenchRuntime workbenchRuntime,
+            IWorkbenchRuntime workbenchRuntime,
             CortexOnboardingResolvedSelection selection,
             bool commitSelection)
         {
@@ -96,7 +96,7 @@ namespace Cortex.Services
 
         private static void ApplyCommittedSelection(
             CortexShellState shellState,
-            UnityWorkbenchRuntime workbenchRuntime,
+            IWorkbenchRuntime workbenchRuntime,
             CortexOnboardingResolvedSelection selection)
         {
             var onboardingState = shellState.Onboarding;
