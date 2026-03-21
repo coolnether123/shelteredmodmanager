@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Cortex
 {
-    public sealed partial class CortexShell
+    public sealed partial class CortexShellController
     {
         private const float OnboardingModalMaxWidth = 940f;
         private const float OnboardingModalMinWidth = 760f;

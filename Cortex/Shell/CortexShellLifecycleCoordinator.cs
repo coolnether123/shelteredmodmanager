@@ -1,46 +1,12 @@
 using System;
-using UnityEngine;
 
 namespace Cortex
 {
-    internal interface ICortexShellLifecycleHost
-    {
-        GameObject ShellGameObject { get; }
-        bool ReloadSettingsRequested { get; }
-        string RequestedContainerId { get; set; }
-        int RequestedTabIndex { get; set; }
-
-        void InitializeSettingsAndServices();
-        void RestoreWorkbenchSession();
-        void InitializeWorkbenchRuntime();
-        void RegisterCommandHandlers();
-        void RegisterToggleAction();
-        void ReleaseOverlayInputCapture();
-        void ShutdownLanguageService();
-        void ShutdownCompletionAugmentation();
-        void DisableRuntimeLogIntegration();
-        void PersistWorkbenchSession();
-        void PersistWindowSettings();
-        bool IsToggleActionPressed();
-        void ExecuteShellToggle();
-        void ApplySettingsChanges();
-        void UpdateLanguageService();
-        void ActivateContainer(string containerId);
-        string MapLegacyTabIndex(int index);
-        void RenderVisibleShell();
-    }
-
     internal sealed class CortexShellLifecycleCoordinator
     {
         private bool _initialized;
 
-        public void Awake(ICortexShellLifecycleHost host)
-        {
-            host.ShellGameObject.name = "Cortex.Shell";
-            UnityEngine.Object.DontDestroyOnLoad(host.ShellGameObject);
-        }
-
-        public void Start(ICortexShellLifecycleHost host)
+        public void Start(ICortexShellControllerLifecycleHost host)
         {
             if (_initialized)
             {
@@ -63,7 +29,7 @@ namespace Cortex
             }
         }
 
-        public void Destroy(ICortexShellLifecycleHost host)
+        public void Destroy(ICortexShellControllerLifecycleHost host)
         {
             if (!_initialized)
             {
@@ -78,7 +44,7 @@ namespace Cortex
             host.PersistWindowSettings();
         }
 
-        public void Update(ICortexShellLifecycleHost host)
+        public void Update(ICortexShellControllerLifecycleHost host)
         {
             if (!_initialized)
             {
@@ -109,7 +75,7 @@ namespace Cortex
             }
         }
 
-        public void OnGui(ICortexShellLifecycleHost host)
+        public void OnGui(ICortexShellControllerLifecycleHost host)
         {
             if (!_initialized)
             {

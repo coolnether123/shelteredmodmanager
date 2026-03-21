@@ -2,7 +2,7 @@ using System;
 using Cortex.Core.Models;
 namespace Cortex
 {
-    public sealed partial class CortexShell
+    public sealed partial class CortexShellController
     {
         private TextSearchQuery BuildActiveSearchQuery()
         {

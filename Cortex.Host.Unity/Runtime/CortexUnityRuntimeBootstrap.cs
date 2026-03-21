@@ -22,7 +22,7 @@ namespace Cortex.Host.Unity.Runtime
                 var compositionRoot = new UnityCortexHostCompositionRoot();
                 CortexLog.Configure(compositionRoot.LogSink);
 
-                var existingShell = UnityEngine.Object.FindObjectOfType<CortexShell>();
+                var existingShell = UnityEngine.Object.FindObjectOfType<UnityCortexShellBehaviour>();
                 if (existingShell != null)
                 {
                     Log.WriteInfo("Runtime bootstrap skipped because an existing shell is already active on '" + existingShell.gameObject.name + "'.");
@@ -30,8 +30,7 @@ namespace Cortex.Host.Unity.Runtime
                 }
 
                 var shellRoot = new GameObject("Cortex.Shell");
-                UnityEngine.Object.DontDestroyOnLoad(shellRoot);
-                var shell = shellRoot.AddComponent<CortexShell>();
+                var shell = shellRoot.AddComponent<UnityCortexShellBehaviour>();
                 shell.ConfigureHostServices(compositionRoot.HostServices);
                 Log.WriteInfo("Runtime bootstrap created shell root '" + shellRoot.name + "'.");
             }

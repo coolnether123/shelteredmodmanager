@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Cortex
 {
-    public sealed partial class CortexShell
+    public sealed partial class CortexShellController
     {
         // ── Active open menu tracking (simple one-at-a-time popup model) ────────────────
         private string _openMenuGroup = string.Empty;

@@ -1,59 +1,79 @@
 using Cortex.Services;
-using UnityEngine;
 
 namespace Cortex
 {
-    public sealed partial class CortexShell :
-        ICortexShellLifecycleHost
+    internal interface ICortexShellControllerLifecycleHost
     {
-        GameObject ICortexShellLifecycleHost.ShellGameObject
-        {
-            get { return gameObject; }
-        }
+        bool ReloadSettingsRequested { get; }
+        string RequestedContainerId { get; set; }
+        int RequestedTabIndex { get; set; }
 
-        bool ICortexShellLifecycleHost.ReloadSettingsRequested
+        void InitializeSettingsAndServices();
+        void RestoreWorkbenchSession();
+        void InitializeWorkbenchRuntime();
+        void RegisterCommandHandlers();
+        void RegisterToggleAction();
+        void ReleaseOverlayInputCapture();
+        void ShutdownLanguageService();
+        void ShutdownCompletionAugmentation();
+        void DisableRuntimeLogIntegration();
+        void PersistWorkbenchSession();
+        void PersistWindowSettings();
+        bool IsToggleActionPressed();
+        void ExecuteShellToggle();
+        void ApplySettingsChanges();
+        void UpdateLanguageService();
+        void ActivateContainer(string containerId);
+        string MapLegacyTabIndex(int index);
+        void RenderVisibleShell();
+    }
+
+    public sealed partial class CortexShellController :
+        ICortexShellControllerLifecycleHost
+    {
+        bool ICortexShellControllerLifecycleHost.ReloadSettingsRequested
         {
             get { return _state.ReloadSettingsRequested; }
         }
 
-        string ICortexShellLifecycleHost.RequestedContainerId
+        string ICortexShellControllerLifecycleHost.RequestedContainerId
         {
             get { return _state.Workbench.RequestedContainerId; }
             set { _state.Workbench.RequestedContainerId = value; }
         }
 
-        int ICortexShellLifecycleHost.RequestedTabIndex
+        int ICortexShellControllerLifecycleHost.RequestedTabIndex
         {
             get { return _state.Workbench.RequestedTabIndex; }
             set { _state.Workbench.RequestedTabIndex = value; }
         }
 
-        void ICortexShellLifecycleHost.InitializeSettingsAndServices() { InitializeSettingsAndServices(); }
-        void ICortexShellLifecycleHost.RestoreWorkbenchSession() { RestoreWorkbenchSession(); }
-        void ICortexShellLifecycleHost.InitializeWorkbenchRuntime() { InitializeWorkbenchRuntime(); }
-        void ICortexShellLifecycleHost.RegisterCommandHandlers() { RegisterCommandHandlers(); }
-        void ICortexShellLifecycleHost.RegisterToggleAction() { RegisterToggleAction(); }
-        void ICortexShellLifecycleHost.ReleaseOverlayInputCapture() { ReleaseOverlayInputCapture(); }
-        void ICortexShellLifecycleHost.ShutdownLanguageService() { ShutdownLanguageService(); }
-        void ICortexShellLifecycleHost.ShutdownCompletionAugmentation() { ShutdownCompletionAugmentation(); }
-        void ICortexShellLifecycleHost.DisableRuntimeLogIntegration() { DisableRuntimeLogIntegration(); }
-        void ICortexShellLifecycleHost.PersistWorkbenchSession() { PersistWorkbenchSession(); }
-        void ICortexShellLifecycleHost.PersistWindowSettings() { PersistWindowSettings(); }
+        void ICortexShellControllerLifecycleHost.InitializeSettingsAndServices() { InitializeSettingsAndServices(); }
+        void ICortexShellControllerLifecycleHost.RestoreWorkbenchSession() { RestoreWorkbenchSession(); }
+        void ICortexShellControllerLifecycleHost.InitializeWorkbenchRuntime() { InitializeWorkbenchRuntime(); }
+        void ICortexShellControllerLifecycleHost.RegisterCommandHandlers() { RegisterCommandHandlers(); }
+        void ICortexShellControllerLifecycleHost.RegisterToggleAction() { RegisterToggleAction(); }
+        void ICortexShellControllerLifecycleHost.ReleaseOverlayInputCapture() { ReleaseOverlayInputCapture(); }
+        void ICortexShellControllerLifecycleHost.ShutdownLanguageService() { ShutdownLanguageService(); }
+        void ICortexShellControllerLifecycleHost.ShutdownCompletionAugmentation() { ShutdownCompletionAugmentation(); }
+        void ICortexShellControllerLifecycleHost.DisableRuntimeLogIntegration() { DisableRuntimeLogIntegration(); }
+        void ICortexShellControllerLifecycleHost.PersistWorkbenchSession() { PersistWorkbenchSession(); }
+        void ICortexShellControllerLifecycleHost.PersistWindowSettings() { PersistWindowSettings(); }
 
-        bool ICortexShellLifecycleHost.IsToggleActionPressed()
+        bool ICortexShellControllerLifecycleHost.IsToggleActionPressed()
         {
             return (_platformModule ?? NullCortexPlatformModule.Instance).IsShellTogglePressed(ToggleActionId);
         }
 
-        void ICortexShellLifecycleHost.ExecuteShellToggle()
+        void ICortexShellControllerLifecycleHost.ExecuteShellToggle()
         {
             ExecuteCommand("cortex.shell.toggle", null);
         }
 
-        void ICortexShellLifecycleHost.ApplySettingsChanges() { ApplySettingsChanges(); }
-        void ICortexShellLifecycleHost.UpdateLanguageService() { UpdateLanguageService(); }
-        void ICortexShellLifecycleHost.ActivateContainer(string containerId) { ActivateContainer(containerId); }
-        string ICortexShellLifecycleHost.MapLegacyTabIndex(int index) { return MapLegacyTabIndex(index); }
-        void ICortexShellLifecycleHost.RenderVisibleShell() { RenderVisibleShell(); }
+        void ICortexShellControllerLifecycleHost.ApplySettingsChanges() { ApplySettingsChanges(); }
+        void ICortexShellControllerLifecycleHost.UpdateLanguageService() { UpdateLanguageService(); }
+        void ICortexShellControllerLifecycleHost.ActivateContainer(string containerId) { ActivateContainer(containerId); }
+        string ICortexShellControllerLifecycleHost.MapLegacyTabIndex(int index) { return MapLegacyTabIndex(index); }
+        void ICortexShellControllerLifecycleHost.RenderVisibleShell() { RenderVisibleShell(); }
     }
 }

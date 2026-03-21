@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Cortex
 {
-    public sealed partial class CortexShell : MonoBehaviour
+    public sealed partial class CortexShellController
     {
         private const string ToggleActionId = "cortex.toggle";
         private const int MainWindowId = 0xC07E;
@@ -101,22 +101,17 @@ namespace Cortex
         private bool _lastOverlayMouseCapture;
         private bool _lastOverlayKeyboardCapture;
 
-        private void Awake()
-        {
-            _lifecycleCoordinator.Awake(this);
-        }
-
-        private void Start()
+        public void StartShell()
         {
             _lifecycleCoordinator.Start(this);
         }
 
-        private void OnDestroy()
+        public void ShutdownShell()
         {
             _lifecycleCoordinator.Destroy(this);
         }
 
-        private void Update()
+        public void UpdateShell()
         {
             if (!_visible)
             {
@@ -126,7 +121,7 @@ namespace Cortex
             _lifecycleCoordinator.Update(this);
         }
 
-        private void OnGUI()
+        public void RenderShell()
         {
             _lifecycleCoordinator.OnGui(this);
         }

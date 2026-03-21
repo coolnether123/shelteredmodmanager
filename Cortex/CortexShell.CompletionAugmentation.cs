@@ -7,7 +7,7 @@ using Cortex.Services;
 
 namespace Cortex
 {
-    public sealed partial class CortexShell
+    public sealed partial class CortexShellController
     {
         private const int CompletionAugmentationDebounceMs = 450;
         private ICompletionAugmentationClient _completionAugmentationClient;
