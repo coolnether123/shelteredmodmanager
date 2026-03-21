@@ -51,6 +51,7 @@ namespace Cortex
         private IOverlayInputCaptureService _overlayInputCaptureService;
         private ICortexPlatformModule _platformModule;
         private ICortexHostEnvironment _hostEnvironment;
+        private ICortexShellHostUi _shellHostUi;
         private ITextSearchService _textSearchService;
         private CortexNavigationService _navigationService;
         private IWorkbenchRuntime _workbenchRuntime;
@@ -151,7 +152,7 @@ namespace Cortex
             var previousSkin = GUI.skin;
             GUI.skin = CortexIdeLayout.GetWorkbenchSkin(previousSkin);
             ClampWindowsToScreen();
-            UpdateOverlayInputCapture(Event.current);
+            UpdateOverlayInputCapture();
             if (_state.Chrome.Main.IsCollapsed)
             {
                 DrawCollapsedWindowButton(_state.Chrome.Main, ">", "Cortex");
@@ -313,6 +314,7 @@ namespace Cortex
             _workbenchRuntimeFactory = resolvedHostServices.WorkbenchRuntimeFactory;
             _platformModule = resolvedHostServices.PlatformModule ?? NullCortexPlatformModule.Instance;
             _hostEnvironment = resolvedHostServices.Environment ?? NullCortexHostServices.Instance.Environment;
+            _shellHostUi = resolvedHostServices.ShellHostUi ?? NullCortexHostServices.Instance.ShellHostUi;
         }
 
         private void RegisterExternalWorkbenchPlugins()
@@ -389,10 +391,11 @@ namespace Cortex
             EnableRuntimeLogIntegration();
         }
 
-        private void UpdateOverlayInputCapture(Event currentEvent)
+        private void UpdateOverlayInputCapture()
         {
+            var shellHostUi = ResolveShellHostUi();
             var captureMouse = false;
-            var captureKeyboard = GUIUtility.hotControl != 0 || GUIUtility.keyboardControl != 0;
+            var captureKeyboard = shellHostUi.HotControl != 0 || shellHostUi.KeyboardControl != 0;
 
             if (_state.Onboarding.IsActive)
             {
@@ -402,18 +405,8 @@ namespace Cortex
 
             if (_visible)
             {
-                Vector2 guiMouse;
-                if (currentEvent != null)
-                {
-                    guiMouse = currentEvent.mousePosition;
-                }
-                else
-                {
-                    var screenMouse = Input.mousePosition;
-                    guiMouse = new Vector2(screenMouse.x, Screen.height - screenMouse.y);
-                }
-
-                captureMouse = GUIUtility.hotControl != 0 || IsPointWithinVisibleChrome(guiMouse);
+                var guiMouse = GetPointerPosition();
+                captureMouse = shellHostUi.HotControl != 0 || IsPointWithinVisibleChrome(guiMouse);
             }
 
             ApplyOverlayInputCapture(captureMouse, captureKeyboard);
@@ -455,6 +448,63 @@ namespace Cortex
         private IOverlayInputCaptureService ResolveOverlayInputCaptureService()
         {
             return _overlayInputCaptureService;
+        }
+
+        private ICortexShellHostUi ResolveShellHostUi()
+        {
+            return _shellHostUi ?? NullCortexHostServices.Instance.ShellHostUi;
+        }
+
+        private int GetScreenWidth()
+        {
+            return ResolveShellHostUi().ScreenWidth;
+        }
+
+        private int GetScreenHeight()
+        {
+            return ResolveShellHostUi().ScreenHeight;
+        }
+
+        private Vector2 GetCurrentMousePosition()
+        {
+            var position = ResolveShellHostUi().CurrentMousePosition;
+            return new Vector2(position.X, position.Y);
+        }
+
+        private Vector2 GetPointerPosition()
+        {
+            var position = ResolveShellHostUi().PointerPosition;
+            return new Vector2(position.X, position.Y);
+        }
+
+        private bool HasCurrentInputEvent()
+        {
+            return ResolveShellHostUi().HasCurrentEvent;
+        }
+
+        private bool IsCurrentInputEvent(CortexShellInputEventKind kind)
+        {
+            return ResolveShellHostUi().CurrentEventKind == kind;
+        }
+
+        private bool IsCurrentRawInputEvent(CortexShellInputEventKind kind)
+        {
+            return ResolveShellHostUi().CurrentEventRawKind == kind;
+        }
+
+        private int GetCurrentMouseButton()
+        {
+            return ResolveShellHostUi().CurrentMouseButton;
+        }
+
+        private bool IsCurrentKey(CortexShellInputKey key)
+        {
+            return ResolveShellHostUi().CurrentKey == key;
+        }
+
+        private void ConsumeCurrentInputEvent()
+        {
+            ResolveShellHostUi().ConsumeCurrentEvent();
         }
 
         private bool IsPointWithinVisibleChrome(Vector2 guiPoint)
@@ -701,8 +751,8 @@ namespace Cortex
 
             if (effective.WindowWidth < 980f || effective.WindowHeight < 620f)
             {
-                effective.WindowWidth = Math.Max(980f, Screen.width * 0.82f);
-                effective.WindowHeight = Math.Max(620f, Screen.height * 0.82f);
+                effective.WindowWidth = Math.Max(980f, GetScreenWidth() * 0.82f);
+                effective.WindowHeight = Math.Max(620f, GetScreenHeight() * 0.82f);
             }
 
             if (effective.WindowX < 0f)
@@ -749,22 +799,26 @@ namespace Cortex
                 26f);
         }
 
-        private static Rect ClampRectToScreen(Rect rect, float minWidth, float minHeight)
+        private Rect ClampRectToScreen(Rect rect, float minWidth, float minHeight)
         {
-            var width = Mathf.Clamp(rect.width, minWidth, Math.Max(minWidth, Screen.width - 20f));
-            var height = Mathf.Clamp(rect.height, minHeight, Math.Max(minHeight, Screen.height - 20f));
-            var x = Mathf.Clamp(rect.x, 0f, Math.Max(0f, Screen.width - width));
-            var y = Mathf.Clamp(rect.y, 0f, Math.Max(0f, Screen.height - height));
+            var screenWidth = GetScreenWidth();
+            var screenHeight = GetScreenHeight();
+            var width = Mathf.Clamp(rect.width, minWidth, Math.Max(minWidth, screenWidth - 20f));
+            var height = Mathf.Clamp(rect.height, minHeight, Math.Max(minHeight, screenHeight - 20f));
+            var x = Mathf.Clamp(rect.x, 0f, Math.Max(0f, screenWidth - width));
+            var y = Mathf.Clamp(rect.y, 0f, Math.Max(0f, screenHeight - height));
             return new Rect(x, y, width, height);
         }
 
         private void FitMainWindowToScreen()
         {
+            var screenWidth = GetScreenWidth();
+            var screenHeight = GetScreenHeight();
             _windowRect = new Rect(
-                Mathf.Max(10f, Screen.width * 0.05f),
-                Mathf.Max(10f, Screen.height * 0.05f),
-                Mathf.Max(980f, Screen.width * 0.9f),
-                Mathf.Max(620f, Screen.height * 0.88f));
+                Mathf.Max(10f, screenWidth * 0.05f),
+                Mathf.Max(10f, screenHeight * 0.05f),
+                Mathf.Max(980f, screenWidth * 0.9f),
+                Mathf.Max(620f, screenHeight * 0.88f));
             _state.Chrome.Main.ExpandedRect = _windowRect;
         }
 
@@ -961,16 +1015,18 @@ namespace Cortex
             };
         }
 
-        private static void ApplyWindowResize(int windowId, ref Rect windowRect, float minWidth, float minHeight)
+        private void ApplyWindowResize(int windowId, ref Rect windowRect, float minWidth, float minHeight)
         {
+            var screenWidth = GetScreenWidth();
+            var screenHeight = GetScreenHeight();
             var localRect = new Rect(0f, 0f, windowRect.width, windowRect.height);
             localRect = CortexWindowChromeController.DrawResizeHandle(
                 windowId,
                 localRect,
                 minWidth,
                 minHeight,
-                Math.Max(minWidth, Screen.width - 12f),
-                Math.Max(minHeight, Screen.height - 12f));
+                Math.Max(minWidth, screenWidth - 12f),
+                Math.Max(minHeight, screenHeight - 12f));
             windowRect.width = localRect.width;
             windowRect.height = localRect.height;
         }

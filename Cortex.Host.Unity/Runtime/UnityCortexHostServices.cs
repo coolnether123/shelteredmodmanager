@@ -10,13 +10,15 @@ namespace Cortex.Host.Unity.Runtime
         private readonly IPathInteractionService _pathInteractionService;
         private readonly IWorkbenchRuntimeFactory _workbenchRuntimeFactory;
         private readonly ICortexPlatformModule _platformModule;
+        private readonly ICortexShellHostUi _shellHostUi;
 
         public UnityCortexHostServices()
             : this(
                 new UnityCortexHostEnvironment(),
                 new WindowsPathInteractionService(),
                 new UnityWorkbenchRuntimeFactory(),
-                new ModApiCortexPlatformModule())
+                new ModApiCortexPlatformModule(),
+                new UnityCortexShellHostUi())
         {
         }
 
@@ -24,12 +26,14 @@ namespace Cortex.Host.Unity.Runtime
             ICortexHostEnvironment environment,
             IPathInteractionService pathInteractionService,
             IWorkbenchRuntimeFactory workbenchRuntimeFactory,
-            ICortexPlatformModule platformModule)
+            ICortexPlatformModule platformModule,
+            ICortexShellHostUi shellHostUi)
         {
             _environment = environment;
             _pathInteractionService = pathInteractionService;
             _workbenchRuntimeFactory = workbenchRuntimeFactory;
             _platformModule = platformModule;
+            _shellHostUi = shellHostUi;
         }
 
         public ICortexHostEnvironment Environment
@@ -50,6 +54,11 @@ namespace Cortex.Host.Unity.Runtime
         public ICortexPlatformModule PlatformModule
         {
             get { return _platformModule; }
+        }
+
+        public ICortexShellHostUi ShellHostUi
+        {
+            get { return _shellHostUi; }
         }
     }
 }
