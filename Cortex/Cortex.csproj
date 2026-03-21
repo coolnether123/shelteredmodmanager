@@ -112,6 +112,7 @@
     <Compile Include="Services\CortexOnboardingProjectSetupService.cs" />
     <Compile Include="Services\CortexOnboardingService.cs" />
     <Compile Include="Services\CortexOnboardingWorkspaceApplier.cs" />
+    <Compile Include="Services\NullCortexHostServices.cs" />
     <Compile Include="Services\NullCortexPlatformModule.cs" />
     <Compile Include="State\CortexOnboardingState.cs" />
     <Compile Include="State\CortexShellState.cs" />

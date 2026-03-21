@@ -50,6 +50,7 @@ namespace Cortex
         private IRestartCoordinator _restartCoordinator;
         private IOverlayInputCaptureService _overlayInputCaptureService;
         private ICortexPlatformModule _platformModule;
+        private ICortexHostEnvironment _hostEnvironment;
         private ITextSearchService _textSearchService;
         private CortexNavigationService _navigationService;
         private IWorkbenchRuntime _workbenchRuntime;
@@ -250,17 +251,15 @@ namespace Cortex
 
         private void InitializeSettingsAndServices()
         {
-            var gameRoot = Directory.GetParent(Application.dataPath).FullName;
-            var smmRoot = Path.Combine(gameRoot, "SMM");
-            var smmBin = Path.Combine(smmRoot, "bin");
-            if (!Directory.Exists(smmBin))
+            var hostEnvironment = _hostEnvironment ?? NullCortexHostServices.Instance.Environment;
+            if (!string.IsNullOrEmpty(hostEnvironment.HostBinPath) && !Directory.Exists(hostEnvironment.HostBinPath))
             {
-                Directory.CreateDirectory(smmBin);
+                Directory.CreateDirectory(hostEnvironment.HostBinPath);
             }
 
-            _settingsStore = new JsonCortexSettingsStore(Path.Combine(smmBin, "cortex_settings.json"));
-            _workbenchPersistenceService = new JsonWorkbenchPersistenceService(Path.Combine(smmBin, "cortex_workbench.json"));
-            var settings = BuildEffectiveSettings(_settingsStore.Load(), gameRoot, smmRoot, smmBin);
+            _settingsStore = new JsonCortexSettingsStore(hostEnvironment.SettingsFilePath);
+            _workbenchPersistenceService = new JsonWorkbenchPersistenceService(hostEnvironment.WorkbenchPersistenceFilePath);
+            var settings = BuildEffectiveSettings(_settingsStore.Load(), hostEnvironment);
             _state.Settings = settings;
             _windowRect = new Rect(settings.WindowX, settings.WindowY, settings.WindowWidth, settings.WindowHeight);
             _logWindowRect = new Rect(settings.WindowX + 30f, settings.WindowY + 30f, Math.Max(760f, settings.WindowWidth - 120f), Math.Max(460f, settings.WindowHeight - 140f));
@@ -269,7 +268,7 @@ namespace Cortex
             _state.Chrome.Logs.ExpandedRect = _logWindowRect;
             _state.Chrome.Logs.CollapsedRect = CortexWindowChromeController.BuildCollapsedRect(_logWindowRect, 110f, 26f);
 
-            InitializeServices(gameRoot, smmRoot, smmBin, settings);
+            InitializeServices(hostEnvironment, settings);
         }
 
         private void InitializeWorkbenchRuntime()
@@ -312,14 +311,13 @@ namespace Cortex
             }
         }
 
-        public void ConfigureHostServices(
-            IPathInteractionService pathInteractionService,
-            IWorkbenchRuntimeFactory workbenchRuntimeFactory,
-            ICortexPlatformModule platformModule)
+        public void ConfigureHostServices(ICortexHostServices hostServices)
         {
-            _pathInteractionService = pathInteractionService;
-            _workbenchRuntimeFactory = workbenchRuntimeFactory;
-            _platformModule = platformModule ?? NullCortexPlatformModule.Instance;
+            var resolvedHostServices = hostServices ?? NullCortexHostServices.Instance;
+            _pathInteractionService = resolvedHostServices.PathInteractionService;
+            _workbenchRuntimeFactory = resolvedHostServices.WorkbenchRuntimeFactory;
+            _platformModule = resolvedHostServices.PlatformModule ?? NullCortexPlatformModule.Instance;
+            _hostEnvironment = resolvedHostServices.Environment ?? NullCortexHostServices.Instance.Environment;
         }
 
         private void RegisterExternalWorkbenchPlugins()
@@ -354,7 +352,7 @@ namespace Cortex
             }
         }
 
-        private void InitializeServices(string gameRoot, string smmRoot, string smmBin, CortexSettings settings)
+        private void InitializeServices(ICortexHostEnvironment hostEnvironment, CortexSettings settings)
         {
             MMLog.WriteInfo("[Cortex] Initializing runtime. WorkspaceRoot=" +
                 (settings != null ? settings.WorkspaceRootPath ?? string.Empty : string.Empty) +
@@ -363,7 +361,7 @@ namespace Cortex
                 ", CompletionProvider=" + (settings != null ? settings.CompletionAugmentationProviderId ?? string.Empty : string.Empty) + ".");
 
             var projectCatalogPath = string.IsNullOrEmpty(settings.ProjectCatalogPath)
-                ? Path.Combine(smmBin, "cortex_projects.json")
+                ? hostEnvironment.ProjectCatalogPath
                 : settings.ProjectCatalogPath;
 
             var platformModule = _platformModule ?? NullCortexPlatformModule.Instance;
@@ -392,7 +390,7 @@ namespace Cortex
             _overlayInputCaptureService = platformModule.OverlayInputCaptureService;
             _textSearchService = new TextSearchService();
             _navigationService = new CortexNavigationService(_documentService, _sourceReferenceService, _runtimeSourceNavigationService, _sourceLookupIndex);
-            InitializeLanguageService(smmBin, settings);
+            InitializeLanguageService(hostEnvironment.HostBinPath, settings);
             EnableRuntimeLogIntegration();
         }
 
@@ -505,14 +503,12 @@ namespace Cortex
             PersistWorkbenchSession();
             PersistWindowSettings();
 
-            var gameRoot = Directory.GetParent(Application.dataPath).FullName;
-            var smmRoot = Path.Combine(gameRoot, "SMM");
-            var smmBin = Path.Combine(smmRoot, "bin");
+            var hostEnvironment = _hostEnvironment ?? NullCortexHostServices.Instance.Environment;
             var activeProjectId = _state.SelectedProject != null ? _state.SelectedProject.ModId : string.Empty;
             var activeDocumentPath = _state.Documents.ActiveDocument != null ? _state.Documents.ActiveDocument.FilePath : string.Empty;
 
-            _state.Settings = BuildEffectiveSettings(_state.Settings, gameRoot, smmRoot, smmBin);
-            InitializeServices(gameRoot, smmRoot, smmBin, _state.Settings);
+            _state.Settings = BuildEffectiveSettings(_state.Settings, hostEnvironment);
+            InitializeServices(hostEnvironment, _state.Settings);
             _settingsStore.Save(_state.Settings);
 
             if (!string.IsNullOrEmpty(activeProjectId))
@@ -548,13 +544,13 @@ namespace Cortex
             }
         }
 
-        private CortexSettings BuildEffectiveSettings(CortexSettings settings, string gameRoot, string smmRoot, string smmBin)
+        private CortexSettings BuildEffectiveSettings(CortexSettings settings, ICortexHostEnvironment hostEnvironment)
         {
             var effective = settings ?? new CortexSettings();
 
             if (string.IsNullOrEmpty(effective.ModsRootPath))
             {
-                effective.ModsRootPath = Path.Combine(smmRoot, "mods");
+                effective.ModsRootPath = hostEnvironment.ModsRootPath;
             }
 
             if (string.IsNullOrEmpty(effective.WorkspaceRootPath))
@@ -564,7 +560,7 @@ namespace Cortex
 
             if (string.IsNullOrEmpty(effective.ManagedAssemblyRootPath))
             {
-                effective.ManagedAssemblyRootPath = Path.Combine(Path.Combine(gameRoot, "Sheltered_Data"), "Managed");
+                effective.ManagedAssemblyRootPath = hostEnvironment.ManagedAssemblyRootPath;
             }
 
             if (string.IsNullOrEmpty(effective.AdditionalSourceRoots))
@@ -579,17 +575,17 @@ namespace Cortex
 
             if (string.IsNullOrEmpty(effective.LogFilePath))
             {
-                effective.LogFilePath = Path.Combine(smmRoot, "mod_manager.log");
+                effective.LogFilePath = hostEnvironment.LogFilePath;
             }
 
             if (string.IsNullOrEmpty(effective.ProjectCatalogPath))
             {
-                effective.ProjectCatalogPath = Path.Combine(smmBin, "cortex_projects.json");
+                effective.ProjectCatalogPath = hostEnvironment.ProjectCatalogPath;
             }
 
             if (string.IsNullOrEmpty(effective.DecompilerCachePath))
             {
-                effective.DecompilerCachePath = Path.Combine(smmBin, "cortex_cache");
+                effective.DecompilerCachePath = hostEnvironment.DecompilerCachePath;
             }
 
             if (string.IsNullOrEmpty(effective.DefaultBuildConfiguration))

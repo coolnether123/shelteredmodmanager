@@ -48,6 +48,9 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Runtime\CortexUnityRuntimeBootstrap.cs" />
     <Compile Include="Runtime\MmLogCortexLogSink.cs" />
+    <Compile Include="Runtime\UnityCortexHostCompositionRoot.cs" />
+    <Compile Include="Runtime\UnityCortexHostEnvironment.cs" />
+    <Compile Include="Runtime\UnityCortexHostServices.cs" />
     <Compile Include="Runtime\UnityWorkbenchRuntime.cs" />
     <Compile Include="Runtime\UnityWorkbenchRuntimeFactory.cs" />
     <Compile Include="Runtime\WindowsPathInteractionService.cs" />
