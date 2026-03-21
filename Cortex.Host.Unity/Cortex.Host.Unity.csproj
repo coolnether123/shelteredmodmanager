@@ -38,6 +38,7 @@
     <Compile Include="Composition\DefaultWorkbenchAppearanceContributions.cs" />
     <Compile Include="Composition\DefaultWorkbenchCommandContributions.cs" />
     <Compile Include="Composition\DefaultWorkbenchComposition.cs" />
+    <Compile Include="Composition\DefaultWorkbenchOnboardingContributions.cs" />
     <Compile Include="Composition\DefaultWorkbenchSettingContributions.cs" />
     <Compile Include="Composition\DefaultWorkbenchViewContributions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

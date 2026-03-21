@@ -77,6 +77,8 @@ namespace Cortex.Presentation.Models
         public readonly List<StatusItemContribution> LeftStatusItems;
         public readonly List<StatusItemContribution> RightStatusItems;
         public readonly List<ThemeContribution> Themes;
+        public readonly List<OnboardingProfileContribution> OnboardingProfiles;
+        public readonly List<OnboardingLayoutPresetContribution> OnboardingLayoutPresets;
         public readonly List<EditorContribution> Editors;
         public readonly List<SettingSectionContribution> SettingSections;
         public readonly List<SettingContribution> Settings;
@@ -94,6 +96,8 @@ namespace Cortex.Presentation.Models
             LeftStatusItems = new List<StatusItemContribution>();
             RightStatusItems = new List<StatusItemContribution>();
             Themes = new List<ThemeContribution>();
+            OnboardingProfiles = new List<OnboardingProfileContribution>();
+            OnboardingLayoutPresets = new List<OnboardingLayoutPresetContribution>();
             Editors = new List<EditorContribution>();
             SettingSections = new List<SettingSectionContribution>();
             Settings = new List<SettingContribution>();

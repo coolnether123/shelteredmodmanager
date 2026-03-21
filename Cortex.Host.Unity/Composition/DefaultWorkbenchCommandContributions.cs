@@ -31,6 +31,7 @@ namespace Cortex.Host.Unity.Composition
             context.RegisterCommand("cortex.window.build", "Build", "Window", "Show the build tool window.", string.Empty, 50, true, false);
             context.RegisterCommand("cortex.window.runtime", "Runtime", "Window", "Show the runtime tool window.", string.Empty, 60, true, false);
             context.RegisterCommand("cortex.window.settings", "Settings", "Window", "Show Cortex settings in the editor surface.", string.Empty, 70, true, false);
+            context.RegisterCommand("cortex.onboarding.reopen", "Reopen Onboarding", "Workbench", "Show the onboarding flow again.", string.Empty, 80, true, false);
             context.RegisterCommand("cortex.editor.find", "Find...", "Editor", "Open the find bar for text search.", "Ctrl+F", 0, true, false);
             context.RegisterCommand("cortex.search.next", "Find Next", "Editor", "Advance to the next search result.", "F3", 110, true, false);
             context.RegisterCommand("cortex.search.previous", "Find Previous", "Editor", "Move to the previous search result.", "Shift+F3", 120, true, false);
@@ -63,6 +64,7 @@ namespace Cortex.Host.Unity.Composition
             context.RegisterMenu("cortex.window.build", MenuProjectionLocation.MainMenu, "Window", 50, string.Empty);
             context.RegisterMenu("cortex.window.runtime", MenuProjectionLocation.MainMenu, "Window", 60, string.Empty);
             context.RegisterMenu("cortex.window.settings", MenuProjectionLocation.MainMenu, "Window", 70, string.Empty);
+            context.RegisterMenu("cortex.onboarding.reopen", MenuProjectionLocation.MainMenu, "Window", 80, string.Empty);
             context.RegisterMenu("cortex.shell.fitWindow", MenuProjectionLocation.MainMenu, "Window", 110, string.Empty);
             context.RegisterMenu("cortex.editor.find", MenuProjectionLocation.MainMenu, "Edit", 0, string.Empty);
             context.RegisterMenu("cortex.build.execute", MenuProjectionLocation.MainMenu, "Build", 0, string.Empty);

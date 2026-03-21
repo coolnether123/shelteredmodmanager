@@ -60,6 +60,7 @@
     <Compile Include="Models\NavigationModels.cs" />
     <Compile Include="Models\RuntimeLogEntry.cs" />
     <Compile Include="Models\SourceReferenceModels.cs" />
+    <Compile Include="Models\OnboardingModels.cs" />
     <Compile Include="Models\WorkbenchIds.cs" />
     <Compile Include="Models\WorkbenchPersistenceModels.cs" />
     <Compile Include="Models\WorkbenchModels.cs" />

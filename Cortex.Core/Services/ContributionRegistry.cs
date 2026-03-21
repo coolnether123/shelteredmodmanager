@@ -8,11 +8,15 @@ namespace Cortex.Core.Services
     public sealed class ContributionRegistry : IContributionRegistry
     {
         private readonly Dictionary<string, ViewContainerContribution> _containers;
-        private readonly Dictionary<string, List<ViewContribution> > _viewsByContainer;
+        private readonly Dictionary<string, List<ViewContribution>> _viewsByContainer;
         private readonly Dictionary<string, EditorContribution> _editors;
         private readonly List<MenuContribution> _menus;
         private readonly Dictionary<string, StatusItemContribution> _statusItems;
         private readonly Dictionary<string, ThemeContribution> _themes;
+        private readonly Dictionary<string, OnboardingProfileContribution> _onboardingProfiles;
+        private readonly List<OnboardingProfileContribution> _orderedOnboardingProfiles;
+        private readonly Dictionary<string, OnboardingLayoutPresetContribution> _onboardingLayoutPresets;
+        private readonly List<OnboardingLayoutPresetContribution> _orderedOnboardingLayoutPresets;
         private readonly Dictionary<string, IconContribution> _icons;
         private readonly Dictionary<string, SettingSectionContribution> _settingSections;
         private readonly Dictionary<string, SettingContribution> _settings;
@@ -20,11 +24,15 @@ namespace Cortex.Core.Services
         public ContributionRegistry()
         {
             _containers = new Dictionary<string, ViewContainerContribution>(StringComparer.OrdinalIgnoreCase);
-            _viewsByContainer = new Dictionary<string, List<ViewContribution> >(StringComparer.OrdinalIgnoreCase);
+            _viewsByContainer = new Dictionary<string, List<ViewContribution>>(StringComparer.OrdinalIgnoreCase);
             _editors = new Dictionary<string, EditorContribution>(StringComparer.OrdinalIgnoreCase);
             _menus = new List<MenuContribution>();
             _statusItems = new Dictionary<string, StatusItemContribution>(StringComparer.OrdinalIgnoreCase);
             _themes = new Dictionary<string, ThemeContribution>(StringComparer.OrdinalIgnoreCase);
+            _onboardingProfiles = new Dictionary<string, OnboardingProfileContribution>(StringComparer.OrdinalIgnoreCase);
+            _orderedOnboardingProfiles = new List<OnboardingProfileContribution>();
+            _onboardingLayoutPresets = new Dictionary<string, OnboardingLayoutPresetContribution>(StringComparer.OrdinalIgnoreCase);
+            _orderedOnboardingLayoutPresets = new List<OnboardingLayoutPresetContribution>();
             _icons = new Dictionary<string, IconContribution>(StringComparer.OrdinalIgnoreCase);
             _settingSections = new Dictionary<string, SettingSectionContribution>(StringComparer.OrdinalIgnoreCase);
             _settings = new Dictionary<string, SettingContribution>(StringComparer.OrdinalIgnoreCase);
@@ -114,6 +122,28 @@ namespace Cortex.Core.Services
             }
 
             _themes[contribution.ThemeId] = contribution;
+        }
+
+        public void RegisterOnboardingProfile(OnboardingProfileContribution contribution)
+        {
+            if (contribution == null || string.IsNullOrEmpty(contribution.ProfileId))
+            {
+                return;
+            }
+
+            _onboardingProfiles[contribution.ProfileId] = contribution;
+            RebuildOnboardingProfileOrder();
+        }
+
+        public void RegisterOnboardingLayoutPreset(OnboardingLayoutPresetContribution contribution)
+        {
+            if (contribution == null || string.IsNullOrEmpty(contribution.LayoutPresetId))
+            {
+                return;
+            }
+
+            _onboardingLayoutPresets[contribution.LayoutPresetId] = contribution;
+            RebuildOnboardingLayoutPresetOrder();
         }
 
         public void RegisterIcon(IconContribution contribution)
@@ -246,6 +276,16 @@ namespace Cortex.Core.Services
             return results;
         }
 
+        public IList<OnboardingProfileContribution> GetOnboardingProfiles()
+        {
+            return new List<OnboardingProfileContribution>(_orderedOnboardingProfiles);
+        }
+
+        public IList<OnboardingLayoutPresetContribution> GetOnboardingLayoutPresets()
+        {
+            return new List<OnboardingLayoutPresetContribution>(_orderedOnboardingLayoutPresets);
+        }
+
         public IList<IconContribution> GetIcons()
         {
             var results = new List<IconContribution>(_icons.Values);
@@ -289,6 +329,32 @@ namespace Cortex.Core.Services
                     : string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
             });
             return results;
+        }
+
+        private void RebuildOnboardingProfileOrder()
+        {
+            _orderedOnboardingProfiles.Clear();
+            _orderedOnboardingProfiles.AddRange(_onboardingProfiles.Values);
+            _orderedOnboardingProfiles.Sort(delegate(OnboardingProfileContribution left, OnboardingProfileContribution right)
+            {
+                var order = left.SortOrder.CompareTo(right.SortOrder);
+                return order != 0
+                    ? order
+                    : string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
+            });
+        }
+
+        private void RebuildOnboardingLayoutPresetOrder()
+        {
+            _orderedOnboardingLayoutPresets.Clear();
+            _orderedOnboardingLayoutPresets.AddRange(_onboardingLayoutPresets.Values);
+            _orderedOnboardingLayoutPresets.Sort(delegate(OnboardingLayoutPresetContribution left, OnboardingLayoutPresetContribution right)
+            {
+                var order = left.SortOrder.CompareTo(right.SortOrder);
+                return order != 0
+                    ? order
+                    : string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
+            });
         }
     }
 }

@@ -47,6 +47,10 @@ namespace Cortex.Core.Models
         public string OpenRouterAppUrl;
         public string OpenRouterAppTitle;
         public int OpenRouterRequestTimeoutMs;
+        public bool HasCompletedOnboarding;
+        public string DefaultOnboardingProfileId;
+        public string DefaultOnboardingLayoutPresetId;
+        public string DefaultOnboardingThemeId;
         public string ThemeId;
         public string DefaultBuildConfiguration;
         public int BuildTimeoutMs;
@@ -60,6 +64,7 @@ namespace Cortex.Core.Models
         public float LogsPaneWidth;
         public float ProjectsPaneWidth;
         public float EditorFilePaneWidth;
+        public float PanelPaneSize;
         public float WindowX;
         public float WindowY;
         public float WindowWidth;
@@ -109,6 +114,10 @@ namespace Cortex.Core.Models
             OpenRouterAppUrl = string.Empty;
             OpenRouterAppTitle = "Cortex";
             OpenRouterRequestTimeoutMs = 10000;
+            HasCompletedOnboarding = false;
+            DefaultOnboardingProfileId = string.Empty;
+            DefaultOnboardingLayoutPresetId = string.Empty;
+            DefaultOnboardingThemeId = string.Empty;
             ThemeId = "cortex.vs-dark";
             DefaultBuildConfiguration = "Debug";
             BuildTimeoutMs = 300000;
@@ -122,6 +131,7 @@ namespace Cortex.Core.Models
             LogsPaneWidth = 520f;
             ProjectsPaneWidth = 360f;
             EditorFilePaneWidth = 420f;
+            PanelPaneSize = 280f;
             WindowX = 70f;
             WindowY = 70f;
             WindowWidth = 1180f;

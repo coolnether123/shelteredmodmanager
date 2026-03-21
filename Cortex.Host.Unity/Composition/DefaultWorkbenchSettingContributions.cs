@@ -88,6 +88,7 @@ namespace Cortex.Host.Unity.Composition
             context.RegisterSetting(nameof(CortexSettings.LogsPaneWidth), "Logs Pane Width", "Preferred width for the logs/details split.", "Layout", "520", SettingValueKind.Float, 0);
             context.RegisterSetting(nameof(CortexSettings.ProjectsPaneWidth), "Projects Pane Width", "Preferred width for the side host.", "Layout", "360", SettingValueKind.Float, 10);
             context.RegisterSetting(nameof(CortexSettings.EditorFilePaneWidth), "Secondary Tool Width", "Preferred width for the right-side tool window host.", "Layout", "420", SettingValueKind.Float, 20);
+            context.RegisterSetting(nameof(CortexSettings.PanelPaneSize), "Panel Height", "Preferred height for the lower utility panel host.", "Layout", "280", SettingValueKind.Float, 30);
             context.RegisterSetting(nameof(CortexSettings.WindowX), "Window X", "Saved shell position on the X axis.", "Window", "70", SettingValueKind.Float, 0);
             context.RegisterSetting(nameof(CortexSettings.WindowY), "Window Y", "Saved shell position on the Y axis.", "Window", "70", SettingValueKind.Float, 10);
             context.RegisterSetting(nameof(CortexSettings.WindowWidth), "Window Width", "Saved shell width.", "Window", "1180", SettingValueKind.Float, 20);

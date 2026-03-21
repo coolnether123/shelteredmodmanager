@@ -22,6 +22,8 @@ namespace Cortex.Core.Abstractions
         void RegisterStatusItem(StatusItemContribution contribution);
         void RegisterTheme(ThemeContribution contribution);
         void RegisterIcon(IconContribution contribution);
+        void RegisterOnboardingProfile(OnboardingProfileContribution contribution);
+        void RegisterOnboardingLayoutPreset(OnboardingLayoutPresetContribution contribution);
         void RegisterSettingSection(SettingSectionContribution contribution);
         void RegisterSetting(SettingContribution contribution);
 
@@ -32,6 +34,8 @@ namespace Cortex.Core.Abstractions
         IList<StatusItemContribution> GetStatusItems();
         IList<ThemeContribution> GetThemes();
         IList<IconContribution> GetIcons();
+        IList<OnboardingProfileContribution> GetOnboardingProfiles();
+        IList<OnboardingLayoutPresetContribution> GetOnboardingLayoutPresets();
         IList<SettingSectionContribution> GetSettingSections();
         IList<SettingContribution> GetSettings();
     }

@@ -14,6 +14,7 @@ namespace Cortex.Host.Unity.Composition
             new DefaultWorkbenchViewContributions().Register(context);
             new DefaultWorkbenchCommandContributions().Register(context);
             new DefaultWorkbenchAppearanceContributions().Register(context, rendererDisplayName);
+            new DefaultWorkbenchOnboardingContributions().Register(context);
             new DefaultWorkbenchSettingContributions().Register(context);
         }
     }

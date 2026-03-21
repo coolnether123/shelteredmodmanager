@@ -109,6 +109,9 @@ namespace Cortex.Core.Models
         public string ThemeId;
         public string DisplayName;
         public string Description;
+        public bool IsDefault;
+        public bool ShowInOnboarding;
+        public bool SupportsCustomColors;
         public string BackgroundColor;
         public string SurfaceColor;
         public string HeaderColor;

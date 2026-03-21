@@ -9,6 +9,7 @@ using Cortex.Core.Services;
 using Cortex.Host.Unity.Runtime;
 using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
+using Cortex.Shell;
 using Cortex.Services;
 using ModAPI.Core;
 using ModAPI.InputActions;
@@ -22,6 +23,7 @@ namespace Cortex
         private const KeyCode ToggleKey = KeyCode.F8;
         private const int MainWindowId = 0xC07E;
         private const int LogsWindowId = 0xC07F;
+        private const int OnboardingWindowId = 0xC080;
         private const string OverlayInputCaptureOwnerId = "Cortex.Shell";
 
         private Rect _windowRect = new Rect(70f, 70f, 1180f, 760f);
@@ -64,6 +66,8 @@ namespace Cortex
         private readonly CortexShellLanguageRequestDispatcher _languageRequestDispatcher = new CortexShellLanguageRequestDispatcher();
         private readonly CortexShellLanguageResponseProcessor _languageResponseProcessor = new CortexShellLanguageResponseProcessor();
         private readonly CortexShellLanguageRuntimeState _languageRuntime = new CortexShellLanguageRuntimeState();
+        private readonly CortexOnboardingCoordinator _onboardingCoordinator = new CortexOnboardingCoordinator();
+        private readonly CortexShellOnboardingLifecycle _onboardingLifecycle = new CortexShellOnboardingLifecycle();
 
         private readonly CortexShellState _state = new CortexShellState();
         private ExternalWorkbenchPluginLoader _externalPluginLoader;
@@ -124,10 +128,21 @@ namespace Cortex
 
         private void RenderVisibleShell()
         {
+            if (_state.OpenOnboardingRequested)
+            {
+                _state.OpenOnboardingRequested = false;
+                OpenOnboarding(true);
+            }
+
             if (!_visible)
             {
                 ReleaseOverlayInputCapture();
                 return;
+            }
+
+            if (_state.Onboarding.IsActive)
+            {
+                PreviewOnboardingSelections();
             }
 
             _frameSnapshot = _workbenchRuntime != null ? _workbenchRuntime.CreateSnapshot() : new WorkbenchPresentationSnapshot();
@@ -147,7 +162,7 @@ namespace Cortex
                 _state.Chrome.Main.ExpandedRect = _windowRect;
             }
 
-            if (_state.Logs.ShowDetachedWindow)
+            if (_state.Logs.ShowDetachedWindow && !_state.Onboarding.IsActive)
             {
                 if (_state.Chrome.Logs.IsCollapsed)
                 {
@@ -160,6 +175,11 @@ namespace Cortex
                 }
             }
 
+            if (_state.Onboarding.IsActive)
+            {
+                DrawOnboardingOverlay();
+            }
+
             _frameSnapshot = null;
             GUI.skin = previousSkin;
         }
@@ -167,6 +187,7 @@ namespace Cortex
         private void DrawWindow(int windowId)
         {
             var snapshot = _frameSnapshot ?? (_workbenchRuntime != null ? _workbenchRuntime.CreateSnapshot() : new WorkbenchPresentationSnapshot());
+            var onboardingActive = IsOnboardingActive();
             const float headerHeight = 30f;
             const float statusHeight = 24f;
             var contentRect = new Rect(6f, 24f, Mathf.Max(0f, _windowRect.width - 12f), Mathf.Max(0f, _windowRect.height - 30f));
@@ -180,6 +201,13 @@ namespace Cortex
                 Mathf.Max(0f, statusRect.y - workbenchTop - 3f));
 
             _menuGroupRects.Clear();
+            var previousEnabled = GUI.enabled;
+            if (onboardingActive)
+            {
+                GUI.enabled = false;
+                _openMenuGroup = string.Empty;
+            }
+
             GUILayout.BeginArea(headerRect);
             DrawHeader(snapshot);
             GUILayout.EndArea();
@@ -191,9 +219,13 @@ namespace Cortex
             GUILayout.BeginArea(statusRect);
             DrawStatusStrip(snapshot);
             GUILayout.EndArea();
-            DrawOpenMenuPanel(snapshot, headerRect);
-            ApplyWindowResize(windowId, ref _windowRect, 920f, 580f);
-            GUI.DragWindow(new Rect(0f, 0f, 10000f, 28f));
+            GUI.enabled = previousEnabled;
+            if (!onboardingActive)
+            {
+                DrawOpenMenuPanel(snapshot, headerRect);
+                ApplyWindowResize(windowId, ref _windowRect, 920f, 580f);
+                GUI.DragWindow(new Rect(0f, 0f, 10000f, 28f));
+            }
         }
 
         private void DrawLogsWindow(int windowId)
@@ -247,7 +279,7 @@ namespace Cortex
             RegisterExternalWorkbenchPlugins();
             _workbenchRuntime.LayoutState.PrimarySideWidth = _state.Settings != null ? _state.Settings.ProjectsPaneWidth : 360f;
             _workbenchRuntime.LayoutState.SecondarySideWidth = _state.Settings != null ? _state.Settings.EditorFilePaneWidth : 320f;
-            _workbenchRuntime.LayoutState.PanelSize = 260f;
+            _workbenchRuntime.LayoutState.PanelSize = _state.Settings != null ? _state.Settings.PanelPaneSize : 280f;
             _workbenchRuntime.ThemeState.ThemeId = _state.Settings != null && !string.IsNullOrEmpty(_state.Settings.ThemeId)
                 ? _state.Settings.ThemeId
                 : _workbenchRuntime.ThemeState.ThemeId;
@@ -258,6 +290,10 @@ namespace Cortex
             }
             ActivateContainer(_state.Workbench.EditorContainerId);
             ActivateContainer(_state.Workbench.PanelContainerId);
+            if (_state.Settings != null && !_state.Settings.HasCompletedOnboarding)
+            {
+                OpenOnboarding(false);
+            }
         }
 
         private void RegisterExternalWorkbenchPlugins()
@@ -349,6 +385,12 @@ namespace Cortex
         {
             var captureMouse = false;
             var captureKeyboard = GUIUtility.hotControl != 0 || GUIUtility.keyboardControl != 0;
+
+            if (_state.Onboarding.IsActive)
+            {
+                ApplyOverlayInputCapture(true, true);
+                return;
+            }
 
             if (_visible)
             {
@@ -501,6 +543,7 @@ namespace Cortex
             {
                 _workbenchRuntime.LayoutState.PrimarySideWidth = _state.Settings.ProjectsPaneWidth;
                 _workbenchRuntime.LayoutState.SecondarySideWidth = _state.Settings.EditorFilePaneWidth;
+                _workbenchRuntime.LayoutState.PanelSize = _state.Settings.PanelPaneSize;
                 _workbenchRuntime.ThemeState.ThemeId = string.IsNullOrEmpty(_state.Settings.ThemeId)
                     ? _workbenchRuntime.ThemeState.ThemeId
                     : _state.Settings.ThemeId;
@@ -627,6 +670,21 @@ namespace Cortex
                 effective.OpenRouterRequestTimeoutMs = 10000;
             }
 
+            if (string.IsNullOrEmpty(effective.DefaultOnboardingProfileId))
+            {
+                effective.DefaultOnboardingProfileId = "cortex.onboarding.profile.ide";
+            }
+
+            if (string.IsNullOrEmpty(effective.DefaultOnboardingLayoutPresetId))
+            {
+                effective.DefaultOnboardingLayoutPresetId = "cortex.onboarding.layout.visual-studio";
+            }
+
+            if (string.IsNullOrEmpty(effective.DefaultOnboardingThemeId))
+            {
+                effective.DefaultOnboardingThemeId = "cortex.vs-dark";
+            }
+
             if (effective.MaxRecentLogs <= 0)
             {
                 effective.MaxRecentLogs = 300;
@@ -645,6 +703,11 @@ namespace Cortex
             if (effective.EditorFilePaneWidth < 240f)
             {
                 effective.EditorFilePaneWidth = 420f;
+            }
+
+            if (effective.PanelPaneSize < 150f)
+            {
+                effective.PanelPaneSize = 280f;
             }
 
             if (effective.WindowWidth < 980f || effective.WindowHeight < 620f)
