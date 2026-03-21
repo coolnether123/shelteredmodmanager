@@ -1,4 +1,5 @@
 using Cortex.Core.Models;
+using Cortex.Presentation.Abstractions;
 using Cortex.Services;
 using UnityEngine;
 
@@ -80,23 +81,22 @@ namespace Cortex
 
         private void DrawOnboardingOverlay()
         {
-            var fullscreenRect = new Rect(0f, 0f, Screen.width, Screen.height);
+            var fullscreenRect = new Rect(0f, 0f, GetScreenWidth(), GetScreenHeight());
             GUI.ModalWindow(OnboardingWindowId, fullscreenRect, DrawOnboardingWindow, string.Empty, GUIStyle.none);
         }
 
         private void DrawOnboardingWindow(int windowId)
         {
-            var fullscreenRect = new Rect(0f, 0f, Screen.width, Screen.height);
+            var fullscreenRect = new Rect(0f, 0f, GetScreenWidth(), GetScreenHeight());
             var modalRect = BuildOnboardingModalRect(fullscreenRect);
             var promptRect = BuildOnboardingPromptRect(modalRect);
-            var current = Event.current;
-            var mousePosition = current != null ? current.mousePosition : Vector2.zero;
+            var mousePosition = HasCurrentInputEvent() ? GetCurrentMousePosition() : Vector2.zero;
             var previewBackground = !_state.Onboarding.KeepFocused &&
                 fullscreenRect.Contains(mousePosition) &&
                 !modalRect.Contains(mousePosition) &&
                 !promptRect.Contains(mousePosition);
 
-            HandleOnboardingOverlayInput(fullscreenRect, modalRect, promptRect, current);
+            HandleOnboardingOverlayInput(fullscreenRect, modalRect, promptRect);
 
             DrawOnboardingBlock(fullscreenRect, new Color(0f, 0f, 0f, previewBackground ? 0.14f : 0.24f));
             DrawOnboardingBlock(
@@ -124,33 +124,34 @@ namespace Cortex
             GUI.FocusWindow(windowId);
         }
 
-        private void HandleOnboardingOverlayInput(Rect fullscreenRect, Rect modalRect, Rect promptRect, Event current)
+        private void HandleOnboardingOverlayInput(Rect fullscreenRect, Rect modalRect, Rect promptRect)
         {
-            if (current == null)
+            if (!HasCurrentInputEvent())
             {
                 return;
             }
 
-            if (current.type == EventType.MouseDown && modalRect.Contains(current.mousePosition))
+            var currentMousePosition = GetCurrentMousePosition();
+            if (IsCurrentInputEvent(CortexShellInputEventKind.MouseDown) && modalRect.Contains(currentMousePosition))
             {
                 _state.Onboarding.FinishPrompt.IsVisible = false;
                 return;
             }
 
-            if (current.type == EventType.MouseDown &&
-                fullscreenRect.Contains(current.mousePosition) &&
-                !modalRect.Contains(current.mousePosition) &&
-                !promptRect.Contains(current.mousePosition))
+            if (IsCurrentInputEvent(CortexShellInputEventKind.MouseDown) &&
+                fullscreenRect.Contains(currentMousePosition) &&
+                !modalRect.Contains(currentMousePosition) &&
+                !promptRect.Contains(currentMousePosition))
             {
-                ShowOnboardingFinishPrompt(current.mousePosition);
-                current.Use();
+                ShowOnboardingFinishPrompt(currentMousePosition);
+                ConsumeCurrentInputEvent();
                 return;
             }
 
-            if (current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape)
+            if (IsCurrentInputEvent(CortexShellInputEventKind.KeyDown) && IsCurrentKey(CortexShellInputKey.Escape))
             {
                 ShowOnboardingFinishPrompt(new Vector2(modalRect.xMax - 120f, modalRect.yMax - 54f));
-                current.Use();
+                ConsumeCurrentInputEvent();
             }
         }
 

@@ -35,6 +35,66 @@ namespace Cortex.Presentation.Abstractions
         IWorkbenchRuntimeFactory WorkbenchRuntimeFactory { get; }
 
         ICortexPlatformModule PlatformModule { get; }
+
+        ICortexShellHostUi ShellHostUi { get; }
+    }
+
+    public enum CortexShellInputEventKind
+    {
+        None = 0,
+        MouseDown = 1,
+        MouseUp = 2,
+        MouseDrag = 3,
+        KeyDown = 4,
+        Repaint = 5,
+        ScrollWheel = 6,
+        Other = 7
+    }
+
+    public enum CortexShellInputKey
+    {
+        None = 0,
+        Escape = 1,
+        Other = 2
+    }
+
+    public struct CortexShellPointerPosition
+    {
+        public float X;
+        public float Y;
+
+        public CortexShellPointerPosition(float x, float y)
+        {
+            X = x;
+            Y = y;
+        }
+    }
+
+    public interface ICortexShellHostUi
+    {
+        int ScreenWidth { get; }
+
+        int ScreenHeight { get; }
+
+        int HotControl { get; }
+
+        int KeyboardControl { get; }
+
+        bool HasCurrentEvent { get; }
+
+        CortexShellInputEventKind CurrentEventKind { get; }
+
+        CortexShellInputEventKind CurrentEventRawKind { get; }
+
+        CortexShellInputKey CurrentKey { get; }
+
+        int CurrentMouseButton { get; }
+
+        CortexShellPointerPosition CurrentMousePosition { get; }
+
+        CortexShellPointerPosition PointerPosition { get; }
+
+        void ConsumeCurrentEvent();
     }
 
     public interface ICortexHostCompositionRoot

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Cortex.Chrome;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
+using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
 using UnityEngine;
 
@@ -334,18 +335,17 @@ namespace Cortex
             GUI.backgroundColor = CortexIdeLayout.GetInteractiveFillColor(isSelected, hostLocation);
             GUI.contentColor = CortexIdeLayout.GetInteractiveTextColor(isSelected);
             var rect = GUILayoutUtility.GetRect(116f, 116f, 24f, 24f);
-            var current = Event.current;
-            var isHovered = current != null && rect.Contains(current.mousePosition);
+            var currentMousePosition = GetCurrentMousePosition();
+            var isHovered = HasCurrentInputEvent() && rect.Contains(currentMousePosition);
             var closeRect = new Rect(rect.xMax - 18f, rect.y + 4f, 14f, Mathf.Max(12f, rect.height - 8f));
             if ((isHovered || isSelected) &&
-                current != null &&
-                current.type == EventType.MouseDown &&
-                current.button == 0 &&
-                closeRect.Contains(current.mousePosition))
+                IsCurrentInputEvent(CortexShellInputEventKind.MouseDown) &&
+                GetCurrentMouseButton() == 0 &&
+                closeRect.Contains(currentMousePosition))
             {
                 HideContainer(item.ContainerId);
                 _state.StatusMessage = GetContainerTitle(null, item.ContainerId) + " hidden.";
-                current.Use();
+                ConsumeCurrentInputEvent();
                 GUI.backgroundColor = previousBackground;
                 GUI.contentColor = previousContent;
                 return;
@@ -367,20 +367,19 @@ namespace Cortex
 
         private void HandleTabDrag(string containerId, WorkbenchHostLocation hostLocation, Rect rect)
         {
-            var current = Event.current;
-            if (current == null || string.IsNullOrEmpty(containerId))
+            if (!HasCurrentInputEvent() || string.IsNullOrEmpty(containerId))
             {
                 return;
             }
 
-            if (current.type == EventType.MouseDrag && rect.Contains(current.mousePosition))
+            if (IsCurrentInputEvent(CortexShellInputEventKind.MouseDrag) && rect.Contains(GetCurrentMousePosition()))
             {
                 _draggingContainerId = containerId;
                 _draggingContainerSourceHost = hostLocation;
-                current.Use();
+                ConsumeCurrentInputEvent();
             }
             else if (!string.IsNullOrEmpty(_draggingContainerId) &&
-                (current.type == EventType.MouseUp || current.rawType == EventType.MouseUp) &&
+                (IsCurrentInputEvent(CortexShellInputEventKind.MouseUp) || IsCurrentRawInputEvent(CortexShellInputEventKind.MouseUp)) &&
                 string.Equals(_draggingContainerId, containerId, StringComparison.OrdinalIgnoreCase))
             {
                 _draggingContainerId = string.Empty;
@@ -406,19 +405,19 @@ namespace Cortex
 
         private void HandleDockDropTarget(WorkbenchHostLocation hostLocation, Rect rect)
         {
-            var current = Event.current;
-            if (current == null || string.IsNullOrEmpty(_draggingContainerId))
+            if (!HasCurrentInputEvent() || string.IsNullOrEmpty(_draggingContainerId))
             {
                 return;
             }
 
-            if ((current.type == EventType.MouseUp || current.rawType == EventType.MouseUp) && rect.Contains(current.mousePosition))
+            if ((IsCurrentInputEvent(CortexShellInputEventKind.MouseUp) || IsCurrentRawInputEvent(CortexShellInputEventKind.MouseUp)) &&
+                rect.Contains(GetCurrentMousePosition()))
             {
                 DockContainer(_draggingContainerId, hostLocation);
                 _draggingContainerId = string.Empty;
-                current.Use();
+                ConsumeCurrentInputEvent();
             }
-            else if (current.type == EventType.MouseUp || current.rawType == EventType.MouseUp)
+            else if (IsCurrentInputEvent(CortexShellInputEventKind.MouseUp) || IsCurrentRawInputEvent(CortexShellInputEventKind.MouseUp))
             {
                 _draggingContainerId = string.Empty;
             }
@@ -578,33 +577,33 @@ namespace Cortex
             }
             GUILayout.EndArea();
 
-            var ev = Event.current;
-            if (ev == null)
+            if (!HasCurrentInputEvent())
             {
                 return;
             }
 
-            if (ev.type == EventType.MouseDown)
+            if (IsCurrentInputEvent(CortexShellInputEventKind.MouseDown))
             {
+                var mousePosition = GetCurrentMousePosition();
                 var overGroup = false;
                 foreach (var rect in _menuGroupRects.Values)
                 {
-                    if (new Rect(headerRect.x + rect.x, headerRect.y + rect.y, rect.width, rect.height).Contains(ev.mousePosition))
+                    if (new Rect(headerRect.x + rect.x, headerRect.y + rect.y, rect.width, rect.height).Contains(mousePosition))
                     {
                         overGroup = true;
                         break;
                     }
                 }
 
-                if (!popupRect.Contains(ev.mousePosition) && !overGroup)
+                if (!popupRect.Contains(mousePosition) && !overGroup)
                 {
                     _openMenuGroup = string.Empty;
                 }
             }
-            else if (ev.type == EventType.KeyDown && ev.keyCode == KeyCode.Escape)
+            else if (IsCurrentInputEvent(CortexShellInputEventKind.KeyDown) && IsCurrentKey(CortexShellInputKey.Escape))
             {
                 _openMenuGroup = string.Empty;
-                ev.Use();
+                ConsumeCurrentInputEvent();
             }
         }
 
