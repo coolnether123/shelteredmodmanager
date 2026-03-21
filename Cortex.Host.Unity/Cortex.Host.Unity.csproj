@@ -33,6 +33,10 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="UnityEngine">
+      <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Composition\DefaultWorkbenchAppearanceContributions.cs" />
@@ -42,9 +46,18 @@
     <Compile Include="Composition\DefaultWorkbenchSettingContributions.cs" />
     <Compile Include="Composition\DefaultWorkbenchViewContributions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Runtime\CortexUnityRuntimeBootstrap.cs" />
+    <Compile Include="Runtime\MmLogCortexLogSink.cs" />
     <Compile Include="Runtime\UnityWorkbenchRuntime.cs" />
+    <Compile Include="Runtime\UnityWorkbenchRuntimeFactory.cs" />
+    <Compile Include="Runtime\WindowsPathInteractionService.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Cortex\Cortex.csproj">
+      <Project>{D982DFB0-FEA1-4DC8-A001-35F5181F212A}</Project>
+      <Name>Cortex</Name>
+      <Private>False</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Cortex.Core\Cortex.Core.csproj">
       <Project>{A5F28666-878B-4C48-A7DA-4A19BFC79F02}</Project>
       <Name>Cortex.Core</Name>
@@ -70,6 +83,14 @@
       <Name>Cortex.Renderers.Imgui</Name>
       <Private>False</Private>
     </ProjectReference>
+    <ProjectReference Include="..\ModAPI\ModAPI.csproj">
+      <Project>{3C99D6BF-A4A9-45DC-BEF1-5717ECE2A687}</Project>
+      <Name>ModAPI</Name>
+      <Private>False</Private>
+    </ProjectReference>
   </ItemGroup>
+  <Target Name="BuildPathPickerHost" BeforeTargets="Build" Condition="Exists('..\Cortex.PathPicker.Host\Cortex.PathPicker.Host.csproj') and '$(DesignTimeBuild)' != 'true' and '$(BuildingSolutionFile)' != 'true'">
+    <MSBuild Projects="..\Cortex.PathPicker.Host\Cortex.PathPicker.Host.csproj" Targets="Build" Properties="Configuration=$(Configuration)" BuildInParallel="false" />
+  </Target>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

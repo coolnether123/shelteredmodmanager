@@ -1,7 +1,7 @@
 using System;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
-using Cortex.Host.Unity.Runtime;
+using Cortex.Presentation.Abstractions;
 using Cortex.Services;
 
 namespace Cortex
@@ -20,6 +20,7 @@ namespace Cortex
         IProjectCatalog ProjectCatalog { get; }
         IProjectWorkspaceService ProjectWorkspaceService { get; }
         ILoadedModCatalog LoadedModCatalog { get; }
+        IPathInteractionService PathInteractionService { get; }
     }
 
     internal interface IFileExplorerModuleServices
@@ -77,6 +78,7 @@ namespace Cortex
         IProjectCatalog ProjectCatalog { get; }
         IProjectWorkspaceService ProjectWorkspaceService { get; }
         ILoadedModCatalog LoadedModCatalog { get; }
+        IPathInteractionService PathInteractionService { get; }
         ThemeState ThemeState { get; }
     }
 
@@ -96,6 +98,7 @@ namespace Cortex
         private readonly Func<IProjectCatalog> _projectCatalogAccessor;
         private readonly Func<ILoadedModCatalog> _loadedModCatalogAccessor;
         private readonly Func<IProjectWorkspaceService> _projectWorkspaceServiceAccessor;
+        private readonly Func<IPathInteractionService> _pathInteractionServiceAccessor;
         private readonly Func<IWorkspaceBrowserService> _workspaceBrowserServiceAccessor;
         private readonly Func<IDecompilerExplorerService> _decompilerExplorerServiceAccessor;
         private readonly Func<IDocumentService> _documentServiceAccessor;
@@ -107,7 +110,7 @@ namespace Cortex
         private readonly Func<IRuntimeToolBridge> _runtimeToolBridgeAccessor;
         private readonly Func<IRestartCoordinator> _restartCoordinatorAccessor;
         private readonly Func<CortexNavigationService> _navigationServiceAccessor;
-        private readonly Func<UnityWorkbenchRuntime> _workbenchRuntimeAccessor;
+        private readonly Func<IWorkbenchRuntime> _workbenchRuntimeAccessor;
         private readonly Func<WorkbenchSearchService> _workbenchSearchServiceAccessor;
 
         public CortexShellModuleServices(
@@ -116,6 +119,7 @@ namespace Cortex
             Func<IProjectCatalog> projectCatalogAccessor,
             Func<ILoadedModCatalog> loadedModCatalogAccessor,
             Func<IProjectWorkspaceService> projectWorkspaceServiceAccessor,
+            Func<IPathInteractionService> pathInteractionServiceAccessor,
             Func<IWorkspaceBrowserService> workspaceBrowserServiceAccessor,
             Func<IDecompilerExplorerService> decompilerExplorerServiceAccessor,
             Func<IDocumentService> documentServiceAccessor,
@@ -127,7 +131,7 @@ namespace Cortex
             Func<IRuntimeToolBridge> runtimeToolBridgeAccessor,
             Func<IRestartCoordinator> restartCoordinatorAccessor,
             Func<CortexNavigationService> navigationServiceAccessor,
-            Func<UnityWorkbenchRuntime> workbenchRuntimeAccessor,
+            Func<IWorkbenchRuntime> workbenchRuntimeAccessor,
             Func<WorkbenchSearchService> workbenchSearchServiceAccessor)
         {
             _state = state;
@@ -135,6 +139,7 @@ namespace Cortex
             _projectCatalogAccessor = projectCatalogAccessor;
             _loadedModCatalogAccessor = loadedModCatalogAccessor;
             _projectWorkspaceServiceAccessor = projectWorkspaceServiceAccessor;
+            _pathInteractionServiceAccessor = pathInteractionServiceAccessor;
             _workspaceBrowserServiceAccessor = workspaceBrowserServiceAccessor;
             _decompilerExplorerServiceAccessor = decompilerExplorerServiceAccessor;
             _documentServiceAccessor = documentServiceAccessor;
@@ -157,6 +162,7 @@ namespace Cortex
         public IProjectCatalog ProjectCatalog { get { return _projectCatalogAccessor != null ? _projectCatalogAccessor() : null; } }
         public IProjectWorkspaceService ProjectWorkspaceService { get { return _projectWorkspaceServiceAccessor != null ? _projectWorkspaceServiceAccessor() : null; } }
         public ILoadedModCatalog LoadedModCatalog { get { return _loadedModCatalogAccessor != null ? _loadedModCatalogAccessor() : null; } }
+        public IPathInteractionService PathInteractionService { get { return _pathInteractionServiceAccessor != null ? _pathInteractionServiceAccessor() : null; } }
         public IWorkspaceBrowserService WorkspaceBrowserService { get { return _workspaceBrowserServiceAccessor != null ? _workspaceBrowserServiceAccessor() : null; } }
         public IDecompilerExplorerService DecompilerExplorerService { get { return _decompilerExplorerServiceAccessor != null ? _decompilerExplorerServiceAccessor() : null; } }
         public IDocumentService DocumentService { get { return _documentServiceAccessor != null ? _documentServiceAccessor() : null; } }

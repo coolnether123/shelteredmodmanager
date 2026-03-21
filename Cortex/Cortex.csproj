@@ -41,7 +41,7 @@
   <ItemGroup>
     <Compile Include="Adapters\RuntimeAdapters.cs" />
     <Compile Include="Chrome\CortexWindowChromeController.cs" />
-    <Compile Include="CortexRuntimeBootstrap.cs" />
+    <Compile Include="MMLog.cs" />
     <Compile Include="CortexShell.Chrome.cs" />
     <Compile Include="CortexShell.CompletionAugmentation.cs" />
     <Compile Include="CortexShell.Onboarding.cs" />
@@ -87,6 +87,7 @@
     <Compile Include="Modules\Settings\SettingsModule.cs" />
     <Compile Include="Modules\Shared\PopupMenuSurface.cs" />
     <Compile Include="Modules\Shared\CortexModuleUtil.cs" />
+    <Compile Include="Modules\Shared\CortexPathField.cs" />
     <Compile Include="Modules\Shared\RuntimeLogVisuals.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\EditorContextMenuService.cs" />
@@ -107,7 +108,9 @@
     <Compile Include="Services\SourceEditorHoverService.cs" />
     <Compile Include="Services\WorkbenchSearchService.cs" />
     <Compile Include="Services\CortexNavigationService.cs" />
+    <Compile Include="Services\CortexLoadedModSourceLinkService.cs" />
     <Compile Include="Services\CortexOnboardingCoordinator.cs" />
+    <Compile Include="Services\CortexOnboardingProjectSetupService.cs" />
     <Compile Include="Services\CortexOnboardingService.cs" />
     <Compile Include="Services\CortexOnboardingWorkspaceApplier.cs" />
     <Compile Include="State\CortexOnboardingState.cs" />
@@ -123,11 +126,6 @@
     <ProjectReference Include="..\Cortex.Presentation\Cortex.Presentation.csproj">
       <Project>{ADAEC1F0-6882-42D6-9016-E79C9EBA1605}</Project>
       <Name>Cortex.Presentation</Name>
-      <Private>False</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj">
-      <Project>{7A570620-E51D-499E-A28E-13A1D8156417}</Project>
-      <Name>Cortex.Host.Unity</Name>
       <Private>False</Private>
     </ProjectReference>
     <ProjectReference Include="..\Cortex.CompletionProviders\Cortex.CompletionProviders.csproj">

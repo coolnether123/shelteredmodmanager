@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Modules.Shared;
 using UnityEngine;
 
 namespace Cortex.Modules.Projects
@@ -20,14 +21,19 @@ namespace Cortex.Modules.Projects
         private Vector2 _diagnosticScroll = Vector2.zero;
         private bool _showAdvanced;
 
-        public void Draw(IProjectCatalog catalog, IProjectWorkspaceService workspaceService, ILoadedModCatalog loadedModCatalog, CortexShellState state)
+        public void Draw(
+            IProjectCatalog catalog,
+            IProjectWorkspaceService workspaceService,
+            ILoadedModCatalog loadedModCatalog,
+            IPathInteractionService pathInteractionService,
+            CortexShellState state)
         {
             var settings = state.Settings ?? new CortexSettings();
             CortexIdeLayout.DrawTwoPane(
                 settings.ProjectsPaneWidth,
                 300f,
                 delegate { DrawProjectList(catalog, state); },
-                delegate { DrawProjectEditor(catalog, workspaceService, loadedModCatalog, state); });
+                delegate { DrawProjectEditor(catalog, workspaceService, loadedModCatalog, pathInteractionService, state); });
         }
 
         private void DrawProjectList(IProjectCatalog catalog, CortexShellState state)
@@ -68,7 +74,12 @@ namespace Cortex.Modules.Projects
             GUILayout.EndVertical();
         }
 
-        private void DrawProjectEditor(IProjectCatalog catalog, IProjectWorkspaceService workspaceService, ILoadedModCatalog loadedModCatalog, CortexShellState state)
+        private void DrawProjectEditor(
+            IProjectCatalog catalog,
+            IProjectWorkspaceService workspaceService,
+            ILoadedModCatalog loadedModCatalog,
+            IPathInteractionService pathInteractionService,
+            CortexShellState state)
         {
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
             DrawLoadedModAssistant(catalog, workspaceService, loadedModCatalog, state);
@@ -76,7 +87,25 @@ namespace Cortex.Modules.Projects
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("Project Setup");
             GUILayout.Label("Enter the root folder for your mod project. Cortex will infer the project id and .csproj automatically.");
-            DrawField("Mod Source Folder", ref _sourceRoot);
+            DrawPathField(
+                "Mod Source Folder",
+                ref _sourceRoot,
+                pathInteractionService,
+                new CortexPathFieldOptions
+                {
+                    AllowBrowse = true,
+                    AllowOpen = true,
+                    AllowPaste = true,
+                    AllowClear = true,
+                    BrowseRequest = new PathSelectionRequest
+                    {
+                        SelectionKind = PathSelectionKind.Folder,
+                        Title = "Select mod source folder",
+                        InitialPath = !string.IsNullOrEmpty(_sourceRoot)
+                            ? _sourceRoot
+                            : (state != null && state.Settings != null ? state.Settings.WorkspaceRootPath : string.Empty)
+                    }
+                });
 
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Apply Source Folder", GUILayout.Width(160f)))
@@ -102,7 +131,24 @@ namespace Cortex.Modules.Projects
             if (_showAdvanced)
             {
                 DrawField("Mod ID", ref _modId);
-                DrawField("Project File", ref _projectFile);
+                DrawPathField(
+                    "Project File",
+                    ref _projectFile,
+                    pathInteractionService,
+                    new CortexPathFieldOptions
+                    {
+                        AllowBrowse = true,
+                        AllowOpen = true,
+                        AllowPaste = true,
+                        AllowClear = true,
+                        BrowseRequest = new PathSelectionRequest
+                        {
+                            SelectionKind = PathSelectionKind.OpenFile,
+                            Title = "Select project file",
+                            InitialPath = !string.IsNullOrEmpty(_projectFile) ? _projectFile : _sourceRoot,
+                            Filter = "C# Project|*.csproj|All Files|*.*"
+                        }
+                    });
                 DrawField("Build Override", ref _buildOverride);
                 DrawField("Output DLL", ref _outputAssembly);
                 DrawField("Output PDB", ref _outputPdb);
@@ -391,6 +437,23 @@ namespace Cortex.Modules.Projects
             GUILayout.BeginHorizontal();
             GUILayout.Label(label, GUILayout.Width(130f));
             value = GUILayout.TextField(value ?? string.Empty, GUILayout.ExpandWidth(true));
+            GUILayout.EndHorizontal();
+        }
+
+        private static void DrawPathField(
+            string label,
+            ref string value,
+            IPathInteractionService pathInteractionService,
+            CortexPathFieldOptions options)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(label, GUILayout.Width(130f));
+            value = CortexPathField.DrawValueEditor(
+                "projects." + label.Replace(" ", string.Empty),
+                value ?? string.Empty,
+                pathInteractionService,
+                options,
+                GUILayout.ExpandWidth(true));
             GUILayout.EndHorizontal();
         }
     }

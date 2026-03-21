@@ -80,6 +80,7 @@ namespace Cortex
                     delegate { return _projectCatalog; },
                     delegate { return _loadedModCatalog; },
                     delegate { return _projectWorkspaceService; },
+                    delegate { return _pathInteractionService; },
                     delegate { return _workspaceBrowserService; },
                     delegate { return _decompilerExplorerService; },
                     delegate { return _documentService; },

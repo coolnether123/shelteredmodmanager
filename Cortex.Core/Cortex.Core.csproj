@@ -39,6 +39,7 @@
     <Compile Include="Abstractions\EditorInterfaces.cs" />
     <Compile Include="Abstractions\Interfaces.cs" />
     <Compile Include="Abstractions\WorkbenchInterfaces.cs" />
+    <Compile Include="Diagnostics\CortexLog.cs" />
     <Compile Include="Models\CommandModels.cs" />
     <Compile Include="Models\CompletionAugmentationModels.cs" />
     <Compile Include="Models\CompletionAugmentationProviderSupport.cs" />
@@ -61,6 +62,7 @@
     <Compile Include="Models\RuntimeLogEntry.cs" />
     <Compile Include="Models\SourceReferenceModels.cs" />
     <Compile Include="Models\OnboardingModels.cs" />
+    <Compile Include="Models\PathInteractionModels.cs" />
     <Compile Include="Models\WorkbenchIds.cs" />
     <Compile Include="Models\WorkbenchPersistenceModels.cs" />
     <Compile Include="Models\WorkbenchModels.cs" />

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Modules.Shared;
 using Cortex.Services;
 using UnityEngine;
 
@@ -12,6 +14,7 @@ namespace Cortex.Modules.Onboarding
         private const float HeaderHeight = 82f;
         private const float FooterHeight = 40f;
         private const int ThemesPerRow = 3;
+        private const float WorkspaceFieldHeight = 26f;
 
         private sealed class OnboardingStepDefinition
         {
@@ -41,14 +44,20 @@ namespace Cortex.Modules.Onboarding
             public Color Editor;
         }
 
-        public bool Draw(Rect modalRect, CortexOnboardingState onboardingState, CortexOnboardingCatalog catalog, CortexOnboardingService onboardingService, bool previewBackground)
+        public bool Draw(
+            Rect modalRect,
+            CortexOnboardingState onboardingState,
+            CortexOnboardingCatalog catalog,
+            CortexOnboardingService onboardingService,
+            IPathInteractionService pathInteractionService,
+            bool previewBackground)
         {
             if (onboardingState == null || catalog == null || onboardingService == null)
             {
                 return false;
             }
 
-            var steps = BuildSteps(onboardingState, catalog, onboardingService);
+            var steps = BuildSteps(onboardingState, catalog, onboardingService, pathInteractionService);
             if (steps.Count == 0)
             {
                 return false;
@@ -84,9 +93,11 @@ namespace Cortex.Modules.Onboarding
         private static List<OnboardingStepDefinition> BuildSteps(
             CortexOnboardingState onboardingState,
             CortexOnboardingCatalog catalog,
-            CortexOnboardingService onboardingService)
+            CortexOnboardingService onboardingService,
+            IPathInteractionService pathInteractionService)
         {
             var steps = new List<OnboardingStepDefinition>();
+            var selectedProfile = ResolveSelectedProfile(onboardingState, catalog, onboardingService);
             steps.Add(new OnboardingStepDefinition
             {
                 StepId = "profile",
@@ -99,6 +110,29 @@ namespace Cortex.Modules.Onboarding
                     DrawProfileStep(state, currentCatalog, service);
                 }
             });
+            if (selectedProfile != null && selectedProfile.WorkflowKind == OnboardingProfileWorkflowKind.Modder)
+            {
+                steps.Add(new OnboardingStepDefinition
+                {
+                    StepId = "projects",
+                    Label = "Projects",
+                    Title = "Link your live mods to source roots",
+                    Description = "Mark which loaded mods you maintain, then point Cortex at the source roots it should treat as editable worktrees.",
+                    IsScrollable = true,
+                    GetScrollPosition = delegate(CortexOnboardingState state) { return state != null ? state.ModProjectScroll : Vector2.zero; },
+                    SetScrollPosition = delegate(CortexOnboardingState state, Vector2 value)
+                    {
+                        if (state != null)
+                        {
+                            state.ModProjectScroll = value;
+                        }
+                    },
+                    Render = delegate(CortexOnboardingState state, CortexOnboardingCatalog currentCatalog, CortexOnboardingService service)
+                    {
+                        DrawModProjectStep(state, pathInteractionService);
+                    }
+                });
+            }
             steps.Add(new OnboardingStepDefinition
             {
                 StepId = "layout",
@@ -146,7 +180,9 @@ namespace Cortex.Modules.Onboarding
             GUILayout.Label(
                 previewBackground
                     ? "Preview the shell behind this overlay. Cortex stays blocked until you finish."
-                    : "Set your starting profile, layout, and theme. Defaults are already selected.",
+                    : (steps.Count > 3
+                        ? "Set your starting profile, link your live mods, then choose a layout and theme. Defaults are already selected."
+                        : "Set your starting profile, layout, and theme. Defaults are already selected."),
                 bodyStyle,
                 GUILayout.Height(34f));
             GUILayout.EndVertical();
@@ -292,6 +328,36 @@ namespace Cortex.Modules.Onboarding
             }
 
             GUILayout.Space(4f);
+        }
+
+        private static void DrawModProjectStep(CortexOnboardingState onboardingState, IPathInteractionService pathInteractionService)
+        {
+            if (onboardingState == null)
+            {
+                return;
+            }
+
+            DrawWorkspaceRootCard(onboardingState, pathInteractionService);
+
+            GUILayout.Space(10f);
+
+            if (onboardingState.ModProjectDrafts.Count == 0)
+            {
+                DrawEmptyModProjectCard();
+                return;
+            }
+
+            DrawModProjectSummary(onboardingState);
+            GUILayout.Space(10f);
+
+            for (var i = 0; i < onboardingState.ModProjectDrafts.Count; i++)
+            {
+                DrawModProjectCard(onboardingState, onboardingState.ModProjectDrafts[i], pathInteractionService);
+                if (i < onboardingState.ModProjectDrafts.Count - 1)
+                {
+                    GUILayout.Space(10f);
+                }
+            }
         }
 
         private static bool DrawFooter(CortexOnboardingState onboardingState, int totalSteps)
@@ -452,6 +518,141 @@ namespace Cortex.Modules.Onboarding
             DrawBlock(rect, color);
         }
 
+        private static void DrawWorkspaceRootCard(CortexOnboardingState onboardingState, IPathInteractionService pathInteractionService)
+        {
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("Workspace Root", CreateSectionTitleStyle(), GUILayout.Height(22f));
+            GUILayout.Label(
+                "Set the broad workspace root Cortex should scan for project discovery. Leave it empty if you only want to map specific mods here.",
+                CreateBodyStyle());
+            GUILayout.Space(6f);
+            onboardingState.SelectedWorkspaceRootPath = DrawPathEditor(
+                "onboarding.workspaceRoot",
+                "Workspace Root",
+                onboardingState.SelectedWorkspaceRootPath,
+                pathInteractionService,
+                new PathSelectionRequest
+                {
+                    SelectionKind = PathSelectionKind.Folder,
+                    Title = "Select workspace root",
+                    InitialPath = onboardingState.SelectedWorkspaceRootPath
+                });
+            GUILayout.EndVertical();
+        }
+
+        private static void DrawEmptyModProjectCard()
+        {
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("No loaded mods are active right now.", CreateSectionTitleStyle(), GUILayout.Height(22f));
+            GUILayout.Label(
+                "Finish onboarding now and link projects later from the Projects or Settings surfaces when active mods are available.",
+                CreateBodyStyle());
+            GUILayout.EndVertical();
+        }
+
+        private static void DrawModProjectSummary(CortexOnboardingState onboardingState)
+        {
+            var ownedCount = 0;
+            for (var i = 0; i < onboardingState.ModProjectDrafts.Count; i++)
+            {
+                if (onboardingState.ModProjectDrafts[i] != null && onboardingState.ModProjectDrafts[i].IsOwnedByUser)
+                {
+                    ownedCount++;
+                }
+            }
+
+            GUILayout.BeginHorizontal();
+            DrawStatPill("Loaded Mods", onboardingState.ModProjectDrafts.Count.ToString());
+            GUILayout.Space(8f);
+            DrawStatPill("Owned By You", ownedCount.ToString());
+            GUILayout.EndHorizontal();
+        }
+
+        private static void DrawModProjectCard(
+            CortexOnboardingState onboardingState,
+            CortexOnboardingModProjectDraft draft,
+            IPathInteractionService pathInteractionService)
+        {
+            if (onboardingState == null || draft == null)
+            {
+                return;
+            }
+
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.BeginHorizontal();
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
+            GUILayout.Label(ResolveDraftDisplayName(draft), CreateSectionTitleStyle(), GUILayout.Height(22f));
+            GUILayout.Label("Mod ID  " + (draft.ModId ?? string.Empty), CreateMetaStyle(), GUILayout.Height(18f));
+            GUILayout.EndVertical();
+            if (draft.HasExistingMapping)
+            {
+                DrawInlineBadge("Mapped", CortexIdeLayout.GetAccentColor(), 74f);
+                GUILayout.Space(6f);
+            }
+
+            if (DrawOwnershipToggleButton(draft.IsOwnedByUser))
+            {
+                draft.IsOwnedByUser = !draft.IsOwnedByUser;
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(4f);
+            DrawMetadataRow("Live Mod Root", string.IsNullOrEmpty(draft.RootPath) ? "Unknown" : draft.RootPath);
+            if (!draft.IsOwnedByUser)
+            {
+                GUILayout.Space(6f);
+                GUILayout.Label(
+                    "Leave this compact if the mod is active but you do not want Cortex mapping it to local source during onboarding.",
+                    CreateHintStyle());
+                GUILayout.EndVertical();
+                return;
+            }
+
+            GUILayout.Space(10f);
+            DrawHorizontalRule(CortexIdeLayout.Blend(CortexIdeLayout.GetBorderColor(), CortexIdeLayout.GetAccentColor(), 0.22f), 1f);
+            GUILayout.Space(8f);
+            GUILayout.Label("Source Setup", CreateSubsectionTitleStyle(), GUILayout.Height(20f));
+            GUILayout.Label(
+                "Point Cortex at the editable source root for this mod. It will infer the project file and create the mapping on finish.",
+                CreateBodyStyle());
+            GUILayout.Space(6f);
+            draft.SourceRootPath = DrawPathEditor(
+                "onboarding.mod." + ResolveDraftFieldKey(draft) + ".sourceRoot",
+                "Source Root",
+                draft.SourceRootPath,
+                pathInteractionService,
+                new PathSelectionRequest
+                {
+                    SelectionKind = PathSelectionKind.Folder,
+                    Title = "Select source root",
+                    InitialPath = !string.IsNullOrEmpty(draft.SourceRootPath)
+                        ? draft.SourceRootPath
+                        : (!string.IsNullOrEmpty(onboardingState.SelectedWorkspaceRootPath)
+                            ? onboardingState.SelectedWorkspaceRootPath
+                            : draft.RootPath)
+                });
+            GUILayout.Space(6f);
+
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            var previousEnabled = GUI.enabled;
+            GUI.enabled = !string.IsNullOrEmpty(onboardingState.SelectedWorkspaceRootPath);
+            if (GUILayout.Button("Use Workspace Root", GUILayout.Width(150f), GUILayout.Height(24f)))
+            {
+                draft.SourceRootPath = onboardingState.SelectedWorkspaceRootPath ?? string.Empty;
+            }
+            GUI.enabled = previousEnabled;
+            GUILayout.EndHorizontal();
+
+            if (string.IsNullOrEmpty(draft.SourceRootPath))
+            {
+                GUILayout.Space(6f);
+                GUILayout.Label("Set a source root for this mod before finishing onboarding.", CreateWarningStyle());
+            }
+
+            GUILayout.EndVertical();
+        }
+
         private static void DrawStepChip(string index, string label, bool isActive, GUIStyle style)
         {
             var chipRect = GUILayoutUtility.GetRect(94f, 94f, 30f, 30f, GUILayout.Width(94f), GUILayout.Height(30f));
@@ -593,6 +794,68 @@ namespace Cortex.Modules.Onboarding
             return style;
         }
 
+        private static GUIStyle CreateSubsectionTitleStyle()
+        {
+            var style = new GUIStyle(GUI.skin.label);
+            style.fontStyle = FontStyle.Bold;
+            style.fontSize = 14;
+            style.normal.textColor = CortexIdeLayout.GetTextColor();
+            return style;
+        }
+
+        private static GUIStyle CreateMetaStyle()
+        {
+            var style = new GUIStyle(GUI.skin.label);
+            style.fontSize = 11;
+            style.normal.textColor = CortexIdeLayout.GetMutedTextColor();
+            return style;
+        }
+
+        private static GUIStyle CreateMetaLabelStyle()
+        {
+            var style = new GUIStyle(GUI.skin.label);
+            style.fontSize = 11;
+            style.fontStyle = FontStyle.Bold;
+            style.normal.textColor = CortexIdeLayout.Blend(CortexIdeLayout.GetMutedTextColor(), CortexIdeLayout.GetTextColor(), 0.18f);
+            return style;
+        }
+
+        private static GUIStyle CreatePathPreviewStyle()
+        {
+            var style = new GUIStyle(GUI.skin.label);
+            style.wordWrap = true;
+            style.clipping = TextClipping.Clip;
+            style.normal.textColor = CortexIdeLayout.GetTextColor();
+            return style;
+        }
+
+        private static GUIStyle CreateHintStyle()
+        {
+            var style = new GUIStyle(GUI.skin.label);
+            style.wordWrap = true;
+            style.fontSize = 11;
+            style.normal.textColor = CortexIdeLayout.GetMutedTextColor();
+            return style;
+        }
+
+        private static GUIStyle CreateWarningStyle()
+        {
+            var style = new GUIStyle(GUI.skin.label);
+            style.wordWrap = true;
+            style.fontSize = 11;
+            style.normal.textColor = CortexIdeLayout.GetWarningColor();
+            return style;
+        }
+
+        private static GUIStyle CreateStatStyle()
+        {
+            var style = new GUIStyle(GUI.skin.label);
+            style.fontStyle = FontStyle.Bold;
+            style.fontSize = 20;
+            style.normal.textColor = CortexIdeLayout.GetTextColor();
+            return style;
+        }
+
         private static ThemePreviewPalette BuildThemePreviewPalette(ThemeContribution theme)
         {
             var background = ParseThemeColor(theme != null ? theme.BackgroundColor : string.Empty, new Color(0.08f, 0.08f, 0.1f, 1f));
@@ -640,6 +903,126 @@ namespace Cortex.Modules.Onboarding
         private static string GetPreviewLabel(string value, string fallback)
         {
             return string.IsNullOrEmpty(value) ? fallback : value;
+        }
+
+        private static OnboardingProfileContribution ResolveSelectedProfile(
+            CortexOnboardingState onboardingState,
+            CortexOnboardingCatalog catalog,
+            CortexOnboardingService onboardingService)
+        {
+            if (catalog == null || onboardingService == null)
+            {
+                return null;
+            }
+
+            var profile = onboardingService.FindProfile(catalog, onboardingState != null ? onboardingState.SelectedProfileId : string.Empty);
+            if (profile != null)
+            {
+                return profile;
+            }
+
+            return catalog.Profiles.Count > 0 ? catalog.Profiles[0] : null;
+        }
+
+        private static bool DrawOwnershipToggleButton(bool isOwnedByUser)
+        {
+            var previousBackground = GUI.backgroundColor;
+            var previousContent = GUI.contentColor;
+            GUI.backgroundColor = isOwnedByUser
+                ? CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetHeaderColor(), 0.28f)
+                : CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.78f);
+            GUI.contentColor = isOwnedByUser ? Color.white : CortexIdeLayout.GetTextColor();
+            var clicked = GUILayout.Button(
+                isOwnedByUser ? "Maintained By Me" : "Mark As Mine",
+                GUILayout.Width(138f),
+                GUILayout.Height(24f));
+            GUI.backgroundColor = previousBackground;
+            GUI.contentColor = previousContent;
+            return clicked;
+        }
+
+        private static void DrawInlineBadge(string text, Color accentColor, float width)
+        {
+            var previousBackground = GUI.backgroundColor;
+            var previousContent = GUI.contentColor;
+            GUI.backgroundColor = CortexIdeLayout.Blend(accentColor, CortexIdeLayout.GetHeaderColor(), 0.25f);
+            GUI.contentColor = Color.white;
+            GUILayout.Label(text, GUI.skin.box, GUILayout.Width(width), GUILayout.Height(22f));
+            GUI.backgroundColor = previousBackground;
+            GUI.contentColor = previousContent;
+        }
+
+        private static void DrawMetadataRow(string label, string value)
+        {
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.MinHeight(52f));
+            GUILayout.Label(label ?? string.Empty, CreateMetaLabelStyle(), GUILayout.Height(18f));
+            GUILayout.Label(value ?? string.Empty, CreatePathPreviewStyle());
+            GUILayout.EndVertical();
+        }
+
+        private static string DrawPathEditor(
+            string fieldId,
+            string label,
+            string value,
+            IPathInteractionService pathInteractionService,
+            PathSelectionRequest browseRequest)
+        {
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
+            GUILayout.Label(label ?? string.Empty, CreateMetaLabelStyle(), GUILayout.Height(18f));
+            var nextValue = CortexPathField.DrawValueEditor(
+                fieldId,
+                value ?? string.Empty,
+                pathInteractionService,
+                new CortexPathFieldOptions
+                {
+                    AllowBrowse = true,
+                    AllowOpen = true,
+                    AllowPaste = true,
+                    AllowClear = true,
+                    BrowseRequest = browseRequest
+                },
+                GUILayout.Height(WorkspaceFieldHeight),
+                GUILayout.ExpandWidth(true));
+            GUILayout.EndVertical();
+            return nextValue;
+        }
+
+        private static void DrawStatPill(string label, string value)
+        {
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(126f), GUILayout.Height(48f));
+            GUILayout.Label(label ?? string.Empty, CreateMetaLabelStyle(), GUILayout.Height(16f));
+            GUILayout.Label(value ?? string.Empty, CreateStatStyle(), GUILayout.Height(22f));
+            GUILayout.EndVertical();
+        }
+
+        private static void DrawHorizontalRule(Color color, float height)
+        {
+            var rect = GUILayoutUtility.GetRect(0f, 0f, height, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
+            DrawBlock(rect, color);
+        }
+
+        private static string DrawPathField(string label, string value)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(label, GUILayout.Width(110f));
+            var nextValue = GUILayout.TextField(value ?? string.Empty, GUILayout.ExpandWidth(true));
+            GUILayout.EndHorizontal();
+            return nextValue;
+        }
+
+        private static string ResolveDraftDisplayName(CortexOnboardingModProjectDraft draft)
+        {
+            return string.IsNullOrEmpty(draft != null ? draft.DisplayName : string.Empty)
+                ? (draft != null ? draft.ModId ?? string.Empty : string.Empty)
+                : draft.DisplayName;
+        }
+
+        private static string ResolveDraftFieldKey(CortexOnboardingModProjectDraft draft)
+        {
+            var rawKey = draft != null && !string.IsNullOrEmpty(draft.ModId)
+                ? draft.ModId
+                : ResolveDraftDisplayName(draft);
+            return string.IsNullOrEmpty(rawKey) ? "unknown" : rawKey.Replace(' ', '_');
         }
     }
 }

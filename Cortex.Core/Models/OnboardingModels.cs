@@ -2,6 +2,12 @@ using System;
 
 namespace Cortex.Core.Models
 {
+    public enum OnboardingProfileWorkflowKind
+    {
+        Standard = 0,
+        Modder = 1
+    }
+
     [Serializable]
     public sealed class OnboardingProfileContribution
     {
@@ -12,6 +18,7 @@ namespace Cortex.Core.Models
         public string DefaultThemeId;
         public string[] PreviewTags;
         public string[] Keywords;
+        public OnboardingProfileWorkflowKind WorkflowKind;
         public bool IsDefault;
         public int SortOrder;
 
@@ -24,6 +31,7 @@ namespace Cortex.Core.Models
             DefaultThemeId = string.Empty;
             PreviewTags = new string[0];
             Keywords = new string[0];
+            WorkflowKind = OnboardingProfileWorkflowKind.Standard;
             IsDefault = false;
             SortOrder = 0;
         }

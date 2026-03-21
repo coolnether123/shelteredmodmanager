@@ -1,14 +1,14 @@
 using System;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
-using Cortex.Host.Unity.Runtime;
 using Cortex.Modules.Editor;
+using Cortex.Presentation.Abstractions;
 
 namespace Cortex
 {
     internal sealed class CortexShellCommandContext
     {
-        private readonly Func<UnityWorkbenchRuntime> _workbenchRuntimeAccessor;
+        private readonly Func<IWorkbenchRuntime> _workbenchRuntimeAccessor;
         private readonly Func<IDocumentService> _documentServiceAccessor;
         private readonly Func<bool> _visibleAccessor;
         private readonly Action<bool> _setVisible;
@@ -27,7 +27,7 @@ namespace Cortex
 
         public CortexShellCommandContext(
             CortexShellState state,
-            Func<UnityWorkbenchRuntime> workbenchRuntimeAccessor,
+            Func<IWorkbenchRuntime> workbenchRuntimeAccessor,
             Func<IDocumentService> documentServiceAccessor,
             Func<bool> visibleAccessor,
             Action<bool> setVisible,
@@ -65,7 +65,7 @@ namespace Cortex
 
         public CortexShellState State { get; private set; }
 
-        public UnityWorkbenchRuntime WorkbenchRuntime
+        public IWorkbenchRuntime WorkbenchRuntime
         {
             get { return _workbenchRuntimeAccessor != null ? _workbenchRuntimeAccessor() : null; }
         }

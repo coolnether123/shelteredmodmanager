@@ -27,6 +27,20 @@ namespace Cortex.Host.Unity.Composition
 
             context.RegisterOnboardingProfile(new OnboardingProfileContribution
             {
+                ProfileId = "cortex.onboarding.profile.modder",
+                DisplayName = "Modder",
+                Description = "Best for linking live mods to source projects, building DLLs, and iterating in-game.",
+                DefaultLayoutPresetId = "cortex.onboarding.layout.visual-studio",
+                DefaultThemeId = "cortex.vs-dark",
+                PreviewTags = new[] { "Live Mods", "Source Roots", "Build DLLs" },
+                WorkflowKind = OnboardingProfileWorkflowKind.Modder,
+                IsDefault = false,
+                Keywords = new[] { "modder", "mods", "source", "dll", "project" },
+                SortOrder = 5
+            });
+
+            context.RegisterOnboardingProfile(new OnboardingProfileContribution
+            {
                 ProfileId = "cortex.onboarding.profile.decompiler",
                 DisplayName = "Decompiler",
                 Description = "Best for browsing assemblies, metadata, and generated source.",

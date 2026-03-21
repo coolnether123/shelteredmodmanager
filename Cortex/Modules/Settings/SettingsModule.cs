@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Modules.Shared;
 using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
 using Cortex.Services;
@@ -54,10 +55,12 @@ namespace Cortex.Modules.Settings
         private IProjectCatalog _projectCatalog;
         private IProjectWorkspaceService _workspaceService;
         private ILoadedModCatalog _loadedModCatalog;
+        private IPathInteractionService _pathInteractionService;
         private WorkbenchPresentationSnapshot _snapshot;
         private CortexShellState _shellState;
         private IWorkbenchUiSurface _uiSurface;
         private readonly IEditorKeybindingService _editorKeybindingService = new EditorKeybindingService();
+        private readonly CortexLoadedModSourceLinkService _loadedModSourceLinkService = new CortexLoadedModSourceLinkService();
 
         private IWorkbenchUiSurface UiSurface
         {
@@ -69,6 +72,7 @@ namespace Cortex.Modules.Settings
             IProjectCatalog projectCatalog,
             IProjectWorkspaceService workspaceService,
             ILoadedModCatalog loadedModCatalog,
+            IPathInteractionService pathInteractionService,
             WorkbenchPresentationSnapshot snapshot,
             ThemeState themeState,
             CortexShellState state,
@@ -77,6 +81,7 @@ namespace Cortex.Modules.Settings
             _projectCatalog = projectCatalog;
             _workspaceService = workspaceService;
             _loadedModCatalog = loadedModCatalog;
+            _pathInteractionService = pathInteractionService;
             _snapshot = snapshot;
             _shellState = state;
             _uiSurface = uiSurface ?? CortexUi.DefaultSurface;
@@ -955,16 +960,32 @@ namespace Cortex.Modules.Settings
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Source Root", GUILayout.Width(100f));
-            draftValue = GUILayout.TextField(draftValue ?? string.Empty, GUILayout.Height(24f), GUILayout.ExpandWidth(true));
+            draftValue = CortexPathField.DrawValueEditor(
+                "settings.loadedMod." + draftKey + ".sourceRoot",
+                draftValue ?? string.Empty,
+                _pathInteractionService,
+                new CortexPathFieldOptions
+                {
+                    AllowBrowse = true,
+                    AllowOpen = true,
+                    AllowPaste = true,
+                    AllowClear = true,
+                    BrowseRequest = new PathSelectionRequest
+                    {
+                        SelectionKind = PathSelectionKind.Folder,
+                        Title = "Select source root",
+                        InitialPath = !string.IsNullOrEmpty(draftValue)
+                            ? draftValue
+                            : (!string.IsNullOrEmpty(existingSourceRoot)
+                                ? existingSourceRoot
+                                : (!string.IsNullOrEmpty(inferredSourceRoot)
+                                    ? inferredSourceRoot
+                                    : mod.RootPath))
+                    }
+                },
+                GUILayout.Height(24f),
+                GUILayout.ExpandWidth(true));
             _loadedModPathDrafts[draftKey] = draftValue;
-            if (GUILayout.Button("Paste", GUILayout.Width(58f), GUILayout.Height(24f)))
-            {
-                _loadedModPathDrafts[draftKey] = GUIUtility.systemCopyBuffer ?? string.Empty;
-            }
-            if (GUILayout.Button("Clear", GUILayout.Width(58f), GUILayout.Height(24f)))
-            {
-                _loadedModPathDrafts[draftKey] = string.Empty;
-            }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
@@ -1399,11 +1420,14 @@ namespace Cortex.Modules.Settings
         {
             GUILayout.BeginHorizontal();
             DrawSettingLabelColumn(contribution);
-            GUILayout.BeginVertical(GUILayout.Width(CompactEditorWidth + 132f));
-            DrawCompactTextValueEditor(contribution.SettingId, GetDefaultSerializedValue(contribution), allowPaste, allowClear);
+            GUILayout.BeginVertical(GUILayout.Width(showPathActions ? CompactEditorWidth + 260f : CompactEditorWidth + 132f));
             if (showPathActions)
             {
-                DrawClipboardActions(contribution.SettingId);
+                DrawCompactPathValueEditor(contribution);
+            }
+            else
+            {
+                DrawCompactTextValueEditor(contribution.SettingId, GetDefaultSerializedValue(contribution), allowPaste, allowClear);
             }
             DrawSettingFooter(contribution);
             GUILayout.EndVertical();
@@ -1945,18 +1969,80 @@ namespace Cortex.Modules.Settings
             }
         }
 
-        private void DrawClipboardActions(string settingId)
+        private void DrawCompactPathValueEditor(SettingContribution contribution)
         {
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Use Clipboard", GUILayout.Width(116f), GUILayout.Height(22f)))
+            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
             {
-                _textValues[settingId] = GUIUtility.systemCopyBuffer ?? string.Empty;
+                return;
             }
-            if (GUILayout.Button("Clear Value", GUILayout.Width(92f), GUILayout.Height(22f)))
+
+            _textValues[contribution.SettingId] = CortexPathField.DrawValueEditor(
+                "settings.setting." + contribution.SettingId,
+                GetTextValue(contribution.SettingId, GetDefaultSerializedValue(contribution)),
+                _pathInteractionService,
+                new CortexPathFieldOptions
+                {
+                    AllowBrowse = true,
+                    AllowOpen = true,
+                    AllowPaste = true,
+                    AllowClear = true,
+                    BrowseRequest = BuildPathSelectionRequest(contribution)
+                },
+                GUILayout.Height(24f),
+                GUILayout.ExpandWidth(true));
+        }
+
+        private PathSelectionRequest BuildPathSelectionRequest(SettingContribution contribution)
+        {
+            var initialValue = GetTextValue(contribution != null ? contribution.SettingId : string.Empty, GetDefaultSerializedValue(contribution));
+            if (string.IsNullOrEmpty(initialValue) && contribution != null)
             {
-                _textValues[settingId] = string.Empty;
+                initialValue = contribution.PlaceholderText ?? string.Empty;
             }
-            GUILayout.EndHorizontal();
+
+            return new PathSelectionRequest
+            {
+                SelectionKind = ResolvePathSelectionKind(contribution, initialValue),
+                Title = "Select " + (contribution != null && !string.IsNullOrEmpty(contribution.DisplayName) ? contribution.DisplayName : "path"),
+                InitialPath = initialValue
+            };
+        }
+
+        private static PathSelectionKind ResolvePathSelectionKind(SettingContribution contribution, string currentValue)
+        {
+            if (LooksLikeFilePath(currentValue))
+            {
+                return PathSelectionKind.OpenFile;
+            }
+
+            if (contribution != null && LooksLikeFilePath(contribution.DefaultValue))
+            {
+                return PathSelectionKind.OpenFile;
+            }
+
+            if (contribution != null && LooksLikeFilePath(contribution.PlaceholderText))
+            {
+                return PathSelectionKind.OpenFile;
+            }
+
+            return PathSelectionKind.Folder;
+        }
+
+        private static bool LooksLikeFilePath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            try
+            {
+                return !string.IsNullOrEmpty(Path.GetExtension(path));
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private bool SetBooleanSettingValue(SettingContribution contribution, CortexShellState state, bool value)
@@ -3481,45 +3567,22 @@ namespace Cortex.Modules.Settings
                 return;
             }
 
-            if (_projectCatalog == null || _workspaceService == null)
-            {
-                state.StatusMessage = "Project mapping services are unavailable.";
-                return;
-            }
-
             var sourceRoot = GetLoadedModDraftValue(mod);
-            if (string.IsNullOrEmpty(sourceRoot))
+            var linkResult = _loadedModSourceLinkService.LinkLoadedModToSource(mod, sourceRoot, _projectCatalog, _workspaceService);
+            for (var i = 0; i < linkResult.Diagnostics.Length; i++)
             {
-                state.StatusMessage = "Set a source root before linking the loaded mod.";
+                state.Diagnostics.Add(linkResult.Diagnostics[i]);
+            }
+
+            if (!linkResult.Success || linkResult.Definition == null)
+            {
+                state.StatusMessage = linkResult.StatusMessage;
                 return;
             }
 
-            var analysis = _workspaceService.AnalyzeSourceRoot(sourceRoot, mod.ModId);
-            if (analysis == null || analysis.Definition == null)
-            {
-                state.StatusMessage = "Source analysis is unavailable for that path.";
-                return;
-            }
-
-            if (!analysis.Success)
-            {
-                state.StatusMessage = analysis.StatusMessage ?? "Could not link loaded mod to the supplied source root.";
-                for (var i = 0; i < analysis.Diagnostics.Count; i++)
-                {
-                    state.Diagnostics.Add(analysis.Diagnostics[i]);
-                }
-                return;
-            }
-
-            _projectCatalog.Upsert(analysis.Definition);
-            state.SelectedProject = _projectCatalog.GetProject(mod.ModId) ?? analysis.Definition;
-            _loadedModPathDrafts[mod.ModId] = analysis.Definition.SourceRootPath ?? sourceRoot;
-            for (var i = 0; i < analysis.Diagnostics.Count; i++)
-            {
-                state.Diagnostics.Add(analysis.Diagnostics[i]);
-            }
-
-            state.StatusMessage = "Linked loaded mod " + mod.ModId + " to " + (analysis.Definition.SourceRootPath ?? string.Empty) + ".";
+            state.SelectedProject = _projectCatalog.GetProject(mod.ModId) ?? linkResult.Definition;
+            _loadedModPathDrafts[mod.ModId] = linkResult.Definition.SourceRootPath ?? sourceRoot;
+            state.StatusMessage = "Linked loaded mod " + mod.ModId + " to " + (linkResult.Definition.SourceRootPath ?? string.Empty) + ".";
         }
 
         private void ApplyLoadedModMappings(CortexShellState state)
@@ -3556,30 +3619,26 @@ namespace Cortex.Modules.Settings
                     continue;
                 }
 
-                var analysis = _workspaceService.AnalyzeSourceRoot(draftValue, mod.ModId);
-                if (analysis == null || analysis.Definition == null || !analysis.Success)
+                var linkResult = _loadedModSourceLinkService.LinkLoadedModToSource(mod, draftValue, _projectCatalog, _workspaceService);
+                if (!linkResult.Success || linkResult.Definition == null)
                 {
-                    if (analysis != null)
+                    for (var diagnosticIndex = 0; diagnosticIndex < linkResult.Diagnostics.Length; diagnosticIndex++)
                     {
-                        for (var diagnosticIndex = 0; diagnosticIndex < analysis.Diagnostics.Count; diagnosticIndex++)
-                        {
-                            state.Diagnostics.Add(analysis.Diagnostics[diagnosticIndex]);
-                        }
+                        state.Diagnostics.Add(linkResult.Diagnostics[diagnosticIndex]);
                     }
 
                     continue;
                 }
 
-                _projectCatalog.Upsert(analysis.Definition);
-                _loadedModPathDrafts[mod.ModId] = analysis.Definition.SourceRootPath ?? draftValue;
-                for (var diagnosticIndex = 0; diagnosticIndex < analysis.Diagnostics.Count; diagnosticIndex++)
+                _loadedModPathDrafts[mod.ModId] = linkResult.Definition.SourceRootPath ?? draftValue;
+                for (var diagnosticIndex = 0; diagnosticIndex < linkResult.Diagnostics.Length; diagnosticIndex++)
                 {
-                    state.Diagnostics.Add(analysis.Diagnostics[diagnosticIndex]);
+                    state.Diagnostics.Add(linkResult.Diagnostics[diagnosticIndex]);
                 }
 
                 if (state.SelectedProject == null || string.Equals(state.SelectedProject.ModId, mod.ModId, StringComparison.OrdinalIgnoreCase))
                 {
-                    state.SelectedProject = _projectCatalog.GetProject(mod.ModId) ?? analysis.Definition;
+                    state.SelectedProject = _projectCatalog.GetProject(mod.ModId) ?? linkResult.Definition;
                 }
             }
         }

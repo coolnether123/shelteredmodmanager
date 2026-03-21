@@ -63,7 +63,7 @@ namespace Cortex
                 string.Equals(_languageRuntime.ServiceConfigurationFingerprint, configurationFingerprint, StringComparison.Ordinal))
             {
                 _languageRuntime.InitializeRequest = initializeRequest;
-                MMLog.WriteInfo("[Cortex.Roslyn] Reusing existing language service configuration. Generation=" + _languageRuntime.ServiceGeneration +
+                MMLog.WriteDebug("[Cortex.Roslyn] Reusing existing language service configuration. Generation=" + _languageRuntime.ServiceGeneration +
                     ", Ready=" + _languageRuntime.ServiceReady +
                     ", Initializing=" + _languageRuntime.ServiceInitializing +
                     ", WorkspaceRoot=" + (initializeRequest.WorkspaceRootPath ?? string.Empty) +
@@ -82,11 +82,11 @@ namespace Cortex
 
             ShutdownLanguageService();
 
-            MMLog.WriteInfo("[Cortex.Roslyn] Resolved worker path: " + workerPath);
+            MMLog.WriteDebug("[Cortex.Roslyn] Resolved worker path: " + workerPath);
             _languageServiceClient = new RoslynLanguageServiceClient(
                 workerPath,
                 settings.RoslynServiceTimeoutMs,
-                delegate(string message) { MMLog.WriteInfo(message); });
+                delegate(string message) { MMLog.WriteDebug(message); });
             ResetLanguageRuntimeState(initializeRequest, configurationFingerprint);
             Interlocked.Increment(ref _languageRuntime.ServiceGeneration);
 
@@ -157,7 +157,7 @@ namespace Cortex
             var hadClient = _languageServiceClient != null;
             if (hadClient || _languageRuntime.ServiceReady || _languageRuntime.ServiceInitializing || _languageRuntime.AnalysisInFlight || _languageRuntime.HoverInFlight || _languageRuntime.DefinitionInFlight)
             {
-                MMLog.WriteInfo("[Cortex.Roslyn] Shutting down language service. HadClient=" + hadClient +
+                MMLog.WriteDebug("[Cortex.Roslyn] Shutting down language service. HadClient=" + hadClient +
                     ", Ready=" + _languageRuntime.ServiceReady +
                     ", Initializing=" + _languageRuntime.ServiceInitializing +
                     ", AnalysisInFlight=" + _languageRuntime.AnalysisInFlight +
@@ -211,7 +211,7 @@ namespace Cortex
             }
 
             _languageRuntime.LastInitializationProgressLogUtc = now;
-            MMLog.WriteInfo("[Cortex.Roslyn] Waiting for initialize response. RequestId=" + _languageRuntime.InitializeRequestId +
+            MMLog.WriteDebug("[Cortex.Roslyn] Waiting for initialize response. RequestId=" + _languageRuntime.InitializeRequestId +
                 ", ElapsedMs=" + (int)(now - _languageRuntime.InitializeQueuedUtc).TotalMilliseconds +
                 ", ClientRunning=" + _languageServiceClient.IsRunning +
                 ", LastError=" + (_languageServiceClient.LastError ?? string.Empty) + ".");

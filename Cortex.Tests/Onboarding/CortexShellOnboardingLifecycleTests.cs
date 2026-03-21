@@ -18,7 +18,14 @@ namespace Cortex.Tests.Onboarding
                 var lifecycle = new CortexShellOnboardingLifecycle();
                 var activatedContainers = new List<string>();
 
-                context.Coordinator.Open(context.ShellState, context.ShellState.Settings, context.Registry, false);
+                context.Coordinator.Open(
+                    context.ShellState,
+                    context.ShellState.Settings,
+                    context.Registry,
+                    context.LoadedModCatalog,
+                    context.ProjectCatalog,
+                    context.ProjectWorkspaceService,
+                    false);
 
                 var result = lifecycle.Preview(
                     context.Coordinator,
@@ -48,7 +55,14 @@ namespace Cortex.Tests.Onboarding
                 var persistWorkbenchSessionCalls = 0;
                 var persistWindowSettingsCalls = 0;
 
-                context.Coordinator.Open(context.ShellState, context.ShellState.Settings, context.Registry, true);
+                context.Coordinator.Open(
+                    context.ShellState,
+                    context.ShellState.Settings,
+                    context.Registry,
+                    context.LoadedModCatalog,
+                    context.ProjectCatalog,
+                    context.ProjectWorkspaceService,
+                    true);
                 context.ShellState.Onboarding.SelectedProfileId = OnboardingTestRegistryBuilder.DecompilerProfileId;
                 context.ShellState.Onboarding.SelectedLayoutPresetId = OnboardingTestRegistryBuilder.DecompilerLayoutId;
                 context.ShellState.Onboarding.SelectedThemeId = OnboardingTestRegistryBuilder.DecompilerThemeId;
@@ -58,6 +72,8 @@ namespace Cortex.Tests.Onboarding
                     context.ShellState,
                     context.Runtime,
                     context.Registry,
+                    context.ProjectCatalog,
+                    context.ProjectWorkspaceService,
                     delegate { persistWorkbenchSessionCalls++; },
                     delegate { persistWindowSettingsCalls++; },
                     delegate(CortexOnboardingWorkspaceApplicationResult applicationResult)

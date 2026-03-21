@@ -6,6 +6,7 @@ namespace Cortex.Tests.Testing
     internal sealed class OnboardingTestRegistryBuilder
     {
         public const string IdeProfileId = "tests.onboarding.profile.ide";
+        public const string ModderProfileId = "tests.onboarding.profile.modder";
         public const string DecompilerProfileId = "tests.onboarding.profile.decompiler";
         public const string VisualStudioLayoutId = "tests.onboarding.layout.visual-studio";
         public const string DecompilerLayoutId = "tests.onboarding.layout.decompiler";
@@ -90,6 +91,16 @@ namespace Cortex.Tests.Testing
                 PreviewTags = new[] { "Code", "Build", "Navigate" },
                 IsDefault = true,
                 SortOrder = 0
+            }).WithProfile(new OnboardingProfileContribution
+            {
+                ProfileId = ModderProfileId,
+                DisplayName = "Modder",
+                Description = "Best for linking live mods to source projects, building DLLs, and iterating in-game.",
+                DefaultLayoutPresetId = VisualStudioLayoutId,
+                DefaultThemeId = VisualStudioThemeId,
+                PreviewTags = new[] { "Live Mods", "Source Roots", "Build DLLs" },
+                WorkflowKind = OnboardingProfileWorkflowKind.Modder,
+                SortOrder = 5
             }).WithProfile(new OnboardingProfileContribution
             {
                 ProfileId = DecompilerProfileId,

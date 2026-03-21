@@ -6,7 +6,7 @@ using Cortex.Chrome;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
-using Cortex.Host.Unity.Runtime;
+using Cortex.Presentation.Abstractions;
 using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
 using Cortex.Shell;
@@ -38,6 +38,7 @@ namespace Cortex
         private IProjectCatalog _projectCatalog;
         private ILoadedModCatalog _loadedModCatalog;
         private IProjectWorkspaceService _projectWorkspaceService;
+        private IPathInteractionService _pathInteractionService;
         private IWorkspaceBrowserService _workspaceBrowserService;
         private IDecompilerExplorerService _decompilerExplorerService;
         private IDocumentService _documentService;
@@ -54,7 +55,8 @@ namespace Cortex
         private IOverlayInputCaptureService _overlayInputCaptureService;
         private ITextSearchService _textSearchService;
         private CortexNavigationService _navigationService;
-        private UnityWorkbenchRuntime _workbenchRuntime;
+        private IWorkbenchRuntime _workbenchRuntime;
+        private IWorkbenchRuntimeFactory _workbenchRuntimeFactory;
         private readonly EditorSymbolInteractionService _editorSymbolInteractionService = new EditorSymbolInteractionService();
         private readonly WorkbenchSearchService _workbenchSearchService = new WorkbenchSearchService();
         private readonly CortexShellLifecycleCoordinator _lifecycleCoordinator = new CortexShellLifecycleCoordinator();
@@ -104,6 +106,11 @@ namespace Cortex
         private void Awake()
         {
             _lifecycleCoordinator.Awake(this);
+        }
+
+        private void Start()
+        {
+            _lifecycleCoordinator.Start(this);
         }
 
         private void OnDestroy()
@@ -270,7 +277,19 @@ namespace Cortex
 
         private void InitializeWorkbenchRuntime()
         {
-            _workbenchRuntime = new UnityWorkbenchRuntime();
+            if (_workbenchRuntimeFactory == null)
+            {
+                MMLog.WriteWarning("[Cortex] Workbench runtime initialization skipped because no host runtime factory was configured.");
+                return;
+            }
+
+            _workbenchRuntime = _workbenchRuntimeFactory.Create();
+            if (_workbenchRuntime == null)
+            {
+                MMLog.WriteWarning("[Cortex] Workbench runtime initialization skipped because the host runtime factory returned null.");
+                return;
+            }
+
             if (_externalPluginLoader == null)
             {
                 _externalPluginLoader = new ExternalWorkbenchPluginLoader();
@@ -294,6 +313,12 @@ namespace Cortex
             {
                 OpenOnboarding(false);
             }
+        }
+
+        public void ConfigureHostServices(IPathInteractionService pathInteractionService, IWorkbenchRuntimeFactory workbenchRuntimeFactory)
+        {
+            _pathInteractionService = pathInteractionService;
+            _workbenchRuntimeFactory = workbenchRuntimeFactory;
         }
 
         private void RegisterExternalWorkbenchPlugins()
@@ -330,13 +355,11 @@ namespace Cortex
 
         private void InitializeServices(string gameRoot, string smmRoot, string smmBin, CortexSettings settings)
         {
-            MMLog.WriteInfo("[Cortex] Initializing services. WorkspaceRoot=" +
+            MMLog.WriteInfo("[Cortex] Initializing runtime. WorkspaceRoot=" +
                 (settings != null ? settings.WorkspaceRootPath ?? string.Empty : string.Empty) +
                 ", ManagedRoot=" + (settings != null ? settings.ManagedAssemblyRootPath ?? string.Empty : string.Empty) +
-                ", Visible=" + _visible +
-                ", ExistingRuntimeFeed=" + (_runtimeLogFeed != null) +
-                ", ExistingLanguageClient=" + (_languageServiceClient != null) +
-                ", ExistingLanguageReady=" + _languageRuntime.ServiceReady + ".");
+                ", LanguageServiceEnabled=" + (settings != null && settings.EnableRoslynLanguageService) +
+                ", CompletionProvider=" + (settings != null ? settings.CompletionAugmentationProviderId ?? string.Empty : string.Empty) + ".");
 
             var existingFeed = _runtimeLogFeed as MmLogRuntimeLogFeed;
             if (existingFeed != null)
@@ -352,7 +375,7 @@ namespace Cortex
                 ? new ModAPI.Inspector.ExternalProcessManager().ResolveDecompilerPath()
                 : settings.DecompilerPathOverride;
 
-            MMLog.WriteInfo("[Cortex] Service inputs resolved. ProjectCatalogPath=" + projectCatalogPath +
+            MMLog.WriteDebug("[Cortex] Service inputs resolved. ProjectCatalogPath=" + projectCatalogPath +
                 ", DecompilerPath=" + decompilerPath +
                 ", DecompilerCachePath=" + (settings != null ? settings.DecompilerCachePath ?? string.Empty : string.Empty) + ".");
 
@@ -781,7 +804,7 @@ namespace Cortex
 
         private static void EnableMmLogRuntimeIntegration()
         {
-            MMLog.ConfigureRuntimeIntegration(MMLogRuntimeOptions.CortexDefaults());
+            ModAPI.Core.MMLog.ConfigureRuntimeIntegration(MMLogRuntimeOptions.CortexDefaults());
         }
 
         private void DisableMmLogRuntimeIntegration()
@@ -792,7 +815,7 @@ namespace Cortex
                 runtimeLogFeed.Detach();
             }
 
-            MMLog.ConfigureRuntimeIntegration(MMLogRuntimeOptions.Disabled());
+            ModAPI.Core.MMLog.ConfigureRuntimeIntegration(MMLogRuntimeOptions.Disabled());
         }
 
         private void EnsureStyles(ThemeTokenSet themeTokens, string themeId)

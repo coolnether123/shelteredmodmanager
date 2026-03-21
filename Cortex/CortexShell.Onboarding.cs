@@ -27,7 +27,14 @@ namespace Cortex
                 return;
             }
 
-            _onboardingCoordinator.Open(_state, _state.Settings, _workbenchRuntime.ContributionRegistry, reopenedByUser);
+            _onboardingCoordinator.Open(
+                _state,
+                _state.Settings,
+                _workbenchRuntime.ContributionRegistry,
+                _loadedModCatalog,
+                _projectCatalog,
+                _projectWorkspaceService,
+                reopenedByUser);
             _visible = true;
             _openMenuGroup = string.Empty;
         }
@@ -54,6 +61,8 @@ namespace Cortex
                 _state,
                 _workbenchRuntime,
                 _workbenchRuntime != null ? _workbenchRuntime.ContributionRegistry : null,
+                _projectCatalog,
+                _projectWorkspaceService,
                 PersistWorkbenchSession,
                 PersistWindowSettings,
                 ActivateOnboardingContainers);
@@ -99,6 +108,7 @@ namespace Cortex
                 modalRect,
                 _state,
                 _workbenchRuntime != null ? _workbenchRuntime.ContributionRegistry : null,
+                _pathInteractionService,
                 previewBackground);
 
             if (_state.Onboarding.FinishPrompt.IsVisible)

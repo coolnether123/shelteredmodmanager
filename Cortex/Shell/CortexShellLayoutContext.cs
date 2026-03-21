@@ -1,14 +1,14 @@
 using System;
 using Cortex.Core.Models;
-using Cortex.Host.Unity.Runtime;
+using Cortex.Presentation.Abstractions;
 
 namespace Cortex
 {
     internal sealed class CortexShellLayoutContext
     {
-        private readonly Func<UnityWorkbenchRuntime> _workbenchRuntimeAccessor;
+        private readonly Func<IWorkbenchRuntime> _workbenchRuntimeAccessor;
 
-        public CortexShellLayoutContext(CortexShellState state, Func<UnityWorkbenchRuntime> workbenchRuntimeAccessor)
+        public CortexShellLayoutContext(CortexShellState state, Func<IWorkbenchRuntime> workbenchRuntimeAccessor)
         {
             State = state;
             _workbenchRuntimeAccessor = workbenchRuntimeAccessor;
@@ -16,7 +16,7 @@ namespace Cortex
 
         public CortexShellState State { get; private set; }
 
-        public UnityWorkbenchRuntime WorkbenchRuntime
+        public IWorkbenchRuntime WorkbenchRuntime
         {
             get { return _workbenchRuntimeAccessor != null ? _workbenchRuntimeAccessor() : null; }
         }
