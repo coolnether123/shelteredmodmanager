@@ -1,6 +1,5 @@
 using System;
 using Cortex.Core.Diagnostics;
-using Cortex.Platform.ModAPI.Runtime;
 using ModAPI.Core;
 using UnityEngine;
 
@@ -11,6 +10,8 @@ namespace Cortex.Host.Unity.Runtime
     /// </summary>
     public sealed class CortexUnityRuntimeBootstrap : IGameRuntimeBootstrap
     {
+        private static readonly CortexLogger Log = CortexLog.ForSource("Cortex.Host.Unity");
+
         /// <summary>
         /// Ensures a single persistent Cortex shell exists in the active Unity runtime.
         /// </summary>
@@ -18,24 +19,25 @@ namespace Cortex.Host.Unity.Runtime
         {
             try
             {
-                CortexLog.Configure(new MmLogCortexLogSink());
+                var compositionRoot = new UnityCortexHostCompositionRoot();
+                CortexLog.Configure(compositionRoot.LogSink);
 
                 var existingShell = UnityEngine.Object.FindObjectOfType<CortexShell>();
                 if (existingShell != null)
                 {
-                    MMLog.WriteInfo("[Cortex] Runtime bootstrap skipped because an existing shell is already active on '" + existingShell.gameObject.name + "'.");
+                    Log.WriteInfo("Runtime bootstrap skipped because an existing shell is already active on '" + existingShell.gameObject.name + "'.");
                     return;
                 }
 
                 var shellRoot = new GameObject("Cortex.Shell");
                 UnityEngine.Object.DontDestroyOnLoad(shellRoot);
                 var shell = shellRoot.AddComponent<CortexShell>();
-                shell.ConfigureHostServices(new WindowsPathInteractionService(), new UnityWorkbenchRuntimeFactory(), new ModApiCortexPlatformModule());
-                MMLog.WriteInfo("[Cortex] Runtime bootstrap created shell root '" + shellRoot.name + "'.");
+                shell.ConfigureHostServices(compositionRoot.HostServices);
+                Log.WriteInfo("Runtime bootstrap created shell root '" + shellRoot.name + "'.");
             }
             catch (Exception ex)
             {
-                MMLog.WriteError("[Cortex] Runtime bootstrap failed: " + ex);
+                Log.WriteError("Runtime bootstrap failed: " + ex);
                 throw;
             }
         }
