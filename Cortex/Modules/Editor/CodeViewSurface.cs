@@ -84,7 +84,13 @@ namespace Cortex.Modules.Editor
             GUIStyle contextMenuButtonStyle,
             GUIStyle contextMenuHeaderStyle,
             Rect blockedRect,
-            float gutterWidth)
+            float gutterWidth,
+            IProjectCatalog projectCatalog,
+            ILoadedModCatalog loadedModCatalog,
+            ISourceLookupIndex sourceLookupIndex,
+            HarmonyPatchInspectionService harmonyPatchInspectionService,
+            HarmonyPatchResolutionService harmonyPatchResolutionService,
+            HarmonyPatchDisplayService harmonyPatchDisplayService)
         {
             if (session == null)
             {
@@ -138,6 +144,17 @@ namespace Cortex.Modules.Editor
                     }
 
                     DrawTooltip(session, scroll, localMouse, hoveredToken, navigationService, state, rect.size, hasMouse);
+                    DrawHarmonyBadge(
+                        session,
+                        state,
+                        rect.size,
+                        commandRegistry,
+                        projectCatalog,
+                        loadedModCatalog,
+                        sourceLookupIndex,
+                        harmonyPatchInspectionService,
+                        harmonyPatchResolutionService,
+                        harmonyPatchDisplayService);
                     DrawContextMenu(state, current, localMouse, rect.size, commandRegistry);
                 }
                 finally
@@ -162,6 +179,80 @@ namespace Cortex.Modules.Editor
             _layoutCacheKey = string.Empty;
             _layout = null;
             CloseContextMenu();
+        }
+
+        private void DrawHarmonyBadge(
+            DocumentSession session,
+            CortexShellState state,
+            Vector2 viewportSize,
+            ICommandRegistry commandRegistry,
+            IProjectCatalog projectCatalog,
+            ILoadedModCatalog loadedModCatalog,
+            ISourceLookupIndex sourceLookupIndex,
+            HarmonyPatchInspectionService harmonyPatchInspectionService,
+            HarmonyPatchResolutionService harmonyPatchResolutionService,
+            HarmonyPatchDisplayService harmonyPatchDisplayService)
+        {
+            if (session == null ||
+                state == null ||
+                commandRegistry == null ||
+                harmonyPatchInspectionService == null ||
+                harmonyPatchResolutionService == null ||
+                harmonyPatchDisplayService == null ||
+                !CortexModuleUtil.IsDecompilerDocumentPath(state, session.FilePath))
+            {
+                return;
+            }
+
+            HarmonyResolvedMethodTarget resolvedTarget;
+            string reason;
+            if (!harmonyPatchResolutionService.TryResolveFromDocument(state, sourceLookupIndex, projectCatalog, session, out resolvedTarget, out reason) ||
+                resolvedTarget == null ||
+                resolvedTarget.InspectionRequest == null)
+            {
+                return;
+            }
+
+            string statusMessage;
+            var summary = harmonyPatchInspectionService.GetCachedSummary(
+                state,
+                resolvedTarget.InspectionRequest,
+                loadedModCatalog,
+                projectCatalog,
+                true,
+                out statusMessage);
+            if (summary == null || !summary.IsPatched)
+            {
+                return;
+            }
+
+            var label = harmonyPatchDisplayService.BuildBadgeText(summary);
+            if (string.IsNullOrEmpty(label))
+            {
+                label = "H";
+            }
+
+            var buttonWidth = Mathf.Max(72f, GUI.skin.button.CalcSize(new GUIContent(label)).x + 18f);
+            var buttonRect = new Rect(
+                Mathf.Max(8f, viewportSize.x - buttonWidth - 16f),
+                8f,
+                buttonWidth,
+                24f);
+            var content = new GUIContent(label, harmonyPatchDisplayService.BuildCountBreakdown(summary.Counts));
+            if (GUI.Button(buttonRect, content))
+            {
+                state.Harmony.ActiveInspectionRequest = resolvedTarget.InspectionRequest;
+                state.Harmony.ActiveSummaryKey = harmonyPatchInspectionService.BuildKey(resolvedTarget.InspectionRequest);
+                state.Harmony.ActiveSummary = summary;
+                state.Harmony.ResolutionFailureReason = string.Empty;
+                state.Workbench.AssignHost(CortexWorkbenchIds.HarmonyContainer, WorkbenchHostLocation.SecondarySideHost);
+                commandRegistry.Execute("cortex.window.harmony", new CommandExecutionContext
+                {
+                    ActiveContainerId = state.Workbench.FocusedContainerId,
+                    ActiveDocumentId = state.Documents.ActiveDocumentPath,
+                    FocusedRegionId = state.Workbench.FocusedContainerId
+                });
+            }
         }
 
         private void EnsureStyles(string themeKey, GUIStyle baseStyle, GUIStyle gutterStyle, GUIStyle tooltipStyle, GUIStyle contextMenuStyle, GUIStyle contextMenuButtonStyle, GUIStyle contextMenuHeaderStyle)
@@ -496,6 +587,16 @@ namespace Cortex.Modules.Editor
 
             if (!hasMouse || current.type != EventType.MouseDown)
             {
+                return;
+            }
+
+            if (current.button == 0 && state != null && state.Harmony != null && state.Harmony.IsInsertionPickActive)
+            {
+                state.Harmony.GenerationStatusMessage = "Select the Harmony insertion point from a writable source editor, not decompiled code.";
+                state.StatusMessage = state.Harmony.GenerationStatusMessage;
+                MMLog.WriteWarning("[Cortex.Harmony] Rejected insertion-point pick from decompiled editor '" +
+                    (session != null ? session.FilePath ?? string.Empty : string.Empty) + "'.");
+                current.Use();
                 return;
             }
 
@@ -1429,13 +1530,25 @@ namespace Cortex.Modules.Editor
             EditorCommandTarget target;
             if (!TryBuildCommandTarget(session, state, token, out target))
             {
+                MMLog.WriteWarning("[Cortex.Harmony] Context menu target creation failed for decompiled token. Document='" +
+                    (session != null ? session.FilePath ?? string.Empty : string.Empty) +
+                    "', Token='" + (token != null ? token.RawText ?? string.Empty : string.Empty) + "'.");
                 CloseContextMenu();
                 return;
             }
 
+            MMLog.WriteInfo("[Cortex.Harmony] Opening editor context menu. Document='" +
+                (target.DocumentPath ?? string.Empty) +
+                "', Symbol='" + (target.SymbolText ?? string.Empty) +
+                "', Position=" + target.AbsolutePosition +
+                ", Line=" + target.Line +
+                ", Column=" + target.Column + ".");
+
             var items = _contextMenuService.BuildItems(state, commandRegistry, contributionRegistry, target);
             if (items == null || items.Count == 0)
             {
+                MMLog.WriteInfo("[Cortex.Harmony] Context menu produced no visible items for symbol '" +
+                    (target.SymbolText ?? string.Empty) + "'.");
                 CloseContextMenu();
                 return;
             }

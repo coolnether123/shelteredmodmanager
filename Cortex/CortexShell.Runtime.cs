@@ -95,7 +95,12 @@ namespace Cortex
                     delegate { return _restartCoordinator; },
                     delegate { return _navigationService; },
                     delegate { return _workbenchRuntime; },
-                    delegate { return _workbenchSearchService; });
+                    delegate { return _workbenchSearchService; },
+                    delegate { return _harmonyPatchInspectionService; },
+                    delegate { return _harmonyPatchResolutionService; },
+                    delegate { return _harmonyPatchDisplayService; },
+                    delegate { return _harmonyPatchGenerationService; },
+                    delegate { return _generatedTemplateNavigationService; });
             }
 
             return _moduleServices;

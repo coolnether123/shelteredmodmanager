@@ -19,6 +19,7 @@ namespace Cortex.Host.Unity.Composition
             context.RegisterViewContainer(CortexWorkbenchIds.ProjectsContainer, "Projects", WorkbenchHostLocation.SecondarySideHost, 10, true, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.ProjectsContainer, CortexWorkbenchIds.ProjectsContainer);
             context.RegisterViewContainer(CortexWorkbenchIds.ReferenceContainer, "References", WorkbenchHostLocation.SecondarySideHost, 20, true, ModuleActivationKind.OnContainerOpen, CortexWorkbenchIds.ReferenceContainer, CortexWorkbenchIds.ReferenceContainer);
             context.RegisterViewContainer(CortexWorkbenchIds.SearchContainer, "Search", WorkbenchHostLocation.PanelHost, 30, true, ModuleActivationKind.OnCommand, "cortex.editor.find", CortexWorkbenchIds.SearchContainer);
+            context.RegisterViewContainer(CortexWorkbenchIds.HarmonyContainer, "Harmony", WorkbenchHostLocation.SecondarySideHost, 40, true, ModuleActivationKind.OnCommand, "cortex.window.harmony", CortexWorkbenchIds.HarmonyContainer);
             context.RegisterViewContainer(CortexWorkbenchIds.EditorContainer, "Editor", WorkbenchHostLocation.DocumentHost, 0, true, ModuleActivationKind.OnDocumentRestore, CortexWorkbenchIds.EditorContainer, CortexWorkbenchIds.EditorContainer);
 
             RegisterDefaultView(context, CortexWorkbenchIds.FileExplorerContainer, "Solution Explorer");
@@ -28,6 +29,7 @@ namespace Cortex.Host.Unity.Composition
             RegisterDefaultView(context, CortexWorkbenchIds.ProjectsContainer, "Projects");
             RegisterDefaultView(context, CortexWorkbenchIds.ReferenceContainer, "References");
             RegisterDefaultView(context, CortexWorkbenchIds.SearchContainer, "Search");
+            RegisterDefaultView(context, CortexWorkbenchIds.HarmonyContainer, "Harmony");
             RegisterDefaultView(context, CortexWorkbenchIds.EditorContainer, "Editor");
 
             context.RegisterIcon(new IconContribution { IconId = CortexWorkbenchIds.FileExplorerContainer, Alias = "EX" });
@@ -35,6 +37,7 @@ namespace Cortex.Host.Unity.Composition
             context.RegisterIcon(new IconContribution { IconId = CortexWorkbenchIds.ProjectsContainer, Alias = "PJ" });
             context.RegisterIcon(new IconContribution { IconId = CortexWorkbenchIds.ReferenceContainer, Alias = "RF" });
             context.RegisterIcon(new IconContribution { IconId = CortexWorkbenchIds.SearchContainer, Alias = "SR" });
+            context.RegisterIcon(new IconContribution { IconId = CortexWorkbenchIds.HarmonyContainer, Alias = "HM" });
             context.RegisterIcon(new IconContribution { IconId = CortexWorkbenchIds.EditorContainer, Alias = "ED" });
             context.RegisterIcon(new IconContribution { IconId = CortexWorkbenchIds.BuildContainer, Alias = "BL" });
             context.RegisterIcon(new IconContribution { IconId = CortexWorkbenchIds.RuntimeContainer, Alias = "RT" });

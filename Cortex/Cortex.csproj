@@ -77,6 +77,8 @@
     <Compile Include="Modules\Editor\EditorInteractionLog.cs" />
     <Compile Include="Modules\Editor\EditorModule.cs" />
     <Compile Include="Modules\Editor\EditorSyntaxHighlighter.cs" />
+    <Compile Include="Modules\Harmony\HarmonyCommandContributions.cs" />
+    <Compile Include="Modules\Harmony\HarmonyModule.cs" />
     <Compile Include="Modules\FileExplorer\FileExplorerModule.cs" />
     <Compile Include="Modules\Logs\LogsModule.cs" />
     <Compile Include="Modules\Onboarding\OnboardingModule.cs" />
@@ -105,6 +107,15 @@
     <Compile Include="Services\EditorCommandContextFactory.cs" />
     <Compile Include="Services\EditorDocumentModeService.cs" />
     <Compile Include="Services\EditorContextActionResolverService.cs" />
+    <Compile Include="Services\GeneratedTemplateNavigationService.cs" />
+    <Compile Include="Services\HarmonyPatchDisplayService.cs" />
+    <Compile Include="Services\HarmonyPatchGenerationService.cs" />
+    <Compile Include="Services\HarmonyPatchInspectionService.cs" />
+    <Compile Include="Services\HarmonyPatchInsertionService.cs" />
+    <Compile Include="Services\HarmonyPatchOrderService.cs" />
+    <Compile Include="Services\HarmonyPatchOwnershipService.cs" />
+    <Compile Include="Services\HarmonyPatchResolutionService.cs" />
+    <Compile Include="Services\HarmonyPatchTemplateService.cs" />
     <Compile Include="Services\DocumentLanguageInteractionService.cs" />
     <Compile Include="Services\IEditorKeybindingService.cs" />
     <Compile Include="Services\EditorKeybindingService.cs" />

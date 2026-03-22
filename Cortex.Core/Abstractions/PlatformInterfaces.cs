@@ -13,6 +13,8 @@ namespace Cortex.Core.Abstractions
 
     public interface ICortexPlatformModule
     {
+        IHarmonyRuntimeInspectionService HarmonyRuntimeInspectionService { get; }
+
         ILoadedModCatalog LoadedModCatalog { get; }
 
         IRuntimeLogFeed RuntimeLogFeed { get; }

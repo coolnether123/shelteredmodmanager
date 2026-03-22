@@ -3,6 +3,7 @@ using Cortex.Core.Models;
 using Cortex.Modules.Build;
 using Cortex.Modules.Editor;
 using Cortex.Modules.FileExplorer;
+using Cortex.Modules.Harmony;
 using Cortex.Modules.Logs;
 using Cortex.Modules.Projects;
 using Cortex.Modules.Reference;
@@ -30,6 +31,7 @@ namespace Cortex
             registry.Register(new BuildModuleContribution(services));
             registry.Register(new ReferenceModuleContribution(services));
             registry.Register(new SearchModuleContribution(services));
+            registry.Register(new HarmonyModuleContribution(services));
             registry.Register(new RuntimeToolsModuleContribution(services));
             registry.Register(new SettingsModuleContribution(services));
         }
@@ -241,12 +243,24 @@ namespace Cortex
 
             public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
             {
+                HarmonyCommandContributions.EnsureRegistered(
+                    _services != null ? _services.CommandRegistry : null,
+                    _services != null ? _services.ContributionRegistry : null,
+                    _services);
                 _module.Draw(
                     _services != null ? _services.DocumentService : null,
                     _services != null ? _services.NavigationService : null,
                     _services != null ? _services.CommandRegistry : null,
                     _services != null ? _services.ContributionRegistry : null,
                     _services != null ? _services.WorkbenchSearchService : null,
+                    _services != null ? _services.ProjectCatalog : null,
+                    _services != null ? _services.LoadedModCatalog : null,
+                    _services != null ? _services.SourceLookupIndex : null,
+                    _services != null ? _services.HarmonyPatchInspectionService : null,
+                    _services != null ? _services.HarmonyPatchResolutionService : null,
+                    _services != null ? _services.HarmonyPatchDisplayService : null,
+                    _services != null ? _services.HarmonyPatchGenerationService : null,
+                    _services != null ? _services.GeneratedTemplateNavigationService : null,
                     _services != null ? _services.State : null);
             }
 
@@ -403,6 +417,70 @@ namespace Cortex
                 AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
                 AddMissing(missingDependencies, "NavigationService", _services != null ? _services.NavigationService : null);
                 AddMissing(missingDependencies, "WorkbenchSearchService", _services != null ? _services.WorkbenchSearchService : null);
+            }
+        }
+    }
+
+    internal sealed class HarmonyModuleContribution : IWorkbenchModuleContribution
+    {
+        private readonly IHarmonyModuleServices _services;
+
+        public HarmonyModuleContribution(IHarmonyModuleServices services)
+        {
+            _services = services;
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.HarmonyContainer, typeof(HarmonyShellModule));
+        }
+
+        public WorkbenchModuleDescriptor Descriptor { get; private set; }
+
+        public IWorkbenchModule CreateModule()
+        {
+            return new HarmonyShellModule(_services);
+        }
+
+        private sealed class HarmonyShellModule : CortexShellModuleBase
+        {
+            private readonly HarmonyModule _module = new HarmonyModule();
+            private readonly IHarmonyModuleServices _services;
+
+            public HarmonyShellModule(IHarmonyModuleServices services)
+                : base(CortexWorkbenchIds.HarmonyContainer)
+            {
+                _services = services;
+            }
+
+            public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
+            {
+                HarmonyCommandContributions.EnsureRegistered(
+                    _services != null ? _services.CommandRegistry : null,
+                    _services != null ? _services.ContributionRegistry : null,
+                    _services);
+                _module.Draw(
+                    _services != null ? _services.CommandRegistry : null,
+                    _services != null ? _services.ContributionRegistry : null,
+                    _services != null ? _services.NavigationService : null,
+                    _services != null ? _services.DocumentService : null,
+                    _services != null ? _services.ProjectCatalog : null,
+                    _services != null ? _services.LoadedModCatalog : null,
+                    _services != null ? _services.PathInteractionService : null,
+                    _services != null ? _services.SourceLookupIndex : null,
+                    _services != null ? _services.HarmonyPatchInspectionService : null,
+                    _services != null ? _services.HarmonyPatchResolutionService : null,
+                    _services != null ? _services.HarmonyPatchDisplayService : null,
+                    _services != null ? _services.HarmonyPatchGenerationService : null,
+                    _services != null ? _services.GeneratedTemplateNavigationService : null,
+                    _services != null ? _services.State : null);
+            }
+
+            protected override void CollectMissingDependencies(List<string> missingDependencies)
+            {
+                AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
+                AddMissing(missingDependencies, "NavigationService", _services != null ? _services.NavigationService : null);
+                AddMissing(missingDependencies, "DocumentService", _services != null ? _services.DocumentService : null);
+                AddMissing(missingDependencies, "ProjectCatalog", _services != null ? _services.ProjectCatalog : null);
+                AddMissing(missingDependencies, "SourceLookupIndex", _services != null ? _services.SourceLookupIndex : null);
+                AddMissing(missingDependencies, "HarmonyPatchInspectionService", _services != null ? _services.HarmonyPatchInspectionService : null);
+                AddMissing(missingDependencies, "HarmonyPatchGenerationService", _services != null ? _services.HarmonyPatchGenerationService : null);
             }
         }
     }

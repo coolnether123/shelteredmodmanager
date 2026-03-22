@@ -37,6 +37,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Abstractions\EditorInterfaces.cs" />
+    <Compile Include="Abstractions\HarmonyInterfaces.cs" />
     <Compile Include="Abstractions\Interfaces.cs" />
     <Compile Include="Abstractions\PlatformInterfaces.cs" />
     <Compile Include="Abstractions\WorkbenchInterfaces.cs" />
@@ -51,6 +52,7 @@
     <Compile Include="Models\DocumentModels.cs" />
     <Compile Include="Models\EditorKeybindingModels.cs" />
     <Compile Include="Models\EditorModels.cs" />
+    <Compile Include="Models\HarmonyModels.cs" />
     <Compile Include="Models\SearchModels.cs" />
     <Compile Include="Models\SemanticModels.cs" />
     <Compile Include="..\Shared\CompletionAugmentationPromptContract.cs">

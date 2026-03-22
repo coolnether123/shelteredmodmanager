@@ -14,8 +14,8 @@ namespace Cortex.Modules.Editor
         private static readonly bool HoverDiagnosticsEnabled = false;
         private static readonly bool EditDiagnosticsEnabled = false;
         private static readonly bool SelectionDiagnosticsEnabled = false;
-        private static readonly bool ContextMenuDiagnosticsEnabled = true;
-        private static readonly bool ScrollDiagnosticsEnabled = true;
+        private static readonly bool ContextMenuDiagnosticsEnabled = false;
+        private static readonly bool ScrollDiagnosticsEnabled = false;
         private static string _lastScrollLogKey = string.Empty;
         private static float _lastScrollLogRealtime;
 

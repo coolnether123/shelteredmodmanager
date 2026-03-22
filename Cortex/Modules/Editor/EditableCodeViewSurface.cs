@@ -115,7 +115,9 @@ namespace Cortex.Modules.Editor
             GUIStyle contextMenuButtonStyle,
             GUIStyle contextMenuHeaderStyle,
             Rect blockedRect,
-            float gutterWidth)
+            float gutterWidth,
+            HarmonyPatchGenerationService harmonyPatchGenerationService,
+            GeneratedTemplateNavigationService generatedTemplateNavigationService)
         {
             if (session == null || !session.SupportsEditing || rect.width <= 0f || rect.height <= 0f)
             {
@@ -142,6 +144,10 @@ namespace Cortex.Modules.Editor
                         session.EditorState.HasExplicitCaretPlacement);
                 }
                 _editorService.SetUndoLimit(session, state != null && state.Settings != null ? state.Settings.EditorUndoHistoryLimit : 128);
+                if (generatedTemplateNavigationService != null)
+                {
+                    generatedTemplateNavigationService.SyncSession(state, session);
+                }
                 EnsureStyles(themeKey, codeStyle, gutterStyle, tooltipStyle);
                 EnsureLayout(session, themeKey, gutterWidth);
                 if (_layout == null || _codeStyle == null || _gutterStyle == null || _surfaceFill == null)
@@ -164,7 +170,7 @@ namespace Cortex.Modules.Editor
                     _lastContextMenuRect = _popupMenuSurface.PredictMenuRect(_contextMenuPosition, rect.size, _popupMenuItems);
                 }
                 PreHandleContextMenuInput(current, localMouse);
-                HandleKeyboardInput(session, state, editingEnabled, commandRegistry, current);
+                HandleKeyboardInput(session, state, editingEnabled, commandRegistry, current, generatedTemplateNavigationService);
                 if (session.TextVersion != inputTextVersion)
                 {
                     _documentLanguageAnalysisService.ApplyProvisionalClassificationProjection(session);
@@ -182,7 +188,7 @@ namespace Cortex.Modules.Editor
 
                 scroll = EnsureCaretVisible(session, scroll, rect.height);
                 var pointerContext = BuildPointerContext(current, rect, hasMouse, localMouse, scroll, true);
-                HandlePointerInput(session, state, editingEnabled, current, pointerContext, gutterWidth, commandRegistry, contributionRegistry);
+                HandlePointerInput(session, state, editingEnabled, current, pointerContext, gutterWidth, commandRegistry, contributionRegistry, harmonyPatchGenerationService);
                 var hoverTarget = hasMouse && !_isDraggingSelection
                     ? TryResolveHoverTarget(session, state, editingEnabled, pointerContext.ContentMouse, gutterWidth)
                     : null;
@@ -213,15 +219,6 @@ namespace Cortex.Modules.Editor
 
                     if (preserveEditorScroll)
                     {
-                        if (!Mathf.Approximately(scroll.x, scrollBeforeDraw.x) || !Mathf.Approximately(scroll.y, scrollBeforeDraw.y))
-                        {
-                            EditorInteractionLog.WriteScrollOwner(
-                                "EditorCodeArea",
-                                "Suppressed editor scroll while context menu owned input. Before=(" +
-                                scrollBeforeDraw.x.ToString("F1") + "," + scrollBeforeDraw.y.ToString("F1") +
-                                "), Attempted=(" + scroll.x.ToString("F1") + "," + scroll.y.ToString("F1") + ").",
-                                true);
-                        }
                         scroll = scrollBeforeDraw;
                     }
 
@@ -1005,7 +1002,8 @@ namespace Cortex.Modules.Editor
             PointerContext pointerContext,
             float gutterWidth,
             ICommandRegistry commandRegistry,
-            IContributionRegistry contributionRegistry)
+            IContributionRegistry contributionRegistry,
+            HarmonyPatchGenerationService harmonyPatchGenerationService)
         {
             if (current == null)
             {
@@ -1051,6 +1049,11 @@ namespace Cortex.Modules.Editor
 
                 session.EditorState.ScrollToCaretPending = false;
                 _isDraggingSelection = true;
+                if (HandleHarmonyInsertionPick(session, state, hitTest, harmonyPatchGenerationService))
+                {
+                    current.Use();
+                    return;
+                }
 
                 // Ctrl+Double-click → Go to Definition (Visual Studio convention).
                 // Plain double-click → word selection only; no navigation.
@@ -1081,6 +1084,38 @@ namespace Cortex.Modules.Editor
             {
                 _isDraggingSelection = false;
             }
+        }
+
+        private bool HandleHarmonyInsertionPick(
+            DocumentSession session,
+            CortexShellState state,
+            PointerHitTestResult hitTest,
+            HarmonyPatchGenerationService harmonyPatchGenerationService)
+        {
+            if (state == null ||
+                state.Harmony == null ||
+                !state.Harmony.IsInsertionPickActive ||
+                harmonyPatchGenerationService == null)
+            {
+                return false;
+            }
+
+            string statusMessage;
+            if (harmonyPatchGenerationService.TryApplyEditorInsertionSelection(state, session, hitTest.LineNumber, hitTest.CharacterIndex, out statusMessage))
+            {
+                MMLog.WriteInfo("[Cortex.Harmony] Editor insertion point selected from writable editor. Document='" +
+                    (session != null ? session.FilePath ?? string.Empty : string.Empty) +
+                    "', Line=" + hitTest.LineNumber + ".");
+            }
+            else
+            {
+                MMLog.WriteWarning("[Cortex.Harmony] Editor insertion point selection failed. Document='" +
+                    (session != null ? session.FilePath ?? string.Empty : string.Empty) +
+                    "', Line=" + hitTest.LineNumber +
+                    ", Reason='" + (statusMessage ?? string.Empty) + "'.");
+            }
+
+            return true;
         }
 
         private string ApplyPointerSelection(DocumentSession session, Event current, int clickedIndex)
@@ -1122,11 +1157,6 @@ namespace Cortex.Modules.Editor
             _popupMenuSurface.TryCapturePointerInput(current, _lastContextMenuRect, localMouse);
             if (current != null && current.type == EventType.ScrollWheel && !_lastContextMenuRect.Contains(localMouse))
             {
-                EditorInteractionLog.WriteScrollOwner(
-                    "ContextMenu",
-                    "Modal menu swallowed wheel outside menu bounds. Mouse=(" +
-                    localMouse.x.ToString("F1") + "," + localMouse.y.ToString("F1") + ").",
-                    false);
                 current.Use();
             }
         }
@@ -1714,7 +1744,7 @@ namespace Cortex.Modules.Editor
                 ", SelectedIndex=" + selection.CaretIndex + ".");
         }
 
-        private void HandleKeyboardInput(DocumentSession session, CortexShellState state, bool editingEnabled, ICommandRegistry commandRegistry, Event current)
+        private void HandleKeyboardInput(DocumentSession session, CortexShellState state, bool editingEnabled, ICommandRegistry commandRegistry, Event current, GeneratedTemplateNavigationService generatedTemplateNavigationService)
         {
             if (!_hasFocus || current == null || current.type != EventType.KeyDown)
             {
@@ -1728,6 +1758,15 @@ namespace Cortex.Modules.Editor
 
             var selectionCountBefore = session != null && session.EditorState != null ? session.EditorState.Selections.Count : 0;
             var caretIndexBefore = session != null && session.EditorState != null ? session.EditorState.CaretIndex : 0;
+            if (editingEnabled &&
+                generatedTemplateNavigationService != null &&
+                current.keyCode == KeyCode.Tab &&
+                generatedTemplateNavigationService.TryHandleNavigation(state, session, current.shift))
+            {
+                current.Use();
+                return;
+            }
+
             if (TryHandleCompletionInput(session, state, current, editingEnabled))
             {
                 current.Use();

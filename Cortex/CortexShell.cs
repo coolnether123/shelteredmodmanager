@@ -54,6 +54,15 @@ namespace Cortex
         private ICortexShellHostUi _shellHostUi;
         private ITextSearchService _textSearchService;
         private CortexNavigationService _navigationService;
+        private HarmonyPatchOwnershipService _harmonyPatchOwnershipService;
+        private HarmonyPatchDisplayService _harmonyPatchDisplayService;
+        private HarmonyPatchOrderService _harmonyPatchOrderService;
+        private HarmonyPatchInspectionService _harmonyPatchInspectionService;
+        private HarmonyPatchResolutionService _harmonyPatchResolutionService;
+        private HarmonyPatchTemplateService _harmonyPatchTemplateService;
+        private HarmonyPatchInsertionService _harmonyPatchInsertionService;
+        private HarmonyPatchGenerationService _harmonyPatchGenerationService;
+        private GeneratedTemplateNavigationService _generatedTemplateNavigationService;
         private IWorkbenchRuntime _workbenchRuntime;
         private IWorkbenchRuntimeFactory _workbenchRuntimeFactory;
         private readonly EditorSymbolInteractionService _editorSymbolInteractionService = new EditorSymbolInteractionService();
@@ -387,6 +396,18 @@ namespace Cortex
             _overlayInputCaptureService = platformModule.OverlayInputCaptureService;
             _textSearchService = new TextSearchService();
             _navigationService = new CortexNavigationService(_documentService, _sourceReferenceService, _runtimeSourceNavigationService, _sourceLookupIndex);
+            _harmonyPatchOwnershipService = new HarmonyPatchOwnershipService();
+            _harmonyPatchDisplayService = new HarmonyPatchDisplayService();
+            _harmonyPatchOrderService = new HarmonyPatchOrderService();
+            _harmonyPatchInspectionService = new HarmonyPatchInspectionService(
+                platformModule.HarmonyRuntimeInspectionService,
+                _harmonyPatchOwnershipService,
+                _harmonyPatchOrderService);
+            _harmonyPatchResolutionService = new HarmonyPatchResolutionService();
+            _harmonyPatchTemplateService = new HarmonyPatchTemplateService();
+            _harmonyPatchInsertionService = new HarmonyPatchInsertionService();
+            _harmonyPatchGenerationService = new HarmonyPatchGenerationService(_harmonyPatchTemplateService, _harmonyPatchInsertionService);
+            _generatedTemplateNavigationService = new GeneratedTemplateNavigationService();
             InitializeLanguageService(hostEnvironment.HostBinPath, settings);
             EnableRuntimeLogIntegration();
         }

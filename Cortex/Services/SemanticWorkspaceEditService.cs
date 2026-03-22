@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
 
@@ -108,7 +109,7 @@ namespace Cortex.Services
         {
             var workingText = originalText ?? string.Empty;
             var orderedEdits = new List<LanguageServiceTextEdit>(edits);
-            orderedEdits.Sort(delegate(LanguageServiceTextEdit left, LanguageServiceTextEdit right)
+            orderedEdits.Sort(delegate (LanguageServiceTextEdit left, LanguageServiceTextEdit right)
             {
                 var leftStart = left != null && left.Range != null ? left.Range.Start : 0;
                 var rightStart = right != null && right.Range != null ? right.Range.Start : 0;
@@ -162,3 +163,4 @@ namespace Cortex.Services
             }
         }
     }
+}
