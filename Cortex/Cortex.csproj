@@ -73,6 +73,7 @@
     <Compile Include="Modules\Build\BuildModule.cs" />
     <Compile Include="Modules\Editor\CodeViewSurface.cs" />
     <Compile Include="Modules\Editor\EditableCodeViewSurface.cs" />
+    <Compile Include="Modules\Editor\EditorCommandContributions.cs" />
     <Compile Include="Modules\Editor\EditorInteractionLog.cs" />
     <Compile Include="Modules\Editor\EditorModule.cs" />
     <Compile Include="Modules\Editor\EditorSyntaxHighlighter.cs" />
@@ -96,6 +97,7 @@
     <Compile Include="Services\CompletionContextAnalyzer.cs" />
     <Compile Include="Services\CompletionMatchUtility.cs" />
     <Compile Include="Services\EditorSymbolInteractionService.cs" />
+    <Compile Include="Services\EditorToolbarService.cs" />
     <Compile Include="Services\CompletionRankingService.cs" />
     <Compile Include="Services\DocumentLanguageAnalysisService.cs" />
     <Compile Include="Services\EditorCompletionService.cs" />

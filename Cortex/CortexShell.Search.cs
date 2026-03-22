@@ -35,6 +35,14 @@ namespace Cortex
 
             search.IsVisible = true;
             search.FocusQueryRequested = true;
+            search.WorkflowKind = TextSearchWorkflowKind.Find;
+            search.WorkflowTargetText = string.Empty;
+            search.WorkflowCaption = string.Empty;
+            search.RenamePanelExpanded = false;
+            if (string.IsNullOrEmpty(search.RenameReplacementText))
+            {
+                search.RenameReplacementText = search.QueryText ?? string.Empty;
+            }
             if (string.IsNullOrEmpty(search.QueryText))
             {
                 search.Query.Scope = SearchScopeKind.CurrentDocument;
@@ -57,6 +65,7 @@ namespace Cortex
             _state.Search.IsVisible = false;
             _state.Search.ScopeMenuOpen = false;
             _state.Search.FocusQueryRequested = false;
+            _state.Search.RenamePanelExpanded = false;
             _state.StatusMessage = "Find closed.";
         }
 

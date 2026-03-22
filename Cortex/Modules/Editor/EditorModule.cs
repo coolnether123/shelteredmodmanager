@@ -81,6 +81,7 @@ namespace Cortex.Modules.Editor
             Services.WorkbenchSearchService workbenchSearchService,
             CortexShellState state)
         {
+            EditorCommandContributions.EnsureRegistered(commandRegistry, contributionRegistry, state);
             EnsureStyles(state);
             HandleSearchShortcuts(commandRegistry, state);
 
@@ -515,6 +516,7 @@ namespace Cortex.Modules.Editor
 
             if (usesUnifiedSourceSurface)
             {
+                var previousEditorScroll = _editorScroll;
                 _editorScroll = _editableCodeViewSurface.Draw(
                     rect,
                     _editorScroll,
@@ -532,9 +534,11 @@ namespace Cortex.Modules.Editor
                     _contextMenuHeaderStyle,
                     overlayBlockRect,
                     GutterWidth);
+                LogEditorScrollChange(active, previousEditorScroll, _editorScroll);
                 return;
             }
 
+            var previousReadOnlyScroll = _editorScroll;
             _editorScroll = _codeViewSurface.Draw(
                 rect,
                 _editorScroll,
@@ -552,6 +556,22 @@ namespace Cortex.Modules.Editor
                 _contextMenuHeaderStyle,
                 overlayBlockRect,
                 GutterWidth);
+            LogEditorScrollChange(active, previousReadOnlyScroll, _editorScroll);
+        }
+
+        private static void LogEditorScrollChange(DocumentSession active, Vector2 previousScroll, Vector2 currentScroll)
+        {
+            if (Mathf.Approximately(previousScroll.x, currentScroll.x) && Mathf.Approximately(previousScroll.y, currentScroll.y))
+            {
+                return;
+            }
+
+            EditorInteractionLog.WriteScrollOwner(
+                "EditorCodeArea",
+                "Viewport scroll changed. Document='" + CortexModuleUtil.GetDocumentDisplayName(active) +
+                "', Before=(" + previousScroll.x.ToString("F1") + "," + previousScroll.y.ToString("F1") +
+                "), After=(" + currentScroll.x.ToString("F1") + "," + currentScroll.y.ToString("F1") + ").",
+                false);
         }
 
         private Rect BuildActiveFindInputBlockRect(CortexShellState state, Rect codeAreaRect)

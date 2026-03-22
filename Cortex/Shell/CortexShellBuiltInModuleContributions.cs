@@ -391,6 +391,10 @@ namespace Cortex
                 _module.Draw(
                     _services != null ? _services.WorkbenchSearchService : null,
                     _services != null ? _services.NavigationService : null,
+                    _services != null ? _services.DocumentService : null,
+                    _services != null ? _services.ProjectCatalog : null,
+                    _services != null ? _services.SourceLookupIndex : null,
+                    _services != null ? _services.TextSearchService : null,
                     _services != null ? _services.State : null);
             }
 

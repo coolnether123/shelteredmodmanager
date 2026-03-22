@@ -84,6 +84,11 @@ namespace Cortex.Core.Abstractions
         void SelectAll(DocumentSession session);
 
         /// <summary>
+        /// Returns the current primary selection text.
+        /// </summary>
+        string GetSelectedText(DocumentSession session);
+
+        /// <summary>
         /// Expands the selection to the word at the given character index.
         /// </summary>
         void SelectWord(DocumentSession session, int characterIndex);
@@ -102,6 +107,11 @@ namespace Cortex.Core.Abstractions
         /// Inserts plain text at the current selection.
         /// </summary>
         bool InsertText(DocumentSession session, string text);
+
+        /// <summary>
+        /// Replaces the entire document text while preserving editor history semantics.
+        /// </summary>
+        bool SetText(DocumentSession session, string text);
 
         /// <summary>
         /// Inserts a matching pair around the current selection or caret.

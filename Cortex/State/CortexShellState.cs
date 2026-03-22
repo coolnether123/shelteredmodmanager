@@ -128,6 +128,9 @@ namespace Cortex
         public string CompletionAugmentationStatus = string.Empty;
         public string CompletionAugmentationProviderId = string.Empty;
         public string CompletionAugmentationStatusMessage = string.Empty;
+        public EditorCommandTarget ActiveRenameTarget;
+        public string ActiveRenameText = string.Empty;
+        public EditorCommandTarget ActivePeekTarget;
     }
 
     public sealed class CortexSearchInteractionState
@@ -139,6 +142,11 @@ namespace Cortex
         public int ActiveMatchIndex = -1;
         public string QueryText = string.Empty;
         public string LastExecutedFingerprint = string.Empty;
+        public TextSearchWorkflowKind WorkflowKind = TextSearchWorkflowKind.Find;
+        public string WorkflowTargetText = string.Empty;
+        public string WorkflowCaption = string.Empty;
+        public string RenameReplacementText = string.Empty;
+        public bool RenamePanelExpanded;
         public TextSearchQuery Query = new TextSearchQuery();
         public TextSearchResultSet Results;
     }
