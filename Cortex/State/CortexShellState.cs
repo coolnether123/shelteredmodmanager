@@ -188,6 +188,30 @@ namespace Cortex
         public bool ShowDetachedWindow;
     }
 
+    public sealed class CortexHarmonyInteractionState
+    {
+        public bool RefreshRequested = true;
+        public bool RuntimeAvailable;
+        public string SnapshotStatusMessage = string.Empty;
+        public DateTime SnapshotUtc = DateTime.MinValue;
+        public string ActiveSummaryKey = string.Empty;
+        public string ResolutionFailureReason = string.Empty;
+        public string ActiveTypeAssemblyPath = string.Empty;
+        public string ActiveTypeName = string.Empty;
+        public string ActiveTypeDisplayName = string.Empty;
+        public HarmonyPatchInspectionRequest ActiveInspectionRequest;
+        public HarmonyMethodPatchSummary ActiveSummary;
+        public HarmonyMethodPatchSummary[] ActiveTypeSummaries = new HarmonyMethodPatchSummary[0];
+        public HarmonyMethodPatchSummary[] SnapshotMethods = new HarmonyMethodPatchSummary[0];
+        public HarmonyPatchGenerationRequest GenerationRequest;
+        public HarmonyPatchGenerationPreview GenerationPreview;
+        public string GenerationStatusMessage = string.Empty;
+        public bool IsInsertionPickActive;
+        public readonly List<HarmonyPatchInsertionTarget> InsertionTargets = new List<HarmonyPatchInsertionTarget>();
+        public readonly Dictionary<string, HarmonyMethodPatchSummary> SummaryCache = new Dictionary<string, HarmonyMethodPatchSummary>(StringComparer.OrdinalIgnoreCase);
+        public GeneratedTemplateSession ActiveTemplateSession;
+    }
+
     public sealed class CortexInterfaceDiagnosticState
     {
         public readonly List<string> Entries = new List<string>();
@@ -216,6 +240,7 @@ namespace Cortex
         public readonly CortexEditorInteractionState Editor = new CortexEditorInteractionState();
         public readonly CortexSearchInteractionState Search = new CortexSearchInteractionState();
         public readonly CortexSemanticInteractionState Semantic = new CortexSemanticInteractionState();
+        public readonly CortexHarmonyInteractionState Harmony = new CortexHarmonyInteractionState();
         public readonly CortexLogSelectionState Logs = new CortexLogSelectionState();
         public readonly CortexInterfaceDiagnosticState Diagnostics = new CortexInterfaceDiagnosticState();
         public CortexProjectDefinition SelectedProject;

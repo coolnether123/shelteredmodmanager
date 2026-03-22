@@ -25,6 +25,7 @@ namespace Cortex.Tests.Testing
 
     internal sealed class TestCortexPlatformModule : ICortexPlatformModule
     {
+        private readonly IHarmonyRuntimeInspectionService _harmonyRuntimeInspectionService = new TestHarmonyRuntimeInspectionService();
         private readonly ILoadedModCatalog _loadedModCatalog;
         private readonly IOverlayInputCaptureService _overlayInputCaptureService;
         private readonly IRuntimeLogFeed _runtimeLogFeed = new TestRuntimeLogFeed();
@@ -37,6 +38,11 @@ namespace Cortex.Tests.Testing
         {
             _loadedModCatalog = loadedModCatalog;
             _overlayInputCaptureService = overlayInputCaptureService;
+        }
+
+        public IHarmonyRuntimeInspectionService HarmonyRuntimeInspectionService
+        {
+            get { return _harmonyRuntimeInspectionService; }
         }
 
         public ILoadedModCatalog LoadedModCatalog
@@ -85,6 +91,49 @@ namespace Cortex.Tests.Testing
         public bool IsShellTogglePressed(string actionId)
         {
             return false;
+        }
+    }
+
+    internal sealed class TestHarmonyRuntimeInspectionService : IHarmonyRuntimeInspectionService
+    {
+        public bool IsAvailable
+        {
+            get { return true; }
+        }
+
+        public HarmonyPatchSnapshot CaptureSnapshot()
+        {
+            return new HarmonyPatchSnapshot
+            {
+                GeneratedUtc = System.DateTime.UtcNow,
+                Methods = new HarmonyMethodPatchSummary[0],
+                StatusMessage = "Test snapshot."
+            };
+        }
+
+        public HarmonyMethodPatchSummary Inspect(HarmonyPatchInspectionRequest request)
+        {
+            return new HarmonyMethodPatchSummary
+            {
+                CapturedUtc = System.DateTime.UtcNow,
+                Counts = new HarmonyPatchCounts(),
+                Entries = new HarmonyPatchEntry[0],
+                Owners = new string[0],
+                Order = new HarmonyPatchOrderExplanation[0],
+                Target = new HarmonyPatchNavigationTarget
+                {
+                    AssemblyPath = request != null ? request.AssemblyPath ?? string.Empty : string.Empty,
+                    MetadataToken = request != null ? request.MetadataToken : 0,
+                    DocumentPath = request != null ? request.DocumentPath ?? string.Empty : string.Empty,
+                    CachePath = request != null ? request.CachePath ?? string.Empty : string.Empty,
+                    DeclaringTypeName = request != null ? request.DeclaringTypeName ?? string.Empty : string.Empty,
+                    MethodName = request != null ? request.MethodName ?? string.Empty : string.Empty,
+                    Signature = request != null ? request.Signature ?? string.Empty : string.Empty,
+                    DisplayName = request != null ? request.DisplayName ?? string.Empty : string.Empty,
+                    Line = 1,
+                    Column = 1
+                }
+            };
         }
     }
 

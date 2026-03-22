@@ -11,11 +11,17 @@ namespace Cortex.Platform.ModAPI.Runtime
     public sealed class ModApiCortexPlatformModule : ICortexPlatformModule
     {
         private const KeyCode ToggleKey = KeyCode.F8;
+        private readonly IHarmonyRuntimeInspectionService _harmonyRuntimeInspectionService = new HarmonyRuntimeInspectionService();
         private readonly ILoadedModCatalog _loadedModCatalog = new ModApiLoadedModCatalog();
         private readonly MmLogRuntimeLogFeed _runtimeLogFeed = new MmLogRuntimeLogFeed();
         private readonly IRuntimeToolBridge _runtimeToolBridge = new ModApiRuntimeToolBridge();
         private readonly IRestartCoordinator _restartCoordinator = new ModApiRestartCoordinator(new RestartRequestWriter());
         private CortexOverlayInputCaptureService _overlayInputCaptureService;
+
+        public IHarmonyRuntimeInspectionService HarmonyRuntimeInspectionService
+        {
+            get { return _harmonyRuntimeInspectionService; }
+        }
 
         public ILoadedModCatalog LoadedModCatalog
         {

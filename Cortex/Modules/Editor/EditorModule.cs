@@ -73,12 +73,20 @@ namespace Cortex.Modules.Editor
         private readonly IEditorService _editorService = new EditorService();
         private readonly EditorDocumentModeService _documentModeService = new EditorDocumentModeService();
 
-        public void Draw(
+        internal void Draw(
             IDocumentService documentService,
             Services.CortexNavigationService navigationService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             Services.WorkbenchSearchService workbenchSearchService,
+            IProjectCatalog projectCatalog,
+            ILoadedModCatalog loadedModCatalog,
+            ISourceLookupIndex sourceLookupIndex,
+            HarmonyPatchInspectionService harmonyPatchInspectionService,
+            HarmonyPatchResolutionService harmonyPatchResolutionService,
+            HarmonyPatchDisplayService harmonyPatchDisplayService,
+            HarmonyPatchGenerationService harmonyPatchGenerationService,
+            GeneratedTemplateNavigationService generatedTemplateNavigationService,
             CortexShellState state)
         {
             EditorCommandContributions.EnsureRegistered(commandRegistry, contributionRegistry, state);
@@ -97,7 +105,20 @@ namespace Cortex.Modules.Editor
             DrawTabStrip(state);
             StabilizeActiveDocumentViewState(documentService, state);
             DrawPathBar(documentService, state);
-            DrawCodeArea(documentService, navigationService, commandRegistry, contributionRegistry, state);
+            DrawCodeArea(
+                documentService,
+                navigationService,
+                commandRegistry,
+                contributionRegistry,
+                projectCatalog,
+                loadedModCatalog,
+                sourceLookupIndex,
+                harmonyPatchInspectionService,
+                harmonyPatchResolutionService,
+                harmonyPatchDisplayService,
+                harmonyPatchGenerationService,
+                generatedTemplateNavigationService,
+                state);
             DrawFindOverlay(commandRegistry, workbenchSearchService, state);
             DrawStatusBar(state);
 
@@ -489,6 +510,14 @@ namespace Cortex.Modules.Editor
             Services.CortexNavigationService navigationService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
+            IProjectCatalog projectCatalog,
+            ILoadedModCatalog loadedModCatalog,
+            ISourceLookupIndex sourceLookupIndex,
+            HarmonyPatchInspectionService harmonyPatchInspectionService,
+            HarmonyPatchResolutionService harmonyPatchResolutionService,
+            HarmonyPatchDisplayService harmonyPatchDisplayService,
+            HarmonyPatchGenerationService harmonyPatchGenerationService,
+            GeneratedTemplateNavigationService generatedTemplateNavigationService,
             CortexShellState state)
         {
             var active = state.Documents.ActiveDocument;
@@ -533,7 +562,9 @@ namespace Cortex.Modules.Editor
                     _contextMenuButtonStyle,
                     _contextMenuHeaderStyle,
                     overlayBlockRect,
-                    GutterWidth);
+                    GutterWidth,
+                    harmonyPatchGenerationService,
+                    generatedTemplateNavigationService);
                 LogEditorScrollChange(active, previousEditorScroll, _editorScroll);
                 return;
             }
@@ -555,23 +586,19 @@ namespace Cortex.Modules.Editor
                 _contextMenuButtonStyle,
                 _contextMenuHeaderStyle,
                 overlayBlockRect,
-                GutterWidth);
+                GutterWidth,
+                projectCatalog,
+                loadedModCatalog,
+                sourceLookupIndex,
+                harmonyPatchInspectionService,
+                harmonyPatchResolutionService,
+                harmonyPatchDisplayService);
             LogEditorScrollChange(active, previousReadOnlyScroll, _editorScroll);
         }
 
         private static void LogEditorScrollChange(DocumentSession active, Vector2 previousScroll, Vector2 currentScroll)
         {
-            if (Mathf.Approximately(previousScroll.x, currentScroll.x) && Mathf.Approximately(previousScroll.y, currentScroll.y))
-            {
-                return;
-            }
-
-            EditorInteractionLog.WriteScrollOwner(
-                "EditorCodeArea",
-                "Viewport scroll changed. Document='" + CortexModuleUtil.GetDocumentDisplayName(active) +
-                "', Before=(" + previousScroll.x.ToString("F1") + "," + previousScroll.y.ToString("F1") +
-                "), After=(" + currentScroll.x.ToString("F1") + "," + currentScroll.y.ToString("F1") + ").",
-                false);
+            // Scroll diagnostics are intentionally suppressed to keep logs focused on workflow-level behavior.
         }
 
         private Rect BuildActiveFindInputBlockRect(CortexShellState state, Rect codeAreaRect)

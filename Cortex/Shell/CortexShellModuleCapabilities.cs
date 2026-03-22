@@ -6,6 +6,24 @@ using Cortex.Services;
 
 namespace Cortex
 {
+    internal interface IHarmonyFeatureServices
+    {
+        CortexShellState State { get; }
+        ICommandRegistry CommandRegistry { get; }
+        IContributionRegistry ContributionRegistry { get; }
+        CortexNavigationService NavigationService { get; }
+        IDocumentService DocumentService { get; }
+        IProjectCatalog ProjectCatalog { get; }
+        ILoadedModCatalog LoadedModCatalog { get; }
+        IPathInteractionService PathInteractionService { get; }
+        ISourceLookupIndex SourceLookupIndex { get; }
+        HarmonyPatchInspectionService HarmonyPatchInspectionService { get; }
+        HarmonyPatchResolutionService HarmonyPatchResolutionService { get; }
+        HarmonyPatchDisplayService HarmonyPatchDisplayService { get; }
+        HarmonyPatchGenerationService HarmonyPatchGenerationService { get; }
+        GeneratedTemplateNavigationService GeneratedTemplateNavigationService { get; }
+    }
+
     internal interface ILogsModuleServices
     {
         CortexShellState State { get; }
@@ -31,13 +49,8 @@ namespace Cortex
         IDecompilerExplorerService DecompilerExplorerService { get; }
     }
 
-    internal interface IEditorModuleServices
+    internal interface IEditorModuleServices : IHarmonyFeatureServices
     {
-        CortexShellState State { get; }
-        CortexNavigationService NavigationService { get; }
-        IDocumentService DocumentService { get; }
-        ICommandRegistry CommandRegistry { get; }
-        IContributionRegistry ContributionRegistry { get; }
         WorkbenchSearchService WorkbenchSearchService { get; }
     }
 
@@ -86,6 +99,10 @@ namespace Cortex
         ThemeState ThemeState { get; }
     }
 
+    internal interface IHarmonyModuleServices : IHarmonyFeatureServices
+    {
+    }
+
     internal sealed class CortexShellModuleServices :
         ILogsModuleServices,
         IProjectsModuleServices,
@@ -95,7 +112,8 @@ namespace Cortex
         IReferenceModuleServices,
         ISearchModuleServices,
         IRuntimeToolsModuleServices,
-        ISettingsModuleServices
+        ISettingsModuleServices,
+        IHarmonyModuleServices
     {
         private readonly CortexShellState _state;
         private readonly Func<ICortexSettingsStore> _settingsStoreAccessor;
@@ -118,6 +136,11 @@ namespace Cortex
         private readonly Func<CortexNavigationService> _navigationServiceAccessor;
         private readonly Func<IWorkbenchRuntime> _workbenchRuntimeAccessor;
         private readonly Func<WorkbenchSearchService> _workbenchSearchServiceAccessor;
+        private readonly Func<HarmonyPatchInspectionService> _harmonyPatchInspectionServiceAccessor;
+        private readonly Func<HarmonyPatchResolutionService> _harmonyPatchResolutionServiceAccessor;
+        private readonly Func<HarmonyPatchDisplayService> _harmonyPatchDisplayServiceAccessor;
+        private readonly Func<HarmonyPatchGenerationService> _harmonyPatchGenerationServiceAccessor;
+        private readonly Func<GeneratedTemplateNavigationService> _generatedTemplateNavigationServiceAccessor;
 
         public CortexShellModuleServices(
             CortexShellState state,
@@ -140,7 +163,12 @@ namespace Cortex
             Func<IRestartCoordinator> restartCoordinatorAccessor,
             Func<CortexNavigationService> navigationServiceAccessor,
             Func<IWorkbenchRuntime> workbenchRuntimeAccessor,
-            Func<WorkbenchSearchService> workbenchSearchServiceAccessor)
+            Func<WorkbenchSearchService> workbenchSearchServiceAccessor,
+            Func<HarmonyPatchInspectionService> harmonyPatchInspectionServiceAccessor,
+            Func<HarmonyPatchResolutionService> harmonyPatchResolutionServiceAccessor,
+            Func<HarmonyPatchDisplayService> harmonyPatchDisplayServiceAccessor,
+            Func<HarmonyPatchGenerationService> harmonyPatchGenerationServiceAccessor,
+            Func<GeneratedTemplateNavigationService> generatedTemplateNavigationServiceAccessor)
         {
             _state = state;
             _settingsStoreAccessor = settingsStoreAccessor;
@@ -163,6 +191,11 @@ namespace Cortex
             _navigationServiceAccessor = navigationServiceAccessor;
             _workbenchRuntimeAccessor = workbenchRuntimeAccessor;
             _workbenchSearchServiceAccessor = workbenchSearchServiceAccessor;
+            _harmonyPatchInspectionServiceAccessor = harmonyPatchInspectionServiceAccessor;
+            _harmonyPatchResolutionServiceAccessor = harmonyPatchResolutionServiceAccessor;
+            _harmonyPatchDisplayServiceAccessor = harmonyPatchDisplayServiceAccessor;
+            _harmonyPatchGenerationServiceAccessor = harmonyPatchGenerationServiceAccessor;
+            _generatedTemplateNavigationServiceAccessor = generatedTemplateNavigationServiceAccessor;
         }
 
         public CortexShellState State { get { return _state; } }
@@ -185,6 +218,11 @@ namespace Cortex
         public ITextSearchService TextSearchService { get { return _textSearchServiceAccessor != null ? _textSearchServiceAccessor() : null; } }
         public IRuntimeToolBridge RuntimeToolBridge { get { return _runtimeToolBridgeAccessor != null ? _runtimeToolBridgeAccessor() : null; } }
         public ICortexSettingsStore SettingsStore { get { return _settingsStoreAccessor != null ? _settingsStoreAccessor() : null; } }
+        public HarmonyPatchInspectionService HarmonyPatchInspectionService { get { return _harmonyPatchInspectionServiceAccessor != null ? _harmonyPatchInspectionServiceAccessor() : null; } }
+        public HarmonyPatchResolutionService HarmonyPatchResolutionService { get { return _harmonyPatchResolutionServiceAccessor != null ? _harmonyPatchResolutionServiceAccessor() : null; } }
+        public HarmonyPatchDisplayService HarmonyPatchDisplayService { get { return _harmonyPatchDisplayServiceAccessor != null ? _harmonyPatchDisplayServiceAccessor() : null; } }
+        public HarmonyPatchGenerationService HarmonyPatchGenerationService { get { return _harmonyPatchGenerationServiceAccessor != null ? _harmonyPatchGenerationServiceAccessor() : null; } }
+        public GeneratedTemplateNavigationService GeneratedTemplateNavigationService { get { return _generatedTemplateNavigationServiceAccessor != null ? _generatedTemplateNavigationServiceAccessor() : null; } }
 
         public ICommandRegistry CommandRegistry
         {

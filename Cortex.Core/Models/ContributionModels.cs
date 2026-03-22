@@ -99,6 +99,7 @@ namespace Cortex.Core.Models
         public MenuProjectionLocation Location;
         public string ContextId;
         public string Group;
+        public bool ShowWhenDisabled = true;
         public int SortOrder;
     }
 

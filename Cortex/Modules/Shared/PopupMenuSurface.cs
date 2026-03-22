@@ -114,8 +114,6 @@ namespace Cortex.Modules.Shared
             if (current.type == EventType.ScrollWheel)
             {
                 QueueScrollDelta(current.delta.y);
-                EditorInteractionLog.WriteContextMenu(
-                    "Editor routed IMGUI wheel to context menu. DeltaY=" + current.delta.y.ToString("F2") + ".");
                 current.Use();
                 return true;
             }
@@ -135,8 +133,6 @@ namespace Cortex.Modules.Shared
 
             _lastRawScrollFrame = Time.frameCount;
             QueueScrollDelta(-rawAxis * RawAxisScrollScale);
-            EditorInteractionLog.WriteContextMenu(
-                "Editor routed raw wheel axis to context menu. Axis=" + rawAxis.ToString("F3") + ".");
             return true;
         }
 
@@ -199,16 +195,6 @@ namespace Cortex.Modules.Shared
             {
                 _scrollPosition.y = ClampScrollOffset(_scrollPosition.y + (current.delta.y * ScrollWheelStep), maxScroll);
                 _scrollCount++;
-                EditorInteractionLog.WriteContextMenu(
-                    "Context menu scrolled. DeltaY=" + current.delta.y.ToString("F2") +
-                    ", ScrollY=" + _scrollPosition.y.ToString("F1") +
-                    ", MaxScroll=" + maxScroll.ToString("F1") + ".");
-                EditorInteractionLog.WriteScrollOwner(
-                    "ContextMenu",
-                    "Wheel consumed. DeltaY=" + current.delta.y.ToString("F2") +
-                    ", ScrollY=" + _scrollPosition.y.ToString("F1") +
-                    ", MaxScroll=" + maxScroll.ToString("F1") + ".",
-                    false);
                 current.Use();
             }
 
@@ -443,16 +429,6 @@ namespace Cortex.Modules.Shared
         {
             _scrollPosition.y = ClampScrollOffset(_scrollPosition.y + delta, maxScroll);
             _scrollCount++;
-            EditorInteractionLog.WriteContextMenu(
-                "Context menu scrolled. DeltaY=" + delta.ToString("F1") +
-                ", ScrollY=" + _scrollPosition.y.ToString("F1") +
-                ", MaxScroll=" + maxScroll.ToString("F1") + ".");
-            EditorInteractionLog.WriteScrollOwner(
-                "ContextMenu",
-                "Chrome consumed. DeltaY=" + delta.ToString("F1") +
-                ", ScrollY=" + _scrollPosition.y.ToString("F1") +
-                ", MaxScroll=" + maxScroll.ToString("F1") + ".",
-                false);
         }
 
         private void DrawItemBackground(Rect itemRect, bool enabled, bool hovered, bool pressed, GUIStyle buttonStyle)
@@ -509,12 +485,6 @@ namespace Cortex.Modules.Shared
 
             _lastRawScrollFrame = Time.frameCount;
             QueueScrollDelta(-rawAxis * RawAxisScrollScale);
-            EditorInteractionLog.WriteContextMenu(
-                "Popup draw captured raw wheel axis. Axis=" + rawAxis.ToString("F3") + ".");
-            EditorInteractionLog.WriteScrollOwner(
-                "ContextMenu",
-                "Draw-phase raw wheel captured. Axis=" + rawAxis.ToString("F3") + ".",
-                false);
 
             if (current != null && current.type == EventType.ScrollWheel)
             {
