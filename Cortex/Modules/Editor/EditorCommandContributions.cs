@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
@@ -20,7 +19,7 @@ namespace Cortex.Modules.Editor
             }
 
             _registered = true;
-            new EditorContextCommandRegistrar(commandRegistry, contributionRegistry, state).RegisterBuiltIns();
+            new EditorContextCommandRegistrar(commandRegistry, contributionRegistry, state).Register();
         }
 
         private sealed class EditorContextCommandRegistrar
@@ -28,7 +27,10 @@ namespace Cortex.Modules.Editor
             private readonly ICommandRegistry _commandRegistry;
             private readonly IContributionRegistry _contributionRegistry;
             private readonly CortexShellState _state;
-            private readonly EditorContextActionService _actionService = new EditorContextActionService();
+            private readonly IEditorService _editorService = new EditorService();
+            private readonly EditorCommandAvailabilityService _availabilityService = new EditorCommandAvailabilityService();
+            private readonly EditorSemanticOperationService _semanticOperationService = new EditorSemanticOperationService();
+            private readonly EditorContextActionResolverService _actionResolverService = new EditorContextActionResolverService();
 
             public EditorContextCommandRegistrar(
                 ICommandRegistry commandRegistry,
@@ -40,633 +42,403 @@ namespace Cortex.Modules.Editor
                 _state = state;
             }
 
-            public void RegisterBuiltIns()
+            public void Register()
             {
-                var descriptors = BuildDescriptors();
-                for (var i = 0; i < descriptors.Count; i++)
-                {
-                    RegisterDescriptor(descriptors[i]);
-                }
+                RegisterCommands();
+                RegisterActions();
             }
 
-            private IList<EditorContextCommandDescriptor> BuildDescriptors()
+            private void RegisterCommands()
             {
-                var descriptors = new List<EditorContextCommandDescriptor>();
-
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.quickActions",
                     "Quick Actions and Refactorings...",
-                    "Refactoring",
-                    "Show the primary refactoring action for the current symbol.",
+                    "Editor",
+                    "Show editor quick actions for the current symbol.",
                     "Ctrl+.",
-                    "1_Refactor",
-                    10,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.ExecuteQuickActions(_state, _commandRegistry, context, GetTarget(context));
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return HasSymbol(context);
-                    }));
+                    0,
+                    ExecuteQuickActions);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.rename",
                     "Rename...",
-                    "Refactoring",
-                    "Rename the current symbol.",
+                    "Editor",
+                    "Preview and apply a semantic rename for the current symbol.",
                     "F2",
-                    "1_Refactor",
-                    20,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.BeginRename(_state, _commandRegistry, context, GetTarget(context));
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return HasRenameTarget(context);
-                    }));
+                    10,
+                    BeginRename);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.removeAndSortUsings",
                     "Remove and Sort Usings",
-                    "Refactoring",
-                    "Remove duplicate using directives and sort the remaining directives.",
+                    "Editor",
+                    "Clean and reorder using directives.",
                     "Ctrl+R, Ctrl+G",
-                    "1_Refactor",
-                    30,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.RemoveAndSortUsings(_state);
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return CanEditActiveDocument(_state);
-                    }));
+                    20,
+                    RemoveAndSortUsings);
 
-                descriptors.Add(CreateDescriptor(
-                    "cortex.editor.viewCode",
-                    "View Code",
-                    "View",
-                    "Keep focus in the active source editor.",
-                    "F7",
-                    "2_View",
-                    10,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.ViewCode(_state);
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return _state.Documents.ActiveDocument != null;
-                    }));
-
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.peekDefinition",
                     "Peek Definition",
-                    "Navigation",
-                    "Open the inline peek definition popup.",
+                    "Editor",
+                    "Preview the current symbol definition.",
                     "Alt+F12",
-                    "3_Navigation",
-                    10,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.PeekDefinition(_state, GetTarget(context));
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return CanNavigate(context);
-                    }));
+                    30,
+                    PeekDefinition);
 
-                descriptors.Add(CreateDefinitionOnlyDescriptor(
-                    "cortex.editor.goToDefinition",
-                    "Go To Definition",
-                    "Navigation",
-                    "Navigate to the symbol definition.",
-                    "F12",
-                    "3_Navigation",
-                    20));
-
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.goToBase",
                     "Go To Base",
-                    "Navigation",
-                    "Navigate to the nearest available base target.",
+                    "Editor",
+                    "Navigate to the current symbol's base declaration.",
                     "Alt+Home",
-                    "3_Navigation",
-                    30,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.GoToDefinitionLike(_state, GetTarget(context), "Go To Base");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return CanNavigate(context);
-                    }));
+                    50,
+                    GoToBase);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.goToImplementation",
                     "Go To Implementation",
-                    "Navigation",
-                    "Navigate to the nearest available implementation target.",
+                    "Editor",
+                    "Navigate to the current symbol implementation targets.",
                     "Ctrl+F12",
-                    "3_Navigation",
-                    40,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.GoToDefinitionLike(_state, GetTarget(context), "Go To Implementation");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return CanNavigate(context);
-                    }));
+                    60,
+                    GoToImplementation);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.findAllReferences",
                     "Find All References",
-                    "Navigation",
-                    "Search for all references to the current symbol.",
+                    "Editor",
+                    "Find semantic references for the current symbol.",
                     "Shift+F12",
-                    "3_Navigation",
-                    50,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.FindAllReferences(_state, _commandRegistry, context, GetTarget(context), "Finding references for: ");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return HasSymbol(context);
-                    }));
+                    70,
+                    FindAllReferences);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.viewCallHierarchy",
                     "View Call Hierarchy",
-                    "Navigation",
-                    "Seed the search panel with the current symbol for hierarchy review.",
+                    "Editor",
+                    "View semantic incoming and outgoing calls for the current symbol.",
                     "Ctrl+K, Ctrl+T",
-                    "3_Navigation",
-                    60,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.FindAllReferences(_state, _commandRegistry, context, GetTarget(context), "Call hierarchy seeded for: ");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return HasSymbol(context);
-                    }));
+                    80,
+                    ViewCallHierarchy);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.trackValueSource",
                     "Track Value Source",
-                    "Navigation",
-                    "Seed the search panel with the current symbol for value-source tracking.",
+                    "Editor",
+                    "View semantic value-source writes for the current symbol.",
                     string.Empty,
-                    "3_Navigation",
-                    70,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.FindAllReferences(_state, _commandRegistry, context, GetTarget(context), "Tracking value source for: ");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return HasSymbol(context);
-                    }));
+                    85,
+                    TrackValueSource);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.createUnitTests",
                     "Create Unit Tests",
-                    "Generation",
-                    "Seed the search panel for a related test target.",
+                    "Editor",
+                    "Generate a reusable unit test scaffold for the current symbol.",
                     string.Empty,
-                    "4_Generation",
-                    10,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.CreateUnitTests(_state, _commandRegistry, context, GetTarget(context));
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return HasSymbol(context);
-                    }));
+                    90,
+                    CreateUnitTests);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.breakpoint",
                     "Breakpoint...",
-                    "Debugging",
-                    "Breakpoint actions are not available in the current runtime.",
+                    "Editor",
+                    "Debugger breakpoint actions are not available in the current runtime.",
                     string.Empty,
-                    "5_Debug",
-                    10,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.ShowNotAvailable(_state, "Breakpoint commands");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return _state.Documents.ActiveDocument != null;
-                    }));
+                    100,
+                    ShowUnavailable);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.runToCursor",
                     "Run To Cursor",
-                    "Debugging",
+                    "Editor",
                     "Run-to-cursor is not available in the current runtime.",
                     "Ctrl+F10",
-                    "5_Debug",
-                    20,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.ShowNotAvailable(_state, "Run To Cursor");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return _state.Documents.ActiveDocument != null;
-                    }));
+                    110,
+                    ShowUnavailable);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.forceRunToCursor",
                     "Force Run To Cursor",
-                    "Debugging",
+                    "Editor",
                     "Force-run-to-cursor is not available in the current runtime.",
                     string.Empty,
-                    "5_Debug",
-                    30,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.ShowNotAvailable(_state, "Force Run To Cursor");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return _state.Documents.ActiveDocument != null;
-                    }));
+                    120,
+                    ShowUnavailable);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.executeInInteractive",
                     "Execute In Interactive",
-                    "Debugging",
+                    "Editor",
                     "Interactive execution is not available in the current runtime.",
                     "Ctrl+E, Ctrl+E",
-                    "5_Debug",
-                    40,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.ShowNotAvailable(_state, "Execute In Interactive");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return _state.Documents.ActiveDocument != null;
-                    }));
+                    130,
+                    ShowUnavailable);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.snippet",
                     "Snippet...",
-                    "Editing",
+                    "Editor",
                     "Snippet insertion is not available in the current runtime.",
                     string.Empty,
-                    "5_Debug",
-                    50,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.ShowNotAvailable(_state, "Snippet insertion");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return CanEditActiveDocument(_state);
-                    }));
+                    140,
+                    ShowUnavailable);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.cut",
                     "Cut",
-                    "Editing",
+                    "Editor",
                     "Cut the active selection to the clipboard.",
                     "Ctrl+X",
-                    "6_Edit",
-                    10,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.Cut(_state);
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return HasSelection(_state) && CanEditActiveDocument(_state);
-                    }));
+                    150,
+                    Cut);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.copy",
                     "Copy",
-                    "Editing",
+                    "Editor",
                     "Copy the active selection or symbol to the clipboard.",
                     "Ctrl+C",
-                    "6_Edit",
-                    20,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.Copy(_state, GetTarget(context));
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return HasSelection(_state) || HasSymbol(context);
-                    }));
+                    160,
+                    Copy);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.paste",
                     "Paste",
-                    "Editing",
+                    "Editor",
                     "Paste clipboard contents into the active document.",
                     "Ctrl+V",
-                    "6_Edit",
-                    30,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.Paste(_state);
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return CanEditActiveDocument(_state);
-                    }));
+                    170,
+                    Paste);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.annotation",
                     "Annotation...",
-                    "Metadata",
+                    "Editor",
                     "Annotations are not available in the current runtime.",
                     string.Empty,
-                    "7_Metadata",
-                    10,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.ShowNotAvailable(_state, "Annotation");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return _state.Documents.ActiveDocument != null;
-                    }));
+                    180,
+                    ShowUnavailable);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.outlining",
                     "Outlining...",
-                    "Metadata",
-                    "Outlining commands are not available in the editable surface yet.",
+                    "Editor",
+                    "Outlining commands are not available in the current runtime.",
                     string.Empty,
-                    "7_Metadata",
-                    20,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.ShowNotAvailable(_state, "Outlining");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return _state.Documents.ActiveDocument != null;
-                    }));
+                    190,
+                    ShowUnavailable);
 
-                descriptors.Add(CreateDescriptor(
+                RegisterCommand(
                     "cortex.editor.git",
                     "Git...",
-                    "Metadata",
-                    "Git integration is not available from the editor context menu yet.",
+                    "Editor",
+                    "Git actions are not available in the current runtime.",
                     string.Empty,
-                    "7_Metadata",
-                    30,
-                    delegate(CommandExecutionContext context)
-                    {
-                        _actionService.ShowNotAvailable(_state, "Git actions");
-                    },
-                    delegate(CommandExecutionContext context)
-                    {
-                        return _state.Documents.ActiveDocument != null;
-                    }));
-
-                return descriptors;
+                    200,
+                    ShowUnavailable);
             }
 
-            private void RegisterDescriptor(EditorContextCommandDescriptor descriptor)
+            private void RegisterActions()
             {
-                if (descriptor == null || descriptor.Definition == null || string.IsNullOrEmpty(descriptor.Definition.CommandId))
-                {
-                    return;
-                }
-
-                _commandRegistry.Register(descriptor.Definition);
-                if (descriptor.Handler != null)
-                {
-                    _commandRegistry.RegisterHandler(descriptor.Definition.CommandId, descriptor.Handler, descriptor.CanExecute);
-                }
-
-                if (descriptor.Menu != null)
-                {
-                    _contributionRegistry.RegisterMenu(descriptor.Menu);
-                }
+                RegisterAction("cortex.editor.quickActions", EditorContextIds.Symbol, "01_actions", 0, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, false, true);
+                RegisterAction("cortex.editor.rename", EditorContextIds.Symbol, "01_actions", 10, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, SemanticCapabilityNames.Rename, false, true);
+                RegisterAction("cortex.editor.removeAndSortUsings", EditorContextIds.Document, "01_actions", 20, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, string.Empty, true, true);
+                RegisterAction("cortex.editor.peekDefinition", EditorContextIds.Symbol, "02_navigation", 0, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, SemanticCapabilityNames.Definition, false, true);
+                RegisterAction("cortex.editor.goToDefinition", EditorContextIds.Symbol, "02_navigation", 10, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, SemanticCapabilityNames.Definition, false, true);
+                RegisterAction("cortex.editor.goToBase", EditorContextIds.Symbol, "02_navigation", 20, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, SemanticCapabilityNames.BaseSymbol, false, true);
+                RegisterAction("cortex.editor.goToImplementation", EditorContextIds.Symbol, "02_navigation", 30, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, SemanticCapabilityNames.Implementations, false, true);
+                RegisterAction("cortex.editor.findAllReferences", EditorContextIds.Symbol, "02_navigation", 40, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, SemanticCapabilityNames.References, false, true);
+                RegisterAction("cortex.editor.viewCallHierarchy", EditorContextIds.Symbol, "02_navigation", 50, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, SemanticCapabilityNames.CallHierarchy, false, true);
+                RegisterAction("cortex.editor.trackValueSource", EditorContextIds.Symbol, "02_navigation", 60, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, SemanticCapabilityNames.ValueSource, false, true);
+                RegisterAction("cortex.editor.createUnitTests", EditorContextIds.Symbol, "03_generation", 0, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, string.Empty, false, true);
+                RegisterAction("cortex.editor.cut", EditorContextIds.Document, "04_clipboard", 0, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, true, true);
+                RegisterAction("cortex.editor.copy", EditorContextIds.Document, "04_clipboard", 10, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, true, true);
+                RegisterAction("cortex.editor.paste", EditorContextIds.Document, "04_clipboard", 20, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, true, true);
+                RegisterAction("cortex.editor.breakpoint", EditorContextIds.Document, "05_runtime", 0, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, true, true);
+                RegisterAction("cortex.editor.runToCursor", EditorContextIds.Document, "05_runtime", 10, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, true, true);
+                RegisterAction("cortex.editor.forceRunToCursor", EditorContextIds.Document, "05_runtime", 20, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, true, true);
+                RegisterAction("cortex.editor.executeInInteractive", EditorContextIds.Document, "05_runtime", 30, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, true, true);
+                RegisterAction("cortex.editor.snippet", EditorContextIds.Document, "06_metadata", 0, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, true, true);
+                RegisterAction("cortex.editor.annotation", EditorContextIds.Document, "06_metadata", 10, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, true, true);
+                RegisterAction("cortex.editor.outlining", EditorContextIds.Document, "06_metadata", 20, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, true, true);
+                RegisterAction("cortex.editor.git", EditorContextIds.Document, "06_metadata", 30, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, true, true);
             }
 
-            private static EditorContextCommandDescriptor CreateDescriptor(
-                string commandId,
-                string displayName,
-                string category,
-                string description,
-                string gesture,
-                string group,
-                int sortOrder,
-                CommandHandler handler,
-                CommandEnablement canExecute)
+            private void RegisterCommand(string commandId, string displayName, string category, string description, string gesture, int sortOrder, CommandHandler handler)
             {
-                return new EditorContextCommandDescriptor
+                if (_commandRegistry.Get(commandId) == null)
                 {
-                    Definition = new CommandDefinition
+                    _commandRegistry.Register(new CommandDefinition
                     {
                         CommandId = commandId,
                         DisplayName = displayName,
                         Category = category,
                         Description = description,
                         DefaultGesture = gesture,
-                        SortOrder = sortOrder
-                    },
-                    Menu = new MenuContribution
+                        SortOrder = sortOrder,
+                        ShowInPalette = true
+                    });
+                }
+
+                _commandRegistry.RegisterHandler(
+                    commandId,
+                    handler,
+                    delegate(CommandExecutionContext context)
                     {
-                        Location = MenuProjectionLocation.ContextMenu,
-                        ContextId = EditorContextIds.Symbol,
-                        CommandId = commandId,
-                        Group = group,
-                        SortOrder = sortOrder
-                    },
-                    Handler = handler,
-                    CanExecute = canExecute
-                };
+                        var target = GetTarget(context);
+                        string disabledReason;
+                        return _availabilityService.TryGetAvailability(commandId, _state, target, out disabledReason);
+                    });
             }
 
-            private static EditorContextCommandDescriptor CreateDefinitionOnlyDescriptor(
+            private void RegisterAction(
                 string commandId,
-                string displayName,
-                string category,
-                string description,
-                string gesture,
+                string contextId,
                 string group,
-                int sortOrder)
+                int sortOrder,
+                EditorContextActionPlacement placements,
+                string requiredCapability,
+                bool includeWhenNoSymbol,
+                bool showWhenDisabled)
             {
-                return CreateDescriptor(commandId, displayName, category, description, gesture, group, sortOrder, null, null);
+                _contributionRegistry.RegisterEditorContextAction(new EditorContextActionContribution
+                {
+                    ActionId = commandId,
+                    CommandId = commandId,
+                    ContextId = contextId,
+                    Group = group,
+                    SortOrder = sortOrder,
+                    Placements = placements,
+                    RequiredCapability = requiredCapability,
+                    IncludeWhenNoSymbol = includeWhenNoSymbol,
+                    ShowWhenDisabled = showWhenDisabled
+                });
             }
-        }
 
-        private sealed class EditorContextCommandDescriptor
-        {
-            public CommandDefinition Definition;
-            public MenuContribution Menu;
-            public CommandHandler Handler;
-            public CommandEnablement CanExecute;
-        }
-
-        private sealed class EditorContextActionService
-        {
-            private readonly IEditorService _editorService = new EditorService();
-            private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
-
-            public void ExecuteQuickActions(
-                CortexShellState state,
-                ICommandRegistry commandRegistry,
-                CommandExecutionContext context,
-                EditorCommandTarget target)
+            private void ExecuteQuickActions(CommandExecutionContext context)
             {
-                if (state == null)
+                var target = GetTarget(context);
+                var actions = _actionResolverService.ResolveActions(
+                    _state,
+                    _commandRegistry,
+                    _contributionRegistry,
+                    target,
+                    EditorContextActionPlacement.QuickActions);
+                _semanticOperationService.OpenQuickActions(_state, target, ToArray(actions));
+                _state.StatusMessage = actions.Count > 0
+                    ? "Quick Actions opened for " + (target.SymbolText ?? string.Empty) + "."
+                    : "No quick actions are available for the current location.";
+            }
+
+            private void BeginRename(CommandExecutionContext context)
+            {
+                var target = GetTarget(context);
+                if (target == null)
                 {
                     return;
                 }
 
-                if (target == null || string.IsNullOrEmpty(target.SymbolText))
-                {
-                    state.StatusMessage = "No quick actions are available for the current location.";
-                    return;
-                }
-
-                BeginRename(state, commandRegistry, context, target);
-                state.StatusMessage = "Quick Actions opened Rename for '" + (target.SymbolText ?? string.Empty) + "'.";
+                _state.Editor.ActiveRenameTarget = target;
+                _state.Editor.ActiveRenameText = target.SymbolText ?? string.Empty;
+                _state.StatusMessage = "Rename preview ready for " + (target.SymbolText ?? string.Empty) + ".";
             }
 
-            public void BeginRename(
-                CortexShellState state,
-                ICommandRegistry commandRegistry,
-                CommandExecutionContext context,
-                EditorCommandTarget target)
+            private void PeekDefinition(CommandExecutionContext context)
             {
-                if (state == null || state.Editor == null || target == null || string.IsNullOrEmpty(target.SymbolText))
-                {
-                    return;
-                }
-
-                state.Editor.ActiveRenameTarget = null;
-                state.Editor.ActiveRenameText = string.Empty;
-                OpenSearchWorkflow(
-                    state,
-                    commandRegistry,
-                    context,
-                    TextSearchWorkflowKind.Rename,
-                    target.SymbolText ?? string.Empty,
-                    "Rename preview opened for '" + (target.SymbolText ?? string.Empty) + "'.",
-                    true);
+                var target = GetTarget(context);
+                _state.Editor.ActivePeekTarget = target;
+                QueueSemantic(context, SemanticRequestKind.PeekDefinition, SemanticWorkbenchViewKind.PeekDefinition, "Peek Definition");
             }
 
-            public void PeekDefinition(CortexShellState state, EditorCommandTarget target)
+            private void GoToBase(CommandExecutionContext context)
             {
-                if (state == null || state.Editor == null || target == null || !target.CanGoToDefinition)
-                {
-                    return;
-                }
-
-                state.Editor.ActivePeekTarget = target;
-                state.StatusMessage = "Peek Definition: " + (target.SymbolText ?? string.Empty);
+                QueueSemantic(context, SemanticRequestKind.BaseSymbol, SemanticWorkbenchViewKind.BaseSymbols, "Go To Base");
             }
 
-            public void GoToDefinitionLike(CortexShellState state, EditorCommandTarget target, string actionName)
+            private void GoToImplementation(CommandExecutionContext context)
             {
-                if (state == null || target == null || !target.CanGoToDefinition)
-                {
-                    return;
-                }
-
-                _symbolInteractionService.RequestDefinition(state, target);
-                state.StatusMessage = (actionName ?? "Navigate") + ": " + (target.SymbolText ?? string.Empty);
+                QueueSemantic(context, SemanticRequestKind.Implementations, SemanticWorkbenchViewKind.Implementations, "Go To Implementation");
             }
 
-            public void FindAllReferences(
-                CortexShellState state,
-                ICommandRegistry commandRegistry,
-                CommandExecutionContext context,
-                EditorCommandTarget target,
-                string statusPrefix)
+            private void FindAllReferences(CommandExecutionContext context)
             {
-                if (state == null || state.Search == null || target == null || string.IsNullOrEmpty(target.SymbolText))
+                QueueSemantic(context, SemanticRequestKind.References, SemanticWorkbenchViewKind.References, "Find All References");
+            }
+
+            private void ViewCallHierarchy(CommandExecutionContext context)
+            {
+                QueueSemantic(context, SemanticRequestKind.CallHierarchy, SemanticWorkbenchViewKind.CallHierarchy, "View Call Hierarchy");
+            }
+
+            private void TrackValueSource(CommandExecutionContext context)
+            {
+                QueueSemantic(context, SemanticRequestKind.ValueSource, SemanticWorkbenchViewKind.ValueSource, "Track Value Source");
+            }
+
+            private void CreateUnitTests(CommandExecutionContext context)
+            {
+                var target = GetTarget(context);
+                var plan = _semanticOperationService.BuildUnitTestPlan(_state, target);
+                _state.Semantic.UnitTestGeneration = plan;
+                _state.Semantic.ActiveView = SemanticWorkbenchViewKind.UnitTestGeneration;
+                OpenSearchContainer();
+                _state.StatusMessage = plan != null ? plan.StatusMessage ?? string.Empty : "Unit test generation was not available.";
+            }
+
+            private void RemoveAndSortUsings(CommandExecutionContext context)
+            {
+                var session = GetActiveDocument(true);
+                if (session == null)
                 {
                     return;
                 }
 
-                var workflowKind = TextSearchWorkflowKind.References;
-                var caption = "Review the current text matches for this symbol.";
-                var loweredPrefix = statusPrefix ?? string.Empty;
-                if (loweredPrefix.IndexOf("call hierarchy", StringComparison.OrdinalIgnoreCase) >= 0)
+                string updatedText;
+                if (!TryOrganizeTopLevelUsings(session.Text, out updatedText))
                 {
-                    workflowKind = TextSearchWorkflowKind.CallHierarchy;
-                    caption = "Call hierarchy is seeded from the current text matches.";
-                }
-                else if (loweredPrefix.IndexOf("value source", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    workflowKind = TextSearchWorkflowKind.ValueSource;
-                    caption = "Value-source tracking is seeded from the current text matches.";
+                    _state.StatusMessage = "No using directives were found to organize.";
+                    return;
                 }
 
-                OpenSearchWorkflow(
-                    state,
-                    commandRegistry,
-                    context,
-                    workflowKind,
-                    target.SymbolText ?? string.Empty,
-                    caption,
-                    false);
-                state.StatusMessage = (statusPrefix ?? string.Empty) + state.Search.QueryText;
+                if (string.Equals(session.Text ?? string.Empty, updatedText ?? string.Empty, StringComparison.Ordinal))
+                {
+                    _state.StatusMessage = "Using directives are already organized.";
+                    return;
+                }
+
+                if (_editorService.SetText(session, updatedText))
+                {
+                    _state.StatusMessage = "Removed duplicates and sorted using directives.";
+                }
             }
 
-            public void CreateUnitTests(
-                CortexShellState state,
-                ICommandRegistry commandRegistry,
-                CommandExecutionContext context,
-                EditorCommandTarget target)
+            private void Cut(CommandExecutionContext context)
             {
-                if (state == null || state.Search == null || target == null || string.IsNullOrEmpty(target.SymbolText))
+                var session = GetActiveDocument(true);
+                if (session == null)
                 {
                     return;
                 }
 
-                OpenSearchWorkflow(
-                    state,
-                    commandRegistry,
-                    context,
-                    TextSearchWorkflowKind.UnitTests,
-                    (target.SymbolText ?? string.Empty) + "Tests",
-                    "Test search seeded from the current symbol.",
-                    false);
-                state.StatusMessage = "Test search seeded for: " + (target.SymbolText ?? string.Empty);
-            }
-
-            public void ViewCode(CortexShellState state)
-            {
-                if (state == null)
+                var text = _editorService.GetSelectedText(session);
+                if (string.IsNullOrEmpty(text))
                 {
                     return;
                 }
 
-                state.StatusMessage = "Code view is already active.";
-            }
-
-            public void ShowNotAvailable(CortexShellState state, string actionName)
-            {
-                if (state == null)
+                GUIUtility.systemCopyBuffer = text;
+                if (_editorService.Backspace(session))
                 {
-                    return;
+                    _state.StatusMessage = "Cut selection.";
                 }
-
-                state.StatusMessage = (actionName ?? "This command") + " is not available in the current runtime.";
             }
 
-            public void Copy(CortexShellState state, EditorCommandTarget target)
+            private void Copy(CommandExecutionContext context)
             {
-                var session = GetActiveDocument(state, false);
+                var session = GetActiveDocument(false);
+                var target = GetTarget(context);
                 if (session == null)
                 {
                     return;
@@ -684,33 +456,12 @@ namespace Cortex.Modules.Editor
                 }
 
                 GUIUtility.systemCopyBuffer = text;
-                state.StatusMessage = "Copied selection.";
+                _state.StatusMessage = "Copied selection.";
             }
 
-            public void Cut(CortexShellState state)
+            private void Paste(CommandExecutionContext context)
             {
-                var session = GetActiveDocument(state, true);
-                if (session == null)
-                {
-                    return;
-                }
-
-                var text = _editorService.GetSelectedText(session);
-                if (string.IsNullOrEmpty(text))
-                {
-                    return;
-                }
-
-                GUIUtility.systemCopyBuffer = text;
-                if (_editorService.Backspace(session))
-                {
-                    state.StatusMessage = "Cut selection.";
-                }
-            }
-
-            public void Paste(CortexShellState state)
-            {
-                var session = GetActiveDocument(state, true);
+                var session = GetActiveDocument(true);
                 if (session == null)
                 {
                     return;
@@ -719,45 +470,47 @@ namespace Cortex.Modules.Editor
                 var text = GUIUtility.systemCopyBuffer ?? string.Empty;
                 if (_editorService.InsertText(session, text))
                 {
-                    state.StatusMessage = "Pasted clipboard contents.";
+                    _state.StatusMessage = "Pasted clipboard contents.";
                 }
             }
 
-            public void RemoveAndSortUsings(CortexShellState state)
+            private void ShowUnavailable(CommandExecutionContext context)
             {
-                var session = GetActiveDocument(state, true);
-                if (session == null)
-                {
-                    return;
-                }
-
-                string updatedText;
-                if (!TryOrganizeTopLevelUsings(session.Text, out updatedText))
-                {
-                    state.StatusMessage = "No using directives were found to organize.";
-                    return;
-                }
-
-                if (string.Equals(session.Text ?? string.Empty, updatedText ?? string.Empty, StringComparison.Ordinal))
-                {
-                    state.StatusMessage = "Using directives are already organized.";
-                    return;
-                }
-
-                if (_editorService.SetText(session, updatedText))
-                {
-                    state.StatusMessage = "Removed duplicates and sorted using directives.";
-                }
+                _state.StatusMessage = "This action is not available in the current runtime.";
             }
 
-            private static DocumentSession GetActiveDocument(CortexShellState state, bool requireEditable)
+            private void QueueSemantic(CommandExecutionContext context, SemanticRequestKind requestKind, SemanticWorkbenchViewKind viewKind, string actionName)
             {
-                if (state == null || state.Documents == null)
+                var target = GetTarget(context);
+                if (target == null)
+                {
+                    return;
+                }
+
+                _semanticOperationService.QueueRequest(_state, target, requestKind);
+                _state.Semantic.ActiveView = viewKind;
+                OpenSearchContainer();
+                _state.StatusMessage = actionName + " requested for " + (target.SymbolText ?? string.Empty) + ".";
+            }
+
+            private void OpenSearchContainer()
+            {
+                _commandRegistry.Execute("cortex.window.search", new CommandExecutionContext
+                {
+                    ActiveContainerId = _state.Workbench.FocusedContainerId,
+                    ActiveDocumentId = _state.Documents.ActiveDocumentPath,
+                    FocusedRegionId = _state.Workbench.FocusedContainerId
+                });
+            }
+
+            private DocumentSession GetActiveDocument(bool requireEditable)
+            {
+                if (_state == null || _state.Documents == null)
                 {
                     return null;
                 }
 
-                var session = state.Documents.ActiveDocument;
+                var session = _state.Documents.ActiveDocument;
                 if (session == null)
                 {
                     return null;
@@ -769,6 +522,27 @@ namespace Cortex.Modules.Editor
                 }
 
                 return session;
+            }
+
+            private static EditorCommandTarget GetTarget(CommandExecutionContext context)
+            {
+                return context != null ? context.Parameter as EditorCommandTarget : null;
+            }
+
+            private static EditorResolvedContextAction[] ToArray(System.Collections.Generic.IList<EditorResolvedContextAction> actions)
+            {
+                if (actions == null || actions.Count == 0)
+                {
+                    return new EditorResolvedContextAction[0];
+                }
+
+                var results = new EditorResolvedContextAction[actions.Count];
+                for (var i = 0; i < actions.Count; i++)
+                {
+                    results[i] = actions[i];
+                }
+
+                return results;
             }
 
             private static bool TryOrganizeTopLevelUsings(string text, out string updatedText)
@@ -820,7 +594,7 @@ namespace Cortex.Modules.Editor
                     return false;
                 }
 
-                var usingLines = new List<string>();
+                var usingLines = new System.Collections.Generic.List<string>();
                 for (var i = blockStart; i < blockEnd; i++)
                 {
                     var trimmed = (lines[i] ?? string.Empty).Trim();
@@ -836,7 +610,7 @@ namespace Cortex.Modules.Editor
                 }
 
                 usingLines.Sort(StringComparer.OrdinalIgnoreCase);
-                var distinctUsings = new List<string>();
+                var distinctUsings = new System.Collections.Generic.List<string>();
                 for (var i = 0; i < usingLines.Count; i++)
                 {
                     if (distinctUsings.Count == 0 ||
@@ -846,7 +620,7 @@ namespace Cortex.Modules.Editor
                     }
                 }
 
-                var rebuilt = new List<string>();
+                var rebuilt = new System.Collections.Generic.List<string>();
                 for (var i = 0; i < blockStart; i++)
                 {
                     rebuilt.Add(lines[i]);
@@ -897,82 +671,6 @@ namespace Cortex.Modules.Editor
                     trimmed.StartsWith("using ", StringComparison.Ordinal) &&
                     trimmed.EndsWith(";", StringComparison.Ordinal);
             }
-
-            private static void OpenSearchWorkflow(
-                CortexShellState state,
-                ICommandRegistry commandRegistry,
-                CommandExecutionContext context,
-                TextSearchWorkflowKind workflowKind,
-                string queryText,
-                string caption,
-                bool expandRenamePanel)
-            {
-                if (state == null || state.Search == null)
-                {
-                    return;
-                }
-
-                state.Search.IsVisible = true;
-                state.Search.FocusQueryRequested = false;
-                state.Search.ScopeMenuOpen = false;
-                state.Search.PendingRefresh = true;
-                state.Search.ActiveMatchIndex = -1;
-                state.Search.QueryText = queryText ?? string.Empty;
-                state.Search.WorkflowKind = workflowKind;
-                state.Search.WorkflowTargetText = queryText ?? string.Empty;
-                state.Search.WorkflowCaption = caption ?? string.Empty;
-                state.Search.RenamePanelExpanded = expandRenamePanel;
-                if (workflowKind == TextSearchWorkflowKind.Rename)
-                {
-                    state.Search.RenameReplacementText = queryText ?? string.Empty;
-                }
-
-                if (commandRegistry != null)
-                {
-                    commandRegistry.Execute("cortex.window.search", context);
-                }
-            }
-        }
-
-        private static EditorCommandTarget GetTarget(CommandExecutionContext context)
-        {
-            return context != null ? context.Parameter as EditorCommandTarget : null;
-        }
-
-        private static bool HasSymbol(CommandExecutionContext context)
-        {
-            var target = GetTarget(context);
-            return target != null && !string.IsNullOrEmpty(target.SymbolText);
-        }
-
-        private static bool CanNavigate(CommandExecutionContext context)
-        {
-            var target = GetTarget(context);
-            return target != null && target.CanGoToDefinition;
-        }
-
-        private static bool HasRenameTarget(CommandExecutionContext context)
-        {
-            var target = GetTarget(context);
-            return target != null &&
-                !string.IsNullOrEmpty(target.SymbolText);
-        }
-
-        private static bool HasSelection(CortexShellState state)
-        {
-            return state != null &&
-                state.Documents != null &&
-                state.Documents.ActiveDocument != null &&
-                state.Documents.ActiveDocument.EditorState != null &&
-                state.Documents.ActiveDocument.EditorState.HasSelection;
-        }
-
-        private static bool CanEditActiveDocument(CortexShellState state)
-        {
-            return state != null &&
-                state.Documents != null &&
-                state.Documents.ActiveDocument != null &&
-                state.Documents.ActiveDocument.SupportsEditing;
         }
     }
 }

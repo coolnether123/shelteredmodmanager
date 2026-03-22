@@ -89,6 +89,13 @@ namespace Cortex.Core.Abstractions
         string QueueHover(LanguageServiceHoverRequest request);
         string QueueGoToDefinition(LanguageServiceDefinitionRequest request);
         string QueueCompletion(LanguageServiceCompletionRequest request);
+        string QueueSymbolContext(LanguageServiceSymbolContextRequest request);
+        string QueueRenamePreview(LanguageServiceRenameRequest request);
+        string QueueReferences(LanguageServiceReferencesRequest request);
+        string QueueGoToBase(LanguageServiceBaseSymbolRequest request);
+        string QueueGoToImplementation(LanguageServiceImplementationRequest request);
+        string QueueCallHierarchy(LanguageServiceCallHierarchyRequest request);
+        string QueueValueSource(LanguageServiceValueSourceRequest request);
         bool TryDequeueResponse(out LanguageServiceEnvelope envelope);
         LanguageServiceInitializeResponse Initialize(LanguageServiceInitializeRequest request);
         LanguageServiceStatusResponse GetStatus();
@@ -96,6 +103,13 @@ namespace Cortex.Core.Abstractions
         LanguageServiceHoverResponse GetHover(LanguageServiceHoverRequest request);
         LanguageServiceDefinitionResponse GoToDefinition(LanguageServiceDefinitionRequest request);
         LanguageServiceCompletionResponse GetCompletion(LanguageServiceCompletionRequest request);
+        LanguageServiceSymbolContextResponse GetSymbolContext(LanguageServiceSymbolContextRequest request);
+        LanguageServiceRenameResponse PreviewRename(LanguageServiceRenameRequest request);
+        LanguageServiceReferencesResponse FindReferences(LanguageServiceReferencesRequest request);
+        LanguageServiceBaseSymbolResponse GoToBase(LanguageServiceBaseSymbolRequest request);
+        LanguageServiceImplementationResponse GoToImplementation(LanguageServiceImplementationRequest request);
+        LanguageServiceCallHierarchyResponse GetCallHierarchy(LanguageServiceCallHierarchyRequest request);
+        LanguageServiceValueSourceResponse GetValueSource(LanguageServiceValueSourceRequest request);
         void Shutdown();
     }
 

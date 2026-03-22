@@ -52,6 +52,7 @@
     <Compile Include="Models\EditorKeybindingModels.cs" />
     <Compile Include="Models\EditorModels.cs" />
     <Compile Include="Models\SearchModels.cs" />
+    <Compile Include="Models\SemanticModels.cs" />
     <Compile Include="..\Shared\CompletionAugmentationPromptContract.cs">
       <Link>Shared\CompletionAugmentationPromptContract.cs</Link>
     </Compile>

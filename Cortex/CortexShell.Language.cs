@@ -162,6 +162,7 @@ namespace Cortex
                     ", HoverInFlight=" + _languageRuntime.HoverInFlight +
                     ", DefinitionInFlight=" + _languageRuntime.DefinitionInFlight +
                     ", CompletionInFlight=" + _languageRuntime.CompletionInFlight +
+                    ", SemanticOperationInFlight=" + _languageRuntime.SemanticOperationInFlight +
                     ", Generation=" + _languageRuntime.ServiceGeneration + ".");
             }
 
@@ -259,12 +260,14 @@ namespace Cortex
             _languageRuntime.HoverInFlight = false;
             _languageRuntime.DefinitionInFlight = false;
             _languageRuntime.CompletionInFlight = false;
+            _languageRuntime.SemanticOperationInFlight = false;
             _languageRuntime.InitializeRequestId = string.Empty;
             _languageRuntime.StatusRequestId = string.Empty;
             _languageRuntime.PendingAnalysis = null;
             _languageRuntime.PendingHover = null;
             _languageRuntime.PendingDefinition = null;
             _languageRuntime.PendingCompletion = null;
+            _languageRuntime.PendingSemanticOperation = null;
             _languageRuntime.LastAnalysisRequestUtc = DateTime.MinValue;
             _languageRuntime.InitializeQueuedUtc = DateTime.MinValue;
             _languageRuntime.LastInitializationProgressLogUtc = DateTime.MinValue;

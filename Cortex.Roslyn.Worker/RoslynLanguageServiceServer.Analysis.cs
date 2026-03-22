@@ -246,6 +246,14 @@ namespace Cortex.Roslyn.Worker
 
             var definitionTree = sourceLocation.SourceTree;
             var definitionText = definitionTree != null ? definitionTree.GetText() : text;
+            var definitionPreviewStartLine = 0;
+            var definitionPreviewText = string.Empty;
+            if (definitionText != null)
+            {
+                BuildLocationText(definitionText, sourceLocation.SourceSpan, out _, out definitionPreviewText);
+                var startPosition = definitionText.Lines.GetLinePosition(sourceLocation.SourceSpan.Start);
+                definitionPreviewStartLine = startPosition.Line + 1;
+            }
             return new LanguageServiceDefinitionResponse
             {
                 Success = true,
@@ -261,7 +269,9 @@ namespace Cortex.Roslyn.Worker
                 DocumentationCommentId = symbol.GetDocumentationCommentId() ?? string.Empty,
                 DocumentationXml = symbol.GetDocumentationCommentXml() ?? string.Empty,
                 DocumentationText = FlattenDocumentation(symbol.GetDocumentationCommentXml()),
-                Range = BuildRange(definitionText, sourceLocation.SourceSpan)
+                Range = BuildRange(definitionText, sourceLocation.SourceSpan),
+                PreviewText = definitionPreviewText,
+                PreviewStartLine = definitionPreviewStartLine
             };
         }
 

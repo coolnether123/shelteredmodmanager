@@ -258,43 +258,6 @@ namespace Cortex
                     return commandContext.Visible && target != null && target.CanGoToDefinition;
                 });
 
-            commandContext.WorkbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.editor.copySymbol",
-                delegate(CommandExecutionContext context)
-                {
-                    var target = GetEditorCommandTarget(context);
-                    if (target == null)
-                    {
-                        return;
-                    }
-
-                    GUIUtility.systemCopyBuffer = target.SymbolText ?? string.Empty;
-                    commandContext.State.StatusMessage = "Copied symbol.";
-                },
-                delegate(CommandExecutionContext context)
-                {
-                    var target = GetEditorCommandTarget(context);
-                    return commandContext.Visible && target != null && !string.IsNullOrEmpty(target.SymbolText);
-                });
-
-            commandContext.WorkbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.editor.copyHoverInfo",
-                delegate(CommandExecutionContext context)
-                {
-                    var target = GetEditorCommandTarget(context);
-                    if (target == null)
-                    {
-                        return;
-                    }
-
-                    GUIUtility.systemCopyBuffer = target.HoverText ?? string.Empty;
-                    commandContext.State.StatusMessage = "Copied hover info.";
-                },
-                delegate(CommandExecutionContext context)
-                {
-                    var target = GetEditorCommandTarget(context);
-                    return commandContext.Visible && target != null && !string.IsNullOrEmpty(target.HoverText);
-                });
         }
 
         private static EditorCommandTarget GetEditorCommandTarget(CommandExecutionContext context)

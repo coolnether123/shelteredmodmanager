@@ -273,5 +273,162 @@ namespace Cortex
                 context.EditorCompletionService.ClearPendingRequest(context.State.Editor);
             }
         }
+
+        public void UpdateSemanticOperation(CortexShellLanguageRuntimeContext context)
+        {
+            var runtime = context != null ? context.RuntimeState : null;
+            var semantic = context != null && context.State != null ? context.State.Semantic : null;
+            if (context == null || runtime == null || semantic == null || runtime.SemanticOperationInFlight || semantic.RequestedKind == SemanticRequestKind.None)
+            {
+                return;
+            }
+
+            var requestKey = semantic.RequestedKey ?? string.Empty;
+            if (string.IsNullOrEmpty(requestKey))
+            {
+                return;
+            }
+
+            var session = context.FindOpenDocument(semantic.RequestedDocumentPath);
+            if (session == null)
+            {
+                return;
+            }
+
+            var project = context.ResolveProjectForDocument(session.FilePath);
+            var sourceRoots = context.BuildLanguageSourceRoots(context.State.Settings, project);
+            var requestId = string.Empty;
+            switch (semantic.RequestedKind)
+            {
+                case SemanticRequestKind.SymbolContext:
+                    requestId = context.LanguageServiceClient != null
+                        ? context.LanguageServiceClient.QueueSymbolContext(
+                            context.DocumentLanguageInteractionService.BuildSymbolContextRequest(
+                                session,
+                                context.State.Settings,
+                                project,
+                                sourceRoots,
+                                semantic.RequestedLine,
+                                semantic.RequestedColumn,
+                                semantic.RequestedAbsolutePosition))
+                        : string.Empty;
+                    break;
+                case SemanticRequestKind.RenamePreview:
+                    requestId = context.LanguageServiceClient != null
+                        ? context.LanguageServiceClient.QueueRenamePreview(
+                            context.DocumentLanguageInteractionService.BuildRenameRequest(
+                                session,
+                                context.State.Settings,
+                                project,
+                                sourceRoots,
+                                semantic.RequestedLine,
+                                semantic.RequestedColumn,
+                                semantic.RequestedAbsolutePosition,
+                                semantic.RequestedNewName))
+                        : string.Empty;
+                    break;
+                case SemanticRequestKind.References:
+                    requestId = context.LanguageServiceClient != null
+                        ? context.LanguageServiceClient.QueueReferences(
+                            context.DocumentLanguageInteractionService.BuildReferencesRequest(
+                                session,
+                                context.State.Settings,
+                                project,
+                                sourceRoots,
+                                semantic.RequestedLine,
+                                semantic.RequestedColumn,
+                                semantic.RequestedAbsolutePosition))
+                        : string.Empty;
+                    break;
+                case SemanticRequestKind.PeekDefinition:
+                    requestId = context.LanguageServiceClient != null
+                        ? context.LanguageServiceClient.QueueGoToDefinition(
+                            context.DocumentLanguageInteractionService.BuildDefinitionRequest(
+                                session,
+                                context.State.Settings,
+                                project,
+                                sourceRoots,
+                                semantic.RequestedLine,
+                                semantic.RequestedColumn,
+                                semantic.RequestedAbsolutePosition))
+                        : string.Empty;
+                    break;
+                case SemanticRequestKind.BaseSymbol:
+                    requestId = context.LanguageServiceClient != null
+                        ? context.LanguageServiceClient.QueueGoToBase(
+                            context.DocumentLanguageInteractionService.BuildBaseSymbolRequest(
+                                session,
+                                context.State.Settings,
+                                project,
+                                sourceRoots,
+                                semantic.RequestedLine,
+                                semantic.RequestedColumn,
+                                semantic.RequestedAbsolutePosition))
+                        : string.Empty;
+                    break;
+                case SemanticRequestKind.Implementations:
+                    requestId = context.LanguageServiceClient != null
+                        ? context.LanguageServiceClient.QueueGoToImplementation(
+                            context.DocumentLanguageInteractionService.BuildImplementationRequest(
+                                session,
+                                context.State.Settings,
+                                project,
+                                sourceRoots,
+                                semantic.RequestedLine,
+                                semantic.RequestedColumn,
+                                semantic.RequestedAbsolutePosition))
+                        : string.Empty;
+                    break;
+                case SemanticRequestKind.CallHierarchy:
+                    requestId = context.LanguageServiceClient != null
+                        ? context.LanguageServiceClient.QueueCallHierarchy(
+                            context.DocumentLanguageInteractionService.BuildCallHierarchyRequest(
+                                session,
+                                context.State.Settings,
+                                project,
+                                sourceRoots,
+                                semantic.RequestedLine,
+                                semantic.RequestedColumn,
+                                semantic.RequestedAbsolutePosition))
+                        : string.Empty;
+                    break;
+                case SemanticRequestKind.ValueSource:
+                    requestId = context.LanguageServiceClient != null
+                        ? context.LanguageServiceClient.QueueValueSource(
+                            context.DocumentLanguageInteractionService.BuildValueSourceRequest(
+                                session,
+                                context.State.Settings,
+                                project,
+                                sourceRoots,
+                                semantic.RequestedLine,
+                                semantic.RequestedColumn,
+                                semantic.RequestedAbsolutePosition))
+                        : string.Empty;
+                    break;
+            }
+
+            if (string.IsNullOrEmpty(requestId))
+            {
+                context.State.StatusMessage = "Semantic operation failed: " + (context.LanguageServiceClient != null ? context.LanguageServiceClient.LastError : "Roslyn client was not available.");
+                semantic.RequestedKey = string.Empty;
+                semantic.RequestedKind = SemanticRequestKind.None;
+                return;
+            }
+
+            runtime.SemanticOperationInFlight = true;
+            runtime.PendingSemanticOperation = new PendingSemanticOperationRequest
+            {
+                RequestId = requestId,
+                Generation = runtime.ServiceGeneration,
+                Kind = semantic.RequestedKind,
+                RequestKey = requestKey,
+                DocumentPath = session.FilePath ?? string.Empty,
+                DocumentVersion = session.TextVersion,
+                SymbolText = semantic.RequestedSymbolText ?? string.Empty,
+                NewName = semantic.RequestedNewName ?? string.Empty
+            };
+            semantic.RequestedKey = string.Empty;
+            semantic.RequestedKind = SemanticRequestKind.None;
+        }
     }
 }

@@ -36,6 +36,41 @@ namespace Cortex.LanguageService.Protocol
         public const string Completion = "completion";
 
         /// <summary>
+        /// Requests normalized semantic symbol context for the current cursor position.
+        /// </summary>
+        public const string SymbolContext = "symbol-context";
+
+        /// <summary>
+        /// Requests a semantic rename preview for the current symbol.
+        /// </summary>
+        public const string RenamePreview = "rename-preview";
+
+        /// <summary>
+        /// Requests semantic references for the current symbol.
+        /// </summary>
+        public const string FindReferences = "find-references";
+
+        /// <summary>
+        /// Requests distinct base-symbol navigation targets.
+        /// </summary>
+        public const string GoToBase = "go-to-base";
+
+        /// <summary>
+        /// Requests distinct implementation navigation targets.
+        /// </summary>
+        public const string GoToImplementation = "go-to-implementation";
+
+        /// <summary>
+        /// Requests semantic call hierarchy for the current symbol.
+        /// </summary>
+        public const string CallHierarchy = "call-hierarchy";
+
+        /// <summary>
+        /// Requests semantic value-source tracking for the current symbol.
+        /// </summary>
+        public const string ValueSource = "value-source";
+
+        /// <summary>
         /// Requests an orderly worker shutdown.
         /// </summary>
         public const string Shutdown = "shutdown";
@@ -252,6 +287,22 @@ namespace Cortex.LanguageService.Protocol
     }
 
     /// <summary>
+    /// Shared request payload used by semantic symbol operations.
+    /// </summary>
+    public class LanguageServiceSymbolRequest
+    {
+        public string DocumentPath;
+        public string ProjectFilePath;
+        public string WorkspaceRootPath;
+        public string[] SourceRoots;
+        public string DocumentText;
+        public int DocumentVersion;
+        public int Line;
+        public int Column;
+        public int AbsolutePosition;
+    }
+
+    /// <summary>
     /// Request payload used to resolve hover details for a symbol.
     /// </summary>
     public sealed class LanguageServiceHoverRequest
@@ -372,6 +423,56 @@ namespace Cortex.LanguageService.Protocol
     }
 
     /// <summary>
+    /// Request payload used to resolve normalized symbol identity details.
+    /// </summary>
+    public sealed class LanguageServiceSymbolContextRequest : LanguageServiceSymbolRequest
+    {
+    }
+
+    /// <summary>
+    /// Request payload used to preview a semantic rename.
+    /// </summary>
+    public sealed class LanguageServiceRenameRequest : LanguageServiceSymbolRequest
+    {
+        public string NewName;
+    }
+
+    /// <summary>
+    /// Request payload used to resolve semantic references.
+    /// </summary>
+    public sealed class LanguageServiceReferencesRequest : LanguageServiceSymbolRequest
+    {
+    }
+
+    /// <summary>
+    /// Request payload used to resolve semantic base-symbol navigation targets.
+    /// </summary>
+    public sealed class LanguageServiceBaseSymbolRequest : LanguageServiceSymbolRequest
+    {
+    }
+
+    /// <summary>
+    /// Request payload used to resolve semantic implementation targets.
+    /// </summary>
+    public sealed class LanguageServiceImplementationRequest : LanguageServiceSymbolRequest
+    {
+    }
+
+    /// <summary>
+    /// Request payload used to resolve call hierarchy details.
+    /// </summary>
+    public sealed class LanguageServiceCallHierarchyRequest : LanguageServiceSymbolRequest
+    {
+    }
+
+    /// <summary>
+    /// Request payload used to resolve semantic value-source details.
+    /// </summary>
+    public sealed class LanguageServiceValueSourceRequest : LanguageServiceSymbolRequest
+    {
+    }
+
+    /// <summary>
     /// Represents a text range in both line/column and absolute offset form.
     /// </summary>
     public sealed class LanguageServiceRange
@@ -402,6 +503,112 @@ namespace Cortex.LanguageService.Protocol
         public string DocumentationText;
         public string DefinitionDocumentPath;
         public LanguageServiceRange DefinitionRange;
+    }
+
+    /// <summary>
+    /// Normalized semantic source location emitted by navigation, references,
+    /// call hierarchy, rename preview, and value-source workflows.
+    /// </summary>
+    public sealed class LanguageServiceSymbolLocation
+    {
+        public string DocumentPath;
+        public string ProjectFilePath;
+        public string SymbolDisplay;
+        public string SymbolKind;
+        public string MetadataName;
+        public string ContainingTypeName;
+        public string ContainingAssemblyName;
+        public string DocumentationCommentId;
+        public LanguageServiceRange Range;
+        public string LineText;
+        public string PreviewText;
+        public string Relationship;
+        public bool IsPrimary;
+        public bool IsDefinition;
+        public bool IsWrite;
+        public bool IsDeclaration;
+    }
+
+    /// <summary>
+    /// A single workspace edit produced by Roslyn.
+    /// </summary>
+    public sealed class LanguageServiceTextEdit
+    {
+        public LanguageServiceRange Range;
+        public string OldText;
+        public string NewText;
+        public string PreviewText;
+    }
+
+    /// <summary>
+    /// All edits produced for a single document.
+    /// </summary>
+    public sealed class LanguageServiceDocumentChange
+    {
+        public string DocumentPath;
+        public string ProjectFilePath;
+        public string DisplayPath;
+        public int ChangeCount;
+        public LanguageServiceTextEdit[] Edits;
+    }
+
+    /// <summary>
+    /// Base symbol metadata response used by semantic workflows.
+    /// </summary>
+    public class LanguageServiceSymbolResponse : LanguageServiceOperationResponse
+    {
+        public string DocumentPath;
+        public string ProjectFilePath;
+        public int DocumentVersion;
+        public string SymbolDisplay;
+        public string QualifiedSymbolDisplay;
+        public string SymbolKind;
+        public string MetadataName;
+        public string ContainingTypeName;
+        public string ContainingAssemblyName;
+        public string DocumentationCommentId;
+        public string DocumentationXml;
+        public string DocumentationText;
+        public LanguageServiceRange Range;
+        public string DefinitionDocumentPath;
+        public LanguageServiceRange DefinitionRange;
+    }
+
+    /// <summary>
+    /// Base response for workflows that return a set of source locations.
+    /// </summary>
+    public class LanguageServiceLocationResponse : LanguageServiceSymbolResponse
+    {
+        public int TotalLocationCount;
+        public LanguageServiceSymbolLocation[] Locations;
+    }
+
+    /// <summary>
+    /// A grouped call relationship entry.
+    /// </summary>
+    public sealed class LanguageServiceCallHierarchyItem
+    {
+        public string SymbolDisplay;
+        public string QualifiedSymbolDisplay;
+        public string SymbolKind;
+        public string MetadataName;
+        public string ContainingTypeName;
+        public string ContainingAssemblyName;
+        public string DocumentationCommentId;
+        public string Relationship;
+        public int CallCount;
+        public LanguageServiceSymbolLocation[] Locations;
+    }
+
+    /// <summary>
+    /// One semantic value-source item.
+    /// </summary>
+    public sealed class LanguageServiceValueSourceItem
+    {
+        public string FlowKind;
+        public string SymbolDisplay;
+        public string Relationship;
+        public LanguageServiceSymbolLocation Location;
     }
 
     /// <summary>
@@ -484,6 +691,8 @@ namespace Cortex.LanguageService.Protocol
         public string DocumentationXml;
         public string DocumentationText;
         public LanguageServiceRange Range;
+        public string PreviewText;
+        public int PreviewStartLine;
     }
 
     /// <summary>
@@ -510,6 +719,62 @@ namespace Cortex.LanguageService.Protocol
         public int DocumentVersion;
         public LanguageServiceRange ReplacementRange;
         public LanguageServiceCompletionItem[] Items;
+    }
+
+    /// <summary>
+    /// Normalized semantic context response for the current symbol.
+    /// </summary>
+    public sealed class LanguageServiceSymbolContextResponse : LanguageServiceSymbolResponse
+    {
+    }
+
+    /// <summary>
+    /// Semantic rename preview produced by Roslyn.
+    /// </summary>
+    public sealed class LanguageServiceRenameResponse : LanguageServiceSymbolResponse
+    {
+        public string OldName;
+        public string NewName;
+        public int TotalChangeCount;
+        public LanguageServiceDocumentChange[] Documents;
+    }
+
+    /// <summary>
+    /// Semantic references produced by Roslyn.
+    /// </summary>
+    public sealed class LanguageServiceReferencesResponse : LanguageServiceLocationResponse
+    {
+    }
+
+    /// <summary>
+    /// Distinct base-symbol navigation targets produced by Roslyn.
+    /// </summary>
+    public sealed class LanguageServiceBaseSymbolResponse : LanguageServiceLocationResponse
+    {
+    }
+
+    /// <summary>
+    /// Distinct implementation targets produced by Roslyn.
+    /// </summary>
+    public sealed class LanguageServiceImplementationResponse : LanguageServiceLocationResponse
+    {
+    }
+
+    /// <summary>
+    /// Semantic call hierarchy produced by Roslyn.
+    /// </summary>
+    public sealed class LanguageServiceCallHierarchyResponse : LanguageServiceSymbolResponse
+    {
+        public LanguageServiceCallHierarchyItem[] IncomingCalls;
+        public LanguageServiceCallHierarchyItem[] OutgoingCalls;
+    }
+
+    /// <summary>
+    /// Semantic value-source tracking produced by Roslyn.
+    /// </summary>
+    public sealed class LanguageServiceValueSourceResponse : LanguageServiceSymbolResponse
+    {
+        public LanguageServiceValueSourceItem[] Items;
     }
 
 }

@@ -11,6 +11,7 @@ namespace Cortex.Core.Services
         private readonly Dictionary<string, List<ViewContribution>> _viewsByContainer;
         private readonly Dictionary<string, EditorContribution> _editors;
         private readonly List<MenuContribution> _menus;
+        private readonly List<EditorContextActionContribution> _editorContextActions;
         private readonly Dictionary<string, StatusItemContribution> _statusItems;
         private readonly Dictionary<string, ThemeContribution> _themes;
         private readonly Dictionary<string, OnboardingProfileContribution> _onboardingProfiles;
@@ -27,6 +28,7 @@ namespace Cortex.Core.Services
             _viewsByContainer = new Dictionary<string, List<ViewContribution>>(StringComparer.OrdinalIgnoreCase);
             _editors = new Dictionary<string, EditorContribution>(StringComparer.OrdinalIgnoreCase);
             _menus = new List<MenuContribution>();
+            _editorContextActions = new List<EditorContextActionContribution>();
             _statusItems = new Dictionary<string, StatusItemContribution>(StringComparer.OrdinalIgnoreCase);
             _themes = new Dictionary<string, ThemeContribution>(StringComparer.OrdinalIgnoreCase);
             _onboardingProfiles = new Dictionary<string, OnboardingProfileContribution>(StringComparer.OrdinalIgnoreCase);
@@ -102,6 +104,36 @@ namespace Cortex.Core.Services
             }
 
             _menus.Add(contribution);
+        }
+
+        public void RegisterEditorContextAction(EditorContextActionContribution contribution)
+        {
+            if (contribution == null || string.IsNullOrEmpty(contribution.CommandId))
+            {
+                return;
+            }
+
+            for (var i = _editorContextActions.Count - 1; i >= 0; i--)
+            {
+                var existing = _editorContextActions[i];
+                if (existing == null)
+                {
+                    continue;
+                }
+
+                var existingKey = !string.IsNullOrEmpty(existing.ActionId)
+                    ? existing.ActionId
+                    : existing.CommandId;
+                var contributionKey = !string.IsNullOrEmpty(contribution.ActionId)
+                    ? contribution.ActionId
+                    : contribution.CommandId;
+                if (string.Equals(existingKey, contributionKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    _editorContextActions.RemoveAt(i);
+                }
+            }
+
+            _editorContextActions.Add(contribution);
         }
 
         public void RegisterStatusItem(StatusItemContribution contribution)
@@ -272,6 +304,25 @@ namespace Cortex.Core.Services
                 return order != 0
                     ? order
                     : string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
+            });
+            return results;
+        }
+
+        public IList<EditorContextActionContribution> GetEditorContextActions()
+        {
+            var results = new List<EditorContextActionContribution>(_editorContextActions);
+            results.Sort(delegate(EditorContextActionContribution left, EditorContextActionContribution right)
+            {
+                var groupOrder = string.Compare(left.Group, right.Group, StringComparison.OrdinalIgnoreCase);
+                if (groupOrder != 0)
+                {
+                    return groupOrder;
+                }
+
+                var sortOrder = left.SortOrder.CompareTo(right.SortOrder);
+                return sortOrder != 0
+                    ? sortOrder
+                    : string.Compare(left.CommandId, right.CommandId, StringComparison.OrdinalIgnoreCase);
             });
             return results;
         }

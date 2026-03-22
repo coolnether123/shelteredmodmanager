@@ -142,13 +142,36 @@ namespace Cortex
         public int ActiveMatchIndex = -1;
         public string QueryText = string.Empty;
         public string LastExecutedFingerprint = string.Empty;
-        public TextSearchWorkflowKind WorkflowKind = TextSearchWorkflowKind.Find;
-        public string WorkflowTargetText = string.Empty;
-        public string WorkflowCaption = string.Empty;
-        public string RenameReplacementText = string.Empty;
-        public bool RenamePanelExpanded;
         public TextSearchQuery Query = new TextSearchQuery();
         public TextSearchResultSet Results;
+    }
+
+    public sealed class CortexSemanticInteractionState
+    {
+        public string RequestedKey = string.Empty;
+        public SemanticRequestKind RequestedKind = SemanticRequestKind.None;
+        public string RequestedDocumentPath = string.Empty;
+        public int RequestedLine;
+        public int RequestedColumn;
+        public int RequestedAbsolutePosition = -1;
+        public string RequestedSymbolText = string.Empty;
+        public string RequestedNewName = string.Empty;
+        public SemanticWorkbenchViewKind ActiveView = SemanticWorkbenchViewKind.None;
+        public bool QuickActionsVisible;
+        public string QuickActionsTitle = string.Empty;
+        public string QuickActionsFilterText = string.Empty;
+        public int QuickActionsSelectedIndex = -1;
+        public EditorCommandTarget QuickActionsTarget;
+        public EditorResolvedContextAction[] QuickActions = new EditorResolvedContextAction[0];
+        public LanguageServiceSymbolContextResponse ActiveSymbolContext;
+        public LanguageServiceRenameResponse RenamePreview;
+        public LanguageServiceReferencesResponse References;
+        public LanguageServiceDefinitionResponse PeekDefinition;
+        public LanguageServiceBaseSymbolResponse BaseSymbols;
+        public LanguageServiceImplementationResponse Implementations;
+        public LanguageServiceCallHierarchyResponse CallHierarchy;
+        public LanguageServiceValueSourceResponse ValueSource;
+        public UnitTestGenerationPlan UnitTestGeneration;
     }
 
     public sealed class CortexAcceptedCompletionEntry
@@ -192,6 +215,7 @@ namespace Cortex
         public readonly CortexDocumentWorkspaceState Documents = new CortexDocumentWorkspaceState();
         public readonly CortexEditorInteractionState Editor = new CortexEditorInteractionState();
         public readonly CortexSearchInteractionState Search = new CortexSearchInteractionState();
+        public readonly CortexSemanticInteractionState Semantic = new CortexSemanticInteractionState();
         public readonly CortexLogSelectionState Logs = new CortexLogSelectionState();
         public readonly CortexInterfaceDiagnosticState Diagnostics = new CortexInterfaceDiagnosticState();
         public CortexProjectDefinition SelectedProject;

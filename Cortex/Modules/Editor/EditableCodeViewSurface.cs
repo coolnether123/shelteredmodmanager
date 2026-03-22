@@ -30,6 +30,7 @@ namespace Cortex.Modules.Editor
         private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
         private readonly EditorToolbarService _toolbarService = new EditorToolbarService();
+        private readonly EditorSemanticOperationService _semanticOperationService = new EditorSemanticOperationService();
         private readonly SourceEditorCommandRouterService _commandRouterService = new SourceEditorCommandRouterService();
         private readonly SourceEditorHoverService _hoverService = new SourceEditorHoverService();
         private readonly PopupMenuSurface _popupMenuSurface = new PopupMenuSurface();
@@ -226,8 +227,9 @@ namespace Cortex.Modules.Editor
 
                     if (editingEnabled)
                     {
+                        DrawQuickActionsPopup(session, state, scroll, rect.size, gutterWidth, commandRegistry);
                         DrawCompletionPopup(session, state, scroll, rect.size, gutterWidth);
-                        DrawRenamePopup(session, state, scroll, rect.size, gutterWidth);
+                        DrawRenamePopup(session, state, scroll, rect.size, gutterWidth, commandRegistry);
                     }
                     DrawPeekPopup(session, state, scroll, rect.size, gutterWidth);
                     DrawHoverTooltip(state, hoverTarget, pointerContext.SurfaceMouse, rect.size);
@@ -295,7 +297,7 @@ namespace Cortex.Modules.Editor
                 barTarget = BuildDocumentTarget(session, editingEnabled, caretIndex);
             }
 
-            var items = _toolbarService.BuildItems(commandRegistry, contributionRegistry, barTarget);
+            var items = _toolbarService.BuildItems(state, commandRegistry, contributionRegistry, barTarget);
             if (items == null || items.Count == 0)
             {
                 return;
@@ -1253,21 +1255,92 @@ namespace Cortex.Modules.Editor
             return tooltipRect;
         }
 
-        private void ApplyRename(DocumentSession session, CortexShellState state, string oldName, string newName)
+        private void DrawQuickActionsPopup(
+            DocumentSession session,
+            CortexShellState state,
+            Vector2 scroll,
+            Vector2 surfaceSize,
+            float gutterWidth,
+            ICommandRegistry commandRegistry)
         {
-            if (string.IsNullOrEmpty(oldName) || string.IsNullOrEmpty(newName) || string.Equals(oldName, newName, StringComparison.Ordinal))
+            if (state == null || state.Semantic == null || !state.Semantic.QuickActionsVisible || state.Semantic.QuickActionsTarget == null)
             {
                 return;
             }
-            
-            // Note: Simple replace-all as a modular UI proof of concept. 
-            // The Language Service should ultimately supply full Semantic Workspace Edits.
-            var newText = session.Text.Replace(oldName, newName);
-            _editorService.SetText(session, newText);
-            state.StatusMessage = "Renamed '" + oldName + "' to '" + newName + "'.";
+
+            var target = state.Semantic.QuickActionsTarget;
+            var targetIndex = _editorService.GetCharacterIndex(session, target.Line - 1, target.Column - 1);
+            var charRect = GetCharacterRect(session, targetIndex, gutterWidth);
+            var popupRect = ClampTooltipRect(new Rect(charRect.x - scroll.x, charRect.yMax - scroll.y + 4f, 360f, 220f), surfaceSize);
+            var current = Event.current;
+            GUI.Box(popupRect, GUIContent.none, GUI.skin.window);
+
+            GUILayout.BeginArea(popupRect);
+            GUILayout.BeginVertical();
+            GUILayout.Label("Quick Actions: " + (state.Semantic.QuickActionsTitle ?? string.Empty), GUI.skin.label);
+            GUI.SetNextControlName("Cortex.QuickActionsFilter");
+            state.Semantic.QuickActionsFilterText = GUILayout.TextField(state.Semantic.QuickActionsFilterText ?? string.Empty, GUI.skin.textField);
+
+            var actions = state.Semantic.QuickActions ?? new EditorResolvedContextAction[0];
+            var previousEnabled = GUI.enabled;
+            var renderedCount = 0;
+            for (var i = 0; i < actions.Length; i++)
+            {
+                var action = actions[i];
+                if (action == null || !MatchesQuickActionFilter(action, state.Semantic.QuickActionsFilterText))
+                {
+                    continue;
+                }
+
+                renderedCount++;
+                GUI.enabled = action.Enabled;
+                var label = action.Title ?? action.CommandId ?? string.Empty;
+                if (!string.IsNullOrEmpty(action.ShortcutText))
+                {
+                    label += "  (" + action.ShortcutText + ")";
+                }
+
+                if (GUILayout.Button(label, GUILayout.Height(24f)))
+                {
+                    _contextMenuService.Execute(state, commandRegistry, target, action.CommandId);
+                    _semanticOperationService.CloseQuickActions(state);
+                    GUI.enabled = previousEnabled;
+                    GUILayout.EndVertical();
+                    GUILayout.EndArea();
+                    return;
+                }
+
+                GUI.enabled = true;
+                var detail = action.Enabled ? action.Description : action.DisabledReason;
+                if (!string.IsNullOrEmpty(detail))
+                {
+                    GUILayout.Label(detail, GUI.skin.label);
+                }
+            }
+
+            GUI.enabled = previousEnabled;
+            if (renderedCount == 0)
+            {
+                GUILayout.Label("No quick actions matched the current filter.", GUI.skin.label);
+            }
+
+            GUILayout.FlexibleSpace();
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Close", GUILayout.Width(72f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape))
+            {
+                _semanticOperationService.CloseQuickActions(state);
+                if (current != null)
+                {
+                    current.Use();
+                }
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+            GUILayout.EndArea();
         }
 
-        private void DrawRenamePopup(DocumentSession session, CortexShellState state, Vector2 scroll, Vector2 surfaceSize, float gutterWidth)
+        private void DrawRenamePopup(DocumentSession session, CortexShellState state, Vector2 scroll, Vector2 surfaceSize, float gutterWidth, ICommandRegistry commandRegistry)
         {
             if (state == null || state.Editor == null || state.Editor.ActiveRenameTarget == null)
             {
@@ -1313,7 +1386,18 @@ namespace Cortex.Modules.Editor
             }
             if (GUILayout.Button("Apply", GUILayout.Width(60f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Return))
             {
-                ApplyRename(session, state, target.SymbolText, state.Editor.ActiveRenameText);
+                _semanticOperationService.QueueRequest(state, target, SemanticRequestKind.RenamePreview, state.Editor.ActiveRenameText);
+                state.Semantic.ActiveView = SemanticWorkbenchViewKind.RenamePreview;
+                if (commandRegistry != null)
+                {
+                    commandRegistry.Execute("cortex.window.search", new CommandExecutionContext
+                    {
+                        ActiveContainerId = state.Workbench.FocusedContainerId,
+                        ActiveDocumentId = state.Documents.ActiveDocumentPath,
+                        FocusedRegionId = state.Workbench.FocusedContainerId
+                    });
+                }
+                state.StatusMessage = "Semantic rename preview requested for " + (target.SymbolText ?? string.Empty) + ".";
                 state.Editor.ActiveRenameTarget = null;
                 if (current != null) current.Use();
             }
@@ -1367,13 +1451,14 @@ namespace Cortex.Modules.Editor
             innerStyle.wordWrap = true;
             
             var contentRect = new Rect(4f, 26f, 392f, 120f);
-            if (string.IsNullOrEmpty(target.HoverText))
+            var peekDefinition = state.Semantic != null ? state.Semantic.PeekDefinition : null;
+            if (peekDefinition == null || !peekDefinition.Success || string.IsNullOrEmpty(peekDefinition.PreviewText))
             {
-                GUI.Label(contentRect, "No peek definition information provided by language service.", innerStyle);
+                GUI.Label(contentRect, "No semantic definition preview is available yet.", innerStyle);
             }
             else
             {
-                GUI.Label(contentRect, target.HoverText, innerStyle);
+                GUI.Label(contentRect, peekDefinition.PreviewText, innerStyle);
             }
 
             GUILayout.EndVertical();
@@ -1476,7 +1561,7 @@ namespace Cortex.Modules.Editor
             var caret = _editorService.GetCaretPosition(session, clampedPosition);
             return new EditorCommandTarget
             {
-                ContextId = EditorContextIds.Symbol,
+                ContextId = EditorContextIds.Document,
                 DocumentPath = session.FilePath ?? string.Empty,
                 SymbolText = string.Empty,
                 HoverText = string.Empty,
@@ -1486,6 +1571,22 @@ namespace Cortex.Modules.Editor
                 SupportsEditing = editingEnabled,
                 CanGoToDefinition = false
             };
+        }
+
+        private static bool MatchesQuickActionFilter(EditorResolvedContextAction action, string filterText)
+        {
+            if (action == null)
+            {
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(filterText))
+            {
+                return true;
+            }
+
+            return (action.Title ?? string.Empty).IndexOf(filterText, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                (action.Description ?? string.Empty).IndexOf(filterText, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private void PopulatePopupMenuItems(IList<EditorContextMenuItem> items)

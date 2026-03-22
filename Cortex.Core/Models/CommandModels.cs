@@ -26,6 +26,7 @@ namespace Cortex.Core.Models
 
     public static class EditorContextIds
     {
+        public const string Document = "cortex.editor.document";
         public const string Symbol = "cortex.editor.symbol";
     }
 

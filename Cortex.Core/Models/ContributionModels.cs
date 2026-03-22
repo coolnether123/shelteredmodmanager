@@ -53,6 +53,15 @@ namespace Cortex.Core.Models
         Error
     }
 
+    [Flags]
+    public enum EditorContextActionPlacement
+    {
+        None = 0,
+        ContextMenu = 1,
+        ActionBar = 2,
+        QuickActions = 4
+    }
+
     public sealed class ViewContainerContribution
     {
         public string ContainerId;
@@ -90,6 +99,21 @@ namespace Cortex.Core.Models
         public MenuProjectionLocation Location;
         public string ContextId;
         public string Group;
+        public int SortOrder;
+    }
+
+    public sealed class EditorContextActionContribution
+    {
+        public string ActionId;
+        public string CommandId;
+        public string ContextId;
+        public string Group;
+        public string Title;
+        public string Description;
+        public string RequiredCapability;
+        public EditorContextActionPlacement Placements;
+        public bool IncludeWhenNoSymbol;
+        public bool ShowWhenDisabled = true;
         public int SortOrder;
     }
 

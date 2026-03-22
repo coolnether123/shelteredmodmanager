@@ -85,6 +85,41 @@ namespace Cortex.Core.Services
             return QueueRequest(LanguageServiceCommands.Completion, request, _timeoutMs);
         }
 
+        public string QueueSymbolContext(LanguageServiceSymbolContextRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.SymbolContext, request, _timeoutMs);
+        }
+
+        public string QueueRenamePreview(LanguageServiceRenameRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.RenamePreview, request, _timeoutMs);
+        }
+
+        public string QueueReferences(LanguageServiceReferencesRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.FindReferences, request, _timeoutMs);
+        }
+
+        public string QueueGoToBase(LanguageServiceBaseSymbolRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.GoToBase, request, _timeoutMs);
+        }
+
+        public string QueueGoToImplementation(LanguageServiceImplementationRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.GoToImplementation, request, _timeoutMs);
+        }
+
+        public string QueueCallHierarchy(LanguageServiceCallHierarchyRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.CallHierarchy, request, _timeoutMs);
+        }
+
+        public string QueueValueSource(LanguageServiceValueSourceRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.ValueSource, request, _timeoutMs);
+        }
+
         public bool TryDequeueResponse(out LanguageServiceEnvelope envelope)
         {
             lock (_sync)
@@ -129,6 +164,41 @@ namespace Cortex.Core.Services
         public LanguageServiceCompletionResponse GetCompletion(LanguageServiceCompletionRequest request)
         {
             return SendRequest<LanguageServiceCompletionResponse>(LanguageServiceCommands.Completion, request);
+        }
+
+        public LanguageServiceSymbolContextResponse GetSymbolContext(LanguageServiceSymbolContextRequest request)
+        {
+            return SendRequest<LanguageServiceSymbolContextResponse>(LanguageServiceCommands.SymbolContext, request);
+        }
+
+        public LanguageServiceRenameResponse PreviewRename(LanguageServiceRenameRequest request)
+        {
+            return SendRequest<LanguageServiceRenameResponse>(LanguageServiceCommands.RenamePreview, request);
+        }
+
+        public LanguageServiceReferencesResponse FindReferences(LanguageServiceReferencesRequest request)
+        {
+            return SendRequest<LanguageServiceReferencesResponse>(LanguageServiceCommands.FindReferences, request);
+        }
+
+        public LanguageServiceBaseSymbolResponse GoToBase(LanguageServiceBaseSymbolRequest request)
+        {
+            return SendRequest<LanguageServiceBaseSymbolResponse>(LanguageServiceCommands.GoToBase, request);
+        }
+
+        public LanguageServiceImplementationResponse GoToImplementation(LanguageServiceImplementationRequest request)
+        {
+            return SendRequest<LanguageServiceImplementationResponse>(LanguageServiceCommands.GoToImplementation, request);
+        }
+
+        public LanguageServiceCallHierarchyResponse GetCallHierarchy(LanguageServiceCallHierarchyRequest request)
+        {
+            return SendRequest<LanguageServiceCallHierarchyResponse>(LanguageServiceCommands.CallHierarchy, request);
+        }
+
+        public LanguageServiceValueSourceResponse GetValueSource(LanguageServiceValueSourceRequest request)
+        {
+            return SendRequest<LanguageServiceValueSourceResponse>(LanguageServiceCommands.ValueSource, request);
         }
 
         public void Shutdown()

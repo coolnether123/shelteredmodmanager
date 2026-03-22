@@ -71,6 +71,15 @@ namespace Cortex
                     var pending = runtime.PendingCompletion;
                     runtime.PendingCompletion = null;
                     HandleLanguageCompletionResponse(context, envelope, pending);
+                    continue;
+                }
+
+                if (runtime.PendingSemanticOperation != null &&
+                    string.Equals(envelope.RequestId, runtime.PendingSemanticOperation.RequestId, StringComparison.Ordinal))
+                {
+                    var pending = runtime.PendingSemanticOperation;
+                    runtime.PendingSemanticOperation = null;
+                    HandleSemanticOperationResponse(context, envelope, pending);
                 }
             }
         }
@@ -359,6 +368,133 @@ namespace Cortex
             {
                 context.TryQueueCompletionAugmentation(target, pending, context.BuildCompletionAugmentationRequest(target, pending), response);
             }
+        }
+
+        private static void HandleSemanticOperationResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope, PendingSemanticOperationRequest pending)
+        {
+            var runtime = context.RuntimeState;
+            runtime.SemanticOperationInFlight = false;
+            if (pending == null || pending.Generation != runtime.ServiceGeneration || context.State == null || context.State.Semantic == null)
+            {
+                return;
+            }
+
+            switch (pending.Kind)
+            {
+                case SemanticRequestKind.SymbolContext:
+                    HandleSymbolContextResponse(context, envelope);
+                    return;
+                case SemanticRequestKind.RenamePreview:
+                    HandleRenamePreviewResponse(context, envelope);
+                    return;
+                case SemanticRequestKind.References:
+                    HandleReferencesResponse(context, envelope);
+                    return;
+                case SemanticRequestKind.PeekDefinition:
+                    HandlePeekDefinitionResponse(context, envelope);
+                    return;
+                case SemanticRequestKind.BaseSymbol:
+                    HandleBaseSymbolResponse(context, envelope);
+                    return;
+                case SemanticRequestKind.Implementations:
+                    HandleImplementationResponse(context, envelope);
+                    return;
+                case SemanticRequestKind.CallHierarchy:
+                    HandleCallHierarchyResponse(context, envelope);
+                    return;
+                case SemanticRequestKind.ValueSource:
+                    HandleValueSourceResponse(context, envelope);
+                    return;
+            }
+        }
+
+        private static void HandleSymbolContextResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
+        {
+            var response = DeserializeEnvelopePayload<LanguageServiceSymbolContextResponse>(envelope);
+            context.State.Semantic.ActiveSymbolContext = response;
+            if (response != null)
+            {
+                context.State.StatusMessage = response.StatusMessage ?? string.Empty;
+            }
+        }
+
+        private static void HandleRenamePreviewResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
+        {
+            var response = DeserializeEnvelopePayload<LanguageServiceRenameResponse>(envelope);
+            context.State.Semantic.RenamePreview = response;
+            context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.RenamePreview;
+            context.State.StatusMessage = response != null ? response.StatusMessage ?? string.Empty : "Rename preview failed.";
+        }
+
+        private static void HandleReferencesResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
+        {
+            var response = DeserializeEnvelopePayload<LanguageServiceReferencesResponse>(envelope);
+            context.State.Semantic.References = response;
+            context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.References;
+            context.State.StatusMessage = response != null ? response.StatusMessage ?? string.Empty : "Reference lookup failed.";
+        }
+
+        private static void HandlePeekDefinitionResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
+        {
+            var response = DeserializeEnvelopePayload<LanguageServiceDefinitionResponse>(envelope);
+            context.State.Semantic.PeekDefinition = response;
+            context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.PeekDefinition;
+            context.State.StatusMessage = response != null ? response.StatusMessage ?? string.Empty : "Peek definition failed.";
+        }
+
+        private static void HandleBaseSymbolResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
+        {
+            var response = DeserializeEnvelopePayload<LanguageServiceBaseSymbolResponse>(envelope);
+            context.State.Semantic.BaseSymbols = response;
+            var opened = TryOpenSingleSemanticLocation(context, response != null ? response.Locations : null, "Opened base symbol.");
+            context.State.Semantic.ActiveView = opened ? SemanticWorkbenchViewKind.None : SemanticWorkbenchViewKind.BaseSymbols;
+            context.State.StatusMessage = response != null && !string.IsNullOrEmpty(response.StatusMessage)
+                ? response.StatusMessage
+                : (opened ? "Opened base symbol." : "Base symbol lookup failed.");
+        }
+
+        private static void HandleImplementationResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
+        {
+            var response = DeserializeEnvelopePayload<LanguageServiceImplementationResponse>(envelope);
+            context.State.Semantic.Implementations = response;
+            var opened = TryOpenSingleSemanticLocation(context, response != null ? response.Locations : null, "Opened implementation.");
+            context.State.Semantic.ActiveView = opened ? SemanticWorkbenchViewKind.None : SemanticWorkbenchViewKind.Implementations;
+            context.State.StatusMessage = response != null && !string.IsNullOrEmpty(response.StatusMessage)
+                ? response.StatusMessage
+                : (opened ? "Opened implementation." : "Implementation lookup failed.");
+        }
+
+        private static void HandleCallHierarchyResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
+        {
+            var response = DeserializeEnvelopePayload<LanguageServiceCallHierarchyResponse>(envelope);
+            context.State.Semantic.CallHierarchy = response;
+            context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.CallHierarchy;
+            context.State.StatusMessage = response != null ? response.StatusMessage ?? string.Empty : "Call hierarchy lookup failed.";
+        }
+
+        private static void HandleValueSourceResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
+        {
+            var response = DeserializeEnvelopePayload<LanguageServiceValueSourceResponse>(envelope);
+            context.State.Semantic.ValueSource = response;
+            context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.ValueSource;
+            context.State.StatusMessage = response != null ? response.StatusMessage ?? string.Empty : "Value source lookup failed.";
+        }
+
+        private static bool TryOpenSingleSemanticLocation(CortexShellLanguageRuntimeContext context, LanguageServiceSymbolLocation[] locations, string successMessage)
+        {
+            if (context == null || context.NavigationService == null || locations == null || locations.Length != 1 || locations[0] == null)
+            {
+                return false;
+            }
+
+            var location = locations[0];
+            context.NavigationService.OpenDocument(
+                context.State,
+                location.DocumentPath,
+                location.Range != null ? location.Range.StartLine : 1,
+                successMessage,
+                "Could not open semantic target.");
+            return true;
         }
 
         private static TResponse DeserializeEnvelopePayload<TResponse>(LanguageServiceEnvelope envelope)
