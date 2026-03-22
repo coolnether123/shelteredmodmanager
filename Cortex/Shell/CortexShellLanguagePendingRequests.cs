@@ -1,3 +1,5 @@
+using Cortex.Core.Models;
+
 namespace Cortex
 {
     internal sealed class PendingLanguageHoverRequest
@@ -16,5 +18,17 @@ namespace Cortex
         public string DocumentPath;
         public int DocumentVersion;
         public string TokenText;
+    }
+
+    internal sealed class PendingSemanticOperationRequest
+    {
+        public string RequestId;
+        public int Generation;
+        public SemanticRequestKind Kind;
+        public string RequestKey;
+        public string DocumentPath;
+        public int DocumentVersion;
+        public string SymbolText;
+        public string NewName;
     }
 }

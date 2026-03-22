@@ -56,6 +56,41 @@ namespace Cortex.Roslyn.Worker
                     return HandleCompletion(request);
                 }
 
+                if (string.Equals(command, LanguageServiceCommands.SymbolContext, StringComparison.OrdinalIgnoreCase))
+                {
+                    return HandleSymbolContext(request);
+                }
+
+                if (string.Equals(command, LanguageServiceCommands.RenamePreview, StringComparison.OrdinalIgnoreCase))
+                {
+                    return HandleRenamePreview(request);
+                }
+
+                if (string.Equals(command, LanguageServiceCommands.FindReferences, StringComparison.OrdinalIgnoreCase))
+                {
+                    return HandleReferences(request);
+                }
+
+                if (string.Equals(command, LanguageServiceCommands.GoToBase, StringComparison.OrdinalIgnoreCase))
+                {
+                    return HandleGoToBase(request);
+                }
+
+                if (string.Equals(command, LanguageServiceCommands.GoToImplementation, StringComparison.OrdinalIgnoreCase))
+                {
+                    return HandleGoToImplementation(request);
+                }
+
+                if (string.Equals(command, LanguageServiceCommands.CallHierarchy, StringComparison.OrdinalIgnoreCase))
+                {
+                    return HandleCallHierarchy(request);
+                }
+
+                if (string.Equals(command, LanguageServiceCommands.ValueSource, StringComparison.OrdinalIgnoreCase))
+                {
+                    return HandleValueSource(request);
+                }
+
                 if (string.Equals(command, LanguageServiceCommands.Shutdown, StringComparison.OrdinalIgnoreCase))
                 {
                     return BuildSuccessEnvelope(request, new LanguageServiceOperationResponse
@@ -98,14 +133,7 @@ namespace Cortex.Roslyn.Worker
                     ? Assembly.GetExecutingAssembly().GetName().Version.ToString()
                     : "1.0.0",
                 RuntimeVersion = Environment.Version.ToString(),
-                Capabilities = new[]
-                {
-                    "classifications",
-                    "diagnostics",
-                    "hover",
-                    "definition",
-                    "completion"
-                }
+                Capabilities = BuildCapabilities()
             });
         }
 
@@ -120,14 +148,7 @@ namespace Cortex.Roslyn.Worker
                     ? Assembly.GetExecutingAssembly().GetName().Version.ToString()
                     : "1.0.0",
                 RuntimeVersion = Environment.Version.ToString(),
-                Capabilities = new[]
-                {
-                    "classifications",
-                    "diagnostics",
-                    "hover",
-                    "definition",
-                    "completion"
-                },
+                Capabilities = BuildCapabilities(),
                 CachedProjectCount = GetCachedProjectCount(),
                 LoadedProjectPaths = GetLoadedProjectPaths(),
                 IsRunning = true
@@ -156,6 +177,48 @@ namespace Cortex.Roslyn.Worker
         {
             var payload = DeserializePayload<LanguageServiceCompletionRequest>(request);
             return BuildSuccessEnvelope(request, GetCompletion(payload));
+        }
+
+        private LanguageServiceEnvelope HandleSymbolContext(LanguageServiceEnvelope request)
+        {
+            var payload = DeserializePayload<LanguageServiceSymbolContextRequest>(request);
+            return BuildSuccessEnvelope(request, GetSymbolContext(payload));
+        }
+
+        private LanguageServiceEnvelope HandleRenamePreview(LanguageServiceEnvelope request)
+        {
+            var payload = DeserializePayload<LanguageServiceRenameRequest>(request);
+            return BuildSuccessEnvelope(request, PreviewRename(payload));
+        }
+
+        private LanguageServiceEnvelope HandleReferences(LanguageServiceEnvelope request)
+        {
+            var payload = DeserializePayload<LanguageServiceReferencesRequest>(request);
+            return BuildSuccessEnvelope(request, FindReferences(payload));
+        }
+
+        private LanguageServiceEnvelope HandleGoToBase(LanguageServiceEnvelope request)
+        {
+            var payload = DeserializePayload<LanguageServiceBaseSymbolRequest>(request);
+            return BuildSuccessEnvelope(request, GetBaseSymbols(payload));
+        }
+
+        private LanguageServiceEnvelope HandleGoToImplementation(LanguageServiceEnvelope request)
+        {
+            var payload = DeserializePayload<LanguageServiceImplementationRequest>(request);
+            return BuildSuccessEnvelope(request, GetImplementations(payload));
+        }
+
+        private LanguageServiceEnvelope HandleCallHierarchy(LanguageServiceEnvelope request)
+        {
+            var payload = DeserializePayload<LanguageServiceCallHierarchyRequest>(request);
+            return BuildSuccessEnvelope(request, GetCallHierarchy(payload));
+        }
+
+        private LanguageServiceEnvelope HandleValueSource(LanguageServiceEnvelope request)
+        {
+            var payload = DeserializePayload<LanguageServiceValueSourceRequest>(request);
+            return BuildSuccessEnvelope(request, GetValueSource(payload));
         }
 
         private T DeserializePayload<T>(LanguageServiceEnvelope request) where T : class, new()
@@ -189,6 +252,25 @@ namespace Cortex.Roslyn.Worker
                 Success = false,
                 PayloadJson = string.Empty,
                 ErrorMessage = message ?? "Roslyn worker failed."
+            };
+        }
+
+        private static string[] BuildCapabilities()
+        {
+            return new[]
+            {
+                "classifications",
+                "diagnostics",
+                "hover",
+                "definition",
+                "completion",
+                "symbol-context",
+                "rename",
+                "references",
+                "base-symbol",
+                "implementations",
+                "call-hierarchy",
+                "value-source"
             };
         }
     }

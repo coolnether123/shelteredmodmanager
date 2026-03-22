@@ -19,6 +19,7 @@ namespace Cortex.Core.Abstractions
         void RegisterView(ViewContribution contribution);
         void RegisterEditor(EditorContribution contribution);
         void RegisterMenu(MenuContribution contribution);
+        void RegisterEditorContextAction(EditorContextActionContribution contribution);
         void RegisterStatusItem(StatusItemContribution contribution);
         void RegisterTheme(ThemeContribution contribution);
         void RegisterIcon(IconContribution contribution);
@@ -31,6 +32,7 @@ namespace Cortex.Core.Abstractions
         IList<ViewContribution> GetViews(string containerId);
         IList<EditorContribution> GetEditors();
         IList<MenuContribution> GetMenus();
+        IList<EditorContextActionContribution> GetEditorContextActions();
         IList<StatusItemContribution> GetStatusItems();
         IList<ThemeContribution> GetThemes();
         IList<IconContribution> GetIcons();

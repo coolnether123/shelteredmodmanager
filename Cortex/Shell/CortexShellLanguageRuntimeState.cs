@@ -15,12 +15,14 @@ namespace Cortex
         public bool HoverInFlight;
         public bool DefinitionInFlight;
         public bool CompletionInFlight;
+        public bool SemanticOperationInFlight;
         public string InitializeRequestId = string.Empty;
         public string StatusRequestId = string.Empty;
         public DocumentLanguageAnalysisRequestState PendingAnalysis;
         public PendingLanguageHoverRequest PendingHover;
         public PendingLanguageDefinitionRequest PendingDefinition;
         public DocumentLanguageCompletionRequestState PendingCompletion;
+        public PendingSemanticOperationRequest PendingSemanticOperation;
         public int ServiceGeneration;
         public DateTime LastAnalysisRequestUtc = DateTime.MinValue;
         public DateTime InitializeQueuedUtc = DateTime.MinValue;

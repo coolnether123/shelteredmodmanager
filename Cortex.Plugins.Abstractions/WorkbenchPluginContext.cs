@@ -383,6 +383,52 @@ namespace Cortex.Plugins.Abstractions
         }
 
         /// <summary>
+        /// Registers an editor-context action contribution shared by the
+        /// right-click menu, the action bar, and the quick-actions picker.
+        /// </summary>
+        public void RegisterEditorContextAction(EditorContextActionContribution contribution)
+        {
+            if (ContributionRegistry == null || contribution == null)
+            {
+                return;
+            }
+
+            ContributionRegistry.RegisterEditorContextAction(contribution);
+        }
+
+        /// <summary>
+        /// Registers an editor-context action using common editor action metadata.
+        /// </summary>
+        public void RegisterEditorContextAction(
+            string actionId,
+            string commandId,
+            string contextId,
+            string group,
+            int sortOrder,
+            EditorContextActionPlacement placements,
+            string requiredCapability,
+            bool includeWhenNoSymbol,
+            bool showWhenDisabled,
+            string title,
+            string description)
+        {
+            RegisterEditorContextAction(new EditorContextActionContribution
+            {
+                ActionId = actionId,
+                CommandId = commandId,
+                ContextId = contextId,
+                Group = group,
+                SortOrder = sortOrder,
+                Placements = placements,
+                RequiredCapability = requiredCapability,
+                IncludeWhenNoSymbol = includeWhenNoSymbol,
+                ShowWhenDisabled = showWhenDisabled,
+                Title = title,
+                Description = description
+            });
+        }
+
+        /// <summary>
         /// Registers a settings contribution.
         /// </summary>
         /// <param name="contribution">The setting contribution.</param>

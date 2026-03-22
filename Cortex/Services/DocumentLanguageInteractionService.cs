@@ -7,6 +7,20 @@ namespace Cortex.Services
 {
     internal sealed class DocumentLanguageInteractionService
     {
+        public LanguageServiceSymbolContextRequest BuildSymbolContextRequest(
+            DocumentSession session,
+            CortexSettings settings,
+            CortexProjectDefinition project,
+            string[] sourceRoots,
+            int line,
+            int column,
+            int absolutePosition)
+        {
+            var request = new LanguageServiceSymbolContextRequest();
+            PopulateSymbolRequest(request, session, settings, project, sourceRoots, line, column, absolutePosition);
+            return request;
+        }
+
         public LanguageServiceHoverRequest BuildHoverRequest(
             DocumentSession session,
             CortexSettings settings,
@@ -51,6 +65,94 @@ namespace Cortex.Services
                 Column = column,
                 AbsolutePosition = absolutePosition
             };
+        }
+
+        public LanguageServiceRenameRequest BuildRenameRequest(
+            DocumentSession session,
+            CortexSettings settings,
+            CortexProjectDefinition project,
+            string[] sourceRoots,
+            int line,
+            int column,
+            int absolutePosition,
+            string newName)
+        {
+            var request = new LanguageServiceRenameRequest
+            {
+                NewName = newName ?? string.Empty
+            };
+            PopulateSymbolRequest(request, session, settings, project, sourceRoots, line, column, absolutePosition);
+            return request;
+        }
+
+        public LanguageServiceReferencesRequest BuildReferencesRequest(
+            DocumentSession session,
+            CortexSettings settings,
+            CortexProjectDefinition project,
+            string[] sourceRoots,
+            int line,
+            int column,
+            int absolutePosition)
+        {
+            var request = new LanguageServiceReferencesRequest();
+            PopulateSymbolRequest(request, session, settings, project, sourceRoots, line, column, absolutePosition);
+            return request;
+        }
+
+        public LanguageServiceBaseSymbolRequest BuildBaseSymbolRequest(
+            DocumentSession session,
+            CortexSettings settings,
+            CortexProjectDefinition project,
+            string[] sourceRoots,
+            int line,
+            int column,
+            int absolutePosition)
+        {
+            var request = new LanguageServiceBaseSymbolRequest();
+            PopulateSymbolRequest(request, session, settings, project, sourceRoots, line, column, absolutePosition);
+            return request;
+        }
+
+        public LanguageServiceImplementationRequest BuildImplementationRequest(
+            DocumentSession session,
+            CortexSettings settings,
+            CortexProjectDefinition project,
+            string[] sourceRoots,
+            int line,
+            int column,
+            int absolutePosition)
+        {
+            var request = new LanguageServiceImplementationRequest();
+            PopulateSymbolRequest(request, session, settings, project, sourceRoots, line, column, absolutePosition);
+            return request;
+        }
+
+        public LanguageServiceCallHierarchyRequest BuildCallHierarchyRequest(
+            DocumentSession session,
+            CortexSettings settings,
+            CortexProjectDefinition project,
+            string[] sourceRoots,
+            int line,
+            int column,
+            int absolutePosition)
+        {
+            var request = new LanguageServiceCallHierarchyRequest();
+            PopulateSymbolRequest(request, session, settings, project, sourceRoots, line, column, absolutePosition);
+            return request;
+        }
+
+        public LanguageServiceValueSourceRequest BuildValueSourceRequest(
+            DocumentSession session,
+            CortexSettings settings,
+            CortexProjectDefinition project,
+            string[] sourceRoots,
+            int line,
+            int column,
+            int absolutePosition)
+        {
+            var request = new LanguageServiceValueSourceRequest();
+            PopulateSymbolRequest(request, session, settings, project, sourceRoots, line, column, absolutePosition);
+            return request;
         }
 
         public string BuildCompletionRequestKey(
@@ -137,6 +239,32 @@ namespace Cortex.Services
         private static bool IsCompletionCharacter(char value)
         {
             return value == '.' || value == '_' || char.IsLetterOrDigit(value);
+        }
+
+        private static void PopulateSymbolRequest(
+            LanguageServiceSymbolRequest request,
+            DocumentSession session,
+            CortexSettings settings,
+            CortexProjectDefinition project,
+            string[] sourceRoots,
+            int line,
+            int column,
+            int absolutePosition)
+        {
+            if (request == null)
+            {
+                return;
+            }
+
+            request.DocumentPath = session != null ? session.FilePath : string.Empty;
+            request.ProjectFilePath = project != null ? project.ProjectFilePath : string.Empty;
+            request.WorkspaceRootPath = settings != null ? settings.WorkspaceRootPath : string.Empty;
+            request.SourceRoots = sourceRoots ?? new string[0];
+            request.DocumentText = session != null ? session.Text : string.Empty;
+            request.DocumentVersion = session != null ? session.TextVersion : 0;
+            request.Line = line;
+            request.Column = column;
+            request.AbsolutePosition = absolutePosition;
         }
     }
 }

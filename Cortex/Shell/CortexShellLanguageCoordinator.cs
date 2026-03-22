@@ -26,6 +26,7 @@ namespace Cortex
 
             requestDispatcher.UpdateLanguageHover(context);
             requestDispatcher.UpdateLanguageDefinition(context);
+            requestDispatcher.UpdateSemanticOperation(context);
             requestDispatcher.ProcessDocumentLanguageAnalysis(context);
         }
     }

@@ -35,14 +35,7 @@ namespace Cortex
 
             search.IsVisible = true;
             search.FocusQueryRequested = true;
-            search.WorkflowKind = TextSearchWorkflowKind.Find;
-            search.WorkflowTargetText = string.Empty;
-            search.WorkflowCaption = string.Empty;
-            search.RenamePanelExpanded = false;
-            if (string.IsNullOrEmpty(search.RenameReplacementText))
-            {
-                search.RenameReplacementText = search.QueryText ?? string.Empty;
-            }
+            _state.Semantic.ActiveView = SemanticWorkbenchViewKind.None;
             if (string.IsNullOrEmpty(search.QueryText))
             {
                 search.Query.Scope = SearchScopeKind.CurrentDocument;
@@ -65,7 +58,6 @@ namespace Cortex
             _state.Search.IsVisible = false;
             _state.Search.ScopeMenuOpen = false;
             _state.Search.FocusQueryRequested = false;
-            _state.Search.RenamePanelExpanded = false;
             _state.StatusMessage = "Find closed.";
         }
 
@@ -115,6 +107,7 @@ namespace Cortex
             }
 
             var query = BuildActiveSearchQuery();
+            _state.Semantic.ActiveView = SemanticWorkbenchViewKind.None;
             if (string.IsNullOrEmpty(query.SearchText))
             {
                 MMLog.WriteInfo("[Cortex.Find] Search skipped because query text was empty. Scope=" + query.Scope + ".");

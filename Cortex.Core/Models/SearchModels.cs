@@ -11,16 +11,6 @@ namespace Cortex.Core.Models
         EntireSolution = 3
     }
 
-    public enum TextSearchWorkflowKind
-    {
-        Find = 0,
-        References = 1,
-        Rename = 2,
-        CallHierarchy = 3,
-        ValueSource = 4,
-        UnitTests = 5
-    }
-
     [Serializable]
     public sealed class TextSearchQuery
     {
