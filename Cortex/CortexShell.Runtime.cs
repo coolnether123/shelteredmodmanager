@@ -88,6 +88,8 @@ namespace Cortex
                     delegate { return _buildExecutor; },
                     delegate { return _referenceCatalogService; },
                     delegate { return _sourcePathResolver; },
+                    delegate { return _sourceLookupIndex; },
+                    delegate { return _textSearchService; },
                     delegate { return _runtimeLogFeed; },
                     delegate { return _runtimeToolBridge; },
                     delegate { return _restartCoordinator; },

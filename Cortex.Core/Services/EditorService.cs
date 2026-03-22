@@ -276,6 +276,28 @@ namespace Cortex.Core.Services
             SetSelection(session, 0, GetText(session).Length);
         }
 
+        public string GetSelectedText(DocumentSession session)
+        {
+            EnsureDocumentState(session);
+            if (session == null || session.EditorState == null)
+            {
+                return string.Empty;
+            }
+
+            var selection = session.EditorState.PrimarySelection;
+            if (selection == null || !selection.HasSelection)
+            {
+                return string.Empty;
+            }
+
+            var text = GetText(session);
+            var start = Clamp(selection.Start, 0, text.Length);
+            var end = Clamp(selection.End, start, text.Length);
+            return end > start
+                ? text.Substring(start, end - start)
+                : string.Empty;
+        }
+
         public void SelectWord(DocumentSession session, int characterIndex)
         {
             EnsureDocumentState(session);
@@ -407,6 +429,45 @@ namespace Cortex.Core.Services
                     AfterSelection = CreateSelection(selection.Start + text.Length, selection.Start + text.Length, -1)
                 };
             });
+        }
+
+        public bool SetText(DocumentSession session, string text)
+        {
+            if (!CanEdit(session))
+            {
+                return false;
+            }
+
+            EnsureDocumentState(session);
+            if (session == null || session.EditorState == null)
+            {
+                return false;
+            }
+
+            var currentText = GetText(session);
+            var updatedText = text ?? string.Empty;
+            if (string.Equals(currentText, updatedText, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var updatedSelections = CloneSelections(session.EditorState.Selections);
+            var updatedTextLength = updatedText.Length;
+            for (var i = 0; i < updatedSelections.Count; i++)
+            {
+                updatedSelections[i].AnchorIndex = Clamp(updatedSelections[i].AnchorIndex, 0, updatedTextLength);
+                updatedSelections[i].CaretIndex = Clamp(updatedSelections[i].CaretIndex, 0, updatedTextLength);
+                updatedSelections[i].PreferredColumn = -1;
+            }
+
+            return ApplyManualEditRecord(
+                session,
+                0,
+                currentText.Length,
+                updatedText,
+                updatedSelections,
+                "replace-document",
+                false);
         }
 
         public bool InsertPair(DocumentSession session, string openText, string closeText)

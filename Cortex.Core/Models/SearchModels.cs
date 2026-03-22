@@ -11,6 +11,16 @@ namespace Cortex.Core.Models
         EntireSolution = 3
     }
 
+    public enum TextSearchWorkflowKind
+    {
+        Find = 0,
+        References = 1,
+        Rename = 2,
+        CallHierarchy = 3,
+        ValueSource = 4,
+        UnitTests = 5
+    }
+
     [Serializable]
     public sealed class TextSearchQuery
     {
@@ -59,6 +69,15 @@ namespace Cortex.Core.Models
         public int SearchedDocumentCount;
         public int TotalMatchCount;
         public DateTime GeneratedUtc;
+        public string StatusMessage;
+    }
+
+    public sealed class TextSearchReplacementResult
+    {
+        public int UpdatedDocumentCount;
+        public int UpdatedMatchCount;
+        public int PendingSaveDocumentCount;
+        public int SkippedDocumentCount;
         public string StatusMessage;
     }
 }

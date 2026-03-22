@@ -1,4 +1,6 @@
+using System;
 using System.IO;
+using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Services;
 using UnityEngine;
@@ -15,18 +17,33 @@ namespace Cortex.Modules.Search
         private GUIStyle _resultButtonStyle;
         private GUIStyle _resultButtonActiveStyle;
         private GUIStyle _emptyStateStyle;
+        private GUIStyle _actionButtonStyle;
         private Texture2D _summaryBackground;
         private Texture2D _activeBackground;
         private string _appliedTheme = string.Empty;
 
-        public void Draw(WorkbenchSearchService searchService, CortexNavigationService navigationService, CortexShellState state)
+        public void Draw(
+            WorkbenchSearchService searchService,
+            CortexNavigationService navigationService,
+            IDocumentService documentService,
+            IProjectCatalog projectCatalog,
+            ISourceLookupIndex sourceLookupIndex,
+            ITextSearchService textSearchService,
+            CortexShellState state)
         {
             EnsureStyles();
+            EnsureResults(searchService, projectCatalog, sourceLookupIndex, textSearchService, state);
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             DrawSummary(state);
-            GUILayout.Space(6f);
 
+            if (IsRenameWorkflow(state))
+            {
+                GUILayout.Space(6f);
+                DrawRenamePanel(searchService, documentService, state);
+            }
+
+            GUILayout.Space(6f);
             _scroll = GUILayout.BeginScrollView(_scroll, GUI.skin.box, GUILayout.ExpandHeight(true));
             DrawResults(searchService, navigationService, state);
             GUILayout.EndScrollView();
@@ -36,9 +53,63 @@ namespace Cortex.Modules.Search
         private void DrawSummary(CortexShellState state)
         {
             GUILayout.BeginVertical(_summaryStyle ?? GUI.skin.box);
+            GUILayout.Label(BuildWorkflowTitle(state), _documentStyle ?? GUI.skin.label);
+
             var results = state != null && state.Search != null ? state.Search.Results : null;
             GUILayout.Label(results != null ? results.StatusMessage ?? "Search ready." : "Search results will appear here.", _summaryCaptionStyle ?? GUI.skin.label);
             GUILayout.Label(BuildScopeCaption(state), _summaryCaptionStyle ?? GUI.skin.label);
+            GUILayout.EndVertical();
+        }
+
+        private void DrawRenamePanel(WorkbenchSearchService searchService, IDocumentService documentService, CortexShellState state)
+        {
+            var searchState = state != null ? state.Search : null;
+            if (searchState == null)
+            {
+                return;
+            }
+
+            GUILayout.BeginVertical(GUI.skin.box);
+            var toggleLabel = searchState.RenamePanelExpanded ? "Rename All v" : "Rename All >";
+            if (GUILayout.Button(toggleLabel, _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(120f)))
+            {
+                searchState.RenamePanelExpanded = !searchState.RenamePanelExpanded;
+            }
+
+            if (searchState.RenamePanelExpanded)
+            {
+                GUILayout.Space(4f);
+                GUILayout.Label(
+                    "Review the current matches, then replace every occurrence of '" + (searchState.WorkflowTargetText ?? string.Empty) +
+                    "' inside the active search scope.",
+                    _summaryCaptionStyle ?? GUI.skin.label);
+
+                GUILayout.Space(4f);
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("New Name", GUILayout.Width(72f));
+                searchState.RenameReplacementText = GUILayout.TextField(searchState.RenameReplacementText ?? string.Empty, GUILayout.ExpandWidth(true));
+                GUILayout.EndHorizontal();
+
+                GUILayout.Space(4f);
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Scope: " + BuildScopeLabel(searchState.Query.Scope), _documentMetaStyle ?? GUI.skin.label);
+                GUILayout.FlexibleSpace();
+
+                var previousEnabled = GUI.enabled;
+                GUI.enabled = CanApplyRename(searchState);
+                if (GUILayout.Button("Rename All", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(96f)))
+                {
+                    ApplyRename(searchService, documentService, state);
+                }
+
+                GUI.enabled = previousEnabled;
+                if (GUILayout.Button("Collapse", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(84f)))
+                {
+                    searchState.RenamePanelExpanded = false;
+                }
+                GUILayout.EndHorizontal();
+            }
+
             GUILayout.EndVertical();
         }
 
@@ -87,6 +158,131 @@ namespace Cortex.Modules.Search
             }
         }
 
+        private void EnsureResults(
+            WorkbenchSearchService searchService,
+            IProjectCatalog projectCatalog,
+            ISourceLookupIndex sourceLookupIndex,
+            ITextSearchService textSearchService,
+            CortexShellState state)
+        {
+            var searchState = state != null ? state.Search : null;
+            if (searchState == null || !searchState.PendingRefresh)
+            {
+                return;
+            }
+
+            var query = BuildQuery(searchState);
+            if (string.IsNullOrEmpty(query.SearchText))
+            {
+                searchState.Results = new TextSearchResultSet
+                {
+                    Query = query,
+                    GeneratedUtc = DateTime.UtcNow,
+                    StatusMessage = "Enter text to search."
+                };
+                searchState.LastExecutedFingerprint = string.Empty;
+                searchState.PendingRefresh = false;
+                searchState.ActiveMatchIndex = -1;
+                return;
+            }
+
+            searchState.Results = searchService != null
+                ? searchService.Search(query, state, projectCatalog, sourceLookupIndex, textSearchService)
+                : new TextSearchResultSet
+                {
+                    Query = query,
+                    GeneratedUtc = DateTime.UtcNow,
+                    StatusMessage = "Search service was not available."
+                };
+            searchState.LastExecutedFingerprint = searchService != null ? searchService.BuildFingerprint(query) : string.Empty;
+            searchState.PendingRefresh = false;
+
+            var totalMatches = searchState.Results != null ? searchState.Results.TotalMatchCount : 0;
+            if (totalMatches <= 0)
+            {
+                searchState.ActiveMatchIndex = -1;
+            }
+            else if (searchState.ActiveMatchIndex < 0 || searchState.ActiveMatchIndex >= totalMatches)
+            {
+                searchState.ActiveMatchIndex = 0;
+            }
+        }
+
+        private void ApplyRename(WorkbenchSearchService searchService, IDocumentService documentService, CortexShellState state)
+        {
+            if (searchService == null || state == null || state.Search == null)
+            {
+                return;
+            }
+
+            var searchState = state.Search;
+            var replacement = searchState.RenameReplacementText ?? string.Empty;
+            var replacementResult = searchService.ApplyReplacement(searchState.Results, replacement, state, documentService);
+            state.StatusMessage = replacementResult != null ? replacementResult.StatusMessage : "Rename did not complete.";
+            if (replacementResult == null || replacementResult.UpdatedMatchCount <= 0)
+            {
+                return;
+            }
+
+            searchState.QueryText = replacement;
+            searchState.WorkflowTargetText = replacement;
+            searchState.WorkflowCaption = "Rename preview refreshed.";
+            searchState.PendingRefresh = true;
+            searchState.ActiveMatchIndex = -1;
+        }
+
+        private static bool CanApplyRename(CortexSearchInteractionState searchState)
+        {
+            return searchState != null &&
+                searchState.Results != null &&
+                searchState.Results.TotalMatchCount > 0 &&
+                !string.IsNullOrEmpty(searchState.RenameReplacementText) &&
+                !string.Equals(searchState.WorkflowTargetText ?? string.Empty, searchState.RenameReplacementText ?? string.Empty, StringComparison.Ordinal);
+        }
+
+        private static bool IsRenameWorkflow(CortexShellState state)
+        {
+            return state != null &&
+                state.Search != null &&
+                state.Search.WorkflowKind == TextSearchWorkflowKind.Rename;
+        }
+
+        private static TextSearchQuery BuildQuery(CortexSearchInteractionState searchState)
+        {
+            return new TextSearchQuery
+            {
+                SearchText = searchState != null ? searchState.QueryText ?? string.Empty : string.Empty,
+                Scope = searchState != null ? searchState.Query.Scope : SearchScopeKind.CurrentDocument,
+                MatchCase = searchState != null && searchState.Query.MatchCase,
+                WholeWord = searchState != null && searchState.Query.WholeWord
+            };
+        }
+
+        private string BuildWorkflowTitle(CortexShellState state)
+        {
+            var searchState = state != null ? state.Search : null;
+            if (searchState == null)
+            {
+                return "Search";
+            }
+
+            switch (searchState.WorkflowKind)
+            {
+                case TextSearchWorkflowKind.References:
+                    return "Find All References: " + (searchState.WorkflowTargetText ?? string.Empty);
+                case TextSearchWorkflowKind.Rename:
+                    return "Rename: " + (searchState.WorkflowTargetText ?? string.Empty);
+                case TextSearchWorkflowKind.CallHierarchy:
+                    return "Call Hierarchy Seed: " + (searchState.WorkflowTargetText ?? string.Empty);
+                case TextSearchWorkflowKind.ValueSource:
+                    return "Track Value Source: " + (searchState.WorkflowTargetText ?? string.Empty);
+                case TextSearchWorkflowKind.UnitTests:
+                    return "Create Unit Tests Seed: " + (searchState.WorkflowTargetText ?? string.Empty);
+                default:
+                    return "Search";
+            }
+        }
+
         private string BuildScopeCaption(CortexShellState state)
         {
             var searchState = state != null ? state.Search : null;
@@ -95,7 +291,24 @@ namespace Cortex.Modules.Search
                 return string.Empty;
             }
 
-            return "Scope: " + searchState.Query.Scope;
+            var caption = "Scope: " + BuildScopeLabel(searchState.Query.Scope);
+            if (!string.IsNullOrEmpty(searchState.WorkflowCaption))
+            {
+                caption += "  |  " + searchState.WorkflowCaption;
+            }
+
+            return caption;
+        }
+
+        private static string BuildScopeLabel(SearchScopeKind scope)
+        {
+            switch (scope)
+            {
+                case SearchScopeKind.AllOpenDocuments: return "All open documents";
+                case SearchScopeKind.CurrentProject: return "Current project";
+                case SearchScopeKind.EntireSolution: return "Entire solution";
+                default: return "Current document";
+            }
         }
 
         private void EnsureStyles()
@@ -105,7 +318,8 @@ namespace Cortex.Modules.Search
                 _summaryStyle != null &&
                 _documentStyle != null &&
                 _resultButtonStyle != null &&
-                _resultButtonActiveStyle != null)
+                _resultButtonActiveStyle != null &&
+                _actionButtonStyle != null)
             {
                 return;
             }
@@ -120,6 +334,7 @@ namespace Cortex.Modules.Search
 
             _summaryCaptionStyle = new GUIStyle(GUI.skin.label);
             GuiStyleUtil.ApplyTextColorToAllStates(_summaryCaptionStyle, CortexIdeLayout.GetTextColor());
+            _summaryCaptionStyle.wordWrap = true;
 
             _documentStyle = new GUIStyle(GUI.skin.label);
             _documentStyle.fontStyle = FontStyle.Bold;
@@ -139,6 +354,10 @@ namespace Cortex.Modules.Search
             _emptyStateStyle = new GUIStyle(GUI.skin.label);
             _emptyStateStyle.wordWrap = true;
             GuiStyleUtil.ApplyTextColorToAllStates(_emptyStateStyle, CortexIdeLayout.GetMutedTextColor());
+
+            _actionButtonStyle = new GUIStyle(GUI.skin.button);
+            _actionButtonStyle.alignment = TextAnchor.MiddleCenter;
+            GuiStyleUtil.ApplyTextColorToAllStates(_actionButtonStyle, CortexIdeLayout.GetTextColor());
         }
 
         private static Texture2D MakeFill(Color color)

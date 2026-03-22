@@ -62,6 +62,10 @@ namespace Cortex
     {
         CortexShellState State { get; }
         CortexNavigationService NavigationService { get; }
+        IDocumentService DocumentService { get; }
+        IProjectCatalog ProjectCatalog { get; }
+        ISourceLookupIndex SourceLookupIndex { get; }
+        ITextSearchService TextSearchService { get; }
         WorkbenchSearchService WorkbenchSearchService { get; }
     }
 
@@ -106,6 +110,8 @@ namespace Cortex
         private readonly Func<IBuildExecutor> _buildExecutorAccessor;
         private readonly Func<IReferenceCatalogService> _referenceCatalogServiceAccessor;
         private readonly Func<ISourcePathResolver> _sourcePathResolverAccessor;
+        private readonly Func<ISourceLookupIndex> _sourceLookupIndexAccessor;
+        private readonly Func<ITextSearchService> _textSearchServiceAccessor;
         private readonly Func<IRuntimeLogFeed> _runtimeLogFeedAccessor;
         private readonly Func<IRuntimeToolBridge> _runtimeToolBridgeAccessor;
         private readonly Func<IRestartCoordinator> _restartCoordinatorAccessor;
@@ -127,6 +133,8 @@ namespace Cortex
             Func<IBuildExecutor> buildExecutorAccessor,
             Func<IReferenceCatalogService> referenceCatalogServiceAccessor,
             Func<ISourcePathResolver> sourcePathResolverAccessor,
+            Func<ISourceLookupIndex> sourceLookupIndexAccessor,
+            Func<ITextSearchService> textSearchServiceAccessor,
             Func<IRuntimeLogFeed> runtimeLogFeedAccessor,
             Func<IRuntimeToolBridge> runtimeToolBridgeAccessor,
             Func<IRestartCoordinator> restartCoordinatorAccessor,
@@ -147,6 +155,8 @@ namespace Cortex
             _buildExecutorAccessor = buildExecutorAccessor;
             _referenceCatalogServiceAccessor = referenceCatalogServiceAccessor;
             _sourcePathResolverAccessor = sourcePathResolverAccessor;
+            _sourceLookupIndexAccessor = sourceLookupIndexAccessor;
+            _textSearchServiceAccessor = textSearchServiceAccessor;
             _runtimeLogFeedAccessor = runtimeLogFeedAccessor;
             _runtimeToolBridgeAccessor = runtimeToolBridgeAccessor;
             _restartCoordinatorAccessor = restartCoordinatorAccessor;
@@ -171,6 +181,8 @@ namespace Cortex
         public IBuildExecutor BuildExecutor { get { return _buildExecutorAccessor != null ? _buildExecutorAccessor() : null; } }
         public IRestartCoordinator RestartCoordinator { get { return _restartCoordinatorAccessor != null ? _restartCoordinatorAccessor() : null; } }
         public IReferenceCatalogService ReferenceCatalogService { get { return _referenceCatalogServiceAccessor != null ? _referenceCatalogServiceAccessor() : null; } }
+        public ISourceLookupIndex SourceLookupIndex { get { return _sourceLookupIndexAccessor != null ? _sourceLookupIndexAccessor() : null; } }
+        public ITextSearchService TextSearchService { get { return _textSearchServiceAccessor != null ? _textSearchServiceAccessor() : null; } }
         public IRuntimeToolBridge RuntimeToolBridge { get { return _runtimeToolBridgeAccessor != null ? _runtimeToolBridgeAccessor() : null; } }
         public ICortexSettingsStore SettingsStore { get { return _settingsStoreAccessor != null ? _settingsStoreAccessor() : null; } }
 

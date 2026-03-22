@@ -11,9 +11,13 @@ namespace Cortex.Modules.Editor
     /// </summary>
     internal static class EditorInteractionLog
     {
-        private const bool HoverDiagnosticsEnabled = false;
-        private const bool EditDiagnosticsEnabled = false;
-        private const bool SelectionDiagnosticsEnabled = false;
+        private static readonly bool HoverDiagnosticsEnabled = false;
+        private static readonly bool EditDiagnosticsEnabled = false;
+        private static readonly bool SelectionDiagnosticsEnabled = false;
+        private static readonly bool ContextMenuDiagnosticsEnabled = true;
+        private static readonly bool ScrollDiagnosticsEnabled = true;
+        private static string _lastScrollLogKey = string.Empty;
+        private static float _lastScrollLogRealtime;
 
         public static bool IsSelectionDiagnosticsEnabled
         {
@@ -146,6 +150,37 @@ namespace Cortex.Modules.Editor
                 ", AnchorIndexAfter=" + anchorIndexAfter +
                 ", LineAfter=" + lineAfter +
                 ", ColumnAfter=" + columnAfter + ".");
+        }
+
+        public static void WriteContextMenu(string message)
+        {
+            if (!ContextMenuDiagnosticsEnabled || string.IsNullOrEmpty(message))
+            {
+                return;
+            }
+
+            MMLog.WriteInfo("[Cortex.ContextMenuDiag] Frame=" + Time.frameCount + " " + message);
+        }
+
+        public static void WriteScrollOwner(string owner, string message, bool force)
+        {
+            if (!ScrollDiagnosticsEnabled || string.IsNullOrEmpty(owner) || string.IsNullOrEmpty(message))
+            {
+                return;
+            }
+
+            var key = owner + "|" + message;
+            var now = Time.realtimeSinceStartup;
+            if (!force &&
+                string.Equals(_lastScrollLogKey, key, System.StringComparison.Ordinal) &&
+                (now - _lastScrollLogRealtime) < 0.35f)
+            {
+                return;
+            }
+
+            _lastScrollLogKey = key;
+            _lastScrollLogRealtime = now;
+            MMLog.WriteInfo("[Cortex.ScrollDiag] Frame=" + Time.frameCount + " Owner=" + owner + " " + message);
         }
     }
 }

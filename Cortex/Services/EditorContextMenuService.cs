@@ -7,6 +7,12 @@ namespace Cortex.Services
 {
     internal sealed class EditorContextMenuService
     {
+        private static readonly string[] SuppressedLegacyCommandIds = new[]
+        {
+            "cortex.editor.copySymbol",
+            "cortex.editor.copyHoverInfo"
+        };
+
         public IList<EditorContextMenuItem> BuildItems(
             CortexShellState state,
             ICommandRegistry commandRegistry,
@@ -19,15 +25,13 @@ namespace Cortex.Services
                 return items;
             }
 
-            var menus = contributionRegistry.GetMenus();
+            var menus = GetEffectiveMenuContributions(contributionRegistry, target.ContextId, false);
             var commandContext = BuildCommandContext(state, target);
             var previousGroup = string.Empty;
             for (var i = 0; i < menus.Count; i++)
             {
                 var menu = menus[i];
-                if (menu == null ||
-                    menu.Location != MenuProjectionLocation.ContextMenu ||
-                    !MatchesContext(menu.ContextId, target.ContextId))
+                if (menu == null)
                 {
                     continue;
                 }
@@ -55,6 +59,49 @@ namespace Cortex.Services
             }
 
             return items;
+        }
+
+        internal static IList<MenuContribution> GetEffectiveMenuContributions(
+            IContributionRegistry contributionRegistry,
+            string requestedContextId,
+            bool includeToolbarMenus)
+        {
+            var results = new List<MenuContribution>();
+            if (contributionRegistry == null)
+            {
+                return results;
+            }
+
+            var menus = contributionRegistry.GetMenus();
+            var selectedByCommandId = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < menus.Count; i++)
+            {
+                var menu = menus[i];
+                if (!IsEligibleEditorMenu(menu, requestedContextId, includeToolbarMenus) || IsSuppressedLegacyMenu(menu))
+                {
+                    continue;
+                }
+
+                int existingIndex;
+                if (selectedByCommandId.TryGetValue(menu.CommandId, out existingIndex))
+                {
+                    results[existingIndex] = null;
+                }
+
+                selectedByCommandId[menu.CommandId] = results.Count;
+                results.Add(menu);
+            }
+
+            var compacted = new List<MenuContribution>(results.Count);
+            for (var i = 0; i < results.Count; i++)
+            {
+                if (results[i] != null)
+                {
+                    compacted.Add(results[i]);
+                }
+            }
+
+            return compacted;
         }
 
         public bool Execute(
@@ -90,6 +137,32 @@ namespace Cortex.Services
             }
 
             return string.Equals(contributionContextId, requestedContextId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsEligibleEditorMenu(MenuContribution menu, string requestedContextId, bool includeToolbarMenus)
+        {
+            return menu != null &&
+                (menu.Location == MenuProjectionLocation.ContextMenu ||
+                    (includeToolbarMenus && menu.Location == MenuProjectionLocation.Toolbar)) &&
+                MatchesContext(menu.ContextId, requestedContextId);
+        }
+
+        private static bool IsSuppressedLegacyMenu(MenuContribution menu)
+        {
+            if (menu == null || string.IsNullOrEmpty(menu.CommandId))
+            {
+                return false;
+            }
+
+            for (var i = 0; i < SuppressedLegacyCommandIds.Length; i++)
+            {
+                if (string.Equals(menu.CommandId, SuppressedLegacyCommandIds[i], StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 

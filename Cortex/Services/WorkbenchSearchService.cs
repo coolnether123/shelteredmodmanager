@@ -100,6 +100,67 @@ namespace Cortex.Services
             return true;
         }
 
+        public TextSearchReplacementResult ApplyReplacement(
+            TextSearchResultSet results,
+            string replacementText,
+            CortexShellState state,
+            IDocumentService documentService)
+        {
+            var replacementResult = new TextSearchReplacementResult();
+            if (results == null || results.Documents.Count == 0)
+            {
+                replacementResult.StatusMessage = "No search results were available to rename.";
+                return replacementResult;
+            }
+
+            if (string.IsNullOrEmpty(replacementText))
+            {
+                replacementResult.StatusMessage = "Enter a replacement name before applying rename.";
+                return replacementResult;
+            }
+
+            for (var i = 0; i < results.Documents.Count; i++)
+            {
+                var document = results.Documents[i];
+                if (document == null || string.IsNullOrEmpty(document.DocumentPath) || document.Matches.Count == 0)
+                {
+                    continue;
+                }
+
+                var session = CortexModuleUtil.FindOpenDocument(state, document.DocumentPath);
+                string originalText;
+                if (!TryReadDocumentText(document.DocumentPath, session, out originalText))
+                {
+                    replacementResult.SkippedDocumentCount++;
+                    continue;
+                }
+
+                var updatedMatchCount = 0;
+                var updatedText = ApplyReplacementToDocument(document, originalText, replacementText, ref updatedMatchCount);
+                if (updatedMatchCount <= 0 || string.Equals(originalText, updatedText, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var applied = ApplyUpdatedDocumentText(session, document.DocumentPath, updatedText, documentService);
+                if (!applied)
+                {
+                    replacementResult.SkippedDocumentCount++;
+                    continue;
+                }
+
+                replacementResult.UpdatedDocumentCount++;
+                replacementResult.UpdatedMatchCount += updatedMatchCount;
+                if (session != null && documentService != null && session.SupportsSaving && session.IsDirty)
+                {
+                    replacementResult.PendingSaveDocumentCount++;
+                }
+            }
+
+            replacementResult.StatusMessage = BuildReplacementStatus(replacementResult);
+            return replacementResult;
+        }
+
         public string BuildFingerprint(TextSearchQuery query)
         {
             return (query != null ? query.SearchText ?? string.Empty : string.Empty) +
@@ -340,6 +401,119 @@ namespace Cortex.Services
                     WholeWord = query.WholeWord
                 }
                 : new TextSearchQuery();
+        }
+
+        private static bool TryReadDocumentText(string documentPath, DocumentSession session, out string text)
+        {
+            text = string.Empty;
+            if (session != null)
+            {
+                text = session.Text ?? string.Empty;
+                return true;
+            }
+
+            try
+            {
+                text = File.ReadAllText(documentPath);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string ApplyReplacementToDocument(
+            TextSearchDocumentResult document,
+            string originalText,
+            string replacementText,
+            ref int updatedMatchCount)
+        {
+            var workingText = originalText ?? string.Empty;
+            var orderedMatches = new List<TextSearchMatch>();
+            for (var i = 0; i < document.Matches.Count; i++)
+            {
+                if (document.Matches[i] != null)
+                {
+                    orderedMatches.Add(document.Matches[i]);
+                }
+            }
+
+            orderedMatches.Sort(delegate(TextSearchMatch left, TextSearchMatch right)
+            {
+                return right.AbsoluteIndex.CompareTo(left.AbsoluteIndex);
+            });
+
+            for (var i = 0; i < orderedMatches.Count; i++)
+            {
+                var match = orderedMatches[i];
+                if (match.AbsoluteIndex < 0 || match.Length <= 0 || match.AbsoluteIndex + match.Length > workingText.Length)
+                {
+                    continue;
+                }
+
+                workingText = workingText.Substring(0, match.AbsoluteIndex) +
+                    replacementText +
+                    workingText.Substring(match.AbsoluteIndex + match.Length);
+                updatedMatchCount++;
+            }
+
+            return workingText;
+        }
+
+        private bool ApplyUpdatedDocumentText(
+            DocumentSession session,
+            string documentPath,
+            string updatedText,
+            IDocumentService documentService)
+        {
+            if (session != null)
+            {
+                if (!_editorService.SetText(session, updatedText))
+                {
+                    return false;
+                }
+
+                if (documentService != null && session.SupportsSaving)
+                {
+                    documentService.Save(session);
+                }
+
+                return true;
+            }
+
+            try
+            {
+                File.WriteAllText(documentPath, updatedText);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string BuildReplacementStatus(TextSearchReplacementResult result)
+        {
+            if (result == null || result.UpdatedMatchCount <= 0)
+            {
+                return result != null && result.SkippedDocumentCount > 0
+                    ? "Rename could not update the requested files."
+                    : "No matching occurrences were updated.";
+            }
+
+            var status = "Renamed " + result.UpdatedMatchCount + " occurrence(s) across " + result.UpdatedDocumentCount + " document(s).";
+            if (result.PendingSaveDocumentCount > 0)
+            {
+                status += " " + result.PendingSaveDocumentCount + " open document(s) remain dirty.";
+            }
+
+            if (result.SkippedDocumentCount > 0)
+            {
+                status += " Skipped " + result.SkippedDocumentCount + " document(s).";
+            }
+
+            return status;
         }
     }
 }
