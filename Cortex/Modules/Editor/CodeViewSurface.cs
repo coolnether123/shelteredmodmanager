@@ -25,9 +25,11 @@ namespace Cortex.Modules.Editor
         private readonly EditorSemanticPopupSurface _semanticPopupSurface = new EditorSemanticPopupSurface();
         private readonly EditorCommandContextFactory _commandContextFactory = new EditorCommandContextFactory();
         private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
+        private readonly EditorSelectionInspectionService _selectionInspectionService = new EditorSelectionInspectionService();
         private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
         private readonly PopupMenuSurface _popupMenuSurface = new PopupMenuSurface();
+        private readonly HoverTooltipPresenter _tooltipPresenter = new HoverTooltipPresenter();
         private readonly List<PopupMenuItem> _popupMenuItems = new List<PopupMenuItem>();
         private string _styleCacheKey = string.Empty;
         private string _layoutCacheKey = string.Empty;
@@ -37,6 +39,7 @@ namespace Cortex.Modules.Editor
         private GUIStyle _tooltipStyle;
         private GUIStyle _tooltipSignatureStyle;
         private GUIStyle _tooltipPathStyle;
+        private GUIStyle _tooltipMetaStyle;
         private GUIStyle _tooltipLinkStyle;
         private GUIStyle _tooltipDetailStyle;
         private GUIStyle _contextMenuStyle;
@@ -45,7 +48,10 @@ namespace Cortex.Modules.Editor
         private GUIStyle _collapsedHintStyle;
         private GUIStyle _foldGlyphStyle;
         private Texture2D _hoverFill;
+        private Texture2D _hoverOutlineFill;
+        private Texture2D _relatedSelectionFill;
         private Texture2D _selectedFill;
+        private Texture2D _selectionOutlineFill;
         private Texture2D _lineHighlightFill;
         private Texture2D _navigationLineFill;
         private Texture2D _tooltipUnderlineFill;
@@ -53,6 +59,9 @@ namespace Cortex.Modules.Editor
         private string _hoverCandidateKey = string.Empty;
         private DateTime _hoverCandidateUtc = DateTime.MinValue;
         private string _selectedTokenKey = string.Empty;
+        private string _selectedTokenText = string.Empty;
+        private string _selectedTokenClassification = string.Empty;
+        private string _selectedDocumentPath = string.Empty;
         private string _stickyHoverKey = string.Empty;
         private string _stickyHoverDocumentPath = string.Empty;
         private Rect _stickyHoverAnchorRect = new Rect(0f, 0f, 0f, 0f);
@@ -304,6 +313,12 @@ namespace Cortex.Modules.Editor
             _tooltipPathStyle.padding = new RectOffset(0, 0, 0, 0);
             _tooltipPathStyle.margin = new RectOffset(0, 0, 0, 0);
             GuiStyleUtil.ApplyTextColorToAllStates(_tooltipPathStyle, CortexIdeLayout.GetMutedTextColor());
+            _tooltipMetaStyle = new GUIStyle(_baseStyle);
+            _tooltipMetaStyle.wordWrap = true;
+            _tooltipMetaStyle.clipping = TextClipping.Clip;
+            _tooltipMetaStyle.padding = new RectOffset(0, 0, 0, 0);
+            _tooltipMetaStyle.margin = new RectOffset(0, 0, 0, 0);
+            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipMetaStyle, CortexIdeLayout.Blend(CortexIdeLayout.GetTextColor(), CortexIdeLayout.GetMutedTextColor(), 0.38f));
             _tooltipLinkStyle = new GUIStyle(_tooltipSignatureStyle);
             GuiStyleUtil.ApplyTextColorToAllStates(_tooltipLinkStyle, CortexIdeLayout.GetAccentColor());
             _tooltipDetailStyle = new GUIStyle(_baseStyle);
@@ -338,7 +353,10 @@ namespace Cortex.Modules.Editor
                 ? Mathf.Max(18f, _baseStyle.lineHeight + 2f)
                 : Mathf.Max(18f, _baseStyle.CalcSize(_sharedContent).y + 3f);
             _hoverFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.18f));
+            _hoverOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.78f));
+            _relatedSelectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.14f));
             _selectedFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f));
+            _selectionOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.95f));
             _lineHighlightFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), 0.35f));
             _navigationLineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.16f));
             _tooltipUnderlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.9f));
@@ -570,7 +588,14 @@ namespace Cortex.Modules.Editor
                     var token = line.Tokens[tokenIndex];
                     var tokenRect = new Rect(gutterWidth + token.X, line.Y, Mathf.Max(2f, token.Width), _lineHeight);
                     token.ContentRect = tokenRect;
-                    if (string.Equals(token.Key, _selectedTokenKey, StringComparison.Ordinal))
+                    var isSelectedToken = string.Equals(token.Key, _selectedTokenKey, StringComparison.Ordinal);
+                    var isRelatedSelection = !isSelectedToken && IsRelatedSelectionToken(session, token);
+                    if (isRelatedSelection)
+                    {
+                        GUI.DrawTexture(tokenRect, _relatedSelectionFill);
+                    }
+
+                    if (isSelectedToken)
                     {
                         GUI.DrawTexture(tokenRect, _selectedFill);
                     }
@@ -580,6 +605,16 @@ namespace Cortex.Modules.Editor
                     }
 
                     GUI.Label(tokenRect, token.DisplayText, GetClassificationStyle(GetEffectiveTokenClassification(line, tokenIndex)));
+                    if (isSelectedToken)
+                    {
+                        DrawSelectionOutline(tokenRect);
+                    }
+                    else if (hoveredToken != null &&
+                        string.Equals(token.Key, hoveredToken.Key, StringComparison.Ordinal) &&
+                        CanNavigateToDefinition(token))
+                    {
+                        DrawHoverOutline(tokenRect);
+                    }
                 }
 
                 if (!string.IsNullOrEmpty(line.CollapsedHintText))
@@ -648,7 +683,16 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            _selectedTokenKey = hoveredToken.Key;
+            SetSelectedToken(session, hoveredToken);
+            _selectionInspectionService.ApplySelection(
+                state,
+                session != null ? session.FilePath ?? string.Empty : string.Empty,
+                hoveredToken.Key,
+                hoveredToken.RawText,
+                hoveredToken.Classification,
+                hoveredToken.LineNumber,
+                hoveredToken.Column,
+                ResolveHoverResponse(state, hoveredToken));
             if (current.clickCount >= 2)
             {
                     EditorCommandInvocation invocation;
@@ -860,95 +904,46 @@ namespace Cortex.Modules.Editor
         private void DrawTooltip(DocumentSession session, Vector2 scroll, Vector2 localMouse, CodeViewToken hoveredToken, CortexNavigationService navigationService, CortexShellState state, Vector2 viewportSize, bool hasMouse)
         {
             var current = Event.current;
-            var canUpdateTooltipVisuals = current == null ||
-                current.type == EventType.Repaint ||
-                current.type == EventType.MouseMove ||
-                current.type == EventType.MouseDrag ||
-                current.type == EventType.MouseDown ||
-                current.type == EventType.MouseUp;
             var effectiveViewportSize = ResolveTooltipViewportSize(viewportSize);
             if (!IsUsableTooltipViewport(effectiveViewportSize))
             {
                 return;
             }
 
-            LanguageServiceHoverResponse response;
-            string hoverKey;
-            if (!TryResolveVisibleHover(session, scroll, hoveredToken, state, hasMouse, localMouse, out response, out hoverKey))
+            var tooltipModel = BuildHoverTooltipModel(session, scroll, hoveredToken, state);
+            HoverTooltipRenderResult tooltipResult;
+            if (!_tooltipPresenter.DrawRichTooltip(
+                tooltipModel,
+                current,
+                localMouse,
+                effectiveViewportSize,
+                hasMouse,
+                CreateHoverTooltipStyleSet(),
+                out tooltipResult))
             {
+                _tooltipPresenter.ClearRichState();
+                _stickyHoverKey = string.Empty;
+                _stickyHoverDocumentPath = string.Empty;
+                _stickyHoverAnchorRect = new Rect(0f, 0f, 0f, 0f);
+                _stickyHoverTooltipRect = new Rect(0f, 0f, 0f, 0f);
                 ClearVisibleHover(state);
                 return;
             }
 
-            var displayParts = GetTooltipDisplayParts(response);
-            var qualifiedPath = GetTooltipQualifiedPath(response);
-            var pathHeight = string.IsNullOrEmpty(qualifiedPath)
-                ? 0f
-                : Mathf.Max(16f, _tooltipPathStyle.CalcSize(new GUIContent(qualifiedPath)).y);
-            var signatureHeight = LayoutTooltipParts(new Rect(0f, 0f, TooltipWidth - 16f, 0f), displayParts, null, false);
-            if (signatureHeight <= 0f)
-            {
-                ClearStickyHover(state);
-                return;
-            }
-
-            var tooltipRect = BuildTooltipRect(
-                scroll,
-                localMouse,
-                hoveredToken,
-                hoverKey,
-                effectiveViewportSize,
-                BuildTooltipHeight(pathHeight, signatureHeight, BuildTooltipDetailText(response, null)));
-
-            var partVisuals = new List<TooltipPartVisual>();
-            var signatureRect = BuildTooltipSignatureRect(tooltipRect, pathHeight);
-            LayoutTooltipParts(signatureRect, displayParts, partVisuals, false);
-            var hoveredPart = FindHoveredTooltipPart(partVisuals, localMouse);
-            var detailText = BuildTooltipDetailText(response, hoveredPart != null ? hoveredPart.Part : null);
-            var finalHeight = BuildTooltipHeight(pathHeight, signatureHeight, detailText);
-            if (canUpdateTooltipVisuals || !HasArea(_stickyHoverTooltipRect))
-            {
-                tooltipRect = BuildTooltipRect(scroll, localMouse, hoveredToken, hoverKey, effectiveViewportSize, finalHeight);
-                _stickyHoverTooltipRect = tooltipRect;
-            }
-            else
-            {
-                tooltipRect = _stickyHoverTooltipRect;
-            }
-
-            SetVisibleHover(state, hoverKey, response, hoveredPart != null ? hoveredPart.Part : null);
+            var response = tooltipResult.Model != null ? tooltipResult.Model.Response : null;
+            var hoverKey = tooltipResult.Model != null ? tooltipResult.Model.Key ?? string.Empty : string.Empty;
+            _stickyHoverKey = hoverKey;
+            _stickyHoverDocumentPath = tooltipResult.Model != null ? tooltipResult.Model.DocumentPath ?? string.Empty : string.Empty;
+            _stickyHoverAnchorRect = tooltipResult.Model != null ? tooltipResult.Model.AnchorRect : new Rect(0f, 0f, 0f, 0f);
+            _stickyHoverTooltipRect = tooltipResult.TooltipRect;
+            SetVisibleHover(state, hoverKey, response, tooltipResult.HoveredPart);
             if (current == null || current.type == EventType.Repaint)
             {
-                LogHoverPlacement(hoverKey, response, hoveredToken, tooltipRect, localMouse, effectiveViewportSize);
+                LogHoverPlacement(hoverKey, response, hoveredToken, tooltipResult.TooltipRect, localMouse, effectiveViewportSize);
             }
             LogVisibleHover(hoverKey, response, hoveredToken);
-            GUI.Box(tooltipRect, GUIContent.none, _tooltipStyle);
-
-            if (!string.IsNullOrEmpty(qualifiedPath))
-            {
-                GUI.Label(BuildTooltipPathRect(tooltipRect, pathHeight), qualifiedPath, _tooltipPathStyle);
-            }
-
-            partVisuals.Clear();
-            signatureRect = BuildTooltipSignatureRect(tooltipRect, pathHeight);
-            LayoutTooltipParts(signatureRect, displayParts, partVisuals, true);
-            hoveredPart = FindHoveredTooltipPart(partVisuals, localMouse);
-            PreloadTooltipTargets(navigationService, state, response, hoveredPart != null ? hoveredPart.Part : null);
-
-            if (hoveredPart != null && hoveredPart.Part != null && hoveredPart.Part.IsInteractive)
-            {
-                GUI.DrawTexture(hoveredPart.Rect, _hoverFill);
-                GUI.Label(hoveredPart.Rect, hoveredPart.Part.Text, _tooltipLinkStyle);
-                GUI.DrawTexture(new Rect(hoveredPart.Rect.x, hoveredPart.Rect.yMax - 1f, hoveredPart.Rect.width, 1f), _tooltipUnderlineFill);
-            }
-
-            HandleTooltipPartInteraction(navigationService, state, hoveredPart != null ? hoveredPart.Part : null);
-
-            if (!string.IsNullOrEmpty(detailText))
-            {
-                var detailRect = BuildTooltipDetailRect(tooltipRect, pathHeight, signatureHeight);
-                GUI.Label(detailRect, detailText, _tooltipDetailStyle);
-            }
+            PreloadTooltipTargets(navigationService, state, response, tooltipResult.HoveredPart);
+            HandleTooltipPartNavigation(navigationService, state, tooltipResult.ActivatedPart);
         }
 
         private static void PreloadTooltipTargets(
@@ -1120,6 +1115,59 @@ namespace Cortex.Modules.Editor
             return response.QualifiedSymbolDisplay ?? string.Empty;
         }
 
+        private HoverTooltipStyleSet CreateHoverTooltipStyleSet()
+        {
+            return new HoverTooltipStyleSet
+            {
+                Width = TooltipWidth,
+                ContainerStyle = _tooltipStyle,
+                PathStyle = _tooltipPathStyle,
+                MetaStyle = _tooltipMetaStyle,
+                SignatureStyle = _tooltipSignatureStyle,
+                LinkStyle = _tooltipLinkStyle,
+                DetailStyle = _tooltipDetailStyle,
+                HoverFill = _hoverFill,
+                UnderlineFill = _tooltipUnderlineFill,
+                BorderFill = _hoverOutlineFill
+            };
+        }
+
+        private HoverTooltipRenderModel BuildHoverTooltipModel(DocumentSession session, Vector2 scroll, CodeViewToken hoveredToken, CortexShellState state)
+        {
+            var response = ResolveHoverResponse(state, hoveredToken);
+            if (hoveredToken == null || response == null || !response.Success)
+            {
+                return null;
+            }
+
+            var tokenClassification = _classificationPresentationService.NormalizeClassification(hoveredToken.Classification);
+            return new HoverTooltipRenderModel
+            {
+                Key = hoveredToken.Key ?? string.Empty,
+                DocumentPath = session != null ? session.FilePath ?? string.Empty : string.Empty,
+                AnchorRect = ToViewportRect(hoveredToken.ContentRect, scroll),
+                QualifiedPath = GetTooltipQualifiedPath(response),
+                Response = response,
+                SignatureParts = GetTooltipDisplayParts(response),
+                BuildMetaText = delegate(LanguageServiceHoverDisplayPart part)
+                {
+                    return BuildTooltipMetaText(response, part, tokenClassification);
+                },
+                BuildDocumentationText = delegate(LanguageServiceHoverDisplayPart part)
+                {
+                    return part != null
+                        ? part.DocumentationText ?? string.Empty
+                        : response.DocumentationText ?? string.Empty;
+                },
+                GetSupplementalSections = delegate(LanguageServiceHoverDisplayPart part)
+                {
+                    return part != null
+                        ? part.SupplementalSections
+                        : response.SupplementalSections;
+                }
+            };
+        }
+
         private float LayoutTooltipParts(Rect bounds, LanguageServiceHoverDisplayPart[] parts, List<TooltipPartVisual> visuals, bool draw)
         {
             var x = bounds.x;
@@ -1182,10 +1230,15 @@ namespace Cortex.Modules.Editor
 
         private float BuildTooltipHeight(float pathHeight, float signatureHeight, string detailText)
         {
+            return BuildTooltipHeight(pathHeight, 0f, signatureHeight, detailText);
+        }
+
+        private float BuildTooltipHeight(float pathHeight, float metaHeight, float signatureHeight, string detailText)
+        {
             var detailHeight = string.IsNullOrEmpty(detailText)
                 ? 0f
                 : _tooltipDetailStyle.CalcHeight(new GUIContent(detailText), TooltipWidth - 16f);
-            return Mathf.Min(280f, 14f + pathHeight + signatureHeight + (detailHeight > 0f ? detailHeight + 8f : 0f));
+            return Mathf.Min(360f, 14f + pathHeight + metaHeight + signatureHeight + (detailHeight > 0f ? detailHeight + 8f : 0f));
         }
 
         private static Rect BuildTooltipPathRect(Rect tooltipRect, float pathHeight)
@@ -1197,25 +1250,34 @@ namespace Cortex.Modules.Editor
                 Mathf.Max(0f, pathHeight));
         }
 
-        private static Rect BuildTooltipSignatureRect(Rect tooltipRect, float pathHeight)
+        private static Rect BuildTooltipMetaRect(Rect tooltipRect, float pathHeight, float metaHeight)
         {
             return new Rect(
                 tooltipRect.x + 8f,
                 tooltipRect.y + 7f + pathHeight,
                 tooltipRect.width - 16f,
-                Mathf.Max(0f, tooltipRect.height - pathHeight - 14f));
+                Mathf.Max(0f, metaHeight));
         }
 
-        private static Rect BuildTooltipDetailRect(Rect tooltipRect, float pathHeight, float signatureHeight)
+        private static Rect BuildTooltipSignatureRect(Rect tooltipRect, float pathHeight, float metaHeight)
         {
             return new Rect(
                 tooltipRect.x + 8f,
-                tooltipRect.y + 7f + pathHeight + signatureHeight + 6f,
+                tooltipRect.y + 7f + pathHeight + metaHeight + (metaHeight > 0f ? 4f : 0f),
                 tooltipRect.width - 16f,
-                Mathf.Max(0f, tooltipRect.height - pathHeight - signatureHeight - 20f));
+                Mathf.Max(0f, tooltipRect.height - pathHeight - metaHeight - 14f));
         }
 
-        private static string BuildTooltipDetailText(LanguageServiceHoverResponse response, LanguageServiceHoverDisplayPart hoveredPart)
+        private static Rect BuildTooltipDetailRect(Rect tooltipRect, float pathHeight, float metaHeight, float signatureHeight)
+        {
+            return new Rect(
+                tooltipRect.x + 8f,
+                tooltipRect.y + 7f + pathHeight + metaHeight + (metaHeight > 0f ? 4f : 0f) + signatureHeight + 6f,
+                tooltipRect.width - 16f,
+                Mathf.Max(0f, tooltipRect.height - pathHeight - metaHeight - signatureHeight - 20f));
+        }
+
+        private static string BuildTooltipDetailText(LanguageServiceHoverResponse response, LanguageServiceHoverDisplayPart hoveredPart, string tokenClassification)
         {
             if (hoveredPart != null)
             {
@@ -1224,7 +1286,80 @@ namespace Cortex.Modules.Editor
             }
 
             var docs = response != null ? response.DocumentationText ?? string.Empty : string.Empty;
-            return docs;
+            if (!string.IsNullOrEmpty(docs))
+            {
+                return docs;
+            }
+
+            return !string.IsNullOrEmpty(tokenClassification)
+                ? "Classification: " + tokenClassification + "."
+                : string.Empty;
+        }
+
+        private static string BuildTooltipMetaText(LanguageServiceHoverResponse response, LanguageServiceHoverDisplayPart hoveredPart, string tokenClassification)
+        {
+            var kind = hoveredPart != null && !string.IsNullOrEmpty(hoveredPart.SymbolKind)
+                ? hoveredPart.SymbolKind
+                : (response != null ? response.SymbolKind ?? string.Empty : string.Empty);
+            var containingType = hoveredPart != null && !string.IsNullOrEmpty(hoveredPart.ContainingTypeName)
+                ? hoveredPart.ContainingTypeName
+                : (response != null ? response.ContainingTypeName ?? string.Empty : string.Empty);
+            var assembly = hoveredPart != null && !string.IsNullOrEmpty(hoveredPart.ContainingAssemblyName)
+                ? hoveredPart.ContainingAssemblyName
+                : (response != null ? response.ContainingAssemblyName ?? string.Empty : string.Empty);
+            var metadataName = hoveredPart != null && !string.IsNullOrEmpty(hoveredPart.MetadataName)
+                ? hoveredPart.MetadataName
+                : (response != null ? response.MetadataName ?? string.Empty : string.Empty);
+
+            var lines = new List<string>();
+            if (!string.IsNullOrEmpty(kind))
+            {
+                lines.Add("Kind: " + kind);
+            }
+            else if (!string.IsNullOrEmpty(tokenClassification))
+            {
+                lines.Add("Classification: " + tokenClassification);
+            }
+
+            if (!string.IsNullOrEmpty(containingType))
+            {
+                lines.Add("Type: " + containingType);
+            }
+
+            if (!string.IsNullOrEmpty(assembly))
+            {
+                lines.Add("Assembly: " + assembly);
+            }
+
+            if (!string.IsNullOrEmpty(metadataName))
+            {
+                lines.Add("Metadata: " + metadataName);
+            }
+
+            return lines.Count > 0 ? string.Join("\n", lines.ToArray()) : string.Empty;
+        }
+
+        private void HandleTooltipPartNavigation(CortexNavigationService navigationService, CortexShellState state, LanguageServiceHoverDisplayPart part)
+        {
+            if (part == null || navigationService == null || state == null)
+            {
+                return;
+            }
+
+            var definitionRange = part.DefinitionRange;
+            EditorInteractionLog.WriteHover("Opening tooltip part. Symbol=" + (part.SymbolDisplay ?? part.Text ?? string.Empty) +
+                ", DefinitionPath=" + (part.DefinitionDocumentPath ?? string.Empty) +
+                ", DefinitionLine=" + (definitionRange != null ? definitionRange.StartLine : 0) +
+                ", DefinitionColumn=" + (definitionRange != null ? definitionRange.StartColumn : 0) + ".");
+
+            if (navigationService.OpenHoverDisplayPart(
+                state,
+                part,
+                "Opened definition: " + (part.SymbolDisplay ?? part.Text ?? string.Empty),
+                "Unable to open definition for " + (part.SymbolDisplay ?? part.Text ?? string.Empty) + "."))
+            {
+                EditorInteractionLog.WriteHover("Opened tooltip symbol target for " + (part.SymbolDisplay ?? part.Text ?? string.Empty) + ".");
+            }
         }
 
         private void HandleTooltipPartInteraction(CortexNavigationService navigationService, CortexShellState state, LanguageServiceHoverDisplayPart part)
@@ -1359,6 +1494,7 @@ namespace Cortex.Modules.Editor
 
         private void ClearStickyHover(CortexShellState state)
         {
+            _tooltipPresenter.ClearRichState();
             _stickyHoverKey = string.Empty;
             _stickyHoverDocumentPath = string.Empty;
             _stickyHoverAnchorRect = new Rect(0f, 0f, 0f, 0f);
@@ -1424,10 +1560,17 @@ namespace Cortex.Modules.Editor
             }
 
             _lastVisibleHoverLogKey = hoverKey;
-            EditorInteractionLog.WriteHover("Displayed hover tooltip for " +
-                (!string.IsNullOrEmpty(response != null ? response.SymbolDisplay : string.Empty)
-                    ? response.SymbolDisplay
-                    : (hoveredToken != null ? hoveredToken.RawText.Trim() : string.Empty)) + ".");
+            var symbolText = !string.IsNullOrEmpty(response != null ? response.SymbolDisplay : string.Empty)
+                ? response.SymbolDisplay
+                : (hoveredToken != null ? hoveredToken.RawText.Trim() : string.Empty);
+            var symbolKind = response != null ? response.SymbolKind ?? string.Empty : string.Empty;
+            var containingType = response != null ? response.ContainingTypeName ?? string.Empty : string.Empty;
+            var assembly = response != null ? response.ContainingAssemblyName ?? string.Empty : string.Empty;
+            MMLog.WriteInfo("[Cortex.Symbol] Hover resolved. Symbol='" +
+                symbolText +
+                "', Kind='" + symbolKind +
+                "', Type='" + containingType +
+                "', Assembly='" + assembly + "'.");
         }
 
         private void LogHoverPlacement(
@@ -1617,7 +1760,7 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            _selectedTokenKey = token != null ? token.Key : string.Empty;
+            SetSelectedToken(session, token);
             _contextMenuOpen = true;
             _contextMenuPosition = localMouse;
             _contextInvocation = invocation;
@@ -1659,6 +1802,81 @@ namespace Cortex.Modules.Editor
             return string.Equals(state.Editor.ActiveHoverKey, token.Key, StringComparison.Ordinal)
                 ? state.Editor.ActiveHoverResponse
                 : null;
+        }
+
+        private void SetSelectedToken(DocumentSession session, CodeViewToken token)
+        {
+            if (token == null)
+            {
+                _selectedTokenKey = string.Empty;
+                _selectedTokenText = string.Empty;
+                _selectedTokenClassification = string.Empty;
+                _selectedDocumentPath = string.Empty;
+                return;
+            }
+
+            _selectedTokenKey = token.Key ?? string.Empty;
+            _selectedTokenText = token.RawText ?? string.Empty;
+            _selectedTokenClassification = token.Classification ?? string.Empty;
+            _selectedDocumentPath = session != null ? session.FilePath ?? string.Empty : string.Empty;
+        }
+
+        private bool IsRelatedSelectionToken(DocumentSession session, CodeViewToken token)
+        {
+            if (session == null || token == null || string.IsNullOrEmpty(_selectedTokenText))
+            {
+                return false;
+            }
+
+            if (!string.Equals(session.FilePath ?? string.Empty, _selectedDocumentPath ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (!CanParticipateInRelatedSelection(token.Classification, token.RawText) ||
+                !CanParticipateInRelatedSelection(_selectedTokenClassification, _selectedTokenText))
+            {
+                return false;
+            }
+
+            return string.Equals(token.RawText ?? string.Empty, _selectedTokenText, StringComparison.Ordinal);
+        }
+
+        private bool CanParticipateInRelatedSelection(string classification, string rawText)
+        {
+            var normalizedText = NormalizeForDisplay(rawText ?? string.Empty).Trim();
+            if (normalizedText.Length <= 1 || !_classificationPresentationService.CanNavigateToDefinition(classification, normalizedText))
+            {
+                return false;
+            }
+
+            var normalizedClassification = _classificationPresentationService.NormalizeClassification(classification);
+            return normalizedClassification.IndexOf("keyword", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
+        private void DrawSelectionOutline(Rect rect)
+        {
+            if (_selectionOutlineFill == null || rect.width <= 0f || rect.height <= 0f)
+            {
+                return;
+            }
+
+            const float thickness = 1f;
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, thickness), _selectionOutlineFill);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), _selectionOutlineFill);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), _selectionOutlineFill);
+            GUI.DrawTexture(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), _selectionOutlineFill);
+        }
+
+        private void DrawHoverOutline(Rect rect)
+        {
+            if (_hoverOutlineFill == null || rect.width <= 0f || rect.height <= 0f)
+            {
+                return;
+            }
+
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, 1f), _hoverOutlineFill);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), _hoverOutlineFill);
         }
 
         private Rect GetViewportAnchorRect(EditorCommandTarget target, Vector2 scroll, float gutterWidth)

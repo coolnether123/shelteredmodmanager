@@ -27,6 +27,7 @@ namespace Cortex.Modules.Reference
         private readonly List<ReferenceAssemblyDescriptor> _assemblies = new List<ReferenceAssemblyDescriptor>();
         private readonly List<ReferenceTypeDescriptor> _types = new List<ReferenceTypeDescriptor>();
         private readonly List<ReferenceMemberDescriptor> _members = new List<ReferenceMemberDescriptor>();
+        private readonly HoverTooltipPresenter _tooltipPresenter = new HoverTooltipPresenter();
         private ReferenceAssemblyDescriptor _selectedAssembly;
         private ReferenceTypeDescriptor _selectedType;
         private ReferenceMemberDescriptor _selectedMember;
@@ -43,16 +44,22 @@ namespace Cortex.Modules.Reference
         private GUIStyle _emptyStateStyle;
         private GUIStyle _previewStyle;
         private GUIStyle _actionButtonStyle;
+        private GUIStyle _tooltipStyle;
         private Texture2D _summaryBackground;
         private Texture2D _filterBackground;
         private Texture2D _rowBackground;
+        private Texture2D _hoverRowBackground;
         private Texture2D _selectedRowBackground;
         private Texture2D _previewBackground;
+        private Texture2D _rowBorder;
+        private Texture2D _selectedRowBorder;
+        private Texture2D _tooltipBackground;
 
         public void Draw(IReferenceCatalogService referenceCatalogService, CortexNavigationService navigationService, CortexShellState state)
         {
             EnsureStyles();
             EnsureAssembliesLoaded(referenceCatalogService, state);
+            _tooltipPresenter.ResetTextTooltip();
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             CortexIdeLayout.DrawTwoPane(
@@ -61,6 +68,8 @@ namespace Cortex.Modules.Reference
                 delegate { DrawBrowserPane(referenceCatalogService, navigationService, state); },
                 delegate { DrawPreviewPane(navigationService, state); });
             GUILayout.EndVertical();
+
+            _tooltipPresenter.DrawTextTooltip(CreateTooltipStyleSet());
         }
 
         private void DrawBrowserPane(IReferenceCatalogService referenceCatalogService, CortexNavigationService navigationService, CortexShellState state)
@@ -294,6 +303,7 @@ namespace Cortex.Modules.Reference
                     assembly.DisplayName,
                     locationText,
                     Path.GetFileName(assembly.AssemblyPath),
+                    ComposeTooltip(assembly.DisplayName, assembly.AssemblyPath),
                     IsSelectedAssembly(assembly),
                     AssemblyRowHeight))
                 {
@@ -332,6 +342,7 @@ namespace Cortex.Modules.Reference
                     shortName,
                     namespaceName,
                     FormatMetadataToken(type.MetadataToken),
+                    ComposeTooltip(type.FullName, FormatMetadataToken(type.MetadataToken)),
                     IsSelectedType(type),
                     TypeRowHeight))
                 {
@@ -377,6 +388,7 @@ namespace Cortex.Modules.Reference
                     memberTitle,
                     subtitle,
                     FormatMetadataToken(member.MetadataToken),
+                    ComposeTooltip(member.DeclaringTypeName + "." + member.DisplayName, FormatMetadataToken(member.MetadataToken)),
                     IsSelectedMember(member),
                     MemberRowHeight))
                 {
@@ -391,11 +403,19 @@ namespace Cortex.Modules.Reference
             }
         }
 
-        private bool DrawSelectableRow(string title, string subtitle, string meta, bool selected, float height)
+        private bool DrawSelectableRow(string title, string subtitle, string meta, string tooltipText, bool selected, float height)
         {
             var rect = GUILayoutUtility.GetRect(0f, height, GUILayout.ExpandWidth(true));
+            var current = Event.current;
+            var hovered = current != null && rect.Contains(current.mousePosition);
             var style = selected ? (_selectedRowStyle ?? GUI.skin.box) : (_rowStyle ?? GUI.skin.box);
             var clicked = GUI.Button(rect, GUIContent.none, style);
+            if (hovered && !selected && _hoverRowBackground != null)
+            {
+                GUI.DrawTexture(rect, _hoverRowBackground);
+            }
+
+            DrawBorder(rect, selected ? _selectedRowBorder : _rowBorder, selected ? 2f : 1f);
 
             var titleRect = new Rect(rect.x + 10f, rect.y + 5f, Mathf.Max(40f, rect.width - 112f), 18f);
             var subtitleRect = new Rect(rect.x + 10f, rect.y + 22f, Mathf.Max(40f, rect.width - 112f), Mathf.Max(18f, rect.height - 24f));
@@ -408,6 +428,11 @@ namespace Cortex.Modules.Reference
                 GUI.Label(metaRect, meta, _rowMetaStyle ?? GUI.skin.label);
             }
 
+            if (hovered)
+            {
+                RegisterHoverTooltip(rect, tooltipText);
+            }
+
             return clicked;
         }
 
@@ -415,8 +440,24 @@ namespace Cortex.Modules.Reference
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label(label + ":", _detailLabelStyle ?? GUI.skin.label, GUILayout.Width(84f));
+            var labelRect = GUILayoutUtility.GetLastRect();
             GUILayout.Label(value ?? string.Empty, _detailValueStyle ?? GUI.skin.label, GUILayout.ExpandWidth(true));
+            var valueRect = GUILayoutUtility.GetLastRect();
             GUILayout.EndHorizontal();
+
+            var current = Event.current;
+            if (current != null)
+            {
+                if (!string.IsNullOrEmpty(label) && labelRect.Contains(current.mousePosition))
+                {
+                    RegisterHoverTooltip(labelRect, label);
+                }
+
+                if (!string.IsNullOrEmpty(value) && valueRect.Contains(current.mousePosition))
+                {
+                    RegisterHoverTooltip(valueRect, value);
+                }
+            }
         }
 
         private void EnsureAssembliesLoaded(IReferenceCatalogService referenceCatalogService, CortexShellState state)
@@ -548,8 +589,12 @@ namespace Cortex.Modules.Reference
             _summaryBackground = MakeTex(CortexIdeLayout.Blend(headerColor, backgroundColor, 0.3f));
             _filterBackground = MakeTex(CortexIdeLayout.Blend(surfaceColor, backgroundColor, 0.45f));
             _rowBackground = MakeTex(CortexIdeLayout.Blend(backgroundColor, surfaceColor, 0.4f));
+            _hoverRowBackground = MakeTex(CortexIdeLayout.Blend(surfaceColor, headerColor, 0.46f));
             _selectedRowBackground = MakeTex(CortexIdeLayout.Blend(headerColor, accentColor, 0.28f));
             _previewBackground = MakeTex(CortexIdeLayout.Blend(surfaceColor, headerColor, 0.35f));
+            _rowBorder = MakeTex(CortexIdeLayout.Blend(CortexIdeLayout.GetBorderColor(), Color.white, 0.08f));
+            _selectedRowBorder = MakeTex(accentColor);
+            _tooltipBackground = MakeTex(CortexIdeLayout.Blend(backgroundColor, surfaceColor, 0.26f));
 
             _summaryStyle = new GUIStyle(GUI.skin.box);
             GuiStyleUtil.ApplyBackgroundToAllStates(_summaryStyle, _summaryBackground);
@@ -611,6 +656,14 @@ namespace Cortex.Modules.Reference
             _actionButtonStyle = new GUIStyle(GUI.skin.button);
             GuiStyleUtil.ApplyBackgroundToAllStates(_actionButtonStyle, MakeTex(CortexIdeLayout.Blend(surfaceColor, headerColor, 0.5f)));
             GuiStyleUtil.ApplyTextColorToAllStates(_actionButtonStyle, textColor);
+
+            _tooltipStyle = new GUIStyle(GUI.skin.box);
+            GuiStyleUtil.ApplyBackgroundToAllStates(_tooltipStyle, _tooltipBackground);
+            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipStyle, textColor);
+            _tooltipStyle.wordWrap = true;
+            _tooltipStyle.alignment = TextAnchor.UpperLeft;
+            _tooltipStyle.padding = new RectOffset(10, 10, 8, 8);
+            _tooltipStyle.margin = new RectOffset(0, 0, 0, 0);
         }
 
         private int CountMatchingAssemblies()
@@ -795,6 +848,48 @@ namespace Cortex.Modules.Reference
         private static bool MatchesText(string value, string filter)
         {
             return string.IsNullOrEmpty(filter) || (value ?? string.Empty).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string ComposeTooltip(string primary, string secondary)
+        {
+            if (string.IsNullOrEmpty(primary))
+            {
+                return secondary ?? string.Empty;
+            }
+
+            if (string.IsNullOrEmpty(secondary))
+            {
+                return primary;
+            }
+
+            return primary + "\n" + secondary;
+        }
+
+        private void RegisterHoverTooltip(Rect anchorRect, string text)
+        {
+            _tooltipPresenter.RegisterTextTooltip(anchorRect, text);
+        }
+
+        private HoverTooltipStyleSet CreateTooltipStyleSet()
+        {
+            return new HoverTooltipStyleSet
+            {
+                ContainerStyle = _tooltipStyle,
+                BorderFill = _selectedRowBorder
+            };
+        }
+
+        private static void DrawBorder(Rect rect, Texture2D texture, float thickness)
+        {
+            if (texture == null || rect.width <= 0f || rect.height <= 0f || thickness <= 0f)
+            {
+                return;
+            }
+
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, thickness), texture);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), texture);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), texture);
+            GUI.DrawTexture(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), texture);
         }
 
         private static Texture2D MakeTex(Color color)

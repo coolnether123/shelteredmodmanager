@@ -115,7 +115,14 @@ namespace Cortex.Services
 
             return ((hoverResponse.SymbolDisplay ?? string.Empty) +
                 Environment.NewLine + Environment.NewLine +
-                (hoverResponse.DocumentationText ?? string.Empty)).Trim();
+                BuildHoverDetailText(hoverResponse.DocumentationText, hoverResponse.SupplementalSections)).Trim();
+        }
+
+        public string BuildHoverDetailText(LanguageServiceHoverResponse hoverResponse)
+        {
+            return hoverResponse != null
+                ? BuildHoverDetailText(hoverResponse.DocumentationText, hoverResponse.SupplementalSections)
+                : string.Empty;
         }
 
         public void ApplySessionContext(EditorCommandTarget target, DocumentSession session, CortexShellState state, bool editingEnabled)
@@ -170,6 +177,75 @@ namespace Cortex.Services
             target.DefinitionLength = hoverResponse != null && hoverResponse.DefinitionRange != null ? hoverResponse.DefinitionRange.Length : -1;
             target.DefinitionLine = hoverResponse != null && hoverResponse.DefinitionRange != null ? hoverResponse.DefinitionRange.StartLine : 0;
             target.DefinitionColumn = hoverResponse != null && hoverResponse.DefinitionRange != null ? hoverResponse.DefinitionRange.StartColumn : 0;
+        }
+
+        private static string BuildHoverDetailText(string documentationText, LanguageServiceHoverSection[] supplementalSections)
+        {
+            var supplementalText = FlattenSupplementalSections(supplementalSections);
+            if (string.IsNullOrEmpty(documentationText))
+            {
+                return supplementalText;
+            }
+
+            if (string.IsNullOrEmpty(supplementalText))
+            {
+                return documentationText ?? string.Empty;
+            }
+
+            return supplementalText + Environment.NewLine + documentationText;
+        }
+
+        private static string FlattenSupplementalSections(LanguageServiceHoverSection[] supplementalSections)
+        {
+            if (supplementalSections == null || supplementalSections.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            var text = string.Empty;
+            for (var i = 0; i < supplementalSections.Length; i++)
+            {
+                var section = supplementalSections[i];
+                if (section == null)
+                {
+                    continue;
+                }
+
+                var sectionText = !string.IsNullOrEmpty(section.Text)
+                    ? section.Text
+                    : FlattenDisplayParts(section.DisplayParts);
+                if (string.IsNullOrEmpty(sectionText))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(text))
+                {
+                    text += Environment.NewLine;
+                }
+
+                text += !string.IsNullOrEmpty(section.Title)
+                    ? section.Title + ": " + sectionText
+                    : sectionText;
+            }
+
+            return text;
+        }
+
+        private static string FlattenDisplayParts(LanguageServiceHoverDisplayPart[] displayParts)
+        {
+            if (displayParts == null || displayParts.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            var text = string.Empty;
+            for (var i = 0; i < displayParts.Length; i++)
+            {
+                text += displayParts[i] != null ? displayParts[i].Text ?? string.Empty : string.Empty;
+            }
+
+            return text.Trim();
         }
 
         private bool TryCreateTarget(

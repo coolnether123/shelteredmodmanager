@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using System.Collections.Immutable;
 using Cortex.LanguageService.Protocol;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Formatting;
@@ -21,9 +22,13 @@ namespace Cortex.Roslyn.Worker
             "Microsoft.CodeAnalysis.RemoveUnnecessaryImports.RemoveUnnecessaryImportsService"
         };
 
-        private static readonly string[] QuickInfoSignatureSectionKinds =
+        private static readonly string[] QuickInfoMainDisplaySectionKinds =
         {
-            "Description",
+            "Description"
+        };
+
+        private static readonly string[] QuickInfoSupplementalSectionKinds =
+        {
             "TypeParameters",
             "AnonymousTypes",
             "Usage"
@@ -46,6 +51,11 @@ namespace Cortex.Roslyn.Worker
             ISymbol symbol)
         {
             var quickInfoItem = TryGetQuickInfo(documentContext != null ? documentContext.Document : null, position);
+            if (symbol == null && quickInfoItem != null && documentContext != null && documentContext.Document != null)
+            {
+                symbol = TryResolveHoverSymbolFromQuickInfo(documentContext.Document, quickInfoItem, position);
+            }
+
             if (symbol == null && quickInfoItem == null)
             {
                 return new LanguageServiceHoverResponse
@@ -74,6 +84,7 @@ namespace Cortex.Roslyn.Worker
                 : null;
             var quickInfoDisplay = BuildQuickInfoMainDisplay(quickInfoItem);
             var displayParts = BuildQuickInfoDisplayParts(quickInfoItem, symbol);
+            var supplementalSections = BuildQuickInfoSupplementalSections(quickInfoItem, symbol);
             if (displayParts.Length == 0 && symbol != null)
             {
                 displayParts = BuildHoverDisplayParts(symbol);
@@ -101,6 +112,7 @@ namespace Cortex.Roslyn.Worker
                 DocumentationCommentId = symbol != null ? symbol.GetDocumentationCommentId() ?? string.Empty : string.Empty,
                 DocumentationXml = documentationXml ?? string.Empty,
                 DocumentationText = BuildQuickInfoDocumentationText(quickInfoItem, FlattenDocumentation(documentationXml)),
+                SupplementalSections = supplementalSections,
                 Range = BuildRange(text, quickInfoItem != null && quickInfoItem.Span != default(TextSpan)
                     ? quickInfoItem.Span
                     : sourceLocation != null ? sourceLocation.SourceSpan : default(TextSpan)),
@@ -137,7 +149,7 @@ namespace Cortex.Roslyn.Worker
             for (var i = 0; i < quickInfoItem.Sections.Length; i++)
             {
                 var section = quickInfoItem.Sections[i];
-                if (section == null || !IsQuickInfoSignatureSection(section.Kind))
+                if (section == null || !IsQuickInfoMainDisplaySection(section.Kind))
                 {
                     continue;
                 }
@@ -154,35 +166,69 @@ namespace Cortex.Roslyn.Worker
 
         private static string BuildQuickInfoDocumentationText(QuickInfoItem quickInfoItem, string fallbackDocumentation)
         {
-            if (quickInfoItem == null || quickInfoItem.Sections.IsDefaultOrEmpty)
-            {
-                return fallbackDocumentation ?? string.Empty;
-            }
-
             var sections = new List<string>();
-            for (var i = 0; i < quickInfoItem.Sections.Length; i++)
+            if (quickInfoItem != null && !quickInfoItem.Sections.IsDefaultOrEmpty)
             {
-                var section = quickInfoItem.Sections[i];
-                if (section == null)
+                for (var i = 0; i < quickInfoItem.Sections.Length; i++)
                 {
-                    continue;
-                }
+                    var section = quickInfoItem.Sections[i];
+                    if (section == null)
+                    {
+                        continue;
+                    }
 
-                if (!IsQuickInfoDocumentationSection(section.Kind) && IsQuickInfoSignatureSection(section.Kind))
-                {
-                    continue;
-                }
+                    if (!IsQuickInfoDocumentationSection(section.Kind) &&
+                        !IsQuickInfoSupplementalSection(section.Kind))
+                    {
+                        continue;
+                    }
 
-                var text = FlattenTaggedParts(section.TaggedParts);
-                if (!string.IsNullOrEmpty(text))
-                {
-                    sections.Add(text);
+                    var text = FlattenTaggedParts(section.TaggedParts);
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        sections.Add(text);
+                    }
                 }
             }
+
+            AppendDistinctSection(sections, fallbackDocumentation);
 
             return sections.Count > 0
                 ? string.Join(Environment.NewLine, sections.ToArray())
-                : fallbackDocumentation ?? string.Empty;
+                : string.Empty;
+        }
+
+        private static LanguageServiceHoverSection[] BuildQuickInfoSupplementalSections(QuickInfoItem quickInfoItem, ISymbol symbol)
+        {
+            var results = new List<LanguageServiceHoverSection>();
+            if (quickInfoItem != null && !quickInfoItem.Sections.IsDefaultOrEmpty)
+            {
+                for (var i = 0; i < quickInfoItem.Sections.Length; i++)
+                {
+                    var section = quickInfoItem.Sections[i];
+                    if (section == null || !IsQuickInfoSupplementalSection(section.Kind))
+                    {
+                        continue;
+                    }
+
+                    var text = FlattenTaggedParts(section.TaggedParts);
+                    if (string.IsNullOrEmpty(text))
+                    {
+                        continue;
+                    }
+
+                    results.Add(new LanguageServiceHoverSection
+                    {
+                        Kind = section.Kind ?? string.Empty,
+                        Title = section.Kind ?? string.Empty,
+                        Text = text,
+                        DisplayParts = new LanguageServiceHoverDisplayPart[0]
+                    });
+                }
+            }
+
+            AddHoverSections(results, BuildSymbolSupplementalSections(symbol));
+            return results.ToArray();
         }
 
         private static LanguageServiceHoverDisplayPart[] BuildQuickInfoDisplayParts(QuickInfoItem quickInfoItem, ISymbol fallbackSymbol)
@@ -193,10 +239,15 @@ namespace Cortex.Roslyn.Worker
             }
 
             var results = new List<LanguageServiceHoverDisplayPart>();
+            var symbolDisplayParts = fallbackSymbol != null
+                ? fallbackSymbol.ToDisplayParts(SymbolDisplayFormat.CSharpErrorMessageFormat)
+                : default(ImmutableArray<SymbolDisplayPart>);
+            var symbolPartCursor = 0;
+            var interactiveTaggedPartCount = CountInteractiveTaggedParts(quickInfoItem);
             for (var i = 0; i < quickInfoItem.Sections.Length; i++)
             {
                 var section = quickInfoItem.Sections[i];
-                if (section == null || !IsQuickInfoSignatureSection(section.Kind) || section.TaggedParts.IsDefaultOrEmpty)
+                if (section == null || !IsQuickInfoMainDisplaySection(section.Kind) || section.TaggedParts.IsDefaultOrEmpty)
                 {
                     continue;
                 }
@@ -204,15 +255,29 @@ namespace Cortex.Roslyn.Worker
                 for (var partIndex = 0; partIndex < section.TaggedParts.Length; partIndex++)
                 {
                     var taggedPart = section.TaggedParts[partIndex];
+                    var resolvedSymbol = TryResolveTaggedPartSymbol(
+                        taggedPart,
+                        symbolDisplayParts,
+                        ref symbolPartCursor);
+                    var isInteractive = resolvedSymbol != null && IsInteractiveTaggedPart(taggedPart.Tag);
+                    if (!isInteractive &&
+                        fallbackSymbol != null &&
+                        interactiveTaggedPartCount == 1 &&
+                        IsInteractiveTaggedPart(taggedPart.Tag))
+                    {
+                        resolvedSymbol = fallbackSymbol;
+                        isInteractive = true;
+                    }
+
                     var part = new LanguageServiceHoverDisplayPart
                     {
                         Text = taggedPart.Text ?? string.Empty,
                         Classification = taggedPart.Tag ?? string.Empty,
-                        IsInteractive = fallbackSymbol != null && IsInteractiveTaggedPart(taggedPart.Tag)
+                        IsInteractive = isInteractive
                     };
-                    if (part.IsInteractive)
+                    if (resolvedSymbol != null)
                     {
-                        PopulateHoverDisplayPart(part, fallbackSymbol);
+                        PopulateHoverDisplayPart(part, resolvedSymbol);
                     }
 
                     results.Add(part);
@@ -237,11 +302,24 @@ namespace Cortex.Roslyn.Worker
                 normalized.IndexOf("namespace", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private static bool IsQuickInfoSignatureSection(string kind)
+        private static bool IsQuickInfoMainDisplaySection(string kind)
         {
-            for (var i = 0; i < QuickInfoSignatureSectionKinds.Length; i++)
+            for (var i = 0; i < QuickInfoMainDisplaySectionKinds.Length; i++)
             {
-                if (string.Equals(QuickInfoSignatureSectionKinds[i], kind ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(QuickInfoMainDisplaySectionKinds[i], kind ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsQuickInfoSupplementalSection(string kind)
+        {
+            for (var i = 0; i < QuickInfoSupplementalSectionKinds.Length; i++)
+            {
+                if (string.Equals(QuickInfoSupplementalSectionKinds[i], kind ?? string.Empty, StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
@@ -268,6 +346,247 @@ namespace Cortex.Roslyn.Worker
             return taggedParts == null
                 ? string.Empty
                 : string.Concat(taggedParts.Select(part => part.Text ?? string.Empty).ToArray()).Trim();
+        }
+
+        private static void AppendDistinctSection(List<string> sections, string text)
+        {
+            if (sections == null || string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            for (var i = 0; i < sections.Count; i++)
+            {
+                if (string.Equals(sections[i], text, StringComparison.Ordinal))
+                {
+                    return;
+                }
+            }
+
+            sections.Add(text);
+        }
+
+        private static void AddHoverSections(List<LanguageServiceHoverSection> sections, LanguageServiceHoverSection[] additions)
+        {
+            if (sections == null || additions == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < additions.Length; i++)
+            {
+                var addition = additions[i];
+                if (addition == null)
+                {
+                    continue;
+                }
+
+                sections.Add(addition);
+            }
+        }
+
+        private static LanguageServiceHoverSection[] BuildSymbolSupplementalSections(ISymbol symbol)
+        {
+            if (symbol == null)
+            {
+                return new LanguageServiceHoverSection[0];
+            }
+
+            var sections = new List<LanguageServiceHoverSection>();
+            AppendGenericTypeArgumentMappings(sections, symbol as INamedTypeSymbol);
+            AppendMethodTypeArgumentMappings(sections, symbol as IMethodSymbol);
+            return sections.ToArray();
+        }
+
+        private static void AppendGenericTypeArgumentMappings(List<LanguageServiceHoverSection> sections, INamedTypeSymbol namedType)
+        {
+            if (sections == null || namedType == null || !namedType.IsGenericType)
+            {
+                return;
+            }
+
+            var definition = namedType.OriginalDefinition;
+            if (definition == null || definition.TypeParameters.Length == 0 || namedType.TypeArguments.Length == 0)
+            {
+                return;
+            }
+
+            var count = Math.Min(definition.TypeParameters.Length, namedType.TypeArguments.Length);
+            for (var i = 0; i < count; i++)
+            {
+                var parameter = definition.TypeParameters[i];
+                var argument = namedType.TypeArguments[i];
+                if (parameter == null || argument == null)
+                {
+                    continue;
+                }
+
+                sections.Add(BuildTypeArgumentMappingSection(parameter, argument));
+            }
+        }
+
+        private static void AppendMethodTypeArgumentMappings(List<LanguageServiceHoverSection> sections, IMethodSymbol method)
+        {
+            if (sections == null || method == null || !method.IsGenericMethod)
+            {
+                return;
+            }
+
+            var definition = method.OriginalDefinition;
+            if (definition == null || definition.TypeParameters.Length == 0 || method.TypeArguments.Length == 0)
+            {
+                return;
+            }
+
+            var count = Math.Min(definition.TypeParameters.Length, method.TypeArguments.Length);
+            for (var i = 0; i < count; i++)
+            {
+                var parameter = definition.TypeParameters[i];
+                var argument = method.TypeArguments[i];
+                if (parameter == null || argument == null)
+                {
+                    continue;
+                }
+
+                sections.Add(BuildTypeArgumentMappingSection(parameter, argument));
+            }
+        }
+
+        private static LanguageServiceHoverSection BuildTypeArgumentMappingSection(ITypeParameterSymbol parameter, ITypeSymbol argument)
+        {
+            var displayParts = new List<LanguageServiceHoverDisplayPart>();
+            var parameterPart = new LanguageServiceHoverDisplayPart
+            {
+                Text = parameter != null ? parameter.Name ?? string.Empty : string.Empty,
+                Classification = parameter != null ? parameter.Kind.ToString() : string.Empty,
+                IsInteractive = parameter != null
+            };
+            if (parameter != null)
+            {
+                PopulateHoverDisplayPart(parameterPart, parameter);
+            }
+
+            displayParts.Add(parameterPart);
+            displayParts.Add(new LanguageServiceHoverDisplayPart
+            {
+                Text = " is ",
+                Classification = string.Empty,
+                IsInteractive = false
+            });
+
+            var argumentParts = argument != null
+                ? BuildHoverDisplayParts(argument)
+                : new LanguageServiceHoverDisplayPart[0];
+            if (argumentParts.Length == 0 && argument != null)
+            {
+                argumentParts = new[]
+                {
+                    new LanguageServiceHoverDisplayPart
+                    {
+                        Text = argument.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                        Classification = argument.Kind.ToString(),
+                        IsInteractive = false
+                    }
+                };
+            }
+            for (var i = 0; i < argumentParts.Length; i++)
+            {
+                displayParts.Add(argumentParts[i]);
+            }
+
+            return new LanguageServiceHoverSection
+            {
+                Kind = "TypeParameterMapping",
+                Title = string.Empty,
+                Text = (parameter != null ? parameter.Name ?? string.Empty : string.Empty) +
+                    " is " +
+                    (argument != null ? argument.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) : string.Empty),
+                DisplayParts = displayParts.ToArray()
+            };
+        }
+
+        private static int CountInteractiveTaggedParts(QuickInfoItem quickInfoItem)
+        {
+            if (quickInfoItem == null || quickInfoItem.Sections.IsDefaultOrEmpty)
+            {
+                return 0;
+            }
+
+            var count = 0;
+            for (var i = 0; i < quickInfoItem.Sections.Length; i++)
+            {
+                var section = quickInfoItem.Sections[i];
+                if (section == null || !IsQuickInfoMainDisplaySection(section.Kind) || section.TaggedParts.IsDefaultOrEmpty)
+                {
+                    continue;
+                }
+
+                for (var partIndex = 0; partIndex < section.TaggedParts.Length; partIndex++)
+                {
+                    if (IsInteractiveTaggedPart(section.TaggedParts[partIndex].Tag))
+                    {
+                        count++;
+                    }
+                }
+            }
+
+            return count;
+        }
+
+        private static ISymbol TryResolveTaggedPartSymbol(
+            TaggedText taggedPart,
+            ImmutableArray<SymbolDisplayPart> symbolDisplayParts,
+            ref int cursor)
+        {
+            if (symbolDisplayParts.IsDefaultOrEmpty || !IsInteractiveTaggedPart(taggedPart.Tag))
+            {
+                return null;
+            }
+
+            var targetText = taggedPart.Text ?? string.Empty;
+            for (var i = cursor; i < symbolDisplayParts.Length; i++)
+            {
+                var candidate = symbolDisplayParts[i];
+                if (!string.Equals(candidate.ToString(), targetText, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                cursor = i + 1;
+                return candidate.Symbol;
+            }
+
+            return null;
+        }
+
+        private static ISymbol TryResolveHoverSymbolFromQuickInfo(Document document, QuickInfoItem quickInfoItem, int fallbackPosition)
+        {
+            if (document == null)
+            {
+                return null;
+            }
+
+            if (quickInfoItem != null && quickInfoItem.Span != default(TextSpan))
+            {
+                var span = quickInfoItem.Span;
+                var candidates = new[]
+                {
+                    span.Start,
+                    Math.Max(span.Start, span.End - 1),
+                    span.Start + (span.Length / 2)
+                };
+
+                for (var i = 0; i < candidates.Length; i++)
+                {
+                    var symbol = ResolveSymbol(document, candidates[i]);
+                    if (symbol != null)
+                    {
+                        return symbol;
+                    }
+                }
+            }
+
+            return ResolveSymbol(document, fallbackPosition);
         }
 
         private LanguageServiceDocumentTransformResponse PreviewDocumentTransform(LanguageServiceDocumentTransformRequest request)

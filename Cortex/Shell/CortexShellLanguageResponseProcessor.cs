@@ -267,13 +267,53 @@ namespace Cortex
             context.State.Editor.RequestedHoverTokenText = string.Empty;
             if (response.Success)
             {
-                MMLog.WriteDebug("[Cortex.Roslyn] Hover resolved for " + requestedHoverTokenText + ".");
+                MMLog.WriteInfo("[Cortex.Symbol] Hover payload. Token='" +
+                    requestedHoverTokenText +
+                    "', Symbol='" + (response.SymbolDisplay ?? string.Empty) +
+                    "', Kind='" + (response.SymbolKind ?? string.Empty) +
+                    "', Parts=" + CountHoverParts(response) +
+                    ", InteractiveParts=" + CountInteractiveHoverParts(response) +
+                    ", SupplementalSections=" + CountSupplementalSections(response) +
+                    ", DefinitionPath='" + (response.DefinitionDocumentPath ?? string.Empty) + "'.");
                 return;
             }
 
             MMLog.WriteWarning("[Cortex.Roslyn] Hover failed for " +
                 requestedHoverTokenText +
                 ": " + (response.StatusMessage ?? "Unknown Roslyn hover failure."));
+        }
+
+        private static int CountHoverParts(LanguageServiceHoverResponse response)
+        {
+            return response != null && response.DisplayParts != null
+                ? response.DisplayParts.Length
+                : 0;
+        }
+
+        private static int CountInteractiveHoverParts(LanguageServiceHoverResponse response)
+        {
+            if (response == null || response.DisplayParts == null)
+            {
+                return 0;
+            }
+
+            var count = 0;
+            for (var i = 0; i < response.DisplayParts.Length; i++)
+            {
+                if (response.DisplayParts[i] != null && response.DisplayParts[i].IsInteractive)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static int CountSupplementalSections(LanguageServiceHoverResponse response)
+        {
+            return response != null && response.SupplementalSections != null
+                ? response.SupplementalSections.Length
+                : 0;
         }
 
         private static void HandleLanguageDefinitionResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope, PendingLanguageDefinitionRequest pending)
