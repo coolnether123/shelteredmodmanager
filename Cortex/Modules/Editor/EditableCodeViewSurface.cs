@@ -1422,46 +1422,11 @@ namespace Cortex.Modules.Editor
             }
 
             _lastVisibleHoverLogKey = hoverKey;
-            MMLog.WriteInfo("[Cortex.Symbol] Source tooltip visible. Token='" +
-                (hoverTarget != null && hoverTarget.Target != null ? hoverTarget.Target.SymbolText ?? string.Empty : string.Empty) +
-                "', Symbol='" + (response != null ? response.SymbolDisplay ?? string.Empty : string.Empty) +
-                "', Kind='" + (response != null ? response.SymbolKind ?? string.Empty : string.Empty) +
-                "', Parts=" + CountHoverParts(response) +
-                ", InteractiveParts=" + CountInteractiveHoverParts(response) +
-                ", SupplementalSections=" + CountSupplementalSections(response) + ".");
-        }
-
-        private static int CountHoverParts(LanguageServiceHoverResponse response)
-        {
-            return response != null && response.DisplayParts != null
-                ? response.DisplayParts.Length
-                : 0;
-        }
-
-        private static int CountInteractiveHoverParts(LanguageServiceHoverResponse response)
-        {
-            if (response == null || response.DisplayParts == null)
-            {
-                return 0;
-            }
-
-            var count = 0;
-            for (var i = 0; i < response.DisplayParts.Length; i++)
-            {
-                if (response.DisplayParts[i] != null && response.DisplayParts[i].IsInteractive)
-                {
-                    count++;
-                }
-            }
-
-            return count;
-        }
-
-        private static int CountSupplementalSections(LanguageServiceHoverResponse response)
-        {
-            return response != null && response.SupplementalSections != null
-                ? response.SupplementalSections.Length
-                : 0;
+            CortexDeveloperLog.WriteSymbolTooltipVisible(
+                "source-editor",
+                hoverKey,
+                hoverTarget != null && hoverTarget.Target != null ? hoverTarget.Target.SymbolText ?? string.Empty : string.Empty,
+                response);
         }
 
         private static Rect ClampTooltipRect(Rect tooltipRect, Vector2 viewportSize)
@@ -1573,14 +1538,11 @@ namespace Cortex.Modules.Editor
                 ", Mouse=(" + localMouse.x.ToString("F1") + "," + localMouse.y.ToString("F1") + ")" +
                 ", TargetSymbol='" + (target != null ? target.SymbolText ?? string.Empty : string.Empty) + "'" +
                 ", AbsolutePosition=" + absolutePosition + ".");
-            MMLog.WriteInfo("[Cortex.Symbol] Source context target. Symbol='" +
-                (target != null ? target.SymbolText ?? string.Empty : string.Empty) +
-                "', HoverResolved=" + (hoverResponse != null && hoverResponse.Success) +
-                ", Kind='" + (hoverResponse != null ? hoverResponse.SymbolKind ?? string.Empty : string.Empty) +
-                "', Parts=" + CountHoverParts(hoverResponse) +
-                ", InteractiveParts=" + CountInteractiveHoverParts(hoverResponse) +
-                ", SupplementalSections=" + CountSupplementalSections(hoverResponse) +
-                ", AbsolutePosition=" + absolutePosition + ".");
+            CortexDeveloperLog.WriteSymbolContextTarget(
+                "source-editor",
+                target != null ? target.SymbolText ?? string.Empty : string.Empty,
+                hoverResponse,
+                absolutePosition);
         }
 
         private bool TryBuildCommandTarget(DocumentSession session, CortexShellState state, bool editingEnabled, int absolutePosition, out EditorCommandInvocation invocation)

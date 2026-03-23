@@ -100,6 +100,7 @@
     <Compile Include="Services\CompletionAugmentationRequestBuilder.cs" />
     <Compile Include="Services\CompletionContextAnalyzer.cs" />
     <Compile Include="Services\CompletionMatchUtility.cs" />
+    <Compile Include="Services\CortexDeveloperLog.cs" />
     <Compile Include="Services\EditorSymbolInteractionService.cs" />
     <Compile Include="Services\EditorToolbarService.cs" />
     <Compile Include="Services\CompletionRankingService.cs" />

@@ -30,7 +30,14 @@ namespace Cortex.Services
                 !string.Equals(_lastSelectionLogKey, inspection.LogKey, StringComparison.Ordinal))
             {
                 _lastSelectionLogKey = inspection.LogKey;
-                MMLog.WriteInfo(inspection.LogMessage);
+                CortexDeveloperLog.WriteSymbolSelection(
+                    documentPath,
+                    tokenKey,
+                    tokenText,
+                    inspection.NormalizedClassification,
+                    inspection.ResolvedKind,
+                    lineNumber,
+                    column);
             }
 
             if (state != null)
@@ -65,12 +72,8 @@ namespace Cortex.Services
                     "|" + (tokenKey ?? string.Empty) +
                     "|" + normalizedClassification +
                     "|" + resolvedKind,
-                LogMessage = "[Cortex.Symbol] Selection. Token='" +
-                    trimmedTokenText +
-                    "', Classification='" + normalizedClassification +
-                    "', ResolvedKind='" + resolvedKind +
-                    "', Line=" + lineNumber +
-                    ", Column=" + column + "."
+                NormalizedClassification = normalizedClassification,
+                ResolvedKind = resolvedKind
             };
         }
 
@@ -85,7 +88,8 @@ namespace Cortex.Services
         {
             public string StatusMessage = string.Empty;
             public string LogKey = string.Empty;
-            public string LogMessage = string.Empty;
+            public string NormalizedClassification = string.Empty;
+            public string ResolvedKind = string.Empty;
         }
     }
 }
