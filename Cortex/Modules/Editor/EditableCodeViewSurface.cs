@@ -70,6 +70,7 @@ namespace Cortex.Modules.Editor
         private DateTime _lastClickUtc = DateTime.MinValue;
         private string _hoverCandidateKey = string.Empty;
         private DateTime _hoverCandidateUtc = DateTime.MinValue;
+        private string _lastVisibleHoverLogKey = string.Empty;
         private bool _contextMenuOpen;
         private Vector2 _contextMenuPosition = Vector2.zero;
         private EditorCommandInvocation _contextInvocation;
@@ -1353,6 +1354,7 @@ namespace Cortex.Modules.Editor
             var response = hoverTarget != null ? _hoverService.ResolveHoverResponse(state, hoverTarget.HoverKey) : null;
             if (hoverTarget == null || hoverTarget.Target == null || response == null || !response.Success || _tooltipContainerStyle == null)
             {
+                _lastVisibleHoverLogKey = string.Empty;
                 _hoverService.ClearVisibleHover(state);
                 return;
             }
@@ -1362,12 +1364,13 @@ namespace Cortex.Modules.Editor
                 : (hoverTarget.Target.SymbolText ?? string.Empty);
             if (string.IsNullOrEmpty(title))
             {
+                _lastVisibleHoverLogKey = string.Empty;
                 _hoverService.ClearVisibleHover(state);
                 return;
             }
 
             var qualified = response.QualifiedSymbolDisplay ?? string.Empty;
-            var detail = response.DocumentationText ?? string.Empty;
+            var detail = _symbolInteractionService.BuildHoverDetailText(response);
             var titleHeight = Mathf.Max(18f, _tooltipTitleStyle.CalcHeight(new GUIContent(title), TooltipWidth - 16f));
             var qualifiedHeight = string.IsNullOrEmpty(qualified)
                 ? 0f
@@ -1406,7 +1409,59 @@ namespace Cortex.Modules.Editor
                 GUI.Label(detailRect, detail, _tooltipDetailStyle);
             }
 
+            LogVisibleHover(hoverTarget, response);
             _hoverService.SetVisibleHover(state, hoverTarget.HoverKey, response);
+        }
+
+        private void LogVisibleHover(SourceEditorHoverTarget hoverTarget, LanguageServiceHoverResponse response)
+        {
+            var hoverKey = hoverTarget != null ? hoverTarget.HoverKey ?? string.Empty : string.Empty;
+            if (string.IsNullOrEmpty(hoverKey) || string.Equals(_lastVisibleHoverLogKey, hoverKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _lastVisibleHoverLogKey = hoverKey;
+            MMLog.WriteInfo("[Cortex.Symbol] Source tooltip visible. Token='" +
+                (hoverTarget != null && hoverTarget.Target != null ? hoverTarget.Target.SymbolText ?? string.Empty : string.Empty) +
+                "', Symbol='" + (response != null ? response.SymbolDisplay ?? string.Empty : string.Empty) +
+                "', Kind='" + (response != null ? response.SymbolKind ?? string.Empty : string.Empty) +
+                "', Parts=" + CountHoverParts(response) +
+                ", InteractiveParts=" + CountInteractiveHoverParts(response) +
+                ", SupplementalSections=" + CountSupplementalSections(response) + ".");
+        }
+
+        private static int CountHoverParts(LanguageServiceHoverResponse response)
+        {
+            return response != null && response.DisplayParts != null
+                ? response.DisplayParts.Length
+                : 0;
+        }
+
+        private static int CountInteractiveHoverParts(LanguageServiceHoverResponse response)
+        {
+            if (response == null || response.DisplayParts == null)
+            {
+                return 0;
+            }
+
+            var count = 0;
+            for (var i = 0; i < response.DisplayParts.Length; i++)
+            {
+                if (response.DisplayParts[i] != null && response.DisplayParts[i].IsInteractive)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static int CountSupplementalSections(LanguageServiceHoverResponse response)
+        {
+            return response != null && response.SupplementalSections != null
+                ? response.SupplementalSections.Length
+                : 0;
         }
 
         private static Rect ClampTooltipRect(Rect tooltipRect, Vector2 viewportSize)
@@ -1497,6 +1552,7 @@ namespace Cortex.Modules.Editor
             }
 
             var target = invocation != null ? invocation.Target : null;
+            var hoverResponse = _hoverService.ResolveHoverResponse(state, session, target);
             var items = _contextMenuService.BuildItems(state, commandRegistry, contributionRegistry, invocation);
             if (items == null || items.Count == 0)
             {
@@ -1516,6 +1572,14 @@ namespace Cortex.Modules.Editor
                 ", Enabled=" + enabledCount +
                 ", Mouse=(" + localMouse.x.ToString("F1") + "," + localMouse.y.ToString("F1") + ")" +
                 ", TargetSymbol='" + (target != null ? target.SymbolText ?? string.Empty : string.Empty) + "'" +
+                ", AbsolutePosition=" + absolutePosition + ".");
+            MMLog.WriteInfo("[Cortex.Symbol] Source context target. Symbol='" +
+                (target != null ? target.SymbolText ?? string.Empty : string.Empty) +
+                "', HoverResolved=" + (hoverResponse != null && hoverResponse.Success) +
+                ", Kind='" + (hoverResponse != null ? hoverResponse.SymbolKind ?? string.Empty : string.Empty) +
+                "', Parts=" + CountHoverParts(hoverResponse) +
+                ", InteractiveParts=" + CountInteractiveHoverParts(hoverResponse) +
+                ", SupplementalSections=" + CountSupplementalSections(hoverResponse) +
                 ", AbsolutePosition=" + absolutePosition + ".");
         }
 

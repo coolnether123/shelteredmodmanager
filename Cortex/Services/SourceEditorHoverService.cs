@@ -116,6 +116,16 @@ namespace Cortex.Services
                 : null;
         }
 
+        public LanguageServiceHoverResponse ResolveHoverResponse(CortexShellState state, DocumentSession session, EditorCommandTarget target)
+        {
+            if (target == null)
+            {
+                return null;
+            }
+
+            return ResolveHoverResponse(state, BuildHoverKey(session, target));
+        }
+
         public void SetVisibleHover(CortexShellState state, string hoverKey, LanguageServiceHoverResponse response)
         {
             if (state == null || state.Editor == null)

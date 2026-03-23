@@ -88,6 +88,7 @@
     <Compile Include="Modules\Runtime\RuntimeToolsModule.cs" />
     <Compile Include="Modules\Search\SearchModule.cs" />
     <Compile Include="Modules\Settings\SettingsModule.cs" />
+    <Compile Include="Modules\Shared\HoverTooltipPresenter.cs" />
     <Compile Include="Modules\Shared\PopupMenuSurface.cs" />
     <Compile Include="Modules\Shared\CortexModuleUtil.cs" />
     <Compile Include="Modules\Shared\CortexPathField.cs" />
@@ -113,6 +114,7 @@
     <Compile Include="Services\EditorContextActionResolverService.cs" />
     <Compile Include="Services\EditorLogicalDocumentTargetResolutionService.cs" />
     <Compile Include="Services\EditorMutationExecutionService.cs" />
+    <Compile Include="Services\EditorSelectionInspectionService.cs" />
     <Compile Include="Services\EditorSignatureHelpService.cs" />
     <Compile Include="Services\GeneratedTemplateNavigationService.cs" />
     <Compile Include="Services\HarmonyPatchDisplayService.cs" />

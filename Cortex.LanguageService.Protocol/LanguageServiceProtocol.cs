@@ -548,8 +548,20 @@ namespace Cortex.LanguageService.Protocol
         public string DocumentationCommentId;
         public string DocumentationXml;
         public string DocumentationText;
+        public LanguageServiceHoverSection[] SupplementalSections;
         public string DefinitionDocumentPath;
         public LanguageServiceRange DefinitionRange;
+    }
+
+    /// <summary>
+    /// Structured supplemental hover content emitted separately from canonical documentation text.
+    /// </summary>
+    public sealed class LanguageServiceHoverSection
+    {
+        public string Kind;
+        public string Title;
+        public string Text;
+        public LanguageServiceHoverDisplayPart[] DisplayParts;
     }
 
     /// <summary>
@@ -715,6 +727,7 @@ namespace Cortex.LanguageService.Protocol
         public string DocumentationCommentId;
         public string DocumentationXml;
         public string DocumentationText;
+        public LanguageServiceHoverSection[] SupplementalSections;
         public LanguageServiceRange Range;
         public string DefinitionDocumentPath;
         public LanguageServiceRange DefinitionRange;

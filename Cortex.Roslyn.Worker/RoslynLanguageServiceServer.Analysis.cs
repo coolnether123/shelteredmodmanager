@@ -436,6 +436,7 @@ namespace Cortex.Roslyn.Worker
             part.DocumentationCommentId = symbol.GetDocumentationCommentId() ?? string.Empty;
             part.DocumentationXml = documentationXml ?? string.Empty;
             part.DocumentationText = FlattenDocumentation(documentationXml);
+            part.SupplementalSections = BuildSymbolSupplementalSections(symbol);
             part.DefinitionDocumentPath = definitionLocation != null && definitionLocation.SourceTree != null
                 ? definitionLocation.SourceTree.FilePath ?? string.Empty
                 : string.Empty;
