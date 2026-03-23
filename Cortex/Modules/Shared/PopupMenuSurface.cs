@@ -230,6 +230,13 @@ namespace Cortex.Modules.Shared
                             continue;
                         }
 
+                        if (item.IsSectionHeader)
+                        {
+                            GUI.Label(new Rect(10f, y + 3f, contentWidth - 20f, 18f), item.Label ?? string.Empty, headerStyle);
+                            y += ItemHeight;
+                            continue;
+                        }
+
                         var itemRect = new Rect(6f, y, contentWidth - 12f, ItemHeight);
                         var isPointerOverItem = itemRect.Contains(viewportMouse);
                         var isQueuedMouseDownOnItem = _queuedMouseDown && _queuedMouseDownButton == 0 && itemRect.Contains(queuedDownViewportMouse);
@@ -521,7 +528,7 @@ namespace Cortex.Modules.Shared
                     continue;
                 }
 
-                key += "|" + (item.CommandId ?? string.Empty) + ":" + (item.Label ?? string.Empty) + ":" + (item.IsSeparator ? "1" : "0");
+                key += "|" + (item.CommandId ?? string.Empty) + ":" + (item.Label ?? string.Empty) + ":" + (item.IsSeparator ? "1" : "0") + ":" + (item.IsSectionHeader ? "1" : "0");
             }
 
             return key;
@@ -564,6 +571,7 @@ namespace Cortex.Modules.Shared
         public string ShortcutText;
         public bool Enabled;
         public bool IsSeparator;
+        public bool IsSectionHeader;
     }
 
     internal struct PopupMenuResult

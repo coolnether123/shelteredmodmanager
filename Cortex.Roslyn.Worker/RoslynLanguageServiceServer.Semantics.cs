@@ -83,21 +83,68 @@ namespace Cortex.Roslyn.Worker
                 return emptyResponse;
             }
 
-            var renameLocations = CollectReferenceLocations(context.Symbol, context.Document.Project.Solution, true);
-            var documentChanges = BuildDocumentChanges(renameLocations, newName);
-            var response = new LanguageServiceRenameResponse
+            Solution renamedSolution;
+            string renameFailureMessage;
+            if (TryRenameSymbolSolution(context.Document.Project.Solution, context.Symbol, newName, out renamedSolution, out renameFailureMessage))
             {
-                Success = documentChanges.Length > 0,
-                StatusMessage = documentChanges.Length > 0
-                    ? "Semantic rename preview resolved."
-                    : "No semantic rename locations were found for the selected symbol.",
+                var documentChanges = BuildDocumentChangesFromSolutionDiff(context.Document.Project.Solution, renamedSolution);
+                var response = new LanguageServiceRenameResponse
+                {
+                    Success = documentChanges.Length > 0,
+                    StatusMessage = documentChanges.Length > 0
+                        ? "Semantic rename preview resolved."
+                        : "No semantic rename locations were found for the selected symbol.",
+                    OldName = GetRenameDisplayName(context.Symbol),
+                    NewName = newName,
+                    TotalChangeCount = documentChanges.Sum(change => change != null ? change.ChangeCount : 0),
+                    Documents = documentChanges
+                };
+                PopulateSymbolResponse(response, request, context);
+                return response;
+            }
+
+            List<LanguageServiceSymbolLocation> fallbackLocations = null;
+            try
+            {
+                fallbackLocations = CollectReferenceLocations(context.Symbol, context.Document.Project.Solution, true);
+            }
+            catch (Exception fallbackException)
+            {
+                renameFailureMessage = !string.IsNullOrEmpty(renameFailureMessage)
+                    ? renameFailureMessage + " Fallback reference collection failed: " + fallbackException.Message
+                    : "Fallback reference collection failed: " + fallbackException.Message;
+            }
+
+            var fallbackChanges = fallbackLocations != null
+                ? BuildDocumentChanges(fallbackLocations, newName)
+                : new LanguageServiceDocumentChange[0];
+            if (fallbackChanges.Length > 0)
+            {
+                var fallbackResponse = new LanguageServiceRenameResponse
+                {
+                    Success = true,
+                    StatusMessage = "Roslyn rename engine was unavailable; generated a reference-based rename preview.",
+                    OldName = GetRenameDisplayName(context.Symbol),
+                    NewName = newName,
+                    TotalChangeCount = fallbackChanges.Sum(change => change != null ? change.ChangeCount : 0),
+                    Documents = fallbackChanges
+                };
+                PopulateSymbolResponse(fallbackResponse, request, context);
+                return fallbackResponse;
+            }
+
+            var failedResponse = new LanguageServiceRenameResponse
+            {
+                Success = false,
+                StatusMessage = !string.IsNullOrEmpty(renameFailureMessage)
+                    ? renameFailureMessage
+                    : "Roslyn rename preview could not be generated.",
                 OldName = GetRenameDisplayName(context.Symbol),
                 NewName = newName,
-                TotalChangeCount = documentChanges.Sum(change => change != null ? change.ChangeCount : 0),
-                Documents = documentChanges
+                Documents = new LanguageServiceDocumentChange[0]
             };
-            PopulateSymbolResponse(response, request, context);
-            return response;
+            PopulateSymbolResponse(failedResponse, request, context);
+            return failedResponse;
         }
 
         private LanguageServiceReferencesResponse FindReferences(LanguageServiceReferencesRequest request)
@@ -533,8 +580,7 @@ namespace Cortex.Roslyn.Worker
             var range = location != null ? location.Range : null;
             return (location != null ? location.DocumentPath ?? string.Empty : string.Empty) +
                 "|" + (range != null ? range.Start.ToString() : "0") +
-                "|" + (range != null ? range.Length.ToString() : "0") +
-                "|" + (location != null ? location.Relationship ?? string.Empty : string.Empty);
+                "|" + (range != null ? range.Length.ToString() : "0");
         }
 
         private LanguageServiceDocumentChange[] BuildDocumentChanges(IList<LanguageServiceSymbolLocation> locations, string newName)
@@ -626,6 +672,42 @@ namespace Cortex.Roslyn.Worker
             return !string.IsNullOrEmpty(oldText)
                 ? preview.Replace(oldText, newName ?? string.Empty)
                 : preview;
+        }
+
+        private bool TryRenameSymbolSolution(Solution solution, ISymbol symbol, string newName, out Solution renamedSolution, out string failureMessage)
+        {
+            renamedSolution = null;
+            failureMessage = string.Empty;
+            if (solution == null || symbol == null || string.IsNullOrEmpty(newName))
+            {
+                failureMessage = "Rename preview requires a source-backed symbol and a new name.";
+                return false;
+            }
+
+            var renamerType = FindLoadedType("Microsoft.CodeAnalysis.Rename.Renamer");
+            if (renamerType == null)
+            {
+                failureMessage = "Roslyn rename engine is unavailable.";
+                return false;
+            }
+
+            var renameResult = InvokeBestTaskResult(
+                renamerType,
+                "RenameSymbolAsync",
+                new object[]
+                {
+                    solution,
+                    symbol,
+                    newName
+                });
+            renamedSolution = renameResult as Solution;
+            if (renamedSolution != null)
+            {
+                return true;
+            }
+
+            failureMessage = "Roslyn rename service did not return a renamed solution.";
+            return false;
         }
 
         private LanguageServiceCallHierarchyItem[] BuildIncomingCallItems(ISymbol symbol, Solution solution)

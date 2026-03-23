@@ -169,6 +169,62 @@ namespace Cortex.Services
                 "|" + (triggerCharacter ?? string.Empty);
         }
 
+        public LanguageServiceSignatureHelpRequest BuildSignatureHelpRequest(
+            DocumentSession session,
+            CortexSettings settings,
+            CortexProjectDefinition project,
+            string[] sourceRoots,
+            int line,
+            int column,
+            int absolutePosition,
+            bool explicitInvocation,
+            string triggerCharacter)
+        {
+            return new LanguageServiceSignatureHelpRequest
+            {
+                DocumentPath = session != null ? session.FilePath : string.Empty,
+                ProjectFilePath = project != null ? project.ProjectFilePath : string.Empty,
+                WorkspaceRootPath = settings != null ? settings.WorkspaceRootPath : string.Empty,
+                SourceRoots = sourceRoots ?? new string[0],
+                DocumentText = session != null ? session.Text : string.Empty,
+                DocumentVersion = session != null ? session.TextVersion : 0,
+                Line = line,
+                Column = column,
+                AbsolutePosition = absolutePosition,
+                ExplicitInvocation = explicitInvocation,
+                TriggerCharacter = triggerCharacter ?? string.Empty
+            };
+        }
+
+        public LanguageServiceDocumentTransformRequest BuildDocumentTransformRequest(
+            DocumentSession session,
+            CortexSettings settings,
+            CortexProjectDefinition project,
+            string[] sourceRoots,
+            string commandId,
+            string title,
+            string applyLabel,
+            bool organizeImports,
+            bool simplifyNames,
+            bool formatDocument)
+        {
+            return new LanguageServiceDocumentTransformRequest
+            {
+                CommandId = commandId ?? string.Empty,
+                Title = title ?? string.Empty,
+                ApplyLabel = applyLabel ?? string.Empty,
+                DocumentPath = session != null ? session.FilePath : string.Empty,
+                ProjectFilePath = project != null ? project.ProjectFilePath : string.Empty,
+                WorkspaceRootPath = settings != null ? settings.WorkspaceRootPath : string.Empty,
+                SourceRoots = sourceRoots ?? new string[0],
+                DocumentText = session != null ? session.Text : string.Empty,
+                DocumentVersion = session != null ? session.TextVersion : 0,
+                OrganizeImports = organizeImports,
+                SimplifyNames = simplifyNames,
+                FormatDocument = formatDocument
+            };
+        }
+
         public bool ShouldTriggerCompletion(char character)
         {
             return character == '.' ||

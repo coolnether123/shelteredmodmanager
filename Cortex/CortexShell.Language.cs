@@ -18,6 +18,7 @@ namespace Cortex
         private readonly DocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
         private readonly DocumentLanguageInteractionService _documentLanguageInteractionService = new DocumentLanguageInteractionService();
         private readonly EditorCompletionService _editorCompletionService = new EditorCompletionService();
+        private readonly EditorSignatureHelpService _editorSignatureHelpService = new EditorSignatureHelpService();
         private const double LanguageAnalysisDebounceMs = 280d;
 
         private void InitializeLanguageService(string smmBin, CortexSettings settings)
@@ -190,6 +191,7 @@ namespace Cortex
                 _languageRuntime.LastAnalyzedDocumentFingerprint = string.Empty;
                 _languageRuntime.PendingLanguageAnalysisFingerprint = string.Empty;
                 _editorCompletionService.Reset(_state.Editor);
+                _editorSignatureHelpService.Reset(_state.Editor);
             }
         }
 
@@ -226,6 +228,7 @@ namespace Cortex
                     _documentLanguageAnalysisService,
                     _documentLanguageInteractionService,
                     _editorCompletionService,
+                    _editorSignatureHelpService,
                     delegate { return _languageServiceClient; },
                     delegate { return _navigationService; },
                     delegate { return _completionAugmentationInFlight; },
@@ -260,6 +263,7 @@ namespace Cortex
             _languageRuntime.HoverInFlight = false;
             _languageRuntime.DefinitionInFlight = false;
             _languageRuntime.CompletionInFlight = false;
+            _languageRuntime.SignatureHelpInFlight = false;
             _languageRuntime.SemanticOperationInFlight = false;
             _languageRuntime.InitializeRequestId = string.Empty;
             _languageRuntime.StatusRequestId = string.Empty;
@@ -267,12 +271,14 @@ namespace Cortex
             _languageRuntime.PendingHover = null;
             _languageRuntime.PendingDefinition = null;
             _languageRuntime.PendingCompletion = null;
+            _languageRuntime.PendingSignatureHelp = null;
             _languageRuntime.PendingSemanticOperation = null;
             _languageRuntime.LastAnalysisRequestUtc = DateTime.MinValue;
             _languageRuntime.InitializeQueuedUtc = DateTime.MinValue;
             _languageRuntime.LastInitializationProgressLogUtc = DateTime.MinValue;
             _languageRuntime.ServiceConfigurationFingerprint = configurationFingerprint ?? string.Empty;
             _editorCompletionService.Reset(_state.Editor);
+            _editorSignatureHelpService.Reset(_state.Editor);
         }
 
         private DocumentSession FindOpenDocument(string filePath)

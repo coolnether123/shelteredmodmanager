@@ -3,7 +3,6 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Services;
-using UnityEngine;
 
 namespace Cortex.Modules.Editor
 {
@@ -28,9 +27,15 @@ namespace Cortex.Modules.Editor
             private readonly IContributionRegistry _contributionRegistry;
             private readonly CortexShellState _state;
             private readonly IEditorService _editorService = new EditorService();
+            private readonly IClipboardService _clipboardService = new EditorClipboardService();
             private readonly EditorCommandAvailabilityService _availabilityService = new EditorCommandAvailabilityService();
+            private readonly EditorCommandExecutionStrategyService _executionStrategyService = new EditorCommandExecutionStrategyService();
             private readonly EditorSemanticOperationService _semanticOperationService = new EditorSemanticOperationService();
             private readonly EditorContextActionResolverService _actionResolverService = new EditorContextActionResolverService();
+            private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
+            private readonly EditorLogicalDocumentTargetResolutionService _targetResolutionService = new EditorLogicalDocumentTargetResolutionService();
+            private readonly EditorMutationExecutionService _mutationExecutionService = new EditorMutationExecutionService();
+            private readonly UsingDirectiveOrganizationService _usingDirectiveOrganizationService = new UsingDirectiveOrganizationService();
 
             public EditorContextCommandRegistrar(
                 ICommandRegistry commandRegistry,
@@ -85,6 +90,15 @@ namespace Cortex.Modules.Editor
                     "Alt+F12",
                     30,
                     PeekDefinition);
+
+                RegisterCommand(
+                    "cortex.editor.goToDefinition",
+                    "Go To Definition",
+                    "Editor",
+                    "Navigate to the current symbol definition.",
+                    "F12",
+                    40,
+                    GoToDefinition);
 
                 RegisterCommand(
                     "cortex.editor.goToBase",
@@ -244,7 +258,7 @@ namespace Cortex.Modules.Editor
             {
                 RegisterAction("cortex.editor.quickActions", EditorContextIds.Symbol, "01_actions", 0, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, false, true);
                 RegisterAction("cortex.editor.rename", EditorContextIds.Symbol, "01_actions", 10, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, SemanticCapabilityNames.Rename, false, true);
-                RegisterAction("cortex.editor.removeAndSortUsings", EditorContextIds.Document, "01_actions", 20, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, string.Empty, true, true);
+                RegisterAction("cortex.editor.removeAndSortUsings", EditorContextIds.Document, "01_actions", 20, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar, string.Empty, true, true);
                 RegisterAction("cortex.editor.peekDefinition", EditorContextIds.Symbol, "02_navigation", 0, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, SemanticCapabilityNames.Definition, false, true);
                 RegisterAction("cortex.editor.goToDefinition", EditorContextIds.Symbol, "02_navigation", 10, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, SemanticCapabilityNames.Definition, false, true);
                 RegisterAction("cortex.editor.goToBase", EditorContextIds.Symbol, "02_navigation", 20, EditorContextActionPlacement.ContextMenu | EditorContextActionPlacement.ActionBar | EditorContextActionPlacement.QuickActions, SemanticCapabilityNames.BaseSymbol, false, true);
@@ -352,6 +366,18 @@ namespace Cortex.Modules.Editor
                 QueueSemantic(context, SemanticRequestKind.PeekDefinition, SemanticWorkbenchViewKind.PeekDefinition, "Peek Definition");
             }
 
+            private void GoToDefinition(CommandExecutionContext context)
+            {
+                var target = GetTarget(context);
+                if (target == null)
+                {
+                    return;
+                }
+
+                _symbolInteractionService.RequestDefinition(_state, target);
+                _state.StatusMessage = "Go To Definition: " + (target.SymbolText ?? string.Empty);
+            }
+
             private void GoToBase(CommandExecutionContext context)
             {
                 QueueSemantic(context, SemanticRequestKind.BaseSymbol, SemanticWorkbenchViewKind.BaseSymbols, "Go To Base");
@@ -389,49 +415,91 @@ namespace Cortex.Modules.Editor
 
             private void RemoveAndSortUsings(CommandExecutionContext context)
             {
-                var session = GetActiveDocument(true);
-                if (session == null)
+                var target = GetTarget(context);
+                var availability = _executionStrategyService.GetAvailability("cortex.editor.removeAndSortUsings", _state, target);
+                if (availability == null || !availability.Enabled)
                 {
+                    _state.StatusMessage = availability != null ? availability.DisabledReason ?? string.Empty : "Remove and Sort Usings is not available.";
+                    return;
+                }
+
+                EditorLogicalDocumentTarget resolvedTarget;
+                string resolutionReason;
+                if (!_targetResolutionService.TryResolveSourceDocument(_state, target, out resolvedTarget, out resolutionReason) || resolvedTarget == null)
+                {
+                    _state.StatusMessage = resolutionReason;
                     return;
                 }
 
                 string updatedText;
-                if (!TryOrganizeTopLevelUsings(session.Text, out updatedText))
+                DocumentEditPreviewPlan previewPlan;
+                string statusMessage;
+                if (!_usingDirectiveOrganizationService.TryBuildPreviewPlan(_state, resolvedTarget.DocumentPath, out previewPlan, out updatedText, out statusMessage))
                 {
-                    _state.StatusMessage = "No using directives were found to organize.";
+                    _state.StatusMessage = statusMessage;
                     return;
                 }
 
-                if (string.Equals(session.Text ?? string.Empty, updatedText ?? string.Empty, StringComparison.Ordinal))
+                if (availability.ExecutionKind == EditorCommandExecutionKind.Direct)
                 {
-                    _state.StatusMessage = "Using directives are already organized.";
+                    var session = resolvedTarget.Session ?? GetActiveDocument(true);
+                    if (session == null)
+                    {
+                        _state.StatusMessage = "Open the source document before organizing using directives.";
+                        return;
+                    }
+
+                    if (_editorService.SetText(session, updatedText))
+                    {
+                        _state.StatusMessage = "Removed duplicates and sorted using directives.";
+                    }
+
                     return;
                 }
 
-                if (_editorService.SetText(session, updatedText))
+                _semanticOperationService.OpenDocumentEditPreview(_state, previewPlan);
+                OpenSearchContainer();
+
+                if (_availabilityService.HasCapability(_state, "document-transforms"))
                 {
-                    _state.StatusMessage = "Removed duplicates and sorted using directives.";
+                    var previewTarget = new EditorCommandTarget
+                    {
+                        ContextId = EditorContextIds.Document,
+                        DocumentPath = resolvedTarget.DocumentPath ?? string.Empty,
+                        Line = target != null ? target.Line : 1,
+                        Column = target != null ? target.Column : 1,
+                        AbsolutePosition = 0,
+                        SupportsEditing = resolvedTarget.SupportsEditing,
+                        CanGoToDefinition = false
+                    };
+                    _semanticOperationService.QueueDocumentTransformRequest(
+                        _state,
+                        previewTarget,
+                        "cortex.editor.removeAndSortUsings",
+                        "Remove and Sort Usings",
+                        "Apply Changes",
+                        true,
+                        false,
+                        true);
+                    _state.StatusMessage = "Previewing Roslyn cleanup changes for " + System.IO.Path.GetFileName(resolvedTarget.DocumentPath) + ".";
+                    return;
                 }
+
+                _state.StatusMessage = previewPlan != null ? previewPlan.StatusMessage ?? string.Empty : "Using directive preview was not available.";
             }
 
             private void Cut(CommandExecutionContext context)
             {
-                var session = GetActiveDocument(true);
-                if (session == null)
+                string statusMessage;
+                if (_mutationExecutionService.TryExecuteClipboardCommand("cortex.editor.cut", _state, GetTarget(context), out statusMessage))
                 {
+                    _state.StatusMessage = statusMessage;
                     return;
                 }
 
-                var text = _editorService.GetSelectedText(session);
-                if (string.IsNullOrEmpty(text))
+                if (!string.IsNullOrEmpty(statusMessage))
                 {
-                    return;
-                }
-
-                GUIUtility.systemCopyBuffer = text;
-                if (_editorService.Backspace(session))
-                {
-                    _state.StatusMessage = "Cut selection.";
+                    _state.StatusMessage = statusMessage;
                 }
             }
 
@@ -439,12 +507,11 @@ namespace Cortex.Modules.Editor
             {
                 var session = GetActiveDocument(false);
                 var target = GetTarget(context);
-                if (session == null)
-                {
-                    return;
-                }
-
-                var text = _editorService.GetSelectedText(session);
+                var text = target != null && target.HasSelection
+                    ? target.SelectionText ?? string.Empty
+                    : session != null
+                        ? _editorService.GetSelectedText(session)
+                        : string.Empty;
                 if (string.IsNullOrEmpty(text) && target != null)
                 {
                     text = target.SymbolText ?? string.Empty;
@@ -455,22 +522,22 @@ namespace Cortex.Modules.Editor
                     return;
                 }
 
-                GUIUtility.systemCopyBuffer = text;
+                _clipboardService.SetText(text);
                 _state.StatusMessage = "Copied selection.";
             }
 
             private void Paste(CommandExecutionContext context)
             {
-                var session = GetActiveDocument(true);
-                if (session == null)
+                string statusMessage;
+                if (_mutationExecutionService.TryExecuteClipboardCommand("cortex.editor.paste", _state, GetTarget(context), out statusMessage))
                 {
+                    _state.StatusMessage = statusMessage;
                     return;
                 }
 
-                var text = GUIUtility.systemCopyBuffer ?? string.Empty;
-                if (_editorService.InsertText(session, text))
+                if (!string.IsNullOrEmpty(statusMessage))
                 {
-                    _state.StatusMessage = "Pasted clipboard contents.";
+                    _state.StatusMessage = statusMessage;
                 }
             }
 
@@ -543,133 +610,6 @@ namespace Cortex.Modules.Editor
                 }
 
                 return results;
-            }
-
-            private static bool TryOrganizeTopLevelUsings(string text, out string updatedText)
-            {
-                var original = text ?? string.Empty;
-                updatedText = original;
-                if (original.Length == 0)
-                {
-                    return false;
-                }
-
-                var usesCrLf = original.IndexOf("\r\n", StringComparison.Ordinal) >= 0;
-                var normalized = original.Replace("\r\n", "\n");
-                var lines = normalized.Split('\n');
-                var blockStart = -1;
-                var blockEnd = -1;
-
-                for (var i = 0; i < lines.Length; i++)
-                {
-                    var trimmed = (lines[i] ?? string.Empty).Trim();
-                    if (blockStart < 0)
-                    {
-                        if (trimmed.Length == 0 || IsDirectivePreambleLine(trimmed))
-                        {
-                            continue;
-                        }
-
-                        if (!IsUsingDirective(trimmed))
-                        {
-                            break;
-                        }
-
-                        blockStart = i;
-                        blockEnd = i + 1;
-                        continue;
-                    }
-
-                    if (trimmed.Length == 0 || IsUsingDirective(trimmed))
-                    {
-                        blockEnd = i + 1;
-                        continue;
-                    }
-
-                    break;
-                }
-
-                if (blockStart < 0 || blockEnd <= blockStart)
-                {
-                    return false;
-                }
-
-                var usingLines = new System.Collections.Generic.List<string>();
-                for (var i = blockStart; i < blockEnd; i++)
-                {
-                    var trimmed = (lines[i] ?? string.Empty).Trim();
-                    if (IsUsingDirective(trimmed))
-                    {
-                        usingLines.Add(trimmed);
-                    }
-                }
-
-                if (usingLines.Count == 0)
-                {
-                    return false;
-                }
-
-                usingLines.Sort(StringComparer.OrdinalIgnoreCase);
-                var distinctUsings = new System.Collections.Generic.List<string>();
-                for (var i = 0; i < usingLines.Count; i++)
-                {
-                    if (distinctUsings.Count == 0 ||
-                        !string.Equals(distinctUsings[distinctUsings.Count - 1], usingLines[i], StringComparison.OrdinalIgnoreCase))
-                    {
-                        distinctUsings.Add(usingLines[i]);
-                    }
-                }
-
-                var rebuilt = new System.Collections.Generic.List<string>();
-                for (var i = 0; i < blockStart; i++)
-                {
-                    rebuilt.Add(lines[i]);
-                }
-
-                for (var i = 0; i < distinctUsings.Count; i++)
-                {
-                    rebuilt.Add(distinctUsings[i]);
-                }
-
-                var firstTrailingIndex = blockEnd;
-                while (firstTrailingIndex < lines.Length && string.IsNullOrEmpty(lines[firstTrailingIndex]))
-                {
-                    firstTrailingIndex++;
-                }
-
-                if (distinctUsings.Count > 0 &&
-                    firstTrailingIndex < lines.Length &&
-                    rebuilt.Count > 0 &&
-                    !string.IsNullOrEmpty(rebuilt[rebuilt.Count - 1]))
-                {
-                    rebuilt.Add(string.Empty);
-                }
-
-                for (var i = firstTrailingIndex; i < lines.Length; i++)
-                {
-                    rebuilt.Add(lines[i]);
-                }
-
-                updatedText = string.Join("\n", rebuilt.ToArray());
-                if (usesCrLf)
-                {
-                    updatedText = updatedText.Replace("\n", "\r\n");
-                }
-
-                return true;
-            }
-
-            private static bool IsDirectivePreambleLine(string trimmed)
-            {
-                return trimmed.StartsWith("//", StringComparison.Ordinal) ||
-                    trimmed.StartsWith("#", StringComparison.Ordinal);
-            }
-
-            private static bool IsUsingDirective(string trimmed)
-            {
-                return !string.IsNullOrEmpty(trimmed) &&
-                    trimmed.StartsWith("using ", StringComparison.Ordinal) &&
-                    trimmed.EndsWith(";", StringComparison.Ordinal);
             }
         }
     }

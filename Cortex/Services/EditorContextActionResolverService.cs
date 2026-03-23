@@ -17,13 +17,29 @@ namespace Cortex.Services
             EditorCommandTarget target,
             EditorContextActionPlacement placement)
         {
+            return ResolveActions(
+                state,
+                commandRegistry,
+                contributionRegistry,
+                _contextFactory.CreateForTarget(state, target),
+                placement);
+        }
+
+        public IList<EditorResolvedContextAction> ResolveActions(
+            CortexShellState state,
+            ICommandRegistry commandRegistry,
+            IContributionRegistry contributionRegistry,
+            EditorCommandInvocation invocation,
+            EditorContextActionPlacement placement)
+        {
             var results = new List<EditorResolvedContextAction>();
+            var target = invocation != null ? invocation.Target : null;
             if (commandRegistry == null || contributionRegistry == null || target == null)
             {
                 return results;
             }
 
-            var commandContext = _contextFactory.Build(state, target);
+            var commandContext = _contextFactory.Build(invocation);
             var contributions = contributionRegistry.GetEditorContextActions();
             for (var i = 0; i < contributions.Count; i++)
             {
@@ -39,8 +55,14 @@ namespace Cortex.Services
                     continue;
                 }
 
-                var disabledReason = string.Empty;
-                var available = _availabilityService.TryGetAvailability(contribution.CommandId, state, target, out disabledReason);
+                var availability = _availabilityService.GetAvailability(contribution.CommandId, state, target);
+                if (availability != null && !availability.Visible)
+                {
+                    continue;
+                }
+
+                var disabledReason = availability != null ? availability.DisabledReason ?? string.Empty : string.Empty;
+                var available = availability != null && availability.Enabled;
                 var enabled = available && commandRegistry.CanExecute(contribution.CommandId, commandContext);
                 if (!enabled && string.IsNullOrEmpty(disabledReason))
                 {
@@ -59,7 +81,11 @@ namespace Cortex.Services
                     ContextId = contribution.ContextId,
                     Group = contribution.Group ?? string.Empty,
                     Title = !string.IsNullOrEmpty(contribution.Title) ? contribution.Title : definition.DisplayName ?? contribution.CommandId,
-                    Description = !string.IsNullOrEmpty(contribution.Description) ? contribution.Description : definition.Description ?? string.Empty,
+                    Description = availability != null && !string.IsNullOrEmpty(availability.Description)
+                        ? availability.Description
+                        : !string.IsNullOrEmpty(contribution.Description)
+                            ? contribution.Description
+                            : definition.Description ?? string.Empty,
                     ShortcutText = definition.DefaultGesture ?? string.Empty,
                     RequiredCapability = contribution.RequiredCapability ?? string.Empty,
                     DisabledReason = enabled ? string.Empty : disabledReason,

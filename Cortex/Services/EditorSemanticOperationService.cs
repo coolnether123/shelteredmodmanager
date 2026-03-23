@@ -26,6 +26,43 @@ namespace Cortex.Services
             state.Semantic.RequestedAbsolutePosition = target.AbsolutePosition;
             state.Semantic.RequestedSymbolText = target.SymbolText ?? string.Empty;
             state.Semantic.RequestedNewName = newName ?? string.Empty;
+            state.Semantic.RequestedCommandId = string.Empty;
+            state.Semantic.RequestedTitle = string.Empty;
+            state.Semantic.RequestedApplyLabel = string.Empty;
+            state.Semantic.RequestedOrganizeImports = false;
+            state.Semantic.RequestedSimplifyNames = false;
+            state.Semantic.RequestedFormatDocument = false;
+        }
+
+        public void QueueDocumentTransformRequest(
+            CortexShellState state,
+            EditorCommandTarget target,
+            string commandId,
+            string title,
+            string applyLabel,
+            bool organizeImports,
+            bool simplifyNames,
+            bool formatDocument)
+        {
+            if (state == null || state.Semantic == null || target == null)
+            {
+                return;
+            }
+
+            state.Semantic.RequestedKey = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition + "|" + SemanticRequestKind.DocumentTransformPreview + "|" + DateTime.UtcNow.Ticks;
+            state.Semantic.RequestedKind = SemanticRequestKind.DocumentTransformPreview;
+            state.Semantic.RequestedDocumentPath = target.DocumentPath ?? string.Empty;
+            state.Semantic.RequestedLine = target.Line;
+            state.Semantic.RequestedColumn = target.Column;
+            state.Semantic.RequestedAbsolutePosition = target.AbsolutePosition;
+            state.Semantic.RequestedSymbolText = target.SymbolText ?? string.Empty;
+            state.Semantic.RequestedNewName = string.Empty;
+            state.Semantic.RequestedCommandId = commandId ?? string.Empty;
+            state.Semantic.RequestedTitle = title ?? string.Empty;
+            state.Semantic.RequestedApplyLabel = applyLabel ?? string.Empty;
+            state.Semantic.RequestedOrganizeImports = organizeImports;
+            state.Semantic.RequestedSimplifyNames = simplifyNames;
+            state.Semantic.RequestedFormatDocument = formatDocument;
         }
 
         public void OpenQuickActions(CortexShellState state, EditorCommandTarget target, EditorResolvedContextAction[] actions)
@@ -107,6 +144,19 @@ namespace Cortex.Services
                 StatusMessage = "Generated unit test scaffold preview for " + (target.SymbolText ?? string.Empty) + ".",
                 CanApply = !string.IsNullOrEmpty(outputFilePath)
             };
+        }
+
+        public void OpenDocumentEditPreview(CortexShellState state, DocumentEditPreviewPlan previewPlan)
+        {
+            if (state == null || state.Semantic == null)
+            {
+                return;
+            }
+
+            state.Semantic.DocumentEditPreview = previewPlan;
+            state.Semantic.ActiveView = previewPlan != null
+                ? SemanticWorkbenchViewKind.DocumentEditPreview
+                : SemanticWorkbenchViewKind.None;
         }
 
         private static string SanitizeIdentifier(string value)

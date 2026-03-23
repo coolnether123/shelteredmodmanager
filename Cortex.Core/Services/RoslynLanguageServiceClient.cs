@@ -85,6 +85,11 @@ namespace Cortex.Core.Services
             return QueueRequest(LanguageServiceCommands.Completion, request, _timeoutMs);
         }
 
+        public string QueueSignatureHelp(LanguageServiceSignatureHelpRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.SignatureHelp, request, _timeoutMs);
+        }
+
         public string QueueSymbolContext(LanguageServiceSymbolContextRequest request)
         {
             return QueueRequest(LanguageServiceCommands.SymbolContext, request, _timeoutMs);
@@ -118,6 +123,11 @@ namespace Cortex.Core.Services
         public string QueueValueSource(LanguageServiceValueSourceRequest request)
         {
             return QueueRequest(LanguageServiceCommands.ValueSource, request, _timeoutMs);
+        }
+
+        public string QueueDocumentTransformPreview(LanguageServiceDocumentTransformRequest request)
+        {
+            return QueueRequest(LanguageServiceCommands.DocumentTransformPreview, request, _timeoutMs);
         }
 
         public bool TryDequeueResponse(out LanguageServiceEnvelope envelope)
@@ -166,6 +176,11 @@ namespace Cortex.Core.Services
             return SendRequest<LanguageServiceCompletionResponse>(LanguageServiceCommands.Completion, request);
         }
 
+        public LanguageServiceSignatureHelpResponse GetSignatureHelp(LanguageServiceSignatureHelpRequest request)
+        {
+            return SendRequest<LanguageServiceSignatureHelpResponse>(LanguageServiceCommands.SignatureHelp, request);
+        }
+
         public LanguageServiceSymbolContextResponse GetSymbolContext(LanguageServiceSymbolContextRequest request)
         {
             return SendRequest<LanguageServiceSymbolContextResponse>(LanguageServiceCommands.SymbolContext, request);
@@ -199,6 +214,11 @@ namespace Cortex.Core.Services
         public LanguageServiceValueSourceResponse GetValueSource(LanguageServiceValueSourceRequest request)
         {
             return SendRequest<LanguageServiceValueSourceResponse>(LanguageServiceCommands.ValueSource, request);
+        }
+
+        public LanguageServiceDocumentTransformResponse PreviewDocumentTransform(LanguageServiceDocumentTransformRequest request)
+        {
+            return SendRequest<LanguageServiceDocumentTransformResponse>(LanguageServiceCommands.DocumentTransformPreview, request);
         }
 
         public void Shutdown()

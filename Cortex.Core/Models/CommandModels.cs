@@ -32,6 +32,21 @@ namespace Cortex.Core.Models
 
     public sealed class EditorCommandTarget
     {
+        public EditorCommandTarget()
+        {
+            ContextId = string.Empty;
+            DocumentPath = string.Empty;
+            SymbolText = string.Empty;
+            HoverText = string.Empty;
+            SelectionText = string.Empty;
+            DefinitionDocumentPath = string.Empty;
+            CaretIndex = -1;
+            SelectionStart = -1;
+            SelectionEnd = -1;
+            DefinitionStart = -1;
+            DefinitionLength = -1;
+        }
+
         public string ContextId;
         public string DocumentPath;
         public string SymbolText;
@@ -39,8 +54,46 @@ namespace Cortex.Core.Models
         public int Line;
         public int Column;
         public int AbsolutePosition;
+        public int CaretIndex;
+        public int SelectionStart;
+        public int SelectionEnd;
+        public string SelectionText;
+        public bool HasSelection;
+        public DocumentKind DocumentKind;
         public bool SupportsEditing;
+        public bool IsEditModeEnabled;
+        public bool CanToggleEditMode;
         public bool CanGoToDefinition;
+        public string DefinitionDocumentPath;
+        public int DefinitionLine;
+        public int DefinitionColumn;
+        public int DefinitionStart;
+        public int DefinitionLength;
+    }
+
+    public enum EditorCommandExecutionKind
+    {
+        Unavailable = 0,
+        Direct = 1,
+        SourceRedirect = 2,
+        PreviewApply = 3
+    }
+
+    public sealed class EditorCommandAvailability
+    {
+        public bool Visible = true;
+        public bool Enabled;
+        public string DisabledReason = string.Empty;
+        public string Description = string.Empty;
+        public EditorCommandExecutionKind ExecutionKind;
+    }
+
+    public sealed class EditorCommandInvocation
+    {
+        public string ActiveContainerId = string.Empty;
+        public string ActiveDocumentId = string.Empty;
+        public string FocusedRegionId = string.Empty;
+        public EditorCommandTarget Target;
     }
 
     public sealed class CommandHandlerRegistration

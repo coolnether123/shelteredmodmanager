@@ -89,6 +89,7 @@ namespace Cortex.Core.Abstractions
         string QueueHover(LanguageServiceHoverRequest request);
         string QueueGoToDefinition(LanguageServiceDefinitionRequest request);
         string QueueCompletion(LanguageServiceCompletionRequest request);
+        string QueueSignatureHelp(LanguageServiceSignatureHelpRequest request);
         string QueueSymbolContext(LanguageServiceSymbolContextRequest request);
         string QueueRenamePreview(LanguageServiceRenameRequest request);
         string QueueReferences(LanguageServiceReferencesRequest request);
@@ -96,6 +97,7 @@ namespace Cortex.Core.Abstractions
         string QueueGoToImplementation(LanguageServiceImplementationRequest request);
         string QueueCallHierarchy(LanguageServiceCallHierarchyRequest request);
         string QueueValueSource(LanguageServiceValueSourceRequest request);
+        string QueueDocumentTransformPreview(LanguageServiceDocumentTransformRequest request);
         bool TryDequeueResponse(out LanguageServiceEnvelope envelope);
         LanguageServiceInitializeResponse Initialize(LanguageServiceInitializeRequest request);
         LanguageServiceStatusResponse GetStatus();
@@ -103,6 +105,7 @@ namespace Cortex.Core.Abstractions
         LanguageServiceHoverResponse GetHover(LanguageServiceHoverRequest request);
         LanguageServiceDefinitionResponse GoToDefinition(LanguageServiceDefinitionRequest request);
         LanguageServiceCompletionResponse GetCompletion(LanguageServiceCompletionRequest request);
+        LanguageServiceSignatureHelpResponse GetSignatureHelp(LanguageServiceSignatureHelpRequest request);
         LanguageServiceSymbolContextResponse GetSymbolContext(LanguageServiceSymbolContextRequest request);
         LanguageServiceRenameResponse PreviewRename(LanguageServiceRenameRequest request);
         LanguageServiceReferencesResponse FindReferences(LanguageServiceReferencesRequest request);
@@ -110,6 +113,7 @@ namespace Cortex.Core.Abstractions
         LanguageServiceImplementationResponse GoToImplementation(LanguageServiceImplementationRequest request);
         LanguageServiceCallHierarchyResponse GetCallHierarchy(LanguageServiceCallHierarchyRequest request);
         LanguageServiceValueSourceResponse GetValueSource(LanguageServiceValueSourceRequest request);
+        LanguageServiceDocumentTransformResponse PreviewDocumentTransform(LanguageServiceDocumentTransformRequest request);
         void Shutdown();
     }
 

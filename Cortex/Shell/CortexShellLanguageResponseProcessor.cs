@@ -74,6 +74,15 @@ namespace Cortex
                     continue;
                 }
 
+                if (runtime.PendingSignatureHelp != null &&
+                    string.Equals(envelope.RequestId, runtime.PendingSignatureHelp.RequestId, StringComparison.Ordinal))
+                {
+                    var pending = runtime.PendingSignatureHelp;
+                    runtime.PendingSignatureHelp = null;
+                    HandleLanguageSignatureHelpResponse(context, envelope, pending);
+                    continue;
+                }
+
                 if (runtime.PendingSemanticOperation != null &&
                     string.Equals(envelope.RequestId, runtime.PendingSemanticOperation.RequestId, StringComparison.Ordinal))
                 {
@@ -370,6 +379,20 @@ namespace Cortex
             }
         }
 
+        private static void HandleLanguageSignatureHelpResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope, PendingLanguageSignatureHelpRequest pending)
+        {
+            var runtime = context.RuntimeState;
+            runtime.SignatureHelpInFlight = false;
+            if (pending == null || pending.Generation != runtime.ServiceGeneration || context.State.Editor == null)
+            {
+                return;
+            }
+
+            var response = DeserializeEnvelopePayload<LanguageServiceSignatureHelpResponse>(envelope);
+            var target = context.FindOpenDocument(response != null ? response.DocumentPath : pending.DocumentPath);
+            context.EditorSignatureHelpService.AcceptResponse(context.State.Editor, target, pending, response);
+        }
+
         private static void HandleSemanticOperationResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope, PendingSemanticOperationRequest pending)
         {
             var runtime = context.RuntimeState;
@@ -404,6 +427,9 @@ namespace Cortex
                     return;
                 case SemanticRequestKind.ValueSource:
                     HandleValueSourceResponse(context, envelope);
+                    return;
+                case SemanticRequestKind.DocumentTransformPreview:
+                    HandleDocumentTransformPreviewResponse(context, envelope);
                     return;
             }
         }
@@ -478,6 +504,38 @@ namespace Cortex
             context.State.Semantic.ValueSource = response;
             context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.ValueSource;
             context.State.StatusMessage = response != null ? response.StatusMessage ?? string.Empty : "Value source lookup failed.";
+        }
+
+        private static void HandleDocumentTransformPreviewResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
+        {
+            var response = DeserializeEnvelopePayload<LanguageServiceDocumentTransformResponse>(envelope);
+            if (response == null || !response.Success)
+            {
+                context.State.StatusMessage = response != null ? response.StatusMessage ?? "Document cleanup preview failed." : "Document cleanup preview failed.";
+                return;
+            }
+
+            var documents = response.Documents != null ? response.Documents : new LanguageServiceDocumentChange[0];
+            if (documents.Length == 0)
+            {
+                context.State.StatusMessage = !string.IsNullOrEmpty(response.StatusMessage)
+                    ? response.StatusMessage
+                    : "Document cleanup preview failed.";
+                return;
+            }
+
+            context.State.Semantic.DocumentEditPreview = new DocumentEditPreviewPlan
+            {
+                CommandId = response.CommandId ?? string.Empty,
+                Title = response.Title ?? string.Empty,
+                ApplyLabel = response.ApplyLabel ?? string.Empty,
+                StatusMessage = response.StatusMessage ?? string.Empty,
+                PrimaryDocumentPath = response.DocumentPath ?? string.Empty,
+                Documents = documents,
+                CanApply = response.CanApply
+            };
+            context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.DocumentEditPreview;
+            context.State.StatusMessage = response.StatusMessage ?? string.Empty;
         }
 
         private static bool TryOpenSingleSemanticLocation(CortexShellLanguageRuntimeContext context, LanguageServiceSymbolLocation[] locations, string successMessage)

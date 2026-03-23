@@ -56,6 +56,11 @@ namespace Cortex.Roslyn.Worker
                     return HandleCompletion(request);
                 }
 
+                if (string.Equals(command, LanguageServiceCommands.SignatureHelp, StringComparison.OrdinalIgnoreCase))
+                {
+                    return HandleSignatureHelp(request);
+                }
+
                 if (string.Equals(command, LanguageServiceCommands.SymbolContext, StringComparison.OrdinalIgnoreCase))
                 {
                     return HandleSymbolContext(request);
@@ -89,6 +94,11 @@ namespace Cortex.Roslyn.Worker
                 if (string.Equals(command, LanguageServiceCommands.ValueSource, StringComparison.OrdinalIgnoreCase))
                 {
                     return HandleValueSource(request);
+                }
+
+                if (string.Equals(command, LanguageServiceCommands.DocumentTransformPreview, StringComparison.OrdinalIgnoreCase))
+                {
+                    return HandleDocumentTransformPreview(request);
                 }
 
                 if (string.Equals(command, LanguageServiceCommands.Shutdown, StringComparison.OrdinalIgnoreCase))
@@ -179,6 +189,12 @@ namespace Cortex.Roslyn.Worker
             return BuildSuccessEnvelope(request, GetCompletion(payload));
         }
 
+        private LanguageServiceEnvelope HandleSignatureHelp(LanguageServiceEnvelope request)
+        {
+            var payload = DeserializePayload<LanguageServiceSignatureHelpRequest>(request);
+            return BuildSuccessEnvelope(request, GetSignatureHelp(payload));
+        }
+
         private LanguageServiceEnvelope HandleSymbolContext(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceSymbolContextRequest>(request);
@@ -219,6 +235,12 @@ namespace Cortex.Roslyn.Worker
         {
             var payload = DeserializePayload<LanguageServiceValueSourceRequest>(request);
             return BuildSuccessEnvelope(request, GetValueSource(payload));
+        }
+
+        private LanguageServiceEnvelope HandleDocumentTransformPreview(LanguageServiceEnvelope request)
+        {
+            var payload = DeserializePayload<LanguageServiceDocumentTransformRequest>(request);
+            return BuildSuccessEnvelope(request, PreviewDocumentTransform(payload));
         }
 
         private T DeserializePayload<T>(LanguageServiceEnvelope request) where T : class, new()
@@ -264,13 +286,15 @@ namespace Cortex.Roslyn.Worker
                 "hover",
                 "definition",
                 "completion",
+                "signature-help",
                 "symbol-context",
                 "rename",
                 "references",
                 "base-symbol",
                 "implementations",
                 "call-hierarchy",
-                "value-source"
+                "value-source",
+                "document-transforms"
             };
         }
     }

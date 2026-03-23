@@ -14,6 +14,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Host.Mef;
 using Microsoft.CodeAnalysis.MSBuild;
+using Microsoft.CodeAnalysis.QuickInfo;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Cortex.Roslyn.Worker
@@ -113,58 +114,7 @@ namespace Cortex.Roslyn.Worker
             }
 
             var symbol = ResolveSymbol(documentContext.Document, position);
-
-            if (symbol == null)
-            {
-                return new LanguageServiceHoverResponse
-                {
-                    Success = false,
-                    StatusMessage = "No Roslyn symbol was found at that position.",
-                    DocumentPath = documentContext.Document.FilePath ?? request.DocumentPath ?? string.Empty,
-                    ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
-                    DocumentVersion = request.DocumentVersion,
-                    SymbolDisplay = string.Empty,
-                    SymbolKind = string.Empty,
-                    DocumentationXml = string.Empty,
-                    DocumentationText = string.Empty,
-                    DisplayParts = new LanguageServiceHoverDisplayPart[0]
-                };
-            }
-
-            var syntaxTree = documentContext.Document.GetSyntaxTreeAsync().Result;
-            var sourceLocation = symbol.Locations.FirstOrDefault(location =>
-                location.IsInSource &&
-                location.SourceTree == syntaxTree);
-            var definitionLocation = symbol.Locations.FirstOrDefault(location => location.IsInSource);
-            var span = sourceLocation != null ? sourceLocation.SourceSpan : default(TextSpan);
-            var definitionText = definitionLocation != null && definitionLocation.SourceTree != null
-                ? definitionLocation.SourceTree.GetText()
-                : null;
-            var documentationXml = symbol.GetDocumentationCommentXml();
-
-            return new LanguageServiceHoverResponse
-            {
-                Success = true,
-                StatusMessage = "Hover info resolved.",
-                DocumentPath = documentContext.Document.FilePath ?? request.DocumentPath ?? string.Empty,
-                ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
-                DocumentVersion = request.DocumentVersion,
-                SymbolDisplay = symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
-                QualifiedSymbolDisplay = GetQualifiedSymbolDisplay(symbol),
-                SymbolKind = symbol.Kind.ToString(),
-                MetadataName = symbol.MetadataName ?? string.Empty,
-                ContainingTypeName = GetContainingTypeName(symbol),
-                ContainingAssemblyName = symbol.ContainingAssembly != null ? symbol.ContainingAssembly.Identity.Name : string.Empty,
-                DocumentationCommentId = symbol.GetDocumentationCommentId() ?? string.Empty,
-                DocumentationXml = documentationXml ?? string.Empty,
-                DocumentationText = FlattenDocumentation(documentationXml),
-                Range = BuildRange(text, span),
-                DefinitionDocumentPath = definitionLocation != null && definitionLocation.SourceTree != null
-                    ? definitionLocation.SourceTree.FilePath ?? string.Empty
-                    : string.Empty,
-                DefinitionRange = BuildRange(definitionText, definitionLocation != null ? definitionLocation.SourceSpan : default(TextSpan)),
-                DisplayParts = BuildHoverDisplayParts(symbol)
-            };
+            return BuildHoverResponse(documentContext, request, text, position, symbol);
         }
 
         private LanguageServiceDefinitionResponse GoToDefinition(LanguageServiceDefinitionRequest request)
@@ -841,13 +791,52 @@ namespace Cortex.Roslyn.Worker
                 var linePosition = text.Lines.GetLinePosition(span.TextSpan.Start);
                 return new LanguageServiceClassifiedSpan
                 {
-                    Classification = span.ClassificationType ?? string.Empty,
+                    Classification = GetEffectiveClassification(document, span.ClassificationType, span.TextSpan.Start) ?? string.Empty,
                     Start = span.TextSpan.Start,
                     Length = span.TextSpan.Length,
                     Line = linePosition.Line + 1,
                     Column = linePosition.Character + 1
                 };
             }).ToArray();
+        }
+
+        private static string GetEffectiveClassification(Document document, string classificationType, int position)
+        {
+            var normalized = classificationType ?? string.Empty;
+            if (!string.IsNullOrEmpty(normalized) &&
+                normalized.IndexOf("identifier", StringComparison.OrdinalIgnoreCase) < 0 &&
+                normalized.IndexOf("text", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return normalized;
+            }
+
+            var symbol = ResolveSymbol(document, position);
+            if (symbol == null)
+            {
+                return normalized;
+            }
+
+            switch (symbol.Kind)
+            {
+                case SymbolKind.NamedType:
+                    return "class name";
+                case SymbolKind.Method:
+                    return "method name";
+                case SymbolKind.Property:
+                    return "property name";
+                case SymbolKind.Event:
+                    return "event name";
+                case SymbolKind.Field:
+                    return "field name";
+                case SymbolKind.Parameter:
+                    return "parameter name";
+                case SymbolKind.Local:
+                    return "local name";
+                case SymbolKind.Namespace:
+                    return "namespace name";
+                default:
+                    return normalized;
+            }
         }
 
         private static TextSpan BuildClassificationSpan(SourceText text, int rangeStart, int rangeLength)

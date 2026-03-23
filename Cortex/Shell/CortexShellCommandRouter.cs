@@ -239,31 +239,6 @@ namespace Cortex
                     commandContext.CloseFind();
                 },
                 delegate(CommandExecutionContext context) { return commandContext.Visible && commandContext.State.Search != null && commandContext.State.Search.IsVisible; });
-
-            commandContext.WorkbenchRuntime.CommandRegistry.RegisterHandler(
-                "cortex.editor.goToDefinition",
-                delegate(CommandExecutionContext context)
-                {
-                    var target = GetEditorCommandTarget(context);
-                    if (target == null)
-                    {
-                        return;
-                    }
-
-                    commandContext.RequestDefinition(target);
-                    commandContext.State.StatusMessage = "Go To Definition: " + (target.SymbolText ?? string.Empty);
-                },
-                delegate(CommandExecutionContext context)
-                {
-                    var target = GetEditorCommandTarget(context);
-                    return commandContext.Visible && target != null && target.CanGoToDefinition;
-                });
-
-        }
-
-        private static EditorCommandTarget GetEditorCommandTarget(CommandExecutionContext context)
-        {
-            return context != null ? context.Parameter as EditorCommandTarget : null;
         }
 
         private static void RegisterWindowCommand(CortexShellCommandContext commandContext, string commandId, string containerId, string statusMessage)

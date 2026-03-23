@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Text;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
+using Cortex.Services;
 using UnityEngine;
 
 namespace Cortex.Modules.Editor
 {
     internal sealed class EditorSyntaxHighlighter
     {
+        private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
         private string _cachedKey = string.Empty;
         private string _cachedRichText = string.Empty;
 
@@ -21,7 +23,7 @@ namespace Cortex.Modules.Editor
             }
 
             _cachedKey = cacheKey;
-            _cachedRichText = BuildRichText(session);
+            _cachedRichText = BuildRichText(session, _classificationPresentationService);
             return _cachedRichText;
         }
 
@@ -49,7 +51,7 @@ namespace Cortex.Modules.Editor
                    classificationCount;
         }
 
-        private static string BuildRichText(DocumentSession session)
+        private static string BuildRichText(DocumentSession session, EditorClassificationPresentationService classificationPresentationService)
         {
             var text = session != null ? session.Text ?? string.Empty : string.Empty;
             if (string.IsNullOrEmpty(text))
@@ -112,7 +114,9 @@ namespace Cortex.Modules.Editor
                     sb.Append(Escape(text.Substring(cursor, start - cursor)));
                 }
 
-                var color = GetColor(span.Classification);
+                var color = classificationPresentationService != null
+                    ? classificationPresentationService.GetHexColor(span.Classification)
+                    : string.Empty;
                 if (string.IsNullOrEmpty(color))
                 {
                     sb.Append(Escape(text.Substring(start, end - start)));
@@ -145,98 +149,6 @@ namespace Cortex.Modules.Editor
             }
 
             return right.Length.CompareTo(left.Length);
-        }
-
-        private static string GetColor(string classification)
-        {
-            var key = (classification ?? string.Empty).Trim().ToLowerInvariant();
-            if (key.Length == 0)
-            {
-                return string.Empty;
-            }
-
-            if (key.Contains("comment"))
-            {
-                return "#6A9955";
-            }
-
-            if (key.Contains("xml"))
-            {
-                return "#808080";
-            }
-
-            if (key.Contains("keyword") || key.Contains("control"))
-            {
-                return "#569CD6";
-            }
-
-            if (key.Contains("class") ||
-                key.Contains("struct") ||
-                key.Contains("interface") ||
-                key.Contains("enum") ||
-                key.Contains("delegate") ||
-                key.Contains("record") ||
-                key.Contains("typeparameter"))
-            {
-                return "#4EC9B0";
-            }
-
-            if (key.Contains("namespace"))
-            {
-                return "#C8C8C8";
-            }
-
-            if (key.Contains("method") || key.Contains("extension method"))
-            {
-                return "#DCDCAA";
-            }
-
-            if (key.Contains("property") || key.Contains("event"))
-            {
-                return "#DCDCAA";
-            }
-
-            if (key.Contains("field") || key.Contains("enum member") || key.Contains("constant"))
-            {
-                return "#9CDCFE";
-            }
-
-            if (key.Contains("parameter") || key.Contains("local"))
-            {
-                return "#9CDCFE";
-            }
-
-            if (key.Contains("string") || key.Contains("char"))
-            {
-                return "#CE9178";
-            }
-
-            if (key.Contains("numeric") || key.Contains("number"))
-            {
-                return "#B5CEA8";
-            }
-
-            if (key.Contains("preprocessor"))
-            {
-                return "#C586C0";
-            }
-
-            if (key.Contains("operator"))
-            {
-                return "#D4D4D4";
-            }
-
-            if (key.Contains("punctuation"))
-            {
-                return "#D4D4D4";
-            }
-
-            if (key.Contains("identifier") || key.Contains("text"))
-            {
-                return "#D4D4D4";
-            }
-
-            return "#D4D4D4";
         }
 
         private static string Escape(string value)

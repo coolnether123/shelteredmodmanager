@@ -1,3 +1,5 @@
+using Cortex.LanguageService.Protocol;
+
 namespace Cortex.Core.Models
 {
     public sealed class EditorResolvedContextAction
@@ -26,7 +28,8 @@ namespace Cortex.Core.Models
         ValueSource = 5,
         UnitTestGeneration = 6,
         BaseSymbols = 7,
-        Implementations = 8
+        Implementations = 8,
+        DocumentEditPreview = 9
     }
 
     public enum SemanticRequestKind
@@ -39,7 +42,8 @@ namespace Cortex.Core.Models
         BaseSymbol = 5,
         Implementations = 6,
         CallHierarchy = 7,
-        ValueSource = 8
+        ValueSource = 8,
+        DocumentTransformPreview = 9
     }
 
     public static class SemanticCapabilityNames
@@ -64,6 +68,17 @@ namespace Cortex.Core.Models
         public string OutputFilePath;
         public string GeneratedText;
         public string StatusMessage;
+        public bool CanApply;
+    }
+
+    public sealed class DocumentEditPreviewPlan
+    {
+        public string CommandId = string.Empty;
+        public string Title = string.Empty;
+        public string ApplyLabel = string.Empty;
+        public string StatusMessage = string.Empty;
+        public string PrimaryDocumentPath = string.Empty;
+        public LanguageServiceDocumentChange[] Documents = new LanguageServiceDocumentChange[0];
         public bool CanApply;
     }
 }
