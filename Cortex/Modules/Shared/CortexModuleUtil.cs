@@ -42,23 +42,22 @@ namespace Cortex.Modules.Shared
                     return true;
                 }
 
-                var runtimeCacheRoot = Path.Combine(
-                    Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                        "ModAPI"),
-                    "Cache");
-                if (string.IsNullOrEmpty(runtimeCacheRoot))
+                foreach (var configuredCacheRoot in EnumerateAdditionalDecompilerCacheRoots(state))
                 {
-                    return false;
-                }
+                    var runtimeCacheRoot = configuredCacheRoot;
+                    if (string.IsNullOrEmpty(runtimeCacheRoot))
+                    {
+                        continue;
+                    }
 
-                runtimeCacheRoot = Path.GetFullPath(runtimeCacheRoot)
-                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
-                    Path.DirectorySeparatorChar;
-                if (fullPath.StartsWith(runtimeCacheRoot, StringComparison.OrdinalIgnoreCase))
-                {
-                    reason = "legacy-modapi-cache-root";
-                    return true;
+                    runtimeCacheRoot = Path.GetFullPath(runtimeCacheRoot)
+                        .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                        Path.DirectorySeparatorChar;
+                    if (fullPath.StartsWith(runtimeCacheRoot, StringComparison.OrdinalIgnoreCase))
+                    {
+                        reason = "platform-cache-root";
+                        return true;
+                    }
                 }
 
                 return false;
@@ -394,6 +393,28 @@ namespace Cortex.Modules.Shared
         public static string[] SplitLines(string text)
         {
             return (text ?? string.Empty).Replace("\r\n", "\n").Split('\n');
+        }
+
+        private static System.Collections.Generic.IEnumerable<string> EnumerateAdditionalDecompilerCacheRoots(CortexShellState state)
+        {
+            var roots = new System.Collections.Generic.List<string>();
+            var rawRoots = state != null && state.Settings != null
+                ? state.Settings.AdditionalDecompilerCacheRoots ?? string.Empty
+                : string.Empty;
+            if (!string.IsNullOrEmpty(rawRoots))
+            {
+                var parts = rawRoots.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+                for (var i = 0; i < parts.Length; i++)
+                {
+                    var root = parts[i] != null ? parts[i].Trim() : string.Empty;
+                    if (!string.IsNullOrEmpty(root))
+                    {
+                        roots.Add(root);
+                    }
+                }
+            }
+
+            return roots;
         }
     }
 }

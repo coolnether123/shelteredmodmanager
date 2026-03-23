@@ -1,5 +1,6 @@
 using System;
 using Cortex.Core.Diagnostics;
+using Cortex.Platform.ModAPI.Runtime;
 using ModAPI.Core;
 using UnityEngine;
 
@@ -19,7 +20,7 @@ namespace Cortex.Host.Unity.Runtime
         {
             try
             {
-                var compositionRoot = new UnityCortexHostCompositionRoot();
+                var compositionRoot = new UnityCortexHostCompositionRoot(new ModApiCortexPlatformModule());
                 CortexLog.Configure(compositionRoot.LogSink);
 
                 var existingShell = UnityEngine.Object.FindObjectOfType<UnityCortexShellBehaviour>();

@@ -1,3 +1,5 @@
+using Cortex.Core.Diagnostics;
+
 namespace Cortex.Core.Abstractions
 {
     public interface IOverlayInputCaptureService
@@ -13,6 +15,8 @@ namespace Cortex.Core.Abstractions
 
     public interface ICortexPlatformModule
     {
+        ICortexLogSink LogSink { get; }
+
         IHarmonyRuntimeInspectionService HarmonyRuntimeInspectionService { get; }
 
         ILoadedModCatalog LoadedModCatalog { get; }
@@ -24,6 +28,8 @@ namespace Cortex.Core.Abstractions
         IRestartCoordinator RestartCoordinator { get; }
 
         IOverlayInputCaptureService OverlayInputCaptureService { get; }
+
+        string AdditionalDecompilerCacheRoots { get; }
 
         IRuntimeSourceNavigationService CreateRuntimeSourceNavigationService(ISourcePathResolver sourcePathResolver);
 

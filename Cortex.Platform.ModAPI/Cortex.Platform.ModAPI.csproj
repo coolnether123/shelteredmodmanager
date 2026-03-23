@@ -43,6 +43,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Runtime\MmLogCortexLogSink.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Runtime\HarmonyRuntimeInspectionService.cs" />
     <Compile Include="Runtime\ModApiCortexPlatformModule.cs" />
