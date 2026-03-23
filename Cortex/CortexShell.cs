@@ -654,6 +654,11 @@ namespace Cortex
                 effective.DecompilerCachePath = hostEnvironment.DecompilerCachePath;
             }
 
+            if (string.IsNullOrEmpty(effective.AdditionalDecompilerCacheRoots))
+            {
+                effective.AdditionalDecompilerCacheRoots = (_platformModule ?? NullCortexPlatformModule.Instance).AdditionalDecompilerCacheRoots;
+            }
+
             if (string.IsNullOrEmpty(effective.DefaultBuildConfiguration))
             {
                 effective.DefaultBuildConfiguration = "Debug";

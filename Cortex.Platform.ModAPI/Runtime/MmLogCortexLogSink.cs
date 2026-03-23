@@ -1,6 +1,6 @@
 using Cortex.Core.Diagnostics;
 
-namespace Cortex.Host.Unity.Runtime
+namespace Cortex.Platform.ModAPI.Runtime
 {
     public sealed class MmLogCortexLogSink : ICortexLogSink
     {
@@ -15,16 +15,16 @@ namespace Cortex.Host.Unity.Runtime
             switch (level)
             {
                 case CortexLogLevel.Debug:
-                    ModAPI.Core.MMLog.WriteWithSource(ModAPI.Core.MMLog.LogLevel.Debug, ModAPI.Core.MMLog.LogCategory.General, source, message);
+                    global::ModAPI.Core.MMLog.WriteWithSource(global::ModAPI.Core.MMLog.LogLevel.Debug, global::ModAPI.Core.MMLog.LogCategory.General, source, message);
                     break;
                 case CortexLogLevel.Warning:
-                    ModAPI.Core.MMLog.WriteWithSource(ModAPI.Core.MMLog.LogLevel.Warning, ModAPI.Core.MMLog.LogCategory.General, source, message);
+                    global::ModAPI.Core.MMLog.WriteWithSource(global::ModAPI.Core.MMLog.LogLevel.Warning, global::ModAPI.Core.MMLog.LogCategory.General, source, message);
                     break;
                 case CortexLogLevel.Error:
-                    ModAPI.Core.MMLog.WriteWithSource(ModAPI.Core.MMLog.LogLevel.Error, ModAPI.Core.MMLog.LogCategory.General, source, message);
+                    global::ModAPI.Core.MMLog.WriteWithSource(global::ModAPI.Core.MMLog.LogLevel.Error, global::ModAPI.Core.MMLog.LogCategory.General, source, message);
                     break;
                 default:
-                    ModAPI.Core.MMLog.WriteWithSource(ModAPI.Core.MMLog.LogLevel.Info, ModAPI.Core.MMLog.LogCategory.General, source, message);
+                    global::ModAPI.Core.MMLog.WriteWithSource(global::ModAPI.Core.MMLog.LogLevel.Info, global::ModAPI.Core.MMLog.LogCategory.General, source, message);
                     break;
             }
         }

@@ -1,5 +1,4 @@
 using Cortex.Core.Abstractions;
-using Cortex.Platform.ModAPI.Runtime;
 using Cortex.Presentation.Abstractions;
 
 namespace Cortex.Host.Unity.Runtime
@@ -17,7 +16,7 @@ namespace Cortex.Host.Unity.Runtime
                 new UnityCortexHostEnvironment(),
                 new WindowsPathInteractionService(),
                 new UnityWorkbenchRuntimeFactory(),
-                new ModApiCortexPlatformModule(),
+                null,
                 new UnityCortexShellHostUi())
         {
         }

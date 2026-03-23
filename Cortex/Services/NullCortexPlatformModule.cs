@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Cortex.Core.Abstractions;
+using Cortex.Core.Diagnostics;
 using Cortex.Core.Models;
 
 namespace Cortex.Services
@@ -8,6 +9,7 @@ namespace Cortex.Services
     {
         public static readonly NullCortexPlatformModule Instance = new NullCortexPlatformModule();
 
+        private readonly ICortexLogSink _logSink = new NullLogSink();
         private readonly IHarmonyRuntimeInspectionService _harmonyRuntimeInspectionService = new NullHarmonyRuntimeInspectionService();
         private readonly ILoadedModCatalog _loadedModCatalog = new NullLoadedModCatalog();
         private readonly IRuntimeLogFeed _runtimeLogFeed = new NullRuntimeLogFeed();
@@ -23,6 +25,11 @@ namespace Cortex.Services
         public IHarmonyRuntimeInspectionService HarmonyRuntimeInspectionService
         {
             get { return _harmonyRuntimeInspectionService; }
+        }
+
+        public ICortexLogSink LogSink
+        {
+            get { return _logSink; }
         }
 
         public ILoadedModCatalog LoadedModCatalog
@@ -48,6 +55,11 @@ namespace Cortex.Services
         public IOverlayInputCaptureService OverlayInputCaptureService
         {
             get { return _overlayInputCaptureService; }
+        }
+
+        public string AdditionalDecompilerCacheRoots
+        {
+            get { return string.Empty; }
         }
 
         public IRuntimeSourceNavigationService CreateRuntimeSourceNavigationService(ISourcePathResolver sourcePathResolver)
@@ -83,6 +95,13 @@ namespace Cortex.Services
             public LoadedModInfo GetMod(string modId)
             {
                 return null;
+            }
+        }
+
+        private sealed class NullLogSink : ICortexLogSink
+        {
+            public void Write(CortexLogEntry entry)
+            {
             }
         }
 

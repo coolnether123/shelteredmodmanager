@@ -1,4 +1,5 @@
 using Cortex.Core.Abstractions;
+using Cortex.Core.Diagnostics;
 using Cortex.Core.Services;
 using ModAPI.Core;
 using ModAPI.Inspector;
@@ -11,6 +12,7 @@ namespace Cortex.Platform.ModAPI.Runtime
     public sealed class ModApiCortexPlatformModule : ICortexPlatformModule
     {
         private const KeyCode ToggleKey = KeyCode.F8;
+        private readonly ICortexLogSink _logSink = new MmLogCortexLogSink();
         private readonly IHarmonyRuntimeInspectionService _harmonyRuntimeInspectionService = new HarmonyRuntimeInspectionService();
         private readonly ILoadedModCatalog _loadedModCatalog = new ModApiLoadedModCatalog();
         private readonly MmLogRuntimeLogFeed _runtimeLogFeed = new MmLogRuntimeLogFeed();
@@ -21,6 +23,11 @@ namespace Cortex.Platform.ModAPI.Runtime
         public IHarmonyRuntimeInspectionService HarmonyRuntimeInspectionService
         {
             get { return _harmonyRuntimeInspectionService; }
+        }
+
+        public ICortexLogSink LogSink
+        {
+            get { return _logSink; }
         }
 
         public ILoadedModCatalog LoadedModCatalog
@@ -54,6 +61,11 @@ namespace Cortex.Platform.ModAPI.Runtime
 
                 return _overlayInputCaptureService;
             }
+        }
+
+        public string AdditionalDecompilerCacheRoots
+        {
+            get { return BuildLegacyDecompilerCacheRoots(); }
         }
 
         public IRuntimeSourceNavigationService CreateRuntimeSourceNavigationService(ISourcePathResolver sourcePathResolver)
@@ -115,6 +127,17 @@ namespace Cortex.Platform.ModAPI.Runtime
             }
 
             return new ModApiOverlayInputCaptureServiceAdapter(captureService);
+        }
+
+        private static string BuildLegacyDecompilerCacheRoots()
+        {
+            var applicationDataPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
+            if (string.IsNullOrEmpty(applicationDataPath))
+            {
+                return string.Empty;
+            }
+
+            return System.IO.Path.Combine(System.IO.Path.Combine(applicationDataPath, "ModAPI"), "Cache");
         }
 
         private sealed class ModApiOverlayInputCaptureServiceAdapter : CortexOverlayInputCaptureService
