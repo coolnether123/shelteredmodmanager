@@ -1346,6 +1346,7 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
+            CortexDeveloperLog.WriteSymbolNavigation("decompiled-editor", part);
             var definitionRange = part.DefinitionRange;
             EditorInteractionLog.WriteHover("Opening tooltip part. Symbol=" + (part.SymbolDisplay ?? part.Text ?? string.Empty) +
                 ", DefinitionPath=" + (part.DefinitionDocumentPath ?? string.Empty) +
@@ -1359,55 +1360,6 @@ namespace Cortex.Modules.Editor
                 "Unable to open definition for " + (part.SymbolDisplay ?? part.Text ?? string.Empty) + "."))
             {
                 EditorInteractionLog.WriteHover("Opened tooltip symbol target for " + (part.SymbolDisplay ?? part.Text ?? string.Empty) + ".");
-            }
-        }
-
-        private void HandleTooltipPartInteraction(CortexNavigationService navigationService, CortexShellState state, LanguageServiceHoverDisplayPart part)
-        {
-            var current = Event.current;
-            if (current == null || current.button != 0)
-            {
-                return;
-            }
-
-            var partKey = part != null && part.IsInteractive ? BuildTooltipPartKey(part) : string.Empty;
-            if (current.type == EventType.MouseDown)
-            {
-                _pressedTooltipPartKey = partKey;
-                if (!string.IsNullOrEmpty(partKey))
-                {
-                    current.Use();
-                }
-                return;
-            }
-
-            if (current.type != EventType.MouseUp)
-            {
-                return;
-            }
-
-            var shouldOpen = !string.IsNullOrEmpty(partKey) &&
-                string.Equals(_pressedTooltipPartKey, partKey, StringComparison.Ordinal);
-            _pressedTooltipPartKey = string.Empty;
-            if (!shouldOpen || navigationService == null || state == null)
-            {
-                return;
-            }
-
-            var definitionRange = part != null ? part.DefinitionRange : null;
-            EditorInteractionLog.WriteHover("Opening tooltip part. Symbol=" + (part != null ? (part.SymbolDisplay ?? part.Text ?? string.Empty) : string.Empty) +
-                ", DefinitionPath=" + (part != null ? (part.DefinitionDocumentPath ?? string.Empty) : string.Empty) +
-                ", DefinitionLine=" + (definitionRange != null ? definitionRange.StartLine : 0) +
-                ", DefinitionColumn=" + (definitionRange != null ? definitionRange.StartColumn : 0) + ".");
-
-            if (navigationService.OpenHoverDisplayPart(
-                state,
-                part,
-                "Opened definition: " + (part.SymbolDisplay ?? part.Text ?? string.Empty),
-                "Unable to open definition for " + (part.SymbolDisplay ?? part.Text ?? string.Empty) + "."))
-            {
-                EditorInteractionLog.WriteHover("Opened tooltip symbol target for " + (part.SymbolDisplay ?? part.Text ?? string.Empty) + ".");
-                current.Use();
             }
         }
 
@@ -1563,14 +1515,7 @@ namespace Cortex.Modules.Editor
             var symbolText = !string.IsNullOrEmpty(response != null ? response.SymbolDisplay : string.Empty)
                 ? response.SymbolDisplay
                 : (hoveredToken != null ? hoveredToken.RawText.Trim() : string.Empty);
-            var symbolKind = response != null ? response.SymbolKind ?? string.Empty : string.Empty;
-            var containingType = response != null ? response.ContainingTypeName ?? string.Empty : string.Empty;
-            var assembly = response != null ? response.ContainingAssemblyName ?? string.Empty : string.Empty;
-            MMLog.WriteInfo("[Cortex.Symbol] Hover resolved. Symbol='" +
-                symbolText +
-                "', Kind='" + symbolKind +
-                "', Type='" + containingType +
-                "', Assembly='" + assembly + "'.");
+            CortexDeveloperLog.WriteSymbolTooltipVisible("decompiled-editor", hoverKey, symbolText, response);
         }
 
         private void LogHoverPlacement(
