@@ -29,6 +29,7 @@ namespace Cortex
             DocumentLanguageAnalysisService documentLanguageAnalysisService,
             DocumentLanguageInteractionService documentLanguageInteractionService,
             EditorCompletionService editorCompletionService,
+            EditorSignatureHelpService editorSignatureHelpService,
             Func<ILanguageServiceClient> languageServiceClientAccessor,
             Func<CortexNavigationService> navigationServiceAccessor,
             Func<bool> completionAugmentationInFlightAccessor,
@@ -50,6 +51,7 @@ namespace Cortex
             DocumentLanguageAnalysisService = documentLanguageAnalysisService;
             DocumentLanguageInteractionService = documentLanguageInteractionService;
             EditorCompletionService = editorCompletionService;
+            EditorSignatureHelpService = editorSignatureHelpService;
             _languageServiceClientAccessor = languageServiceClientAccessor;
             _navigationServiceAccessor = navigationServiceAccessor;
             _completionAugmentationInFlightAccessor = completionAugmentationInFlightAccessor;
@@ -77,6 +79,8 @@ namespace Cortex
 
         public EditorCompletionService EditorCompletionService { get; private set; }
 
+        public EditorSignatureHelpService EditorSignatureHelpService { get; private set; }
+
         public ILanguageServiceClient LanguageServiceClient
         {
             get { return _languageServiceClientAccessor != null ? _languageServiceClientAccessor() : null; }
@@ -97,6 +101,26 @@ namespace Cortex
         public bool IsLanguageServiceReadyForDocumentWork
         {
             get { return LanguageServiceClient != null && RuntimeState.ServiceReady && !RuntimeState.ServiceInitializing; }
+        }
+
+        public bool HasLanguageCapability(string capability)
+        {
+            var status = State != null ? State.LanguageServiceStatus : null;
+            var capabilities = status != null ? status.Capabilities : null;
+            if (capabilities == null || string.IsNullOrEmpty(capability))
+            {
+                return false;
+            }
+
+            for (var i = 0; i < capabilities.Length; i++)
+            {
+                if (string.Equals(capabilities[i], capability, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public void EnsureLanguageServiceStarted()

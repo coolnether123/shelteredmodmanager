@@ -120,6 +120,15 @@ namespace Cortex
         public bool RequestedCompletionExplicit;
         public string ActiveCompletionKey = string.Empty;
         public LanguageServiceCompletionResponse ActiveCompletionResponse;
+        public string RequestedSignatureHelpKey = string.Empty;
+        public string RequestedSignatureHelpDocumentPath = string.Empty;
+        public int RequestedSignatureHelpLine;
+        public int RequestedSignatureHelpColumn;
+        public int RequestedSignatureHelpAbsolutePosition = -1;
+        public string RequestedSignatureHelpTriggerCharacter = string.Empty;
+        public bool RequestedSignatureHelpExplicit;
+        public string ActiveSignatureHelpKey = string.Empty;
+        public LanguageServiceSignatureHelpResponse ActiveSignatureHelpResponse;
         public string CompletionPopupStateKey = string.Empty;
         public int CompletionSelectedIndex = -1;
         public string ActiveInlineCompletionKey = string.Empty;
@@ -156,6 +165,12 @@ namespace Cortex
         public int RequestedAbsolutePosition = -1;
         public string RequestedSymbolText = string.Empty;
         public string RequestedNewName = string.Empty;
+        public string RequestedCommandId = string.Empty;
+        public string RequestedTitle = string.Empty;
+        public string RequestedApplyLabel = string.Empty;
+        public bool RequestedOrganizeImports;
+        public bool RequestedSimplifyNames;
+        public bool RequestedFormatDocument;
         public SemanticWorkbenchViewKind ActiveView = SemanticWorkbenchViewKind.None;
         public bool QuickActionsVisible;
         public string QuickActionsTitle = string.Empty;
@@ -172,6 +187,7 @@ namespace Cortex
         public LanguageServiceCallHierarchyResponse CallHierarchy;
         public LanguageServiceValueSourceResponse ValueSource;
         public UnitTestGenerationPlan UnitTestGeneration;
+        public DocumentEditPreviewPlan DocumentEditPreview;
     }
 
     public sealed class CortexAcceptedCompletionEntry

@@ -17,6 +17,7 @@ namespace Cortex
             context.ProcessCompletionAugmentationResponses();
             context.LogLanguageInitializationProgress();
             requestDispatcher.UpdateLanguageCompletion(context);
+            requestDispatcher.UpdateLanguageSignatureHelp(context);
 
             if (!context.IsLanguageServiceReadyForDocumentWork)
             {

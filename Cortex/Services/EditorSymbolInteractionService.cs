@@ -79,13 +79,15 @@ namespace Cortex.Services
                 ContextId = EditorSymbolContextId,
                 DocumentPath = session.FilePath ?? string.Empty,
                 SymbolText = symbolText,
-                HoverText = BuildHoverCopyText(hoverResponse),
                 Line = Math.Max(1, line),
                 Column = Math.Max(1, column),
                 AbsolutePosition = Math.Max(0, absolutePosition),
+                CaretIndex = Math.Max(0, absolutePosition),
+                DocumentKind = session.Kind,
                 SupportsEditing = session.SupportsEditing,
                 CanGoToDefinition = canGoToDefinition
             };
+            ApplyHoverMetadata(target, hoverResponse);
             return true;
         }
 
@@ -114,6 +116,60 @@ namespace Cortex.Services
             return ((hoverResponse.SymbolDisplay ?? string.Empty) +
                 Environment.NewLine + Environment.NewLine +
                 (hoverResponse.DocumentationText ?? string.Empty)).Trim();
+        }
+
+        public void ApplySessionContext(EditorCommandTarget target, DocumentSession session, CortexShellState state, bool editingEnabled)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            target.DocumentKind = session != null ? session.Kind : DocumentKind.Unknown;
+            target.SupportsEditing = session != null && session.SupportsEditing;
+            target.IsEditModeEnabled = editingEnabled;
+            target.CanToggleEditMode = state != null &&
+                state.Settings != null &&
+                state.Settings.EnableFileEditing &&
+                session != null &&
+                session.SupportsEditing;
+
+            if (session == null || session.EditorState == null)
+            {
+                return;
+            }
+
+            var selection = session.EditorState.PrimarySelection;
+            if (target.CaretIndex < 0)
+            {
+                target.CaretIndex = session.EditorState.CaretIndex;
+            }
+            if (selection == null)
+            {
+                return;
+            }
+
+            target.SelectionStart = selection.Start;
+            target.SelectionEnd = selection.End;
+            target.HasSelection = selection.HasSelection;
+            target.SelectionText = selection.HasSelection
+                ? _editorService.GetSelectedText(session)
+                : string.Empty;
+        }
+
+        public void ApplyHoverMetadata(EditorCommandTarget target, LanguageServiceHoverResponse hoverResponse)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            target.HoverText = BuildHoverCopyText(hoverResponse);
+            target.DefinitionDocumentPath = hoverResponse != null ? hoverResponse.DefinitionDocumentPath ?? string.Empty : string.Empty;
+            target.DefinitionStart = hoverResponse != null && hoverResponse.DefinitionRange != null ? hoverResponse.DefinitionRange.Start : -1;
+            target.DefinitionLength = hoverResponse != null && hoverResponse.DefinitionRange != null ? hoverResponse.DefinitionRange.Length : -1;
+            target.DefinitionLine = hoverResponse != null && hoverResponse.DefinitionRange != null ? hoverResponse.DefinitionRange.StartLine : 0;
+            target.DefinitionColumn = hoverResponse != null && hoverResponse.DefinitionRange != null ? hoverResponse.DefinitionRange.StartColumn : 0;
         }
 
         private bool TryCreateTarget(
@@ -149,13 +205,15 @@ namespace Cortex.Services
                 ContextId = EditorSymbolContextId,
                 DocumentPath = session.FilePath ?? string.Empty,
                 SymbolText = symbolText,
-                HoverText = BuildHoverCopyText(hoverResponse),
                 Line = caret.Line + 1,
                 Column = caret.Column + 1,
                 AbsolutePosition = start,
+                CaretIndex = start,
+                DocumentKind = session.Kind,
                 SupportsEditing = session.SupportsEditing,
                 CanGoToDefinition = true
             };
+            ApplyHoverMetadata(target, hoverResponse);
             return true;
         }
 

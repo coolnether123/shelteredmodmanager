@@ -76,6 +76,7 @@
     <Compile Include="Modules\Editor\EditorCommandContributions.cs" />
     <Compile Include="Modules\Editor\EditorInteractionLog.cs" />
     <Compile Include="Modules\Editor\EditorModule.cs" />
+    <Compile Include="Modules\Editor\EditorSemanticPopupSurface.cs" />
     <Compile Include="Modules\Editor\EditorSyntaxHighlighter.cs" />
     <Compile Include="Modules\Harmony\HarmonyCommandContributions.cs" />
     <Compile Include="Modules\Harmony\HarmonyModule.cs" />
@@ -104,9 +105,15 @@
     <Compile Include="Services\DocumentLanguageAnalysisService.cs" />
     <Compile Include="Services\EditorCompletionService.cs" />
     <Compile Include="Services\EditorCommandAvailabilityService.cs" />
+    <Compile Include="Services\EditorClipboardService.cs" />
+    <Compile Include="Services\EditorClassificationPresentationService.cs" />
     <Compile Include="Services\EditorCommandContextFactory.cs" />
+    <Compile Include="Services\EditorCommandExecutionStrategyService.cs" />
     <Compile Include="Services\EditorDocumentModeService.cs" />
     <Compile Include="Services\EditorContextActionResolverService.cs" />
+    <Compile Include="Services\EditorLogicalDocumentTargetResolutionService.cs" />
+    <Compile Include="Services\EditorMutationExecutionService.cs" />
+    <Compile Include="Services\EditorSignatureHelpService.cs" />
     <Compile Include="Services\GeneratedTemplateNavigationService.cs" />
     <Compile Include="Services\HarmonyPatchDisplayService.cs" />
     <Compile Include="Services\HarmonyPatchGenerationService.cs" />
@@ -123,6 +130,7 @@
     <Compile Include="Services\SourceEditorCommandRouterService.cs" />
     <Compile Include="Services\SourceEditorHoverService.cs" />
     <Compile Include="Services\SemanticWorkspaceEditService.cs" />
+    <Compile Include="Services\UsingDirectiveOrganizationService.cs" />
     <Compile Include="Services\WorkbenchSearchService.cs" />
     <Compile Include="Services\CortexNavigationService.cs" />
     <Compile Include="Services\CortexLoadedModSourceLinkService.cs" />

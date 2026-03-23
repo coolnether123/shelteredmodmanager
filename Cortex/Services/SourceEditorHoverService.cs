@@ -13,6 +13,7 @@ namespace Cortex.Services
     internal sealed class SourceEditorHoverService
     {
         private const float HoverDelaySeconds = 0.18f;
+        private readonly EditorCommandContextFactory _contextFactory = new EditorCommandContextFactory();
         private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
 
         public bool TryCreateInteractionTarget(
@@ -23,12 +24,16 @@ namespace Cortex.Services
             out EditorCommandTarget target)
         {
             target = null;
-            if (!_symbolInteractionService.TryCreateTargetFromPosition(session, absolutePosition, null, out target))
+            EditorCommandInvocation invocation;
+            if (!_contextFactory.TryCreateSourceInteractionInvocation(session, state, editingEnabled, absolutePosition, null, out invocation) ||
+                invocation == null ||
+                invocation.Target == null)
             {
                 return false;
             }
 
-            ApplyInteractionCapabilities(target, editingEnabled, ResolveHoverResponse(state, BuildHoverKey(session, target)));
+            target = invocation.Target;
+            ApplyInteractionCapabilities(target, session, state, editingEnabled, ResolveHoverResponse(state, BuildHoverKey(session, target)));
             return true;
         }
 
@@ -139,15 +144,14 @@ namespace Cortex.Services
                 "|" + (target != null ? target.AbsolutePosition : -1);
         }
 
-        private void ApplyInteractionCapabilities(EditorCommandTarget target, bool editingEnabled, LanguageServiceHoverResponse hoverResponse)
+        private void ApplyInteractionCapabilities(EditorCommandTarget target, DocumentSession session, CortexShellState state, bool editingEnabled, LanguageServiceHoverResponse hoverResponse)
         {
             if (target == null)
             {
                 return;
             }
 
-            target.SupportsEditing = editingEnabled;
-            target.HoverText = _symbolInteractionService.BuildHoverCopyText(hoverResponse);
+            _symbolInteractionService.ApplyHoverMetadata(target, hoverResponse);
         }
     }
 }

@@ -27,12 +27,15 @@ namespace Cortex.Modules.Editor
         private readonly IEditorKeybindingService _keybindingService = new EditorKeybindingService();
         private readonly DocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
         private readonly EditorCompletionService _editorCompletionService = new EditorCompletionService();
+        private readonly EditorSignatureHelpService _editorSignatureHelpService = new EditorSignatureHelpService();
+        private readonly EditorSemanticPopupSurface _semanticPopupSurface = new EditorSemanticPopupSurface();
+        private readonly EditorCommandContextFactory _commandContextFactory = new EditorCommandContextFactory();
         private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
         private readonly EditorToolbarService _toolbarService = new EditorToolbarService();
-        private readonly EditorSemanticOperationService _semanticOperationService = new EditorSemanticOperationService();
         private readonly SourceEditorCommandRouterService _commandRouterService = new SourceEditorCommandRouterService();
         private readonly SourceEditorHoverService _hoverService = new SourceEditorHoverService();
+        private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
         private readonly PopupMenuSurface _popupMenuSurface = new PopupMenuSurface();
         private readonly GUIContent _measureContent = new GUIContent();
         private readonly List<NormalizedSpan> _orderedSpans = new List<NormalizedSpan>();
@@ -69,7 +72,7 @@ namespace Cortex.Modules.Editor
         private DateTime _hoverCandidateUtc = DateTime.MinValue;
         private bool _contextMenuOpen;
         private Vector2 _contextMenuPosition = Vector2.zero;
-        private EditorCommandTarget _contextTarget;
+        private EditorCommandInvocation _contextInvocation;
         private string _lastDrawError = string.Empty;
         private DateTime _lastDrawErrorUtc = DateTime.MinValue;
         private LayoutCache _layout;
@@ -222,13 +225,14 @@ namespace Cortex.Modules.Editor
                         scroll = scrollBeforeDraw;
                     }
 
+                    _semanticPopupSurface.DrawQuickActions(state, GetViewportAnchorRect(session, state != null && state.Semantic != null ? state.Semantic.QuickActionsTarget : null, scroll, gutterWidth), rect.size, commandRegistry);
                     if (editingEnabled)
                     {
-                        DrawQuickActionsPopup(session, state, scroll, rect.size, gutterWidth, commandRegistry);
                         DrawCompletionPopup(session, state, scroll, rect.size, gutterWidth);
-                        DrawRenamePopup(session, state, scroll, rect.size, gutterWidth, commandRegistry);
                     }
-                    DrawPeekPopup(session, state, scroll, rect.size, gutterWidth);
+                    DrawSignatureHelpPopup(session, state, scroll, rect.size, gutterWidth);
+                    _semanticPopupSurface.DrawRename(state, GetViewportAnchorRect(session, state != null && state.Editor != null ? state.Editor.ActiveRenameTarget : null, scroll, gutterWidth), rect.size, commandRegistry);
+                    _semanticPopupSurface.DrawPeek(state, GetViewportAnchorRect(session, state != null && state.Editor != null ? state.Editor.ActivePeekTarget : null, scroll, gutterWidth), rect.size);
                     DrawHoverTooltip(state, hoverTarget, pointerContext.SurfaceMouse, rect.size);
                     DrawContextMenu(state, current, pointerContext.SurfaceMouse, rect.size, commandRegistry, contextMenuStyle, contextMenuButtonStyle, contextMenuHeaderStyle);
                 }
@@ -285,16 +289,16 @@ namespace Cortex.Modules.Editor
 
             // Build a target from the current caret position so the bar reflects
             // the symbol under the caret rather than a stale right-click position.
-            EditorCommandTarget barTarget;
+            EditorCommandInvocation barInvocation;
             var caretIndex = session.EditorState != null ? session.EditorState.CaretIndex : 0;
-            if (!TryBuildCommandTarget(session, state, editingEnabled, caretIndex, out barTarget))
+            if (!TryBuildCommandTarget(session, state, editingEnabled, caretIndex, out barInvocation))
             {
                 // No identifier under the caret – use a minimal document-level
                 // target so generic actions (Copy, Paste, Undo, …) remain visible.
-                barTarget = BuildDocumentTarget(session, editingEnabled, caretIndex);
+                barInvocation = BuildDocumentInvocation(session, state, editingEnabled, caretIndex);
             }
 
-            var items = _toolbarService.BuildItems(state, commandRegistry, contributionRegistry, barTarget);
+            var items = _toolbarService.BuildItems(state, commandRegistry, contributionRegistry, barInvocation);
             if (items == null || items.Count == 0)
             {
                 return;
@@ -336,7 +340,7 @@ namespace Cortex.Modules.Editor
                     : new GUIContent(cleanLabel, item.ToolTip);
                 if (GUILayout.Button(content, style))
                 {
-                    _contextMenuService.Execute(state, commandRegistry, barTarget, item.CommandId);
+                    _contextMenuService.Execute(state, commandRegistry, barInvocation, item.CommandId);
                 }
 
                 GUI.enabled = previousEnabled;
@@ -605,10 +609,10 @@ namespace Cortex.Modules.Editor
                 var segmentStart = Math.Max(cursor, spanStart);
                 if (segmentStart > cursor)
                 {
-                    AddSegment(lineLayout, cursor - lineStart, segmentStart - cursor, string.Empty);
+                    AddSegmentRuns(lineLayout, cursor - lineStart, segmentStart - cursor, string.Empty);
                 }
 
-                AddSegment(lineLayout, segmentStart - lineStart, spanEnd - segmentStart, span.Classification);
+                AddSegmentRuns(lineLayout, segmentStart - lineStart, spanEnd - segmentStart, span.Classification);
                 cursor = spanEnd;
                 if (cursor >= lineEnd)
                 {
@@ -618,12 +622,53 @@ namespace Cortex.Modules.Editor
 
             if (cursor < lineEnd)
             {
-                AddSegment(lineLayout, cursor - lineStart, lineEnd - cursor, string.Empty);
+                AddSegmentRuns(lineLayout, cursor - lineStart, lineEnd - cursor, string.Empty);
             }
 
             if (lineLayout.Segments.Count == 0)
             {
-                AddSegment(lineLayout, 0, lineLayout.RawText.Length, string.Empty);
+                AddSegmentRuns(lineLayout, 0, lineLayout.RawText.Length, string.Empty);
+            }
+        }
+
+        private void AddSegmentRuns(EditableLineLayout lineLayout, int startInLine, int rawLength, string classification)
+        {
+            if (lineLayout == null || rawLength <= 0)
+            {
+                return;
+            }
+
+            var normalizedClassification = _classificationPresentationService.NormalizeClassification(classification);
+            if (!ShouldTokenizeForPresentation(normalizedClassification))
+            {
+                AddSegment(lineLayout, startInLine, rawLength, normalizedClassification);
+                return;
+            }
+
+            var raw = lineLayout.RawText.Substring(startInLine, rawLength);
+            var offset = 0;
+            while (offset < raw.Length)
+            {
+                var runLength = 1;
+                var kind = ClassifyCharacter(raw[offset]);
+                if (kind == CharacterKind.Word || kind == CharacterKind.Whitespace)
+                {
+                    while (offset + runLength < raw.Length && ClassifyCharacter(raw[offset + runLength]) == kind)
+                    {
+                        runLength++;
+                    }
+                }
+
+                var tokenStartInLine = startInLine + offset;
+                var effectiveClassification = kind == CharacterKind.Word
+                    ? _classificationPresentationService.GetEffectiveLineTokenClassification(
+                        normalizedClassification,
+                        lineLayout.RawText,
+                        tokenStartInLine,
+                        runLength)
+                    : normalizedClassification;
+                AddSegment(lineLayout, tokenStartInLine, runLength, effectiveClassification);
+                offset += runLength;
             }
         }
 
@@ -918,6 +963,112 @@ namespace Cortex.Modules.Editor
             }
         }
 
+        private void DrawSignatureHelpPopup(DocumentSession session, CortexShellState state, Vector2 scroll, Vector2 viewportSize, float gutterWidth)
+        {
+            if (_layout == null || session == null || state == null || state.Editor == null)
+            {
+                return;
+            }
+
+            if (!_editorSignatureHelpService.HasVisibleSignatureHelp(state.Editor, session))
+            {
+                if (state.Editor.ActiveSignatureHelpResponse != null)
+                {
+                    ClearSignatureHelp(state);
+                }
+                return;
+            }
+
+            var response = state.Editor.ActiveSignatureHelpResponse;
+            if (response == null || response.Items == null || response.Items.Length == 0)
+            {
+                return;
+            }
+
+            var activeSignatureIndex = Mathf.Clamp(response.ActiveSignatureIndex, 0, response.Items.Length - 1);
+            var activeItem = response.Items[activeSignatureIndex];
+            if (activeItem == null)
+            {
+                return;
+            }
+
+            var caret = _editorService.GetCaretPosition(session, session.EditorState.CaretIndex);
+            if (caret.Line < 0 || caret.Line >= _layout.Lines.Count)
+            {
+                return;
+            }
+
+            var signatureText = BuildSignatureHelpText(activeItem, response.ActiveParameterIndex);
+            if (string.IsNullOrEmpty(signatureText))
+            {
+                return;
+            }
+
+            var detailText = activeItem.Documentation ?? string.Empty;
+            var caretRect = BuildCaretViewportRect(_layout.Lines[caret.Line], gutterWidth, session.EditorState.CaretIndex, scroll);
+            var popupWidth = Mathf.Min(560f, Mathf.Max(280f, Measure(signatureText) + 32f));
+            var popupHeight = _lineHeight + 10f;
+            if (!string.IsNullOrEmpty(detailText))
+            {
+                popupHeight += Mathf.Max(_lineHeight, _tooltipDetailStyle.CalcHeight(new GUIContent(detailText), popupWidth - 20f)) + 8f;
+            }
+
+            var popupRect = new Rect(caretRect.x, caretRect.yMax + 2f, popupWidth, popupHeight);
+            if (HasVisibleCompletion(state))
+            {
+                popupRect.y = Mathf.Max(4f, caretRect.y - popupHeight - 4f);
+            }
+
+            if (popupRect.xMax > viewportSize.x - 6f)
+            {
+                popupRect.x = Mathf.Max(4f, viewportSize.x - popupWidth - 6f);
+            }
+
+            if (popupRect.yMax > viewportSize.y - 6f)
+            {
+                popupRect.y = Mathf.Max(4f, viewportSize.y - popupHeight - 6f);
+            }
+
+            GUI.Box(popupRect, GUIContent.none, _completionPopupStyle);
+            GUI.DrawTexture(new Rect(popupRect.x, popupRect.y, popupRect.width, 1f), _completionBorderFill);
+            GUI.DrawTexture(new Rect(popupRect.x, popupRect.yMax - 1f, popupRect.width, 1f), _completionBorderFill);
+            GUI.Label(new Rect(popupRect.x + 8f, popupRect.y + 4f, popupRect.width - 16f, _lineHeight + 2f), signatureText, _completionItemStyle);
+            if (!string.IsNullOrEmpty(detailText))
+            {
+                GUI.Label(new Rect(popupRect.x + 8f, popupRect.y + _lineHeight + 8f, popupRect.width - 16f, popupRect.height - _lineHeight - 12f), detailText, _tooltipDetailStyle);
+            }
+        }
+
+        private static string BuildSignatureHelpText(LanguageServiceSignatureHelpItem item, int activeParameterIndex)
+        {
+            if (item == null)
+            {
+                return string.Empty;
+            }
+
+            var prefix = item.PrefixDisplay ?? string.Empty;
+            var separator = !string.IsNullOrEmpty(item.SeparatorDisplay) ? item.SeparatorDisplay : ", ";
+            var suffix = item.SuffixDisplay ?? string.Empty;
+            var parameters = item.Parameters ?? new LanguageServiceSignatureHelpParameter[0];
+            if (parameters.Length == 0)
+            {
+                return prefix + suffix;
+            }
+
+            var parameterParts = new string[parameters.Length];
+            for (var i = 0; i < parameters.Length; i++)
+            {
+                var display = parameters[i] != null && !string.IsNullOrEmpty(parameters[i].Display)
+                    ? parameters[i].Display
+                    : parameters[i] != null ? parameters[i].Name ?? string.Empty : string.Empty;
+                parameterParts[i] = i == activeParameterIndex
+                    ? "[" + display + "]"
+                    : display;
+            }
+
+            return prefix + string.Join(separator, parameterParts) + suffix;
+        }
+
         private Rect BuildCaretViewportRect(EditableLineLayout line, float gutterWidth, int caretIndex, Vector2 scroll)
         {
             var rawColumn = Mathf.Max(0, Mathf.Min(line.RawText.Length, caretIndex - line.StartIndex));
@@ -1060,10 +1211,13 @@ namespace Cortex.Modules.Editor
                 if (string.Equals(selectionAction, "double-click", StringComparison.Ordinal) &&
                     current != null && current.control)
                 {
-                    EditorCommandTarget target;
-                    if (TryBuildCommandTarget(session, state, editingEnabled, hitTest.CharacterIndex, out target) && target.CanGoToDefinition)
+                    EditorCommandInvocation invocation;
+                    if (TryBuildCommandTarget(session, state, editingEnabled, hitTest.CharacterIndex, out invocation) &&
+                        invocation != null &&
+                        invocation.Target != null &&
+                        invocation.Target.CanGoToDefinition)
                     {
-                        _symbolInteractionService.RequestDefinition(state, target);
+                        _symbolInteractionService.RequestDefinition(state, invocation.Target);
                     }
                 }
 
@@ -1285,216 +1439,6 @@ namespace Cortex.Modules.Editor
             return tooltipRect;
         }
 
-        private void DrawQuickActionsPopup(
-            DocumentSession session,
-            CortexShellState state,
-            Vector2 scroll,
-            Vector2 surfaceSize,
-            float gutterWidth,
-            ICommandRegistry commandRegistry)
-        {
-            if (state == null || state.Semantic == null || !state.Semantic.QuickActionsVisible || state.Semantic.QuickActionsTarget == null)
-            {
-                return;
-            }
-
-            var target = state.Semantic.QuickActionsTarget;
-            var targetIndex = _editorService.GetCharacterIndex(session, target.Line - 1, target.Column - 1);
-            var charRect = GetCharacterRect(session, targetIndex, gutterWidth);
-            var popupRect = ClampTooltipRect(new Rect(charRect.x - scroll.x, charRect.yMax - scroll.y + 4f, 360f, 220f), surfaceSize);
-            var current = Event.current;
-            GUI.Box(popupRect, GUIContent.none, GUI.skin.window);
-
-            GUILayout.BeginArea(popupRect);
-            GUILayout.BeginVertical();
-            GUILayout.Label("Quick Actions: " + (state.Semantic.QuickActionsTitle ?? string.Empty), GUI.skin.label);
-            GUI.SetNextControlName("Cortex.QuickActionsFilter");
-            state.Semantic.QuickActionsFilterText = GUILayout.TextField(state.Semantic.QuickActionsFilterText ?? string.Empty, GUI.skin.textField);
-
-            var actions = state.Semantic.QuickActions ?? new EditorResolvedContextAction[0];
-            var previousEnabled = GUI.enabled;
-            var renderedCount = 0;
-            for (var i = 0; i < actions.Length; i++)
-            {
-                var action = actions[i];
-                if (action == null || !MatchesQuickActionFilter(action, state.Semantic.QuickActionsFilterText))
-                {
-                    continue;
-                }
-
-                renderedCount++;
-                GUI.enabled = action.Enabled;
-                var label = action.Title ?? action.CommandId ?? string.Empty;
-                if (!string.IsNullOrEmpty(action.ShortcutText))
-                {
-                    label += "  (" + action.ShortcutText + ")";
-                }
-
-                if (GUILayout.Button(label, GUILayout.Height(24f)))
-                {
-                    _contextMenuService.Execute(state, commandRegistry, target, action.CommandId);
-                    _semanticOperationService.CloseQuickActions(state);
-                    GUI.enabled = previousEnabled;
-                    GUILayout.EndVertical();
-                    GUILayout.EndArea();
-                    return;
-                }
-
-                GUI.enabled = true;
-                var detail = action.Enabled ? action.Description : action.DisabledReason;
-                if (!string.IsNullOrEmpty(detail))
-                {
-                    GUILayout.Label(detail, GUI.skin.label);
-                }
-            }
-
-            GUI.enabled = previousEnabled;
-            if (renderedCount == 0)
-            {
-                GUILayout.Label("No quick actions matched the current filter.", GUI.skin.label);
-            }
-
-            GUILayout.FlexibleSpace();
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Close", GUILayout.Width(72f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape))
-            {
-                _semanticOperationService.CloseQuickActions(state);
-                if (current != null)
-                {
-                    current.Use();
-                }
-            }
-            GUILayout.EndHorizontal();
-            GUILayout.EndVertical();
-            GUILayout.EndArea();
-        }
-
-        private void DrawRenamePopup(DocumentSession session, CortexShellState state, Vector2 scroll, Vector2 surfaceSize, float gutterWidth, ICommandRegistry commandRegistry)
-        {
-            if (state == null || state.Editor == null || state.Editor.ActiveRenameTarget == null)
-            {
-                return;
-            }
-
-            var target = state.Editor.ActiveRenameTarget;
-
-            var targetIndex = _editorService.GetCharacterIndex(session, target.Line - 1, target.Column - 1);
-            var rect = GetCharacterRect(session, targetIndex, gutterWidth);
-            var yPos = rect.yMax - scroll.y + 4f;
-            var xPos = rect.x - scroll.x;
-
-            var popupRect = new Rect(xPos, yPos, 260f, 65f);
-            popupRect = ClampTooltipRect(popupRect, surfaceSize);
-
-            var current = Event.current;
-            if (current != null && current.isMouse && popupRect.Contains(current.mousePosition))
-            {
-                // Eat mouse inputs
-            }
-
-            GUI.Box(popupRect, GUIContent.none, GUI.skin.window);
-            
-            GUILayout.BeginArea(popupRect);
-            GUILayout.BeginVertical();
-            GUILayout.Label("Rename '" + (target.SymbolText ?? "") + "' to:", GUI.skin.label);
-            
-            GUI.SetNextControlName("Cortex.RenameInput");
-            state.Editor.ActiveRenameText = GUILayout.TextField(state.Editor.ActiveRenameText, GUI.skin.textField);
-
-            if (current != null && current.type == EventType.Repaint && GUI.GetNameOfFocusedControl() != "Cortex.RenameInput")
-            {
-                GUI.FocusControl("Cortex.RenameInput");
-            }
-
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Cancel", GUILayout.Width(60f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape))
-            {
-                state.Editor.ActiveRenameTarget = null;
-                if (current != null) current.Use();
-            }
-            if (GUILayout.Button("Apply", GUILayout.Width(60f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Return))
-            {
-                _semanticOperationService.QueueRequest(state, target, SemanticRequestKind.RenamePreview, state.Editor.ActiveRenameText);
-                state.Semantic.ActiveView = SemanticWorkbenchViewKind.RenamePreview;
-                if (commandRegistry != null)
-                {
-                    commandRegistry.Execute("cortex.window.search", new CommandExecutionContext
-                    {
-                        ActiveContainerId = state.Workbench.FocusedContainerId,
-                        ActiveDocumentId = state.Documents.ActiveDocumentPath,
-                        FocusedRegionId = state.Workbench.FocusedContainerId
-                    });
-                }
-                state.StatusMessage = "Semantic rename preview requested for " + (target.SymbolText ?? string.Empty) + ".";
-                state.Editor.ActiveRenameTarget = null;
-                if (current != null) current.Use();
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.EndVertical();
-            GUILayout.EndArea();
-        }
-
-        private void DrawPeekPopup(DocumentSession session, CortexShellState state, Vector2 scroll, Vector2 surfaceSize, float gutterWidth)
-        {
-            if (state == null || state.Editor == null || state.Editor.ActivePeekTarget == null)
-            {
-                return;
-            }
-
-            var target = state.Editor.ActivePeekTarget;
-
-            var targetIndex = _editorService.GetCharacterIndex(session, target.Line - 1, target.Column - 1);
-            var charRect = GetCharacterRect(session, targetIndex, gutterWidth);
-            var yPos = charRect.yMax - scroll.y + 4f;
-            var xPos = charRect.x - scroll.x;
-
-            var popupRect = new Rect(xPos, yPos, 400f, 150f);
-            popupRect = ClampTooltipRect(popupRect, surfaceSize);
-            
-            var current = Event.current;
-            if (current != null && current.isMouse && popupRect.Contains(current.mousePosition))
-            {
-                // Eat mouse inputs
-            }
-
-            GUI.Box(popupRect, GUIContent.none, GUI.skin.window);
-            
-            GUILayout.BeginArea(popupRect);
-            GUILayout.BeginVertical();
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Peek Definition: " + (target.SymbolText ?? string.Empty), GUI.skin.label);
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("X", GUILayout.Width(24f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape))
-            {
-                state.Editor.ActivePeekTarget = null;
-                if (current != null) current.Use();
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(2f);
-            
-            var innerStyle = new GUIStyle(GUI.skin.box);
-            innerStyle.alignment = TextAnchor.UpperLeft;
-            innerStyle.wordWrap = true;
-            
-            var contentRect = new Rect(4f, 26f, 392f, 120f);
-            var peekDefinition = state.Semantic != null ? state.Semantic.PeekDefinition : null;
-            if (peekDefinition == null || !peekDefinition.Success || string.IsNullOrEmpty(peekDefinition.PreviewText))
-            {
-                GUI.Label(contentRect, "No semantic definition preview is available yet.", innerStyle);
-            }
-            else
-            {
-                GUI.Label(contentRect, peekDefinition.PreviewText, innerStyle);
-            }
-
-            GUILayout.EndVertical();
-            GUILayout.EndArea();
-        }
-
         private void DrawContextMenu(
             CortexShellState state,
             Event current,
@@ -1505,7 +1449,7 @@ namespace Cortex.Modules.Editor
             GUIStyle contextMenuButtonStyle,
             GUIStyle contextMenuHeaderStyle)
         {
-            if (!_contextMenuOpen || _contextTarget == null || _popupMenuItems.Count == 0)
+            if (!_contextMenuOpen || _contextInvocation == null || _contextInvocation.Target == null || _popupMenuItems.Count == 0)
             {
                 return;
             }
@@ -1513,7 +1457,7 @@ namespace Cortex.Modules.Editor
             var menuResult = _popupMenuSurface.Draw(
                 _contextMenuPosition,
                 viewportSize,
-                _contextTarget.SymbolText ?? string.Empty,
+                _contextInvocation.Target.SymbolText ?? string.Empty,
                 _popupMenuItems,
                 current,
                 localMouse,
@@ -1525,7 +1469,7 @@ namespace Cortex.Modules.Editor
 
             if (!string.IsNullOrEmpty(menuResult.ActivatedCommandId))
             {
-                _contextMenuService.Execute(state, commandRegistry, _contextTarget, menuResult.ActivatedCommandId);
+                _contextMenuService.Execute(state, commandRegistry, _contextInvocation, menuResult.ActivatedCommandId);
                 EditorInteractionLog.WriteContextMenu("Executed context menu command '" + menuResult.ActivatedCommandId + "'.");
                 CloseContextMenu("command executed");
                 return;
@@ -1546,13 +1490,14 @@ namespace Cortex.Modules.Editor
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry)
         {
-            EditorCommandTarget target;
-            if (!TryBuildCommandTarget(session, state, editingEnabled, absolutePosition, out target))
+            EditorCommandInvocation invocation;
+            if (!TryBuildCommandTarget(session, state, editingEnabled, absolutePosition, out invocation))
             {
-                target = BuildDocumentTarget(session, editingEnabled, absolutePosition);
+                invocation = BuildDocumentInvocation(session, state, editingEnabled, absolutePosition);
             }
 
-            var items = _contextMenuService.BuildItems(state, commandRegistry, contributionRegistry, target);
+            var target = invocation != null ? invocation.Target : null;
+            var items = _contextMenuService.BuildItems(state, commandRegistry, contributionRegistry, invocation);
             if (items == null || items.Count == 0)
             {
                 CloseContextMenu("no items available");
@@ -1561,62 +1506,47 @@ namespace Cortex.Modules.Editor
 
             _contextMenuOpen = true;
             _contextMenuPosition = localMouse;
-            _contextTarget = target;
+            _contextInvocation = invocation;
             _popupMenuSurface.Reset();
             PopulatePopupMenuItems(items);
             var enabledCount = CountEnabledPopupMenuItems();
             EditorInteractionLog.WriteContextMenu(
-                "Opened context menu for '" + (_contextTarget.SymbolText ?? string.Empty) +
+                "Opened context menu for '" + (target != null ? target.SymbolText ?? string.Empty : string.Empty) +
                 "'. Items=" + _popupMenuItems.Count +
                 ", Enabled=" + enabledCount +
                 ", Mouse=(" + localMouse.x.ToString("F1") + "," + localMouse.y.ToString("F1") + ")" +
-                ", TargetSymbol='" + (_contextTarget.SymbolText ?? string.Empty) + "'" +
+                ", TargetSymbol='" + (target != null ? target.SymbolText ?? string.Empty : string.Empty) + "'" +
                 ", AbsolutePosition=" + absolutePosition + ".");
         }
 
-        private bool TryBuildCommandTarget(DocumentSession session, CortexShellState state, bool editingEnabled, int absolutePosition, out EditorCommandTarget target)
+        private bool TryBuildCommandTarget(DocumentSession session, CortexShellState state, bool editingEnabled, int absolutePosition, out EditorCommandInvocation invocation)
         {
-            return _hoverService.TryCreateInteractionTarget(session, state, editingEnabled, absolutePosition, out target);
-        }
-
-        private EditorCommandTarget BuildDocumentTarget(DocumentSession session, bool editingEnabled, int absolutePosition)
-        {
-            if (session == null)
-            {
-                return null;
-            }
-
-            var safeTextLength = session.Text != null ? session.Text.Length : 0;
-            var clampedPosition = Mathf.Clamp(absolutePosition, 0, safeTextLength);
-            var caret = _editorService.GetCaretPosition(session, clampedPosition);
-            return new EditorCommandTarget
-            {
-                ContextId = EditorContextIds.Document,
-                DocumentPath = session.FilePath ?? string.Empty,
-                SymbolText = string.Empty,
-                HoverText = string.Empty,
-                Line = caret.Line + 1,
-                Column = caret.Column + 1,
-                AbsolutePosition = clampedPosition,
-                SupportsEditing = editingEnabled,
-                CanGoToDefinition = false
-            };
-        }
-
-        private static bool MatchesQuickActionFilter(EditorResolvedContextAction action, string filterText)
-        {
-            if (action == null)
+            invocation = null;
+            EditorCommandTarget target;
+            if (!_hoverService.TryCreateInteractionTarget(session, state, editingEnabled, absolutePosition, out target))
             {
                 return false;
             }
 
-            if (string.IsNullOrEmpty(filterText))
+            invocation = _commandContextFactory.CreateForTarget(state, target);
+            return invocation != null;
+        }
+
+        private EditorCommandInvocation BuildDocumentInvocation(DocumentSession session, CortexShellState state, bool editingEnabled, int absolutePosition)
+        {
+            return _commandContextFactory.CreateDocumentInvocation(session, state, editingEnabled, absolutePosition);
+        }
+
+        private Rect GetViewportAnchorRect(DocumentSession session, EditorCommandTarget target, Vector2 scroll, float gutterWidth)
+        {
+            if (session == null || target == null)
             {
-                return true;
+                return new Rect(Mathf.Max(0f, gutterWidth - scroll.x), Mathf.Max(0f, -scroll.y), 2f, _lineHeight);
             }
 
-            return (action.Title ?? string.Empty).IndexOf(filterText, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                (action.Description ?? string.Empty).IndexOf(filterText, StringComparison.OrdinalIgnoreCase) >= 0;
+            var targetIndex = _editorService.GetCharacterIndex(session, target.Line - 1, target.Column - 1);
+            var characterRect = GetCharacterRect(session, targetIndex, gutterWidth);
+            return new Rect(characterRect.x - scroll.x, characterRect.y - scroll.y, characterRect.width, characterRect.height);
         }
 
         private void PopulatePopupMenuItems(IList<EditorContextMenuItem> items)
@@ -1641,7 +1571,8 @@ namespace Cortex.Modules.Editor
                     Label = item.Label,
                     ShortcutText = item.ShortcutText,
                     Enabled = item.Enabled,
-                    IsSeparator = item.IsSeparator
+                    IsSeparator = item.IsSeparator,
+                    IsSectionHeader = item.IsSectionHeader
                 });
             }
         }
@@ -1652,7 +1583,7 @@ namespace Cortex.Modules.Editor
             for (var i = 0; i < _popupMenuItems.Count; i++)
             {
                 var item = _popupMenuItems[i];
-                if (item != null && !item.IsSeparator && item.Enabled)
+                if (item != null && !item.IsSeparator && !item.IsSectionHeader && item.Enabled)
                 {
                     count++;
                 }
@@ -1668,16 +1599,16 @@ namespace Cortex.Modules.Editor
 
         private void CloseContextMenu(string reason)
         {
-            if (_contextMenuOpen || _popupMenuItems.Count > 0 || _contextTarget != null)
+            if (_contextMenuOpen || _popupMenuItems.Count > 0 || _contextInvocation != null)
             {
                 EditorInteractionLog.WriteContextMenu(
                     "Closing context menu. Reason=" + (reason ?? string.Empty) +
-                    ", TargetSymbol='" + (_contextTarget != null ? (_contextTarget.SymbolText ?? string.Empty) : string.Empty) + "'" +
+                    ", TargetSymbol='" + (_contextInvocation != null && _contextInvocation.Target != null ? (_contextInvocation.Target.SymbolText ?? string.Empty) : string.Empty) + "'" +
                     ", " + _popupMenuSurface.BuildDiagnosticsSummary());
             }
 
             _contextMenuOpen = false;
-            _contextTarget = null;
+            _contextInvocation = null;
             _lastContextMenuRect = EmptyRect;
             _popupMenuSurface.Reset();
             _popupMenuItems.Clear();
@@ -1773,6 +1704,12 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
+            if (TryHandleSignatureHelpInput(session, state, current))
+            {
+                current.Use();
+                return;
+            }
+
             var previousTextVersion = session != null ? session.TextVersion : 0;
             var handled = false;
             var commandId = string.Empty;
@@ -1786,10 +1723,20 @@ namespace Cortex.Modules.Editor
                         handled = true;
                     }
                 }
+                else if (string.Equals(commandId, "edit.parameterinfo", StringComparison.Ordinal))
+                {
+                    QueueSignatureHelpRequest(session, state, true, string.Empty);
+                    handled = true;
+                }
                 else
                 {
                     handled = ExecuteCommand(session, state, commandRegistry, commandId, current.shift, editingEnabled);
                 }
+            }
+            else if (current.control && current.shift && current.keyCode == KeyCode.Space)
+            {
+                QueueSignatureHelpRequest(session, state, true, string.Empty);
+                handled = true;
             }
 
             if (!handled && !current.control && !current.alt)
@@ -1975,9 +1922,25 @@ namespace Cortex.Modules.Editor
             return false;
         }
 
+        private bool TryHandleSignatureHelpInput(DocumentSession session, CortexShellState state, Event current)
+        {
+            if (state == null || state.Editor == null || !_editorSignatureHelpService.HasVisibleSignatureHelp(state.Editor, session))
+            {
+                return false;
+            }
+
+            if (current.keyCode == KeyCode.Escape)
+            {
+                ClearSignatureHelp(state);
+                return true;
+            }
+
+            return false;
+        }
+
         private void HandleCompletionAfterKey(DocumentSession session, CortexShellState state, Event current, string commandId, int previousTextVersion, bool editingEnabled)
         {
-            if (!editingEnabled || state == null || state.Editor == null || session == null || session.EditorState == null)
+            if (state == null || state.Editor == null || session == null || session.EditorState == null)
             {
                 return;
             }
@@ -1987,9 +1950,19 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            var textChanged = session.TextVersion != previousTextVersion;
+            var textChanged = editingEnabled && session.TextVersion != previousTextVersion;
             if (textChanged)
             {
+                if (_editorSignatureHelpService.ShouldDismissAfterText(current.character))
+                {
+                    ClearSignatureHelp(state);
+                }
+                else if (_editorSignatureHelpService.ShouldTriggerSignatureHelp(current.character) ||
+                    _editorSignatureHelpService.HasVisibleSignatureHelp(state.Editor, session))
+                {
+                    QueueSignatureHelpRequest(session, state, false, current.character != '\0' ? current.character.ToString() : string.Empty);
+                }
+
                 if (_editorCompletionService.ShouldTriggerCompletion(current.character))
                 {
                     MMLog.WriteInfo("[Cortex.Completion] Triggering completion from typed character '" +
@@ -2009,20 +1982,27 @@ namespace Cortex.Modules.Editor
                 }
 
                 ClearCompletion(state);
-                return;
             }
 
-            if ((HasVisibleCompletion(state) || _editorCompletionService.HasVisibleInlineSuggestion(state != null ? state.Editor : null, session)) &&
-                (string.Equals(commandId, "caret.left", StringComparison.Ordinal) ||
-                 string.Equals(commandId, "caret.right", StringComparison.Ordinal) ||
-                 string.Equals(commandId, "caret.up", StringComparison.Ordinal) ||
-                 string.Equals(commandId, "caret.down", StringComparison.Ordinal) ||
-                 string.Equals(commandId, "caret.line.start", StringComparison.Ordinal) ||
-                 string.Equals(commandId, "caret.line.end", StringComparison.Ordinal) ||
-                 string.Equals(commandId, "caret.document.start", StringComparison.Ordinal) ||
-                 string.Equals(commandId, "caret.document.end", StringComparison.Ordinal)))
+            var movementCommand =
+                string.Equals(commandId, "caret.left", StringComparison.Ordinal) ||
+                string.Equals(commandId, "caret.right", StringComparison.Ordinal) ||
+                string.Equals(commandId, "caret.up", StringComparison.Ordinal) ||
+                string.Equals(commandId, "caret.down", StringComparison.Ordinal) ||
+                string.Equals(commandId, "caret.line.start", StringComparison.Ordinal) ||
+                string.Equals(commandId, "caret.line.end", StringComparison.Ordinal) ||
+                string.Equals(commandId, "caret.document.start", StringComparison.Ordinal) ||
+                string.Equals(commandId, "caret.document.end", StringComparison.Ordinal);
+
+            if (movementCommand &&
+                (HasVisibleCompletion(state) || _editorCompletionService.HasVisibleInlineSuggestion(state != null ? state.Editor : null, session)))
             {
                 ClearCompletion(state);
+            }
+
+            if (_editorSignatureHelpService.HasVisibleSignatureHelp(state.Editor, session) && movementCommand)
+            {
+                ClearSignatureHelp(state);
             }
         }
 
@@ -2076,6 +2056,24 @@ namespace Cortex.Modules.Editor
         private void ClearCompletion(CortexShellState state)
         {
             _editorCompletionService.Reset(state != null ? state.Editor : null);
+        }
+
+        private void QueueSignatureHelpRequest(DocumentSession session, CortexShellState state, bool explicitInvocation, string triggerCharacter)
+        {
+            if (!_editorSignatureHelpService.QueueRequest(
+                session,
+                state != null ? state.Editor : null,
+                _editorService,
+                explicitInvocation,
+                triggerCharacter))
+            {
+                ClearSignatureHelp(state);
+            }
+        }
+
+        private void ClearSignatureHelp(CortexShellState state)
+        {
+            _editorSignatureHelpService.Reset(state != null ? state.Editor : null);
         }
 
         private static string[] BuildInlineSuggestionDisplayLines(string suffixText)
@@ -2232,7 +2230,7 @@ namespace Cortex.Modules.Editor
             }
 
             style = new GUIStyle(_codeStyle);
-            style.normal.textColor = GetClassificationColor(classification);
+            style.normal.textColor = _classificationPresentationService.GetColor(classification);
             style.padding = new RectOffset(0, 0, 0, 0);
             style.margin = new RectOffset(0, 0, 0, 0);
             style.border = new RectOffset(0, 0, 0, 0);
@@ -2264,60 +2262,23 @@ namespace Cortex.Modules.Editor
                 : value.Replace("\t", "    ");
         }
 
-        private static Color GetClassificationColor(string classification)
+        private static CharacterKind ClassifyCharacter(char c)
         {
-            var key = (classification ?? string.Empty).Trim().ToLowerInvariant();
-            if (key.Contains("comment"))
+            if (char.IsWhiteSpace(c))
             {
-                return CortexIdeLayout.ParseColor("#6A9955", CortexIdeLayout.GetMutedTextColor());
+                return CharacterKind.Whitespace;
             }
 
-            if (key.Contains("xml"))
-            {
-                return CortexIdeLayout.ParseColor("#808080", CortexIdeLayout.GetMutedTextColor());
-            }
+            return char.IsLetterOrDigit(c) || c == '_'
+                ? CharacterKind.Word
+                : CharacterKind.Punctuation;
+        }
 
-            if (key.Contains("keyword") || key.Contains("control"))
-            {
-                return CortexIdeLayout.ParseColor("#569CD6", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("class") || key.Contains("struct") || key.Contains("interface") || key.Contains("enum") || key.Contains("delegate") || key.Contains("record") || key.Contains("typeparameter"))
-            {
-                return CortexIdeLayout.ParseColor("#4EC9B0", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("namespace"))
-            {
-                return CortexIdeLayout.ParseColor("#C8C8C8", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("method") || key.Contains("property") || key.Contains("event"))
-            {
-                return CortexIdeLayout.ParseColor("#DCDCAA", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("field") || key.Contains("enum member") || key.Contains("constant") || key.Contains("parameter") || key.Contains("local"))
-            {
-                return CortexIdeLayout.ParseColor("#9CDCFE", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("string") || key.Contains("char"))
-            {
-                return CortexIdeLayout.ParseColor("#CE9178", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("numeric") || key.Contains("number"))
-            {
-                return CortexIdeLayout.ParseColor("#B5CEA8", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("preprocessor"))
-            {
-                return CortexIdeLayout.ParseColor("#C586C0", CortexIdeLayout.GetTextColor());
-            }
-
-            return CortexIdeLayout.GetTextColor();
+        private static bool ShouldTokenizeForPresentation(string classification)
+        {
+            return string.IsNullOrEmpty(classification) ||
+                classification.IndexOf("identifier", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                classification.IndexOf("text", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static Texture2D MakeFill(Color color)
@@ -2363,6 +2324,13 @@ namespace Cortex.Modules.Editor
             public int Start;
             public int Length;
             public string Classification;
+        }
+
+        private enum CharacterKind
+        {
+            Word,
+            Whitespace,
+            Punctuation
         }
     }
 }

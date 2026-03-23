@@ -12,6 +12,7 @@ namespace Cortex.Services
     internal sealed class EditorToolbarService
     {
         private readonly List<EditorToolbarItem> _scratch = new List<EditorToolbarItem>();
+        private readonly EditorCommandContextFactory _contextFactory = new EditorCommandContextFactory();
         private readonly EditorContextActionResolverService _resolverService = new EditorContextActionResolverService();
 
         /// <summary>
@@ -24,7 +25,21 @@ namespace Cortex.Services
             IContributionRegistry contributionRegistry,
             EditorCommandTarget target)
         {
+            return BuildItems(
+                state,
+                commandRegistry,
+                contributionRegistry,
+                _contextFactory.CreateForTarget(state, target));
+        }
+
+        public IList<EditorToolbarItem> BuildItems(
+            CortexShellState state,
+            ICommandRegistry commandRegistry,
+            IContributionRegistry contributionRegistry,
+            EditorCommandInvocation invocation)
+        {
             _scratch.Clear();
+            var target = invocation != null ? invocation.Target : null;
 
             if (commandRegistry == null || contributionRegistry == null || target == null)
             {
@@ -35,7 +50,7 @@ namespace Cortex.Services
                 state,
                 commandRegistry,
                 contributionRegistry,
-                target,
+                invocation,
                 EditorContextActionPlacement.ActionBar);
             for (var i = 0; i < actions.Count; i++)
             {

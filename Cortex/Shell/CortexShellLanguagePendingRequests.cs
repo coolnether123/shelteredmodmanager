@@ -20,6 +20,16 @@ namespace Cortex
         public string TokenText;
     }
 
+    internal sealed class PendingLanguageSignatureHelpRequest
+    {
+        public string RequestId;
+        public int Generation;
+        public string RequestKey;
+        public string DocumentPath;
+        public int DocumentVersion;
+        public int AbsolutePosition;
+    }
+
     internal sealed class PendingSemanticOperationRequest
     {
         public string RequestId;

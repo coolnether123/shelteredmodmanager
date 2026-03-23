@@ -35,7 +35,8 @@ namespace Cortex.Services
 
     internal sealed class HarmonyPatchResolutionService
     {
-        private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
+        private readonly EditorCommandContextFactory _commandContextFactory = new EditorCommandContextFactory();
+        private readonly EditorDocumentModeService _documentModeService = new EditorDocumentModeService();
 
         public bool TryResolveFromEditorTarget(CortexShellState state, ISourceLookupIndex sourceLookupIndex, IProjectCatalog projectCatalog, EditorCommandTarget target, out HarmonyResolvedMethodTarget resolvedTarget, out string reason)
         {
@@ -70,15 +71,15 @@ namespace Cortex.Services
                 return false;
             }
 
-            string hoverReason;
-            if (TryResolveFromSourceHover(state, sourceLookupIndex, projectCatalog, target, out resolvedTarget, out hoverReason))
+            string attributeReason;
+            if (TryResolveFromSourceHarmonyPatchAttribute(state, projectCatalog, target, out resolvedTarget, out attributeReason))
             {
                 reason = string.Empty;
                 return true;
             }
 
-            string attributeReason;
-            if (TryResolveFromSourceHarmonyPatchAttribute(state, projectCatalog, target, out resolvedTarget, out attributeReason))
+            string hoverReason;
+            if (TryResolveFromSourceHover(state, sourceLookupIndex, projectCatalog, target, out resolvedTarget, out hoverReason))
             {
                 reason = string.Empty;
                 return true;
@@ -91,11 +92,11 @@ namespace Cortex.Services
                 return true;
             }
 
-            reason = !string.IsNullOrEmpty(hoverReason)
-                ? hoverReason
-                : !string.IsNullOrEmpty(attributeReason)
-                    ? attributeReason
-                : fallbackReason;
+            reason = !string.IsNullOrEmpty(attributeReason)
+                ? attributeReason
+                : !string.IsNullOrEmpty(hoverReason)
+                    ? hoverReason
+                    : fallbackReason;
             if (string.IsNullOrEmpty(reason))
             {
                 reason = "Cortex could not map the current editor context to a runtime method.";
@@ -201,7 +202,19 @@ namespace Cortex.Services
             }
 
             if (documentTarget != null &&
+                TryResolveFromSourceHarmonyPatchAttribute(state, projectCatalog, documentTarget, out resolvedTarget, out reason))
+            {
+                return true;
+            }
+
+            if (documentTarget != null &&
                 TryResolveFromSourceHover(state, sourceLookupIndex, projectCatalog, documentTarget, out resolvedTarget, out reason))
+            {
+                return true;
+            }
+
+            if (documentTarget != null &&
+                TryResolveFromSourceFallback(state, projectCatalog, documentTarget, out resolvedTarget, out reason))
             {
                 return true;
             }
@@ -585,15 +598,25 @@ namespace Cortex.Services
             }
 
             var absolutePosition = session.EditorState != null ? session.EditorState.CaretIndex : 0;
-            return _symbolInteractionService.TryCreateTargetFromPosition(
+            EditorCommandInvocation invocation;
+            if (!_commandContextFactory.TryCreateSourceInteractionInvocation(
                 session,
+                state,
+                _documentModeService.IsEditingEnabled(state != null ? state.Settings : null, session),
                 absolutePosition,
                 GetMatchingHoverResponse(state, new EditorCommandTarget
                 {
                     DocumentPath = session.FilePath ?? string.Empty,
                     AbsolutePosition = absolutePosition
                 }),
-                out target);
+                out invocation) ||
+                invocation == null)
+            {
+                return false;
+            }
+
+            target = invocation.Target;
+            return target != null;
         }
 
         private static bool TryResolveAssemblyFromCachePath(CortexShellState state, ISourceLookupIndex sourceLookupIndex, string cachePath, out string assemblyPath)

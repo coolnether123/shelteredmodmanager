@@ -7,6 +7,7 @@ namespace Cortex.Services
 {
     internal sealed class EditorContextMenuService
     {
+        private const string DisabledSectionLabel = "Unavailable Here";
         private readonly EditorContextActionResolverService _resolverService = new EditorContextActionResolverService();
         private readonly EditorCommandContextFactory _contextFactory = new EditorCommandContextFactory();
 
@@ -16,7 +17,21 @@ namespace Cortex.Services
             IContributionRegistry contributionRegistry,
             EditorCommandTarget target)
         {
+            return BuildItems(
+                state,
+                commandRegistry,
+                contributionRegistry,
+                _contextFactory.CreateForTarget(state, target));
+        }
+
+        public IList<EditorContextMenuItem> BuildItems(
+            CortexShellState state,
+            ICommandRegistry commandRegistry,
+            IContributionRegistry contributionRegistry,
+            EditorCommandInvocation invocation)
+        {
             var items = new List<EditorContextMenuItem>();
+            var target = invocation != null ? invocation.Target : null;
             if (commandRegistry == null || contributionRegistry == null || target == null)
             {
                 return items;
@@ -62,7 +77,7 @@ namespace Cortex.Services
                 });
             }
 
-            var commandContext = _contextFactory.Build(state, target);
+            var commandContext = _contextFactory.Build(invocation);
             var menus = contributionRegistry.GetMenus();
             for (var i = 0; i < menus.Count; i++)
             {
@@ -122,7 +137,8 @@ namespace Cortex.Services
             }
 
             resolvedItems.Sort(CompareItems);
-            var previousGroup = string.Empty;
+            var enabledItems = new List<ResolvedMenuItem>();
+            var disabledItems = new List<ResolvedMenuItem>();
             for (var i = 0; i < resolvedItems.Count; i++)
             {
                 var item = resolvedItems[i];
@@ -131,19 +147,26 @@ namespace Cortex.Services
                     continue;
                 }
 
-                if (items.Count > 0 && !string.Equals(previousGroup, item.Group ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+                if (item.Enabled)
+                {
+                    enabledItems.Add(item);
+                }
+                else
+                {
+                    disabledItems.Add(item);
+                }
+            }
+
+            AppendResolvedItems(items, enabledItems);
+            if (disabledItems.Count > 0)
+            {
+                if (items.Count > 0)
                 {
                     items.Add(EditorContextMenuItem.CreateSeparator());
                 }
 
-                items.Add(new EditorContextMenuItem
-                {
-                    CommandId = item.CommandId,
-                    Label = item.Label,
-                    ShortcutText = item.ShortcutText,
-                    Enabled = item.Enabled
-                });
-                previousGroup = item.Group ?? string.Empty;
+                items.Add(EditorContextMenuItem.CreateSectionHeader(DisabledSectionLabel));
+                AppendResolvedItems(items, disabledItems);
             }
 
             if (harmonyCommandsConsidered > 0 || harmonyActionsResolved > 0)
@@ -167,12 +190,26 @@ namespace Cortex.Services
             EditorCommandTarget target,
             string commandId)
         {
+            return Execute(
+                state,
+                commandRegistry,
+                _contextFactory.CreateForTarget(state, target),
+                commandId);
+        }
+
+        public bool Execute(
+            CortexShellState state,
+            ICommandRegistry commandRegistry,
+            EditorCommandInvocation invocation,
+            string commandId)
+        {
+            var target = invocation != null ? invocation.Target : null;
             if (commandRegistry == null || target == null || string.IsNullOrEmpty(commandId))
             {
                 return false;
             }
 
-            return commandRegistry.Execute(commandId, _contextFactory.Build(state, target));
+            return commandRegistry.Execute(commandId, _contextFactory.Build(invocation));
         }
 
         private static bool MatchesContext(string contextId, EditorCommandTarget target)
@@ -212,6 +249,40 @@ namespace Cortex.Services
             return !string.IsNullOrEmpty(commandId) &&
                 commandId.StartsWith("cortex.harmony.", StringComparison.OrdinalIgnoreCase);
         }
+
+        private static void AppendResolvedItems(IList<EditorContextMenuItem> items, IList<ResolvedMenuItem> resolvedItems)
+        {
+            if (items == null || resolvedItems == null || resolvedItems.Count == 0)
+            {
+                return;
+            }
+
+            var previousGroup = string.Empty;
+            var appendedAny = false;
+            for (var i = 0; i < resolvedItems.Count; i++)
+            {
+                var item = resolvedItems[i];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                if (appendedAny && !string.Equals(previousGroup, item.Group ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+                {
+                    items.Add(EditorContextMenuItem.CreateSeparator());
+                }
+
+                items.Add(new EditorContextMenuItem
+                {
+                    CommandId = item.CommandId,
+                    Label = item.Label,
+                    ShortcutText = item.ShortcutText,
+                    Enabled = item.Enabled
+                });
+                previousGroup = item.Group ?? string.Empty;
+                appendedAny = true;
+            }
+        }
     }
 
     internal sealed class ResolvedMenuItem
@@ -231,6 +302,7 @@ namespace Cortex.Services
         public string ShortcutText;
         public bool Enabled;
         public bool IsSeparator;
+        public bool IsSectionHeader;
 
         public static EditorContextMenuItem CreateSeparator()
         {
@@ -238,6 +310,16 @@ namespace Cortex.Services
             {
                 IsSeparator = true,
                 Enabled = false
+            };
+        }
+
+        public static EditorContextMenuItem CreateSectionHeader(string label)
+        {
+            return new EditorContextMenuItem
+            {
+                Label = label ?? string.Empty,
+                Enabled = false,
+                IsSectionHeader = true
             };
         }
     }

@@ -274,6 +274,62 @@ namespace Cortex
             }
         }
 
+        public void UpdateLanguageSignatureHelp(CortexShellLanguageRuntimeContext context)
+        {
+            var runtime = context != null ? context.RuntimeState : null;
+            if (context == null || runtime == null || runtime.SignatureHelpInFlight || context.State.Editor == null)
+            {
+                return;
+            }
+
+            if (!context.HasLanguageCapability("signature-help"))
+            {
+                return;
+            }
+
+            if (!context.EditorSignatureHelpService.ShouldDispatch(context.State.Editor, runtime.SignatureHelpInFlight))
+            {
+                return;
+            }
+
+            var session = context.FindOpenDocument(context.State.Editor.RequestedSignatureHelpDocumentPath);
+            if (session == null)
+            {
+                return;
+            }
+
+            var project = context.ResolveProjectForDocument(session.FilePath);
+            var sourceRoots = context.BuildLanguageSourceRoots(context.State.Settings, project);
+            var request = context.EditorSignatureHelpService.BuildWorkerRequest(
+                session,
+                context.State.Settings,
+                project,
+                sourceRoots,
+                context.State.Editor);
+            if (request == null)
+            {
+                return;
+            }
+
+            runtime.SignatureHelpInFlight = true;
+            var requestId = context.LanguageServiceClient != null ? context.LanguageServiceClient.QueueSignatureHelp(request) : string.Empty;
+            if (string.IsNullOrEmpty(requestId))
+            {
+                runtime.SignatureHelpInFlight = false;
+                return;
+            }
+
+            runtime.PendingSignatureHelp = new PendingLanguageSignatureHelpRequest
+            {
+                RequestId = requestId,
+                Generation = runtime.ServiceGeneration,
+                RequestKey = context.State.Editor.RequestedSignatureHelpKey ?? string.Empty,
+                DocumentPath = request.DocumentPath ?? string.Empty,
+                DocumentVersion = request.DocumentVersion,
+                AbsolutePosition = request.AbsolutePosition
+            };
+        }
+
         public void UpdateSemanticOperation(CortexShellLanguageRuntimeContext context)
         {
             var runtime = context != null ? context.RuntimeState : null;
@@ -403,6 +459,22 @@ namespace Cortex
                                 semantic.RequestedLine,
                                 semantic.RequestedColumn,
                                 semantic.RequestedAbsolutePosition))
+                        : string.Empty;
+                    break;
+                case SemanticRequestKind.DocumentTransformPreview:
+                    requestId = context.LanguageServiceClient != null && context.HasLanguageCapability("document-transforms")
+                        ? context.LanguageServiceClient.QueueDocumentTransformPreview(
+                            context.DocumentLanguageInteractionService.BuildDocumentTransformRequest(
+                                session,
+                                context.State.Settings,
+                                project,
+                                sourceRoots,
+                                semantic.RequestedCommandId,
+                                semantic.RequestedTitle,
+                                semantic.RequestedApplyLabel,
+                                semantic.RequestedOrganizeImports,
+                                semantic.RequestedSimplifyNames,
+                                semantic.RequestedFormatDocument))
                         : string.Empty;
                     break;
             }

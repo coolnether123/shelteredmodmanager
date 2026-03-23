@@ -22,7 +22,10 @@ namespace Cortex.Modules.Editor
         private readonly Dictionary<string, GUIStyle> _classificationStyles = new Dictionary<string, GUIStyle>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, HashSet<string>> _collapsedRegionKeys = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         private readonly GUIContent _sharedContent = new GUIContent();
+        private readonly EditorSemanticPopupSurface _semanticPopupSurface = new EditorSemanticPopupSurface();
+        private readonly EditorCommandContextFactory _commandContextFactory = new EditorCommandContextFactory();
         private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
+        private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
         private readonly PopupMenuSurface _popupMenuSurface = new PopupMenuSurface();
         private readonly List<PopupMenuItem> _popupMenuItems = new List<PopupMenuItem>();
@@ -63,7 +66,8 @@ namespace Cortex.Modules.Editor
         private string _pressedTooltipPartKey = string.Empty;
         private bool _contextMenuOpen;
         private Vector2 _contextMenuPosition = Vector2.zero;
-        private EditorCommandTarget _contextTarget;
+        private Rect _lastContextMenuRect = new Rect(0f, 0f, 0f, 0f);
+        private EditorCommandInvocation _contextInvocation;
         private string _lastDrawError = string.Empty;
         private string _lastFocusedDocumentPath = string.Empty;
         private int _lastFocusedLineNumber = -1;
@@ -119,6 +123,11 @@ namespace Cortex.Modules.Editor
                 var localMouse = current != null ? current.mousePosition - new Vector2(rect.x, rect.y) : Vector2.zero;
                 var mouseBlocked = current != null && blockedRect.width > 0f && blockedRect.height > 0f && blockedRect.Contains(current.mousePosition);
                 var hasMouse = current != null && rect.Contains(current.mousePosition) && !mouseBlocked;
+                if (_contextMenuOpen && _popupMenuItems.Count > 0)
+                {
+                    _lastContextMenuRect = _popupMenuSurface.PredictMenuRect(_contextMenuPosition, rect.size, _popupMenuItems);
+                }
+                PreHandleContextMenuInput(current, localMouse);
                 var pointerOnTooltip = hasMouse && IsPointerWithinTooltip(localMouse);
                 var pointerOnHoverSurface = hasMouse && (pointerOnTooltip || IsPointerWithinHoverSurface(localMouse));
                 var editorHoverActive = hasMouse && !pointerOnHoverSurface;
@@ -133,14 +142,26 @@ namespace Cortex.Modules.Editor
                 try
                 {
                     var contentRect = new Rect(0f, 0f, Mathf.Max(rect.width - 18f, _layout.ContentWidth), Mathf.Max(rect.height - 18f, _layout.ContentHeight));
-                    scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
+                    var preserveEditorScroll = ShouldPreserveEditorScroll(current, localMouse);
+                    var scrollBeforeDraw = scroll;
                     try
                     {
-                        DrawVisibleLines(session, scroll, rect.height, hoveredToken, hoveredFoldRegion, gutterWidth);
+                        scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
+                        try
+                        {
+                            DrawVisibleLines(session, scroll, rect.height, hoveredToken, hoveredFoldRegion, gutterWidth);
+                        }
+                        finally
+                        {
+                            GUI.EndScrollView();
+                        }
                     }
                     finally
                     {
-                        GUI.EndScrollView();
+                        if (preserveEditorScroll)
+                        {
+                            scroll = scrollBeforeDraw;
+                        }
                     }
 
                     DrawTooltip(session, scroll, localMouse, hoveredToken, navigationService, state, rect.size, hasMouse);
@@ -155,6 +176,9 @@ namespace Cortex.Modules.Editor
                         harmonyPatchInspectionService,
                         harmonyPatchResolutionService,
                         harmonyPatchDisplayService);
+                    _semanticPopupSurface.DrawQuickActions(state, GetViewportAnchorRect(state != null && state.Semantic != null ? state.Semantic.QuickActionsTarget : null, scroll, gutterWidth), rect.size, commandRegistry);
+                    _semanticPopupSurface.DrawRename(state, GetViewportAnchorRect(state != null && state.Editor != null ? state.Editor.ActiveRenameTarget : null, scroll, gutterWidth), rect.size, commandRegistry);
+                    _semanticPopupSurface.DrawPeek(state, GetViewportAnchorRect(state != null && state.Editor != null ? state.Editor.ActivePeekTarget : null, scroll, gutterWidth), rect.size);
                     DrawContextMenu(state, current, localMouse, rect.size, commandRegistry);
                 }
                 finally
@@ -555,7 +579,7 @@ namespace Cortex.Modules.Editor
                         GUI.DrawTexture(tokenRect, _hoverFill);
                     }
 
-                    GUI.Label(tokenRect, token.DisplayText, GetClassificationStyle(token.Classification));
+                    GUI.Label(tokenRect, token.DisplayText, GetClassificationStyle(GetEffectiveTokenClassification(line, tokenIndex)));
                 }
 
                 if (!string.IsNullOrEmpty(line.CollapsedHintText))
@@ -581,6 +605,11 @@ namespace Cortex.Modules.Editor
             IContributionRegistry contributionRegistry)
         {
             if (current == null)
+            {
+                return;
+            }
+
+            if (_contextMenuOpen && _lastContextMenuRect.Contains(localMouse))
             {
                 return;
             }
@@ -622,14 +651,47 @@ namespace Cortex.Modules.Editor
             _selectedTokenKey = hoveredToken.Key;
             if (current.clickCount >= 2)
             {
-                EditorCommandTarget target;
-                if (TryBuildCommandTarget(session, state, hoveredToken, out target) && target.CanGoToDefinition)
-                {
-                    _symbolInteractionService.RequestDefinition(state, target);
-                }
+                    EditorCommandInvocation invocation;
+                    if (TryBuildCommandTarget(session, state, hoveredToken, out invocation) &&
+                        invocation != null &&
+                        invocation.Target != null &&
+                        invocation.Target.CanGoToDefinition)
+                    {
+                        _symbolInteractionService.RequestDefinition(state, invocation.Target);
+                    }
             }
 
             current.Use();
+        }
+
+        private void PreHandleContextMenuInput(Event current, Vector2 localMouse)
+        {
+            if (!_contextMenuOpen)
+            {
+                return;
+            }
+
+            _popupMenuSurface.TryCapturePointerInput(current, _lastContextMenuRect, localMouse);
+            if (current != null && current.type == EventType.ScrollWheel && !_lastContextMenuRect.Contains(localMouse))
+            {
+                current.Use();
+            }
+        }
+
+        private bool ShouldPreserveEditorScroll(Event current, Vector2 localMouse)
+        {
+            if (!_contextMenuOpen)
+            {
+                return false;
+            }
+
+            if (current != null && current.type == EventType.ScrollWheel)
+            {
+                return true;
+            }
+
+            return Mathf.Abs(Input.GetAxisRaw("Mouse ScrollWheel")) > 0.0001f ||
+                Mathf.Abs(Input.GetAxis("Mouse ScrollWheel")) > 0.0001f;
         }
 
         private void BuildFoldRegions(DocumentSession session, CodeViewLayout layout)
@@ -1490,7 +1552,7 @@ namespace Cortex.Modules.Editor
             Vector2 viewportSize,
             ICommandRegistry commandRegistry)
         {
-            if (!_contextMenuOpen || _contextTarget == null || _popupMenuItems.Count == 0)
+            if (!_contextMenuOpen || _contextInvocation == null || _contextInvocation.Target == null || _popupMenuItems.Count == 0)
             {
                 return;
             }
@@ -1498,17 +1560,18 @@ namespace Cortex.Modules.Editor
             var menuResult = _popupMenuSurface.Draw(
                 _contextMenuPosition,
                 viewportSize,
-                _contextTarget.SymbolText ?? string.Empty,
+                _contextInvocation.Target.SymbolText ?? string.Empty,
                 _popupMenuItems,
                 current,
                 localMouse,
                 _contextMenuStyle,
                 _contextMenuButtonStyle,
                 _contextMenuHeaderStyle);
+            _lastContextMenuRect = menuResult.MenuRect;
 
             if (!string.IsNullOrEmpty(menuResult.ActivatedCommandId))
             {
-                _contextMenuService.Execute(state, commandRegistry, _contextTarget, menuResult.ActivatedCommandId);
+                _contextMenuService.Execute(state, commandRegistry, _contextInvocation, menuResult.ActivatedCommandId);
                 CloseContextMenu();
                 return;
             }
@@ -1527,8 +1590,8 @@ namespace Cortex.Modules.Editor
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry)
         {
-            EditorCommandTarget target;
-            if (!TryBuildCommandTarget(session, state, token, out target))
+            EditorCommandInvocation invocation;
+            if (!TryBuildCommandTarget(session, state, token, out invocation))
             {
                 MMLog.WriteWarning("[Cortex.Harmony] Context menu target creation failed for decompiled token. Document='" +
                     (session != null ? session.FilePath ?? string.Empty : string.Empty) +
@@ -1537,18 +1600,19 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
+            var target = invocation != null ? invocation.Target : null;
             MMLog.WriteInfo("[Cortex.Harmony] Opening editor context menu. Document='" +
-                (target.DocumentPath ?? string.Empty) +
-                "', Symbol='" + (target.SymbolText ?? string.Empty) +
-                "', Position=" + target.AbsolutePosition +
-                ", Line=" + target.Line +
-                ", Column=" + target.Column + ".");
+                (target != null ? target.DocumentPath ?? string.Empty : string.Empty) +
+                "', Symbol='" + (target != null ? target.SymbolText ?? string.Empty : string.Empty) +
+                "', Position=" + (target != null ? target.AbsolutePosition : -1) +
+                ", Line=" + (target != null ? target.Line : 0) +
+                ", Column=" + (target != null ? target.Column : 0) + ".");
 
-            var items = _contextMenuService.BuildItems(state, commandRegistry, contributionRegistry, target);
+            var items = _contextMenuService.BuildItems(state, commandRegistry, contributionRegistry, invocation);
             if (items == null || items.Count == 0)
             {
                 MMLog.WriteInfo("[Cortex.Harmony] Context menu produced no visible items for symbol '" +
-                    (target.SymbolText ?? string.Empty) + "'.");
+                    (target != null ? target.SymbolText ?? string.Empty : string.Empty) + "'.");
                 CloseContextMenu();
                 return;
             }
@@ -1556,7 +1620,8 @@ namespace Cortex.Modules.Editor
             _selectedTokenKey = token != null ? token.Key : string.Empty;
             _contextMenuOpen = true;
             _contextMenuPosition = localMouse;
-            _contextTarget = target;
+            _contextInvocation = invocation;
+            _popupMenuSurface.Reset();
             PopulatePopupMenuItems(items);
         }
 
@@ -1564,23 +1629,24 @@ namespace Cortex.Modules.Editor
             DocumentSession session,
             CortexShellState state,
             CodeViewToken token,
-            out EditorCommandTarget target)
+            out EditorCommandInvocation invocation)
         {
-            target = null;
+            invocation = null;
             if (session == null || token == null)
             {
                 return false;
             }
 
-            return _symbolInteractionService.TryCreateTargetFromToken(
+            return _commandContextFactory.TryCreateTokenInvocation(
                 session,
+                state,
                 token.Start,
                 token.LineNumber,
                 token.Column,
                 token.RawText,
                 ResolveHoverResponse(state, token),
                 CanNavigateToDefinition(token),
-                out target);
+                out invocation);
         }
 
         private LanguageServiceHoverResponse ResolveHoverResponse(CortexShellState state, CodeViewToken token)
@@ -1593,6 +1659,72 @@ namespace Cortex.Modules.Editor
             return string.Equals(state.Editor.ActiveHoverKey, token.Key, StringComparison.Ordinal)
                 ? state.Editor.ActiveHoverResponse
                 : null;
+        }
+
+        private Rect GetViewportAnchorRect(EditorCommandTarget target, Vector2 scroll, float gutterWidth)
+        {
+            var contentRect = GetTargetContentRect(target, gutterWidth);
+            return new Rect(contentRect.x - scroll.x, contentRect.y - scroll.y, contentRect.width, contentRect.height);
+        }
+
+        private Rect GetTargetContentRect(EditorCommandTarget target, float gutterWidth)
+        {
+            if (target == null)
+            {
+                return new Rect(gutterWidth, 0f, 2f, _lineHeight);
+            }
+
+            var token = FindTokenByTarget(target);
+            if (token != null && token.ContentRect.width > 0f && token.ContentRect.height > 0f)
+            {
+                return token.ContentRect;
+            }
+
+            var line = FindVisibleLineByLineNumber(target.Line);
+            if (line != null)
+            {
+                return new Rect(gutterWidth, line.Y, 2f, _lineHeight);
+            }
+
+            return new Rect(gutterWidth, 0f, 2f, _lineHeight);
+        }
+
+        private CodeViewToken FindTokenByTarget(EditorCommandTarget target)
+        {
+            if (target == null || _layout == null || _layout.VisibleLines.Count == 0)
+            {
+                return null;
+            }
+
+            for (var lineIndex = 0; lineIndex < _layout.VisibleLines.Count; lineIndex++)
+            {
+                var line = _layout.VisibleLines[lineIndex];
+                if (line == null || line.Tokens.Count == 0)
+                {
+                    continue;
+                }
+
+                for (var tokenIndex = 0; tokenIndex < line.Tokens.Count; tokenIndex++)
+                {
+                    var token = line.Tokens[tokenIndex];
+                    if (token == null)
+                    {
+                        continue;
+                    }
+
+                    if (target.AbsolutePosition >= token.Start && target.AbsolutePosition < token.Start + Mathf.Max(1, token.Length))
+                    {
+                        return token;
+                    }
+
+                    if (token.LineNumber == target.Line && token.Column == target.Column)
+                    {
+                        return token;
+                    }
+                }
+            }
+
+            return null;
         }
 
         private void PopulatePopupMenuItems(IList<EditorContextMenuItem> items)
@@ -1617,7 +1749,8 @@ namespace Cortex.Modules.Editor
                     Label = item.Label,
                     ShortcutText = item.ShortcutText,
                     Enabled = item.Enabled,
-                    IsSeparator = item.IsSeparator
+                    IsSeparator = item.IsSeparator,
+                    IsSectionHeader = item.IsSectionHeader
                 });
             }
         }
@@ -1625,7 +1758,9 @@ namespace Cortex.Modules.Editor
         private void CloseContextMenu()
         {
             _contextMenuOpen = false;
-            _contextTarget = null;
+            _contextInvocation = null;
+            _lastContextMenuRect = new Rect(0f, 0f, 0f, 0f);
+            _popupMenuSurface.Reset();
             _popupMenuItems.Clear();
         }
 
@@ -1753,7 +1888,7 @@ namespace Cortex.Modules.Editor
             style.onHover.background = null;
             style.onActive.background = null;
             style.onFocused.background = null;
-            GuiStyleUtil.ApplyTextColorToAllStates(style, GetClassificationColor(key));
+            GuiStyleUtil.ApplyTextColorToAllStates(style, _classificationPresentationService.GetColor(key));
             _classificationStyles[key] = style;
             return style;
         }
@@ -1884,319 +2019,64 @@ namespace Cortex.Modules.Editor
             return token != null && !string.IsNullOrEmpty(token.RawText) && token.RawText.Trim().Length > 0;
         }
 
-        private static bool CanHoverToken(CodeViewToken token)
+        private bool CanHoverToken(CodeViewToken token)
         {
             return IsInteractiveToken(token) &&
-                IsHoverCandidateToken(token);
+                _classificationPresentationService.IsHoverCandidate(
+                    token != null ? token.Classification : string.Empty,
+                    token != null ? token.RawText : string.Empty);
         }
 
-        private static bool CanNavigateToDefinition(CodeViewToken token)
+        private bool CanNavigateToDefinition(CodeViewToken token)
         {
-            if (!IsInteractiveToken(token) || !IsDefinitionClassification(token.Classification))
-            {
-                return false;
-            }
-
-            var key = (token.Classification ?? string.Empty).Trim().ToLowerInvariant();
-            return key.IndexOf("local", StringComparison.OrdinalIgnoreCase) < 0 &&
-                key.IndexOf("parameter", StringComparison.OrdinalIgnoreCase) < 0;
+            return IsInteractiveToken(token) &&
+                _classificationPresentationService.CanNavigateToDefinition(
+                    token != null ? token.Classification : string.Empty,
+                    token != null ? token.RawText : string.Empty);
         }
 
-        private static bool IsHoverCandidateToken(CodeViewToken token)
+        private string GetEffectiveTokenClassification(CodeViewLine line, int tokenIndex)
         {
-            if (!IsInteractiveToken(token))
+            if (line == null || tokenIndex < 0 || tokenIndex >= line.Tokens.Count)
             {
-                return false;
+                return string.Empty;
             }
 
-            var rawText = token.RawText != null ? token.RawText.Trim() : string.Empty;
-            if (string.IsNullOrEmpty(rawText))
-            {
-                return false;
-            }
-
-            var classification = NormalizeClassification(token.Classification);
-            if (!string.IsNullOrEmpty(classification))
-            {
-                return IsHoverClassification(classification, rawText);
-            }
-
-            return IsIdentifierLikeTokenText(rawText);
+            var token = line.Tokens[tokenIndex];
+            return _classificationPresentationService.GetEffectiveCodeViewClassification(
+                token != null ? token.Classification : string.Empty,
+                token != null ? token.RawText : string.Empty,
+                GetAdjacentTokenText(line, tokenIndex, -1),
+                GetAdjacentTokenText(line, tokenIndex, 1),
+                GetAdjacentTokenText(line, tokenIndex, 2));
         }
 
-        private static bool IsHoverClassification(string classification, string rawText)
+        private static string GetAdjacentTokenText(CodeViewLine line, int tokenIndex, int offset)
         {
-            var key = NormalizeClassification(classification);
-            if (string.IsNullOrEmpty(key))
+            if (line == null || line.Tokens == null || line.Tokens.Count == 0 || offset == 0)
             {
-                return false;
+                return string.Empty;
             }
 
-            if (key.Contains("operator") ||
-                key.Contains("punctuation") ||
-                key.Contains("comment") ||
-                key.Contains("xml") ||
-                key.Contains("preprocessor") ||
-                key.Contains("string") ||
-                key.Contains("char") ||
-                key.Contains("numeric") ||
-                key.Contains("number"))
+            var direction = offset > 0 ? 1 : -1;
+            var remaining = Math.Abs(offset);
+            for (var index = tokenIndex + direction; index >= 0 && index < line.Tokens.Count; index += direction)
             {
-                return false;
-            }
-
-            if (key.Contains("keyword"))
-            {
-                return IsPredefinedTypeKeyword(rawText);
-            }
-
-            return key.Contains("class") ||
-                key.Contains("struct") ||
-                key.Contains("interface") ||
-                key.Contains("enum") ||
-                key.Contains("delegate") ||
-                key.Contains("record") ||
-                key.Contains("namespace") ||
-                key.Contains("method") ||
-                key.Contains("property") ||
-                key.Contains("event") ||
-                key.Contains("field") ||
-                key.Contains("constant") ||
-                key.Contains("enum member") ||
-                key.Contains("typeparameter") ||
-                key.Contains("local") ||
-                key.Contains("parameter");
-        }
-
-        private static bool IsDefinitionClassification(string classification)
-        {
-            var key = NormalizeClassification(classification);
-            if (string.IsNullOrEmpty(key))
-            {
-                return false;
-            }
-
-            if (key.Contains("keyword") ||
-                key.Contains("operator") ||
-                key.Contains("punctuation") ||
-                key.Contains("comment") ||
-                key.Contains("xml") ||
-                key.Contains("preprocessor") ||
-                key.Contains("string") ||
-                key.Contains("char") ||
-                key.Contains("numeric") ||
-                key.Contains("number"))
-            {
-                return false;
-            }
-
-            return key.Contains("class") ||
-                key.Contains("struct") ||
-                key.Contains("interface") ||
-                key.Contains("enum") ||
-                key.Contains("delegate") ||
-                key.Contains("record") ||
-                key.Contains("namespace") ||
-                key.Contains("method") ||
-                key.Contains("property") ||
-                key.Contains("event") ||
-                key.Contains("field") ||
-                key.Contains("constant") ||
-                key.Contains("enum member") ||
-                key.Contains("typeparameter");
-        }
-
-        private static string NormalizeClassification(string classification)
-        {
-            return (classification ?? string.Empty).Trim().ToLowerInvariant();
-        }
-
-        private static bool IsPredefinedTypeKeyword(string rawText)
-        {
-            var token = (rawText ?? string.Empty).Trim();
-            if (string.IsNullOrEmpty(token))
-            {
-                return false;
-            }
-
-            switch (token)
-            {
-                case "bool":
-                case "byte":
-                case "sbyte":
-                case "short":
-                case "ushort":
-                case "int":
-                case "uint":
-                case "long":
-                case "ulong":
-                case "nint":
-                case "nuint":
-                case "float":
-                case "double":
-                case "decimal":
-                case "char":
-                case "string":
-                case "object":
-                case "dynamic":
-                case "void":
-                    return true;
-                default:
-                    return false;
-            }
-        }
-
-        private static bool IsIdentifierLikeTokenText(string rawText)
-        {
-            var token = (rawText ?? string.Empty).Trim();
-            if (string.IsNullOrEmpty(token) || IsReservedHoverKeyword(token))
-            {
-                return false;
-            }
-
-            var first = token[0];
-            if (!(char.IsLetter(first) || first == '_' || first == '@'))
-            {
-                return false;
-            }
-
-            for (var i = 1; i < token.Length; i++)
-            {
-                var current = token[i];
-                if (!(char.IsLetterOrDigit(current) || current == '_'))
+                var token = line.Tokens[index];
+                var rawText = token != null ? token.RawText : string.Empty;
+                if (string.IsNullOrEmpty(rawText) || rawText.Trim().Length == 0)
                 {
-                    return false;
+                    continue;
+                }
+
+                remaining--;
+                if (remaining == 0)
+                {
+                    return rawText;
                 }
             }
 
-            return true;
-        }
-
-        private static bool IsReservedHoverKeyword(string token)
-        {
-            switch (token)
-            {
-                case "abstract":
-                case "as":
-                case "base":
-                case "break":
-                case "case":
-                case "catch":
-                case "checked":
-                case "class":
-                case "const":
-                case "continue":
-                case "default":
-                case "delegate":
-                case "do":
-                case "else":
-                case "enum":
-                case "event":
-                case "explicit":
-                case "extern":
-                case "false":
-                case "finally":
-                case "fixed":
-                case "for":
-                case "foreach":
-                case "goto":
-                case "if":
-                case "implicit":
-                case "in":
-                case "interface":
-                case "internal":
-                case "is":
-                case "lock":
-                case "namespace":
-                case "new":
-                case "null":
-                case "operator":
-                case "out":
-                case "override":
-                case "params":
-                case "private":
-                case "protected":
-                case "public":
-                case "readonly":
-                case "ref":
-                case "return":
-                case "sealed":
-                case "sizeof":
-                case "stackalloc":
-                case "static":
-                case "struct":
-                case "switch":
-                case "this":
-                case "throw":
-                case "true":
-                case "try":
-                case "typeof":
-                case "unchecked":
-                case "unsafe":
-                case "using":
-                case "virtual":
-                case "volatile":
-                case "while":
-                    return true;
-                default:
-                    return false;
-            }
-        }
-
-        private static Color GetClassificationColor(string classification)
-        {
-            var key = NormalizeClassification(classification);
-            if (key.Contains("comment"))
-            {
-                return CortexIdeLayout.ParseColor("#6A9955", CortexIdeLayout.GetMutedTextColor());
-            }
-
-            if (key.Contains("xml"))
-            {
-                return CortexIdeLayout.ParseColor("#808080", CortexIdeLayout.GetMutedTextColor());
-            }
-
-            if (key.Contains("keyword") || key.Contains("control"))
-            {
-                return CortexIdeLayout.ParseColor("#569CD6", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("class") || key.Contains("struct") || key.Contains("interface") || key.Contains("enum") || key.Contains("delegate") || key.Contains("record") || key.Contains("typeparameter"))
-            {
-                return CortexIdeLayout.ParseColor("#4EC9B0", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("namespace"))
-            {
-                return CortexIdeLayout.ParseColor("#C8C8C8", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("method") || key.Contains("property") || key.Contains("event"))
-            {
-                return CortexIdeLayout.ParseColor("#DCDCAA", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("field") || key.Contains("enum member") || key.Contains("constant") || key.Contains("parameter") || key.Contains("local"))
-            {
-                return CortexIdeLayout.ParseColor("#9CDCFE", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("string") || key.Contains("char"))
-            {
-                return CortexIdeLayout.ParseColor("#CE9178", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("numeric") || key.Contains("number"))
-            {
-                return CortexIdeLayout.ParseColor("#B5CEA8", CortexIdeLayout.GetTextColor());
-            }
-
-            if (key.Contains("preprocessor"))
-            {
-                return CortexIdeLayout.ParseColor("#C586C0", CortexIdeLayout.GetTextColor());
-            }
-
-            return CortexIdeLayout.GetTextColor();
+            return string.Empty;
         }
 
         private HashSet<string> GetCollapsedKeys(string documentPath)

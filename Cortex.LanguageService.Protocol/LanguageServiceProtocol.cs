@@ -36,6 +36,11 @@ namespace Cortex.LanguageService.Protocol
         public const string Completion = "completion";
 
         /// <summary>
+        /// Requests active signature help for an invocation position.
+        /// </summary>
+        public const string SignatureHelp = "signature-help";
+
+        /// <summary>
         /// Requests normalized semantic symbol context for the current cursor position.
         /// </summary>
         public const string SymbolContext = "symbol-context";
@@ -69,6 +74,11 @@ namespace Cortex.LanguageService.Protocol
         /// Requests semantic value-source tracking for the current symbol.
         /// </summary>
         public const string ValueSource = "value-source";
+
+        /// <summary>
+        /// Requests a previewable document cleanup transform.
+        /// </summary>
+        public const string DocumentTransformPreview = "document-transform-preview";
 
         /// <summary>
         /// Requests an orderly worker shutdown.
@@ -423,6 +433,24 @@ namespace Cortex.LanguageService.Protocol
     }
 
     /// <summary>
+    /// Request payload used to resolve active signature help.
+    /// </summary>
+    public sealed class LanguageServiceSignatureHelpRequest
+    {
+        public string DocumentPath;
+        public string ProjectFilePath;
+        public string WorkspaceRootPath;
+        public string[] SourceRoots;
+        public string DocumentText;
+        public int DocumentVersion;
+        public int Line;
+        public int Column;
+        public int AbsolutePosition;
+        public bool ExplicitInvocation;
+        public string TriggerCharacter;
+    }
+
+    /// <summary>
     /// Request payload used to resolve normalized symbol identity details.
     /// </summary>
     public sealed class LanguageServiceSymbolContextRequest : LanguageServiceSymbolRequest
@@ -470,6 +498,25 @@ namespace Cortex.LanguageService.Protocol
     /// </summary>
     public sealed class LanguageServiceValueSourceRequest : LanguageServiceSymbolRequest
     {
+    }
+
+    /// <summary>
+    /// Request payload used to preview a Roslyn-backed document transform.
+    /// </summary>
+    public sealed class LanguageServiceDocumentTransformRequest
+    {
+        public string CommandId;
+        public string Title;
+        public string ApplyLabel;
+        public string DocumentPath;
+        public string ProjectFilePath;
+        public string WorkspaceRootPath;
+        public string[] SourceRoots;
+        public string DocumentText;
+        public int DocumentVersion;
+        public bool OrganizeImports;
+        public bool SimplifyNames;
+        public bool FormatDocument;
     }
 
     /// <summary>
@@ -722,6 +769,43 @@ namespace Cortex.LanguageService.Protocol
     }
 
     /// <summary>
+    /// One parameter entry inside a signature-help item.
+    /// </summary>
+    public sealed class LanguageServiceSignatureHelpParameter
+    {
+        public string Name;
+        public string Display;
+        public string Documentation;
+        public bool IsOptional;
+    }
+
+    /// <summary>
+    /// One callable signature returned by Roslyn.
+    /// </summary>
+    public sealed class LanguageServiceSignatureHelpItem
+    {
+        public string PrefixDisplay;
+        public string SeparatorDisplay;
+        public string SuffixDisplay;
+        public string Documentation;
+        public LanguageServiceSignatureHelpParameter[] Parameters;
+    }
+
+    /// <summary>
+    /// Active signature-help response returned by Roslyn.
+    /// </summary>
+    public sealed class LanguageServiceSignatureHelpResponse : LanguageServiceOperationResponse
+    {
+        public string DocumentPath;
+        public string ProjectFilePath;
+        public int DocumentVersion;
+        public LanguageServiceRange ApplicableRange;
+        public int ActiveSignatureIndex;
+        public int ActiveParameterIndex;
+        public LanguageServiceSignatureHelpItem[] Items;
+    }
+
+    /// <summary>
     /// Normalized semantic context response for the current symbol.
     /// </summary>
     public sealed class LanguageServiceSymbolContextResponse : LanguageServiceSymbolResponse
@@ -775,6 +859,21 @@ namespace Cortex.LanguageService.Protocol
     public sealed class LanguageServiceValueSourceResponse : LanguageServiceSymbolResponse
     {
         public LanguageServiceValueSourceItem[] Items;
+    }
+
+    /// <summary>
+    /// Previewable document-transform response returned by Roslyn.
+    /// </summary>
+    public sealed class LanguageServiceDocumentTransformResponse : LanguageServiceOperationResponse
+    {
+        public string CommandId;
+        public string Title;
+        public string ApplyLabel;
+        public string DocumentPath;
+        public string ProjectFilePath;
+        public int DocumentVersion;
+        public bool CanApply;
+        public LanguageServiceDocumentChange[] Documents;
     }
 
 }

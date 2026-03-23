@@ -99,6 +99,9 @@ namespace Cortex.Modules.Search
                 case SemanticWorkbenchViewKind.Implementations:
                     DrawLocationList(state.Semantic.Implementations != null ? state.Semantic.Implementations.Locations : null, navigationService, state);
                     return;
+                case SemanticWorkbenchViewKind.DocumentEditPreview:
+                    DrawDocumentEditPreview(navigationService, documentService, state);
+                    return;
             }
 
             GUILayout.Label("No semantic results are active.", _emptyStateStyle ?? GUI.skin.label);
@@ -134,34 +137,47 @@ namespace Cortex.Modules.Search
                 return;
             }
 
-            for (var i = 0; i < preview.Documents.Length; i++)
+            DrawDocumentChangeList(preview.Documents, navigationService, state);
+        }
+
+        private void DrawDocumentEditPreview(CortexNavigationService navigationService, IDocumentService documentService, CortexShellState state)
+        {
+            var preview = state != null && state.Semantic != null ? state.Semantic.DocumentEditPreview : null;
+            if (preview == null)
             {
-                var document = preview.Documents[i];
-                if (document == null)
-                {
-                    continue;
-                }
-
-                GUILayout.BeginVertical(GUI.skin.box);
-                GUILayout.Label(Path.GetFileName(document.DocumentPath) + "  (" + document.ChangeCount + " edit(s))", _documentStyle ?? GUI.skin.label);
-                GUILayout.Label(document.DocumentPath ?? string.Empty, _documentMetaStyle ?? GUI.skin.label);
-                for (var j = 0; j < document.Edits.Length; j++)
-                {
-                    var edit = document.Edits[j];
-                    if (edit == null)
-                    {
-                        continue;
-                    }
-
-                    if (GUILayout.Button(edit.PreviewText ?? edit.NewText ?? string.Empty, _resultButtonStyle ?? GUI.skin.button))
-                    {
-                        OpenDocumentAtRange(navigationService, state, document.DocumentPath, edit.Range);
-                    }
-                }
-
-                GUILayout.EndVertical();
-                GUILayout.Space(4f);
+                GUILayout.Label("Document edit preview is not available.", _emptyStateStyle ?? GUI.skin.label);
+                return;
             }
+
+            GUILayout.BeginHorizontal();
+            var previousEnabled = GUI.enabled;
+            GUI.enabled = preview.CanApply && preview.Documents != null && preview.Documents.Length > 0;
+            if (GUILayout.Button(!string.IsNullOrEmpty(preview.ApplyLabel) ? preview.ApplyLabel : "Apply Changes", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(120f)))
+            {
+                string statusMessage;
+                var applied = _workspaceEditService.ApplyDocumentEditPreview(state, documentService, preview, out statusMessage);
+                state.StatusMessage = statusMessage;
+                if (applied && navigationService != null && preview.Documents.Length == 1 && preview.Documents[0] != null)
+                {
+                    var firstEdit = preview.Documents[0].Edits != null && preview.Documents[0].Edits.Length > 0
+                        ? preview.Documents[0].Edits[0]
+                        : null;
+                    OpenDocumentAtRange(navigationService, state, preview.Documents[0].DocumentPath, firstEdit != null ? firstEdit.Range : null);
+                }
+            }
+
+            GUI.enabled = previousEnabled;
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4f);
+
+            if (preview.Documents == null || preview.Documents.Length == 0)
+            {
+                GUILayout.Label(preview.StatusMessage ?? "No preview edits were produced.", _emptyStateStyle ?? GUI.skin.label);
+                return;
+            }
+
+            DrawDocumentChangeList(preview.Documents, navigationService, state);
         }
 
         private void DrawPeekDefinition(LanguageServiceDefinitionResponse peekDefinition, CortexNavigationService navigationService, CortexShellState state)
@@ -314,6 +330,38 @@ namespace Cortex.Modules.Search
             }
         }
 
+        private void DrawDocumentChangeList(LanguageServiceDocumentChange[] documents, CortexNavigationService navigationService, CortexShellState state)
+        {
+            for (var i = 0; i < documents.Length; i++)
+            {
+                var document = documents[i];
+                if (document == null)
+                {
+                    continue;
+                }
+
+                GUILayout.BeginVertical(GUI.skin.box);
+                GUILayout.Label(Path.GetFileName(document.DocumentPath) + "  (" + document.ChangeCount + " edit(s))", _documentStyle ?? GUI.skin.label);
+                GUILayout.Label(document.DocumentPath ?? string.Empty, _documentMetaStyle ?? GUI.skin.label);
+                for (var j = 0; document.Edits != null && j < document.Edits.Length; j++)
+                {
+                    var edit = document.Edits[j];
+                    if (edit == null)
+                    {
+                        continue;
+                    }
+
+                    if (GUILayout.Button(edit.PreviewText ?? edit.NewText ?? string.Empty, _resultButtonStyle ?? GUI.skin.button))
+                    {
+                        OpenDocumentAtRange(navigationService, state, document.DocumentPath, edit.Range);
+                    }
+                }
+
+                GUILayout.EndVertical();
+                GUILayout.Space(4f);
+            }
+        }
+
         private void DrawSearchSummary(CortexShellState state)
         {
             GUILayout.BeginVertical(_summaryStyle ?? GUI.skin.box);
@@ -451,6 +499,8 @@ namespace Cortex.Modules.Search
                     return "Base Symbols";
                 case SemanticWorkbenchViewKind.Implementations:
                     return "Implementations";
+                case SemanticWorkbenchViewKind.DocumentEditPreview:
+                    return "Document Edit Preview";
                 default:
                     return "Semantic Results";
             }
@@ -481,6 +531,8 @@ namespace Cortex.Modules.Search
                     return state.Semantic.BaseSymbols != null ? state.Semantic.BaseSymbols.StatusMessage ?? string.Empty : string.Empty;
                 case SemanticWorkbenchViewKind.Implementations:
                     return state.Semantic.Implementations != null ? state.Semantic.Implementations.StatusMessage ?? string.Empty : string.Empty;
+                case SemanticWorkbenchViewKind.DocumentEditPreview:
+                    return state.Semantic.DocumentEditPreview != null ? state.Semantic.DocumentEditPreview.StatusMessage ?? string.Empty : string.Empty;
                 default:
                     return string.Empty;
             }

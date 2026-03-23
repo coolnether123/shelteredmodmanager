@@ -15,6 +15,7 @@ namespace Cortex
         public bool HoverInFlight;
         public bool DefinitionInFlight;
         public bool CompletionInFlight;
+        public bool SignatureHelpInFlight;
         public bool SemanticOperationInFlight;
         public string InitializeRequestId = string.Empty;
         public string StatusRequestId = string.Empty;
@@ -22,6 +23,7 @@ namespace Cortex
         public PendingLanguageHoverRequest PendingHover;
         public PendingLanguageDefinitionRequest PendingDefinition;
         public DocumentLanguageCompletionRequestState PendingCompletion;
+        public PendingLanguageSignatureHelpRequest PendingSignatureHelp;
         public PendingSemanticOperationRequest PendingSemanticOperation;
         public int ServiceGeneration;
         public DateTime LastAnalysisRequestUtc = DateTime.MinValue;

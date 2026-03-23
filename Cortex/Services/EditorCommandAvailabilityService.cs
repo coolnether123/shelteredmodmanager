@@ -5,38 +5,46 @@ namespace Cortex.Services
 {
     internal sealed class EditorCommandAvailabilityService
     {
+        private readonly EditorCommandExecutionStrategyService _strategyService = new EditorCommandExecutionStrategyService();
+
         public bool TryGetAvailability(string commandId, CortexShellState state, EditorCommandTarget target, out string disabledReason)
         {
-            disabledReason = string.Empty;
+            var availability = GetAvailability(commandId, state, target);
+            disabledReason = availability != null ? availability.DisabledReason ?? string.Empty : string.Empty;
+            return availability != null && availability.Enabled;
+        }
+
+        public EditorCommandAvailability GetAvailability(string commandId, CortexShellState state, EditorCommandTarget target)
+        {
             switch (commandId ?? string.Empty)
             {
                 case "cortex.editor.quickActions":
-                    return RequireSymbol(target, "Quick Actions require a symbol.", ref disabledReason);
+                    return RequireSymbol(target, "Quick Actions require a symbol.");
                 case "cortex.editor.rename":
-                    return RequireSymbolCapability(target, state, SemanticCapabilityNames.Rename, "Rename", ref disabledReason);
+                    return RequireSymbolCapability(target, state, SemanticCapabilityNames.Rename, "Rename");
                 case "cortex.editor.peekDefinition":
                 case "cortex.editor.goToDefinition":
-                    return RequireNavigationCapability(target, state, SemanticCapabilityNames.Definition, "Definition navigation", ref disabledReason);
+                    return RequireNavigationCapability(target, state, SemanticCapabilityNames.Definition, "Definition navigation");
                 case "cortex.editor.goToBase":
-                    return RequireNavigationCapability(target, state, SemanticCapabilityNames.BaseSymbol, "Base navigation", ref disabledReason);
+                    return RequireNavigationCapability(target, state, SemanticCapabilityNames.BaseSymbol, "Base navigation");
                 case "cortex.editor.goToImplementation":
-                    return RequireNavigationCapability(target, state, SemanticCapabilityNames.Implementations, "Implementation navigation", ref disabledReason);
+                    return RequireNavigationCapability(target, state, SemanticCapabilityNames.Implementations, "Implementation navigation");
                 case "cortex.editor.findAllReferences":
-                    return RequireSymbolCapability(target, state, SemanticCapabilityNames.References, "Reference lookup", ref disabledReason);
+                    return RequireSymbolCapability(target, state, SemanticCapabilityNames.References, "Reference lookup");
                 case "cortex.editor.viewCallHierarchy":
-                    return RequireSymbolCapability(target, state, SemanticCapabilityNames.CallHierarchy, "Call hierarchy", ref disabledReason);
+                    return RequireSymbolCapability(target, state, SemanticCapabilityNames.CallHierarchy, "Call hierarchy");
                 case "cortex.editor.trackValueSource":
-                    return RequireSymbolCapability(target, state, SemanticCapabilityNames.ValueSource, "Value source tracking", ref disabledReason);
+                    return RequireSymbolCapability(target, state, SemanticCapabilityNames.ValueSource, "Value source tracking");
                 case "cortex.editor.createUnitTests":
-                    return RequireSymbol(target, "Unit test generation requires a symbol.", ref disabledReason);
+                    return RequireSymbol(target, "Unit test generation requires a symbol.");
                 case "cortex.editor.removeAndSortUsings":
-                case "cortex.editor.paste":
-                case "cortex.editor.snippet":
-                    return RequireEditableDocument(state, "Editing is disabled for the active document.", ref disabledReason);
                 case "cortex.editor.cut":
-                    return RequireEditableSelection(state, ref disabledReason);
+                case "cortex.editor.paste":
+                    return _strategyService.GetAvailability(commandId, state, target);
+                case "cortex.editor.snippet":
+                    return RequireEditableDocument(state, "Editing is disabled for the active document.");
                 case "cortex.editor.copy":
-                    return RequireSelectionOrSymbol(state, target, ref disabledReason);
+                    return RequireSelectionOrSymbol(state, target);
                 case "cortex.editor.viewCode":
                 case "cortex.editor.breakpoint":
                 case "cortex.editor.runToCursor":
@@ -45,9 +53,9 @@ namespace Cortex.Services
                 case "cortex.editor.annotation":
                 case "cortex.editor.outlining":
                 case "cortex.editor.git":
-                    return RequireDocument(state, "Open a document to use this action.", ref disabledReason);
+                    return RequireDocument(state, "Open a document to use this action.");
                 default:
-                    return true;
+                    return Enabled();
             }
         }
 
@@ -76,111 +84,116 @@ namespace Cortex.Services
             return false;
         }
 
-        private bool RequireNavigationCapability(EditorCommandTarget target, CortexShellState state, string capability, string actionLabel, ref string disabledReason)
+        private EditorCommandAvailability RequireNavigationCapability(EditorCommandTarget target, CortexShellState state, string capability, string actionLabel)
         {
             if (target == null || !target.CanGoToDefinition)
             {
-                disabledReason = actionLabel + " requires a navigable symbol.";
-                return false;
+                return Disabled(actionLabel + " requires a navigable symbol.");
             }
 
             if (!HasCapability(state, capability))
             {
-                disabledReason = actionLabel + " is not supported by the active language service.";
-                return false;
+                return Disabled(actionLabel + " is not supported by the active language service.");
             }
 
-            return true;
+            return Enabled();
         }
 
-        private bool RequireSymbolCapability(EditorCommandTarget target, CortexShellState state, string capability, string actionLabel, ref string disabledReason)
+        private EditorCommandAvailability RequireSymbolCapability(EditorCommandTarget target, CortexShellState state, string capability, string actionLabel)
         {
-            if (!RequireSymbol(target, actionLabel + " requires a symbol.", ref disabledReason))
+            var symbolAvailability = RequireSymbol(target, actionLabel + " requires a symbol.");
+            if (!symbolAvailability.Enabled)
             {
-                return false;
+                return symbolAvailability;
             }
 
             if (!HasCapability(state, capability))
             {
-                disabledReason = actionLabel + " is not supported by the active language service.";
-                return false;
+                return Disabled(actionLabel + " is not supported by the active language service.");
             }
 
-            return true;
+            return Enabled();
         }
 
-        private static bool RequireSymbol(EditorCommandTarget target, string reason, ref string disabledReason)
+        private static EditorCommandAvailability RequireSymbol(EditorCommandTarget target, string reason)
         {
             if (target == null || string.IsNullOrEmpty(target.SymbolText))
             {
-                disabledReason = reason;
-                return false;
+                return Disabled(reason);
             }
 
-            return true;
+            return Enabled();
         }
 
-        private static bool RequireDocument(CortexShellState state, string reason, ref string disabledReason)
+        private static EditorCommandAvailability RequireDocument(CortexShellState state, string reason)
         {
             if (state == null || state.Documents == null || state.Documents.ActiveDocument == null)
             {
-                disabledReason = reason;
-                return false;
+                return Disabled(reason);
             }
 
-            return true;
+            return Enabled();
         }
 
-        private static bool RequireEditableDocument(CortexShellState state, string reason, ref string disabledReason)
+        private static EditorCommandAvailability RequireEditableDocument(CortexShellState state, string reason)
         {
-            if (!RequireDocument(state, reason, ref disabledReason))
+            var documentAvailability = RequireDocument(state, reason);
+            if (!documentAvailability.Enabled)
             {
-                return false;
+                return documentAvailability;
             }
 
             if (!state.Documents.ActiveDocument.SupportsEditing)
             {
-                disabledReason = reason;
-                return false;
+                return Disabled(reason);
             }
 
-            return true;
+            return Enabled();
         }
 
-        private static bool RequireEditableSelection(CortexShellState state, ref string disabledReason)
+        private static EditorCommandAvailability RequireSelectionOrSymbol(CortexShellState state, EditorCommandTarget target)
         {
-            if (!RequireEditableDocument(state, "Editing is disabled for the active document.", ref disabledReason))
+            if (target != null && target.HasSelection)
             {
-                return false;
+                return Enabled();
             }
 
-            if (state.Documents.ActiveDocument.EditorState == null || !state.Documents.ActiveDocument.EditorState.HasSelection)
-            {
-                disabledReason = "Select text before cutting.";
-                return false;
-            }
-
-            return true;
-        }
-
-        private static bool RequireSelectionOrSymbol(CortexShellState state, EditorCommandTarget target, ref string disabledReason)
-        {
             if (state != null &&
                 state.Documents != null &&
                 state.Documents.ActiveDocument != null &&
                 state.Documents.ActiveDocument.EditorState != null &&
                 state.Documents.ActiveDocument.EditorState.HasSelection)
             {
-                return true;
+                return Enabled();
             }
 
             if (target != null && !string.IsNullOrEmpty(target.SymbolText))
             {
-                return true;
+                return Enabled();
             }
 
-            disabledReason = "Select text or place the caret on a symbol before copying.";
-            return false;
+            return Disabled("Select text or place the caret on a symbol before copying.");
+        }
+
+        private static EditorCommandAvailability Enabled()
+        {
+            return new EditorCommandAvailability
+            {
+                Visible = true,
+                Enabled = true,
+                ExecutionKind = EditorCommandExecutionKind.Direct
+            };
+        }
+
+        private static EditorCommandAvailability Disabled(string reason)
+        {
+            return new EditorCommandAvailability
+            {
+                Visible = true,
+                Enabled = false,
+                DisabledReason = reason ?? string.Empty,
+                ExecutionKind = EditorCommandExecutionKind.Unavailable
+            };
         }
     }
 }
