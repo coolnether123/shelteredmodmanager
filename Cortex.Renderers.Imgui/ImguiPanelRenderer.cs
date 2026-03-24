@@ -45,18 +45,25 @@ namespace Cortex.Renderers.Imgui
                 return result;
             }
 
+            var hasHeaderActions = document.HeaderActions != null && document.HeaderActions.Length > 0;
             var headerRect = new Rect(0f, 0f, rect.width, HeaderHeight);
-            var actionsRect = new Rect(Padding, HeaderHeight + 6f, rect.width - (Padding * 2f), ActionStripHeight);
+            var actionsRect = hasHeaderActions
+                ? new Rect(Padding, HeaderHeight + 6f, rect.width - (Padding * 2f), ActionStripHeight)
+                : new Rect(Padding, HeaderHeight + 6f, rect.width - (Padding * 2f), 0f);
+            var contentTop = hasHeaderActions ? actionsRect.yMax + 8f : headerRect.yMax + 10f;
             var contentViewport = new Rect(
                 Padding,
-                actionsRect.yMax + 8f,
+                contentTop,
                 rect.width - (Padding * 2f),
-                Mathf.Max(24f, rect.height - actionsRect.yMax - Padding - 8f));
+                Mathf.Max(24f, rect.height - contentTop - Padding));
 
             GUI.BeginGroup(rect);
-            DrawChrome(new Rect(0f, 0f, rect.width, rect.height), headerRect, actionsRect);
+            DrawChrome(new Rect(0f, 0f, rect.width, rect.height), headerRect, actionsRect, hasHeaderActions);
             DrawHeader(document, headerRect, ref result);
-            DrawHeaderActions(document, actionsRect, ref result);
+            if (hasHeaderActions)
+            {
+                DrawHeaderActions(document, actionsRect, ref result);
+            }
 
             var contentWidth = Mathf.Max(120f, contentViewport.width - 16f);
             var contentHeight = MeasureDocument(document, contentWidth);
@@ -68,12 +75,15 @@ namespace Cortex.Renderers.Imgui
             return result;
         }
 
-        private void DrawChrome(Rect panelRect, Rect headerRect, Rect actionsRect)
+        private void DrawChrome(Rect panelRect, Rect headerRect, Rect actionsRect, bool hasHeaderActions)
         {
             GUI.DrawTexture(panelRect, _backgroundFill);
             GUI.DrawTexture(headerRect, _headerFill);
             GUI.DrawTexture(new Rect(0f, headerRect.yMax, panelRect.width, DividerHeight), _dividerFill);
-            GUI.DrawTexture(new Rect(Padding, actionsRect.yMax + 8f, panelRect.width - (Padding * 2f), DividerHeight), _dividerFill);
+            if (hasHeaderActions)
+            {
+                GUI.DrawTexture(new Rect(Padding, actionsRect.yMax + 8f, panelRect.width - (Padding * 2f), DividerHeight), _dividerFill);
+            }
             DrawBorder(panelRect);
         }
 

@@ -28,7 +28,7 @@ namespace Cortex.Services
             {
                 inspector.OverviewExpanded = true;
                 inspector.NavigationExpanded = true;
-                inspector.ReferencesExpanded = true;
+                inspector.ReferencesExpanded = false;
                 inspector.HarmonyExpanded = true;
                 inspector.IndirectHarmonyExpanded = true;
             }

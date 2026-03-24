@@ -21,8 +21,64 @@ namespace Cortex.Services
         public EditorIndirectHarmonyCallerContext[] PatchedCallers = new EditorIndirectHarmonyCallerContext[0];
     }
 
+    internal sealed class EditorSourceHarmonyContext
+    {
+        public bool IsPatchMethod;
+        public string StatusMessage = string.Empty;
+        public string PatchKind = string.Empty;
+        public string SourceMethodName = string.Empty;
+        public string ResolutionSource = string.Empty;
+        public string TargetDisplayName = string.Empty;
+        public string TargetTypeName = string.Empty;
+        public string TargetMethodName = string.Empty;
+        public string TargetSignature = string.Empty;
+        public HarmonyPatchInspectionRequest TargetInspectionRequest;
+    }
+
     internal sealed class EditorMethodHarmonyContextService
     {
+        public EditorSourceHarmonyContext BuildSourcePatchContext(
+            CortexShellState state,
+            EditorCommandTarget target,
+            IProjectCatalog projectCatalog,
+            HarmonyPatchResolutionService harmonyResolutionService)
+        {
+            var context = new EditorSourceHarmonyContext();
+            if (state == null || target == null || projectCatalog == null || harmonyResolutionService == null)
+            {
+                context.StatusMessage = "Harmony source context is not available for this method.";
+                return context;
+            }
+
+            HarmonySourcePatchContext sourceContext;
+            string reason;
+            if (!harmonyResolutionService.TryResolveSourcePatchContext(state, projectCatalog, target, out sourceContext, out reason) ||
+                sourceContext == null ||
+                sourceContext.Target == null ||
+                sourceContext.Target.Method == null)
+            {
+                context.StatusMessage = !string.IsNullOrEmpty(reason)
+                    ? reason
+                    : "The selected method is not recognized as a Harmony patch entry point.";
+                return context;
+            }
+
+            context.IsPatchMethod = true;
+            context.PatchKind = sourceContext.PatchKind ?? string.Empty;
+            context.SourceMethodName = sourceContext.SourceMethodName ?? string.Empty;
+            context.ResolutionSource = sourceContext.ResolutionSource ?? string.Empty;
+            context.TargetDisplayName = sourceContext.Target.DisplayName ?? string.Empty;
+            context.TargetTypeName = sourceContext.Target.Method.DeclaringType != null
+                ? sourceContext.Target.Method.DeclaringType.FullName ?? sourceContext.Target.Method.DeclaringType.Name ?? string.Empty
+                : string.Empty;
+            context.TargetMethodName = sourceContext.Target.Method.Name ?? string.Empty;
+            context.TargetSignature = HarmonyPatchResolutionService.BuildMethodSignature(sourceContext.Target.Method);
+            context.TargetInspectionRequest = sourceContext.Target.InspectionRequest;
+            context.StatusMessage = "This method is a Harmony " + context.PatchKind + " patch for " +
+                (!string.IsNullOrEmpty(context.TargetDisplayName) ? context.TargetDisplayName : "the resolved runtime target") + ".";
+            return context;
+        }
+
         public EditorIndirectHarmonyContext BuildIndirectContext(
             CortexShellState state,
             CortexMethodInspectorState inspector,
