@@ -6,7 +6,6 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Presentation.Abstractions;
-using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
 using Cortex.Shell;
 using Cortex.Services;
@@ -17,54 +16,22 @@ namespace Cortex
     public sealed partial class CortexShellController
     {
         private const string ToggleActionId = "cortex.toggle";
+        private const string OverlayInputCaptureOwnerId = "Cortex.Shell";
         private const int MainWindowId = 0xC07E;
         private const int LogsWindowId = 0xC07F;
-        private const int OnboardingWindowId = 0xC080;
-        private const string OverlayInputCaptureOwnerId = "Cortex.Shell";
 
         private Rect _windowRect = new Rect(70f, 70f, 1180f, 760f);
         private Rect _logWindowRect = new Rect(100f, 100f, 980f, 620f);
-        private bool _visible;
         private Vector2 _windowScroll = Vector2.zero;
-        private string _draggingContainerId = string.Empty;
-        private WorkbenchHostLocation _draggingContainerSourceHost = WorkbenchHostLocation.PrimarySideHost;
 
-        private ICortexSettingsStore _settingsStore;
-        private IWorkbenchPersistenceService _workbenchPersistenceService;
-        private IProjectCatalog _projectCatalog;
-        private ILoadedModCatalog _loadedModCatalog;
-        private IProjectWorkspaceService _projectWorkspaceService;
-        private IPathInteractionService _pathInteractionService;
-        private IWorkspaceBrowserService _workspaceBrowserService;
-        private IDecompilerExplorerService _decompilerExplorerService;
-        private IDocumentService _documentService;
-        private IBuildCommandResolver _buildCommandResolver;
-        private IBuildExecutor _buildExecutor;
-        private IReferenceCatalogService _referenceCatalogService;
-        private ISourceLookupIndex _sourceLookupIndex;
-        private ISourcePathResolver _sourcePathResolver;
-        private ISourceReferenceService _sourceReferenceService;
-        private IRuntimeLogFeed _runtimeLogFeed;
-        private IRuntimeSourceNavigationService _runtimeSourceNavigationService;
-        private IRuntimeToolBridge _runtimeToolBridge;
-        private IRestartCoordinator _restartCoordinator;
-        private IOverlayInputCaptureService _overlayInputCaptureService;
-        private ICortexPlatformModule _platformModule;
-        private ICortexHostEnvironment _hostEnvironment;
-        private ICortexShellHostUi _shellHostUi;
-        private ITextSearchService _textSearchService;
-        private CortexNavigationService _navigationService;
-        private HarmonyPatchOwnershipService _harmonyPatchOwnershipService;
-        private HarmonyPatchDisplayService _harmonyPatchDisplayService;
-        private HarmonyPatchOrderService _harmonyPatchOrderService;
-        private HarmonyPatchInspectionService _harmonyPatchInspectionService;
-        private HarmonyPatchResolutionService _harmonyPatchResolutionService;
-        private HarmonyPatchTemplateService _harmonyPatchTemplateService;
-        private HarmonyPatchInsertionService _harmonyPatchInsertionService;
-        private HarmonyPatchGenerationService _harmonyPatchGenerationService;
-        private GeneratedTemplateNavigationService _generatedTemplateNavigationService;
-        private IWorkbenchRuntime _workbenchRuntime;
-        private IWorkbenchRuntimeFactory _workbenchRuntimeFactory;
+        private readonly CortexShellState _state = new CortexShellState();
+        private readonly ShellBootstrapper _bootstrapper;
+        private readonly ShellSessionCoordinator _sessionCoordinator;
+        private readonly ShellLayoutCoordinator _layoutCoordinator;
+        private readonly ShellOverlayCoordinator _overlayCoordinator;
+        private readonly ShellCommandDispatcher _commandDispatcher;
+        private readonly ShellStatusPresenter _statusPresenter;
+
         private readonly EditorSymbolInteractionService _editorSymbolInteractionService = new EditorSymbolInteractionService();
         private readonly WorkbenchSearchService _workbenchSearchService = new WorkbenchSearchService();
         private readonly CortexShellLifecycleCoordinator _lifecycleCoordinator = new CortexShellLifecycleCoordinator();
@@ -79,8 +46,37 @@ namespace Cortex
         private readonly CortexOnboardingCoordinator _onboardingCoordinator = new CortexOnboardingCoordinator();
         private readonly CortexShellOnboardingLifecycle _onboardingLifecycle = new CortexShellOnboardingLifecycle();
 
-        private readonly CortexShellState _state = new CortexShellState();
-        private ExternalWorkbenchPluginLoader _externalPluginLoader;
+        private IWorkbenchRuntime _workbenchRuntime;
+        private IProjectCatalog _projectCatalog;
+        private ILoadedModCatalog _loadedModCatalog;
+        private ISourceLookupIndex _sourceLookupIndex;
+        private IProjectWorkspaceService _projectWorkspaceService;
+        private IWorkspaceBrowserService _workspaceBrowserService;
+        private IReferenceCatalogService _referenceCatalogService;
+        private IDecompilerExplorerService _decompilerExplorerService;
+        private IDocumentService _documentService;
+        private IBuildCommandResolver _buildCommandResolver;
+        private IBuildExecutor _buildExecutor;
+        private ISourcePathResolver _sourcePathResolver;
+        private ISourceReferenceService _sourceReferenceService;
+        private IRuntimeLogFeed _runtimeLogFeed;
+        private IRuntimeToolBridge _runtimeToolBridge;
+        private IRestartCoordinator _restartCoordinator;
+        private IOverlayInputCaptureService _overlayInputCaptureService;
+        private ITextSearchService _textSearchService;
+        private CortexNavigationService _navigationService;
+        private HarmonyPatchOwnershipService _harmonyPatchOwnershipService;
+        private HarmonyPatchDisplayService _harmonyPatchDisplayService;
+        private HarmonyPatchOrderService _harmonyPatchOrderService;
+        private HarmonyPatchInspectionService _harmonyPatchInspectionService;
+        private HarmonyPatchResolutionService _harmonyPatchResolutionService;
+        private ICortexSettingsStore _settingsStore;
+        private IWorkbenchPersistenceService _workbenchPersistenceService;
+        private IPathInteractionService _pathInteractionService;
+        private IRuntimeSourceNavigationService _runtimeSourceNavigationService;
+        private ICortexPlatformModule _platformModule;
+        private ICortexHostEnvironment _hostEnvironment;
+        private ICortexShellHostUi _shellHostUi;
         private CortexShellLayoutContext _layoutContext;
         private CortexShellCommandContext _commandContext;
         private CortexShellModuleServices _moduleServices;
@@ -108,8 +104,70 @@ namespace Cortex
         private string _appliedThemeId = string.Empty;
         private WorkbenchPresentationSnapshot _frameSnapshot;
         private readonly Dictionary<string, Rect> _menuGroupRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+
+        private ShellServiceMap _services;
+        private HarmonyPatchTemplateService _harmonyPatchTemplateService;
+        private HarmonyPatchInsertionService _harmonyPatchInsertionService;
+        private HarmonyPatchGenerationService _harmonyPatchGenerationService;
+        private GeneratedTemplateNavigationService _generatedTemplateNavigationService;
         private bool _lastOverlayMouseCapture;
         private bool _lastOverlayKeyboardCapture;
+
+        public CortexShellController()
+        {
+            _services = new ShellServiceMap();
+            _bootstrapper = new ShellBootstrapper(_state, _moduleContributionRegistry, null, _moduleRegistrar);
+            _sessionCoordinator = new ShellSessionCoordinator(
+                _state,
+                _lifecycleCoordinator,
+                () => _navigationService,
+                () => _loadedModCatalog,
+                () => _projectCatalog,
+                () => _workbenchPersistenceService,
+                () => _settingsStore);
+            _layoutCoordinator = new ShellLayoutCoordinator(
+                _state,
+                _layoutHostRouter,
+                () => _workbenchRuntime,
+                () => GetModuleRenderService(),
+                () => GetPointerPosition(),
+                () => HasCurrentInputEvent(),
+                kind => IsCurrentInputEvent(kind),
+                () => GetCurrentMouseButton());
+            _overlayCoordinator = new ShellOverlayCoordinator(
+                _state,
+                _onboardingCoordinator,
+                _onboardingLifecycle,
+                () => ResolveShellHostUi(),
+                () => _overlayInputCaptureService,
+                () => GetCurrentMousePosition(),
+                () => GetPointerPosition(),
+                () => HasCurrentInputEvent(),
+                kind => IsCurrentInputEvent(kind),
+                key => IsCurrentKey(key),
+                () => GetCurrentMouseButton(),
+                ConsumeCurrentInputEvent);
+            _commandDispatcher = new ShellCommandDispatcher(
+                _state,
+                _commandRouter,
+                () => _workbenchRuntime,
+                () => _documentService,
+                () => _sessionCoordinator.Visible,
+                value => _sessionCoordinator.Visible = value,
+                PersistWorkbenchSession,
+                PersistWindowSettings,
+                FitMainWindowToScreen,
+                ActivateContainer,
+                ResolveHostLocation,
+                HideContainer,
+                OpenSettingsWindow,
+                OpenOnboarding,
+                OpenFind,
+                ExecuteSearchOrAdvance,
+                CloseFind,
+                _editorSymbolInteractionService);
+            _statusPresenter = new ShellStatusPresenter(_state, ExecuteCommand);
+        }
 
         public void StartShell()
         {
@@ -123,7 +181,7 @@ namespace Cortex
 
         public void UpdateShell()
         {
-            if (!_visible)
+            if (!_sessionCoordinator.Visible)
             {
                 ReleaseOverlayInputCapture();
             }
@@ -144,7 +202,7 @@ namespace Cortex
                 OpenOnboarding(true);
             }
 
-            if (!_visible)
+            if (!_sessionCoordinator.Visible)
             {
                 ReleaseOverlayInputCapture();
                 return;
@@ -249,25 +307,13 @@ namespace Cortex
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));
         }
 
-        private void DrawActiveModule(WorkbenchPresentationSnapshot snapshot, string containerId, bool detachedWindow)
-        {
-            GetModuleRenderService().DrawActiveModule(snapshot, containerId, detachedWindow);
-        }
-
         private void InitializeSettingsAndServices()
         {
-            var hostEnvironment = _hostEnvironment ?? NullCortexHostServices.Instance.Environment;
-            if (!string.IsNullOrEmpty(hostEnvironment.HostBinPath) && !Directory.Exists(hostEnvironment.HostBinPath))
-            {
-                Directory.CreateDirectory(hostEnvironment.HostBinPath);
-            }
-
-            _settingsStore = new JsonCortexSettingsStore(hostEnvironment.SettingsFilePath);
-            _workbenchPersistenceService = new JsonWorkbenchPersistenceService(hostEnvironment.WorkbenchPersistenceFilePath);
-            var settings = BuildEffectiveSettings(_settingsStore.Load(), hostEnvironment);
-            _state.Settings = settings;
-            _windowRect = new Rect(settings.WindowX, settings.WindowY, settings.WindowWidth, settings.WindowHeight);
-            _logWindowRect = new Rect(settings.WindowX + 30f, settings.WindowY + 30f, Math.Max(760f, settings.WindowWidth - 120f), Math.Max(460f, settings.WindowHeight - 140f));
+            _bootstrapper.InitializeSettings(out _windowRect, out _logWindowRect);
+            var hostEnvironment = _bootstrapper.HostEnvironment ?? _hostEnvironment ?? NullCortexHostServices.Instance.Environment;
+            var settings = _state.Settings;
+            _settingsStore = _bootstrapper.SettingsStore;
+            _workbenchPersistenceService = _bootstrapper.PersistenceService;
             _state.Chrome.Main.ExpandedRect = _windowRect;
             _state.Chrome.Main.CollapsedRect = CortexWindowChromeController.BuildCollapsedRect(_windowRect, 126f, 28f);
             _state.Chrome.Logs.ExpandedRect = _logWindowRect;
@@ -278,31 +324,11 @@ namespace Cortex
 
         private void InitializeWorkbenchRuntime()
         {
-            if (_workbenchRuntimeFactory == null)
-            {
-                MMLog.WriteWarning("[Cortex] Workbench runtime initialization skipped because no host runtime factory was configured.");
-                return;
-            }
-
-            _workbenchRuntime = _workbenchRuntimeFactory.Create();
+            _workbenchRuntime = _bootstrapper.InitializeRuntime();
             if (_workbenchRuntime == null)
             {
-                MMLog.WriteWarning("[Cortex] Workbench runtime initialization skipped because the host runtime factory returned null.");
                 return;
             }
-
-            if (_externalPluginLoader == null)
-            {
-                _externalPluginLoader = new ExternalWorkbenchPluginLoader();
-            }
-
-            RegisterExternalWorkbenchPlugins();
-            _workbenchRuntime.LayoutState.PrimarySideWidth = _state.Settings != null ? _state.Settings.ProjectsPaneWidth : 360f;
-            _workbenchRuntime.LayoutState.SecondarySideWidth = _state.Settings != null ? _state.Settings.EditorFilePaneWidth : 320f;
-            _workbenchRuntime.LayoutState.PanelSize = _state.Settings != null ? _state.Settings.PanelPaneSize : 280f;
-            _workbenchRuntime.ThemeState.ThemeId = _state.Settings != null && !string.IsNullOrEmpty(_state.Settings.ThemeId)
-                ? _state.Settings.ThemeId
-                : _workbenchRuntime.ThemeState.ThemeId;
             ActivateContainer(_state.Workbench.SideContainerId);
             if (!string.IsNullOrEmpty(_state.Workbench.SecondarySideContainerId))
             {
@@ -320,123 +346,21 @@ namespace Cortex
         {
             var resolvedHostServices = hostServices ?? NullCortexHostServices.Instance;
             _pathInteractionService = resolvedHostServices.PathInteractionService;
-            _workbenchRuntimeFactory = resolvedHostServices.WorkbenchRuntimeFactory;
             _platformModule = resolvedHostServices.PlatformModule ?? NullCortexPlatformModule.Instance;
             _hostEnvironment = resolvedHostServices.Environment ?? NullCortexHostServices.Instance.Environment;
             _shellHostUi = resolvedHostServices.ShellHostUi ?? NullCortexHostServices.Instance.ShellHostUi;
-        }
-
-        private void RegisterExternalWorkbenchPlugins()
-        {
-            if (_workbenchRuntime == null || _externalPluginLoader == null)
-            {
-                return;
-            }
-
-            var results = _externalPluginLoader.LoadPlugins(
-                _state.Settings,
-                _workbenchRuntime.CommandRegistry,
-                _workbenchRuntime.ContributionRegistry,
-                _moduleContributionRegistry);
-
-            for (var i = 0; i < results.Count; i++)
-            {
-                var result = results[i];
-                if (result == null)
-                {
-                    continue;
-                }
-
-                if (result.Loaded)
-                {
-                    _state.Diagnostics.Add("Loaded Cortex plugin " + result.DisplayName + " from " + result.AssemblyPath + ".");
-                }
-                else if (!string.IsNullOrEmpty(result.StatusMessage))
-                {
-                    _state.Diagnostics.Add("Cortex plugin skip: " + result.StatusMessage);
-                }
-            }
+            _bootstrapper.ConfigureHostServices(resolvedHostServices);
         }
 
         private void InitializeServices(ICortexHostEnvironment hostEnvironment, CortexSettings settings)
         {
-            MMLog.WriteInfo("[Cortex] Initializing runtime. WorkspaceRoot=" +
-                (settings != null ? settings.WorkspaceRootPath ?? string.Empty : string.Empty) +
-                ", ManagedRoot=" + (settings != null ? settings.ManagedAssemblyRootPath ?? string.Empty : string.Empty) +
-                ", LanguageServiceEnabled=" + (settings != null && settings.EnableRoslynLanguageService) +
-                ", CompletionProvider=" + (settings != null ? settings.CompletionAugmentationProviderId ?? string.Empty : string.Empty) + ".");
-
-            var projectCatalogPath = string.IsNullOrEmpty(settings.ProjectCatalogPath)
-                ? hostEnvironment.ProjectCatalogPath
-                : settings.ProjectCatalogPath;
-
-            var platformModule = _platformModule ?? NullCortexPlatformModule.Instance;
-            var decompilerPath = platformModule.ResolveDecompilerPath(settings.DecompilerPathOverride);
-
-            MMLog.WriteDebug("[Cortex] Service inputs resolved. ProjectCatalogPath=" + projectCatalogPath +
-                ", DecompilerPath=" + decompilerPath +
-                ", DecompilerCachePath=" + (settings != null ? settings.DecompilerCachePath ?? string.Empty : string.Empty) + ".");
-
-            _projectCatalog = new ProjectCatalog(new JsonProjectConfigurationStore(projectCatalogPath));
-            _loadedModCatalog = platformModule.LoadedModCatalog;
-            _sourceLookupIndex = new SourceLookupIndexService();
-            _projectWorkspaceService = new ProjectWorkspaceService(_sourceLookupIndex);
-            _workspaceBrowserService = new WorkspaceBrowserService(_sourceLookupIndex);
-            _referenceCatalogService = new ReferenceCatalogService();
-            _decompilerExplorerService = new DecompilerExplorerService(_referenceCatalogService);
-            _documentService = new FileDocumentService();
-            _buildCommandResolver = new CsprojBuildCommandResolver();
-            _buildExecutor = new ProcessBuildExecutor();
-            _sourcePathResolver = new SourcePathResolver(_sourceLookupIndex);
-            _sourceReferenceService = new SourceReferenceService(new DecompilerCliClient(decompilerPath, settings.DecompilerCachePath, 15000));
-            _runtimeLogFeed = platformModule.RuntimeLogFeed;
-            _runtimeSourceNavigationService = platformModule.CreateRuntimeSourceNavigationService(_sourcePathResolver);
-            _runtimeToolBridge = platformModule.RuntimeToolBridge;
-            _restartCoordinator = platformModule.RestartCoordinator;
-            _overlayInputCaptureService = platformModule.OverlayInputCaptureService;
-            _textSearchService = new TextSearchService();
-            _navigationService = new CortexNavigationService(_documentService, _sourceReferenceService, _runtimeSourceNavigationService, _sourceLookupIndex);
-            _harmonyPatchOwnershipService = new HarmonyPatchOwnershipService();
-            _harmonyPatchDisplayService = new HarmonyPatchDisplayService();
-            _harmonyPatchOrderService = new HarmonyPatchOrderService();
-            _harmonyPatchInspectionService = new HarmonyPatchInspectionService(
-                platformModule.HarmonyRuntimeInspectionService,
-                _harmonyPatchOwnershipService,
-                _harmonyPatchOrderService);
-            _harmonyPatchResolutionService = new HarmonyPatchResolutionService();
-            _harmonyPatchTemplateService = new HarmonyPatchTemplateService();
-            _harmonyPatchInsertionService = new HarmonyPatchInsertionService();
-            _harmonyPatchGenerationService = new HarmonyPatchGenerationService(_harmonyPatchTemplateService, _harmonyPatchInsertionService);
-            _generatedTemplateNavigationService = new GeneratedTemplateNavigationService();
+            ApplyServiceMap(_bootstrapper.InitializeServices(settings));
             InitializeLanguageService(hostEnvironment.HostBinPath, settings);
             EnableRuntimeLogIntegration();
         }
 
-        private void UpdateOverlayInputCapture()
-        {
-            var shellHostUi = ResolveShellHostUi();
-            var captureMouse = false;
-            var captureKeyboard = shellHostUi.HotControl != 0 || shellHostUi.KeyboardControl != 0;
-
-            if (_state.Onboarding.IsActive)
-            {
-                ApplyOverlayInputCapture(true, true);
-                return;
-            }
-
-            if (_visible)
-            {
-                var guiMouse = GetPointerPosition();
-                captureMouse = shellHostUi.HotControl != 0 || IsPointWithinVisibleChrome(guiMouse);
-            }
-
-            ApplyOverlayInputCapture(captureMouse, captureKeyboard);
-        }
-
-        private void ReleaseOverlayInputCapture()
-        {
-            ApplyOverlayInputCapture(false, false);
-        }
+        private void UpdateOverlayInputCapture() => _overlayCoordinator.UpdateOverlayInputCapture(_sessionCoordinator.Visible, _windowRect, _logWindowRect);
+        private void ReleaseOverlayInputCapture() => _overlayCoordinator.ReleaseOverlayInputCapture();
 
         private void ApplyOverlayInputCapture(bool captureMouse, bool captureKeyboard)
         {
@@ -562,37 +486,15 @@ namespace Cortex
 
         private void ApplySettingsChanges()
         {
-            MMLog.WriteInfo("[Cortex] Applying settings changes. ActiveProject=" +
-                (_state.SelectedProject != null ? _state.SelectedProject.ModId ?? string.Empty : string.Empty) +
-                ", ActiveDocument=" + (_state.Documents.ActiveDocument != null ? _state.Documents.ActiveDocument.FilePath ?? string.Empty : string.Empty) +
-                ", ReloadRequested=" + _state.ReloadSettingsRequested + ".");
-            PersistWorkbenchSession();
-            PersistWindowSettings();
+            _sessionCoordinator.PersistSession();
+            _sessionCoordinator.PersistWindowSettings(_windowRect, _state.Chrome.Main.IsCollapsed, _state.Chrome.Main.ExpandedRect);
 
-            var hostEnvironment = _hostEnvironment ?? NullCortexHostServices.Instance.Environment;
-            var activeProjectId = _state.SelectedProject != null ? _state.SelectedProject.ModId : string.Empty;
-            var activeDocumentPath = _state.Documents.ActiveDocument != null ? _state.Documents.ActiveDocument.FilePath : string.Empty;
-
-            _state.Settings = BuildEffectiveSettings(_state.Settings, hostEnvironment);
-            InitializeServices(hostEnvironment, _state.Settings);
-            _settingsStore.Save(_state.Settings);
-
-            if (!string.IsNullOrEmpty(activeProjectId))
+            var hostEnv = _bootstrapper.HostEnvironment;
+            _state.Settings = _bootstrapper.BuildEffectiveSettings(_state.Settings, hostEnv);
+            ApplyServiceMap(_bootstrapper.InitializeServices(_state.Settings));
+            if (_settingsStore != null)
             {
-                _state.SelectedProject = _projectCatalog.GetProject(activeProjectId) ?? _state.SelectedProject;
-            }
-
-            if (!string.IsNullOrEmpty(activeDocumentPath))
-            {
-                for (var i = 0; i < _state.Documents.OpenDocuments.Count; i++)
-                {
-                    if (string.Equals(_state.Documents.OpenDocuments[i].FilePath, activeDocumentPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        _state.Documents.ActiveDocument = _state.Documents.OpenDocuments[i];
-                        _state.Documents.ActiveDocumentPath = activeDocumentPath;
-                        break;
-                    }
-                }
+                _settingsStore.Save(_state.Settings);
             }
 
             _windowRect = new Rect(_state.Settings.WindowX, _state.Settings.WindowY, _state.Settings.WindowWidth, _state.Settings.WindowHeight);
@@ -604,280 +506,59 @@ namespace Cortex
                 _workbenchRuntime.LayoutState.PrimarySideWidth = _state.Settings.ProjectsPaneWidth;
                 _workbenchRuntime.LayoutState.SecondarySideWidth = _state.Settings.EditorFilePaneWidth;
                 _workbenchRuntime.LayoutState.PanelSize = _state.Settings.PanelPaneSize;
-                _workbenchRuntime.ThemeState.ThemeId = string.IsNullOrEmpty(_state.Settings.ThemeId)
-                    ? _workbenchRuntime.ThemeState.ThemeId
-                    : _state.Settings.ThemeId;
+                _workbenchRuntime.ThemeState.ThemeId = string.IsNullOrEmpty(_state.Settings.ThemeId) ? _workbenchRuntime.ThemeState.ThemeId : _state.Settings.ThemeId;
             }
         }
 
-        private CortexSettings BuildEffectiveSettings(CortexSettings settings, ICortexHostEnvironment hostEnvironment)
-        {
-            var effective = settings ?? new CortexSettings();
-
-            if (string.IsNullOrEmpty(effective.ModsRootPath))
-            {
-                effective.ModsRootPath = hostEnvironment.ModsRootPath;
-            }
-
-            if (string.IsNullOrEmpty(effective.WorkspaceRootPath))
-            {
-                effective.WorkspaceRootPath = effective.ModsRootPath;
-            }
-
-            if (string.IsNullOrEmpty(effective.ManagedAssemblyRootPath))
-            {
-                effective.ManagedAssemblyRootPath = hostEnvironment.ManagedAssemblyRootPath;
-            }
-
-            if (string.IsNullOrEmpty(effective.AdditionalSourceRoots))
-            {
-                effective.AdditionalSourceRoots = effective.WorkspaceRootPath;
-            }
-
-            if (string.IsNullOrEmpty(effective.CortexPluginSearchRoots))
-            {
-                effective.CortexPluginSearchRoots = effective.ModsRootPath;
-            }
-
-            if (string.IsNullOrEmpty(effective.LogFilePath))
-            {
-                effective.LogFilePath = hostEnvironment.LogFilePath;
-            }
-
-            if (string.IsNullOrEmpty(effective.ProjectCatalogPath))
-            {
-                effective.ProjectCatalogPath = hostEnvironment.ProjectCatalogPath;
-            }
-
-            if (string.IsNullOrEmpty(effective.DecompilerCachePath))
-            {
-                effective.DecompilerCachePath = hostEnvironment.DecompilerCachePath;
-            }
-
-            if (string.IsNullOrEmpty(effective.AdditionalDecompilerCacheRoots))
-            {
-                effective.AdditionalDecompilerCacheRoots = (_platformModule ?? NullCortexPlatformModule.Instance).AdditionalDecompilerCacheRoots;
-            }
-
-            if (string.IsNullOrEmpty(effective.DefaultBuildConfiguration))
-            {
-                effective.DefaultBuildConfiguration = "Debug";
-            }
-
-            if (effective.BuildTimeoutMs <= 0)
-            {
-                effective.BuildTimeoutMs = 300000;
-            }
-
-            if (effective.RoslynServiceTimeoutMs <= 0)
-            {
-                effective.RoslynServiceTimeoutMs = 15000;
-            }
-
-            if (string.IsNullOrEmpty(effective.CompletionAugmentationProviderId))
-            {
-                effective.CompletionAugmentationProviderId = CompletionAugmentationProviderIds.Tabby;
-            }
-
-            if (effective.EnableTabbyCompletion && !effective.EnableCompletionAugmentation)
-            {
-                effective.EnableCompletionAugmentation = true;
-                effective.CompletionAugmentationProviderId = CompletionAugmentationProviderIds.Tabby;
-            }
-
-            if (effective.CompletionAugmentationSnippetDocumentLimit < 0)
-            {
-                effective.CompletionAugmentationSnippetDocumentLimit = 3;
-            }
-
-            if (effective.CompletionAugmentationSnippetCharacterLimit <= 0)
-            {
-                effective.CompletionAugmentationSnippetCharacterLimit = 800;
-            }
-
-            if (effective.TabbyRequestTimeoutMs <= 0)
-            {
-                effective.TabbyRequestTimeoutMs = 8000;
-            }
-
-            if (string.IsNullOrEmpty(effective.OllamaServerUrl))
-            {
-                effective.OllamaServerUrl = "http://localhost:11434";
-            }
-
-            if (string.IsNullOrEmpty(effective.OllamaSystemPrompt))
-            {
-                effective.OllamaSystemPrompt = CompletionAugmentationPromptDefaults.OllamaSystemPrompt;
-            }
-
-            if (effective.OllamaRequestTimeoutMs <= 0)
-            {
-                effective.OllamaRequestTimeoutMs = 8000;
-            }
-
-            if (string.IsNullOrEmpty(effective.OpenRouterBaseUrl))
-            {
-                effective.OpenRouterBaseUrl = "https://openrouter.ai/api/v1";
-            }
-
-            if (string.IsNullOrEmpty(effective.OpenRouterPromptPreamble))
-            {
-                effective.OpenRouterPromptPreamble = CompletionAugmentationPromptDefaults.OpenRouterPromptPreamble;
-            }
-
-            if (string.IsNullOrEmpty(effective.OpenRouterAppTitle))
-            {
-                effective.OpenRouterAppTitle = "Cortex";
-            }
-
-            if (effective.OpenRouterRequestTimeoutMs <= 0)
-            {
-                effective.OpenRouterRequestTimeoutMs = 10000;
-            }
-
-            if (string.IsNullOrEmpty(effective.DefaultOnboardingProfileId))
-            {
-                effective.DefaultOnboardingProfileId = "cortex.onboarding.profile.ide";
-            }
-
-            if (string.IsNullOrEmpty(effective.DefaultOnboardingLayoutPresetId))
-            {
-                effective.DefaultOnboardingLayoutPresetId = "cortex.onboarding.layout.visual-studio";
-            }
-
-            if (string.IsNullOrEmpty(effective.DefaultOnboardingThemeId))
-            {
-                effective.DefaultOnboardingThemeId = "cortex.vs-dark";
-            }
-
-            if (effective.MaxRecentLogs <= 0)
-            {
-                effective.MaxRecentLogs = 300;
-            }
-
-            if (effective.LogsPaneWidth < 360f)
-            {
-                effective.LogsPaneWidth = 520f;
-            }
-
-            if (effective.ProjectsPaneWidth < 280f)
-            {
-                effective.ProjectsPaneWidth = 360f;
-            }
-
-            if (effective.EditorFilePaneWidth < 240f)
-            {
-                effective.EditorFilePaneWidth = 420f;
-            }
-
-            if (effective.PanelPaneSize < 150f)
-            {
-                effective.PanelPaneSize = 280f;
-            }
-
-            if (effective.WindowWidth < 980f || effective.WindowHeight < 620f)
-            {
-                effective.WindowWidth = Math.Max(980f, GetScreenWidth() * 0.82f);
-                effective.WindowHeight = Math.Max(620f, GetScreenHeight() * 0.82f);
-            }
-
-            if (effective.WindowX < 0f)
-            {
-                effective.WindowX = 40f;
-            }
-
-            if (effective.WindowY < 0f)
-            {
-                effective.WindowY = 40f;
-            }
-
-            return effective;
-        }
-
-        private void PersistWindowSettings()
-        {
-            if (_state.Settings == null || _settingsStore == null)
-            {
-                return;
-            }
-
-            var persistedRect = _state.Chrome.Main.IsCollapsed ? _state.Chrome.Main.ExpandedRect : _windowRect;
-            _state.Settings.WindowX = persistedRect.x;
-            _state.Settings.WindowY = persistedRect.y;
-            _state.Settings.WindowWidth = persistedRect.width;
-            _state.Settings.WindowHeight = persistedRect.height;
-            _settingsStore.Save(_state.Settings);
-        }
+        private void PersistWindowSettings() => _sessionCoordinator.PersistWindowSettings(_windowRect, _state.Chrome.Main.IsCollapsed, _state.Chrome.Main.ExpandedRect);
 
         private void ClampWindowsToScreen()
         {
-            _windowRect = ClampRectToScreen(_windowRect, 920f, 580f);
-            _logWindowRect = ClampRectToScreen(_logWindowRect, 760f, 420f);
-            _state.Chrome.Main.ExpandedRect = ClampRectToScreen(_state.Chrome.Main.ExpandedRect.width > 0f ? _state.Chrome.Main.ExpandedRect : _windowRect, 920f, 580f);
-            _state.Chrome.Logs.ExpandedRect = ClampRectToScreen(_state.Chrome.Logs.ExpandedRect.width > 0f ? _state.Chrome.Logs.ExpandedRect : _logWindowRect, 760f, 420f);
-            _state.Chrome.Main.CollapsedRect = ClampRectToScreen(
-                _state.Chrome.Main.CollapsedRect.width > 0f ? _state.Chrome.Main.CollapsedRect : CortexWindowChromeController.BuildCollapsedRect(_windowRect, 126f, 28f),
-                126f,
-                28f);
-            _state.Chrome.Logs.CollapsedRect = ClampRectToScreen(
-                _state.Chrome.Logs.CollapsedRect.width > 0f ? _state.Chrome.Logs.CollapsedRect : CortexWindowChromeController.BuildCollapsedRect(_logWindowRect, 110f, 26f),
-                110f,
-                26f);
+            var sw = GetScreenWidth(); var sh = GetScreenHeight();
+            _windowRect = ClampRectToScreen(_windowRect, 920f, 580f, sw, sh);
+            _logWindowRect = ClampRectToScreen(_logWindowRect, 760f, 420f, sw, sh);
+            _state.Chrome.Main.ExpandedRect = ClampRectToScreen(_state.Chrome.Main.ExpandedRect.width > 0f ? _state.Chrome.Main.ExpandedRect : _windowRect, 920f, 580f, sw, sh);
+            _state.Chrome.Logs.ExpandedRect = ClampRectToScreen(_state.Chrome.Logs.ExpandedRect.width > 0f ? _state.Chrome.Logs.ExpandedRect : _logWindowRect, 760f, 420f, sw, sh);
+            _state.Chrome.Main.CollapsedRect = ClampRectToScreen(_state.Chrome.Main.CollapsedRect.width > 0f ? _state.Chrome.Main.CollapsedRect : CortexWindowChromeController.BuildCollapsedRect(_windowRect, 126f, 28f), 126f, 28f, sw, sh);
+            _state.Chrome.Logs.CollapsedRect = ClampRectToScreen(_state.Chrome.Logs.CollapsedRect.width > 0f ? _state.Chrome.Logs.CollapsedRect : CortexWindowChromeController.BuildCollapsedRect(_logWindowRect, 110f, 26f), 110f, 26f, sw, sh);
         }
 
-        private Rect ClampRectToScreen(Rect rect, float minWidth, float minHeight)
+        private Rect ClampRectToScreen(Rect rect, float minWidth, float minHeight, int sw, int sh)
         {
-            var screenWidth = GetScreenWidth();
-            var screenHeight = GetScreenHeight();
-            var width = Mathf.Clamp(rect.width, minWidth, Math.Max(minWidth, screenWidth - 20f));
-            var height = Mathf.Clamp(rect.height, minHeight, Math.Max(minHeight, screenHeight - 20f));
-            var x = Mathf.Clamp(rect.x, 0f, Math.Max(0f, screenWidth - width));
-            var y = Mathf.Clamp(rect.y, 0f, Math.Max(0f, screenHeight - height));
+            var width = Mathf.Clamp(rect.width, minWidth, Math.Max(minWidth, sw - 20f));
+            var height = Mathf.Clamp(rect.height, minHeight, Math.Max(minHeight, sh - 20f));
+            var x = Mathf.Clamp(rect.x, 0f, Math.Max(0f, sw - width));
+            var y = Mathf.Clamp(rect.y, 0f, Math.Max(0f, sh - height));
             return new Rect(x, y, width, height);
         }
 
         private void FitMainWindowToScreen()
         {
-            var screenWidth = GetScreenWidth();
-            var screenHeight = GetScreenHeight();
-            _windowRect = new Rect(
-                Mathf.Max(10f, screenWidth * 0.05f),
-                Mathf.Max(10f, screenHeight * 0.05f),
-                Mathf.Max(980f, screenWidth * 0.9f),
-                Mathf.Max(620f, screenHeight * 0.88f));
+            var sw = GetScreenWidth(); var sh = GetScreenHeight();
+            _windowRect = new Rect(Mathf.Max(10f, sw * 0.05f), Mathf.Max(10f, sh * 0.05f), Mathf.Max(980f, sw * 0.9f), Mathf.Max(620f, sh * 0.88f));
             _state.Chrome.Main.ExpandedRect = _windowRect;
         }
 
-        private void EnableRuntimeLogIntegration()
-        {
-            (_platformModule ?? NullCortexPlatformModule.Instance).ConfigureRuntimeLogging(true);
-        }
+        private void EnableRuntimeLogIntegration() => (_bootstrapper.PlatformModule ?? NullCortexPlatformModule.Instance).ConfigureRuntimeLogging(true);
+        private void DisableRuntimeLogIntegration() => (_bootstrapper.PlatformModule ?? NullCortexPlatformModule.Instance).ConfigureRuntimeLogging(false);
 
-        private void DisableRuntimeLogIntegration()
-        {
-            (_platformModule ?? NullCortexPlatformModule.Instance).ConfigureRuntimeLogging(false);
-        }
+        private void RegisterToggleAction() => (_bootstrapper.PlatformModule ?? NullCortexPlatformModule.Instance).EnsureShellToggleRegistered(ToggleActionId);
+
+        private void ActivateContainer(string containerId) => _layoutCoordinator.ActivateContainer(containerId);
+        private WorkbenchHostLocation ResolveHostLocation(string containerId) => _layoutCoordinator.ResolveHostLocation(containerId);
+        private void DockContainer(string containerId, WorkbenchHostLocation hostLocation) => _layoutCoordinator.DockContainer(containerId, hostLocation);
+        private void HideContainer(string containerId) => _layoutCoordinator.HideContainer(containerId);
+        private string FindFirstContainerForHost(WorkbenchHostLocation hostLocation, string excludedContainerId) => _layoutHostRouter.FindFirstContainerForHost(GetLayoutContext(), hostLocation, excludedContainerId);
+        private string MapLegacyTabIndex(int index) => _layoutHostRouter.MapLegacyTabIndex(index);
 
         private void EnsureStyles(ThemeTokenSet themeTokens, string themeId)
         {
             var effectiveThemeId = string.IsNullOrEmpty(themeId) ? "cortex.vs-dark" : themeId;
             if (!string.Equals(_appliedThemeId, effectiveThemeId, StringComparison.OrdinalIgnoreCase))
             {
-                _titleStyle = null;
-                _menuStyle = null;
-                _statusStyle = null;
-                _captionStyle = null;
-                _sectionStyle = null;
-                _windowStyle = null;
-                _tabStyle = null;
-                _activeTabStyle = null;
-                _tabCloseButtonStyle = null;
-                _collapsedWindowStyle = null;
-                _windowBackground = null;
-                _sectionBackground = null;
-                _tabBackground = null;
-                _tabActiveBackground = null;
-                _collapsedWindowBackground = null;
+                _titleStyle = null; _menuStyle = null; _statusStyle = null; _captionStyle = null; _sectionStyle = null; _windowStyle = null;
+                _tabStyle = null; _activeTabStyle = null; _tabCloseButtonStyle = null; _collapsedWindowStyle = null;
+                _windowBackground = null; _sectionBackground = null; _tabBackground = null; _tabActiveBackground = null; _collapsedWindowBackground = null;
                 _appliedThemeId = effectiveThemeId;
             }
 
@@ -888,208 +569,140 @@ namespace Cortex
             var headerColor = CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.HeaderColor : string.Empty, new Color(0.16f, 0.17f, 0.2f, 1f));
             var accentColor = CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.AccentColor : string.Empty, new Color(0.22f, 0.3f, 0.4f, 1f));
 
-            if (_titleStyle == null)
-            {
-                _titleStyle = new GUIStyle(GUI.skin.label);
-                _titleStyle.fontSize = 13;
-                _titleStyle.fontStyle = FontStyle.Bold;
-                GuiStyleUtil.ApplyTextColorToAllStates(_titleStyle, textColor);
-            }
-
-            if (_menuStyle == null)
-            {
-                _menuStyle = new GUIStyle(GUI.skin.label);
-                _menuStyle.fontSize = 12;
-                _menuStyle.fontStyle = FontStyle.Normal;
-                _menuStyle.padding = new RectOffset(6, 6, 3, 3);
-                GuiStyleUtil.ApplyTextColorToAllStates(_menuStyle, textColor);
-            }
-
-            if (_statusStyle == null)
-            {
-                _statusStyle = new GUIStyle(GUI.skin.label);
-                _statusStyle.wordWrap = true;
-                GuiStyleUtil.ApplyTextColorToAllStates(_statusStyle, CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.TextColor : string.Empty, new Color(0.88f, 0.88f, 0.9f, 1f)));
-            }
-
-            if (_captionStyle == null)
-            {
-                _captionStyle = new GUIStyle(GUI.skin.label);
-                _captionStyle.wordWrap = true;
-                GuiStyleUtil.ApplyTextColorToAllStates(_captionStyle, mutedTextColor);
-            }
-
-            if (_sectionStyle == null)
-            {
-                _sectionStyle = new GUIStyle(GUI.skin.box);
-                _sectionBackground = MakeTex(surfaceColor);
-                GuiStyleUtil.ApplyBackgroundToAllStates(_sectionStyle, _sectionBackground);
-                _sectionStyle.padding = new RectOffset(8, 8, 6, 6);
-                _sectionStyle.margin = new RectOffset(0, 0, 0, 0);
-            }
-
-            if (_windowStyle == null)
-            {
-                _windowBackground = MakeTex(surfaceColor);
-                _windowStyle = new GUIStyle(GUI.skin.window);
-                GuiStyleUtil.ApplyBackgroundToAllStates(_windowStyle, _windowBackground);
-                GuiStyleUtil.ApplyTextColorToAllStates(_windowStyle, textColor);
-                _windowStyle.padding = new RectOffset(6, 6, 24, 6);
-                _windowStyle.margin = new RectOffset(0, 0, 0, 0);
-            }
-
-            if (_tabStyle == null)
-            {
-                _tabBackground = MakeTex(headerColor);
-                _tabStyle = new GUIStyle(GUI.skin.button);
-                GuiStyleUtil.ApplyBackgroundToAllStates(_tabStyle, _tabBackground);
-                GuiStyleUtil.ApplyTextColorToAllStates(_tabStyle, mutedTextColor);
-                _tabStyle.alignment = TextAnchor.MiddleCenter;
-                _tabStyle.padding = new RectOffset(10, 10, 5, 5);
-                _tabStyle.margin = new RectOffset(0, 2, 0, 0);
-            }
-
-            if (_activeTabStyle == null)
-            {
-                _tabActiveBackground = MakeTex(accentColor);
-                _activeTabStyle = new GUIStyle(_tabStyle);
-                GuiStyleUtil.ApplyBackgroundToAllStates(_activeTabStyle, _tabActiveBackground);
-                GuiStyleUtil.ApplyTextColorToAllStates(_activeTabStyle, Color.white);
-                _activeTabStyle.fontStyle = FontStyle.Bold;
-            }
-
-            if (_tabCloseButtonStyle == null)
-            {
-                _tabCloseButtonStyle = new GUIStyle(GUI.skin.button);
-                _tabCloseButtonStyle.alignment = TextAnchor.MiddleCenter;
-                _tabCloseButtonStyle.fontSize = 10;
-                _tabCloseButtonStyle.padding = new RectOffset(0, 0, 0, 0);
-                _tabCloseButtonStyle.margin = new RectOffset(0, 0, 0, 0);
-                GuiStyleUtil.ApplyBackgroundToAllStates(_tabCloseButtonStyle, MakeTex(CortexIdeLayout.Blend(headerColor, backgroundColor, 0.45f)));
-                GuiStyleUtil.ApplyTextColorToAllStates(_tabCloseButtonStyle, textColor);
-            }
-
-            if (_collapsedWindowStyle == null)
-            {
-                _collapsedWindowBackground = MakeTex(CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.HeaderColor : string.Empty, new Color(0.09f, 0.11f, 0.15f, 0.98f)));
-                _collapsedWindowStyle = new GUIStyle(GUI.skin.button);
-                GuiStyleUtil.ApplyBackgroundToAllStates(_collapsedWindowStyle, _collapsedWindowBackground);
-                _collapsedWindowStyle.alignment = TextAnchor.MiddleLeft;
-                _collapsedWindowStyle.padding = new RectOffset(10, 10, 4, 4);
-                _collapsedWindowStyle.fontStyle = FontStyle.Bold;
-                GuiStyleUtil.ApplyTextColorToAllStates(_collapsedWindowStyle, textColor);
-            }
+            if (_titleStyle == null) { _titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Bold }; GuiStyleUtil.ApplyTextColorToAllStates(_titleStyle, textColor); }
+            if (_menuStyle == null) { _menuStyle = new GUIStyle(GUI.skin.label) { fontSize = 12, fontStyle = FontStyle.Normal, padding = new RectOffset(6, 6, 3, 3) }; GuiStyleUtil.ApplyTextColorToAllStates(_menuStyle, textColor); }
+            if (_statusStyle == null) { _statusStyle = new GUIStyle(GUI.skin.label) { wordWrap = true }; GuiStyleUtil.ApplyTextColorToAllStates(_statusStyle, CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.TextColor : string.Empty, new Color(0.88f, 0.88f, 0.9f, 1f))); }
+            if (_captionStyle == null) { _captionStyle = new GUIStyle(GUI.skin.label) { wordWrap = true }; GuiStyleUtil.ApplyTextColorToAllStates(_captionStyle, mutedTextColor); }
+            if (_sectionStyle == null) { _sectionStyle = new GUIStyle(GUI.skin.box); _sectionBackground = MakeTex(surfaceColor); GuiStyleUtil.ApplyBackgroundToAllStates(_sectionStyle, _sectionBackground); _sectionStyle.padding = new RectOffset(8, 8, 6, 6); _sectionStyle.margin = new RectOffset(0, 0, 0, 0); }
+            if (_windowStyle == null) { _windowBackground = MakeTex(surfaceColor); _windowStyle = new GUIStyle(GUI.skin.window); GuiStyleUtil.ApplyBackgroundToAllStates(_windowStyle, _windowBackground); GuiStyleUtil.ApplyTextColorToAllStates(_windowStyle, textColor); _windowStyle.padding = new RectOffset(6, 6, 24, 6); _windowStyle.margin = new RectOffset(0, 0, 0, 0); }
+            if (_tabStyle == null) { _tabBackground = MakeTex(headerColor); _tabStyle = new GUIStyle(GUI.skin.button); GuiStyleUtil.ApplyBackgroundToAllStates(_tabStyle, _tabBackground); GuiStyleUtil.ApplyTextColorToAllStates(_tabStyle, mutedTextColor); _tabStyle.alignment = TextAnchor.MiddleCenter; _tabStyle.padding = new RectOffset(10, 10, 5, 5); _tabStyle.margin = new RectOffset(0, 2, 0, 0); }
+            if (_activeTabStyle == null) { _tabActiveBackground = MakeTex(accentColor); _activeTabStyle = new GUIStyle(_tabStyle); GuiStyleUtil.ApplyBackgroundToAllStates(_activeTabStyle, _tabActiveBackground); GuiStyleUtil.ApplyTextColorToAllStates(_activeTabStyle, Color.white); _activeTabStyle.fontStyle = FontStyle.Bold; }
+            if (_tabCloseButtonStyle == null) { _tabCloseButtonStyle = new GUIStyle(GUI.skin.button) { alignment = TextAnchor.MiddleCenter, fontSize = 10, padding = new RectOffset(0, 0, 0, 0), margin = new RectOffset(0, 0, 0, 0) }; GuiStyleUtil.ApplyBackgroundToAllStates(_tabCloseButtonStyle, MakeTex(CortexIdeLayout.Blend(headerColor, backgroundColor, 0.45f))); GuiStyleUtil.ApplyTextColorToAllStates(_tabCloseButtonStyle, textColor); }
+            if (_collapsedWindowStyle == null) { _collapsedWindowBackground = MakeTex(CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.HeaderColor : string.Empty, new Color(0.09f, 0.11f, 0.15f, 0.98f))); _collapsedWindowStyle = new GUIStyle(GUI.skin.button) { alignment = TextAnchor.MiddleLeft, padding = new RectOffset(10, 10, 4, 4), fontStyle = FontStyle.Bold }; GuiStyleUtil.ApplyBackgroundToAllStates(_collapsedWindowStyle, _collapsedWindowBackground); GuiStyleUtil.ApplyTextColorToAllStates(_collapsedWindowStyle, textColor); }
         }
 
         private void DrawCollapsedWindowButton(CortexWindowChromeState chromeState, string glyph, string title)
         {
-            if (chromeState == null)
-            {
-                return;
-            }
-
-            if (CortexWindowChromeController.DrawCollapsedButton(chromeState.CollapsedRect, glyph + " " + title, _collapsedWindowStyle))
-            {
-                chromeState.IsCollapsed = false;
-            }
+            if (chromeState != null && CortexWindowChromeController.DrawCollapsedButton(chromeState.CollapsedRect, glyph + " " + title, _collapsedWindowStyle)) chromeState.IsCollapsed = false;
         }
 
         private void DrawLogsWindowHeaderActions()
         {
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
+            GUILayout.BeginHorizontal(); GUILayout.FlexibleSpace();
             var actions = new List<CortexWindowAction>();
-            actions.Add(BuildGlyphWindowAction(
-                "logs.collapse",
-                "_",
-                "Minimize logs window",
-                delegate
-                {
-                    _logWindowRect = CortexWindowChromeController.ToggleCollapsed(_state.Chrome.Logs, _logWindowRect, 110f, 26f);
-                }));
-            actions.Add(BuildGlyphWindowAction(
-                "logs.close",
-                "X",
-                "Close detached logs window",
-                delegate
-                {
-                    _state.Logs.ShowDetachedWindow = false;
-                    _state.Chrome.Logs.IsCollapsed = false;
-                }));
+            actions.Add(BuildGlyphWindowAction("logs.collapse", "_", "Minimize logs window", delegate { _logWindowRect = CortexWindowChromeController.ToggleCollapsed(_state.Chrome.Logs, _logWindowRect, 110f, 26f); }));
+            actions.Add(BuildGlyphWindowAction("logs.close", "X", "Close detached logs window", delegate { _state.Logs.ShowDetachedWindow = false; _state.Chrome.Logs.IsCollapsed = false; }));
             CortexWindowChromeController.DrawActions(actions);
             GUILayout.EndHorizontal();
         }
 
-        private static Texture2D MakeTex(Color color)
-        {
-            var texture = new Texture2D(1, 1);
-            texture.SetPixel(0, 0, color);
-            texture.Apply();
-            return texture;
-        }
-
-        private static CortexWindowAction BuildGlyphWindowAction(string actionId, string label, string toolTip, Action execute)
-        {
-            return new CortexWindowAction
-            {
-                ActionId = actionId,
-                Label = label,
-                ToolTip = toolTip,
-                Width = 24f,
-                Height = 20f,
-                Execute = execute
-            };
-        }
+        private static Texture2D MakeTex(Color color) { var texture = new Texture2D(1, 1); texture.SetPixel(0, 0, color); texture.Apply(); return texture; }
+        private static CortexWindowAction BuildGlyphWindowAction(string actionId, string label, string toolTip, Action execute) => new CortexWindowAction { ActionId = actionId, Label = label, ToolTip = toolTip, Width = 24f, Height = 20f, Execute = execute };
 
         private void ApplyWindowResize(int windowId, ref Rect windowRect, float minWidth, float minHeight)
         {
-            var screenWidth = GetScreenWidth();
-            var screenHeight = GetScreenHeight();
-            var localRect = new Rect(0f, 0f, windowRect.width, windowRect.height);
-            localRect = CortexWindowChromeController.DrawResizeHandle(
-                windowId,
-                localRect,
-                minWidth,
-                minHeight,
-                Math.Max(minWidth, screenWidth - 12f),
-                Math.Max(minHeight, screenHeight - 12f));
-            windowRect.width = localRect.width;
-            windowRect.height = localRect.height;
+            var sw = GetScreenWidth(); var sh = GetScreenHeight(); var localRect = new Rect(0f, 0f, windowRect.width, windowRect.height);
+            localRect = CortexWindowChromeController.DrawResizeHandle(windowId, localRect, minWidth, minHeight, Math.Max(minWidth, sw - 12f), Math.Max(minHeight, sh - 12f));
+            windowRect.width = localRect.width; windowRect.height = localRect.height;
         }
 
-        private void RegisterToggleAction()
+        private void ApplyServiceMap(ShellServiceMap services)
         {
-            (_platformModule ?? NullCortexPlatformModule.Instance).EnsureShellToggleRegistered(ToggleActionId);
+            if (services == null)
+            {
+                return;
+            }
+
+            if (_services == null)
+            {
+                _services = new ShellServiceMap();
+            }
+
+            _services.ProjectCatalog = services.ProjectCatalog;
+            _services.LoadedModCatalog = services.LoadedModCatalog;
+            _services.SourceLookupIndex = services.SourceLookupIndex;
+            _services.ProjectWorkspaceService = services.ProjectWorkspaceService;
+            _services.WorkspaceBrowserService = services.WorkspaceBrowserService;
+            _services.ReferenceCatalogService = services.ReferenceCatalogService;
+            _services.DecompilerExplorerService = services.DecompilerExplorerService;
+            _services.DocumentService = services.DocumentService;
+            _services.BuildCommandResolver = services.BuildCommandResolver;
+            _services.BuildExecutor = services.BuildExecutor;
+            _services.SourcePathResolver = services.SourcePathResolver;
+            _services.SourceReferenceService = services.SourceReferenceService;
+            _services.RuntimeLogFeed = services.RuntimeLogFeed;
+            _services.PathInteractionService = services.PathInteractionService;
+            _services.RuntimeToolBridge = services.RuntimeToolBridge;
+            _services.RestartCoordinator = services.RestartCoordinator;
+            _services.OverlayInputCaptureService = services.OverlayInputCaptureService;
+            _services.TextSearchService = services.TextSearchService;
+            _services.NavigationService = services.NavigationService;
+            _services.HarmonyPatchOwnershipService = services.HarmonyPatchOwnershipService;
+            _services.HarmonyPatchDisplayService = services.HarmonyPatchDisplayService;
+            _services.HarmonyPatchOrderService = services.HarmonyPatchOrderService;
+            _services.HarmonyPatchInspectionService = services.HarmonyPatchInspectionService;
+            _services.HarmonyPatchResolutionService = services.HarmonyPatchResolutionService;
+            _services.HarmonyPatchTemplateService = services.HarmonyPatchTemplateService;
+            _services.HarmonyPatchInsertionService = services.HarmonyPatchInsertionService;
+            _services.HarmonyPatchGenerationService = services.HarmonyPatchGenerationService;
+            _services.GeneratedTemplateNavigationService = services.GeneratedTemplateNavigationService;
+
+            _projectCatalog = _services.ProjectCatalog;
+            _loadedModCatalog = _services.LoadedModCatalog;
+            _sourceLookupIndex = _services.SourceLookupIndex;
+            _projectWorkspaceService = _services.ProjectWorkspaceService;
+            _workspaceBrowserService = _services.WorkspaceBrowserService;
+            _referenceCatalogService = _services.ReferenceCatalogService;
+            _decompilerExplorerService = _services.DecompilerExplorerService;
+            _documentService = _services.DocumentService;
+            _buildCommandResolver = _services.BuildCommandResolver;
+            _buildExecutor = _services.BuildExecutor;
+            _sourcePathResolver = _services.SourcePathResolver;
+            _sourceReferenceService = _services.SourceReferenceService;
+            _runtimeLogFeed = _services.RuntimeLogFeed;
+            _runtimeToolBridge = _services.RuntimeToolBridge;
+            _restartCoordinator = _services.RestartCoordinator;
+            _overlayInputCaptureService = _services.OverlayInputCaptureService;
+            _textSearchService = _services.TextSearchService;
+            _navigationService = _services.NavigationService;
+            _harmonyPatchOwnershipService = _services.HarmonyPatchOwnershipService;
+            _harmonyPatchDisplayService = _services.HarmonyPatchDisplayService;
+            _harmonyPatchOrderService = _services.HarmonyPatchOrderService;
+            _harmonyPatchInspectionService = _services.HarmonyPatchInspectionService;
+            _harmonyPatchResolutionService = _services.HarmonyPatchResolutionService;
+            _harmonyPatchTemplateService = _services.HarmonyPatchTemplateService;
+            _harmonyPatchInsertionService = _services.HarmonyPatchInsertionService;
+            _harmonyPatchGenerationService = _services.HarmonyPatchGenerationService;
+            _generatedTemplateNavigationService = _services.GeneratedTemplateNavigationService;
         }
 
-        private void ActivateContainer(string containerId)
+        private CortexSettings BuildEffectiveSettings(CortexSettings settings, ICortexHostEnvironment hostEnvironment)
         {
-            _layoutHostRouter.ActivateContainer(GetLayoutContext(), containerId);
+            return _bootstrapper.BuildEffectiveSettings(settings, hostEnvironment);
         }
 
-        private WorkbenchHostLocation ResolveHostLocation(string containerId)
+        private void DrawOnboardingOverlay()
         {
-            return _layoutHostRouter.ResolveHostLocation(GetLayoutContext(), containerId);
+            _overlayCoordinator.DrawOnboardingOverlay(
+                _hostEnvironment ?? NullCortexHostServices.Instance.Environment,
+                _loadedModCatalog,
+                _projectCatalog,
+                _projectWorkspaceService,
+                _workbenchRuntime,
+                _pathInteractionService,
+                ActivateContainer,
+                PersistWorkbenchSession,
+                PersistWindowSettings);
         }
 
-        private void DockContainer(string containerId, WorkbenchHostLocation hostLocation)
+        private CortexShellLayoutContext GetLayoutContext()
         {
-            _layoutHostRouter.DockContainer(GetLayoutContext(), containerId, hostLocation);
-        }
+            if (_layoutContext == null)
+            {
+                _layoutContext = new CortexShellLayoutContext(_state, delegate { return _workbenchRuntime; });
+            }
 
-        private void HideContainer(string containerId)
-        {
-            _layoutHostRouter.HideContainer(GetLayoutContext(), containerId);
-        }
-
-        private string FindFirstContainerForHost(WorkbenchHostLocation hostLocation, string excludedContainerId)
-        {
-            return _layoutHostRouter.FindFirstContainerForHost(GetLayoutContext(), hostLocation, excludedContainerId);
-        }
-
-        private string MapLegacyTabIndex(int index)
-        {
-            return _layoutHostRouter.MapLegacyTabIndex(index);
+            return _layoutContext;
         }
 
     }
