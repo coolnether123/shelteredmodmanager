@@ -1428,7 +1428,12 @@ namespace Cortex.Services
             }
 
             var normalizedSymbol = NormalizeMethodName(symbolText);
+            string methodHeader;
+            bool resolvedFromAttribute;
+            var isSourcePatchEntryPoint = TryExtractEnclosingMethodHeader(text, absolutePosition, out methodHeader) &&
+                !string.IsNullOrEmpty(ResolveSourcePatchKind(methodHeader, normalizedSymbol, out resolvedFromAttribute));
             if (!string.IsNullOrEmpty(normalizedSymbol) &&
+                !isSourcePatchEntryPoint &&
                 !string.Equals(normalizedSymbol, binding.MethodName, StringComparison.Ordinal) &&
                 !string.Equals(normalizedSymbol, NormalizeTypeName(binding.TypeName), StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(normalizedSymbol, NormalizeTypeName(GetSimpleTypeName(binding.TypeName)), StringComparison.OrdinalIgnoreCase))

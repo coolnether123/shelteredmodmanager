@@ -118,6 +118,7 @@
     <Compile Include="Services\EditorMethodPatchCreationService.cs" />
     <Compile Include="Services\EditorMethodHarmonyContextService.cs" />
     <Compile Include="Services\EditorMethodInspectorService.cs" />
+    <Compile Include="Services\EditorMethodTargetMetadataService.cs" />
     <Compile Include="Services\EditorOverlayInteractionService.cs" />
     <Compile Include="Services\EditorMethodTargetOutlineService.cs" />
     <Compile Include="Services\EditorMutationExecutionService.cs" />
