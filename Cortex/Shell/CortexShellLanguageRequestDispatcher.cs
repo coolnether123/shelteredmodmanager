@@ -502,5 +502,66 @@ namespace Cortex
             semantic.RequestedKey = string.Empty;
             semantic.RequestedKind = SemanticRequestKind.None;
         }
+
+        public void UpdateMethodInspectorCallHierarchy(CortexShellLanguageRuntimeContext context)
+        {
+            var runtime = context != null ? context.RuntimeState : null;
+            var inspector = context != null && context.State != null && context.State.Editor != null
+                ? context.State.Editor.MethodInspector
+                : null;
+            var invocation = inspector != null ? inspector.Invocation : null;
+            var target = invocation != null ? invocation.Target : null;
+            if (context == null ||
+                runtime == null ||
+                inspector == null ||
+                !inspector.IsVisible ||
+                target == null ||
+                runtime.MethodInspectorCallHierarchyInFlight ||
+                string.IsNullOrEmpty(inspector.CallHierarchyRequestKey))
+            {
+                return;
+            }
+
+            var session = context.FindOpenDocument(target.DocumentPath);
+            if (session == null)
+            {
+                inspector.CallHierarchyRequestKey = string.Empty;
+                inspector.CallHierarchyStatusMessage = "Incoming-call inference is not available because the source document is no longer open.";
+                return;
+            }
+
+            var project = context.ResolveProjectForDocument(session.FilePath);
+            var sourceRoots = context.BuildLanguageSourceRoots(context.State.Settings, project);
+            var request = context.DocumentLanguageInteractionService.BuildCallHierarchyRequest(
+                session,
+                context.State.Settings,
+                project,
+                sourceRoots,
+                target.Line,
+                target.Column,
+                target.AbsolutePosition);
+            var requestKey = inspector.CallHierarchyRequestKey ?? string.Empty;
+            var requestId = context.LanguageServiceClient != null
+                ? context.LanguageServiceClient.QueueCallHierarchy(request)
+                : string.Empty;
+            inspector.CallHierarchyRequestKey = string.Empty;
+            if (string.IsNullOrEmpty(requestId))
+            {
+                inspector.CallHierarchyStatusMessage = "Incoming-call inference failed: " +
+                    (context.LanguageServiceClient != null ? context.LanguageServiceClient.LastError : "Roslyn client was not available.");
+                return;
+            }
+
+            runtime.MethodInspectorCallHierarchyInFlight = true;
+            runtime.PendingMethodInspectorCallHierarchy = new PendingMethodInspectorCallHierarchyRequest
+            {
+                RequestId = requestId,
+                Generation = runtime.ServiceGeneration,
+                RequestKey = requestKey,
+                TargetKey = inspector.CallHierarchyTargetKey ?? string.Empty,
+                DocumentPath = request.DocumentPath ?? string.Empty,
+                DocumentVersion = request.DocumentVersion
+            };
+        }
     }
 }

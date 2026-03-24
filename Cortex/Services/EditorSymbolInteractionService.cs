@@ -172,6 +172,12 @@ namespace Cortex.Services
             }
 
             target.HoverText = BuildHoverCopyText(hoverResponse);
+            target.QualifiedSymbolDisplay = hoverResponse != null ? hoverResponse.QualifiedSymbolDisplay ?? string.Empty : string.Empty;
+            target.SymbolKind = hoverResponse != null ? hoverResponse.SymbolKind ?? string.Empty : string.Empty;
+            target.MetadataName = hoverResponse != null ? hoverResponse.MetadataName ?? string.Empty : string.Empty;
+            target.ContainingTypeName = hoverResponse != null ? hoverResponse.ContainingTypeName ?? string.Empty : string.Empty;
+            target.ContainingAssemblyName = hoverResponse != null ? hoverResponse.ContainingAssemblyName ?? string.Empty : string.Empty;
+            target.DocumentationCommentId = hoverResponse != null ? hoverResponse.DocumentationCommentId ?? string.Empty : string.Empty;
             target.DefinitionDocumentPath = hoverResponse != null ? hoverResponse.DefinitionDocumentPath ?? string.Empty : string.Empty;
             target.DefinitionStart = hoverResponse != null && hoverResponse.DefinitionRange != null ? hoverResponse.DefinitionRange.Start : -1;
             target.DefinitionLength = hoverResponse != null && hoverResponse.DefinitionRange != null ? hoverResponse.DefinitionRange.Length : -1;

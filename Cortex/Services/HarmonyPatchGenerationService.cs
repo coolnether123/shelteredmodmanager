@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Core.Services;
 using Cortex.Modules.Shared;
 
 namespace Cortex.Services
@@ -11,6 +12,7 @@ namespace Cortex.Services
     {
         private readonly HarmonyPatchTemplateService _templateService;
         private readonly HarmonyPatchInsertionService _insertionService;
+        private readonly IEditorService _editorService = new EditorService();
 
         public HarmonyPatchGenerationService(HarmonyPatchTemplateService templateService, HarmonyPatchInsertionService insertionService)
         {
@@ -181,6 +183,68 @@ namespace Cortex.Services
             return true;
         }
 
+        public bool TryOpenInsertionTarget(
+            CortexShellState state,
+            IDocumentService documentService,
+            HarmonyPatchInsertionTarget insertionTarget,
+            out DocumentSession session,
+            out string statusMessage)
+        {
+            session = null;
+            statusMessage = "Harmony patch generation is not ready.";
+            if (state == null ||
+                state.Harmony == null ||
+                state.Harmony.GenerationRequest == null ||
+                insertionTarget == null ||
+                string.IsNullOrEmpty(insertionTarget.FilePath) ||
+                documentService == null)
+            {
+                return false;
+            }
+
+            var request = state.Harmony.GenerationRequest;
+            var destinationPath = NormalizePath(insertionTarget.FilePath);
+            if (string.IsNullOrEmpty(destinationPath))
+            {
+                statusMessage = "The selected patch destination path was invalid.";
+                return false;
+            }
+
+            request.DestinationFilePath = destinationPath;
+            request.InsertionAnchorKind = HarmonyPatchInsertionAnchorKind.SelectedContext;
+            request.InsertionLine = Math.Max(1, insertionTarget.SuggestedLine);
+            request.InsertionAbsolutePosition = Math.Max(0, insertionTarget.SuggestedAbsolutePosition);
+            request.InsertionContextLabel = !string.IsNullOrEmpty(insertionTarget.SuggestedContextLabel)
+                ? insertionTarget.SuggestedContextLabel
+                : "selected editor slot";
+
+            UpsertEditorInsertionTarget(
+                state,
+                destinationPath,
+                request.InsertionLine,
+                request.InsertionAbsolutePosition,
+                request.InsertionContextLabel);
+
+            session = ResolveOrCreateDestinationSession(state, documentService, destinationPath, request.InsertionLine);
+            if (session == null)
+            {
+                statusMessage = "Cortex could not open the selected patch destination.";
+                return false;
+            }
+
+            if (session.EditorState != null)
+            {
+                session.EditorState.EditModeEnabled = true;
+            }
+
+            _editorService.SetCaret(session, request.InsertionAbsolutePosition, false, false);
+            ArmEditorInsertionPick(state);
+            statusMessage = "Opened " + Path.GetFileName(destinationPath) + ". Move the caret to the insertion point and press Tab to insert the Harmony patch.";
+            state.Harmony.GenerationStatusMessage = statusMessage;
+            state.StatusMessage = statusMessage;
+            return true;
+        }
+
         private static string BuildPatchClassName(MethodBase method, HarmonyPatchGenerationKind generationKind)
         {
             var typeName = method != null && method.DeclaringType != null ? method.DeclaringType.Name ?? "Target" : "Target";
@@ -321,6 +385,48 @@ namespace Cortex.Services
                 SuggestedContextLabel = contextLabel ?? string.Empty,
                 Reason = "Selected editor insertion point"
             });
+        }
+
+        private static DocumentSession ResolveOrCreateDestinationSession(CortexShellState state, IDocumentService documentService, string filePath, int highlightedLine)
+        {
+            var existing = CortexModuleUtil.FindOpenDocument(state, filePath);
+            if (existing != null)
+            {
+                existing.Kind = DocumentKind.SourceCode;
+                existing.IsReadOnly = false;
+                state.Documents.ActiveDocument = existing;
+                state.Documents.ActiveDocumentPath = existing.FilePath ?? string.Empty;
+                existing.HighlightedLine = highlightedLine;
+                return existing;
+            }
+
+            if (File.Exists(filePath))
+            {
+                return CortexModuleUtil.OpenDocument(documentService, state, filePath, highlightedLine, DocumentKind.SourceCode);
+            }
+
+            var fullPath = Path.GetFullPath(filePath);
+            var directory = Path.GetDirectoryName(fullPath) ?? string.Empty;
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var session = new DocumentSession();
+            session.FilePath = fullPath;
+            session.Kind = DocumentKind.SourceCode;
+            session.IsReadOnly = false;
+            session.Text = string.Empty;
+            session.OriginalTextSnapshot = string.Empty;
+            session.TextVersion = 1;
+            session.LastKnownWriteUtc = DateTime.MinValue;
+            session.LastTextMutationUtc = DateTime.UtcNow;
+            session.EditorState = new EditorDocumentState();
+            session.HighlightedLine = highlightedLine;
+            state.Documents.OpenDocuments.Add(session);
+            state.Documents.ActiveDocument = session;
+            state.Documents.ActiveDocumentPath = fullPath;
+            return session;
         }
     }
 }

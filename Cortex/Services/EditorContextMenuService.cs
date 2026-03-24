@@ -37,10 +37,6 @@ namespace Cortex.Services
                 return items;
             }
 
-            var harmonyCommandsConsidered = 0;
-            var harmonyCommandsVisible = 0;
-            var harmonyActionsResolved = 0;
-
             var resolvedItems = new List<ResolvedMenuItem>();
             var actions = _resolverService.ResolveActions(
                 state,
@@ -55,17 +51,6 @@ namespace Cortex.Services
                 {
                     continue;
                 }
-
-                if (IsHarmonyCommand(action.CommandId))
-                {
-                    harmonyActionsResolved++;
-                    MMLog.WriteInfo("[Cortex.Harmony] Editor action resolved for context menu. Command='" +
-                        (action.CommandId ?? string.Empty) +
-                        "', Enabled=" + action.Enabled +
-                        ", Symbol='" + (target.SymbolText ?? string.Empty) +
-                        "', Document='" + (target.DocumentPath ?? string.Empty) + "'.");
-                }
-
                 resolvedItems.Add(new ResolvedMenuItem
                 {
                     CommandId = action.CommandId,
@@ -95,34 +80,10 @@ namespace Cortex.Services
                     continue;
                 }
 
-                var isHarmony = IsHarmonyCommand(menu.CommandId);
-                if (isHarmony)
-                {
-                    harmonyCommandsConsidered++;
-                }
-
                 var enabled = commandRegistry.CanExecute(menu.CommandId, commandContext);
                 if (!enabled && !menu.ShowWhenDisabled)
                 {
-                    if (isHarmony)
-                    {
-                        MMLog.WriteInfo("[Cortex.Harmony] Context menu command hidden. Command='" +
-                            (menu.CommandId ?? string.Empty) +
-                            "', Enabled=False, ShowWhenDisabled=False, Symbol='" +
-                            (target.SymbolText ?? string.Empty) +
-                            "', Document='" + (target.DocumentPath ?? string.Empty) + "'.");
-                    }
                     continue;
-                }
-
-                if (isHarmony)
-                {
-                    harmonyCommandsVisible++;
-                    MMLog.WriteInfo("[Cortex.Harmony] Context menu command visible. Command='" +
-                        (menu.CommandId ?? string.Empty) +
-                        "', Enabled=" + enabled +
-                        ", Symbol='" + (target.SymbolText ?? string.Empty) +
-                        "', Document='" + (target.DocumentPath ?? string.Empty) + "'.");
                 }
 
                 resolvedItems.Add(new ResolvedMenuItem
@@ -167,18 +128,6 @@ namespace Cortex.Services
 
                 items.Add(EditorContextMenuItem.CreateSectionHeader(DisabledSectionLabel));
                 AppendResolvedItems(items, disabledItems);
-            }
-
-            if (harmonyCommandsConsidered > 0 || harmonyActionsResolved > 0)
-            {
-                MMLog.WriteInfo("[Cortex.Harmony] Context menu build summary. Symbol='" +
-                    (target.SymbolText ?? string.Empty) +
-                    "', Document='" + (target.DocumentPath ?? string.Empty) +
-                    "', Position=" + target.AbsolutePosition +
-                    ", HarmonyActionsResolved=" + harmonyActionsResolved +
-                    ", HarmonyCommandsConsidered=" + harmonyCommandsConsidered +
-                    ", HarmonyCommandsVisible=" + harmonyCommandsVisible +
-                    ", TotalMenuItems=" + items.Count + ".");
             }
 
             return items;
@@ -242,12 +191,6 @@ namespace Cortex.Services
             }
 
             return string.Compare(left != null ? left.Label : string.Empty, right != null ? right.Label : string.Empty, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool IsHarmonyCommand(string commandId)
-        {
-            return !string.IsNullOrEmpty(commandId) &&
-                commandId.StartsWith("cortex.harmony.", StringComparison.OrdinalIgnoreCase);
         }
 
         private static void AppendResolvedItems(IList<EditorContextMenuItem> items, IList<ResolvedMenuItem> resolvedItems)
