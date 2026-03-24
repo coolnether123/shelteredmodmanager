@@ -175,6 +175,36 @@ namespace Cortex.Services
             return true;
         }
 
+        public bool TryResolveFromCallHierarchyItem(
+            CortexShellState state,
+            ISourceLookupIndex sourceLookupIndex,
+            IProjectCatalog projectCatalog,
+            LanguageServiceCallHierarchyItem item,
+            out HarmonyResolvedMethodTarget resolvedTarget,
+            out string reason)
+        {
+            resolvedTarget = null;
+            reason = string.Empty;
+            if (item == null)
+            {
+                reason = "Incoming caller metadata was incomplete.";
+                return false;
+            }
+
+            return TryResolveFromMetadataSymbol(
+                state,
+                sourceLookupIndex,
+                projectCatalog,
+                item.ContainingAssemblyName,
+                item.DocumentationCommentId,
+                item.ContainingTypeName,
+                item.SymbolKind,
+                !string.IsNullOrEmpty(item.QualifiedSymbolDisplay) ? item.QualifiedSymbolDisplay : item.SymbolDisplay,
+                string.Empty,
+                out resolvedTarget,
+                out reason);
+        }
+
         public bool TryResolveFromDocument(CortexShellState state, ISourceLookupIndex sourceLookupIndex, IProjectCatalog projectCatalog, DocumentSession session, out HarmonyResolvedMethodTarget resolvedTarget, out string reason)
         {
             resolvedTarget = null;
@@ -280,8 +310,38 @@ namespace Cortex.Services
                 return false;
             }
 
+            return TryResolveFromMetadataSymbol(
+                state,
+                sourceLookupIndex,
+                projectCatalog,
+                hoverResponse.ContainingAssemblyName,
+                hoverResponse.DocumentationCommentId,
+                hoverResponse.ContainingTypeName,
+                hoverResponse.SymbolKind,
+                hoverResponse.SymbolDisplay,
+                hoverResponse.DefinitionDocumentPath ?? target.DocumentPath ?? string.Empty,
+                out resolvedTarget,
+                out reason);
+        }
+
+        private bool TryResolveFromMetadataSymbol(
+            CortexShellState state,
+            ISourceLookupIndex sourceLookupIndex,
+            IProjectCatalog projectCatalog,
+            string containingAssemblyName,
+            string documentationCommentId,
+            string containingTypeName,
+            string symbolKind,
+            string displayName,
+            string documentPath,
+            out HarmonyResolvedMethodTarget resolvedTarget,
+            out string reason)
+        {
+            resolvedTarget = null;
+            reason = string.Empty;
+
             string assemblyPath;
-            if (!MetadataNavigationResolver.TryResolveAssemblyPath(state, sourceLookupIndex, hoverResponse.ContainingAssemblyName, out assemblyPath))
+            if (!MetadataNavigationResolver.TryResolveAssemblyPath(state, sourceLookupIndex, containingAssemblyName, out assemblyPath))
             {
                 reason = "The containing assembly could not be located for the selected symbol.";
                 return false;
@@ -291,9 +351,9 @@ namespace Cortex.Services
             DecompilerEntityKind entityKind;
             if (!MetadataNavigationResolver.TryResolveMetadataTarget(
                 assemblyPath,
-                hoverResponse.DocumentationCommentId,
-                hoverResponse.ContainingTypeName,
-                hoverResponse.SymbolKind,
+                documentationCommentId,
+                containingTypeName,
+                symbolKind,
                 out metadataToken,
                 out entityKind) ||
                 entityKind != DecompilerEntityKind.Method)
@@ -315,15 +375,19 @@ namespace Cortex.Services
             {
                 AssemblyPath = assemblyPath,
                 MetadataToken = metadataToken,
-                DeclaringTypeName = hoverResponse.ContainingTypeName ?? (method.DeclaringType != null ? method.DeclaringType.FullName : string.Empty),
+                DeclaringTypeName = containingTypeName ?? (method.DeclaringType != null ? method.DeclaringType.FullName : string.Empty),
                 MethodName = method.Name,
                 Signature = BuildMethodSignature(method),
-                DisplayName = hoverResponse.SymbolDisplay ?? BuildMethodDisplayName(method),
-                DocumentPath = hoverResponse.DefinitionDocumentPath ?? target.DocumentPath ?? string.Empty,
-                DocumentationCommentId = hoverResponse.DocumentationCommentId ?? string.Empty
+                DisplayName = !string.IsNullOrEmpty(displayName) ? displayName : BuildMethodDisplayName(method),
+                DocumentPath = documentPath ?? string.Empty,
+                DocumentationCommentId = documentationCommentId ?? string.Empty
             };
 
-            resolvedTarget = BuildResolvedTarget(request, method, FindProjectForDocument(projectCatalog, request.DocumentPath, assemblyPath), request.DisplayName);
+            resolvedTarget = BuildResolvedTarget(
+                request,
+                method,
+                FindProjectForRequest(projectCatalog, request, method),
+                request.DisplayName);
             return true;
         }
 

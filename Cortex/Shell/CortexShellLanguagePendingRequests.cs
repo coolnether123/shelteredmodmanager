@@ -41,4 +41,14 @@ namespace Cortex
         public string SymbolText;
         public string NewName;
     }
+
+    internal sealed class PendingMethodInspectorCallHierarchyRequest
+    {
+        public string RequestId;
+        public int Generation;
+        public string RequestKey;
+        public string TargetKey;
+        public string DocumentPath;
+        public int DocumentVersion;
+    }
 }

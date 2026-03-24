@@ -140,6 +140,25 @@ namespace Cortex
         public EditorCommandTarget ActiveRenameTarget;
         public string ActiveRenameText = string.Empty;
         public EditorCommandTarget ActivePeekTarget;
+        public readonly CortexMethodInspectorState MethodInspector = new CortexMethodInspectorState();
+    }
+
+    public sealed class CortexMethodInspectorState
+    {
+        public bool IsVisible;
+        public string Title = string.Empty;
+        public string Classification = string.Empty;
+        public EditorCommandInvocation Invocation;
+        public bool OverviewExpanded = true;
+        public bool NavigationExpanded = true;
+        public bool ReferencesExpanded = true;
+        public bool HarmonyExpanded = true;
+        public bool IndirectHarmonyExpanded = true;
+        public bool CallHierarchyRequested;
+        public string CallHierarchyTargetKey = string.Empty;
+        public string CallHierarchyRequestKey = string.Empty;
+        public string CallHierarchyStatusMessage = string.Empty;
+        public LanguageServiceCallHierarchyResponse CallHierarchy;
     }
 
     public sealed class CortexSearchInteractionState

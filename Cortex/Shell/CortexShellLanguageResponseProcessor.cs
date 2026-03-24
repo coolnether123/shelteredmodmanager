@@ -89,6 +89,15 @@ namespace Cortex
                     var pending = runtime.PendingSemanticOperation;
                     runtime.PendingSemanticOperation = null;
                     HandleSemanticOperationResponse(context, envelope, pending);
+                    continue;
+                }
+
+                if (runtime.PendingMethodInspectorCallHierarchy != null &&
+                    string.Equals(envelope.RequestId, runtime.PendingMethodInspectorCallHierarchy.RequestId, StringComparison.Ordinal))
+                {
+                    var pending = runtime.PendingMethodInspectorCallHierarchy;
+                    runtime.PendingMethodInspectorCallHierarchy = null;
+                    HandleMethodInspectorCallHierarchyResponse(context, envelope, pending);
                 }
             }
         }
@@ -536,6 +545,55 @@ namespace Cortex
             };
             context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.DocumentEditPreview;
             context.State.StatusMessage = response.StatusMessage ?? string.Empty;
+        }
+
+        private static void HandleMethodInspectorCallHierarchyResponse(
+            CortexShellLanguageRuntimeContext context,
+            LanguageServiceEnvelope envelope,
+            PendingMethodInspectorCallHierarchyRequest pending)
+        {
+            var runtime = context.RuntimeState;
+            runtime.MethodInspectorCallHierarchyInFlight = false;
+            if (pending == null || pending.Generation != runtime.ServiceGeneration || context.State == null || context.State.Editor == null)
+            {
+                return;
+            }
+
+            var inspector = context.State.Editor.MethodInspector;
+            var liveTarget = inspector != null && inspector.Invocation != null ? inspector.Invocation.Target : null;
+            if (inspector == null ||
+                !inspector.IsVisible ||
+                liveTarget == null ||
+                !string.Equals(inspector.CallHierarchyTargetKey ?? string.Empty, pending.TargetKey ?? string.Empty, StringComparison.Ordinal) ||
+                !string.Equals(EditorMethodInspectorService.BuildTargetKey(liveTarget), pending.TargetKey ?? string.Empty, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var liveSession = context.FindOpenDocument(pending.DocumentPath);
+            if (liveSession != null &&
+                pending.DocumentVersion > 0 &&
+                liveSession.TextVersion > 0 &&
+                liveSession.TextVersion != pending.DocumentVersion)
+            {
+                inspector.CallHierarchyStatusMessage = "Incoming-call inference was skipped because the document changed.";
+                return;
+            }
+
+            var response = DeserializeEnvelopePayload<LanguageServiceCallHierarchyResponse>(envelope);
+            if (response == null)
+            {
+                response = new LanguageServiceCallHierarchyResponse
+                {
+                    Success = false,
+                    StatusMessage = envelope != null && !string.IsNullOrEmpty(envelope.ErrorMessage)
+                        ? envelope.ErrorMessage
+                        : "Incoming-call inference payload was unreadable."
+                };
+            }
+
+            inspector.CallHierarchy = response;
+            inspector.CallHierarchyStatusMessage = response.StatusMessage ?? string.Empty;
         }
 
         private static bool TryOpenSingleSemanticLocation(CortexShellLanguageRuntimeContext context, LanguageServiceSymbolLocation[] locations, string successMessage)

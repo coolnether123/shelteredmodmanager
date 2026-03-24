@@ -551,6 +551,7 @@ namespace Cortex.Modules.Editor
                     _editorScroll,
                     active,
                     isEditable,
+                    documentService,
                     commandRegistry,
                     contributionRegistry,
                     state,
@@ -564,7 +565,13 @@ namespace Cortex.Modules.Editor
                     overlayBlockRect,
                     GutterWidth,
                     harmonyPatchGenerationService,
-                    generatedTemplateNavigationService);
+                    generatedTemplateNavigationService,
+                    projectCatalog,
+                    loadedModCatalog,
+                    sourceLookupIndex,
+                    harmonyPatchInspectionService,
+                    harmonyPatchResolutionService,
+                    harmonyPatchDisplayService);
                 LogEditorScrollChange(active, previousEditorScroll, _editorScroll);
                 return;
             }
@@ -574,6 +581,7 @@ namespace Cortex.Modules.Editor
                 rect,
                 _editorScroll,
                 active,
+                documentService,
                 navigationService,
                 commandRegistry,
                 contributionRegistry,
@@ -592,7 +600,8 @@ namespace Cortex.Modules.Editor
                 sourceLookupIndex,
                 harmonyPatchInspectionService,
                 harmonyPatchResolutionService,
-                harmonyPatchDisplayService);
+                harmonyPatchDisplayService,
+                harmonyPatchGenerationService);
             LogEditorScrollChange(active, previousReadOnlyScroll, _editorScroll);
         }
 

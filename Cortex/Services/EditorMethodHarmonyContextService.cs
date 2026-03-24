@@ -1,0 +1,137 @@
+using System.Collections.Generic;
+using Cortex.Core.Abstractions;
+using Cortex.Core.Models;
+using Cortex.LanguageService.Protocol;
+
+namespace Cortex.Services
+{
+    internal sealed class EditorIndirectHarmonyCallerContext
+    {
+        public LanguageServiceCallHierarchyItem Caller;
+        public HarmonyMethodPatchSummary Summary;
+    }
+
+    internal sealed class EditorIndirectHarmonyContext
+    {
+        public bool IsLoading;
+        public string StatusMessage = string.Empty;
+        public int IncomingCallerCount;
+        public int PatchedCallerCount;
+        public int UnresolvedCallerCount;
+        public EditorIndirectHarmonyCallerContext[] PatchedCallers = new EditorIndirectHarmonyCallerContext[0];
+    }
+
+    internal sealed class EditorMethodHarmonyContextService
+    {
+        public EditorIndirectHarmonyContext BuildIndirectContext(
+            CortexShellState state,
+            CortexMethodInspectorState inspector,
+            ILoadedModCatalog loadedModCatalog,
+            IProjectCatalog projectCatalog,
+            ISourceLookupIndex sourceLookupIndex,
+            HarmonyPatchInspectionService harmonyInspectionService,
+            HarmonyPatchResolutionService harmonyResolutionService)
+        {
+            var context = new EditorIndirectHarmonyContext();
+            if (state == null || inspector == null || harmonyInspectionService == null || harmonyResolutionService == null || projectCatalog == null)
+            {
+                context.StatusMessage = "Indirect Harmony context is not available.";
+                return context;
+            }
+
+            if (!inspector.CallHierarchyRequested || !string.IsNullOrEmpty(inspector.CallHierarchyRequestKey))
+            {
+                context.IsLoading = true;
+                context.StatusMessage = !string.IsNullOrEmpty(inspector.CallHierarchyStatusMessage)
+                    ? inspector.CallHierarchyStatusMessage
+                    : "Analyzing incoming callers for Harmony context.";
+                return context;
+            }
+
+            var response = inspector.CallHierarchy;
+            if (response == null)
+            {
+                context.StatusMessage = !string.IsNullOrEmpty(inspector.CallHierarchyStatusMessage)
+                    ? inspector.CallHierarchyStatusMessage
+                    : "Incoming-call analysis has not produced any results yet.";
+                return context;
+            }
+
+            if (!response.Success)
+            {
+                context.StatusMessage = !string.IsNullOrEmpty(response.StatusMessage)
+                    ? response.StatusMessage
+                    : "Incoming-call analysis failed for the selected method.";
+                return context;
+            }
+
+            var incomingCalls = response.IncomingCalls ?? new LanguageServiceCallHierarchyItem[0];
+            context.IncomingCallerCount = incomingCalls.Length;
+            if (incomingCalls.Length == 0)
+            {
+                context.StatusMessage = "No incoming callers were found for this method.";
+                return context;
+            }
+
+            var patchedCallers = new List<EditorIndirectHarmonyCallerContext>();
+            var seenKeys = new HashSet<string>();
+            for (var i = 0; i < incomingCalls.Length; i++)
+            {
+                var caller = incomingCalls[i];
+                if (caller == null)
+                {
+                    continue;
+                }
+
+                HarmonyResolvedMethodTarget resolvedCaller;
+                string resolutionReason;
+                if (!harmonyResolutionService.TryResolveFromCallHierarchyItem(state, sourceLookupIndex, projectCatalog, caller, out resolvedCaller, out resolutionReason) ||
+                    resolvedCaller == null ||
+                    resolvedCaller.InspectionRequest == null)
+                {
+                    context.UnresolvedCallerCount++;
+                    continue;
+                }
+
+                var summary = harmonyInspectionService.GetSummary(
+                    state,
+                    resolvedCaller.InspectionRequest,
+                    loadedModCatalog,
+                    projectCatalog,
+                    false,
+                    out resolutionReason);
+                if (summary == null || !summary.IsPatched)
+                {
+                    continue;
+                }
+
+                var summaryKey = harmonyInspectionService.BuildKey(resolvedCaller.InspectionRequest);
+                if (!string.IsNullOrEmpty(summaryKey) && !seenKeys.Add(summaryKey))
+                {
+                    continue;
+                }
+
+                patchedCallers.Add(new EditorIndirectHarmonyCallerContext
+                {
+                    Caller = caller,
+                    Summary = summary
+                });
+            }
+
+            context.PatchedCallers = patchedCallers.ToArray();
+            context.PatchedCallerCount = context.PatchedCallers.Length;
+            if (context.PatchedCallerCount > 0)
+            {
+                context.StatusMessage = context.PatchedCallerCount == 1
+                    ? "This method is called by 1 directly patched caller."
+                    : "This method is called by " + context.PatchedCallerCount + " directly patched callers.";
+                return context;
+            }
+
+            context.StatusMessage = context.UnresolvedCallerCount > 0
+                ? "No patched incoming callers were confirmed. Some callers could not be mapped to runtime methods."
+                : "No directly patched incoming callers were found for this method.";
+            return context;
+        }
+    }
+}

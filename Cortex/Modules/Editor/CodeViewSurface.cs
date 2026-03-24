@@ -28,6 +28,10 @@ namespace Cortex.Modules.Editor
         private readonly EditorSelectionInspectionService _selectionInspectionService = new EditorSelectionInspectionService();
         private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
+        private readonly EditorOverlayInteractionService _overlayInteractionService = new EditorOverlayInteractionService();
+        private readonly EditorMethodInspectorService _methodInspectorService = new EditorMethodInspectorService();
+        private readonly EditorMethodTargetOutlineService _methodTargetOutlineService = new EditorMethodTargetOutlineService();
+        private readonly EditorMethodInspectorSurface _methodInspectorSurface = new EditorMethodInspectorSurface();
         private readonly PopupMenuSurface _popupMenuSurface = new PopupMenuSurface();
         private readonly HoverTooltipPresenter _tooltipPresenter = new HoverTooltipPresenter();
         private readonly List<PopupMenuItem> _popupMenuItems = new List<PopupMenuItem>();
@@ -55,6 +59,9 @@ namespace Cortex.Modules.Editor
         private Texture2D _lineHighlightFill;
         private Texture2D _navigationLineFill;
         private Texture2D _tooltipUnderlineFill;
+        private Texture2D _methodTargetFill;
+        private Texture2D _methodTargetOutlineFill;
+        private Texture2D _methodTargetGlowFill;
         private float _lineHeight = 18f;
         private string _hoverCandidateKey = string.Empty;
         private DateTime _hoverCandidateUtc = DateTime.MinValue;
@@ -76,6 +83,7 @@ namespace Cortex.Modules.Editor
         private bool _contextMenuOpen;
         private Vector2 _contextMenuPosition = Vector2.zero;
         private Rect _lastContextMenuRect = new Rect(0f, 0f, 0f, 0f);
+        private Rect _lastMethodInspectorRect = new Rect(0f, 0f, 0f, 0f);
         private EditorCommandInvocation _contextInvocation;
         private string _lastDrawError = string.Empty;
         private string _lastFocusedDocumentPath = string.Empty;
@@ -85,6 +93,7 @@ namespace Cortex.Modules.Editor
             Rect rect,
             Vector2 scroll,
             DocumentSession session,
+            IDocumentService documentService,
             CortexNavigationService navigationService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
@@ -103,7 +112,8 @@ namespace Cortex.Modules.Editor
             ISourceLookupIndex sourceLookupIndex,
             HarmonyPatchInspectionService harmonyPatchInspectionService,
             HarmonyPatchResolutionService harmonyPatchResolutionService,
-            HarmonyPatchDisplayService harmonyPatchDisplayService)
+            HarmonyPatchDisplayService harmonyPatchDisplayService,
+            HarmonyPatchGenerationService harmonyPatchGenerationService)
         {
             if (session == null)
             {
@@ -137,28 +147,47 @@ namespace Cortex.Modules.Editor
                     _lastContextMenuRect = _popupMenuSurface.PredictMenuRect(_contextMenuPosition, rect.size, _popupMenuItems);
                 }
                 PreHandleContextMenuInput(current, localMouse);
+                var pointerOnContextMenu = _contextMenuOpen && _overlayInteractionService.IsPointerWithin(_lastContextMenuRect, localMouse);
+                var activeMethodInspectorTarget = state != null &&
+                    state.Editor != null &&
+                    state.Editor.MethodInspector != null &&
+                    state.Editor.MethodInspector.Invocation != null
+                        ? state.Editor.MethodInspector.Invocation.Target
+                        : null;
+                var predictedMethodInspectorRect = _methodInspectorSurface.PredictRect(
+                    state,
+                    session.FilePath,
+                    GetMethodInspectorViewportAnchorRect(session, activeMethodInspectorTarget, scroll, gutterWidth),
+                    rect.size);
+                _lastMethodInspectorRect = predictedMethodInspectorRect;
+                var pointerOnMethodInspector = _overlayInteractionService.IsPointerWithin(predictedMethodInspectorRect, localMouse);
+                _overlayInteractionService.TraceScrollOwner("decompiled-editor", current, pointerOnMethodInspector, pointerOnContextMenu);
+                _methodInspectorSurface.TryHandlePreDrawInput(current, predictedMethodInspectorRect, localMouse);
                 var pointerOnTooltip = hasMouse && IsPointerWithinTooltip(localMouse);
-                var pointerOnHoverSurface = hasMouse && (pointerOnTooltip || IsPointerWithinHoverSurface(localMouse));
+                var pointerOnHoverSurface = hasMouse && (pointerOnTooltip || pointerOnMethodInspector || IsPointerWithinHoverSurface(localMouse));
                 var editorHoverActive = hasMouse && !pointerOnHoverSurface;
                 var contentMouse = scroll + localMouse;
                 var hoveredFoldRegion = editorHoverActive ? FindFoldRegionAt(contentMouse) : null;
+                var hoveredMethodTarget = hoveredFoldRegion == null && editorHoverActive && IsMethodTargetSelectionMode()
+                    ? FindMethodTargetAt(session, contentMouse, gutterWidth)
+                    : null;
                 var hoveredToken = hoveredFoldRegion == null && editorHoverActive ? FindTokenAt(contentMouse, gutterWidth) : null;
                 hoveredToken = CanHoverToken(hoveredToken) ? hoveredToken : null;
                 UpdateHoverRequest(session, state, hoveredToken, editorHoverActive && !pointerOnTooltip);
-                HandlePointerInput(session, state, hoveredToken, hoveredFoldRegion, editorHoverActive, current, localMouse, rect.size, commandRegistry, contributionRegistry);
+                HandlePointerInput(session, state, hoveredToken, hoveredMethodTarget, hoveredFoldRegion, editorHoverActive, current, localMouse, rect.size, commandRegistry, contributionRegistry, pointerOnMethodInspector, pointerOnContextMenu);
 
                 GUI.BeginGroup(rect);
                 try
                 {
                     var contentRect = new Rect(0f, 0f, Mathf.Max(rect.width - 18f, _layout.ContentWidth), Mathf.Max(rect.height - 18f, _layout.ContentHeight));
-                    var preserveEditorScroll = ShouldPreserveEditorScroll(current, localMouse);
+                    var preserveEditorScroll = _overlayInteractionService.ShouldPreserveEditorScroll(current, _contextMenuOpen, pointerOnMethodInspector);
                     var scrollBeforeDraw = scroll;
                     try
                     {
                         scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
                         try
                         {
-                            DrawVisibleLines(session, scroll, rect.height, hoveredToken, hoveredFoldRegion, gutterWidth);
+                            DrawVisibleLines(session, scroll, rect.height, hoveredToken, hoveredMethodTarget, hoveredFoldRegion, gutterWidth);
                         }
                         finally
                         {
@@ -185,6 +214,31 @@ namespace Cortex.Modules.Editor
                         harmonyPatchInspectionService,
                         harmonyPatchResolutionService,
                         harmonyPatchDisplayService);
+                    _lastMethodInspectorRect = _methodInspectorSurface.Draw(
+                        state,
+                        session,
+                        session.FilePath,
+                        GetMethodInspectorViewportAnchorRect(
+                            session,
+                            state != null && state.Editor != null && state.Editor.MethodInspector != null && state.Editor.MethodInspector.Invocation != null
+                                ? state.Editor.MethodInspector.Invocation.Target
+                                : null,
+                            scroll,
+                            gutterWidth),
+                        rect.size,
+                        commandRegistry,
+                        contributionRegistry,
+                        _contextMenuStyle,
+                        _contextMenuButtonStyle,
+                        _contextMenuHeaderStyle,
+                        documentService,
+                        projectCatalog,
+                        loadedModCatalog,
+                        sourceLookupIndex,
+                        harmonyPatchInspectionService,
+                        harmonyPatchResolutionService,
+                        harmonyPatchDisplayService,
+                        harmonyPatchGenerationService);
                     _semanticPopupSurface.DrawQuickActions(state, GetViewportAnchorRect(state != null && state.Semantic != null ? state.Semantic.QuickActionsTarget : null, scroll, gutterWidth), rect.size, commandRegistry);
                     _semanticPopupSurface.DrawRename(state, GetViewportAnchorRect(state != null && state.Editor != null ? state.Editor.ActiveRenameTarget : null, scroll, gutterWidth), rect.size, commandRegistry);
                     _semanticPopupSurface.DrawPeek(state, GetViewportAnchorRect(state != null && state.Editor != null ? state.Editor.ActivePeekTarget : null, scroll, gutterWidth), rect.size);
@@ -360,6 +414,9 @@ namespace Cortex.Modules.Editor
             _lineHighlightFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), 0.35f));
             _navigationLineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.16f));
             _tooltipUnderlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.9f));
+            _methodTargetFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.10f));
+            _methodTargetOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.94f));
+            _methodTargetGlowFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), Color.white, 0.18f), 0.16f));
             Invalidate();
         }
 
@@ -548,17 +605,22 @@ namespace Cortex.Modules.Editor
             layout.ContentHeight = Mathf.Max(_lineHeight, layout.VisibleLines.Count * _lineHeight + 4f);
         }
 
-        private void DrawVisibleLines(DocumentSession session, Vector2 scroll, float viewHeight, CodeViewToken hoveredToken, FoldRegion hoveredFoldRegion, float gutterWidth)
+        private void DrawVisibleLines(DocumentSession session, Vector2 scroll, float viewHeight, CodeViewToken hoveredToken, EditorMethodTargetOutline hoveredMethodTarget, FoldRegion hoveredFoldRegion, float gutterWidth)
         {
             if (_layout == null || _layout.VisibleLines.Count == 0)
             {
                 return;
             }
 
+            var showMethodTargets = IsMethodTargetSelectionMode();
             var firstLine = Mathf.Max(0, Mathf.FloorToInt(scroll.y / _lineHeight));
             var lastLine = Mathf.Min(_layout.VisibleLines.Count - 1, Mathf.CeilToInt((scroll.y + viewHeight) / _lineHeight) + 1);
             var hoveredLine = hoveredToken != null ? hoveredToken.LineNumber : -1;
             var highlightedLine = session != null ? session.HighlightedLine : 0;
+            if (showMethodTargets)
+            {
+                DrawMethodTargetOutlines(session, firstLine, lastLine, gutterWidth, hoveredMethodTarget);
+            }
 
             for (var i = firstLine; i <= lastLine; i++)
             {
@@ -588,6 +650,7 @@ namespace Cortex.Modules.Editor
                     var token = line.Tokens[tokenIndex];
                     var tokenRect = new Rect(gutterWidth + token.X, line.Y, Mathf.Max(2f, token.Width), _lineHeight);
                     token.ContentRect = tokenRect;
+                    var effectiveClassification = GetEffectiveTokenClassification(line, tokenIndex);
                     var isSelectedToken = string.Equals(token.Key, _selectedTokenKey, StringComparison.Ordinal);
                     var isRelatedSelection = !isSelectedToken && IsRelatedSelectionToken(session, token);
                     if (isRelatedSelection)
@@ -604,7 +667,7 @@ namespace Cortex.Modules.Editor
                         GUI.DrawTexture(tokenRect, _hoverFill);
                     }
 
-                    GUI.Label(tokenRect, token.DisplayText, GetClassificationStyle(GetEffectiveTokenClassification(line, tokenIndex)));
+                    GUI.Label(tokenRect, token.DisplayText, GetClassificationStyle(effectiveClassification));
                     if (isSelectedToken)
                     {
                         DrawSelectionOutline(tokenRect);
@@ -631,22 +694,41 @@ namespace Cortex.Modules.Editor
             DocumentSession session,
             CortexShellState state,
             CodeViewToken hoveredToken,
+            EditorMethodTargetOutline hoveredMethodTarget,
             FoldRegion hoveredFoldRegion,
             bool hasMouse,
             Event current,
             Vector2 localMouse,
             Vector2 viewportSize,
             ICommandRegistry commandRegistry,
-            IContributionRegistry contributionRegistry)
+            IContributionRegistry contributionRegistry,
+            bool pointerOnMethodInspector,
+            bool pointerOnContextMenu)
         {
             if (current == null)
             {
                 return;
             }
 
-            if (_contextMenuOpen && _lastContextMenuRect.Contains(localMouse))
+            _overlayInteractionService.TracePointerRouting(
+                "decompiled-editor",
+                current,
+                pointerOnMethodInspector,
+                pointerOnContextMenu,
+                hasMouse,
+                state != null &&
+                    state.Editor != null &&
+                    state.Editor.MethodInspector != null &&
+                    state.Editor.MethodInspector.IsVisible);
+
+            if (_overlayInteractionService.ShouldBypassSurfaceInput(current, pointerOnMethodInspector, pointerOnContextMenu))
             {
                 return;
+            }
+
+            if (_overlayInteractionService.ShouldCloseMethodInspectorOnPointerDown(current, pointerOnMethodInspector, pointerOnContextMenu, state))
+            {
+                _methodInspectorService.Close(state);
             }
 
             if (!hasMouse || current.type != EventType.MouseDown)
@@ -678,6 +760,25 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
+            if (current.button == 0 &&
+                current.control &&
+                current.clickCount == 1 &&
+                hoveredMethodTarget != null)
+            {
+                EditorCommandInvocation invocation;
+                var opened = TryOpenMethodTargetInspector(session, state, hoveredMethodTarget, out invocation);
+                MMLog.WriteInfo("[Cortex.MethodTargets] Ctrl+click on decompiled method target. Document='" +
+                    (session != null ? session.FilePath ?? string.Empty : string.Empty) +
+                    "', Symbol='" + (hoveredMethodTarget.SymbolText ?? string.Empty) +
+                    "', Lines=" + hoveredMethodTarget.StartLineNumber + "-" + hoveredMethodTarget.EndLineNumber +
+                    ", Opened=" + opened + ".");
+                if (opened)
+                {
+                    current.Use();
+                    return;
+                }
+            }
+
             if (current.button != 0 || hoveredToken == null)
             {
                 return;
@@ -693,6 +794,17 @@ namespace Cortex.Modules.Editor
                 hoveredToken.LineNumber,
                 hoveredToken.Column,
                 ResolveHoverResponse(state, hoveredToken));
+            if (current.control && current.clickCount == 1)
+            {
+                EditorCommandInvocation invocation;
+                if (TryBuildCommandTarget(session, state, hoveredToken, out invocation) &&
+                    _methodInspectorService.TryOpen(state, invocation, hoveredToken.Classification))
+                {
+                    current.Use();
+                    return;
+                }
+            }
+
             if (current.clickCount >= 2)
             {
                     EditorCommandInvocation invocation;
@@ -720,22 +832,6 @@ namespace Cortex.Modules.Editor
             {
                 current.Use();
             }
-        }
-
-        private bool ShouldPreserveEditorScroll(Event current, Vector2 localMouse)
-        {
-            if (!_contextMenuOpen)
-            {
-                return false;
-            }
-
-            if (current != null && current.type == EventType.ScrollWheel)
-            {
-                return true;
-            }
-
-            return Mathf.Abs(Input.GetAxisRaw("Mouse ScrollWheel")) > 0.0001f ||
-                Mathf.Abs(Input.GetAxis("Mouse ScrollWheel")) > 0.0001f;
         }
 
         private void BuildFoldRegions(DocumentSession session, CodeViewLayout layout)
@@ -834,6 +930,248 @@ namespace Cortex.Modules.Editor
             }
 
             GUI.Label(glyphRect, glyph, _foldGlyphStyle);
+        }
+
+        private bool IsMethodTargetSelectionMode()
+        {
+            var current = Event.current;
+            return (current != null && current.control) ||
+                Input.GetKey(KeyCode.LeftControl) ||
+                Input.GetKey(KeyCode.RightControl);
+        }
+
+        private void DrawMethodTargetOutlines(DocumentSession session, int firstVisibleLineIndex, int lastVisibleLineIndex, float gutterWidth, EditorMethodTargetOutline hoveredMethodTarget)
+        {
+            var outlines = _methodTargetOutlineService.GetOutlines(session);
+            for (var i = 0; i < outlines.Length; i++)
+            {
+                var outline = outlines[i];
+                if (outline == null ||
+                    outline.EndLineNumber < 1 ||
+                    outline.StartLineNumber > outline.EndLineNumber)
+                {
+                    continue;
+                }
+
+                var startLineIndex = FindVisibleLineIndexByLineNumber(outline.StartLineNumber);
+                var endLineIndex = FindVisibleLineIndexByLineNumber(outline.EndLineNumber);
+                if (startLineIndex < 0 || endLineIndex < 0 || endLineIndex < firstVisibleLineIndex || startLineIndex > lastVisibleLineIndex)
+                {
+                    continue;
+                }
+
+                Rect blockRect;
+                if (!TryBuildMethodTargetRect(outline, gutterWidth, out blockRect))
+                {
+                    continue;
+                }
+
+                DrawMethodTargetGlow(blockRect);
+                GUI.DrawTexture(blockRect, _methodTargetFill);
+                DrawMethodTargetOutline(blockRect);
+                if (hoveredMethodTarget != null &&
+                    hoveredMethodTarget.AnchorStart == outline.AnchorStart &&
+                    hoveredMethodTarget.StartLineNumber == outline.StartLineNumber &&
+                    hoveredMethodTarget.EndLineNumber == outline.EndLineNumber)
+                {
+                    DrawHoverOutline(blockRect);
+                }
+            }
+        }
+
+        private EditorMethodTargetOutline FindMethodTargetAt(DocumentSession session, Vector2 contentMouse, float gutterWidth)
+        {
+            var outlines = _methodTargetOutlineService.GetOutlines(session);
+            EditorMethodTargetOutline bestMatch = null;
+            var bestHeight = float.MaxValue;
+            for (var i = 0; i < outlines.Length; i++)
+            {
+                var outline = outlines[i];
+                Rect blockRect;
+                if (outline == null ||
+                    !TryBuildMethodTargetRect(outline, gutterWidth, out blockRect) ||
+                    !blockRect.Contains(contentMouse))
+                {
+                    continue;
+                }
+
+                if (bestMatch == null || blockRect.height < bestHeight)
+                {
+                    bestMatch = outline;
+                    bestHeight = blockRect.height;
+                }
+            }
+
+            return bestMatch;
+        }
+
+        private bool TryOpenMethodTargetInspector(DocumentSession session, CortexShellState state, EditorMethodTargetOutline outline, out EditorCommandInvocation invocation)
+        {
+            invocation = null;
+            var token = FindMethodTargetToken(outline);
+            if (token == null)
+            {
+                return false;
+            }
+
+            SetSelectedToken(session, token);
+            _selectionInspectionService.ApplySelection(
+                state,
+                session != null ? session.FilePath ?? string.Empty : string.Empty,
+                token.Key,
+                token.RawText,
+                outline != null ? outline.Classification : token.Classification,
+                token.LineNumber,
+                token.Column,
+                ResolveHoverResponse(state, token));
+            return TryBuildCommandTarget(session, state, token, out invocation) &&
+                _methodInspectorService.TryOpen(state, invocation, outline != null ? outline.Classification : token.Classification);
+        }
+
+        private CodeViewToken FindMethodTargetToken(EditorMethodTargetOutline outline)
+        {
+            if (outline == null || _layout == null)
+            {
+                return null;
+            }
+
+            for (var lineIndex = 0; lineIndex < _layout.VisibleLines.Count; lineIndex++)
+            {
+                var line = _layout.VisibleLines[lineIndex];
+                if (line == null || line.LineNumber != outline.AnchorLineNumber)
+                {
+                    continue;
+                }
+
+                for (var tokenIndex = 0; tokenIndex < line.Tokens.Count; tokenIndex++)
+                {
+                    var token = line.Tokens[tokenIndex];
+                    if (token != null &&
+                        token.Start == outline.AnchorStart &&
+                        token.Length == outline.AnchorLength)
+                    {
+                        return token;
+                    }
+                }
+            }
+
+            for (var lineIndex = 0; lineIndex < _layout.VisibleLines.Count; lineIndex++)
+            {
+                var line = _layout.VisibleLines[lineIndex];
+                if (line == null || line.LineNumber != outline.AnchorLineNumber)
+                {
+                    continue;
+                }
+
+                for (var tokenIndex = 0; tokenIndex < line.Tokens.Count; tokenIndex++)
+                {
+                    var token = line.Tokens[tokenIndex];
+                    if (token != null &&
+                        string.Equals((token.RawText ?? string.Empty).Trim(), outline.SymbolText ?? string.Empty, StringComparison.Ordinal))
+                    {
+                        return token;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private bool TryBuildMethodTargetRect(EditorMethodTargetOutline outline, float gutterWidth, out Rect rect)
+        {
+            rect = new Rect(0f, 0f, 0f, 0f);
+            if (outline == null || _layout == null || _layout.VisibleLines.Count == 0)
+            {
+                return false;
+            }
+
+            var startIndex = FindVisibleLineIndexByLineNumber(outline.StartLineNumber);
+            var endIndex = FindVisibleLineIndexByLineNumber(outline.EndLineNumber);
+            if (startIndex < 0 || endIndex < startIndex)
+            {
+                return false;
+            }
+
+            var top = _layout.VisibleLines[startIndex].Y + 1f;
+            var bottom = _layout.VisibleLines[endIndex].Y + _lineHeight - 1f;
+            var left = float.MaxValue;
+            var right = gutterWidth + 8f;
+            for (var lineIndex = startIndex; lineIndex <= endIndex; lineIndex++)
+            {
+                var line = _layout.VisibleLines[lineIndex];
+                if (line == null)
+                {
+                    continue;
+                }
+
+                left = Mathf.Min(left, GetMethodTargetLineLeft(line, gutterWidth));
+                right = Mathf.Max(right, gutterWidth + line.Width + 8f);
+            }
+
+            if (left == float.MaxValue)
+            {
+                left = gutterWidth;
+            }
+
+            rect = new Rect(left, top, Mathf.Max(24f, right - left), Mathf.Max(_lineHeight - 2f, bottom - top));
+            return true;
+        }
+
+        private float GetMethodTargetLineLeft(CodeViewLine line, float gutterWidth)
+        {
+            if (line == null || line.Tokens.Count == 0)
+            {
+                return gutterWidth;
+            }
+
+            for (var i = 0; i < line.Tokens.Count; i++)
+            {
+                var token = line.Tokens[i];
+                if (token != null && !string.IsNullOrEmpty((token.RawText ?? string.Empty).Trim()))
+                {
+                    return gutterWidth + token.X - 4f;
+                }
+            }
+
+            return gutterWidth;
+        }
+
+        private void DrawMethodTargetOutline(Rect blockRect)
+        {
+            GUI.DrawTexture(new Rect(blockRect.x, blockRect.y, blockRect.width, 1f), _methodTargetOutlineFill);
+            GUI.DrawTexture(new Rect(blockRect.x, blockRect.yMax - 1f, blockRect.width, 1f), _methodTargetOutlineFill);
+            GUI.DrawTexture(new Rect(blockRect.x, blockRect.y, 1f, blockRect.height), _methodTargetOutlineFill);
+            GUI.DrawTexture(new Rect(blockRect.xMax - 1f, blockRect.y, 1f, blockRect.height), _methodTargetOutlineFill);
+        }
+
+        private void DrawMethodTargetGlow(Rect blockRect)
+        {
+            if (_methodTargetGlowFill == null)
+            {
+                return;
+            }
+
+            var glowRect = new Rect(blockRect.x - 3f, blockRect.y - 3f, blockRect.width + 6f, blockRect.height + 6f);
+            GUI.DrawTexture(glowRect, _methodTargetGlowFill);
+        }
+
+        private int FindVisibleLineIndexByLineNumber(int lineNumber)
+        {
+            if (_layout == null || _layout.VisibleLines.Count == 0 || lineNumber <= 0)
+            {
+                return -1;
+            }
+
+            for (var i = 0; i < _layout.VisibleLines.Count; i++)
+            {
+                var line = _layout.VisibleLines[i];
+                if (line != null && line.LineNumber == lineNumber)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
         private void UpdateHoverRequest(DocumentSession session, CortexShellState state, CodeViewToken hoveredToken, bool hasMouse)
@@ -1830,6 +2168,17 @@ namespace Cortex.Modules.Editor
             return new Rect(contentRect.x - scroll.x, contentRect.y - scroll.y, contentRect.width, contentRect.height);
         }
 
+        private Rect GetMethodInspectorViewportAnchorRect(DocumentSession session, EditorCommandTarget target, Vector2 scroll, float gutterWidth)
+        {
+            Rect blockRect;
+            if (TryBuildMethodTargetRect(session, target, gutterWidth, out blockRect))
+            {
+                return new Rect(blockRect.x - scroll.x, blockRect.y - scroll.y, blockRect.width, blockRect.height);
+            }
+
+            return GetViewportAnchorRect(target, scroll, gutterWidth);
+        }
+
         private Rect GetTargetContentRect(EditorCommandTarget target, float gutterWidth)
         {
             if (target == null)
@@ -1888,6 +2237,13 @@ namespace Cortex.Modules.Editor
             }
 
             return null;
+        }
+
+        private bool TryBuildMethodTargetRect(DocumentSession session, EditorCommandTarget target, float gutterWidth, out Rect rect)
+        {
+            rect = new Rect(0f, 0f, 0f, 0f);
+            var outline = _methodTargetOutlineService.FindOutline(session, target);
+            return TryBuildMethodTargetRect(outline, gutterWidth, out rect);
         }
 
         private void PopulatePopupMenuItems(IList<EditorContextMenuItem> items)

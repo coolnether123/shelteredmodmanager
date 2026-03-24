@@ -447,19 +447,13 @@ namespace Cortex.Modules.Harmony
                 var target = GetTarget(context);
                 if (target != null)
                 {
-                    var resolvedFromEditorTarget = _services.HarmonyPatchResolutionService.TryResolveFromEditorTarget(
+                    return _services.HarmonyPatchResolutionService.TryResolveFromEditorTarget(
                         _services.State,
                         _services.SourceLookupIndex,
                         _services.ProjectCatalog,
                         target,
                         out resolvedTarget,
                         out reason);
-                    MMLog.WriteInfo("[Cortex.Harmony] Resolve target from editor context. Success=" + resolvedFromEditorTarget +
-                        ", Document='" + (target.DocumentPath ?? string.Empty) +
-                        "', Symbol='" + (target.SymbolText ?? string.Empty) +
-                        "', Position=" + target.AbsolutePosition +
-                        ", Reason='" + (reason ?? string.Empty) + "'.");
-                    return resolvedFromEditorTarget;
                 }
 
                 var activeRequest = _services.State != null && _services.State.Harmony != null
@@ -496,19 +490,13 @@ namespace Cortex.Modules.Harmony
                     return false;
                 }
 
-                var resolvedFromEditorTarget = _services.HarmonyPatchResolutionService.TryResolveTypeFromEditorTarget(
+                return _services.HarmonyPatchResolutionService.TryResolveTypeFromEditorTarget(
                     _services.State,
                     _services.SourceLookupIndex,
                     _services.ProjectCatalog,
                     target,
                     out resolvedTarget,
                     out reason);
-                MMLog.WriteInfo("[Cortex.Harmony] Resolve type target from editor context. Success=" + resolvedFromEditorTarget +
-                    ", Document='" + (target.DocumentPath ?? string.Empty) +
-                    "', Symbol='" + (target.SymbolText ?? string.Empty) +
-                    "', Position=" + target.AbsolutePosition +
-                    ", Reason='" + (reason ?? string.Empty) + "'.");
-                return resolvedFromEditorTarget;
             }
 
             private void OpenHarmonyWindow()

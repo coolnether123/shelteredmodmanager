@@ -265,6 +265,7 @@ namespace Cortex
             _languageRuntime.CompletionInFlight = false;
             _languageRuntime.SignatureHelpInFlight = false;
             _languageRuntime.SemanticOperationInFlight = false;
+            _languageRuntime.MethodInspectorCallHierarchyInFlight = false;
             _languageRuntime.InitializeRequestId = string.Empty;
             _languageRuntime.StatusRequestId = string.Empty;
             _languageRuntime.PendingAnalysis = null;
@@ -273,6 +274,7 @@ namespace Cortex
             _languageRuntime.PendingCompletion = null;
             _languageRuntime.PendingSignatureHelp = null;
             _languageRuntime.PendingSemanticOperation = null;
+            _languageRuntime.PendingMethodInspectorCallHierarchy = null;
             _languageRuntime.LastAnalysisRequestUtc = DateTime.MinValue;
             _languageRuntime.InitializeQueuedUtc = DateTime.MinValue;
             _languageRuntime.LastInitializationProgressLogUtc = DateTime.MinValue;

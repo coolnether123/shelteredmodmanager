@@ -75,6 +75,7 @@
     <Compile Include="Modules\Editor\EditableCodeViewSurface.cs" />
     <Compile Include="Modules\Editor\EditorCommandContributions.cs" />
     <Compile Include="Modules\Editor\EditorInteractionLog.cs" />
+    <Compile Include="Modules\Editor\EditorMethodInspectorSurface.cs" />
     <Compile Include="Modules\Editor\EditorModule.cs" />
     <Compile Include="Modules\Editor\EditorSemanticPopupSurface.cs" />
     <Compile Include="Modules\Editor\EditorSyntaxHighlighter.cs" />
@@ -114,6 +115,11 @@
     <Compile Include="Services\EditorDocumentModeService.cs" />
     <Compile Include="Services\EditorContextActionResolverService.cs" />
     <Compile Include="Services\EditorLogicalDocumentTargetResolutionService.cs" />
+    <Compile Include="Services\EditorMethodPatchCreationService.cs" />
+    <Compile Include="Services\EditorMethodHarmonyContextService.cs" />
+    <Compile Include="Services\EditorMethodInspectorService.cs" />
+    <Compile Include="Services\EditorOverlayInteractionService.cs" />
+    <Compile Include="Services\EditorMethodTargetOutlineService.cs" />
     <Compile Include="Services\EditorMutationExecutionService.cs" />
     <Compile Include="Services\EditorSelectionInspectionService.cs" />
     <Compile Include="Services\EditorSignatureHelpService.cs" />
@@ -166,6 +172,16 @@
     <ProjectReference Include="..\Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj">
       <Project>{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1}</Project>
       <Name>Cortex.Plugins.Abstractions</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Rendering\Cortex.Rendering.csproj">
+      <Project>{5B4B178C-9BB0-4297-A07A-5C69FA861A26}</Project>
+      <Name>Cortex.Rendering</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Renderers.Imgui\Cortex.Renderers.Imgui.csproj">
+      <Project>{4D1B939A-3C10-4A7B-B6C4-259D50848A5A}</Project>
+      <Name>Cortex.Renderers.Imgui</Name>
       <Private>False</Private>
     </ProjectReference>
     <ProjectReference Include="..\GameModding.Shared\GameModding.Shared.csproj">

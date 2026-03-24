@@ -32,6 +32,10 @@ namespace Cortex.Modules.Editor
         private readonly EditorCommandContextFactory _commandContextFactory = new EditorCommandContextFactory();
         private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
+        private readonly EditorOverlayInteractionService _overlayInteractionService = new EditorOverlayInteractionService();
+        private readonly EditorMethodInspectorService _methodInspectorService = new EditorMethodInspectorService();
+        private readonly EditorMethodTargetOutlineService _methodTargetOutlineService = new EditorMethodTargetOutlineService();
+        private readonly EditorMethodInspectorSurface _methodInspectorSurface = new EditorMethodInspectorSurface();
         private readonly EditorToolbarService _toolbarService = new EditorToolbarService();
         private readonly SourceEditorCommandRouterService _commandRouterService = new SourceEditorCommandRouterService();
         private readonly SourceEditorHoverService _hoverService = new SourceEditorHoverService();
@@ -61,6 +65,9 @@ namespace Cortex.Modules.Editor
         private Texture2D _completionPopupFill;
         private Texture2D _completionSelectedFill;
         private Texture2D _completionBorderFill;
+        private Texture2D _methodTargetFill;
+        private Texture2D _methodTargetOutlineFill;
+        private Texture2D _methodTargetGlowFill;
         private string _styleCacheKey = string.Empty;
         private float _lineHeight = DefaultLineHeight;
         private bool _hasFocus;
@@ -78,6 +85,7 @@ namespace Cortex.Modules.Editor
         private DateTime _lastDrawErrorUtc = DateTime.MinValue;
         private LayoutCache _layout;
         private Rect _lastContextMenuRect;
+        private Rect _lastMethodInspectorRect;
 
         private struct PointerContext
         {
@@ -108,6 +116,7 @@ namespace Cortex.Modules.Editor
             Vector2 scroll,
             DocumentSession session,
             bool editingEnabled,
+            IDocumentService documentService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             CortexShellState state,
@@ -121,7 +130,13 @@ namespace Cortex.Modules.Editor
             Rect blockedRect,
             float gutterWidth,
             HarmonyPatchGenerationService harmonyPatchGenerationService,
-            GeneratedTemplateNavigationService generatedTemplateNavigationService)
+            GeneratedTemplateNavigationService generatedTemplateNavigationService,
+            IProjectCatalog projectCatalog,
+            ILoadedModCatalog loadedModCatalog,
+            ISourceLookupIndex sourceLookupIndex,
+            HarmonyPatchInspectionService harmonyPatchInspectionService,
+            HarmonyPatchResolutionService harmonyPatchResolutionService,
+            HarmonyPatchDisplayService harmonyPatchDisplayService)
         {
             if (session == null || !session.SupportsEditing || rect.width <= 0f || rect.height <= 0f)
             {
@@ -174,7 +189,8 @@ namespace Cortex.Modules.Editor
                     _lastContextMenuRect = _popupMenuSurface.PredictMenuRect(_contextMenuPosition, rect.size, _popupMenuItems);
                 }
                 PreHandleContextMenuInput(current, localMouse);
-                HandleKeyboardInput(session, state, editingEnabled, commandRegistry, current, generatedTemplateNavigationService);
+                var pointerOnContextMenu = _contextMenuOpen && _overlayInteractionService.IsPointerWithin(_lastContextMenuRect, localMouse);
+                HandleKeyboardInput(session, state, editingEnabled, documentService, commandRegistry, current, generatedTemplateNavigationService, projectCatalog, harmonyPatchResolutionService, harmonyPatchGenerationService);
                 if (session.TextVersion != inputTextVersion)
                 {
                     _documentLanguageAnalysisService.ApplyProvisionalClassificationProjection(session);
@@ -191,8 +207,26 @@ namespace Cortex.Modules.Editor
                 }
 
                 scroll = EnsureCaretVisible(session, scroll, rect.height);
+                var activeMethodInspectorTarget = state != null &&
+                    state.Editor != null &&
+                    state.Editor.MethodInspector != null &&
+                    state.Editor.MethodInspector.Invocation != null
+                        ? state.Editor.MethodInspector.Invocation.Target
+                        : null;
+                var predictedMethodInspectorRect = _methodInspectorSurface.PredictRect(
+                    state,
+                    session.FilePath,
+                    GetMethodInspectorViewportAnchorRect(session, activeMethodInspectorTarget, scroll, gutterWidth),
+                    rect.size);
+                _lastMethodInspectorRect = predictedMethodInspectorRect;
+                var pointerOnMethodInspector = _overlayInteractionService.IsPointerWithin(predictedMethodInspectorRect, localMouse);
+                _overlayInteractionService.TraceScrollOwner("source-editor", current, pointerOnMethodInspector, pointerOnContextMenu);
+                _methodInspectorSurface.TryHandlePreDrawInput(current, predictedMethodInspectorRect, localMouse);
                 var pointerContext = BuildPointerContext(current, rect, hasMouse, localMouse, scroll, true);
-                HandlePointerInput(session, state, editingEnabled, current, pointerContext, gutterWidth, commandRegistry, contributionRegistry, harmonyPatchGenerationService);
+                var hoveredMethodTarget = hasMouse && !_isDraggingSelection && IsMethodTargetSelectionMode()
+                    ? FindMethodTargetAt(session, gutterWidth, pointerContext.ContentMouse)
+                    : null;
+                HandlePointerInput(session, state, editingEnabled, current, pointerContext, hoveredMethodTarget, gutterWidth, commandRegistry, contributionRegistry, harmonyPatchGenerationService, pointerOnMethodInspector, pointerOnContextMenu);
                 var hoverTarget = hasMouse && !_isDraggingSelection
                     ? TryResolveHoverTarget(session, state, editingEnabled, pointerContext.ContentMouse, gutterWidth)
                     : null;
@@ -208,7 +242,7 @@ namespace Cortex.Modules.Editor
                 try
                 {
                     var contentRect = new Rect(0f, 0f, Mathf.Max(rect.width - 18f, _layout.ContentWidth), Mathf.Max(rect.height - 18f, _layout.ContentHeight));
-                    var preserveEditorScroll = ShouldPreserveEditorScroll(current, localMouse);
+                    var preserveEditorScroll = _overlayInteractionService.ShouldPreserveEditorScroll(current, _contextMenuOpen, pointerOnMethodInspector);
                     var scrollBeforeDraw = scroll;
                     try
                     {
@@ -227,6 +261,31 @@ namespace Cortex.Modules.Editor
                     }
 
                     _semanticPopupSurface.DrawQuickActions(state, GetViewportAnchorRect(session, state != null && state.Semantic != null ? state.Semantic.QuickActionsTarget : null, scroll, gutterWidth), rect.size, commandRegistry);
+                    _lastMethodInspectorRect = _methodInspectorSurface.Draw(
+                        state,
+                        session,
+                        session.FilePath,
+                        GetMethodInspectorViewportAnchorRect(
+                            session,
+                            state != null && state.Editor != null && state.Editor.MethodInspector != null && state.Editor.MethodInspector.Invocation != null
+                                ? state.Editor.MethodInspector.Invocation.Target
+                                : null,
+                            scroll,
+                            gutterWidth),
+                        rect.size,
+                        commandRegistry,
+                        contributionRegistry,
+                        contextMenuStyle,
+                        contextMenuButtonStyle,
+                        contextMenuHeaderStyle,
+                        documentService,
+                        projectCatalog,
+                        loadedModCatalog,
+                        sourceLookupIndex,
+                        harmonyPatchInspectionService,
+                        harmonyPatchResolutionService,
+                        harmonyPatchDisplayService,
+                        harmonyPatchGenerationService);
                     if (editingEnabled)
                     {
                         DrawCompletionPopup(session, state, scroll, rect.size, gutterWidth);
@@ -421,6 +480,9 @@ namespace Cortex.Modules.Editor
             _completionPopupFill = MakeFill(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.55f));
             _completionSelectedFill = MakeFill(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetSurfaceColor(), 0.22f));
             _completionBorderFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.38f));
+            _methodTargetFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.10f));
+            _methodTargetOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.94f));
+            _methodTargetGlowFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), Color.white, 0.18f), 0.16f));
             _surfaceFill = MakeFill(CortexIdeLayout.GetBackgroundColor());
             _completionPopupStyle = new GUIStyle(GUI.skin.box);
             _completionPopupStyle.padding = new RectOffset(4, 4, 4, 4);
@@ -766,6 +828,10 @@ namespace Cortex.Modules.Editor
             var primarySelection = _editorService.GetPrimarySelection(session);
             var selections = _editorService.GetSelections(session);
             var primaryCaret = _editorService.GetCaretPosition(session, primarySelection.CaretIndex);
+            if (IsMethodTargetSelectionMode())
+            {
+                DrawMethodTargetOutlines(session, firstLine, lastLine, gutterWidth);
+            }
 
             for (var i = firstLine; i <= lastLine; i++)
             {
@@ -837,7 +903,8 @@ namespace Cortex.Modules.Editor
 
                 var style = GetClassificationStyle(segment.Classification);
                 var width = Measure(segment.DisplayText);
-                GUI.Label(new Rect(x, line.Y, width + 2f, _lineHeight), segment.DisplayText, style);
+                var segmentRect = new Rect(x, line.Y, width + 2f, _lineHeight);
+                GUI.Label(segmentRect, segment.DisplayText, style);
                 x += width;
             }
         }
@@ -848,6 +915,40 @@ namespace Cortex.Modules.Editor
             var prefix = rawColumn > 0 ? line.RawText.Substring(0, rawColumn) : string.Empty;
             var x = gutterWidth + Measure(ExpandTabs(prefix));
             GUI.DrawTexture(new Rect(x, line.Y + 1f, 1.5f, _lineHeight - 2f), _caretFill);
+        }
+
+        private bool IsMethodTargetSelectionMode()
+        {
+            var current = Event.current;
+            return (current != null && current.control) ||
+                Input.GetKey(KeyCode.LeftControl) ||
+                Input.GetKey(KeyCode.RightControl);
+        }
+
+        private void DrawMethodTargetOutlines(DocumentSession session, int firstLineIndex, int lastLineIndex, float gutterWidth)
+        {
+            var outlines = _methodTargetOutlineService.GetOutlines(session);
+            for (var i = 0; i < outlines.Length; i++)
+            {
+                var outline = outlines[i];
+                Rect blockRect;
+                if (outline == null ||
+                    !TryBuildMethodTargetRect(outline, gutterWidth, out blockRect))
+                {
+                    continue;
+                }
+
+                var startIndex = outline.StartLineNumber - 1;
+                var endIndex = outline.EndLineNumber - 1;
+                if (endIndex < firstLineIndex || startIndex > lastLineIndex)
+                {
+                    continue;
+                }
+
+                DrawMethodTargetGlow(blockRect);
+                GUI.DrawTexture(blockRect, _methodTargetFill);
+                DrawMethodTargetOutline(blockRect);
+            }
         }
 
         private void DrawInlineSuggestion(DocumentSession session, CortexShellState state, EditableLineLayout line, float gutterWidth)
@@ -1152,20 +1253,38 @@ namespace Cortex.Modules.Editor
             bool editingEnabled,
             Event current,
             PointerContext pointerContext,
+            EditorMethodTargetOutline hoveredMethodTarget,
             float gutterWidth,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
-            HarmonyPatchGenerationService harmonyPatchGenerationService)
+            HarmonyPatchGenerationService harmonyPatchGenerationService,
+            bool pointerOnMethodInspector,
+            bool pointerOnContextMenu)
         {
             if (current == null)
             {
                 return;
             }
 
-            if (_contextMenuOpen && _lastContextMenuRect.Contains(pointerContext.SurfaceMouse))
+            _overlayInteractionService.TracePointerRouting(
+                "source-editor",
+                current,
+                pointerOnMethodInspector,
+                pointerOnContextMenu,
+                pointerContext.IsWithinSurface,
+                state != null &&
+                    state.Editor != null &&
+                    state.Editor.MethodInspector != null &&
+                    state.Editor.MethodInspector.IsVisible);
+
+            if (_overlayInteractionService.ShouldBypassSurfaceInput(current, pointerOnMethodInspector, pointerOnContextMenu))
             {
-                // Context menu is open and cursor is over it; let its buttons receive the event.
                 return;
+            }
+
+            if (_overlayInteractionService.ShouldCloseMethodInspectorOnPointerDown(current, pointerOnMethodInspector, pointerOnContextMenu, state))
+            {
+                _methodInspectorService.Close(state);
             }
 
             if (current.type == EventType.MouseDown && current.button == 1)
@@ -1194,6 +1313,27 @@ namespace Cortex.Modules.Editor
                     return;
                 }
 
+                if (current.control && current.clickCount == 1 && hoveredMethodTarget != null)
+                {
+                    _editorService.SetSelection(session, hoveredMethodTarget.AnchorStart, hoveredMethodTarget.AnchorStart);
+                    _dragAnchorIndex = hoveredMethodTarget.AnchorStart;
+                    session.EditorState.ScrollToCaretPending = false;
+                    _isDraggingSelection = false;
+                    EditorCommandInvocation methodInvocation;
+                    var opened = TryBuildCommandTarget(session, state, editingEnabled, hoveredMethodTarget.AnchorStart, out methodInvocation) &&
+                        _methodInspectorService.TryOpen(state, methodInvocation, hoveredMethodTarget.Classification);
+                    MMLog.WriteInfo("[Cortex.MethodTargets] Ctrl+click on source method target. Document='" +
+                        (session != null ? session.FilePath ?? string.Empty : string.Empty) +
+                        "', Symbol='" + (hoveredMethodTarget.SymbolText ?? string.Empty) +
+                        "', Lines=" + hoveredMethodTarget.StartLineNumber + "-" + hoveredMethodTarget.EndLineNumber +
+                        ", Opened=" + opened + ".");
+                    if (opened)
+                    {
+                        current.Use();
+                        return;
+                    }
+                }
+
                 var hitTest = GetCharacterIndexAt(session, pointerContext.ContentMouse, gutterWidth);
                 var selectionAction = ApplyPointerSelection(session, current, hitTest.CharacterIndex);
                 LogPointerSelection(session, selectionAction, pointerContext, gutterWidth, hitTest);
@@ -1205,6 +1345,17 @@ namespace Cortex.Modules.Editor
                 {
                     current.Use();
                     return;
+                }
+
+                if (current.control && current.clickCount == 1)
+                {
+                    EditorCommandInvocation invocation;
+                    if (TryBuildCommandTarget(session, state, editingEnabled, hitTest.CharacterIndex, out invocation) &&
+                        _methodInspectorService.TryOpen(state, invocation, GetClassificationAt(session, hitTest.CharacterIndex)))
+                    {
+                        current.Use();
+                        return;
+                    }
                 }
 
                 // Ctrl+Double-click → Go to Definition (Visual Studio convention).
@@ -1239,6 +1390,124 @@ namespace Cortex.Modules.Editor
             {
                 _isDraggingSelection = false;
             }
+        }
+
+        private EditorMethodTargetOutline FindMethodTargetAt(DocumentSession session, float gutterWidth, Vector2 contentMouse)
+        {
+            var outlines = _methodTargetOutlineService.GetOutlines(session);
+            EditorMethodTargetOutline bestMatch = null;
+            var bestHeight = float.MaxValue;
+            for (var i = 0; i < outlines.Length; i++)
+            {
+                var outline = outlines[i];
+                Rect blockRect;
+                if (outline == null ||
+                    !TryBuildMethodTargetRect(outline, gutterWidth, out blockRect) ||
+                    !blockRect.Contains(contentMouse))
+                {
+                    continue;
+                }
+
+                if (bestMatch == null || blockRect.height < bestHeight)
+                {
+                    bestMatch = outline;
+                    bestHeight = blockRect.height;
+                }
+            }
+
+            return bestMatch;
+        }
+
+        private bool TryBuildMethodTargetRect(EditorMethodTargetOutline outline, float gutterWidth, out Rect rect)
+        {
+            rect = EmptyRect;
+            if (outline == null ||
+                _layout == null ||
+                _layout.Lines.Count == 0 ||
+                outline.StartLineNumber <= 0 ||
+                outline.EndLineNumber < outline.StartLineNumber)
+            {
+                return false;
+            }
+
+            var startIndex = outline.StartLineNumber - 1;
+            var endIndex = outline.EndLineNumber - 1;
+            if (startIndex < 0 || endIndex >= _layout.Lines.Count || endIndex < startIndex)
+            {
+                return false;
+            }
+
+            var top = _layout.Lines[startIndex].Y + 1f;
+            var bottom = _layout.Lines[endIndex].Y + _lineHeight - 1f;
+            var left = float.MaxValue;
+            var right = gutterWidth + 8f;
+            for (var lineIndex = startIndex; lineIndex <= endIndex; lineIndex++)
+            {
+                var line = _layout.Lines[lineIndex];
+                if (line == null)
+                {
+                    continue;
+                }
+
+                left = Mathf.Min(left, GetMethodTargetLineLeft(line, gutterWidth));
+                right = Mathf.Max(right, gutterWidth + line.Width + 8f);
+            }
+
+            if (left == float.MaxValue)
+            {
+                left = gutterWidth;
+            }
+
+            rect = new Rect(left, top, Mathf.Max(24f, right - left), Mathf.Max(_lineHeight - 2f, bottom - top));
+            return true;
+        }
+
+        private bool TryBuildMethodTargetRect(DocumentSession session, EditorCommandTarget target, float gutterWidth, out Rect rect)
+        {
+            rect = EmptyRect;
+            var outline = _methodTargetOutlineService.FindOutline(session, target);
+            return TryBuildMethodTargetRect(outline, gutterWidth, out rect);
+        }
+
+        private float GetMethodTargetLineLeft(EditableLineLayout line, float gutterWidth)
+        {
+            if (line == null || line.Segments.Count == 0)
+            {
+                return gutterWidth;
+            }
+
+            for (var i = 0; i < line.Segments.Count; i++)
+            {
+                var segment = line.Segments[i];
+                if (segment != null && !string.IsNullOrEmpty((segment.DisplayText ?? string.Empty).Trim()))
+                {
+                    var prefix = segment.StartInLine > 0
+                        ? ExpandTabs(line.RawText.Substring(0, Math.Min(segment.StartInLine, line.RawText.Length)))
+                        : string.Empty;
+                    return gutterWidth + Measure(prefix) - 4f;
+                }
+            }
+
+            return gutterWidth;
+        }
+
+        private void DrawMethodTargetOutline(Rect blockRect)
+        {
+            GUI.DrawTexture(new Rect(blockRect.x, blockRect.y, blockRect.width, 1f), _methodTargetOutlineFill);
+            GUI.DrawTexture(new Rect(blockRect.x, blockRect.yMax - 1f, blockRect.width, 1f), _methodTargetOutlineFill);
+            GUI.DrawTexture(new Rect(blockRect.x, blockRect.y, 1f, blockRect.height), _methodTargetOutlineFill);
+            GUI.DrawTexture(new Rect(blockRect.xMax - 1f, blockRect.y, 1f, blockRect.height), _methodTargetOutlineFill);
+        }
+
+        private void DrawMethodTargetGlow(Rect blockRect)
+        {
+            if (_methodTargetGlowFill == null)
+            {
+                return;
+            }
+
+            var glowRect = new Rect(blockRect.x - 3f, blockRect.y - 3f, blockRect.width + 6f, blockRect.height + 6f);
+            GUI.DrawTexture(glowRect, _methodTargetGlowFill);
         }
 
         private bool HandleHarmonyInsertionPick(
@@ -1314,22 +1583,6 @@ namespace Cortex.Modules.Editor
             {
                 current.Use();
             }
-        }
-
-        private bool ShouldPreserveEditorScroll(Event current, Vector2 localMouse)
-        {
-            if (!_contextMenuOpen)
-            {
-                return false;
-            }
-
-            if (current != null && current.type == EventType.ScrollWheel)
-            {
-                return true;
-            }
-
-            return Mathf.Abs(Input.GetAxisRaw("Mouse ScrollWheel")) > 0.0001f ||
-                Mathf.Abs(Input.GetAxis("Mouse ScrollWheel")) > 0.0001f;
         }
 
         private SourceEditorHoverTarget TryResolveHoverTarget(
@@ -1575,6 +1828,17 @@ namespace Cortex.Modules.Editor
             return new Rect(characterRect.x - scroll.x, characterRect.y - scroll.y, characterRect.width, characterRect.height);
         }
 
+        private Rect GetMethodInspectorViewportAnchorRect(DocumentSession session, EditorCommandTarget target, Vector2 scroll, float gutterWidth)
+        {
+            Rect blockRect;
+            if (TryBuildMethodTargetRect(session, target, gutterWidth, out blockRect))
+            {
+                return new Rect(blockRect.x - scroll.x, blockRect.y - scroll.y, blockRect.width, blockRect.height);
+            }
+
+            return GetViewportAnchorRect(session, target, scroll, gutterWidth);
+        }
+
         private void PopulatePopupMenuItems(IList<EditorContextMenuItem> items)
         {
             _popupMenuItems.Clear();
@@ -1701,7 +1965,17 @@ namespace Cortex.Modules.Editor
                 ", SelectedIndex=" + selection.CaretIndex + ".");
         }
 
-        private void HandleKeyboardInput(DocumentSession session, CortexShellState state, bool editingEnabled, ICommandRegistry commandRegistry, Event current, GeneratedTemplateNavigationService generatedTemplateNavigationService)
+        private void HandleKeyboardInput(
+            DocumentSession session,
+            CortexShellState state,
+            bool editingEnabled,
+            IDocumentService documentService,
+            ICommandRegistry commandRegistry,
+            Event current,
+            GeneratedTemplateNavigationService generatedTemplateNavigationService,
+            IProjectCatalog projectCatalog,
+            HarmonyPatchResolutionService harmonyPatchResolutionService,
+            HarmonyPatchGenerationService harmonyPatchGenerationService)
         {
             if (!_hasFocus || current == null || current.type != EventType.KeyDown)
             {
@@ -1715,6 +1989,21 @@ namespace Cortex.Modules.Editor
 
             var selectionCountBefore = session != null && session.EditorState != null ? session.EditorState.Selections.Count : 0;
             var caretIndexBefore = session != null && session.EditorState != null ? session.EditorState.CaretIndex : 0;
+            if (editingEnabled &&
+                TryHandleHarmonyInsertionKeyboard(
+                    session,
+                    state,
+                    current,
+                    documentService,
+                    projectCatalog,
+                    harmonyPatchResolutionService,
+                    harmonyPatchGenerationService,
+                    generatedTemplateNavigationService))
+            {
+                current.Use();
+                return;
+            }
+
             if (editingEnabled &&
                 generatedTemplateNavigationService != null &&
                 current.keyCode == KeyCode.Tab &&
@@ -1823,6 +2112,88 @@ namespace Cortex.Modules.Editor
                 HandleCompletionAfterKey(session, state, current, commandId, previousTextVersion, editingEnabled);
                 current.Use();
             }
+        }
+
+        private bool TryHandleHarmonyInsertionKeyboard(
+            DocumentSession session,
+            CortexShellState state,
+            Event current,
+            IDocumentService documentService,
+            IProjectCatalog projectCatalog,
+            HarmonyPatchResolutionService harmonyPatchResolutionService,
+            HarmonyPatchGenerationService harmonyPatchGenerationService,
+            GeneratedTemplateNavigationService generatedTemplateNavigationService)
+        {
+            if (session == null ||
+                state == null ||
+                state.Harmony == null ||
+                current == null ||
+                current.keyCode != KeyCode.Tab ||
+                current.shift ||
+                current.control ||
+                current.alt ||
+                !state.Harmony.IsInsertionPickActive ||
+                state.Harmony.GenerationRequest == null ||
+                harmonyPatchGenerationService == null ||
+                harmonyPatchResolutionService == null ||
+                documentService == null)
+            {
+                return false;
+            }
+
+            var caretIndex = session.EditorState != null ? session.EditorState.CaretIndex : 0;
+            var caret = _editorService.GetCaretPosition(session, caretIndex);
+            string statusMessage;
+            if (!harmonyPatchGenerationService.TryApplyEditorInsertionSelection(state, session, caret.Line + 1, caretIndex, out statusMessage))
+            {
+                state.StatusMessage = statusMessage;
+                return true;
+            }
+
+            HarmonyResolvedMethodTarget resolvedTarget;
+            string reason;
+            if (!harmonyPatchResolutionService.TryResolveFromInspectionRequest(projectCatalog, state.Harmony.ActiveInspectionRequest, out resolvedTarget, out reason) ||
+                resolvedTarget == null ||
+                !harmonyPatchGenerationService.TryValidateGenerationTarget(state, resolvedTarget, out reason))
+            {
+                state.StatusMessage = reason;
+                return true;
+            }
+
+            var preview = harmonyPatchGenerationService.BuildPreview(state, resolvedTarget, state.Harmony.GenerationRequest);
+            if (preview == null || !preview.CanApply)
+            {
+                state.Harmony.GenerationPreview = preview;
+                state.StatusMessage = preview != null ? preview.StatusMessage ?? string.Empty : "Harmony patch preview is not ready to apply.";
+                return true;
+            }
+
+            DocumentSession appliedSession;
+            if (!harmonyPatchGenerationService.Apply(state, documentService, state.Harmony.GenerationRequest, preview, out appliedSession, out statusMessage))
+            {
+                state.StatusMessage = statusMessage;
+                return true;
+            }
+
+            state.Harmony.GenerationPreview = preview;
+            if (appliedSession != null && appliedSession.EditorState != null)
+            {
+                appliedSession.EditorState.EditModeEnabled = true;
+            }
+
+            if (generatedTemplateNavigationService != null && appliedSession != null)
+            {
+                generatedTemplateNavigationService.StartSession(
+                    state,
+                    appliedSession,
+                    preview.Placeholders,
+                    preview.InsertionOffset,
+                    preview.InsertionOffset + ((preview.SnippetText ?? string.Empty).Length));
+            }
+
+            harmonyPatchGenerationService.ClearEditorInsertionPick(state);
+            state.StatusMessage = statusMessage;
+            return true;
         }
 
         private void LogKeyboardSelectionState(DocumentSession session, string commandId, char character, int selectionCountBefore, int caretIndexBefore)
@@ -1962,6 +2333,32 @@ namespace Cortex.Modules.Editor
             }
 
             return false;
+        }
+
+        private string GetClassificationAt(DocumentSession session, int absolutePosition)
+        {
+            if (session == null || session.LanguageAnalysis == null || session.LanguageAnalysis.Classifications == null)
+            {
+                return string.Empty;
+            }
+
+            for (var i = 0; i < session.LanguageAnalysis.Classifications.Length; i++)
+            {
+                var span = session.LanguageAnalysis.Classifications[i];
+                if (span == null)
+                {
+                    continue;
+                }
+
+                var start = span.Start;
+                var end = span.Start + Math.Max(0, span.Length);
+                if (absolutePosition >= start && absolutePosition < end)
+                {
+                    return span.Classification ?? string.Empty;
+                }
+            }
+
+            return string.Empty;
         }
 
         private void HandleCompletionAfterKey(DocumentSession session, CortexShellState state, Event current, string commandId, int previousTextVersion, bool editingEnabled)

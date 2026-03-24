@@ -37,6 +37,12 @@ namespace Cortex.Core.Models
             ContextId = string.Empty;
             DocumentPath = string.Empty;
             SymbolText = string.Empty;
+            QualifiedSymbolDisplay = string.Empty;
+            SymbolKind = string.Empty;
+            MetadataName = string.Empty;
+            ContainingTypeName = string.Empty;
+            ContainingAssemblyName = string.Empty;
+            DocumentationCommentId = string.Empty;
             HoverText = string.Empty;
             SelectionText = string.Empty;
             DefinitionDocumentPath = string.Empty;
@@ -50,6 +56,12 @@ namespace Cortex.Core.Models
         public string ContextId;
         public string DocumentPath;
         public string SymbolText;
+        public string QualifiedSymbolDisplay;
+        public string SymbolKind;
+        public string MetadataName;
+        public string ContainingTypeName;
+        public string ContainingAssemblyName;
+        public string DocumentationCommentId;
         public string HoverText;
         public int Line;
         public int Column;
