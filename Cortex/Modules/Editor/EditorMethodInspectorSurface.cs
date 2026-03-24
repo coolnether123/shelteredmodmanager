@@ -19,7 +19,6 @@ namespace Cortex.Modules.Editor
         private const float PopupGap = 12f;
         private const int SnippetContextLineCount = 2;
 
-        private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
         private readonly EditorMethodInspectorService _inspectorService = new EditorMethodInspectorService();
         private readonly EditorMethodHarmonyContextService _harmonyContextService = new EditorMethodHarmonyContextService();
         private readonly EditorMethodPatchCreationService _patchCreationService = new EditorMethodPatchCreationService();
@@ -64,14 +63,20 @@ namespace Cortex.Modules.Editor
             }
 
             var popupRect = ResolvePanelRect(anchorRect, surfaceSize);
-            var menuItems = _contextMenuService.BuildItems(state, commandRegistry, contributionRegistry, invocation);
             _inspectorService.EnsureCallHierarchyRequest(state);
+
+            var sourceHarmonyContext = _harmonyContextService.BuildSourcePatchContext(
+                state,
+                target,
+                projectCatalog,
+                harmonyResolutionService);
 
             HarmonyMethodPatchSummary harmonySummary;
             string harmonyStatusMessage;
             TryLoadHarmonySummary(
                 state,
                 target,
+                sourceHarmonyContext,
                 projectCatalog,
                 loadedModCatalog,
                 sourceLookupIndex,
@@ -110,7 +115,7 @@ namespace Cortex.Modules.Editor
                 session,
                 inspector,
                 target,
-                menuItems,
+                sourceHarmonyContext,
                 harmonySummary,
                 harmonyStatusMessage,
                 indirectHarmonyContext,
@@ -125,7 +130,6 @@ namespace Cortex.Modules.Editor
                 state,
                 inspector,
                 invocation,
-                menuItems,
                 commandRegistry,
                 documentService,
                 projectCatalog,
@@ -176,7 +180,7 @@ namespace Cortex.Modules.Editor
             DocumentSession session,
             CortexMethodInspectorState inspector,
             EditorCommandTarget target,
-            IList<EditorContextMenuItem> menuItems,
+            EditorSourceHarmonyContext sourceHarmonyContext,
             HarmonyMethodPatchSummary harmonySummary,
             string harmonyStatusMessage,
             EditorIndirectHarmonyContext indirectHarmonyContext,
@@ -188,15 +192,13 @@ namespace Cortex.Modules.Editor
             var document = new PanelDocument();
             document.Title = "Method Info: " + (inspector != null ? inspector.Title ?? string.Empty : string.Empty);
             document.Subtitle = BuildHeaderSubtitle(target);
-            document.HeaderActions = BuildHeaderActions(menuItems);
 
             var sections = new List<PanelSection>();
             sections.Add(BuildStructureSection(inspector, target));
-            sections.Add(BuildSourceSection(inspector, session, target));
-            sections.Add(BuildRelationshipsSection(inspector, menuItems));
             sections.Add(BuildHarmonySection(
                 inspector,
                 state,
+                sourceHarmonyContext,
                 harmonySummary,
                 harmonyStatusMessage,
                 indirectHarmonyContext,
@@ -204,17 +206,9 @@ namespace Cortex.Modules.Editor
                 canCreatePatch,
                 hasPreparedPatch,
                 patchAvailabilityReason));
+            sections.Add(BuildSourceSection(inspector, session, target));
             document.Sections = sections.ToArray();
             return document;
-        }
-
-        private PanelAction[] BuildHeaderActions(IList<EditorContextMenuItem> menuItems)
-        {
-            var actions = new List<PanelAction>();
-            AddCommandAction(actions, FindMenuItem(menuItems, "cortex.editor.goToDefinition"), "Open Declaration");
-            AddCommandAction(actions, FindMenuItem(menuItems, "cortex.editor.findAllReferences"), "Find References");
-            AddCommandAction(actions, FindMenuItem(menuItems, "cortex.harmony.viewPatches"), "View Patches");
-            return actions.ToArray();
         }
 
         private PanelSection BuildStructureSection(CortexMethodInspectorState inspector, EditorCommandTarget target)
@@ -288,33 +282,10 @@ namespace Cortex.Modules.Editor
             return section;
         }
 
-        private PanelSection BuildRelationshipsSection(CortexMethodInspectorState inspector, IList<EditorContextMenuItem> menuItems)
-        {
-            var section = new PanelSection();
-            section.Id = "relationships";
-            section.Title = "Relationships";
-            section.Expanded = inspector != null ? inspector.ReferencesExpanded : true;
-
-            var elements = new List<PanelElement>();
-            AddActionElement(elements, FindMenuItem(menuItems, "cortex.editor.peekDefinition"));
-            AddActionElement(elements, FindMenuItem(menuItems, "cortex.editor.goToBase"));
-            AddActionElement(elements, FindMenuItem(menuItems, "cortex.editor.goToImplementation"));
-            AddActionElement(elements, FindMenuItem(menuItems, "cortex.editor.findAllReferences"));
-            AddActionElement(elements, FindMenuItem(menuItems, "cortex.editor.viewCallHierarchy"));
-            AddActionElement(elements, FindMenuItem(menuItems, "cortex.editor.trackValueSource"));
-
-            if (elements.Count == 0)
-            {
-                elements.Add(CreateTextElement(string.Empty, "No relationship actions are available for this symbol.", false));
-            }
-
-            section.Elements = elements.ToArray();
-            return section;
-        }
-
         private PanelSection BuildHarmonySection(
             CortexMethodInspectorState inspector,
             CortexShellState state,
+            EditorSourceHarmonyContext sourceHarmonyContext,
             HarmonyMethodPatchSummary harmonySummary,
             string harmonyStatusMessage,
             EditorIndirectHarmonyContext indirectHarmonyContext,
@@ -325,16 +296,23 @@ namespace Cortex.Modules.Editor
         {
             var section = new PanelSection();
             section.Id = "harmony";
-            section.Title = "Harmony";
+            section.Title = "Harmony Context";
             section.Expanded = inspector != null ? inspector.HarmonyExpanded : true;
 
             var elements = new List<PanelElement>();
-            if (harmonySummary == null)
+            var hasSourceHarmonyContext = AppendSourceHarmonyElements(elements, sourceHarmonyContext);
+            if (hasSourceHarmonyContext)
             {
-                elements.Add(CreateTextElement(string.Empty, !string.IsNullOrEmpty(harmonyStatusMessage) ? harmonyStatusMessage : "No Harmony patch details are available for this function.", false));
+                elements.Add(new PanelSpacerElement { Height = 4f });
             }
-            else
+
+            if (harmonySummary != null)
             {
+                if (hasSourceHarmonyContext)
+                {
+                    elements.Add(CreateTextElement("Target Runtime Patch State", "Live Harmony data for the patched runtime method.", false));
+                }
+
                 elements.Add(CreateMetadataElement("Status", harmonySummary.IsPatched ? "Patched at runtime" : "No active patches"));
                 elements.Add(CreateMetadataElement("Counts", harmonyDisplayService.BuildCountBreakdown(harmonySummary.Counts)));
                 elements.Add(CreateMetadataElement("Owners", harmonyDisplayService.BuildOwnerSummary(harmonySummary)));
@@ -378,6 +356,10 @@ namespace Cortex.Modules.Editor
                     }
                 }
             }
+            else if (!hasSourceHarmonyContext)
+            {
+                elements.Add(CreateTextElement(string.Empty, !string.IsNullOrEmpty(harmonyStatusMessage) ? harmonyStatusMessage : "No Harmony patch details are available for this method.", false));
+            }
 
             elements.Add(new PanelSpacerElement { Height = 4f });
             elements.Add(CreateTextElement("Indirect Harmony Context", BuildIndirectStatus(indirectHarmonyContext), false));
@@ -389,6 +371,25 @@ namespace Cortex.Modules.Editor
 
             section.Elements = elements.ToArray();
             return section;
+        }
+
+        private static bool AppendSourceHarmonyElements(List<PanelElement> elements, EditorSourceHarmonyContext sourceHarmonyContext)
+        {
+            if (elements == null || sourceHarmonyContext == null || !sourceHarmonyContext.IsPatchMethod)
+            {
+                return false;
+            }
+
+            elements.Add(CreateTextElement("Current Method", sourceHarmonyContext.StatusMessage, false));
+            elements.Add(CreateMetadataElement("Patch Kind", sourceHarmonyContext.PatchKind));
+            elements.Add(CreateMetadataElement("Source Method", sourceHarmonyContext.SourceMethodName));
+            elements.Add(CreateMetadataElement("Patches Into", sourceHarmonyContext.TargetDisplayName));
+            elements.Add(CreateMetadataElement("Target Type", sourceHarmonyContext.TargetTypeName));
+            elements.Add(CreateMetadataElement("Target Method", sourceHarmonyContext.TargetMethodName + sourceHarmonyContext.TargetSignature));
+            elements.Add(CreateMetadataElement("Resolved Via", string.Equals(sourceHarmonyContext.ResolutionSource, "attribute", StringComparison.OrdinalIgnoreCase)
+                ? "Harmony method attribute"
+                : "Harmony naming convention"));
+            return true;
         }
 
         private static string BuildIndirectStatus(EditorIndirectHarmonyContext indirectContext)
@@ -512,7 +513,6 @@ namespace Cortex.Modules.Editor
             CortexShellState state,
             CortexMethodInspectorState inspector,
             EditorCommandInvocation invocation,
-            IList<EditorContextMenuItem> menuItems,
             ICommandRegistry commandRegistry,
             IDocumentService documentService,
             IProjectCatalog projectCatalog,
@@ -535,17 +535,6 @@ namespace Cortex.Modules.Editor
             if (activatedId.StartsWith("section:", StringComparison.Ordinal))
             {
                 ToggleSection(inspector, activatedId.Substring("section:".Length));
-                return;
-            }
-
-            if (activatedId.StartsWith("command:", StringComparison.Ordinal))
-            {
-                var commandId = activatedId.Substring("command:".Length);
-                if (!string.IsNullOrEmpty(commandId))
-                {
-                    _contextMenuService.Execute(state, commandRegistry, invocation, commandId);
-                }
-
                 return;
             }
 
@@ -699,40 +688,6 @@ namespace Cortex.Modules.Editor
             };
         }
 
-        private static void AddCommandAction(List<PanelAction> actions, EditorContextMenuItem item, string overrideLabel)
-        {
-            if (actions == null || item == null)
-            {
-                return;
-            }
-
-            actions.Add(new PanelAction
-            {
-                Id = "command:" + (item.CommandId ?? string.Empty),
-                Label = !string.IsNullOrEmpty(overrideLabel) ? overrideLabel : item.Label ?? item.CommandId ?? string.Empty,
-                Hint = item.ShortcutText ?? string.Empty,
-                Enabled = item.Enabled
-            });
-        }
-
-        private static void AddActionElement(List<PanelElement> elements, EditorContextMenuItem item)
-        {
-            if (elements == null || item == null)
-            {
-                return;
-            }
-
-            elements.Add(CreateActionElement(
-                new PanelAction
-                {
-                    Id = "command:" + (item.CommandId ?? string.Empty),
-                    Label = item.Label ?? item.CommandId ?? string.Empty,
-                    Hint = item.ShortcutText ?? string.Empty,
-                    Enabled = item.Enabled
-                },
-                !string.IsNullOrEmpty(item.ShortcutText) ? "Shortcut: " + item.ShortcutText : string.Empty));
-        }
-
         private static Rect ResolvePanelRect(Rect anchorRect, Vector2 viewportSize)
         {
             var panelSize = ResolvePanelSize(viewportSize);
@@ -800,6 +755,7 @@ namespace Cortex.Modules.Editor
         private void TryLoadHarmonySummary(
             CortexShellState state,
             EditorCommandTarget target,
+            EditorSourceHarmonyContext sourceHarmonyContext,
             IProjectCatalog projectCatalog,
             ILoadedModCatalog loadedModCatalog,
             ISourceLookupIndex sourceLookupIndex,
@@ -811,55 +767,47 @@ namespace Cortex.Modules.Editor
             summary = null;
             statusMessage = string.Empty;
             if (state == null ||
-                target == null ||
                 harmonyInspectionService == null ||
-                harmonyResolutionService == null ||
                 projectCatalog == null)
             {
                 return;
             }
 
-            HarmonyResolvedMethodTarget resolvedTarget;
-            string resolutionReason;
-            if (!harmonyResolutionService.TryResolveFromEditorTarget(state, sourceLookupIndex, projectCatalog, target, out resolvedTarget, out resolutionReason) ||
-                resolvedTarget == null ||
-                resolvedTarget.InspectionRequest == null)
+            HarmonyPatchInspectionRequest inspectionRequest = null;
+            if (sourceHarmonyContext != null &&
+                sourceHarmonyContext.IsPatchMethod &&
+                sourceHarmonyContext.TargetInspectionRequest != null)
             {
-                statusMessage = resolutionReason;
-                return;
+                inspectionRequest = sourceHarmonyContext.TargetInspectionRequest;
+                statusMessage = "Loaded Harmony target context for the patched runtime method.";
+            }
+            else
+            {
+                if (target == null || harmonyResolutionService == null)
+                {
+                    return;
+                }
+
+                HarmonyResolvedMethodTarget resolvedTarget;
+                string resolutionReason;
+                if (!harmonyResolutionService.TryResolveFromEditorTarget(state, sourceLookupIndex, projectCatalog, target, out resolvedTarget, out resolutionReason) ||
+                    resolvedTarget == null ||
+                    resolvedTarget.InspectionRequest == null)
+                {
+                    statusMessage = resolutionReason;
+                    return;
+                }
+
+                inspectionRequest = resolvedTarget.InspectionRequest;
             }
 
             summary = harmonyInspectionService.GetSummary(
                 state,
-                resolvedTarget.InspectionRequest,
+                inspectionRequest,
                 loadedModCatalog,
                 projectCatalog,
                 false,
                 out statusMessage);
-        }
-
-        private static EditorContextMenuItem FindMenuItem(IList<EditorContextMenuItem> items, string commandId)
-        {
-            if (items == null || string.IsNullOrEmpty(commandId))
-            {
-                return null;
-            }
-
-            for (var i = 0; i < items.Count; i++)
-            {
-                var item = items[i];
-                if (item == null || item.IsSeparator || item.IsSectionHeader)
-                {
-                    continue;
-                }
-
-                if (string.Equals(item.CommandId ?? string.Empty, commandId ?? string.Empty, StringComparison.OrdinalIgnoreCase))
-                {
-                    return item;
-                }
-            }
-
-            return null;
         }
 
         private static string BuildHeaderSubtitle(EditorCommandTarget target)

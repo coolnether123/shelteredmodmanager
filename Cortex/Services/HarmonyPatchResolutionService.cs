@@ -33,6 +33,14 @@ namespace Cortex.Services
         public string[] ParameterTypeNames = new string[0];
     }
 
+    internal sealed class HarmonySourcePatchContext
+    {
+        public string PatchKind = string.Empty;
+        public string SourceMethodName = string.Empty;
+        public string ResolutionSource = string.Empty;
+        public HarmonyResolvedMethodTarget Target;
+    }
+
     internal sealed class HarmonyPatchResolutionService
     {
         private readonly EditorCommandContextFactory _commandContextFactory = new EditorCommandContextFactory();
@@ -254,6 +262,75 @@ namespace Cortex.Services
                 reason = "The active document does not resolve to a specific Harmony target yet.";
             }
             return false;
+        }
+
+        public bool TryResolveSourcePatchContext(
+            CortexShellState state,
+            IProjectCatalog projectCatalog,
+            EditorCommandTarget target,
+            out HarmonySourcePatchContext context,
+            out string reason)
+        {
+            context = null;
+            reason = string.Empty;
+            if (target == null || string.IsNullOrEmpty(target.DocumentPath))
+            {
+                reason = "Select a Harmony source method to inspect its patch context.";
+                return false;
+            }
+
+            if (CortexModuleUtil.IsDecompilerDocumentPath(state, target.DocumentPath))
+            {
+                reason = "Harmony source patch context is only available for writable source methods.";
+                return false;
+            }
+
+            var text = GetDocumentText(state, target.DocumentPath);
+            if (string.IsNullOrEmpty(text))
+            {
+                reason = "Source text was not available for Harmony source context.";
+                return false;
+            }
+
+            MethodLookupHint methodHint;
+            if (!TryBuildLookupHint(state, target.DocumentPath, target.AbsolutePosition, target.SymbolText, out methodHint) ||
+                methodHint == null)
+            {
+                reason = "The selected source location does not map to a method declaration.";
+                return false;
+            }
+
+            string declarationHeader;
+            if (!TryExtractEnclosingMethodHeader(text, target.AbsolutePosition, out declarationHeader))
+            {
+                reason = "The enclosing source method header could not be read for Harmony context.";
+                return false;
+            }
+
+            bool resolvedFromAttribute;
+            var patchKind = ResolveSourcePatchKind(declarationHeader, methodHint.Name, out resolvedFromAttribute);
+            if (string.IsNullOrEmpty(patchKind))
+            {
+                reason = "The selected source method is not a Harmony Prefix, Postfix, Transpiler, or Finalizer.";
+                return false;
+            }
+
+            HarmonyResolvedMethodTarget resolvedTarget;
+            if (!TryResolveFromSourceHarmonyPatchAttribute(state, projectCatalog, target, out resolvedTarget, out reason) ||
+                resolvedTarget == null)
+            {
+                return false;
+            }
+
+            context = new HarmonySourcePatchContext
+            {
+                PatchKind = patchKind,
+                SourceMethodName = !string.IsNullOrEmpty(methodHint.Name) ? methodHint.Name : NormalizeMethodName(target.SymbolText),
+                ResolutionSource = resolvedFromAttribute ? "attribute" : "convention",
+                Target = resolvedTarget
+            };
+            reason = string.Empty;
+            return true;
         }
 
         public static string BuildMethodDisplayName(MethodBase method)
@@ -1366,6 +1443,94 @@ namespace Cortex.Services
             }
 
             return true;
+        }
+
+        private static bool TryExtractEnclosingMethodHeader(string text, int absolutePosition, out string header)
+        {
+            header = string.Empty;
+            if (string.IsNullOrEmpty(text))
+            {
+                return false;
+            }
+
+            var safePosition = Math.Max(0, Math.Min(absolutePosition, Math.Max(0, text.Length - 1)));
+            var openBraces = BuildOpenBraceStack(text, safePosition);
+            for (var i = openBraces.Count - 1; i >= 0; i--)
+            {
+                string candidateHeader;
+                if (!TryExtractDeclarationHeader(text, openBraces[i], out candidateHeader))
+                {
+                    continue;
+                }
+
+                var normalizedHeader = NormalizeHeaderText(candidateHeader);
+                if (string.IsNullOrEmpty(normalizedHeader) ||
+                    IsTypeDeclarationHeader(normalizedHeader) ||
+                    IsControlBlockHeader(normalizedHeader))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(GetAccessorKind(normalizedHeader)))
+                {
+                    continue;
+                }
+
+                MethodLookupHint hint;
+                if (!TryCreateMethodLookupHint(normalizedHeader, out hint))
+                {
+                    continue;
+                }
+
+                header = candidateHeader;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static string ResolveSourcePatchKind(string declarationHeader, string methodName, out bool resolvedFromAttribute)
+        {
+            resolvedFromAttribute = false;
+            var normalizedHeader = NormalizeHeaderText(declarationHeader);
+            if (normalizedHeader.IndexOf("HarmonyPrefix", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                resolvedFromAttribute = true;
+                return "Prefix";
+            }
+
+            if (normalizedHeader.IndexOf("HarmonyPostfix", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                resolvedFromAttribute = true;
+                return "Postfix";
+            }
+
+            if (normalizedHeader.IndexOf("HarmonyTranspiler", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                resolvedFromAttribute = true;
+                return "Transpiler";
+            }
+
+            if (normalizedHeader.IndexOf("HarmonyFinalizer", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                resolvedFromAttribute = true;
+                return "Finalizer";
+            }
+
+            var normalizedMethodName = NormalizeMethodName(methodName);
+            switch (normalizedMethodName)
+            {
+                case "Prefix":
+                    return "Prefix";
+                case "Postfix":
+                    return "Postfix";
+                case "Transpiler":
+                    return "Transpiler";
+                case "Finalizer":
+                    return "Finalizer";
+                default:
+                    return string.Empty;
+            }
         }
 
         private static List<string> CollectPrecedingHarmonyPatchAttributes(string text, int declarationStart)
