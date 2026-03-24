@@ -21,6 +21,7 @@ namespace Cortex.Modules.Editor
 
         private readonly EditorMethodInspectorService _inspectorService = new EditorMethodInspectorService();
         private readonly EditorMethodHarmonyContextService _harmonyContextService = new EditorMethodHarmonyContextService();
+        private readonly EditorMethodTargetMetadataService _targetMetadataService = new EditorMethodTargetMetadataService();
         private readonly EditorMethodPatchCreationService _patchCreationService = new EditorMethodPatchCreationService();
         private readonly HarmonyPatchDisplayService _fallbackHarmonyDisplayService = new HarmonyPatchDisplayService();
         private readonly ImguiPanelRenderer _panelRenderer = new ImguiPanelRenderer();
@@ -64,6 +65,8 @@ namespace Cortex.Modules.Editor
 
             var popupRect = ResolvePanelRect(anchorRect, surfaceSize);
             _inspectorService.EnsureCallHierarchyRequest(state);
+            _targetMetadataService.EnsureSymbolContextRequest(state, target);
+            _targetMetadataService.Enrich(target, session, state);
 
             var sourceHarmonyContext = _harmonyContextService.BuildSourcePatchContext(
                 state,
@@ -162,9 +165,6 @@ namespace Cortex.Modules.Editor
             if (current.type == EventType.ScrollWheel)
             {
                 _scroll.y = Mathf.Max(0f, _scroll.y + (current.delta.y * ScrollWheelStep));
-                MMLog.WriteInfo("[Cortex.Overlay] Method inspector scroll. DeltaY=" +
-                    current.delta.y +
-                    ", ScrollY=" + _scroll.y + ".");
                 current.Use();
             }
 
@@ -365,9 +365,12 @@ namespace Cortex.Modules.Editor
             elements.Add(CreateTextElement("Indirect Harmony Context", BuildIndirectStatus(indirectHarmonyContext), false));
             AppendIndirectHarmonyElements(elements, indirectHarmonyContext, harmonyDisplayService);
 
-            elements.Add(new PanelSpacerElement { Height = 4f });
-            elements.Add(CreateTextElement("Patch Creation", BuildPatchCreationStatus(state, canCreatePatch, hasPreparedPatch, patchAvailabilityReason), false));
-            AppendPatchCreationElements(elements, state, canCreatePatch, hasPreparedPatch);
+            if (canCreatePatch || hasPreparedPatch)
+            {
+                elements.Add(new PanelSpacerElement { Height = 4f });
+                elements.Add(CreateTextElement("Patch Creation", BuildPatchCreationStatus(state, canCreatePatch, hasPreparedPatch, patchAvailabilityReason), false));
+                AppendPatchCreationElements(elements, state, canCreatePatch, hasPreparedPatch);
+            }
 
             section.Elements = elements.ToArray();
             return section;
