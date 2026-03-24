@@ -63,6 +63,12 @@
     <Compile Include="Shell\CortexShellModuleContributionRegistry.cs" />
     <Compile Include="Shell\CortexShellOnboardingLifecycle.cs" />
     <Compile Include="Shell\CortexShellModuleRenderService.cs" />
+    <Compile Include="Shell\ShellBootstrapper.cs" />
+    <Compile Include="Shell\ShellCommandDispatcher.cs" />
+    <Compile Include="Shell\ShellLayoutCoordinator.cs" />
+    <Compile Include="Shell\ShellOverlayCoordinator.cs" />
+    <Compile Include="Shell\ShellSessionCoordinator.cs" />
+    <Compile Include="Shell\ShellStatusPresenter.cs" />
     <Compile Include="CortexShell.Language.cs" />
     <Compile Include="CortexShell.Runtime.cs" />
     <Compile Include="CortexShell.cs" />
@@ -78,6 +84,7 @@
     <Compile Include="Modules\Editor\EditorMethodInspectorSurface.cs" />
     <Compile Include="Modules\Editor\EditorModule.cs" />
     <Compile Include="Modules\Editor\EditorSemanticPopupSurface.cs" />
+    <Compile Include="Modules\Editor\EditorSurfaceRenderContext.cs" />
     <Compile Include="Modules\Editor\EditorSyntaxHighlighter.cs" />
     <Compile Include="Modules\Harmony\HarmonyCommandContributions.cs" />
     <Compile Include="Modules\Harmony\HarmonyModule.cs" />

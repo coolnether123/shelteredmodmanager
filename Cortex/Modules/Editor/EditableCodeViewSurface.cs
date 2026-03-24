@@ -116,27 +116,7 @@ namespace Cortex.Modules.Editor
             Vector2 scroll,
             DocumentSession session,
             bool editingEnabled,
-            IDocumentService documentService,
-            ICommandRegistry commandRegistry,
-            IContributionRegistry contributionRegistry,
-            CortexShellState state,
-            string themeKey,
-            GUIStyle codeStyle,
-            GUIStyle gutterStyle,
-            GUIStyle tooltipStyle,
-            GUIStyle contextMenuStyle,
-            GUIStyle contextMenuButtonStyle,
-            GUIStyle contextMenuHeaderStyle,
-            Rect blockedRect,
-            float gutterWidth,
-            HarmonyPatchGenerationService harmonyPatchGenerationService,
-            GeneratedTemplateNavigationService generatedTemplateNavigationService,
-            IProjectCatalog projectCatalog,
-            ILoadedModCatalog loadedModCatalog,
-            ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchInspectionService harmonyPatchInspectionService,
-            HarmonyPatchResolutionService harmonyPatchResolutionService,
-            HarmonyPatchDisplayService harmonyPatchDisplayService)
+            EditorSurfaceRenderContext context)
         {
             if (session == null || !session.SupportsEditing || rect.width <= 0f || rect.height <= 0f)
             {
@@ -147,6 +127,28 @@ namespace Cortex.Modules.Editor
 
             try
             {
+                var documentService = context != null ? context.DocumentService : null;
+                var commandRegistry = context != null ? context.CommandRegistry : null;
+                var contributionRegistry = context != null ? context.ContributionRegistry : null;
+                var state = context != null ? context.State : null;
+                var themeKey = context != null ? context.ThemeKey : string.Empty;
+                var codeStyle = context != null ? context.CodeStyle : null;
+                var gutterStyle = context != null ? context.GutterStyle : null;
+                var tooltipStyle = context != null ? context.TooltipStyle : null;
+                var contextMenuStyle = context != null ? context.ContextMenuStyle : null;
+                var contextMenuButtonStyle = context != null ? context.ContextMenuButtonStyle : null;
+                var contextMenuHeaderStyle = context != null ? context.ContextMenuHeaderStyle : null;
+                var blockedRect = context != null ? context.BlockedRect : new Rect(0f, 0f, 0f, 0f);
+                var gutterWidth = context != null ? context.GutterWidth : 52f;
+                var harmonyPatchGenerationService = context != null ? context.HarmonyPatchGenerationService : null;
+                var generatedTemplateNavigationService = context != null ? context.GeneratedTemplateNavigationService : null;
+                var projectCatalog = context != null ? context.ProjectCatalog : null;
+                var loadedModCatalog = context != null ? context.LoadedModCatalog : null;
+                var sourceLookupIndex = context != null ? context.SourceLookupIndex : null;
+                var harmonyPatchInspectionService = context != null ? context.HarmonyPatchInspectionService : null;
+                var harmonyPatchResolutionService = context != null ? context.HarmonyPatchResolutionService : null;
+                var harmonyPatchDisplayService = context != null ? context.HarmonyPatchDisplayService : null;
+
                 var hadExplicitCaretPlacement = session.EditorState != null && session.EditorState.HasExplicitCaretPlacement;
                 var highlightedLineBeforeEnsure = session.HighlightedLine;
                 _editorService.EnsureDocumentState(session);

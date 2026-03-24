@@ -106,7 +106,7 @@ namespace Cortex
                 return;
             }
 
-            if (!_visible)
+            if (!_sessionCoordinator.Visible)
             {
                 return;
             }
