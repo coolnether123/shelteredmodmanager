@@ -13,6 +13,7 @@ namespace Cortex.Platform.ModAPI.Runtime
     {
         private const KeyCode ToggleKey = KeyCode.F8;
         private readonly ICortexLogSink _logSink = new MmLogCortexLogSink();
+        private readonly ICortexDiagnosticConfiguration _diagnosticConfiguration = new ModApiCortexDiagnosticConfiguration();
         private readonly IHarmonyRuntimeInspectionService _harmonyRuntimeInspectionService = new HarmonyRuntimeInspectionService();
         private readonly ILoadedModCatalog _loadedModCatalog = new ModApiLoadedModCatalog();
         private readonly MmLogRuntimeLogFeed _runtimeLogFeed = new MmLogRuntimeLogFeed();
@@ -28,6 +29,11 @@ namespace Cortex.Platform.ModAPI.Runtime
         public ICortexLogSink LogSink
         {
             get { return _logSink; }
+        }
+
+        public ICortexDiagnosticConfiguration DiagnosticConfiguration
+        {
+            get { return _diagnosticConfiguration; }
         }
 
         public ILoadedModCatalog LoadedModCatalog

@@ -221,6 +221,18 @@ When authoring modules and contributions:
 - Avoid storing global mutable state inside modules when a command or persisted setting can represent it.
 - Treat `WorkbenchPluginContext` as the composition boundary, not as a place to hide runtime logic.
 
+## Diagnostics
+
+For opt-in tracing and investigation paths, use the Cortex diagnostics channel system instead of adding direct loader-specific logging in module code.
+
+The rule is:
+
+- use `Cortex.Core.Diagnostics`
+- define a stable channel name
+- let the active platform module decide how channels are enabled and where messages are routed
+
+Current guidance and examples live in [Cortex_Diagnostics_Guide.md](/D:/Projects/_Archived/Sheltered%20Modding/shelteredmodmanager/documentation/Cortex_Diagnostics_Guide.md).
+
 Full UI-surface guidance and examples live in [Cortex_UI_Surface_Guide.md](/D:/Projects/_Archived/Sheltered%20Modding/shelteredmodmanager/documentation/Cortex_UI_Surface_Guide.md).
 
 ## Registering settings

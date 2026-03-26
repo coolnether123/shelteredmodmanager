@@ -22,6 +22,7 @@ namespace Cortex.Host.Unity.Runtime
             {
                 var compositionRoot = new UnityCortexHostCompositionRoot(new ModApiCortexPlatformModule());
                 CortexLog.Configure(compositionRoot.LogSink);
+                CortexDiagnostics.Configure(compositionRoot.PlatformModule != null ? compositionRoot.PlatformModule.DiagnosticConfiguration : null);
 
                 var existingShell = UnityEngine.Object.FindObjectOfType<UnityCortexShellBehaviour>();
                 if (existingShell != null)

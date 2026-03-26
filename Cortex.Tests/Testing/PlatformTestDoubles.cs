@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Cortex.Core.Abstractions;
+using Cortex.Core.Diagnostics;
 using Cortex.Core.Models;
 
 namespace Cortex.Tests.Testing
@@ -25,6 +26,8 @@ namespace Cortex.Tests.Testing
 
     internal sealed class TestCortexPlatformModule : ICortexPlatformModule
     {
+        private readonly ICortexLogSink _logSink = new TestLogSink();
+        private readonly ICortexDiagnosticConfiguration _diagnosticConfiguration = new DisabledDiagnosticConfiguration();
         private readonly IHarmonyRuntimeInspectionService _harmonyRuntimeInspectionService = new TestHarmonyRuntimeInspectionService();
         private readonly ILoadedModCatalog _loadedModCatalog;
         private readonly IOverlayInputCaptureService _overlayInputCaptureService;
@@ -50,6 +53,16 @@ namespace Cortex.Tests.Testing
             get { return _loadedModCatalog; }
         }
 
+        public ICortexLogSink LogSink
+        {
+            get { return _logSink; }
+        }
+
+        public ICortexDiagnosticConfiguration DiagnosticConfiguration
+        {
+            get { return _diagnosticConfiguration; }
+        }
+
         public IRuntimeLogFeed RuntimeLogFeed
         {
             get { return _runtimeLogFeed; }
@@ -68,6 +81,11 @@ namespace Cortex.Tests.Testing
         public IOverlayInputCaptureService OverlayInputCaptureService
         {
             get { return _overlayInputCaptureService; }
+        }
+
+        public string AdditionalDecompilerCacheRoots
+        {
+            get { return string.Empty; }
         }
 
         public IRuntimeSourceNavigationService CreateRuntimeSourceNavigationService(ISourcePathResolver sourcePathResolver)
@@ -91,6 +109,21 @@ namespace Cortex.Tests.Testing
         public bool IsShellTogglePressed(string actionId)
         {
             return false;
+        }
+
+        private sealed class TestLogSink : ICortexLogSink
+        {
+            public void Write(CortexLogEntry entry)
+            {
+            }
+        }
+
+        private sealed class DisabledDiagnosticConfiguration : ICortexDiagnosticConfiguration
+        {
+            public bool IsEnabled(string channel, CortexLogLevel level)
+            {
+                return false;
+            }
         }
     }
 

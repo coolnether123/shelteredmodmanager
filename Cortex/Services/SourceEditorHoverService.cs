@@ -15,6 +15,12 @@ namespace Cortex.Services
         private const float HoverDelaySeconds = 0.18f;
         private readonly EditorCommandContextFactory _contextFactory = new EditorCommandContextFactory();
         private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
+        private readonly IEditorContextService _contextService;
+
+        public SourceEditorHoverService(IEditorContextService contextService)
+        {
+            _contextService = contextService;
+        }
 
         public bool TryCreateInteractionTarget(
             DocumentSession session,
@@ -94,27 +100,23 @@ namespace Cortex.Services
                 return;
             }
 
-            if (string.Equals(state.Editor.RequestedHoverKey, hoverTarget.HoverKey, StringComparison.Ordinal))
+            if (string.Equals(state.Editor.Hover.RequestedKey, hoverTarget.HoverKey, StringComparison.Ordinal))
             {
                 return;
             }
 
-            state.Editor.RequestedHoverKey = hoverTarget.HoverKey;
-            state.EditorContext.Hover.RequestedContextKey = hoverTarget.Target.ContextKey ?? string.Empty;
-            state.Editor.RequestedHoverDocumentPath = session != null ? session.FilePath ?? string.Empty : string.Empty;
-            state.Editor.RequestedHoverLine = hoverTarget.Target.Line;
-            state.Editor.RequestedHoverColumn = hoverTarget.Target.Column;
-            state.Editor.RequestedHoverAbsolutePosition = hoverTarget.Target.AbsolutePosition;
-            state.Editor.RequestedHoverTokenText = hoverTarget.Target.SymbolText ?? string.Empty;
+            state.Editor.Hover.RequestedKey = hoverTarget.HoverKey;
+            state.Editor.Hover.RequestedContextKey = hoverTarget.Target.ContextKey ?? string.Empty;
+            state.Editor.Hover.RequestedDocumentPath = session != null ? session.FilePath ?? string.Empty : string.Empty;
+            state.Editor.Hover.RequestedLine = hoverTarget.Target.Line;
+            state.Editor.Hover.RequestedColumn = hoverTarget.Target.Column;
+            state.Editor.Hover.RequestedAbsolutePosition = hoverTarget.Target.AbsolutePosition;
+            state.Editor.Hover.RequestedTokenText = hoverTarget.Target.SymbolText ?? string.Empty;
         }
 
         public LanguageServiceHoverResponse ResolveHoverResponse(CortexShellState state, string hoverKey)
         {
-            return state != null &&
-                state.Editor != null &&
-                string.Equals(state.Editor.ActiveHoverKey, hoverKey, StringComparison.Ordinal)
-                ? state.Editor.ActiveHoverResponse
-                : null;
+            return _contextService != null ? _contextService.ResolveHoverResponse(state, hoverKey) : null;
         }
 
         public LanguageServiceHoverResponse ResolveHoverResponse(CortexShellState state, DocumentSession session, EditorCommandTarget target)
@@ -134,8 +136,8 @@ namespace Cortex.Services
                 return;
             }
 
-            state.Editor.VisibleHoverKey = hoverKey ?? string.Empty;
-            state.Editor.VisibleHoverDefinitionDocumentPath = response != null ? response.DefinitionDocumentPath ?? string.Empty : string.Empty;
+            state.Editor.Hover.VisibleContextKey = state.Editor.Hover.ActiveContextKey ?? string.Empty;
+            state.Editor.Hover.VisibleDefinitionDocumentPath = response != null ? response.DefinitionDocumentPath ?? string.Empty : string.Empty;
         }
 
         public void ClearVisibleHover(CortexShellState state)
@@ -145,8 +147,8 @@ namespace Cortex.Services
                 return;
             }
 
-            state.Editor.VisibleHoverKey = string.Empty;
-            state.Editor.VisibleHoverDefinitionDocumentPath = string.Empty;
+            state.Editor.Hover.VisibleContextKey = string.Empty;
+            state.Editor.Hover.VisibleDefinitionDocumentPath = string.Empty;
         }
 
         private string BuildHoverKey(DocumentSession session, EditorCommandTarget target)

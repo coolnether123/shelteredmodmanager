@@ -19,7 +19,7 @@ namespace Cortex.Services
             }
 
             state.Semantic.RequestedKey = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition + "|" + requestKind + "|" + DateTime.UtcNow.Ticks;
-            state.EditorContext.SemanticRequest.RequestedContextKey = target.ContextKey ?? string.Empty;
+            state.Semantic.RequestedContextKey = target.ContextKey ?? string.Empty;
             state.Semantic.RequestedKind = requestKind;
             state.Semantic.RequestedDocumentPath = target.DocumentPath ?? string.Empty;
             state.Semantic.RequestedLine = target.Line;
@@ -51,7 +51,7 @@ namespace Cortex.Services
             }
 
             state.Semantic.RequestedKey = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition + "|" + SemanticRequestKind.DocumentTransformPreview + "|" + DateTime.UtcNow.Ticks;
-            state.EditorContext.SemanticRequest.RequestedContextKey = target.ContextKey ?? string.Empty;
+            state.Semantic.RequestedContextKey = target.ContextKey ?? string.Empty;
             state.Semantic.RequestedKind = SemanticRequestKind.DocumentTransformPreview;
             state.Semantic.RequestedDocumentPath = target.DocumentPath ?? string.Empty;
             state.Semantic.RequestedLine = target.Line;

@@ -93,54 +93,87 @@ namespace Cortex
 
     public sealed class CortexEditorInteractionState
     {
-        public readonly List<CortexAcceptedCompletionEntry> RecentAcceptedCompletions = new List<CortexAcceptedCompletionEntry>();
-        public int CompletionAcceptanceSequence;
-        public string RequestedHoverKey = string.Empty;
-        public string RequestedHoverDocumentPath = string.Empty;
-        public int RequestedHoverLine;
-        public int RequestedHoverColumn;
-        public int RequestedHoverAbsolutePosition = -1;
-        public string RequestedHoverTokenText = string.Empty;
-        public string ActiveHoverKey = string.Empty;
-        public LanguageServiceHoverResponse ActiveHoverResponse;
-        public string VisibleHoverKey = string.Empty;
-        public string VisibleHoverDefinitionDocumentPath = string.Empty;
-        public string RequestedDefinitionKey = string.Empty;
-        public string RequestedDefinitionDocumentPath = string.Empty;
-        public int RequestedDefinitionLine;
-        public int RequestedDefinitionColumn;
-        public int RequestedDefinitionAbsolutePosition = -1;
-        public string RequestedDefinitionTokenText = string.Empty;
-        public string RequestedCompletionKey = string.Empty;
-        public string RequestedCompletionDocumentPath = string.Empty;
-        public int RequestedCompletionLine;
-        public int RequestedCompletionColumn;
-        public int RequestedCompletionAbsolutePosition = -1;
-        public string RequestedCompletionTriggerCharacter = string.Empty;
-        public bool RequestedCompletionExplicit;
-        public string ActiveCompletionKey = string.Empty;
-        public LanguageServiceCompletionResponse ActiveCompletionResponse;
-        public string RequestedSignatureHelpKey = string.Empty;
-        public string RequestedSignatureHelpDocumentPath = string.Empty;
-        public int RequestedSignatureHelpLine;
-        public int RequestedSignatureHelpColumn;
-        public int RequestedSignatureHelpAbsolutePosition = -1;
-        public string RequestedSignatureHelpTriggerCharacter = string.Empty;
-        public bool RequestedSignatureHelpExplicit;
-        public string ActiveSignatureHelpKey = string.Empty;
-        public LanguageServiceSignatureHelpResponse ActiveSignatureHelpResponse;
-        public string CompletionPopupStateKey = string.Empty;
-        public int CompletionSelectedIndex = -1;
-        public string ActiveInlineCompletionKey = string.Empty;
-        public LanguageServiceCompletionResponse ActiveInlineCompletionResponse;
-        public string ActiveInlineCompletionProviderId = string.Empty;
-        public string CompletionAugmentationStatus = string.Empty;
-        public string CompletionAugmentationProviderId = string.Empty;
-        public string CompletionAugmentationStatusMessage = string.Empty;
-        public string ActiveRenameText = string.Empty;
-        public string ActiveRenameContextKey = string.Empty;
-        public string ActivePeekContextKey = string.Empty;
+        public readonly CortexHoverInteractionState Hover = new CortexHoverInteractionState();
+        public readonly CortexDefinitionInteractionState Definition = new CortexDefinitionInteractionState();
+        public readonly CortexCompletionInteractionState Completion = new CortexCompletionInteractionState();
+        public readonly CortexSignatureHelpInteractionState SignatureHelp = new CortexSignatureHelpInteractionState();
+        public readonly CortexRenameInteractionState Rename = new CortexRenameInteractionState();
+        public readonly CortexPeekInteractionState Peek = new CortexPeekInteractionState();
         public readonly CortexMethodInspectorState MethodInspector = new CortexMethodInspectorState();
+    }
+
+    public sealed class CortexHoverInteractionState
+    {
+        public string RequestedContextKey = string.Empty;
+        public string RequestedKey = string.Empty;
+        public string RequestedDocumentPath = string.Empty;
+        public int RequestedLine;
+        public int RequestedColumn;
+        public int RequestedAbsolutePosition = -1;
+        public string RequestedTokenText = string.Empty;
+        public string ActiveContextKey = string.Empty;
+        public string VisibleContextKey = string.Empty;
+        public string VisibleDefinitionDocumentPath = string.Empty;
+    }
+
+    public sealed class CortexDefinitionInteractionState
+    {
+        public string RequestedContextKey = string.Empty;
+        public string RequestedKey = string.Empty;
+        public string RequestedDocumentPath = string.Empty;
+        public int RequestedLine;
+        public int RequestedColumn;
+        public int RequestedAbsolutePosition = -1;
+        public string RequestedTokenText = string.Empty;
+    }
+
+    public sealed class CortexCompletionInteractionState
+    {
+        public readonly List<CortexAcceptedCompletionEntry> RecentAcceptedCompletions = new List<CortexAcceptedCompletionEntry>();
+        public int AcceptanceSequence;
+        public string RequestedContextKey = string.Empty;
+        public string RequestedKey = string.Empty;
+        public string RequestedDocumentPath = string.Empty;
+        public int RequestedLine;
+        public int RequestedColumn;
+        public int RequestedAbsolutePosition = -1;
+        public string RequestedTriggerCharacter = string.Empty;
+        public bool RequestedExplicit;
+        public string ActiveContextKey = string.Empty;
+        public LanguageServiceCompletionResponse Response;
+        public string PopupStateKey = string.Empty;
+        public int SelectedIndex = -1;
+        public string InlineContextKey = string.Empty;
+        public LanguageServiceCompletionResponse InlineResponse;
+        public string InlineProviderId = string.Empty;
+        public string AugmentationStatus = string.Empty;
+        public string AugmentationProviderId = string.Empty;
+        public string AugmentationStatusMessage = string.Empty;
+    }
+
+    public sealed class CortexSignatureHelpInteractionState
+    {
+        public string RequestedContextKey = string.Empty;
+        public string RequestedKey = string.Empty;
+        public string RequestedDocumentPath = string.Empty;
+        public int RequestedLine;
+        public int RequestedColumn;
+        public int RequestedAbsolutePosition = -1;
+        public string RequestedTriggerCharacter = string.Empty;
+        public bool RequestedExplicit;
+        public string ActiveContextKey = string.Empty;
+        public LanguageServiceSignatureHelpResponse Response;
+    }
+
+    public sealed class CortexRenameInteractionState
+    {
+        public string ActiveText = string.Empty;
+        public string ContextKey = string.Empty;
+    }
+
+    public sealed class CortexPeekInteractionState
+    {
+        public string ContextKey = string.Empty;
     }
 
     public sealed class CortexMethodInspectorState
@@ -177,6 +210,7 @@ namespace Cortex
     public sealed class CortexSemanticInteractionState
     {
         public string RequestedKey = string.Empty;
+        public string RequestedContextKey = string.Empty;
         public SemanticRequestKind RequestedKind = SemanticRequestKind.None;
         public string RequestedDocumentPath = string.Empty;
         public int RequestedLine;
@@ -269,27 +303,8 @@ namespace Cortex
     {
         public string ActiveSurfaceId = string.Empty;
         public string ActiveContextKey = string.Empty;
-        public readonly CortexHoverContextState Hover = new CortexHoverContextState();
-        public readonly CortexDefinitionContextState Definition = new CortexDefinitionContextState();
-        public readonly CortexSemanticRequestContextState SemanticRequest = new CortexSemanticRequestContextState();
         public readonly Dictionary<string, string> SurfaceContextKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public readonly Dictionary<string, EditorContextSnapshot> ContextsByKey = new Dictionary<string, EditorContextSnapshot>(StringComparer.OrdinalIgnoreCase);
-    }
-
-    public sealed class CortexHoverContextState
-    {
-        public string RequestedContextKey = string.Empty;
-        public string ActiveContextKey = string.Empty;
-    }
-
-    public sealed class CortexDefinitionContextState
-    {
-        public string RequestedContextKey = string.Empty;
-    }
-
-    public sealed class CortexSemanticRequestContextState
-    {
-        public string RequestedContextKey = string.Empty;
     }
 
     public sealed class CortexShellState

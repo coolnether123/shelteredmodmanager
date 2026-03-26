@@ -17,8 +17,11 @@ namespace Cortex.Services
         EditorContextSnapshot GetSurfaceContext(CortexShellState state, string surfaceId);
         EditorCommandTarget ResolveTarget(CortexShellState state, string contextKey);
         EditorCommandInvocation ResolveInvocation(CortexShellState state, string contextKey);
+        LanguageServiceHoverResponse ResolveHoverResponse(CortexShellState state, string contextKey, string hoverKey);
+        LanguageServiceHoverResponse ResolveHoverResponse(CortexShellState state, string hoverKey);
         void ApplyHoverResponse(CortexShellState state, string contextKey, string hoverKey, LanguageServiceHoverResponse response);
         void ApplySymbolContext(CortexShellState state, string contextKey, LanguageServiceSymbolContextResponse response);
+        void ClearHoverResponse(CortexShellState state, string contextKey);
         string BuildContextKey(string surfaceId, string documentPath, int documentVersion, int caretIndex, int selectionStart, int selectionEnd, int targetStart, int targetLength, string symbolText);
     }
 
@@ -158,7 +161,7 @@ namespace Cortex.Services
         public EditorCommandTarget ResolveTarget(CortexShellState state, string contextKey)
         {
             var snapshot = GetContext(state, contextKey);
-            return snapshot != null && snapshot.Target != null ? snapshot.Target.Clone() : null;
+            return ProjectTarget(snapshot);
         }
 
         public EditorCommandInvocation ResolveInvocation(CortexShellState state, string contextKey)
@@ -167,78 +170,137 @@ namespace Cortex.Services
             return target != null ? _contextFactory.CreateForTarget(state, target) : null;
         }
 
+        public LanguageServiceHoverResponse ResolveHoverResponse(CortexShellState state, string contextKey, string hoverKey)
+        {
+            var snapshot = GetContext(state, contextKey);
+            if (snapshot == null || snapshot.Semantic == null)
+            {
+                return null;
+            }
+
+            return string.IsNullOrEmpty(hoverKey) || string.Equals(snapshot.HoverKey ?? string.Empty, hoverKey, StringComparison.Ordinal)
+                ? snapshot.Semantic.HoverResponse
+                : null;
+        }
+
+        public LanguageServiceHoverResponse ResolveHoverResponse(CortexShellState state, string hoverKey)
+        {
+            if (state == null || state.EditorContext == null || string.IsNullOrEmpty(hoverKey))
+            {
+                return null;
+            }
+
+            foreach (var pair in state.EditorContext.ContextsByKey)
+            {
+                var snapshot = pair.Value;
+                if (snapshot == null ||
+                    !string.Equals(snapshot.HoverKey ?? string.Empty, hoverKey, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                return snapshot.Semantic != null ? snapshot.Semantic.HoverResponse : null;
+            }
+
+            return null;
+        }
+
         public void ApplyHoverResponse(CortexShellState state, string contextKey, string hoverKey, LanguageServiceHoverResponse response)
         {
             var snapshot = GetContext(state, contextKey);
-            if (snapshot == null || snapshot.Target == null)
+            if (snapshot == null)
             {
                 return;
             }
 
+            if (snapshot.Semantic == null)
+            {
+                snapshot.Semantic = new EditorSemanticContext();
+            }
+
             snapshot.HoverKey = hoverKey ?? snapshot.HoverKey ?? string.Empty;
-            _symbolInteractionService.ApplyHoverMetadata(snapshot.Target, response);
-            snapshot.FocusTokenText = !string.IsNullOrEmpty(snapshot.Target.SymbolText)
-                ? snapshot.Target.SymbolText
+            snapshot.Semantic.HoverResponse = response;
+            var projected = ProjectTarget(snapshot);
+            _symbolInteractionService.ApplyHoverMetadata(projected, response);
+            CopySemanticFields(projected, snapshot.Semantic);
+            snapshot.FocusTokenText = !string.IsNullOrEmpty(projected.SymbolText)
+                ? projected.SymbolText
                 : snapshot.FocusTokenText ?? string.Empty;
-            snapshot.TargetStart = snapshot.Target.AbsolutePosition;
-            snapshot.TargetLength = !string.IsNullOrEmpty(snapshot.Target.SymbolText)
-                ? snapshot.Target.SymbolText.Length
+            snapshot.TargetStart = projected.AbsolutePosition;
+            snapshot.TargetLength = !string.IsNullOrEmpty(projected.SymbolText)
+                ? projected.SymbolText.Length
                 : snapshot.TargetLength;
-            snapshot.ContainingMemberName = ResolveContainingMemberName(snapshot.Target);
+            snapshot.ContainingMemberName = ResolveContainingMemberName(projected, snapshot.Semantic);
         }
 
         public void ApplySymbolContext(CortexShellState state, string contextKey, LanguageServiceSymbolContextResponse response)
         {
             var snapshot = GetContext(state, contextKey);
-            if (snapshot == null || snapshot.Target == null || response == null)
+            if (snapshot == null || response == null)
             {
                 return;
             }
 
+            if (snapshot.Semantic == null)
+            {
+                snapshot.Semantic = new EditorSemanticContext();
+            }
+
             if (!string.IsNullOrEmpty(response.QualifiedSymbolDisplay))
             {
-                snapshot.Target.QualifiedSymbolDisplay = response.QualifiedSymbolDisplay;
+                snapshot.Semantic.QualifiedSymbolDisplay = response.QualifiedSymbolDisplay;
             }
 
             if (!string.IsNullOrEmpty(response.SymbolKind))
             {
-                snapshot.Target.SymbolKind = response.SymbolKind;
+                snapshot.Semantic.SymbolKind = response.SymbolKind;
             }
 
             if (!string.IsNullOrEmpty(response.MetadataName))
             {
-                snapshot.Target.MetadataName = response.MetadataName;
+                snapshot.Semantic.MetadataName = response.MetadataName;
             }
 
             if (!string.IsNullOrEmpty(response.ContainingTypeName))
             {
-                snapshot.Target.ContainingTypeName = response.ContainingTypeName;
+                snapshot.Semantic.ContainingTypeName = response.ContainingTypeName;
             }
 
             if (!string.IsNullOrEmpty(response.ContainingAssemblyName))
             {
-                snapshot.Target.ContainingAssemblyName = response.ContainingAssemblyName;
+                snapshot.Semantic.ContainingAssemblyName = response.ContainingAssemblyName;
             }
 
             if (!string.IsNullOrEmpty(response.DocumentationCommentId))
             {
-                snapshot.Target.DocumentationCommentId = response.DocumentationCommentId;
+                snapshot.Semantic.DocumentationCommentId = response.DocumentationCommentId;
             }
 
             if (!string.IsNullOrEmpty(response.DefinitionDocumentPath))
             {
-                snapshot.Target.DefinitionDocumentPath = response.DefinitionDocumentPath;
+                snapshot.Semantic.DefinitionDocumentPath = response.DefinitionDocumentPath;
             }
 
             if (response.DefinitionRange != null)
             {
-                snapshot.Target.DefinitionStart = response.DefinitionRange.Start;
-                snapshot.Target.DefinitionLength = response.DefinitionRange.Length;
-                snapshot.Target.DefinitionLine = response.DefinitionRange.StartLine;
-                snapshot.Target.DefinitionColumn = response.DefinitionRange.StartColumn;
+                snapshot.Semantic.DefinitionStart = response.DefinitionRange.Start;
+                snapshot.Semantic.DefinitionLength = response.DefinitionRange.Length;
+                snapshot.Semantic.DefinitionLine = response.DefinitionRange.StartLine;
+                snapshot.Semantic.DefinitionColumn = response.DefinitionRange.StartColumn;
             }
 
-            snapshot.ContainingMemberName = ResolveContainingMemberName(snapshot.Target);
+            snapshot.ContainingMemberName = ResolveContainingMemberName(ProjectTarget(snapshot), snapshot.Semantic);
+        }
+
+        public void ClearHoverResponse(CortexShellState state, string contextKey)
+        {
+            var snapshot = GetContext(state, contextKey);
+            if (snapshot == null || snapshot.Semantic == null)
+            {
+                return;
+            }
+
+            snapshot.Semantic.HoverResponse = null;
         }
 
         public string BuildContextKey(
@@ -317,9 +379,10 @@ namespace Cortex.Services
                     ? clonedTarget.SymbolText
                     : clonedTarget.SelectionText ?? string.Empty,
                 HoverKey = BuildHoverKey(documentPath, clonedTarget.AbsolutePosition),
-                ContainingMemberName = ResolveContainingMemberName(clonedTarget),
+                ContainingMemberName = ResolveContainingMemberName(clonedTarget, null),
                 CapturedUtc = DateTime.UtcNow,
-                Target = clonedTarget
+                Target = BuildBaseTarget(clonedTarget),
+                Semantic = BuildSemanticContext(clonedTarget)
             };
         }
 
@@ -358,18 +421,101 @@ namespace Cortex.Services
             return (documentPath ?? string.Empty) + "|" + absolutePosition;
         }
 
-        private static string ResolveContainingMemberName(EditorCommandTarget target)
+        private static string ResolveContainingMemberName(EditorCommandTarget target, EditorSemanticContext semantic)
         {
             if (target == null)
             {
                 return string.Empty;
             }
 
+            var symbolKind = semantic != null && !string.IsNullOrEmpty(semantic.SymbolKind)
+                ? semantic.SymbolKind
+                : target.SymbolKind;
             return !string.IsNullOrEmpty(target.SymbolText) &&
-                !string.IsNullOrEmpty(target.SymbolKind) &&
-                target.SymbolKind.IndexOf("method", StringComparison.OrdinalIgnoreCase) >= 0
+                !string.IsNullOrEmpty(symbolKind) &&
+                symbolKind.IndexOf("method", StringComparison.OrdinalIgnoreCase) >= 0
                 ? target.SymbolText
                 : string.Empty;
+        }
+
+        private static EditorCommandTarget BuildBaseTarget(EditorCommandTarget source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            var clone = source.Clone();
+            clone.QualifiedSymbolDisplay = string.Empty;
+            clone.SymbolKind = string.Empty;
+            clone.MetadataName = string.Empty;
+            clone.ContainingTypeName = string.Empty;
+            clone.ContainingAssemblyName = string.Empty;
+            clone.DocumentationCommentId = string.Empty;
+            clone.HoverText = string.Empty;
+            clone.DefinitionDocumentPath = string.Empty;
+            clone.DefinitionLine = 0;
+            clone.DefinitionColumn = 0;
+            clone.DefinitionStart = -1;
+            clone.DefinitionLength = -1;
+            return clone;
+        }
+
+        private static EditorSemanticContext BuildSemanticContext(EditorCommandTarget source)
+        {
+            if (source == null)
+            {
+                return new EditorSemanticContext();
+            }
+
+            return new EditorSemanticContext
+            {
+                QualifiedSymbolDisplay = source.QualifiedSymbolDisplay ?? string.Empty,
+                SymbolKind = source.SymbolKind ?? string.Empty,
+                MetadataName = source.MetadataName ?? string.Empty,
+                ContainingTypeName = source.ContainingTypeName ?? string.Empty,
+                ContainingAssemblyName = source.ContainingAssemblyName ?? string.Empty,
+                DocumentationCommentId = source.DocumentationCommentId ?? string.Empty,
+                HoverText = source.HoverText ?? string.Empty,
+                DefinitionDocumentPath = source.DefinitionDocumentPath ?? string.Empty,
+                DefinitionLine = source.DefinitionLine,
+                DefinitionColumn = source.DefinitionColumn,
+                DefinitionStart = source.DefinitionStart,
+                DefinitionLength = source.DefinitionLength
+            };
+        }
+
+        private static EditorCommandTarget ProjectTarget(EditorContextSnapshot snapshot)
+        {
+            if (snapshot == null || snapshot.Target == null)
+            {
+                return null;
+            }
+
+            var projected = snapshot.Target.Clone();
+            CopySemanticFields(projected, snapshot.Semantic);
+            return projected;
+        }
+
+        private static void CopySemanticFields(EditorCommandTarget target, EditorSemanticContext semantic)
+        {
+            if (target == null || semantic == null)
+            {
+                return;
+            }
+
+            target.QualifiedSymbolDisplay = semantic.QualifiedSymbolDisplay ?? string.Empty;
+            target.SymbolKind = semantic.SymbolKind ?? string.Empty;
+            target.MetadataName = semantic.MetadataName ?? string.Empty;
+            target.ContainingTypeName = semantic.ContainingTypeName ?? string.Empty;
+            target.ContainingAssemblyName = semantic.ContainingAssemblyName ?? string.Empty;
+            target.DocumentationCommentId = semantic.DocumentationCommentId ?? string.Empty;
+            target.HoverText = semantic.HoverText ?? string.Empty;
+            target.DefinitionDocumentPath = semantic.DefinitionDocumentPath ?? string.Empty;
+            target.DefinitionLine = semantic.DefinitionLine;
+            target.DefinitionColumn = semantic.DefinitionColumn;
+            target.DefinitionStart = semantic.DefinitionStart;
+            target.DefinitionLength = semantic.DefinitionLength;
         }
     }
 }
