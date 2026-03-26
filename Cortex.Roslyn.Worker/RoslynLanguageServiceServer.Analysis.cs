@@ -787,57 +787,30 @@ namespace Cortex.Roslyn.Worker
         {
             var classificationSpan = BuildClassificationSpan(text, rangeStart, rangeLength);
             var spans = Classifier.GetClassifiedSpansAsync(document, classificationSpan).Result;
-            return spans.Select(span =>
+            var classificationService = new RoslynSemanticTokenClassificationService();
+            var merged = new Dictionary<string, LanguageServiceClassifiedSpan>(StringComparer.Ordinal);
+            foreach (var span in spans)
             {
-                var linePosition = text.Lines.GetLinePosition(span.TextSpan.Start);
-                return new LanguageServiceClassifiedSpan
+                var classifiedSpan = classificationService.CreateClassifiedSpan(
+                    text,
+                    span.ClassificationType,
+                    span.TextSpan,
+                    ResolveSymbol(document, span.TextSpan.Start));
+                var key = classifiedSpan.Start + ":" + classifiedSpan.Length;
+                LanguageServiceClassifiedSpan existing;
+                if (!merged.TryGetValue(key, out existing))
                 {
-                    Classification = GetEffectiveClassification(document, span.ClassificationType, span.TextSpan.Start) ?? string.Empty,
-                    Start = span.TextSpan.Start,
-                    Length = span.TextSpan.Length,
-                    Line = linePosition.Line + 1,
-                    Column = linePosition.Character + 1
-                };
-            }).ToArray();
-        }
+                    merged[key] = classifiedSpan;
+                    continue;
+                }
 
-        private static string GetEffectiveClassification(Document document, string classificationType, int position)
-        {
-            var normalized = classificationType ?? string.Empty;
-            if (!string.IsNullOrEmpty(normalized) &&
-                normalized.IndexOf("identifier", StringComparison.OrdinalIgnoreCase) < 0 &&
-                normalized.IndexOf("text", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                return normalized;
+                merged[key] = classificationService.ChoosePreferredClassification(existing, classifiedSpan);
             }
 
-            var symbol = ResolveSymbol(document, position);
-            if (symbol == null)
-            {
-                return normalized;
-            }
-
-            switch (symbol.Kind)
-            {
-                case SymbolKind.NamedType:
-                    return "class name";
-                case SymbolKind.Method:
-                    return "method name";
-                case SymbolKind.Property:
-                    return "property name";
-                case SymbolKind.Event:
-                    return "event name";
-                case SymbolKind.Field:
-                    return "field name";
-                case SymbolKind.Parameter:
-                    return "parameter name";
-                case SymbolKind.Local:
-                    return "local name";
-                case SymbolKind.Namespace:
-                    return "namespace name";
-                default:
-                    return normalized;
-            }
+            return merged.Values
+                .OrderBy(span => span.Start)
+                .ThenByDescending(span => span.Length)
+                .ToArray();
         }
 
         private static TextSpan BuildClassificationSpan(SourceText text, int rangeStart, int rangeLength)
@@ -1144,6 +1117,14 @@ namespace Cortex.Roslyn.Worker
                 namespaceDeclaration.Name.Span.Contains(position))
             {
                 symbol = semanticModel.GetSymbolInfo(namespaceDeclaration.Name).Symbol;
+                return symbol != null;
+            }
+
+            if (node is FileScopedNamespaceDeclarationSyntax fileScopedNamespaceDeclaration &&
+                fileScopedNamespaceDeclaration.Name != null &&
+                fileScopedNamespaceDeclaration.Name.Span.Contains(position))
+            {
+                symbol = semanticModel.GetSymbolInfo(fileScopedNamespaceDeclaration.Name).Symbol;
                 return symbol != null;
             }
 

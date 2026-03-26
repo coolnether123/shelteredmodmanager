@@ -434,6 +434,7 @@ namespace Cortex.Services
                 : new LanguageServiceClassifiedSpan
                 {
                     Classification = classification.Classification,
+                    SemanticTokenType = classification.SemanticTokenType,
                     Start = classification.Start,
                     Length = classification.Length,
                     Line = classification.Line,

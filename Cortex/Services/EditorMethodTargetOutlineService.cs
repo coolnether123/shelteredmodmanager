@@ -154,7 +154,10 @@ namespace Cortex.Services
                     continue;
                 }
 
-                if (!_methodInspectorService.CanInspectSymbol(symbolText, span.Classification, string.Empty))
+                var resolvedClassification = _classificationPresentationService.ResolvePresentationClassification(
+                    span.Classification,
+                    span.SemanticTokenType);
+                if (!_methodInspectorService.CanInspectSymbol(symbolText, resolvedClassification, string.Empty))
                 {
                     continue;
                 }
@@ -172,7 +175,7 @@ namespace Cortex.Services
                     Start = span.Start,
                     Length = length,
                     SymbolText = symbolText,
-                    Classification = _classificationPresentationService.NormalizeClassification(span.Classification)
+                    Classification = resolvedClassification
                 });
             }
 

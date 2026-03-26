@@ -1,4 +1,5 @@
 using System;
+using Cortex.Core.Models;
 using UnityEngine;
 
 namespace Cortex.Services
@@ -17,178 +18,65 @@ namespace Cortex.Services
         private const string NumberHex = "#B5CEA8";
         private const string PreprocessorHex = "#C586C0";
 
+        private readonly EditorSemanticTokenMappingService _semanticTokenMappingService = new EditorSemanticTokenMappingService();
+
         public string GetHexColor(string classification)
         {
-            var key = NormalizeClassification(classification);
-            if (key.Length == 0)
-            {
-                return DefaultTextHex;
-            }
+            return GetHexColor(classification, string.Empty);
+        }
 
-            if (key.Contains("comment"))
+        public string GetHexColor(string classification, string semanticTokenType)
+        {
+            var key = ResolvePresentationClassification(classification, semanticTokenType);
+            switch (key)
             {
-                return CommentHex;
+                case SemanticTokenClassificationNames.Comment:
+                    return CommentHex;
+                case SemanticTokenClassificationNames.Xml:
+                    return XmlHex;
+                case SemanticTokenClassificationNames.Keyword:
+                    return KeywordHex;
+                case SemanticTokenClassificationNames.Class:
+                case SemanticTokenClassificationNames.Type:
+                    return TypeHex;
+                case SemanticTokenClassificationNames.Namespace:
+                    return NamespaceHex;
+                case SemanticTokenClassificationNames.Method:
+                case SemanticTokenClassificationNames.Property:
+                case SemanticTokenClassificationNames.Event:
+                    return MethodHex;
+                case SemanticTokenClassificationNames.Field:
+                case SemanticTokenClassificationNames.Variable:
+                case SemanticTokenClassificationNames.Parameter:
+                case SemanticTokenClassificationNames.Local:
+                    return ValueHex;
+                case SemanticTokenClassificationNames.String:
+                    return StringHex;
+                case SemanticTokenClassificationNames.Number:
+                    return NumberHex;
+                case SemanticTokenClassificationNames.Preprocessor:
+                    return PreprocessorHex;
+                default:
+                    return DefaultTextHex;
             }
-
-            if (key.Contains("xml"))
-            {
-                return XmlHex;
-            }
-
-            if (key.Contains("keyword") || key.Contains("control"))
-            {
-                return KeywordHex;
-            }
-
-            if (key.Contains("class") ||
-                key.Contains("struct") ||
-                key.Contains("interface") ||
-                key.Contains("enum") ||
-                key.Contains("delegate") ||
-                key.Contains("record") ||
-                key.Contains("typeparameter"))
-            {
-                return TypeHex;
-            }
-
-            if (key.Contains("namespace"))
-            {
-                return NamespaceHex;
-            }
-
-            if (key.Contains("method") || key.Contains("property") || key.Contains("event"))
-            {
-                return MethodHex;
-            }
-
-            if (key.Contains("field") ||
-                key.Contains("enum member") ||
-                key.Contains("constant") ||
-                key.Contains("parameter") ||
-                key.Contains("local"))
-            {
-                return ValueHex;
-            }
-
-            if (key.Contains("string") || key.Contains("char"))
-            {
-                return StringHex;
-            }
-
-            if (key.Contains("numeric") || key.Contains("number"))
-            {
-                return NumberHex;
-            }
-
-            if (key.Contains("preprocessor"))
-            {
-                return PreprocessorHex;
-            }
-
-            return DefaultTextHex;
         }
 
         public Color GetColor(string classification)
         {
-            return CortexIdeLayout.ParseColor(GetHexColor(classification), CortexIdeLayout.GetTextColor());
+            return GetColor(classification, string.Empty);
         }
 
-        public string GetEffectiveCodeViewClassification(
-            string classification,
-            string rawText,
-            string previousTokenText,
-            string nextTokenText,
-            string secondNextTokenText)
+        public Color GetColor(string classification, string semanticTokenType)
         {
-            var key = NormalizeClassification(classification);
-            if (!IsGenericIdentifierClassification(key))
-            {
-                return key;
-            }
-
-            var token = NormalizeTokenText(rawText);
-            if (!IsIdentifierLikeTokenText(token))
-            {
-                return key;
-            }
-
-            var previous = NormalizeTokenText(previousTokenText);
-            var next = NormalizeTokenText(nextTokenText);
-            var secondNext = NormalizeTokenText(secondNextTokenText);
-            if (LooksLikeInvocation(next, secondNext))
-            {
-                return "method";
-            }
-
-            if (LooksLikeTypeReference(token, previous, next))
-            {
-                return "class";
-            }
-
-            return key;
-        }
-
-        public string GetEffectiveLineTokenClassification(
-            string classification,
-            string lineRawText,
-            int tokenStartInLine,
-            int tokenLength)
-        {
-            var safeLineText = lineRawText ?? string.Empty;
-            var start = Math.Max(0, Math.Min(tokenStartInLine, safeLineText.Length));
-            var length = Math.Max(0, Math.Min(tokenLength, safeLineText.Length - start));
-            if (length <= 0)
-            {
-                return NormalizeClassification(classification);
-            }
-
-            var rawText = safeLineText.Substring(start, length);
-            var key = NormalizeClassification(classification);
-            if (!IsGenericIdentifierClassification(key))
-            {
-                return key;
-            }
-
-            var token = NormalizeTokenText(rawText);
-            if (!IsIdentifierLikeTokenText(token))
-            {
-                return key;
-            }
-
-            var previous = NormalizeTokenText(FindAdjacentTokenText(safeLineText, start, false, 1));
-            var secondPrevious = NormalizeTokenText(FindAdjacentTokenText(safeLineText, start, false, 2));
-            var next = NormalizeTokenText(FindAdjacentTokenText(safeLineText, start + length, true, 1));
-            var secondNext = NormalizeTokenText(FindAdjacentTokenText(safeLineText, start + length, true, 2));
-
-            if (LooksLikeNamespaceReference(token, previous, secondPrevious))
-            {
-                return "namespace";
-            }
-
-            if (LooksLikeAttributeType(token, previous, secondPrevious, next))
-            {
-                return "class";
-            }
-
-            if (LooksLikeTypeReferenceWithExtendedContext(token, previous, secondPrevious, next))
-            {
-                return "class";
-            }
-
-            if (LooksLikeInvocation(next, secondNext))
-            {
-                return "method";
-            }
-
-            if (LooksLikeStaticMember(previous, token, next))
-            {
-                return "property";
-            }
-
-            return key;
+            return CortexIdeLayout.ParseColor(GetHexColor(classification, semanticTokenType), CortexIdeLayout.GetTextColor());
         }
 
         public bool IsHoverCandidate(string classification, string rawText)
+        {
+            return IsHoverCandidate(classification, string.Empty, rawText);
+        }
+
+        public bool IsHoverCandidate(string classification, string semanticTokenType, string rawText)
         {
             var token = NormalizeTokenText(rawText);
             if (token.Length == 0)
@@ -196,8 +84,8 @@ namespace Cortex.Services
                 return false;
             }
 
-            var key = NormalizeClassification(classification);
-            if (IsGenericIdentifierClassification(key))
+            var key = ResolvePresentationClassification(classification, semanticTokenType);
+            if (_semanticTokenMappingService.IsGenericClassification(key))
             {
                 return IsIdentifierLikeTokenText(token);
             }
@@ -207,7 +95,7 @@ namespace Cortex.Services
                 return false;
             }
 
-            if (key.Contains("keyword"))
+            if (string.Equals(key, SemanticTokenClassificationNames.Keyword, StringComparison.Ordinal))
             {
                 return IsPredefinedTypeKeyword(token);
             }
@@ -217,14 +105,19 @@ namespace Cortex.Services
 
         public bool CanNavigateToDefinition(string classification, string rawText)
         {
+            return CanNavigateToDefinition(classification, string.Empty, rawText);
+        }
+
+        public bool CanNavigateToDefinition(string classification, string semanticTokenType, string rawText)
+        {
             var token = NormalizeTokenText(rawText);
             if (token.Length == 0)
             {
                 return false;
             }
 
-            var key = NormalizeClassification(classification);
-            if (IsGenericIdentifierClassification(key))
+            var key = ResolvePresentationClassification(classification, semanticTokenType);
+            if (_semanticTokenMappingService.IsGenericClassification(key))
             {
                 return IsIdentifierLikeTokenText(token);
             }
@@ -234,173 +127,53 @@ namespace Cortex.Services
                 return false;
             }
 
-            return key.IndexOf("local", StringComparison.OrdinalIgnoreCase) < 0 &&
-                key.IndexOf("parameter", StringComparison.OrdinalIgnoreCase) < 0;
+            return !string.Equals(key, SemanticTokenClassificationNames.Local, StringComparison.Ordinal) &&
+                !string.Equals(key, SemanticTokenClassificationNames.Parameter, StringComparison.Ordinal);
         }
 
         public string NormalizeClassification(string classification)
         {
-            return (classification ?? string.Empty).Trim().ToLowerInvariant();
+            return _semanticTokenMappingService.NormalizeClassification(classification);
         }
 
-        private static bool IsGenericIdentifierClassification(string key)
+        public string ResolvePresentationClassification(string classification, string semanticTokenType)
         {
-            return string.IsNullOrEmpty(key) ||
-                key.Contains("identifier") ||
-                key.Contains("text");
+            return _semanticTokenMappingService.ResolvePresentationClassification(classification, semanticTokenType);
         }
 
         private static bool IsExcludedInteractionClassification(string key)
         {
-            return key.Contains("operator") ||
-                key.Contains("punctuation") ||
-                key.Contains("comment") ||
-                key.Contains("xml") ||
-                key.Contains("preprocessor") ||
-                key.Contains("string") ||
-                key.Contains("char") ||
-                key.Contains("numeric") ||
-                key.Contains("number");
+            return string.Equals(key, SemanticTokenClassificationNames.Operator, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.Punctuation, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.Comment, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.Xml, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.Preprocessor, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.String, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.Number, StringComparison.Ordinal);
         }
 
         private static bool IsSymbolClassification(string key, bool includeLocalsAndParameters)
         {
-            if (key.Contains("class") ||
-                key.Contains("struct") ||
-                key.Contains("interface") ||
-                key.Contains("enum") ||
-                key.Contains("delegate") ||
-                key.Contains("record") ||
-                key.Contains("namespace") ||
-                key.Contains("method") ||
-                key.Contains("property") ||
-                key.Contains("event") ||
-                key.Contains("field") ||
-                key.Contains("constant") ||
-                key.Contains("enum member") ||
-                key.Contains("typeparameter"))
+            if (string.Equals(key, SemanticTokenClassificationNames.Class, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.Type, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.Namespace, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.Method, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.Property, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.Event, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.Field, StringComparison.Ordinal) ||
+                string.Equals(key, SemanticTokenClassificationNames.Variable, StringComparison.Ordinal))
             {
                 return true;
             }
 
             return includeLocalsAndParameters &&
-                (key.Contains("local") || key.Contains("parameter"));
+                (string.Equals(key, SemanticTokenClassificationNames.Local, StringComparison.Ordinal) ||
+                 string.Equals(key, SemanticTokenClassificationNames.Parameter, StringComparison.Ordinal));
         }
 
         private static string NormalizeTokenText(string value)
         {
             return value != null ? value.Trim() : string.Empty;
-        }
-
-        private static bool LooksLikeInvocation(string nextTokenText, string secondNextTokenText)
-        {
-            if (string.Equals(nextTokenText, "(", StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            return string.Equals(nextTokenText, "<", StringComparison.Ordinal) &&
-                string.Equals(secondNextTokenText, "(", StringComparison.Ordinal);
-        }
-
-        private static bool LooksLikeTypeReference(string rawText, string previousTokenText, string nextTokenText)
-        {
-            if (string.IsNullOrEmpty(rawText) || !char.IsUpper(rawText[0]))
-            {
-                return false;
-            }
-
-            if (string.Equals(nextTokenText, ".", StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            switch (previousTokenText)
-            {
-                case "new":
-                case "typeof":
-                case "is":
-                case "as":
-                case ":":
-                case "[":
-                case ",":
-                    return true;
-                default:
-                    return false;
-            }
-        }
-
-        private static bool LooksLikeTypeReferenceWithExtendedContext(string rawText, string previousTokenText, string secondPreviousTokenText, string nextTokenText)
-        {
-            if (LooksLikeTypeReference(rawText, previousTokenText, nextTokenText))
-            {
-                return true;
-            }
-
-            if (string.IsNullOrEmpty(rawText) || !char.IsUpper(rawText[0]))
-            {
-                return false;
-            }
-
-            return string.Equals(previousTokenText, "(", StringComparison.Ordinal) &&
-                (string.Equals(secondPreviousTokenText, "typeof", StringComparison.Ordinal) ||
-                 string.Equals(secondPreviousTokenText, "default", StringComparison.Ordinal));
-        }
-
-        private static bool LooksLikeNamespaceReference(string rawText, string previousTokenText, string secondPreviousTokenText)
-        {
-            if (string.IsNullOrEmpty(rawText) || !IsIdentifierLikeTokenText(rawText))
-            {
-                return false;
-            }
-
-            if (string.Equals(previousTokenText, "namespace", StringComparison.Ordinal) ||
-                string.Equals(previousTokenText, "using", StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            return string.Equals(previousTokenText, ".", StringComparison.Ordinal) &&
-                (string.Equals(secondPreviousTokenText, "namespace", StringComparison.Ordinal) ||
-                 string.Equals(secondPreviousTokenText, "using", StringComparison.Ordinal));
-        }
-
-        private static bool LooksLikeAttributeType(string rawText, string previousTokenText, string secondPreviousTokenText, string nextTokenText)
-        {
-            if (string.IsNullOrEmpty(rawText) || !char.IsUpper(rawText[0]))
-            {
-                return false;
-            }
-
-            if (rawText.EndsWith("Attribute", StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            if (string.Equals(previousTokenText, "[", StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            return string.Equals(previousTokenText, ".", StringComparison.Ordinal) &&
-                string.Equals(secondPreviousTokenText, "[", StringComparison.Ordinal) &&
-                string.Equals(nextTokenText, "(", StringComparison.Ordinal);
-        }
-
-        private static bool LooksLikeStaticMember(string previousTokenText, string rawText, string nextTokenText)
-        {
-            if (string.IsNullOrEmpty(rawText) || !IsIdentifierLikeTokenText(rawText))
-            {
-                return false;
-            }
-
-            if (!string.Equals(previousTokenText, ".", StringComparison.Ordinal) ||
-                string.Equals(nextTokenText, "(", StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            return !char.IsUpper(rawText[0]);
         }
 
         private static bool IsPredefinedTypeKeyword(string rawText)
@@ -434,7 +207,7 @@ namespace Cortex.Services
 
         private static bool IsIdentifierLikeTokenText(string rawText)
         {
-            if (string.IsNullOrEmpty(rawText) || IsReservedHoverKeyword(rawText))
+            if (string.IsNullOrEmpty(rawText) || IsReservedIdentifierKeyword(rawText))
             {
                 return false;
             }
@@ -457,92 +230,7 @@ namespace Cortex.Services
             return true;
         }
 
-        private static string FindAdjacentTokenText(string lineRawText, int anchorIndex, bool forward, int ordinal)
-        {
-            var text = lineRawText ?? string.Empty;
-            if (text.Length == 0 || ordinal <= 0)
-            {
-                return string.Empty;
-            }
-
-            var index = Math.Max(0, Math.Min(anchorIndex, text.Length));
-            var remaining = ordinal;
-            while (forward ? index < text.Length : index > 0)
-            {
-                if (forward)
-                {
-                    while (index < text.Length && char.IsWhiteSpace(text[index]))
-                    {
-                        index++;
-                    }
-
-                    if (index >= text.Length)
-                    {
-                        break;
-                    }
-
-                    var tokenStart = index;
-                    var tokenKind = ClassifyCharacter(text[index]);
-                    index++;
-                    while (tokenKind != CharacterKind.Punctuation &&
-                        index < text.Length &&
-                        ClassifyCharacter(text[index]) == tokenKind)
-                    {
-                        index++;
-                    }
-
-                    remaining--;
-                    if (remaining == 0)
-                    {
-                        return text.Substring(tokenStart, index - tokenStart);
-                    }
-                }
-                else
-                {
-                    while (index > 0 && char.IsWhiteSpace(text[index - 1]))
-                    {
-                        index--;
-                    }
-
-                    if (index <= 0)
-                    {
-                        break;
-                    }
-
-                    var tokenEnd = index;
-                    var tokenKind = ClassifyCharacter(text[index - 1]);
-                    index--;
-                    while (tokenKind != CharacterKind.Punctuation &&
-                        index > 0 &&
-                        ClassifyCharacter(text[index - 1]) == tokenKind)
-                    {
-                        index--;
-                    }
-
-                    remaining--;
-                    if (remaining == 0)
-                    {
-                        return text.Substring(index, tokenEnd - index);
-                    }
-                }
-            }
-
-            return string.Empty;
-        }
-
-        private static CharacterKind ClassifyCharacter(char c)
-        {
-            if (char.IsWhiteSpace(c))
-            {
-                return CharacterKind.Whitespace;
-            }
-
-            return char.IsLetterOrDigit(c) || c == '_'
-                ? CharacterKind.Word
-                : CharacterKind.Punctuation;
-        }
-
-        private static bool IsReservedHoverKeyword(string token)
+        private static bool IsReservedIdentifierKeyword(string token)
         {
             switch (token)
             {
@@ -611,13 +299,6 @@ namespace Cortex.Services
                 default:
                     return false;
             }
-        }
-
-        private enum CharacterKind
-        {
-            Word,
-            Whitespace,
-            Punctuation
         }
     }
 }

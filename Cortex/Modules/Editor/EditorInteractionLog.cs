@@ -14,14 +14,22 @@ namespace Cortex.Modules.Editor
         private static readonly bool HoverDiagnosticsEnabled = false;
         private static readonly bool EditDiagnosticsEnabled = false;
         private static readonly bool SelectionDiagnosticsEnabled = false;
+        private static readonly bool CaretDiagnosticsEnabled = true;
         private static readonly bool ContextMenuDiagnosticsEnabled = false;
         private static readonly bool ScrollDiagnosticsEnabled = false;
+        private static string _lastCaretLogKey = string.Empty;
+        private static float _lastCaretLogRealtime;
         private static string _lastScrollLogKey = string.Empty;
         private static float _lastScrollLogRealtime;
 
         public static bool IsSelectionDiagnosticsEnabled
         {
             get { return SelectionDiagnosticsEnabled; }
+        }
+
+        public static bool IsCaretDiagnosticsEnabled
+        {
+            get { return CaretDiagnosticsEnabled; }
         }
 
         public static void WriteHover(string message)
@@ -160,6 +168,32 @@ namespace Cortex.Modules.Editor
             }
 
             MMLog.WriteInfo("[Cortex.ContextMenuDiag] Frame=" + Time.frameCount + " " + message);
+        }
+
+        public static void WriteCaret(string eventName, string filePath, string detail, string dedupeKey, float throttleSeconds)
+        {
+            if (!CaretDiagnosticsEnabled ||
+                string.IsNullOrEmpty(eventName) ||
+                string.IsNullOrEmpty(detail))
+            {
+                return;
+            }
+
+            var key = eventName + "|" + (dedupeKey ?? string.Empty);
+            var now = Time.realtimeSinceStartup;
+            if (string.Equals(_lastCaretLogKey, key, System.StringComparison.Ordinal) &&
+                (now - _lastCaretLogRealtime) < throttleSeconds)
+            {
+                return;
+            }
+
+            _lastCaretLogKey = key;
+            _lastCaretLogRealtime = now;
+            MMLog.WriteInfo(
+                "[Cortex.CaretDiag] Frame=" + Time.frameCount +
+                ", Event=" + eventName +
+                ", File=" + Path.GetFileName(filePath ?? string.Empty) +
+                ", " + detail);
         }
 
         public static void WriteScrollOwner(string owner, string message, bool force)
