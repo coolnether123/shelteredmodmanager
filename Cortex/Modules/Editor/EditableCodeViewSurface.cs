@@ -40,6 +40,8 @@ namespace Cortex.Modules.Editor
         private readonly SourceEditorCommandRouterService _commandRouterService = new SourceEditorCommandRouterService();
         private readonly SourceEditorHoverService _hoverService = new SourceEditorHoverService();
         private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
+        private readonly EditorFallbackColoringService _fallbackColoringService = new EditorFallbackColoringService();
+        private readonly EditorCaretIndicatorPresentationService _caretIndicatorPresentationService = new EditorCaretIndicatorPresentationService();
         private readonly PopupMenuSurface _popupMenuSurface = new PopupMenuSurface();
         private readonly GUIContent _measureContent = new GUIContent();
         private readonly List<NormalizedSpan> _orderedSpans = new List<NormalizedSpan>();
@@ -59,6 +61,8 @@ namespace Cortex.Modules.Editor
         private GUIStyle _inlineSuggestionStyle;
         private Texture2D _selectionFill;
         private Texture2D _caretFill;
+        private Texture2D _caretReadyFill;
+        private Texture2D _caretIndicatorFill;
         private Texture2D _currentLineFill;
         private Texture2D _currentLineEdgeFill;
         private Texture2D _surfaceFill;
@@ -86,6 +90,24 @@ namespace Cortex.Modules.Editor
         private LayoutCache _layout;
         private Rect _lastContextMenuRect;
         private Rect _lastMethodInspectorRect;
+        private CaretDebugProbe _caretDebugProbe;
+
+        private struct CaretDebugProbe
+        {
+            public int CharacterIndex;
+            public int LineNumber;
+            public int CandidateColumn;
+            public int RawLength;
+            public float ContentX;
+            public float ContentY;
+            public float TargetX;
+            public float LineWidth;
+            public DateTime CapturedUtc;
+            public bool LoggedPointerHit;
+            public bool LoggedRenderGate;
+            public bool LoggedDrawCaret;
+            public bool LoggedDrawIndicator;
+        }
 
         private struct PointerContext
         {
@@ -109,6 +131,7 @@ namespace Cortex.Modules.Editor
             public float TargetX;
             public float PreviousWidth;
             public float CandidateWidth;
+            public float LineWidth;
         }
 
         public Vector2 Draw(
@@ -250,7 +273,7 @@ namespace Cortex.Modules.Editor
                     {
                         scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
                         GUI.DrawTexture(new Rect(0f, 0f, contentRect.width, contentRect.height), _surfaceFill);
-                        DrawLines(session, state, scroll, rect.height, gutterWidth);
+                        DrawLines(session, state, editingEnabled, scroll, rect.height, gutterWidth);
                     }
                     finally
                     {
@@ -431,6 +454,8 @@ namespace Cortex.Modules.Editor
                 _inlineSuggestionStyle != null &&
                 _selectionFill != null &&
                 _caretFill != null &&
+                _caretReadyFill != null &&
+                _caretIndicatorFill != null &&
                 _currentLineFill != null &&
                 _currentLineEdgeFill != null &&
                 _completionPopupFill != null &&
@@ -477,6 +502,8 @@ namespace Cortex.Modules.Editor
             _lineHeight = _codeStyle.lineHeight > 0f ? Mathf.Max(DefaultLineHeight, _codeStyle.lineHeight + 2f) : DefaultLineHeight;
             _selectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.30f));
             _caretFill = MakeFill(CortexIdeLayout.GetAccentColor());
+            _caretReadyFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.38f));
+            _caretIndicatorFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), Color.white, 0.18f), 0.96f));
             _currentLineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), 0.16f));
             _currentLineEdgeFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f));
             _completionPopupFill = MakeFill(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.55f));
@@ -704,7 +731,7 @@ namespace Cortex.Modules.Editor
             }
 
             var normalizedClassification = _classificationPresentationService.NormalizeClassification(classification);
-            if (!ShouldTokenizeForPresentation(normalizedClassification))
+            if (!_fallbackColoringService.ShouldApplyFallback(normalizedClassification))
             {
                 AddSegment(lineLayout, startInLine, rawLength, normalizedClassification);
                 return;
@@ -726,7 +753,7 @@ namespace Cortex.Modules.Editor
 
                 var tokenStartInLine = startInLine + offset;
                 var effectiveClassification = kind == CharacterKind.Word
-                    ? _classificationPresentationService.GetEffectiveLineTokenClassification(
+                    ? _fallbackColoringService.GetEffectiveLineTokenClassification(
                         normalizedClassification,
                         lineLayout.RawText,
                         tokenStartInLine,
@@ -775,7 +802,9 @@ namespace Cortex.Modules.Editor
                 {
                     Start = span.Start,
                     Length = Math.Min(span.Length, textLength - span.Start),
-                    Classification = span.Classification ?? string.Empty
+                    Classification = _classificationPresentationService.ResolvePresentationClassification(
+                        span.Classification,
+                        span.SemanticTokenType)
                 });
             }
 
@@ -818,7 +847,7 @@ namespace Cortex.Modules.Editor
             return scroll;
         }
 
-        private void DrawLines(DocumentSession session, CortexShellState state, Vector2 scroll, float viewportHeight, float gutterWidth)
+        private void DrawLines(DocumentSession session, CortexShellState state, bool editingEnabled, Vector2 scroll, float viewportHeight, float gutterWidth)
         {
             if (_layout == null || _layout.Lines.Count == 0)
             {
@@ -830,6 +859,32 @@ namespace Cortex.Modules.Editor
             var primarySelection = _editorService.GetPrimarySelection(session);
             var selections = _editorService.GetSelections(session);
             var primaryCaret = _editorService.GetCaretPosition(session, primarySelection.CaretIndex);
+            var hasNamedImGuiFocus = HasNamedImGuiFocus();
+            var isEditorContainerFocused = IsEditorContainerFocused(state);
+            var isReadyForInput = _caretIndicatorPresentationService.IsReadyForInput(
+                _hasFocus,
+                editingEnabled,
+                hasNamedImGuiFocus,
+                isEditorContainerFocused);
+            var hasEditorFocus = _hasFocus && !hasNamedImGuiFocus;
+            var shouldDrawCaret = hasEditorFocus;
+            var showTypingIndicator = _caretIndicatorPresentationService.ShouldDrawIndicator(
+                _hasFocus,
+                editingEnabled,
+                hasNamedImGuiFocus,
+                isEditorContainerFocused);
+            TraceCaretRenderGate(
+                session,
+                editingEnabled,
+                firstLine,
+                lastLine,
+                primarySelection.CaretIndex,
+                primaryCaret,
+                hasNamedImGuiFocus,
+                isEditorContainerFocused,
+                shouldDrawCaret,
+                isReadyForInput,
+                showTypingIndicator);
             if (IsMethodTargetSelectionMode())
             {
                 DrawMethodTargetOutlines(session, firstLine, lastLine, gutterWidth);
@@ -852,20 +907,25 @@ namespace Cortex.Modules.Editor
                     DrawSelection(line, gutterWidth, selections[selectionIndex].Start, selections[selectionIndex].End);
                 }
                 DrawCode(line, gutterWidth);
-                if (_hasFocus)
+                if (shouldDrawCaret)
                 {
                     for (var selectionIndex = 0; selectionIndex < selections.Length; selectionIndex++)
                     {
                         var caret = _editorService.GetCaretPosition(session, selections[selectionIndex].CaretIndex);
                         if (caret.Line == i)
                         {
-                            DrawCaret(line, gutterWidth, selections[selectionIndex].CaretIndex);
+                            DrawCaret(session, line, gutterWidth, selections[selectionIndex].CaretIndex, isReadyForInput);
                         }
                     }
                 }
+
+                if (showTypingIndicator && primaryCaret.Line == i)
+                {
+                    DrawTypingIndicator(session, line, gutterWidth, primarySelection.CaretIndex);
+                }
             }
 
-            if (_hasFocus && primaryCaret.Line >= 0 && primaryCaret.Line < _layout.Lines.Count)
+            if (hasEditorFocus && primaryCaret.Line >= 0 && primaryCaret.Line < _layout.Lines.Count)
             {
                 DrawInlineSuggestion(session, state, _layout.Lines[primaryCaret.Line], gutterWidth);
             }
@@ -911,12 +971,27 @@ namespace Cortex.Modules.Editor
             }
         }
 
-        private void DrawCaret(EditableLineLayout line, float gutterWidth, int caretIndex)
+        private void DrawCaret(DocumentSession session, EditableLineLayout line, float gutterWidth, int caretIndex, bool isReadyForInput)
         {
             var rawColumn = Mathf.Max(0, Mathf.Min(line.RawText.Length, caretIndex - line.StartIndex));
             var prefix = rawColumn > 0 ? line.RawText.Substring(0, rawColumn) : string.Empty;
             var x = gutterWidth + Measure(ExpandTabs(prefix));
-            GUI.DrawTexture(new Rect(x, line.Y + 1f, 1.5f, _lineHeight - 2f), _caretFill);
+            TraceCaretDraw(session, line, caretIndex, rawColumn, x, "DrawCaret");
+            GUI.DrawTexture(new Rect(x, line.Y + 1f, 1.5f, _lineHeight - 2f), isReadyForInput ? _caretReadyFill : _caretFill);
+        }
+
+        private void DrawTypingIndicator(DocumentSession session, EditableLineLayout line, float gutterWidth, int caretIndex)
+        {
+            if (_caretIndicatorFill == null)
+            {
+                return;
+            }
+
+            var rawColumn = Mathf.Max(0, Mathf.Min(line.RawText.Length, caretIndex - line.StartIndex));
+            var prefix = rawColumn > 0 ? line.RawText.Substring(0, rawColumn) : string.Empty;
+            var x = gutterWidth + Measure(ExpandTabs(prefix));
+            TraceCaretDraw(session, line, caretIndex, rawColumn, x, "DrawIndicator");
+            GUI.DrawTexture(new Rect(x - 0.75f, line.Y + 1f, 3f, _lineHeight - 2f), _caretIndicatorFill);
         }
 
         private bool IsMethodTargetSelectionMode()
@@ -1337,7 +1412,9 @@ namespace Cortex.Modules.Editor
                 }
 
                 var hitTest = GetCharacterIndexAt(session, pointerContext.ContentMouse, gutterWidth);
+                CaptureCaretDebugProbe(hitTest, pointerContext.ContentMouse);
                 var selectionAction = ApplyPointerSelection(session, current, hitTest.CharacterIndex);
+                TraceCaretSelectionResult(session, selectionAction, hitTest);
                 LogPointerSelection(session, selectionAction, pointerContext, gutterWidth, hitTest);
                 WritePointerSelectionAudit(session, selectionAction, pointerContext, hitTest);
 
@@ -1979,12 +2056,15 @@ namespace Cortex.Modules.Editor
             HarmonyPatchResolutionService harmonyPatchResolutionService,
             HarmonyPatchGenerationService harmonyPatchGenerationService)
         {
-            if (!_hasFocus || current == null || current.type != EventType.KeyDown)
+            if (current == null || current.type != EventType.KeyDown)
             {
                 return;
             }
 
-            if (GUIUtility.keyboardControl != 0 && !string.IsNullOrEmpty(GUI.GetNameOfFocusedControl()))
+            if (!_caretIndicatorPresentationService.HasKeyboardOwnership(
+                _hasFocus,
+                HasNamedImGuiFocus(),
+                IsEditorContainerFocused(state)))
             {
                 return;
             }
@@ -2356,7 +2436,9 @@ namespace Cortex.Modules.Editor
                 var end = span.Start + Math.Max(0, span.Length);
                 if (absolutePosition >= start && absolutePosition < end)
                 {
-                    return span.Classification ?? string.Empty;
+                    return _classificationPresentationService.ResolvePresentationClassification(
+                        span.Classification,
+                        span.SemanticTokenType);
                 }
             }
 
@@ -2599,6 +2681,7 @@ namespace Cortex.Modules.Editor
             result.LineNumber = line.LineNumber;
             result.LineStartIndex = line.StartIndex;
             result.RawLength = line.RawText != null ? line.RawText.Length : 0;
+            result.LineWidth = line.Width;
             if (contentMouse.x <= gutterWidth)
             {
                 result.CharacterIndex = line.StartIndex;
@@ -2643,6 +2726,167 @@ namespace Cortex.Modules.Editor
             result.CandidateColumn = candidate;
             result.CharacterIndex = line.StartIndex + candidate;
             return result;
+        }
+
+        private void CaptureCaretDebugProbe(PointerHitTestResult hitTest, Vector2 contentMouse)
+        {
+            if (!EditorInteractionLog.IsCaretDiagnosticsEnabled)
+            {
+                return;
+            }
+
+            _caretDebugProbe.CharacterIndex = hitTest.CharacterIndex;
+            _caretDebugProbe.LineNumber = hitTest.LineNumber;
+            _caretDebugProbe.CandidateColumn = hitTest.CandidateColumn;
+            _caretDebugProbe.RawLength = hitTest.RawLength;
+            _caretDebugProbe.ContentX = contentMouse.x;
+            _caretDebugProbe.ContentY = contentMouse.y;
+            _caretDebugProbe.TargetX = hitTest.TargetX;
+            _caretDebugProbe.LineWidth = hitTest.LineWidth;
+            _caretDebugProbe.CapturedUtc = DateTime.UtcNow;
+            _caretDebugProbe.LoggedPointerHit = false;
+            _caretDebugProbe.LoggedRenderGate = false;
+            _caretDebugProbe.LoggedDrawCaret = false;
+            _caretDebugProbe.LoggedDrawIndicator = false;
+        }
+
+        private void TraceCaretSelectionResult(DocumentSession session, string action, PointerHitTestResult hitTest)
+        {
+            if (!HasActiveCaretDebugProbe() ||
+                _caretDebugProbe.LoggedPointerHit ||
+                session == null ||
+                session.EditorState == null)
+            {
+                return;
+            }
+
+            var selection = _editorService.GetPrimarySelection(session);
+            var caret = _editorService.GetCaretPosition(session, selection.CaretIndex);
+            _caretDebugProbe.LoggedPointerHit = true;
+            EditorInteractionLog.WriteCaret(
+                "PointerHit",
+                session.FilePath,
+                "Action=" + (action ?? string.Empty) +
+                ", ContentMouse=(" + _caretDebugProbe.ContentX.ToString("F1") + "," + _caretDebugProbe.ContentY.ToString("F1") + ")" +
+                ", Line=" + hitTest.LineNumber +
+                ", TargetX=" + hitTest.TargetX.ToString("F1") +
+                ", LineWidth=" + hitTest.LineWidth.ToString("F1") +
+                ", CandidateColumn=" + hitTest.CandidateColumn +
+                ", RawLength=" + hitTest.RawLength +
+                ", CharacterIndex=" + hitTest.CharacterIndex +
+                ", PreviousWidth=" + hitTest.PreviousWidth.ToString("F1") +
+                ", CandidateWidth=" + hitTest.CandidateWidth.ToString("F1") +
+                ", SelectionCaretIndex=" + selection.CaretIndex +
+                ", SelectionAnchorIndex=" + selection.AnchorIndex +
+                ", CaretLine=" + (caret.Line + 1) +
+                ", CaretColumn=" + (caret.Column + 1) +
+                ", ClickPastLineWidth=" + (hitTest.TargetX > hitTest.LineWidth),
+                hitTest.LineNumber + "|" + hitTest.CharacterIndex + "|" + action,
+                0.02f);
+        }
+
+        private void TraceCaretRenderGate(
+            DocumentSession session,
+            bool editingEnabled,
+            int firstLine,
+            int lastLine,
+            int primaryCaretIndex,
+            EditorCaretPosition primaryCaret,
+            bool hasNamedImGuiFocus,
+            bool isEditorContainerFocused,
+            bool shouldDrawCaret,
+            bool isReadyForInput,
+            bool showTypingIndicator)
+        {
+            if (!HasActiveCaretDebugProbe() ||
+                _caretDebugProbe.LoggedRenderGate ||
+                session == null ||
+                session.EditorState == null ||
+                primaryCaretIndex != _caretDebugProbe.CharacterIndex)
+            {
+                return;
+            }
+
+            var focusedControl = GUI.GetNameOfFocusedControl() ?? string.Empty;
+            _caretDebugProbe.LoggedRenderGate = true;
+            EditorInteractionLog.WriteCaret(
+                "RenderGate",
+                session.FilePath,
+                "CaretIndex=" + primaryCaretIndex +
+                ", CaretLine=" + (primaryCaret.Line + 1) +
+                ", CaretColumn=" + (primaryCaret.Column + 1) +
+                ", VisibleLines=" + (firstLine + 1) + "-" + (lastLine + 1) +
+                ", HasFocus=" + _hasFocus +
+                ", EditingEnabled=" + editingEnabled +
+                ", HasNamedImGuiFocus=" + hasNamedImGuiFocus +
+                ", KeyboardControl=" + GUIUtility.keyboardControl +
+                ", FocusedControl='" + focusedControl + "'" +
+                ", EditorContainerFocused=" + isEditorContainerFocused +
+                ", ShouldDrawCaret=" + shouldDrawCaret +
+                ", IsReadyForInput=" + isReadyForInput +
+                ", ShowTypingIndicator=" + showTypingIndicator +
+                ", CaretLineVisible=" + (primaryCaret.Line >= firstLine && primaryCaret.Line <= lastLine),
+                primaryCaretIndex + "|" + shouldDrawCaret + "|" + isReadyForInput + "|" + showTypingIndicator + "|" + primaryCaret.Line,
+                0.1f);
+        }
+
+        private void TraceCaretDraw(
+            DocumentSession session,
+            EditableLineLayout line,
+            int caretIndex,
+            int rawColumn,
+            float x,
+            string stage)
+        {
+            if (!HasActiveCaretDebugProbe() ||
+                session == null ||
+                line == null ||
+                caretIndex != _caretDebugProbe.CharacterIndex)
+            {
+                return;
+            }
+
+            if (string.Equals(stage, "DrawCaret", StringComparison.Ordinal))
+            {
+                if (_caretDebugProbe.LoggedDrawCaret)
+                {
+                    return;
+                }
+
+                _caretDebugProbe.LoggedDrawCaret = true;
+            }
+            else if (string.Equals(stage, "DrawIndicator", StringComparison.Ordinal))
+            {
+                if (_caretDebugProbe.LoggedDrawIndicator)
+                {
+                    return;
+                }
+
+                _caretDebugProbe.LoggedDrawIndicator = true;
+            }
+
+            var rawLength = line.RawText != null ? line.RawText.Length : 0;
+            EditorInteractionLog.WriteCaret(
+                stage,
+                session.FilePath,
+                "Line=" + line.LineNumber +
+                ", CaretIndex=" + caretIndex +
+                ", RawColumn=" + rawColumn +
+                ", RawLength=" + rawLength +
+                ", LineWidth=" + line.Width.ToString("F1") +
+                ", CaretX=" + x.ToString("F1") +
+                ", ClickTargetX=" + _caretDebugProbe.TargetX.ToString("F1") +
+                ", ClickPastLineWidth=" + (_caretDebugProbe.TargetX > line.Width) +
+                ", EndOfLine=" + (rawColumn >= rawLength),
+                line.LineNumber + "|" + caretIndex + "|" + rawColumn + "|" + stage,
+                0f);
+        }
+
+        private bool HasActiveCaretDebugProbe()
+        {
+            return EditorInteractionLog.IsCaretDiagnosticsEnabled &&
+                _caretDebugProbe.CharacterIndex >= 0 &&
+                (DateTime.UtcNow - _caretDebugProbe.CapturedUtc).TotalSeconds <= 1.5d;
         }
 
         private GUIStyle GetClassificationStyle(string classification)
@@ -2699,11 +2943,20 @@ namespace Cortex.Modules.Editor
                 : CharacterKind.Punctuation;
         }
 
-        private static bool ShouldTokenizeForPresentation(string classification)
+        private static bool HasNamedImGuiFocus()
         {
-            return string.IsNullOrEmpty(classification) ||
-                classification.IndexOf("identifier", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                classification.IndexOf("text", StringComparison.OrdinalIgnoreCase) >= 0;
+            return GUIUtility.keyboardControl != 0 &&
+                !string.IsNullOrEmpty(GUI.GetNameOfFocusedControl());
+        }
+
+        private static bool IsEditorContainerFocused(CortexShellState state)
+        {
+            return state != null &&
+                state.Workbench != null &&
+                string.Equals(
+                    state.Workbench.FocusedContainerId ?? string.Empty,
+                    state.Workbench.EditorContainerId ?? string.Empty,
+                    StringComparison.OrdinalIgnoreCase);
         }
 
         private static Texture2D MakeFill(Color color)

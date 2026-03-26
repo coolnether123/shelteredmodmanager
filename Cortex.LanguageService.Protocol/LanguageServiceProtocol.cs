@@ -692,6 +692,7 @@ namespace Cortex.LanguageService.Protocol
     public sealed class LanguageServiceClassifiedSpan
     {
         public string Classification;
+        public string SemanticTokenType;
         public int Start;
         public int Length;
         public int Line;

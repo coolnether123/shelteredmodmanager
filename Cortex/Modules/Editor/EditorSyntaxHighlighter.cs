@@ -115,7 +115,7 @@ namespace Cortex.Modules.Editor
                 }
 
                 var color = classificationPresentationService != null
-                    ? classificationPresentationService.GetHexColor(span.Classification)
+                    ? classificationPresentationService.GetHexColor(span.Classification, span.SemanticTokenType)
                     : string.Empty;
                 if (string.IsNullOrEmpty(color))
                 {

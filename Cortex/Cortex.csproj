@@ -116,10 +116,12 @@
     <Compile Include="Services\EditorCompletionService.cs" />
     <Compile Include="Services\EditorCommandAvailabilityService.cs" />
     <Compile Include="Services\EditorClipboardService.cs" />
+    <Compile Include="Services\EditorCaretIndicatorPresentationService.cs" />
     <Compile Include="Services\EditorClassificationPresentationService.cs" />
     <Compile Include="Services\EditorCommandContextFactory.cs" />
     <Compile Include="Services\EditorCommandExecutionStrategyService.cs" />
     <Compile Include="Services\EditorDocumentModeService.cs" />
+    <Compile Include="Services\EditorFallbackColoringService.cs" />
     <Compile Include="Services\EditorContextActionResolverService.cs" />
     <Compile Include="Services\EditorLogicalDocumentTargetResolutionService.cs" />
     <Compile Include="Services\EditorMethodPatchCreationService.cs" />
@@ -130,6 +132,7 @@
     <Compile Include="Services\EditorMethodTargetOutlineService.cs" />
     <Compile Include="Services\EditorMutationExecutionService.cs" />
     <Compile Include="Services\EditorSelectionInspectionService.cs" />
+    <Compile Include="Services\EditorSemanticTokenMappingService.cs" />
     <Compile Include="Services\EditorSignatureHelpService.cs" />
     <Compile Include="Services\GeneratedTemplateNavigationService.cs" />
     <Compile Include="Services\HarmonyPatchDisplayService.cs" />

@@ -34,6 +34,7 @@ namespace Cortex.Modules.Editor
         private readonly EditorMethodInspectorSurface _methodInspectorSurface = new EditorMethodInspectorSurface();
         private readonly PopupMenuSurface _popupMenuSurface = new PopupMenuSurface();
         private readonly HoverTooltipPresenter _tooltipPresenter = new HoverTooltipPresenter();
+        private readonly EditorFallbackColoringService _fallbackColoringService = new EditorFallbackColoringService();
         private readonly List<PopupMenuItem> _popupMenuItems = new List<PopupMenuItem>();
         private string _styleCacheKey = string.Empty;
         private string _layoutCacheKey = string.Empty;
@@ -2418,7 +2419,7 @@ namespace Cortex.Modules.Editor
             return GetClassificationStyle(classification).CalcSize(_sharedContent).x;
         }
 
-        private static List<NormalizedSpan> NormalizeSpans(int textLength, LanguageServiceClassifiedSpan[] spans)
+        private List<NormalizedSpan> NormalizeSpans(int textLength, LanguageServiceClassifiedSpan[] spans)
         {
             var result = new List<NormalizedSpan>();
             if (spans == null || spans.Length == 0 || textLength <= 0)
@@ -2445,7 +2446,9 @@ namespace Cortex.Modules.Editor
                 {
                     Start = start,
                     Length = end - start,
-                    Classification = span.Classification ?? string.Empty
+                    Classification = _classificationPresentationService.ResolvePresentationClassification(
+                        span.Classification,
+                        span.SemanticTokenType)
                 });
             }
 
@@ -2562,7 +2565,7 @@ namespace Cortex.Modules.Editor
             }
 
             var token = line.Tokens[tokenIndex];
-            return _classificationPresentationService.GetEffectiveCodeViewClassification(
+            return _fallbackColoringService.GetEffectiveCodeViewClassification(
                 token != null ? token.Classification : string.Empty,
                 token != null ? token.RawText : string.Empty,
                 GetAdjacentTokenText(line, tokenIndex, -1),

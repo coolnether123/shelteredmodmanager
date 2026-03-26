@@ -20,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Cortex.Core\Models\SemanticTokenClassification.cs" Link="Shared\SemanticTokenClassification.cs" />
     <Compile Include="..\Cortex.LanguageService.Protocol\LanguageServiceProtocol.cs" Link="Protocol\LanguageServiceProtocol.cs" />
     <Compile Include="..\GameModding.Shared\Serialization\ManualJson.cs" Link="Serialization\ManualJson.cs" />
   </ItemGroup>
