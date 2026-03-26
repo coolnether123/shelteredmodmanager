@@ -22,16 +22,17 @@ namespace Cortex.Modules.Editor
         private readonly Dictionary<string, GUIStyle> _classificationStyles = new Dictionary<string, GUIStyle>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, HashSet<string>> _collapsedRegionKeys = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         private readonly GUIContent _sharedContent = new GUIContent();
-        private readonly EditorSemanticPopupSurface _semanticPopupSurface = new EditorSemanticPopupSurface();
+        private readonly EditorSemanticPopupSurface _semanticPopupSurface;
+        private readonly IEditorContextService _contextService;
         private readonly EditorCommandContextFactory _commandContextFactory = new EditorCommandContextFactory();
         private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
         private readonly EditorSelectionInspectionService _selectionInspectionService = new EditorSelectionInspectionService();
         private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
         private readonly EditorOverlayInteractionService _overlayInteractionService = new EditorOverlayInteractionService();
-        private readonly EditorMethodInspectorService _methodInspectorService = new EditorMethodInspectorService();
+        private readonly EditorMethodInspectorService _methodInspectorService;
         private readonly EditorMethodTargetOutlineService _methodTargetOutlineService = new EditorMethodTargetOutlineService();
-        private readonly EditorMethodInspectorSurface _methodInspectorSurface = new EditorMethodInspectorSurface();
+        private readonly EditorMethodInspectorSurface _methodInspectorSurface;
         private readonly PopupMenuSurface _popupMenuSurface = new PopupMenuSurface();
         private readonly HoverTooltipPresenter _tooltipPresenter = new HoverTooltipPresenter();
         private readonly EditorFallbackColoringService _fallbackColoringService = new EditorFallbackColoringService();
@@ -66,10 +67,6 @@ namespace Cortex.Modules.Editor
         private float _lineHeight = 18f;
         private string _hoverCandidateKey = string.Empty;
         private DateTime _hoverCandidateUtc = DateTime.MinValue;
-        private string _selectedTokenKey = string.Empty;
-        private string _selectedTokenText = string.Empty;
-        private string _selectedTokenClassification = string.Empty;
-        private string _selectedDocumentPath = string.Empty;
         private string _stickyHoverKey = string.Empty;
         private string _stickyHoverDocumentPath = string.Empty;
         private Rect _stickyHoverAnchorRect = new Rect(0f, 0f, 0f, 0f);
@@ -89,6 +86,14 @@ namespace Cortex.Modules.Editor
         private string _lastDrawError = string.Empty;
         private string _lastFocusedDocumentPath = string.Empty;
         private int _lastFocusedLineNumber = -1;
+
+        public CodeViewSurface(IEditorContextService contextService)
+        {
+            _contextService = contextService;
+            _semanticPopupSurface = new EditorSemanticPopupSurface(contextService);
+            _methodInspectorService = new EditorMethodInspectorService(contextService);
+            _methodInspectorSurface = new EditorMethodInspectorSurface(contextService);
+        }
 
         public Vector2 Draw(
             Rect rect,
@@ -149,12 +154,11 @@ namespace Cortex.Modules.Editor
                 }
                 PreHandleContextMenuInput(current, localMouse);
                 var pointerOnContextMenu = _contextMenuOpen && _overlayInteractionService.IsPointerWithin(_lastContextMenuRect, localMouse);
-                var activeMethodInspectorTarget = state != null &&
-                    state.Editor != null &&
-                    state.Editor.MethodInspector != null &&
-                    state.Editor.MethodInspector.Invocation != null
-                        ? state.Editor.MethodInspector.Invocation.Target
-                        : null;
+                var activeMethodInspectorTarget = _contextService.ResolveTarget(
+                    state,
+                    state != null && state.Editor != null && state.Editor.MethodInspector != null
+                        ? state.Editor.MethodInspector.ContextKey
+                        : string.Empty);
                 var predictedMethodInspectorRect = _methodInspectorSurface.PredictRect(
                     state,
                     session.FilePath,
@@ -188,7 +192,7 @@ namespace Cortex.Modules.Editor
                         scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
                         try
                         {
-                            DrawVisibleLines(session, scroll, rect.height, hoveredToken, hoveredMethodTarget, hoveredFoldRegion, gutterWidth);
+                            DrawVisibleLines(state, session, scroll, rect.height, hoveredToken, hoveredMethodTarget, hoveredFoldRegion, gutterWidth);
                         }
                         finally
                         {
@@ -221,9 +225,11 @@ namespace Cortex.Modules.Editor
                         session.FilePath,
                         GetMethodInspectorViewportAnchorRect(
                             session,
-                            state != null && state.Editor != null && state.Editor.MethodInspector != null && state.Editor.MethodInspector.Invocation != null
-                                ? state.Editor.MethodInspector.Invocation.Target
-                                : null,
+                            _contextService.ResolveTarget(
+                                state,
+                                state != null && state.Editor != null && state.Editor.MethodInspector != null
+                                    ? state.Editor.MethodInspector.ContextKey
+                                    : string.Empty),
                             scroll,
                             gutterWidth),
                         rect.size,
@@ -240,9 +246,20 @@ namespace Cortex.Modules.Editor
                         harmonyPatchResolutionService,
                         harmonyPatchDisplayService,
                         harmonyPatchGenerationService);
-                    _semanticPopupSurface.DrawQuickActions(state, GetViewportAnchorRect(state != null && state.Semantic != null ? state.Semantic.QuickActionsTarget : null, scroll, gutterWidth), rect.size, commandRegistry);
-                    _semanticPopupSurface.DrawRename(state, GetViewportAnchorRect(state != null && state.Editor != null ? state.Editor.ActiveRenameTarget : null, scroll, gutterWidth), rect.size, commandRegistry);
-                    _semanticPopupSurface.DrawPeek(state, GetViewportAnchorRect(state != null && state.Editor != null ? state.Editor.ActivePeekTarget : null, scroll, gutterWidth), rect.size);
+                    _semanticPopupSurface.DrawQuickActions(
+                        state,
+                        GetViewportAnchorRect(_contextService.ResolveTarget(state, state != null && state.Semantic != null ? state.Semantic.QuickActionsContextKey : string.Empty), scroll, gutterWidth),
+                        rect.size,
+                        commandRegistry);
+                    _semanticPopupSurface.DrawRename(
+                        state,
+                        GetViewportAnchorRect(_contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.ActiveRenameContextKey : string.Empty), scroll, gutterWidth),
+                        rect.size,
+                        commandRegistry);
+                    _semanticPopupSurface.DrawPeek(
+                        state,
+                        GetViewportAnchorRect(_contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.ActivePeekContextKey : string.Empty), scroll, gutterWidth),
+                        rect.size);
                     DrawContextMenu(state, current, localMouse, rect.size, commandRegistry);
                 }
                 finally
@@ -606,7 +623,7 @@ namespace Cortex.Modules.Editor
             layout.ContentHeight = Mathf.Max(_lineHeight, layout.VisibleLines.Count * _lineHeight + 4f);
         }
 
-        private void DrawVisibleLines(DocumentSession session, Vector2 scroll, float viewHeight, CodeViewToken hoveredToken, EditorMethodTargetOutline hoveredMethodTarget, FoldRegion hoveredFoldRegion, float gutterWidth)
+        private void DrawVisibleLines(CortexShellState state, DocumentSession session, Vector2 scroll, float viewHeight, CodeViewToken hoveredToken, EditorMethodTargetOutline hoveredMethodTarget, FoldRegion hoveredFoldRegion, float gutterWidth)
         {
             if (_layout == null || _layout.VisibleLines.Count == 0)
             {
@@ -652,8 +669,8 @@ namespace Cortex.Modules.Editor
                     var tokenRect = new Rect(gutterWidth + token.X, line.Y, Mathf.Max(2f, token.Width), _lineHeight);
                     token.ContentRect = tokenRect;
                     var effectiveClassification = GetEffectiveTokenClassification(line, tokenIndex);
-                    var isSelectedToken = string.Equals(token.Key, _selectedTokenKey, StringComparison.Ordinal);
-                    var isRelatedSelection = !isSelectedToken && IsRelatedSelectionToken(session, token);
+                    var isSelectedToken = IsSelectedToken(state, session, token);
+                    var isRelatedSelection = !isSelectedToken && IsRelatedSelectionToken(state, session, token);
                     if (isRelatedSelection)
                     {
                         GUI.DrawTexture(tokenRect, _relatedSelectionFill);
@@ -785,7 +802,7 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            SetSelectedToken(session, hoveredToken);
+            PublishSelectedTokenContext(session, state, hoveredToken);
             _selectionInspectionService.ApplySelection(
                 state,
                 session != null ? session.FilePath ?? string.Empty : string.Empty,
@@ -1015,7 +1032,7 @@ namespace Cortex.Modules.Editor
                 return false;
             }
 
-            SetSelectedToken(session, token);
+            PublishSelectedTokenContext(session, state, token);
             _selectionInspectionService.ApplySelection(
                 state,
                 session != null ? session.FilePath ?? string.Empty : string.Empty,
@@ -2044,7 +2061,7 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            SetSelectedToken(session, token);
+            PublishSelectedTokenContext(session, state, token);
             _contextMenuOpen = true;
             _contextMenuPosition = localMouse;
             _contextInvocation = invocation;
@@ -2064,7 +2081,7 @@ namespace Cortex.Modules.Editor
                 return false;
             }
 
-            return _commandContextFactory.TryCreateTokenInvocation(
+            var created = _commandContextFactory.TryCreateTokenInvocation(
                 session,
                 state,
                 token.Start,
@@ -2074,6 +2091,19 @@ namespace Cortex.Modules.Editor
                 ResolveHoverResponse(state, token),
                 CanNavigateToDefinition(token),
                 out invocation);
+            if (created && invocation != null)
+            {
+                _contextService.PublishInvocationContext(
+                    state,
+                    session,
+                    GetSurfaceId(session, state),
+                    state != null ? state.Workbench.FocusedContainerId : string.Empty,
+                    GetSurfaceKind(session),
+                    invocation,
+                    true);
+            }
+
+            return created;
         }
 
         private LanguageServiceHoverResponse ResolveHoverResponse(CortexShellState state, CodeViewToken token)
@@ -2088,42 +2118,80 @@ namespace Cortex.Modules.Editor
                 : null;
         }
 
-        private void SetSelectedToken(DocumentSession session, CodeViewToken token)
+        private bool IsRelatedSelectionToken(CortexShellState state, DocumentSession session, CodeViewToken token)
         {
-            if (token == null)
-            {
-                _selectedTokenKey = string.Empty;
-                _selectedTokenText = string.Empty;
-                _selectedTokenClassification = string.Empty;
-                _selectedDocumentPath = string.Empty;
-                return;
-            }
-
-            _selectedTokenKey = token.Key ?? string.Empty;
-            _selectedTokenText = token.RawText ?? string.Empty;
-            _selectedTokenClassification = token.Classification ?? string.Empty;
-            _selectedDocumentPath = session != null ? session.FilePath ?? string.Empty : string.Empty;
-        }
-
-        private bool IsRelatedSelectionToken(DocumentSession session, CodeViewToken token)
-        {
-            if (session == null || token == null || string.IsNullOrEmpty(_selectedTokenText))
+            var context = GetSurfaceContext(session, state);
+            var selectedText = context != null ? context.FocusTokenText ?? string.Empty : string.Empty;
+            if (session == null || token == null || string.IsNullOrEmpty(selectedText))
             {
                 return false;
             }
 
-            if (!string.Equals(session.FilePath ?? string.Empty, _selectedDocumentPath ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+            if (context == null ||
+                !string.Equals(session.FilePath ?? string.Empty, context.DocumentPath ?? string.Empty, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
 
             if (!CanParticipateInRelatedSelection(token.Classification, token.RawText) ||
-                !CanParticipateInRelatedSelection(_selectedTokenClassification, _selectedTokenText))
+                !CanParticipateInRelatedSelection(context != null && context.Target != null ? context.Target.SymbolKind : string.Empty, selectedText))
             {
                 return false;
             }
 
-            return string.Equals(token.RawText ?? string.Empty, _selectedTokenText, StringComparison.Ordinal);
+            return string.Equals(token.RawText ?? string.Empty, selectedText, StringComparison.Ordinal);
+        }
+
+        private bool IsSelectedToken(CortexShellState state, DocumentSession session, CodeViewToken token)
+        {
+            var context = GetSurfaceContext(session, state);
+            if (context == null || context.Target == null || token == null)
+            {
+                return false;
+            }
+
+            return string.Equals(context.DocumentPath ?? string.Empty, session != null ? session.FilePath ?? string.Empty : string.Empty, StringComparison.OrdinalIgnoreCase) &&
+                context.TargetStart == token.Start &&
+                context.TargetLength == token.Length &&
+                string.Equals(context.FocusTokenText ?? string.Empty, token.RawText ?? string.Empty, StringComparison.Ordinal);
+        }
+
+        private EditorContextSnapshot GetSurfaceContext(DocumentSession session, CortexShellState state)
+        {
+            return _contextService.GetSurfaceContext(state, GetSurfaceId(session, state));
+        }
+
+        private void PublishSelectedTokenContext(DocumentSession session, CortexShellState state, CodeViewToken token)
+        {
+            EditorCommandInvocation invocation;
+            if (!TryBuildCommandTarget(session, state, token, out invocation) || invocation == null)
+            {
+                return;
+            }
+
+            _contextService.PublishInvocationContext(
+                state,
+                session,
+                GetSurfaceId(session, state),
+                state != null ? state.Workbench.FocusedContainerId : string.Empty,
+                GetSurfaceKind(session),
+                invocation,
+                true);
+        }
+
+        private string GetSurfaceId(DocumentSession session, CortexShellState state)
+        {
+            return _contextService.BuildSurfaceId(
+                session != null ? session.FilePath ?? string.Empty : string.Empty,
+                GetSurfaceKind(session),
+                state != null && state.Workbench != null ? state.Workbench.FocusedContainerId : string.Empty);
+        }
+
+        private static EditorSurfaceKind GetSurfaceKind(DocumentSession session)
+        {
+            return session != null && session.Kind == DocumentKind.DecompiledCode
+                ? EditorSurfaceKind.Decompiled
+                : EditorSurfaceKind.ReadOnlyCode;
         }
 
         private bool CanParticipateInRelatedSelection(string classification, string rawText)

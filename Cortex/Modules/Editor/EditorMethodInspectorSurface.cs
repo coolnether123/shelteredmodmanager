@@ -19,15 +19,23 @@ namespace Cortex.Modules.Editor
         private const float PopupGap = 12f;
         private const int SnippetContextLineCount = 2;
 
-        private readonly EditorMethodInspectorService _inspectorService = new EditorMethodInspectorService();
+        private readonly EditorMethodInspectorService _inspectorService;
+        private readonly IEditorContextService _contextService;
         private readonly EditorMethodHarmonyContextService _harmonyContextService = new EditorMethodHarmonyContextService();
-        private readonly EditorMethodTargetMetadataService _targetMetadataService = new EditorMethodTargetMetadataService();
+        private readonly EditorMethodTargetMetadataService _targetMetadataService;
         private readonly EditorMethodPatchCreationService _patchCreationService = new EditorMethodPatchCreationService();
         private readonly HarmonyPatchDisplayService _fallbackHarmonyDisplayService = new HarmonyPatchDisplayService();
         private readonly ImguiPanelRenderer _panelRenderer = new ImguiPanelRenderer();
         private const float ScrollWheelStep = 28f;
 
         private Vector2 _scroll = Vector2.zero;
+
+        public EditorMethodInspectorSurface(IEditorContextService contextService)
+        {
+            _contextService = contextService;
+            _inspectorService = new EditorMethodInspectorService(contextService);
+            _targetMetadataService = new EditorMethodTargetMetadataService(contextService);
+        }
 
         public Rect Draw(
             CortexShellState state,
@@ -55,7 +63,7 @@ namespace Cortex.Modules.Editor
             }
 
             var inspector = state != null && state.Editor != null ? state.Editor.MethodInspector : null;
-            var invocation = inspector != null ? inspector.Invocation : null;
+            var invocation = _contextService.ResolveInvocation(state, inspector != null ? inspector.ContextKey : string.Empty);
             var target = invocation != null ? invocation.Target : null;
             if (target == null)
             {

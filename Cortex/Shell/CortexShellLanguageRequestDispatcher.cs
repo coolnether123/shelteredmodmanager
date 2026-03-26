@@ -119,6 +119,7 @@ namespace Cortex
             if (string.IsNullOrEmpty(requestId))
             {
                 runtime.HoverInFlight = false;
+                context.State.EditorContext.Hover.RequestedContextKey = string.Empty;
                 MMLog.WriteWarning("[Cortex.Roslyn] Failed to queue hover for " +
                     (context.State.Editor.RequestedHoverTokenText ?? string.Empty) +
                     ": " + (context.LanguageServiceClient != null ? context.LanguageServiceClient.LastError : "Roslyn client was not available."));
@@ -129,6 +130,7 @@ namespace Cortex
             {
                 RequestId = requestId,
                 Generation = runtime.ServiceGeneration,
+                ContextKey = context.State.EditorContext.Hover.RequestedContextKey ?? string.Empty,
                 HoverKey = requestKey,
                 DocumentPath = requestDocumentPath,
                 DocumentVersion = requestDocumentVersion
@@ -173,6 +175,7 @@ namespace Cortex
             if (string.IsNullOrEmpty(requestId))
             {
                 runtime.DefinitionInFlight = false;
+                context.State.EditorContext.Definition.RequestedContextKey = string.Empty;
                 context.State.StatusMessage = "Definition lookup failed: " + (context.LanguageServiceClient != null ? context.LanguageServiceClient.LastError : "Roslyn client was not available.");
                 return;
             }
@@ -181,6 +184,7 @@ namespace Cortex
             {
                 RequestId = requestId,
                 Generation = runtime.ServiceGeneration,
+                ContextKey = context.State.EditorContext.Definition.RequestedContextKey ?? string.Empty,
                 DocumentPath = requestDocumentPath,
                 DocumentVersion = requestDocumentVersion,
                 TokenText = context.State.Editor.RequestedDefinitionTokenText ?? string.Empty
@@ -323,6 +327,7 @@ namespace Cortex
             {
                 RequestId = requestId,
                 Generation = runtime.ServiceGeneration,
+                ContextKey = context.State != null && context.State.EditorContext != null ? context.State.EditorContext.ActiveContextKey ?? string.Empty : string.Empty,
                 RequestKey = context.State.Editor.RequestedSignatureHelpKey ?? string.Empty,
                 DocumentPath = request.DocumentPath ?? string.Empty,
                 DocumentVersion = request.DocumentVersion,
@@ -494,12 +499,14 @@ namespace Cortex
                 Generation = runtime.ServiceGeneration,
                 Kind = semantic.RequestedKind,
                 RequestKey = requestKey,
+                ContextKey = context.State.EditorContext.SemanticRequest.RequestedContextKey ?? string.Empty,
                 DocumentPath = session.FilePath ?? string.Empty,
                 DocumentVersion = session.TextVersion,
                 SymbolText = semantic.RequestedSymbolText ?? string.Empty,
                 NewName = semantic.RequestedNewName ?? string.Empty
             };
             semantic.RequestedKey = string.Empty;
+            context.State.EditorContext.SemanticRequest.RequestedContextKey = string.Empty;
             semantic.RequestedKind = SemanticRequestKind.None;
         }
 
@@ -509,15 +516,20 @@ namespace Cortex
             var inspector = context != null && context.State != null && context.State.Editor != null
                 ? context.State.Editor.MethodInspector
                 : null;
-            var invocation = inspector != null ? inspector.Invocation : null;
-            var target = invocation != null ? invocation.Target : null;
             if (context == null ||
                 runtime == null ||
                 inspector == null ||
                 !inspector.IsVisible ||
-                target == null ||
                 runtime.MethodInspectorCallHierarchyInFlight ||
                 string.IsNullOrEmpty(inspector.CallHierarchyRequestKey))
+            {
+                return;
+            }
+
+            var target = context.EditorContextService != null ? context.EditorContextService.ResolveTarget(
+                context.State,
+                inspector != null ? inspector.ContextKey : string.Empty) : null;
+            if (target == null)
             {
                 return;
             }
@@ -558,6 +570,7 @@ namespace Cortex
                 RequestId = requestId,
                 Generation = runtime.ServiceGeneration,
                 RequestKey = requestKey,
+                ContextKey = inspector.ContextKey ?? string.Empty,
                 TargetKey = inspector.CallHierarchyTargetKey ?? string.Empty,
                 DocumentPath = request.DocumentPath ?? string.Empty,
                 DocumentVersion = request.DocumentVersion

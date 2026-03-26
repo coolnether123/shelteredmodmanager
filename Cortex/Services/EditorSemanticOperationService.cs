@@ -19,6 +19,7 @@ namespace Cortex.Services
             }
 
             state.Semantic.RequestedKey = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition + "|" + requestKind + "|" + DateTime.UtcNow.Ticks;
+            state.EditorContext.SemanticRequest.RequestedContextKey = target.ContextKey ?? string.Empty;
             state.Semantic.RequestedKind = requestKind;
             state.Semantic.RequestedDocumentPath = target.DocumentPath ?? string.Empty;
             state.Semantic.RequestedLine = target.Line;
@@ -50,6 +51,7 @@ namespace Cortex.Services
             }
 
             state.Semantic.RequestedKey = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition + "|" + SemanticRequestKind.DocumentTransformPreview + "|" + DateTime.UtcNow.Ticks;
+            state.EditorContext.SemanticRequest.RequestedContextKey = target.ContextKey ?? string.Empty;
             state.Semantic.RequestedKind = SemanticRequestKind.DocumentTransformPreview;
             state.Semantic.RequestedDocumentPath = target.DocumentPath ?? string.Empty;
             state.Semantic.RequestedLine = target.Line;
@@ -78,7 +80,7 @@ namespace Cortex.Services
                 : "Quick Actions";
             state.Semantic.QuickActionsFilterText = string.Empty;
             state.Semantic.QuickActionsSelectedIndex = actions != null && actions.Length > 0 ? 0 : -1;
-            state.Semantic.QuickActionsTarget = target;
+            state.Semantic.QuickActionsContextKey = target != null ? target.ContextKey ?? string.Empty : string.Empty;
             state.Semantic.QuickActions = actions ?? new EditorResolvedContextAction[0];
         }
 
@@ -93,7 +95,7 @@ namespace Cortex.Services
             state.Semantic.QuickActionsTitle = string.Empty;
             state.Semantic.QuickActionsFilterText = string.Empty;
             state.Semantic.QuickActionsSelectedIndex = -1;
-            state.Semantic.QuickActionsTarget = null;
+            state.Semantic.QuickActionsContextKey = string.Empty;
             state.Semantic.QuickActions = new EditorResolvedContextAction[0];
         }
 

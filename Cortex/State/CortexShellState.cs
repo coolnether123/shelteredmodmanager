@@ -137,9 +137,9 @@ namespace Cortex
         public string CompletionAugmentationStatus = string.Empty;
         public string CompletionAugmentationProviderId = string.Empty;
         public string CompletionAugmentationStatusMessage = string.Empty;
-        public EditorCommandTarget ActiveRenameTarget;
         public string ActiveRenameText = string.Empty;
-        public EditorCommandTarget ActivePeekTarget;
+        public string ActiveRenameContextKey = string.Empty;
+        public string ActivePeekContextKey = string.Empty;
         public readonly CortexMethodInspectorState MethodInspector = new CortexMethodInspectorState();
     }
 
@@ -148,7 +148,7 @@ namespace Cortex
         public bool IsVisible;
         public string Title = string.Empty;
         public string Classification = string.Empty;
-        public EditorCommandInvocation Invocation;
+        public string ContextKey = string.Empty;
         public bool OverviewExpanded = true;
         public bool NavigationExpanded = true;
         public bool ReferencesExpanded = true;
@@ -195,9 +195,8 @@ namespace Cortex
         public string QuickActionsTitle = string.Empty;
         public string QuickActionsFilterText = string.Empty;
         public int QuickActionsSelectedIndex = -1;
-        public EditorCommandTarget QuickActionsTarget;
+        public string QuickActionsContextKey = string.Empty;
         public EditorResolvedContextAction[] QuickActions = new EditorResolvedContextAction[0];
-        public LanguageServiceSymbolContextResponse ActiveSymbolContext;
         public LanguageServiceRenameResponse RenamePreview;
         public LanguageServiceReferencesResponse References;
         public LanguageServiceDefinitionResponse PeekDefinition;
@@ -266,12 +265,40 @@ namespace Cortex
         }
     }
 
+    public sealed class CortexEditorContextState
+    {
+        public string ActiveSurfaceId = string.Empty;
+        public string ActiveContextKey = string.Empty;
+        public readonly CortexHoverContextState Hover = new CortexHoverContextState();
+        public readonly CortexDefinitionContextState Definition = new CortexDefinitionContextState();
+        public readonly CortexSemanticRequestContextState SemanticRequest = new CortexSemanticRequestContextState();
+        public readonly Dictionary<string, string> SurfaceContextKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        public readonly Dictionary<string, EditorContextSnapshot> ContextsByKey = new Dictionary<string, EditorContextSnapshot>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public sealed class CortexHoverContextState
+    {
+        public string RequestedContextKey = string.Empty;
+        public string ActiveContextKey = string.Empty;
+    }
+
+    public sealed class CortexDefinitionContextState
+    {
+        public string RequestedContextKey = string.Empty;
+    }
+
+    public sealed class CortexSemanticRequestContextState
+    {
+        public string RequestedContextKey = string.Empty;
+    }
+
     public sealed class CortexShellState
     {
         public readonly CortexWindowChromeWorkspaceState Chrome = new CortexWindowChromeWorkspaceState();
         public readonly CortexWorkbenchSelectionState Workbench = new CortexWorkbenchSelectionState();
         public readonly CortexOnboardingState Onboarding = new CortexOnboardingState();
         public readonly CortexDocumentWorkspaceState Documents = new CortexDocumentWorkspaceState();
+        public readonly CortexEditorContextState EditorContext = new CortexEditorContextState();
         public readonly CortexEditorInteractionState Editor = new CortexEditorInteractionState();
         public readonly CortexSearchInteractionState Search = new CortexSearchInteractionState();
         public readonly CortexSemanticInteractionState Semantic = new CortexSemanticInteractionState();

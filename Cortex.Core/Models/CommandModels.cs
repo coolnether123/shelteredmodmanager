@@ -34,6 +34,8 @@ namespace Cortex.Core.Models
     {
         public EditorCommandTarget()
         {
+            ContextKey = string.Empty;
+            SurfaceId = string.Empty;
             ContextId = string.Empty;
             DocumentPath = string.Empty;
             SymbolText = string.Empty;
@@ -53,6 +55,8 @@ namespace Cortex.Core.Models
             DefinitionLength = -1;
         }
 
+        public string ContextKey;
+        public string SurfaceId;
         public string ContextId;
         public string DocumentPath;
         public string SymbolText;
@@ -81,6 +85,43 @@ namespace Cortex.Core.Models
         public int DefinitionColumn;
         public int DefinitionStart;
         public int DefinitionLength;
+
+        public EditorCommandTarget Clone()
+        {
+            return new EditorCommandTarget
+            {
+                ContextKey = ContextKey ?? string.Empty,
+                SurfaceId = SurfaceId ?? string.Empty,
+                ContextId = ContextId ?? string.Empty,
+                DocumentPath = DocumentPath ?? string.Empty,
+                SymbolText = SymbolText ?? string.Empty,
+                QualifiedSymbolDisplay = QualifiedSymbolDisplay ?? string.Empty,
+                SymbolKind = SymbolKind ?? string.Empty,
+                MetadataName = MetadataName ?? string.Empty,
+                ContainingTypeName = ContainingTypeName ?? string.Empty,
+                ContainingAssemblyName = ContainingAssemblyName ?? string.Empty,
+                DocumentationCommentId = DocumentationCommentId ?? string.Empty,
+                HoverText = HoverText ?? string.Empty,
+                Line = Line,
+                Column = Column,
+                AbsolutePosition = AbsolutePosition,
+                CaretIndex = CaretIndex,
+                SelectionStart = SelectionStart,
+                SelectionEnd = SelectionEnd,
+                SelectionText = SelectionText ?? string.Empty,
+                HasSelection = HasSelection,
+                DocumentKind = DocumentKind,
+                SupportsEditing = SupportsEditing,
+                IsEditModeEnabled = IsEditModeEnabled,
+                CanToggleEditMode = CanToggleEditMode,
+                CanGoToDefinition = CanGoToDefinition,
+                DefinitionDocumentPath = DefinitionDocumentPath ?? string.Empty,
+                DefinitionLine = DefinitionLine,
+                DefinitionColumn = DefinitionColumn,
+                DefinitionStart = DefinitionStart,
+                DefinitionLength = DefinitionLength
+            };
+        }
     }
 
     public enum EditorCommandExecutionKind

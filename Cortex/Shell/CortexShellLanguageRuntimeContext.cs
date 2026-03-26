@@ -30,6 +30,7 @@ namespace Cortex
             DocumentLanguageInteractionService documentLanguageInteractionService,
             EditorCompletionService editorCompletionService,
             EditorSignatureHelpService editorSignatureHelpService,
+            IEditorContextService editorContextService,
             Func<ILanguageServiceClient> languageServiceClientAccessor,
             Func<CortexNavigationService> navigationServiceAccessor,
             Func<bool> completionAugmentationInFlightAccessor,
@@ -52,6 +53,7 @@ namespace Cortex
             DocumentLanguageInteractionService = documentLanguageInteractionService;
             EditorCompletionService = editorCompletionService;
             EditorSignatureHelpService = editorSignatureHelpService;
+            EditorContextService = editorContextService;
             _languageServiceClientAccessor = languageServiceClientAccessor;
             _navigationServiceAccessor = navigationServiceAccessor;
             _completionAugmentationInFlightAccessor = completionAugmentationInFlightAccessor;
@@ -80,6 +82,8 @@ namespace Cortex
         public EditorCompletionService EditorCompletionService { get; private set; }
 
         public EditorSignatureHelpService EditorSignatureHelpService { get; private set; }
+
+        public IEditorContextService EditorContextService { get; private set; }
 
         public ILanguageServiceClient LanguageServiceClient
         {

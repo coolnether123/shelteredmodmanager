@@ -98,6 +98,7 @@ namespace Cortex.Services
                 return;
             }
 
+            state.EditorContext.Definition.RequestedContextKey = target.ContextKey ?? string.Empty;
             state.Editor.RequestedDefinitionKey = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition + "|" + DateTime.UtcNow.Ticks;
             state.Editor.RequestedDefinitionDocumentPath = target.DocumentPath ?? string.Empty;
             state.Editor.RequestedDefinitionLine = target.Line;

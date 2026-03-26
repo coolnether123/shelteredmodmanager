@@ -354,7 +354,7 @@ namespace Cortex.Modules.Editor
                     return;
                 }
 
-                _state.Editor.ActiveRenameTarget = target;
+                _state.Editor.ActiveRenameContextKey = target.ContextKey ?? string.Empty;
                 _state.Editor.ActiveRenameText = target.SymbolText ?? string.Empty;
                 _state.StatusMessage = "Rename preview ready for " + (target.SymbolText ?? string.Empty) + ".";
             }
@@ -362,7 +362,7 @@ namespace Cortex.Modules.Editor
             private void PeekDefinition(CommandExecutionContext context)
             {
                 var target = GetTarget(context);
-                _state.Editor.ActivePeekTarget = target;
+                _state.Editor.ActivePeekContextKey = target != null ? target.ContextKey ?? string.Empty : string.Empty;
                 QueueSemantic(context, SemanticRequestKind.PeekDefinition, SemanticWorkbenchViewKind.PeekDefinition, "Peek Definition");
             }
 

@@ -232,7 +232,7 @@ namespace Cortex
 
         private sealed class EditorShellModule : CortexShellModuleBase
         {
-            private readonly EditorModule _module = new EditorModule();
+            private EditorModule _module;
             private readonly IEditorModuleServices _services;
 
             public EditorShellModule(IEditorModuleServices services)
@@ -243,10 +243,19 @@ namespace Cortex
 
             public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
             {
+                if (_module == null && _services != null && _services.EditorContextService != null)
+                {
+                    _module = new EditorModule(_services.EditorContextService);
+                }
+
                 HarmonyCommandContributions.EnsureRegistered(
                     _services != null ? _services.CommandRegistry : null,
                     _services != null ? _services.ContributionRegistry : null,
                     _services);
+                if (_module == null)
+                {
+                    return;
+                }
                 _module.Draw(
                     _services != null ? _services.DocumentService : null,
                     _services != null ? _services.NavigationService : null,
@@ -272,6 +281,7 @@ namespace Cortex
                 AddMissing(missingDependencies, "CommandRegistry", _services != null ? _services.CommandRegistry : null);
                 AddMissing(missingDependencies, "ContributionRegistry", _services != null ? _services.ContributionRegistry : null);
                 AddMissing(missingDependencies, "WorkbenchSearchService", _services != null ? _services.WorkbenchSearchService : null);
+                AddMissing(missingDependencies, "EditorContextService", _services != null ? _services.EditorContextService : null);
             }
         }
     }

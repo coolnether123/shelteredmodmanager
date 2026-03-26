@@ -229,6 +229,7 @@ namespace Cortex
                     _documentLanguageInteractionService,
                     _editorCompletionService,
                     _editorSignatureHelpService,
+                    _services != null ? _services.EditorContextService : null,
                     delegate { return _languageServiceClient; },
                     delegate { return _navigationService; },
                     delegate { return _completionAugmentationInFlight; },
