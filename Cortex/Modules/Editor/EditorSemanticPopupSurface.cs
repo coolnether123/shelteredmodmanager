@@ -25,12 +25,12 @@ namespace Cortex.Modules.Editor
 
         public void DrawQuickActions(CortexShellState state, Rect anchorRect, Vector2 surfaceSize, ICommandRegistry commandRegistry)
         {
-            if (state == null || state.Semantic == null || !state.Semantic.QuickActionsVisible || string.IsNullOrEmpty(state.Semantic.QuickActionsContextKey))
+            if (state == null || state.Semantic == null || state.Semantic.QuickActions == null || !state.Semantic.QuickActions.Visible || string.IsNullOrEmpty(state.Semantic.QuickActions.ContextKey))
             {
                 return;
             }
 
-            var target = _contextService.ResolveTarget(state, state.Semantic.QuickActionsContextKey);
+            var target = _contextService.ResolveTarget(state, state.Semantic.QuickActions.ContextKey);
             if (target == null)
             {
                 _semanticOperationService.CloseQuickActions(state);
@@ -42,17 +42,17 @@ namespace Cortex.Modules.Editor
 
             GUILayout.BeginArea(popupRect);
             GUILayout.BeginVertical();
-            GUILayout.Label("Quick Actions: " + (state.Semantic.QuickActionsTitle ?? string.Empty), GUI.skin.label);
+            GUILayout.Label("Quick Actions: " + (state.Semantic.QuickActions.Title ?? string.Empty), GUI.skin.label);
             GUI.SetNextControlName("Cortex.QuickActionsFilter");
-            state.Semantic.QuickActionsFilterText = GUILayout.TextField(state.Semantic.QuickActionsFilterText ?? string.Empty, GUI.skin.textField);
+            state.Semantic.QuickActions.FilterText = GUILayout.TextField(state.Semantic.QuickActions.FilterText ?? string.Empty, GUI.skin.textField);
 
-            var actions = state.Semantic.QuickActions ?? new EditorResolvedContextAction[0];
+            var actions = state.Semantic.QuickActions.Actions ?? new EditorResolvedContextAction[0];
             var previousEnabled = GUI.enabled;
             var renderedCount = 0;
             for (var i = 0; i < actions.Length; i++)
             {
                 var action = actions[i];
-                if (action == null || !MatchesQuickActionFilter(action, state.Semantic.QuickActionsFilterText))
+                if (action == null || !MatchesQuickActionFilter(action, state.Semantic.QuickActions.FilterText))
                 {
                     continue;
                 }
@@ -107,15 +107,15 @@ namespace Cortex.Modules.Editor
 
         public void DrawRename(CortexShellState state, Rect anchorRect, Vector2 surfaceSize, ICommandRegistry commandRegistry)
         {
-            if (state == null || state.Editor == null || string.IsNullOrEmpty(state.Editor.ActiveRenameContextKey))
+            if (state == null || state.Editor == null || string.IsNullOrEmpty(state.Editor.Rename.ContextKey))
             {
                 return;
             }
 
-            var target = _contextService.ResolveTarget(state, state.Editor.ActiveRenameContextKey);
+            var target = _contextService.ResolveTarget(state, state.Editor.Rename.ContextKey);
             if (target == null)
             {
-                state.Editor.ActiveRenameContextKey = string.Empty;
+                state.Editor.Rename.ContextKey = string.Empty;
                 return;
             }
             var popupRect = BuildPopupRect(anchorRect, surfaceSize, RenameWidth, RenameHeight);
@@ -127,7 +127,7 @@ namespace Cortex.Modules.Editor
             GUILayout.Label("Rename '" + (target.SymbolText ?? string.Empty) + "' to:", GUI.skin.label);
 
             GUI.SetNextControlName("Cortex.RenameInput");
-            state.Editor.ActiveRenameText = GUILayout.TextField(state.Editor.ActiveRenameText, GUI.skin.textField);
+            state.Editor.Rename.ActiveText = GUILayout.TextField(state.Editor.Rename.ActiveText, GUI.skin.textField);
 
             if (current != null && current.type == EventType.Repaint && GUI.GetNameOfFocusedControl() != "Cortex.RenameInput")
             {
@@ -138,7 +138,7 @@ namespace Cortex.Modules.Editor
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Cancel", GUILayout.Width(60f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape))
             {
-                state.Editor.ActiveRenameContextKey = string.Empty;
+                state.Editor.Rename.ContextKey = string.Empty;
                 if (current != null)
                 {
                     current.Use();
@@ -147,11 +147,11 @@ namespace Cortex.Modules.Editor
 
             if (GUILayout.Button("Apply", GUILayout.Width(60f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Return))
             {
-                _semanticOperationService.QueueRequest(state, target, SemanticRequestKind.RenamePreview, state.Editor.ActiveRenameText);
-                state.Semantic.ActiveView = SemanticWorkbenchViewKind.RenamePreview;
+                _semanticOperationService.QueueRequest(state, target, SemanticRequestKind.RenamePreview, state.Editor.Rename.ActiveText);
+                state.Semantic.Workbench.ActiveView = SemanticWorkbenchViewKind.RenamePreview;
                 OpenSearchContainer(state, commandRegistry);
                 state.StatusMessage = "Semantic rename preview requested for " + (target.SymbolText ?? string.Empty) + ".";
-                state.Editor.ActiveRenameContextKey = string.Empty;
+                state.Editor.Rename.ContextKey = string.Empty;
                 if (current != null)
                 {
                     current.Use();
@@ -165,15 +165,15 @@ namespace Cortex.Modules.Editor
 
         public void DrawPeek(CortexShellState state, Rect anchorRect, Vector2 surfaceSize)
         {
-            if (state == null || state.Editor == null || string.IsNullOrEmpty(state.Editor.ActivePeekContextKey))
+            if (state == null || state.Editor == null || string.IsNullOrEmpty(state.Editor.Peek.ContextKey))
             {
                 return;
             }
 
-            var target = _contextService.ResolveTarget(state, state.Editor.ActivePeekContextKey);
+            var target = _contextService.ResolveTarget(state, state.Editor.Peek.ContextKey);
             if (target == null)
             {
-                state.Editor.ActivePeekContextKey = string.Empty;
+                state.Editor.Peek.ContextKey = string.Empty;
                 return;
             }
             var popupRect = BuildPopupRect(anchorRect, surfaceSize, PeekWidth, PeekHeight);
@@ -187,7 +187,7 @@ namespace Cortex.Modules.Editor
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("X", GUILayout.Width(24f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape))
             {
-                state.Editor.ActivePeekContextKey = string.Empty;
+                state.Editor.Peek.ContextKey = string.Empty;
                 if (current != null)
                 {
                     current.Use();
@@ -202,7 +202,7 @@ namespace Cortex.Modules.Editor
             innerStyle.wordWrap = true;
 
             var contentRect = new Rect(4f, 26f, PeekWidth - 8f, PeekHeight - 30f);
-            var peekDefinition = state.Semantic != null ? state.Semantic.PeekDefinition : null;
+            var peekDefinition = state.Semantic != null && state.Semantic.Workbench != null ? state.Semantic.Workbench.PeekDefinition : null;
             if (peekDefinition == null || !peekDefinition.Success || string.IsNullOrEmpty(peekDefinition.PreviewText))
             {
                 GUI.Label(contentRect, "No semantic definition preview is available yet.", innerStyle);

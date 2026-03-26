@@ -33,9 +33,10 @@ namespace Cortex.Services
                 return;
             }
 
-            if (state.Semantic.RequestedKind == SemanticRequestKind.SymbolContext &&
-                string.Equals(state.Semantic.RequestedDocumentPath ?? string.Empty, target.DocumentPath ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
-                state.Semantic.RequestedAbsolutePosition == target.AbsolutePosition)
+            if (state.Semantic.Request != null &&
+                state.Semantic.Request.RequestedKind == SemanticRequestKind.SymbolContext &&
+                string.Equals(state.Semantic.Request.RequestedDocumentPath ?? string.Empty, target.DocumentPath ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
+                state.Semantic.Request.RequestedAbsolutePosition == target.AbsolutePosition)
             {
                 return;
             }

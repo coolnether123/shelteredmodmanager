@@ -18,21 +18,21 @@ namespace Cortex.Services
                 return;
             }
 
-            state.Semantic.RequestedKey = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition + "|" + requestKind + "|" + DateTime.UtcNow.Ticks;
-            state.Semantic.RequestedContextKey = target.ContextKey ?? string.Empty;
-            state.Semantic.RequestedKind = requestKind;
-            state.Semantic.RequestedDocumentPath = target.DocumentPath ?? string.Empty;
-            state.Semantic.RequestedLine = target.Line;
-            state.Semantic.RequestedColumn = target.Column;
-            state.Semantic.RequestedAbsolutePosition = target.AbsolutePosition;
-            state.Semantic.RequestedSymbolText = target.SymbolText ?? string.Empty;
-            state.Semantic.RequestedNewName = newName ?? string.Empty;
-            state.Semantic.RequestedCommandId = string.Empty;
-            state.Semantic.RequestedTitle = string.Empty;
-            state.Semantic.RequestedApplyLabel = string.Empty;
-            state.Semantic.RequestedOrganizeImports = false;
-            state.Semantic.RequestedSimplifyNames = false;
-            state.Semantic.RequestedFormatDocument = false;
+            state.Semantic.Request.RequestedKey = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition + "|" + requestKind + "|" + DateTime.UtcNow.Ticks;
+            state.Semantic.Request.RequestedContextKey = target.ContextKey ?? string.Empty;
+            state.Semantic.Request.RequestedKind = requestKind;
+            state.Semantic.Request.RequestedDocumentPath = target.DocumentPath ?? string.Empty;
+            state.Semantic.Request.RequestedLine = target.Line;
+            state.Semantic.Request.RequestedColumn = target.Column;
+            state.Semantic.Request.RequestedAbsolutePosition = target.AbsolutePosition;
+            state.Semantic.Request.RequestedSymbolText = target.SymbolText ?? string.Empty;
+            state.Semantic.Request.RequestedNewName = newName ?? string.Empty;
+            state.Semantic.Request.RequestedCommandId = string.Empty;
+            state.Semantic.Request.RequestedTitle = string.Empty;
+            state.Semantic.Request.RequestedApplyLabel = string.Empty;
+            state.Semantic.Request.RequestedOrganizeImports = false;
+            state.Semantic.Request.RequestedSimplifyNames = false;
+            state.Semantic.Request.RequestedFormatDocument = false;
         }
 
         public void QueueDocumentTransformRequest(
@@ -50,21 +50,21 @@ namespace Cortex.Services
                 return;
             }
 
-            state.Semantic.RequestedKey = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition + "|" + SemanticRequestKind.DocumentTransformPreview + "|" + DateTime.UtcNow.Ticks;
-            state.Semantic.RequestedContextKey = target.ContextKey ?? string.Empty;
-            state.Semantic.RequestedKind = SemanticRequestKind.DocumentTransformPreview;
-            state.Semantic.RequestedDocumentPath = target.DocumentPath ?? string.Empty;
-            state.Semantic.RequestedLine = target.Line;
-            state.Semantic.RequestedColumn = target.Column;
-            state.Semantic.RequestedAbsolutePosition = target.AbsolutePosition;
-            state.Semantic.RequestedSymbolText = target.SymbolText ?? string.Empty;
-            state.Semantic.RequestedNewName = string.Empty;
-            state.Semantic.RequestedCommandId = commandId ?? string.Empty;
-            state.Semantic.RequestedTitle = title ?? string.Empty;
-            state.Semantic.RequestedApplyLabel = applyLabel ?? string.Empty;
-            state.Semantic.RequestedOrganizeImports = organizeImports;
-            state.Semantic.RequestedSimplifyNames = simplifyNames;
-            state.Semantic.RequestedFormatDocument = formatDocument;
+            state.Semantic.Request.RequestedKey = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition + "|" + SemanticRequestKind.DocumentTransformPreview + "|" + DateTime.UtcNow.Ticks;
+            state.Semantic.Request.RequestedContextKey = target.ContextKey ?? string.Empty;
+            state.Semantic.Request.RequestedKind = SemanticRequestKind.DocumentTransformPreview;
+            state.Semantic.Request.RequestedDocumentPath = target.DocumentPath ?? string.Empty;
+            state.Semantic.Request.RequestedLine = target.Line;
+            state.Semantic.Request.RequestedColumn = target.Column;
+            state.Semantic.Request.RequestedAbsolutePosition = target.AbsolutePosition;
+            state.Semantic.Request.RequestedSymbolText = target.SymbolText ?? string.Empty;
+            state.Semantic.Request.RequestedNewName = string.Empty;
+            state.Semantic.Request.RequestedCommandId = commandId ?? string.Empty;
+            state.Semantic.Request.RequestedTitle = title ?? string.Empty;
+            state.Semantic.Request.RequestedApplyLabel = applyLabel ?? string.Empty;
+            state.Semantic.Request.RequestedOrganizeImports = organizeImports;
+            state.Semantic.Request.RequestedSimplifyNames = simplifyNames;
+            state.Semantic.Request.RequestedFormatDocument = formatDocument;
         }
 
         public void OpenQuickActions(CortexShellState state, EditorCommandTarget target, EditorResolvedContextAction[] actions)
@@ -74,14 +74,14 @@ namespace Cortex.Services
                 return;
             }
 
-            state.Semantic.QuickActionsVisible = true;
-            state.Semantic.QuickActionsTitle = target != null && !string.IsNullOrEmpty(target.SymbolText)
+            state.Semantic.QuickActions.Visible = true;
+            state.Semantic.QuickActions.Title = target != null && !string.IsNullOrEmpty(target.SymbolText)
                 ? target.SymbolText
                 : "Quick Actions";
-            state.Semantic.QuickActionsFilterText = string.Empty;
-            state.Semantic.QuickActionsSelectedIndex = actions != null && actions.Length > 0 ? 0 : -1;
-            state.Semantic.QuickActionsContextKey = target != null ? target.ContextKey ?? string.Empty : string.Empty;
-            state.Semantic.QuickActions = actions ?? new EditorResolvedContextAction[0];
+            state.Semantic.QuickActions.FilterText = string.Empty;
+            state.Semantic.QuickActions.SelectedIndex = actions != null && actions.Length > 0 ? 0 : -1;
+            state.Semantic.QuickActions.ContextKey = target != null ? target.ContextKey ?? string.Empty : string.Empty;
+            state.Semantic.QuickActions.Actions = actions ?? new EditorResolvedContextAction[0];
         }
 
         public void CloseQuickActions(CortexShellState state)
@@ -91,12 +91,12 @@ namespace Cortex.Services
                 return;
             }
 
-            state.Semantic.QuickActionsVisible = false;
-            state.Semantic.QuickActionsTitle = string.Empty;
-            state.Semantic.QuickActionsFilterText = string.Empty;
-            state.Semantic.QuickActionsSelectedIndex = -1;
-            state.Semantic.QuickActionsContextKey = string.Empty;
-            state.Semantic.QuickActions = new EditorResolvedContextAction[0];
+            state.Semantic.QuickActions.Visible = false;
+            state.Semantic.QuickActions.Title = string.Empty;
+            state.Semantic.QuickActions.FilterText = string.Empty;
+            state.Semantic.QuickActions.SelectedIndex = -1;
+            state.Semantic.QuickActions.ContextKey = string.Empty;
+            state.Semantic.QuickActions.Actions = new EditorResolvedContextAction[0];
         }
 
         public UnitTestGenerationPlan BuildUnitTestPlan(CortexShellState state, EditorCommandTarget target)
@@ -155,8 +155,8 @@ namespace Cortex.Services
                 return;
             }
 
-            state.Semantic.DocumentEditPreview = previewPlan;
-            state.Semantic.ActiveView = previewPlan != null
+            state.Semantic.Workbench.DocumentEditPreview = previewPlan;
+            state.Semantic.Workbench.ActiveView = previewPlan != null
                 ? SemanticWorkbenchViewKind.DocumentEditPreview
                 : SemanticWorkbenchViewKind.None;
         }

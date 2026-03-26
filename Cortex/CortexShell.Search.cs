@@ -35,7 +35,7 @@ namespace Cortex
 
             search.IsVisible = true;
             search.FocusQueryRequested = true;
-            _state.Semantic.ActiveView = SemanticWorkbenchViewKind.None;
+            _state.Semantic.Workbench.ActiveView = SemanticWorkbenchViewKind.None;
             if (string.IsNullOrEmpty(search.QueryText))
             {
                 search.Query.Scope = SearchScopeKind.CurrentDocument;
@@ -107,7 +107,7 @@ namespace Cortex
             }
 
             var query = BuildActiveSearchQuery();
-            _state.Semantic.ActiveView = SemanticWorkbenchViewKind.None;
+            _state.Semantic.Workbench.ActiveView = SemanticWorkbenchViewKind.None;
             if (string.IsNullOrEmpty(query.SearchText))
             {
                 MMLog.WriteInfo("[Cortex.Find] Search skipped because query text was empty. Scope=" + query.Scope + ".");

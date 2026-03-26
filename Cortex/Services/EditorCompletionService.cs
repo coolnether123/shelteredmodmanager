@@ -13,16 +13,16 @@ namespace Cortex.Services
         private readonly DocumentLanguageInteractionService _documentLanguageInteractionService = new DocumentLanguageInteractionService();
         private readonly CompletionRankingService _completionRankingService = new CompletionRankingService();
 
-        public bool ShouldDispatch(CortexEditorInteractionState editorState, bool requestInFlight)
+        public bool ShouldDispatch(CortexCompletionInteractionState editorState, bool requestInFlight)
         {
             if (requestInFlight || editorState == null)
             {
                 return false;
             }
 
-            var requestKey = editorState.RequestedCompletionKey ?? string.Empty;
+            var requestKey = editorState.RequestedKey ?? string.Empty;
             return !string.IsNullOrEmpty(requestKey) &&
-                !string.Equals(requestKey, editorState.ActiveCompletionKey ?? string.Empty, StringComparison.Ordinal);
+                !string.Equals(requestKey, editorState.ActiveContextKey ?? string.Empty, StringComparison.Ordinal);
         }
 
         public LanguageServiceCompletionRequest BuildWorkerRequest(
@@ -30,7 +30,7 @@ namespace Cortex.Services
             CortexSettings settings,
             CortexProjectDefinition project,
             string[] sourceRoots,
-            CortexEditorInteractionState editorState)
+            CortexCompletionInteractionState editorState)
         {
             if (session == null || editorState == null)
             {
@@ -53,17 +53,17 @@ namespace Cortex.Services
                 SourceRoots = sourceRoots ?? new string[0],
                 DocumentText = session.Text ?? string.Empty,
                 DocumentVersion = session.TextVersion,
-                Line = editorState.RequestedCompletionLine,
-                Column = editorState.RequestedCompletionColumn,
-                AbsolutePosition = editorState.RequestedCompletionAbsolutePosition,
-                ExplicitInvocation = editorState.RequestedCompletionExplicit,
-                TriggerCharacter = editorState.RequestedCompletionTriggerCharacter ?? string.Empty
+                Line = editorState.RequestedLine,
+                Column = editorState.RequestedColumn,
+                AbsolutePosition = editorState.RequestedAbsolutePosition,
+                ExplicitInvocation = editorState.RequestedExplicit,
+                TriggerCharacter = editorState.RequestedTriggerCharacter ?? string.Empty
             };
         }
 
         public bool QueueRequest(
             DocumentSession session,
-            CortexEditorInteractionState editorState,
+            CortexCompletionInteractionState editorState,
             IEditorService editorService,
             bool explicitInvocation,
             string triggerCharacter)
@@ -76,18 +76,18 @@ namespace Cortex.Services
 
             var caretIndex = Mathf.Max(0, session.EditorState.CaretIndex);
             var caret = editorService.GetCaretPosition(session, caretIndex);
-            editorState.RequestedCompletionKey = _documentLanguageInteractionService.BuildCompletionRequestKey(
+            editorState.RequestedKey = _documentLanguageInteractionService.BuildCompletionRequestKey(
                 session.FilePath,
                 session.TextVersion,
                 caretIndex,
                 explicitInvocation,
                 triggerCharacter);
-            editorState.RequestedCompletionDocumentPath = session.FilePath ?? string.Empty;
-            editorState.RequestedCompletionLine = caret.Line + 1;
-            editorState.RequestedCompletionColumn = caret.Column + 1;
-            editorState.RequestedCompletionAbsolutePosition = caretIndex;
-            editorState.RequestedCompletionTriggerCharacter = triggerCharacter ?? string.Empty;
-            editorState.RequestedCompletionExplicit = explicitInvocation;
+            editorState.RequestedDocumentPath = session.FilePath ?? string.Empty;
+            editorState.RequestedLine = caret.Line + 1;
+            editorState.RequestedColumn = caret.Column + 1;
+            editorState.RequestedAbsolutePosition = caretIndex;
+            editorState.RequestedTriggerCharacter = triggerCharacter ?? string.Empty;
+            editorState.RequestedExplicit = explicitInvocation;
             ClearActive(editorState);
             ResetSelection(editorState);
             LogQueueBehavior(session, editorState, triggerCharacter, explicitInvocation);
@@ -95,7 +95,7 @@ namespace Cortex.Services
         }
 
         public bool AcceptResponse(
-            CortexEditorInteractionState editorState,
+            CortexCompletionInteractionState editorState,
             DocumentSession target,
             DocumentLanguageCompletionRequestState pending,
             LanguageServiceCompletionResponse response)
@@ -105,7 +105,7 @@ namespace Cortex.Services
                 return false;
             }
 
-            if (!string.Equals(editorState.RequestedCompletionKey ?? string.Empty, pending.RequestKey ?? string.Empty, StringComparison.Ordinal))
+            if (!string.Equals(editorState.RequestedKey ?? string.Empty, pending.RequestKey ?? string.Empty, StringComparison.Ordinal))
             {
                 return false;
             }
@@ -123,15 +123,15 @@ namespace Cortex.Services
             }
 
             response = _completionRankingService.Rank(target, editorState, response);
-            editorState.ActiveCompletionKey = pending.RequestKey ?? string.Empty;
-            editorState.ActiveCompletionResponse = response;
+            editorState.ActiveContextKey = pending.ContextKey ?? string.Empty;
+            editorState.Response = response;
             ResetSelection(editorState);
             SyncSelection(editorState);
             return true;
         }
 
         public bool MergeSupplementalResponse(
-            CortexEditorInteractionState editorState,
+            CortexCompletionInteractionState editorState,
             DocumentSession target,
             DocumentLanguageCompletionRequestState pending,
             LanguageServiceCompletionResponse response)
@@ -147,7 +147,7 @@ namespace Cortex.Services
                 return false;
             }
 
-            var active = editorState.ActiveCompletionResponse;
+            var active = editorState.Response;
             if (active != null &&
                 string.Equals(active.DocumentPath ?? string.Empty, target.FilePath ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
                 active.DocumentVersion == target.TextVersion &&
@@ -191,15 +191,15 @@ namespace Cortex.Services
             }
 
             combined = _completionRankingService.Rank(target, editorState, combined);
-            editorState.ActiveCompletionKey = pending.RequestKey ?? string.Empty;
-            editorState.ActiveCompletionResponse = combined;
+            editorState.ActiveContextKey = pending.ContextKey ?? string.Empty;
+            editorState.Response = combined;
             ResetSelection(editorState);
             SyncSelection(editorState);
             return true;
         }
 
         public bool SetInlineSuggestion(
-            CortexEditorInteractionState editorState,
+            CortexCompletionInteractionState editorState,
             DocumentSession target,
             DocumentLanguageCompletionRequestState pending,
             LanguageServiceCompletionResponse response,
@@ -260,20 +260,20 @@ namespace Cortex.Services
                 return false;
             }
 
-            editorState.ActiveInlineCompletionKey = pending.RequestKey ?? string.Empty;
-            editorState.ActiveInlineCompletionResponse = CloneCompletionResponse(response);
-            editorState.ActiveInlineCompletionProviderId = providerId ?? string.Empty;
+            editorState.InlineContextKey = pending.ContextKey ?? string.Empty;
+            editorState.InlineResponse = CloneCompletionResponse(response);
+            editorState.InlineProviderId = providerId ?? string.Empty;
             return true;
         }
 
-        public bool HasVisibleInlineSuggestion(CortexEditorInteractionState editorState, DocumentSession session)
+        public bool HasVisibleInlineSuggestion(CortexCompletionInteractionState editorState, DocumentSession session)
         {
             string _;
             return TryGetInlineSuggestionSuffix(editorState, session, out _);
         }
 
         public bool TryGetInlineSuggestionSuffix(
-            CortexEditorInteractionState editorState,
+            CortexCompletionInteractionState editorState,
             DocumentSession session,
             out string suffixText)
         {
@@ -283,7 +283,7 @@ namespace Cortex.Services
                 return false;
             }
 
-            var response = editorState.ActiveInlineCompletionResponse;
+            var response = editorState.InlineResponse;
             if (!HasCompletionItems(response) ||
                 !string.Equals(response.DocumentPath ?? string.Empty, session.FilePath ?? string.Empty, StringComparison.OrdinalIgnoreCase))
             {
@@ -329,14 +329,14 @@ namespace Cortex.Services
             return !string.IsNullOrEmpty(suffixText);
         }
 
-        public bool ApplyInlineSuggestion(DocumentSession session, CortexEditorInteractionState editorState, IEditorService editorService)
+        public bool ApplyInlineSuggestion(DocumentSession session, CortexCompletionInteractionState editorState, IEditorService editorService)
         {
             if (session == null || editorState == null || editorService == null)
             {
                 return false;
             }
 
-            var response = editorState.ActiveInlineCompletionResponse;
+            var response = editorState.InlineResponse;
             if (!HasCompletionItems(response))
             {
                 return false;
@@ -389,9 +389,9 @@ namespace Cortex.Services
             return applied;
         }
 
-        public bool IsVisibleForSession(CortexEditorInteractionState editorState, DocumentSession session)
+        public bool IsVisibleForSession(CortexCompletionInteractionState editorState, DocumentSession session)
         {
-            var response = editorState != null ? editorState.ActiveCompletionResponse : null;
+            var response = editorState != null ? editorState.Response : null;
             return HasCompletionItems(response) &&
                 session != null &&
                 string.Equals(response.DocumentPath ?? string.Empty, session.FilePath ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
@@ -400,9 +400,9 @@ namespace Cortex.Services
                 !session.EditorState.HasMultipleSelections;
         }
 
-        public bool HasVisibleCompletion(CortexEditorInteractionState editorState)
+        public bool HasVisibleCompletion(CortexCompletionInteractionState editorState)
         {
-            return editorState != null && HasCompletionItems(editorState.ActiveCompletionResponse);
+            return editorState != null && HasCompletionItems(editorState.Response);
         }
 
         public bool HasCompletionItems(LanguageServiceCompletionResponse response)
@@ -420,14 +420,14 @@ namespace Cortex.Services
             return _documentLanguageInteractionService.ShouldContinueCompletion(session, caretIndex);
         }
 
-        public void SyncSelection(CortexEditorInteractionState editorState)
+        public void SyncSelection(CortexCompletionInteractionState editorState)
         {
             if (editorState == null)
             {
                 return;
             }
 
-            var response = editorState.ActiveCompletionResponse;
+            var response = editorState.Response;
             if (response == null)
             {
                 ResetSelection(editorState);
@@ -437,27 +437,27 @@ namespace Cortex.Services
             var responseKey = (response.DocumentPath ?? string.Empty) + "|" +
                 response.DocumentVersion + "|" +
                 (response.Items != null ? response.Items.Length : 0);
-            if (!string.Equals(editorState.CompletionPopupStateKey, responseKey, StringComparison.Ordinal))
+            if (!string.Equals(editorState.PopupStateKey, responseKey, StringComparison.Ordinal))
             {
-                editorState.CompletionPopupStateKey = responseKey;
-                editorState.CompletionSelectedIndex = 0;
+                editorState.PopupStateKey = responseKey;
+                editorState.SelectedIndex = 0;
                 if (response.Items != null)
                 {
                     for (var i = 0; i < response.Items.Length; i++)
                     {
                         if (response.Items[i] != null && response.Items[i].IsPreselected)
                         {
-                            editorState.CompletionSelectedIndex = i;
+                            editorState.SelectedIndex = i;
                             break;
                         }
                     }
                 }
             }
 
-            editorState.CompletionSelectedIndex = _documentLanguageInteractionService.NormalizeSelectedIndex(response, editorState.CompletionSelectedIndex);
+            editorState.SelectedIndex = _documentLanguageInteractionService.NormalizeSelectedIndex(response, editorState.SelectedIndex);
         }
 
-        public void MoveSelection(CortexEditorInteractionState editorState, int delta)
+        public void MoveSelection(CortexCompletionInteractionState editorState, int delta)
         {
             if (editorState == null || delta == 0)
             {
@@ -465,31 +465,31 @@ namespace Cortex.Services
             }
 
             SyncSelection(editorState);
-            var response = editorState.ActiveCompletionResponse;
+            var response = editorState.Response;
             if (!HasCompletionItems(response))
             {
                 return;
             }
 
-            var next = editorState.CompletionSelectedIndex + delta;
-            editorState.CompletionSelectedIndex = Mathf.Max(0, Mathf.Min(response.Items.Length - 1, next));
+            var next = editorState.SelectedIndex + delta;
+            editorState.SelectedIndex = Mathf.Max(0, Mathf.Min(response.Items.Length - 1, next));
         }
 
-        public bool ApplySelectedCompletion(DocumentSession session, CortexEditorInteractionState editorState, IEditorService editorService)
+        public bool ApplySelectedCompletion(DocumentSession session, CortexCompletionInteractionState editorState, IEditorService editorService)
         {
             if (editorState == null || editorService == null)
             {
                 return false;
             }
 
-            var response = editorState.ActiveCompletionResponse;
+            var response = editorState.Response;
             if (!HasCompletionItems(response))
             {
                 return false;
             }
 
             SyncSelection(editorState);
-            if (editorState.CompletionSelectedIndex < 0 || editorState.CompletionSelectedIndex >= response.Items.Length)
+            if (editorState.SelectedIndex < 0 || editorState.SelectedIndex >= response.Items.Length)
             {
                 return false;
             }
@@ -498,16 +498,16 @@ namespace Cortex.Services
                 session,
                 editorService,
                 response,
-                response.Items[editorState.CompletionSelectedIndex]);
+                response.Items[editorState.SelectedIndex]);
             if (applied)
             {
-                RecordAcceptedCompletion(editorState, session, response.Items[editorState.CompletionSelectedIndex]);
+                RecordAcceptedCompletion(editorState, session, response.Items[editorState.SelectedIndex]);
             }
             Reset(editorState);
             return applied;
         }
 
-        public void Reset(CortexEditorInteractionState editorState)
+        public void Reset(CortexCompletionInteractionState editorState)
         {
             if (editorState == null)
             {
@@ -520,70 +520,71 @@ namespace Cortex.Services
             ResetSelection(editorState);
         }
 
-        public void ClearPendingRequest(CortexEditorInteractionState editorState)
+        public void ClearPendingRequest(CortexCompletionInteractionState editorState)
         {
             ClearRequest(editorState);
         }
 
-        public void ClearPopupCompletion(CortexEditorInteractionState editorState)
+        public void ClearPopupCompletion(CortexCompletionInteractionState editorState)
         {
             ClearRequest(editorState);
             ClearActive(editorState);
             ResetSelection(editorState);
         }
 
-        public void ClearInlineSuggestion(CortexEditorInteractionState editorState)
+        public void ClearInlineSuggestion(CortexCompletionInteractionState editorState)
         {
             if (editorState == null)
             {
                 return;
             }
 
-            editorState.ActiveInlineCompletionKey = string.Empty;
-            editorState.ActiveInlineCompletionResponse = null;
-            editorState.ActiveInlineCompletionProviderId = string.Empty;
+            editorState.InlineContextKey = string.Empty;
+            editorState.InlineResponse = null;
+            editorState.InlineProviderId = string.Empty;
         }
 
-        private static void ClearRequest(CortexEditorInteractionState editorState)
+        private static void ClearRequest(CortexCompletionInteractionState editorState)
         {
             if (editorState == null)
             {
                 return;
             }
 
-            editorState.RequestedCompletionKey = string.Empty;
-            editorState.RequestedCompletionDocumentPath = string.Empty;
-            editorState.RequestedCompletionLine = 0;
-            editorState.RequestedCompletionColumn = 0;
-            editorState.RequestedCompletionAbsolutePosition = -1;
-            editorState.RequestedCompletionTriggerCharacter = string.Empty;
-            editorState.RequestedCompletionExplicit = false;
+            editorState.RequestedContextKey = string.Empty;
+            editorState.RequestedKey = string.Empty;
+            editorState.RequestedDocumentPath = string.Empty;
+            editorState.RequestedLine = 0;
+            editorState.RequestedColumn = 0;
+            editorState.RequestedAbsolutePosition = -1;
+            editorState.RequestedTriggerCharacter = string.Empty;
+            editorState.RequestedExplicit = false;
         }
 
-        private static void ClearActive(CortexEditorInteractionState editorState)
+        private static void ClearActive(CortexCompletionInteractionState editorState)
         {
             if (editorState == null)
             {
                 return;
             }
 
-            editorState.ActiveCompletionKey = string.Empty;
-            editorState.ActiveCompletionResponse = null;
+            editorState.ActiveContextKey = string.Empty;
+            editorState.Response = null;
         }
 
-        private static void ResetSelection(CortexEditorInteractionState editorState)
+        private static void ResetSelection(CortexCompletionInteractionState editorState)
         {
             if (editorState == null)
             {
                 return;
             }
 
-            editorState.CompletionPopupStateKey = string.Empty;
-            editorState.CompletionSelectedIndex = -1;
+            editorState.PopupStateKey = string.Empty;
+            editorState.SelectedIndex = -1;
         }
 
         private static void RecordAcceptedCompletion(
-            CortexEditorInteractionState editorState,
+            CortexCompletionInteractionState editorState,
             DocumentSession session,
             LanguageServiceCompletionItem item)
         {
@@ -622,7 +623,7 @@ namespace Cortex.Services
             {
                 DocumentPath = documentPath,
                 CompletionText = completionText,
-                Sequence = ++editorState.CompletionAcceptanceSequence
+                Sequence = ++editorState.AcceptanceSequence
             });
 
             const int maxAcceptedEntries = 12;
@@ -782,7 +783,7 @@ namespace Cortex.Services
 
         private static void LogQueueBehavior(
             DocumentSession session,
-            CortexEditorInteractionState editorState,
+            CortexCompletionInteractionState editorState,
             string triggerCharacter,
             bool explicitInvocation)
         {
@@ -819,6 +820,7 @@ namespace Cortex.Services
         public string RequestId;
         public int Generation;
         public string RequestKey;
+        public string ContextKey;
         public string DocumentPath;
         public int DocumentVersion;
         public int AbsolutePosition;

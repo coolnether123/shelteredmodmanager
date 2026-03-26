@@ -94,7 +94,7 @@ namespace Cortex
             }
 
             var skipReason = CompletionAugmentationDispatchPolicy.GetSkipReason(
-                _state != null ? _state.Editor : null,
+                _state != null ? _state.Editor.Completion : null,
                 session,
                 request,
                 _editorCompletionService);
@@ -245,11 +245,11 @@ namespace Cortex
                     ", Status=" + (result != null && result.Response != null ? result.Response.StatusMessage ?? string.Empty : string.Empty) + ".");
                 SetCompletionAugmentationStatus(
                     result != null && result.Response != null && result.Response.Success ? "ready" : "error",
-                    result != null ? result.ProviderId ?? string.Empty : _state.Editor.CompletionAugmentationProviderId ?? string.Empty,
+                    result != null ? result.ProviderId ?? string.Empty : _state.Editor.Completion.AugmentationProviderId ?? string.Empty,
                     result != null && result.Response != null ? result.Response.StatusMessage ?? string.Empty : string.Empty);
-                if (_state.Editor.ActiveCompletionResponse == null)
+                if (_state.Editor.Completion.Response == null)
                 {
-                    _editorCompletionService.ClearPendingRequest(_state.Editor);
+                    _editorCompletionService.ClearPendingRequest(_state.Editor.Completion);
                 }
                 return;
             }
@@ -280,7 +280,7 @@ namespace Cortex
             }
 
             var inlineSet = _editorCompletionService.SetInlineSuggestion(
-                _state.Editor,
+                _state.Editor.Completion,
                 target,
                 new DocumentLanguageCompletionRequestState
                 {
@@ -302,7 +302,7 @@ namespace Cortex
                 inlineSet ? "inline suggestion ready" : "response received");
 
             var merged = _editorCompletionService.MergeSupplementalResponse(
-                _state.Editor,
+                _state.Editor.Completion,
                 target,
                 new DocumentLanguageCompletionRequestState
                 {
@@ -317,9 +317,9 @@ namespace Cortex
                 ", Merged=" + merged +
                 ", Items=" + (result != null && result.Response != null && result.Response.Items != null ? result.Response.Items.Length : 0) +
                 ", Document=" + (target != null ? target.FilePath ?? string.Empty : string.Empty) + ".");
-            if (!merged && _state.Editor.ActiveCompletionResponse == null)
+            if (!merged && _state.Editor.Completion.Response == null)
             {
-                _editorCompletionService.ClearPendingRequest(_state.Editor);
+                _editorCompletionService.ClearPendingRequest(_state.Editor.Completion);
             }
         }
 
@@ -330,9 +330,9 @@ namespace Cortex
                 return;
             }
 
-            _state.Editor.CompletionAugmentationStatus = status ?? string.Empty;
-            _state.Editor.CompletionAugmentationProviderId = providerId ?? string.Empty;
-            _state.Editor.CompletionAugmentationStatusMessage = statusMessage ?? string.Empty;
+            _state.Editor.Completion.AugmentationStatus = status ?? string.Empty;
+            _state.Editor.Completion.AugmentationProviderId = providerId ?? string.Empty;
+            _state.Editor.Completion.AugmentationStatusMessage = statusMessage ?? string.Empty;
         }
 
         private void DispatchDeferredCompletionAugmentation()
@@ -376,7 +376,7 @@ namespace Cortex
 
             var deferredSession = FindOpenDocument(deferred.Request.DocumentPath);
             var skipReason = CompletionAugmentationDispatchPolicy.GetSkipReason(
-                _state != null ? _state.Editor : null,
+                _state != null ? _state.Editor.Completion : null,
                 deferredSession,
                 deferred.Request,
                 _editorCompletionService);
@@ -404,7 +404,7 @@ namespace Cortex
                 session,
                 pending,
                 _state.Settings,
-                _state.Editor,
+                _state.Editor != null ? _state.Editor.Completion : null,
                 _state.Documents != null ? _state.Documents.OpenDocuments : null,
                 MapLanguageId(documentPath));
         }

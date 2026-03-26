@@ -248,17 +248,17 @@ namespace Cortex.Modules.Editor
                         harmonyPatchGenerationService);
                     _semanticPopupSurface.DrawQuickActions(
                         state,
-                        GetViewportAnchorRect(_contextService.ResolveTarget(state, state != null && state.Semantic != null ? state.Semantic.QuickActionsContextKey : string.Empty), scroll, gutterWidth),
+                        GetViewportAnchorRect(_contextService.ResolveTarget(state, state != null && state.Semantic != null && state.Semantic.QuickActions != null ? state.Semantic.QuickActions.ContextKey : string.Empty), scroll, gutterWidth),
                         rect.size,
                         commandRegistry);
                     _semanticPopupSurface.DrawRename(
                         state,
-                        GetViewportAnchorRect(_contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.ActiveRenameContextKey : string.Empty), scroll, gutterWidth),
+                        GetViewportAnchorRect(_contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.Rename.ContextKey : string.Empty), scroll, gutterWidth),
                         rect.size,
                         commandRegistry);
                     _semanticPopupSurface.DrawPeek(
                         state,
-                        GetViewportAnchorRect(_contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.ActivePeekContextKey : string.Empty), scroll, gutterWidth),
+                        GetViewportAnchorRect(_contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.Peek.ContextKey : string.Empty), scroll, gutterWidth),
                         rect.size);
                     DrawContextMenu(state, current, localMouse, rect.size, commandRegistry);
                 }
@@ -1225,7 +1225,7 @@ namespace Cortex.Modules.Editor
             }
 
             if (!string.IsNullOrEmpty(_stickyHoverKey) &&
-                !string.IsNullOrEmpty(state.Editor.ActiveHoverKey) &&
+                !string.IsNullOrEmpty(state.Editor.Hover.ActiveContextKey) &&
                 !string.Equals(hoverKey, _stickyHoverKey, StringComparison.Ordinal))
             {
                 LogHoverRetargetSuppressed(hoveredToken, hoverKey);
@@ -1234,27 +1234,28 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            if (string.Equals(state.Editor.ActiveHoverKey, hoverKey, StringComparison.Ordinal) &&
-                state.Editor.ActiveHoverResponse != null &&
-                state.Editor.ActiveHoverResponse.Success)
+            var activeHoverResponse = _contextService.ResolveHoverResponse(state, hoverKey);
+            if (activeHoverResponse != null &&
+                activeHoverResponse.Success)
             {
                 return;
             }
 
-            if (string.Equals(state.Editor.RequestedHoverKey, hoverKey, StringComparison.Ordinal))
+            if (string.Equals(state.Editor.Hover.RequestedKey, hoverKey, StringComparison.Ordinal))
             {
                 return;
             }
 
-            state.Editor.RequestedHoverKey = hoverKey;
-            state.Editor.RequestedHoverDocumentPath = session.FilePath ?? string.Empty;
-            state.Editor.RequestedHoverLine = hoveredToken.LineNumber;
-            state.Editor.RequestedHoverColumn = hoveredToken.Column;
-            state.Editor.RequestedHoverAbsolutePosition = hoveredToken.Start;
-            state.Editor.RequestedHoverTokenText = hoveredToken.RawText.Trim();
+            state.Editor.Hover.RequestedKey = hoverKey;
+            state.Editor.Hover.RequestedContextKey = state.EditorContext != null ? state.EditorContext.ActiveContextKey ?? string.Empty : string.Empty;
+            state.Editor.Hover.RequestedDocumentPath = session.FilePath ?? string.Empty;
+            state.Editor.Hover.RequestedLine = hoveredToken.LineNumber;
+            state.Editor.Hover.RequestedColumn = hoveredToken.Column;
+            state.Editor.Hover.RequestedAbsolutePosition = hoveredToken.Start;
+            state.Editor.Hover.RequestedTokenText = hoveredToken.RawText.Trim();
             EditorInteractionLog.WriteHover("Queued hover request for " +
-                state.Editor.RequestedHoverTokenText +
-                " @ " + state.Editor.RequestedHoverLine + ":" + state.Editor.RequestedHoverColumn + ".");
+                state.Editor.Hover.RequestedTokenText +
+                " @ " + state.Editor.Hover.RequestedLine + ":" + state.Editor.Hover.RequestedColumn + ".");
         }
 
         private void DrawTooltip(DocumentSession session, Vector2 scroll, Vector2 localMouse, CodeViewToken hoveredToken, CortexNavigationService navigationService, CortexShellState state, Vector2 viewportSize, bool hasMouse)
@@ -1339,8 +1340,9 @@ namespace Cortex.Modules.Editor
                 return false;
             }
 
-            response = state.Editor.ActiveHoverResponse;
-            hoverKey = state.Editor.ActiveHoverKey ?? string.Empty;
+            var activeHoverContext = _contextService.GetContext(state, state.Editor.Hover.ActiveContextKey);
+            response = _contextService.ResolveHoverResponse(state, state.Editor.Hover.ActiveContextKey, string.Empty);
+            hoverKey = activeHoverContext != null ? activeHoverContext.HoverKey ?? string.Empty : string.Empty;
             if (response == null || !response.Success || string.IsNullOrEmpty(hoverKey))
             {
                 if (HasAnyHoverState(state))
@@ -1830,9 +1832,8 @@ namespace Cortex.Modules.Editor
 
             return state != null &&
                 state.Editor != null &&
-                (!string.IsNullOrEmpty(state.Editor.ActiveHoverKey) ||
-                 state.Editor.ActiveHoverResponse != null ||
-                 !string.IsNullOrEmpty(state.Editor.VisibleHoverKey));
+                (!string.IsNullOrEmpty(state.Editor.Hover.ActiveContextKey) ||
+                 !string.IsNullOrEmpty(state.Editor.Hover.VisibleContextKey));
         }
 
         private bool HasStickyHoverState()
@@ -1844,15 +1845,19 @@ namespace Cortex.Modules.Editor
                 _stickyHoverKeepAliveUtc > DateTime.MinValue;
         }
 
-        private static void ClearActiveHover(CortexShellState state)
+        private void ClearActiveHover(CortexShellState state)
         {
             if (state == null || state.Editor == null)
             {
                 return;
             }
 
-            state.Editor.ActiveHoverKey = string.Empty;
-            state.Editor.ActiveHoverResponse = null;
+            if (!string.IsNullOrEmpty(state.Editor.Hover.ActiveContextKey))
+            {
+                _contextService.ClearHoverResponse(state, state.Editor.Hover.ActiveContextKey);
+            }
+
+            state.Editor.Hover.ActiveContextKey = string.Empty;
         }
 
         private static bool HasArea(Rect rect)
@@ -1971,8 +1976,8 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            state.Editor.VisibleHoverKey = hoverKey ?? string.Empty;
-            state.Editor.VisibleHoverDefinitionDocumentPath =
+            state.Editor.Hover.VisibleContextKey = state.Editor.Hover.ActiveContextKey ?? string.Empty;
+            state.Editor.Hover.VisibleDefinitionDocumentPath =
                 hoveredPart != null && hoveredPart.IsInteractive && !string.IsNullOrEmpty(hoveredPart.DefinitionDocumentPath)
                     ? hoveredPart.DefinitionDocumentPath
                     : (response != null ? response.DefinitionDocumentPath ?? string.Empty : string.Empty);
@@ -1985,8 +1990,8 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            state.Editor.VisibleHoverKey = string.Empty;
-            state.Editor.VisibleHoverDefinitionDocumentPath = string.Empty;
+            state.Editor.Hover.VisibleContextKey = string.Empty;
+            state.Editor.Hover.VisibleDefinitionDocumentPath = string.Empty;
         }
 
         private void DrawContextMenu(
@@ -2113,9 +2118,7 @@ namespace Cortex.Modules.Editor
                 return null;
             }
 
-            return string.Equals(state.Editor.ActiveHoverKey, token.Key, StringComparison.Ordinal)
-                ? state.Editor.ActiveHoverResponse
-                : null;
+            return _contextService.ResolveHoverResponse(state, token.Key);
         }
 
         private bool IsRelatedSelectionToken(CortexShellState state, DocumentSession session, CodeViewToken token)
@@ -2134,7 +2137,7 @@ namespace Cortex.Modules.Editor
             }
 
             if (!CanParticipateInRelatedSelection(token.Classification, token.RawText) ||
-                !CanParticipateInRelatedSelection(context != null && context.Target != null ? context.Target.SymbolKind : string.Empty, selectedText))
+                !CanParticipateInRelatedSelection(context != null && context.Semantic != null ? context.Semantic.SymbolKind : string.Empty, selectedText))
             {
                 return false;
             }

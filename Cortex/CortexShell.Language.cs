@@ -190,8 +190,8 @@ namespace Cortex
             {
                 _languageRuntime.LastAnalyzedDocumentFingerprint = string.Empty;
                 _languageRuntime.PendingLanguageAnalysisFingerprint = string.Empty;
-                _editorCompletionService.Reset(_state.Editor);
-                _editorSignatureHelpService.Reset(_state.Editor);
+                _editorCompletionService.Reset(_state.Editor.Completion);
+                _editorSignatureHelpService.Reset(_state.Editor.SignatureHelp);
             }
         }
 
@@ -280,8 +280,8 @@ namespace Cortex
             _languageRuntime.InitializeQueuedUtc = DateTime.MinValue;
             _languageRuntime.LastInitializationProgressLogUtc = DateTime.MinValue;
             _languageRuntime.ServiceConfigurationFingerprint = configurationFingerprint ?? string.Empty;
-            _editorCompletionService.Reset(_state.Editor);
-            _editorSignatureHelpService.Reset(_state.Editor);
+            _editorCompletionService.Reset(_state.Editor.Completion);
+            _editorSignatureHelpService.Reset(_state.Editor.SignatureHelp);
         }
 
         private DocumentSession FindOpenDocument(string filePath)

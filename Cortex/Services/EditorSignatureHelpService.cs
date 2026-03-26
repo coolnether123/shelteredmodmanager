@@ -9,16 +9,16 @@ namespace Cortex.Services
 {
     internal sealed class EditorSignatureHelpService
     {
-        public bool ShouldDispatch(CortexEditorInteractionState editorState, bool requestInFlight)
+        public bool ShouldDispatch(CortexSignatureHelpInteractionState editorState, bool requestInFlight)
         {
             if (requestInFlight || editorState == null)
             {
                 return false;
             }
 
-            var requestKey = editorState.RequestedSignatureHelpKey ?? string.Empty;
+            var requestKey = editorState.RequestedKey ?? string.Empty;
             return !string.IsNullOrEmpty(requestKey) &&
-                !string.Equals(requestKey, editorState.ActiveSignatureHelpKey ?? string.Empty, StringComparison.Ordinal);
+                !string.Equals(requestKey, editorState.ActiveContextKey ?? string.Empty, StringComparison.Ordinal);
         }
 
         public LanguageServiceSignatureHelpRequest BuildWorkerRequest(
@@ -26,7 +26,7 @@ namespace Cortex.Services
             CortexSettings settings,
             CortexProjectDefinition project,
             string[] sourceRoots,
-            CortexEditorInteractionState editorState)
+            CortexSignatureHelpInteractionState editorState)
         {
             if (session == null || editorState == null)
             {
@@ -41,17 +41,17 @@ namespace Cortex.Services
                 SourceRoots = sourceRoots ?? new string[0],
                 DocumentText = session.Text ?? string.Empty,
                 DocumentVersion = session.TextVersion,
-                Line = editorState.RequestedSignatureHelpLine,
-                Column = editorState.RequestedSignatureHelpColumn,
-                AbsolutePosition = editorState.RequestedSignatureHelpAbsolutePosition,
-                ExplicitInvocation = editorState.RequestedSignatureHelpExplicit,
-                TriggerCharacter = editorState.RequestedSignatureHelpTriggerCharacter ?? string.Empty
+                Line = editorState.RequestedLine,
+                Column = editorState.RequestedColumn,
+                AbsolutePosition = editorState.RequestedAbsolutePosition,
+                ExplicitInvocation = editorState.RequestedExplicit,
+                TriggerCharacter = editorState.RequestedTriggerCharacter ?? string.Empty
             };
         }
 
         public bool QueueRequest(
             DocumentSession session,
-            CortexEditorInteractionState editorState,
+            CortexSignatureHelpInteractionState editorState,
             IEditorService editorService,
             bool explicitInvocation,
             string triggerCharacter)
@@ -64,20 +64,20 @@ namespace Cortex.Services
 
             var caretIndex = Mathf.Max(0, session.EditorState.CaretIndex);
             var caret = editorService.GetCaretPosition(session, caretIndex);
-            editorState.RequestedSignatureHelpKey = BuildRequestKey(session.FilePath, session.TextVersion, caretIndex, explicitInvocation, triggerCharacter);
-            editorState.RequestedSignatureHelpDocumentPath = session.FilePath ?? string.Empty;
-            editorState.RequestedSignatureHelpLine = caret.Line + 1;
-            editorState.RequestedSignatureHelpColumn = caret.Column + 1;
-            editorState.RequestedSignatureHelpAbsolutePosition = caretIndex;
-            editorState.RequestedSignatureHelpTriggerCharacter = triggerCharacter ?? string.Empty;
-            editorState.RequestedSignatureHelpExplicit = explicitInvocation;
-            editorState.ActiveSignatureHelpKey = string.Empty;
-            editorState.ActiveSignatureHelpResponse = null;
+            editorState.RequestedKey = BuildRequestKey(session.FilePath, session.TextVersion, caretIndex, explicitInvocation, triggerCharacter);
+            editorState.RequestedDocumentPath = session.FilePath ?? string.Empty;
+            editorState.RequestedLine = caret.Line + 1;
+            editorState.RequestedColumn = caret.Column + 1;
+            editorState.RequestedAbsolutePosition = caretIndex;
+            editorState.RequestedTriggerCharacter = triggerCharacter ?? string.Empty;
+            editorState.RequestedExplicit = explicitInvocation;
+            editorState.ActiveContextKey = string.Empty;
+            editorState.Response = null;
             return true;
         }
 
         public bool AcceptResponse(
-            CortexEditorInteractionState editorState,
+            CortexSignatureHelpInteractionState editorState,
             DocumentSession target,
             PendingLanguageSignatureHelpRequest pending,
             LanguageServiceSignatureHelpResponse response)
@@ -87,7 +87,7 @@ namespace Cortex.Services
                 return false;
             }
 
-            if (!string.Equals(editorState.RequestedSignatureHelpKey ?? string.Empty, pending.RequestKey ?? string.Empty, StringComparison.Ordinal))
+            if (!string.Equals(editorState.RequestedKey ?? string.Empty, pending.RequestKey ?? string.Empty, StringComparison.Ordinal))
             {
                 return false;
             }
@@ -103,14 +103,14 @@ namespace Cortex.Services
                 return false;
             }
 
-            editorState.ActiveSignatureHelpKey = pending.RequestKey ?? string.Empty;
-            editorState.ActiveSignatureHelpResponse = response;
+            editorState.ActiveContextKey = pending.ContextKey ?? string.Empty;
+            editorState.Response = response;
             return true;
         }
 
-        public bool HasVisibleSignatureHelp(CortexEditorInteractionState editorState, DocumentSession session)
+        public bool HasVisibleSignatureHelp(CortexSignatureHelpInteractionState editorState, DocumentSession session)
         {
-            var response = editorState != null ? editorState.ActiveSignatureHelpResponse : null;
+            var response = editorState != null ? editorState.Response : null;
             return response != null &&
                 response.Success &&
                 response.Items != null &&
@@ -132,37 +132,38 @@ namespace Cortex.Services
             return character == ')' || character == ';' || character == '{' || character == '}';
         }
 
-        public void Reset(CortexEditorInteractionState editorState)
+        public void Reset(CortexSignatureHelpInteractionState editorState)
         {
             ClearRequest(editorState);
             ClearActive(editorState);
         }
 
-        public void ClearActive(CortexEditorInteractionState editorState)
+        public void ClearActive(CortexSignatureHelpInteractionState editorState)
         {
             if (editorState == null)
             {
                 return;
             }
 
-            editorState.ActiveSignatureHelpKey = string.Empty;
-            editorState.ActiveSignatureHelpResponse = null;
+            editorState.ActiveContextKey = string.Empty;
+            editorState.Response = null;
         }
 
-        private static void ClearRequest(CortexEditorInteractionState editorState)
+        private static void ClearRequest(CortexSignatureHelpInteractionState editorState)
         {
             if (editorState == null)
             {
                 return;
             }
 
-            editorState.RequestedSignatureHelpKey = string.Empty;
-            editorState.RequestedSignatureHelpDocumentPath = string.Empty;
-            editorState.RequestedSignatureHelpLine = 0;
-            editorState.RequestedSignatureHelpColumn = 0;
-            editorState.RequestedSignatureHelpAbsolutePosition = -1;
-            editorState.RequestedSignatureHelpTriggerCharacter = string.Empty;
-            editorState.RequestedSignatureHelpExplicit = false;
+            editorState.RequestedContextKey = string.Empty;
+            editorState.RequestedKey = string.Empty;
+            editorState.RequestedDocumentPath = string.Empty;
+            editorState.RequestedLine = 0;
+            editorState.RequestedColumn = 0;
+            editorState.RequestedAbsolutePosition = -1;
+            editorState.RequestedTriggerCharacter = string.Empty;
+            editorState.RequestedExplicit = false;
         }
 
         private static string BuildRequestKey(string documentPath, int documentVersion, int absolutePosition, bool explicitInvocation, string triggerCharacter)
