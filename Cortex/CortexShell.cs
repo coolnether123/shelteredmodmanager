@@ -65,6 +65,7 @@ namespace Cortex
         private IOverlayInputCaptureService _overlayInputCaptureService;
         private ITextSearchService _textSearchService;
         private CortexNavigationService _navigationService;
+        private IEditorContextService _editorContextService;
         private HarmonyPatchOwnershipService _harmonyPatchOwnershipService;
         private HarmonyPatchDisplayService _harmonyPatchDisplayService;
         private HarmonyPatchOrderService _harmonyPatchOrderService;
@@ -637,6 +638,7 @@ namespace Cortex
             _services.OverlayInputCaptureService = services.OverlayInputCaptureService;
             _services.TextSearchService = services.TextSearchService;
             _services.NavigationService = services.NavigationService;
+            _services.EditorContextService = services.EditorContextService;
             _services.HarmonyPatchOwnershipService = services.HarmonyPatchOwnershipService;
             _services.HarmonyPatchDisplayService = services.HarmonyPatchDisplayService;
             _services.HarmonyPatchOrderService = services.HarmonyPatchOrderService;
@@ -665,6 +667,7 @@ namespace Cortex
             _overlayInputCaptureService = _services.OverlayInputCaptureService;
             _textSearchService = _services.TextSearchService;
             _navigationService = _services.NavigationService;
+            _editorContextService = _services.EditorContextService;
             _harmonyPatchOwnershipService = _services.HarmonyPatchOwnershipService;
             _harmonyPatchDisplayService = _services.HarmonyPatchDisplayService;
             _harmonyPatchOrderService = _services.HarmonyPatchOrderService;

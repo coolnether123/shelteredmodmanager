@@ -6,6 +6,7 @@ namespace Cortex
     {
         public string RequestId;
         public int Generation;
+        public string ContextKey;
         public string DocumentPath;
         public int DocumentVersion;
         public string HoverKey;
@@ -15,6 +16,7 @@ namespace Cortex
     {
         public string RequestId;
         public int Generation;
+        public string ContextKey;
         public string DocumentPath;
         public int DocumentVersion;
         public string TokenText;
@@ -24,6 +26,7 @@ namespace Cortex
     {
         public string RequestId;
         public int Generation;
+        public string ContextKey;
         public string RequestKey;
         public string DocumentPath;
         public int DocumentVersion;
@@ -36,6 +39,7 @@ namespace Cortex
         public int Generation;
         public SemanticRequestKind Kind;
         public string RequestKey;
+        public string ContextKey;
         public string DocumentPath;
         public int DocumentVersion;
         public string SymbolText;
@@ -47,6 +51,7 @@ namespace Cortex
         public string RequestId;
         public int Generation;
         public string RequestKey;
+        public string ContextKey;
         public string TargetKey;
         public string DocumentPath;
         public int DocumentVersion;

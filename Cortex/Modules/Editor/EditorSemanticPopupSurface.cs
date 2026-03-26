@@ -15,16 +15,27 @@ namespace Cortex.Modules.Editor
         private const float PeekWidth = 400f;
         private const float PeekHeight = 150f;
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
+        private readonly IEditorContextService _contextService;
         private readonly EditorSemanticOperationService _semanticOperationService = new EditorSemanticOperationService();
+
+        public EditorSemanticPopupSurface(IEditorContextService contextService)
+        {
+            _contextService = contextService;
+        }
 
         public void DrawQuickActions(CortexShellState state, Rect anchorRect, Vector2 surfaceSize, ICommandRegistry commandRegistry)
         {
-            if (state == null || state.Semantic == null || !state.Semantic.QuickActionsVisible || state.Semantic.QuickActionsTarget == null)
+            if (state == null || state.Semantic == null || !state.Semantic.QuickActionsVisible || string.IsNullOrEmpty(state.Semantic.QuickActionsContextKey))
             {
                 return;
             }
 
-            var target = state.Semantic.QuickActionsTarget;
+            var target = _contextService.ResolveTarget(state, state.Semantic.QuickActionsContextKey);
+            if (target == null)
+            {
+                _semanticOperationService.CloseQuickActions(state);
+                return;
+            }
             var popupRect = BuildPopupRect(anchorRect, surfaceSize, QuickActionsWidth, QuickActionsHeight);
             var current = Event.current;
             GUI.Box(popupRect, GUIContent.none, GUI.skin.window);
@@ -96,12 +107,17 @@ namespace Cortex.Modules.Editor
 
         public void DrawRename(CortexShellState state, Rect anchorRect, Vector2 surfaceSize, ICommandRegistry commandRegistry)
         {
-            if (state == null || state.Editor == null || state.Editor.ActiveRenameTarget == null)
+            if (state == null || state.Editor == null || string.IsNullOrEmpty(state.Editor.ActiveRenameContextKey))
             {
                 return;
             }
 
-            var target = state.Editor.ActiveRenameTarget;
+            var target = _contextService.ResolveTarget(state, state.Editor.ActiveRenameContextKey);
+            if (target == null)
+            {
+                state.Editor.ActiveRenameContextKey = string.Empty;
+                return;
+            }
             var popupRect = BuildPopupRect(anchorRect, surfaceSize, RenameWidth, RenameHeight);
             var current = Event.current;
 
@@ -122,7 +138,7 @@ namespace Cortex.Modules.Editor
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Cancel", GUILayout.Width(60f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape))
             {
-                state.Editor.ActiveRenameTarget = null;
+                state.Editor.ActiveRenameContextKey = string.Empty;
                 if (current != null)
                 {
                     current.Use();
@@ -135,7 +151,7 @@ namespace Cortex.Modules.Editor
                 state.Semantic.ActiveView = SemanticWorkbenchViewKind.RenamePreview;
                 OpenSearchContainer(state, commandRegistry);
                 state.StatusMessage = "Semantic rename preview requested for " + (target.SymbolText ?? string.Empty) + ".";
-                state.Editor.ActiveRenameTarget = null;
+                state.Editor.ActiveRenameContextKey = string.Empty;
                 if (current != null)
                 {
                     current.Use();
@@ -149,12 +165,17 @@ namespace Cortex.Modules.Editor
 
         public void DrawPeek(CortexShellState state, Rect anchorRect, Vector2 surfaceSize)
         {
-            if (state == null || state.Editor == null || state.Editor.ActivePeekTarget == null)
+            if (state == null || state.Editor == null || string.IsNullOrEmpty(state.Editor.ActivePeekContextKey))
             {
                 return;
             }
 
-            var target = state.Editor.ActivePeekTarget;
+            var target = _contextService.ResolveTarget(state, state.Editor.ActivePeekContextKey);
+            if (target == null)
+            {
+                state.Editor.ActivePeekContextKey = string.Empty;
+                return;
+            }
             var popupRect = BuildPopupRect(anchorRect, surfaceSize, PeekWidth, PeekHeight);
             var current = Event.current;
 
@@ -166,7 +187,7 @@ namespace Cortex.Modules.Editor
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("X", GUILayout.Width(24f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape))
             {
-                state.Editor.ActivePeekTarget = null;
+                state.Editor.ActivePeekContextKey = string.Empty;
                 if (current != null)
                 {
                     current.Use();

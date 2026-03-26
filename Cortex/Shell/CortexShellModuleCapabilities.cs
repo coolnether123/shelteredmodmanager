@@ -53,6 +53,7 @@ namespace Cortex
     internal interface IEditorModuleServices : IHarmonyFeatureServices
     {
         WorkbenchSearchService WorkbenchSearchService { get; }
+        IEditorContextService EditorContextService { get; }
     }
 
     internal interface IBuildModuleServices
@@ -161,6 +162,7 @@ namespace Cortex
         public HarmonyPatchDisplayService HarmonyPatchDisplayService => _services.HarmonyPatchDisplayService;
         public HarmonyPatchGenerationService HarmonyPatchGenerationService => _services.HarmonyPatchGenerationService;
         public GeneratedTemplateNavigationService GeneratedTemplateNavigationService => _services.GeneratedTemplateNavigationService;
+        public IEditorContextService EditorContextService => _services.EditorContextService;
 
         public ICommandRegistry CommandRegistry
         {

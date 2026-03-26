@@ -6,6 +6,12 @@ namespace Cortex.Services
     internal sealed class EditorMethodInspectorService
     {
         private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
+        private readonly IEditorContextService _contextService;
+
+        public EditorMethodInspectorService(IEditorContextService contextService)
+        {
+            _contextService = contextService;
+        }
 
         public bool TryOpen(CortexShellState state, EditorCommandInvocation invocation, string classification)
         {
@@ -16,14 +22,14 @@ namespace Cortex.Services
                 return false;
             }
 
-            var existingKey = BuildKey(inspector.Invocation);
-            var nextKey = BuildKey(invocation);
+            var existingKey = inspector.ContextKey ?? string.Empty;
+            var nextKey = target.ContextKey ?? string.Empty;
             var preserveSections = string.Equals(existingKey, nextKey, StringComparison.Ordinal);
 
             inspector.IsVisible = true;
             inspector.Title = !string.IsNullOrEmpty(target.SymbolText) ? target.SymbolText : "Method";
             inspector.Classification = _classificationPresentationService.NormalizeClassification(classification);
-            inspector.Invocation = invocation;
+            inspector.ContextKey = target.ContextKey ?? string.Empty;
             if (!preserveSections)
             {
                 inspector.OverviewExpanded = true;
@@ -52,7 +58,7 @@ namespace Cortex.Services
             inspector.IsVisible = false;
             inspector.Title = string.Empty;
             inspector.Classification = string.Empty;
-            inspector.Invocation = null;
+            inspector.ContextKey = string.Empty;
             inspector.CallHierarchyRequested = false;
             inspector.CallHierarchyTargetKey = string.Empty;
             inspector.CallHierarchyRequestKey = string.Empty;
@@ -63,7 +69,7 @@ namespace Cortex.Services
         public bool IsVisibleForDocument(CortexShellState state, string documentPath)
         {
             var inspector = state != null && state.Editor != null ? state.Editor.MethodInspector : null;
-            var target = inspector != null && inspector.Invocation != null ? inspector.Invocation.Target : null;
+            var target = _contextService != null ? _contextService.ResolveTarget(state, inspector != null ? inspector.ContextKey : string.Empty) : null;
             return inspector != null &&
                 inspector.IsVisible &&
                 target != null &&
@@ -99,7 +105,7 @@ namespace Cortex.Services
         public bool EnsureCallHierarchyRequest(CortexShellState state)
         {
             var inspector = state != null && state.Editor != null ? state.Editor.MethodInspector : null;
-            var target = inspector != null && inspector.Invocation != null ? inspector.Invocation.Target : null;
+            var target = _contextService != null ? _contextService.ResolveTarget(state, inspector != null ? inspector.ContextKey : string.Empty) : null;
             if (inspector == null || !inspector.IsVisible || target == null)
             {
                 return false;
@@ -137,12 +143,6 @@ namespace Cortex.Services
                 (classification.IndexOf("method", StringComparison.OrdinalIgnoreCase) >= 0 ||
                  classification.IndexOf("property", StringComparison.OrdinalIgnoreCase) >= 0 ||
                  classification.IndexOf("event", StringComparison.OrdinalIgnoreCase) >= 0);
-        }
-
-        private static string BuildKey(EditorCommandInvocation invocation)
-        {
-            var target = invocation != null ? invocation.Target : null;
-            return BuildTargetKey(target);
         }
 
         private static void ResetCallHierarchy(CortexMethodInspectorState inspector, EditorCommandTarget target)

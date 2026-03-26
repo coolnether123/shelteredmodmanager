@@ -266,12 +266,18 @@ namespace Cortex
             }
 
             context.State.Editor.ActiveHoverKey = pending.HoverKey;
+            context.State.EditorContext.Hover.ActiveContextKey = pending.ContextKey ?? string.Empty;
             context.State.Editor.ActiveHoverResponse = response;
             context.State.Editor.RequestedHoverKey = string.Empty;
+            context.State.EditorContext.Hover.RequestedContextKey = string.Empty;
             context.State.Editor.RequestedHoverDocumentPath = string.Empty;
             context.State.Editor.RequestedHoverLine = 0;
             context.State.Editor.RequestedHoverColumn = 0;
             context.State.Editor.RequestedHoverAbsolutePosition = -1;
+            if (context.EditorContextService != null)
+            {
+                context.EditorContextService.ApplyHoverResponse(context.State, pending.ContextKey, pending.HoverKey, response);
+            }
             var requestedHoverTokenText = context.State.Editor.RequestedHoverTokenText ?? string.Empty;
             context.State.Editor.RequestedHoverTokenText = string.Empty;
             if (response.Success)
@@ -312,6 +318,7 @@ namespace Cortex
                 var response = DeserializeEnvelopePayload<LanguageServiceDefinitionResponse>(envelope);
                 if (response == null || !response.Success)
                 {
+                    context.State.EditorContext.Definition.RequestedContextKey = string.Empty;
                     context.State.StatusMessage = response != null && !string.IsNullOrEmpty(response.StatusMessage)
                         ? response.StatusMessage
                         : (envelope != null && !string.IsNullOrEmpty(envelope.ErrorMessage) ? envelope.ErrorMessage : "Definition was not found.");
@@ -319,6 +326,7 @@ namespace Cortex
                 }
 
                 context.State.Editor.RequestedDefinitionAbsolutePosition = -1;
+                context.State.EditorContext.Definition.RequestedContextKey = string.Empty;
 
                 var opened = context.NavigationService != null && context.NavigationService.OpenLanguageSymbolTarget(
                     context.State,
@@ -411,10 +419,20 @@ namespace Cortex
                 return;
             }
 
+            var liveSession = context.FindOpenDocument(pending.DocumentPath);
+            if (liveSession != null &&
+                pending.DocumentVersion > 0 &&
+                liveSession.TextVersion > 0 &&
+                liveSession.TextVersion != pending.DocumentVersion)
+            {
+                context.State.StatusMessage = "Ignored stale semantic result for " + (pending.SymbolText ?? string.Empty) + ".";
+                return;
+            }
+
             switch (pending.Kind)
             {
                 case SemanticRequestKind.SymbolContext:
-                    HandleSymbolContextResponse(context, envelope);
+                    HandleSymbolContextResponse(context, envelope, pending);
                     return;
                 case SemanticRequestKind.RenamePreview:
                     HandleRenamePreviewResponse(context, envelope);
@@ -443,10 +461,16 @@ namespace Cortex
             }
         }
 
-        private static void HandleSymbolContextResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
+        private static void HandleSymbolContextResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope, PendingSemanticOperationRequest pending)
         {
             var response = DeserializeEnvelopePayload<LanguageServiceSymbolContextResponse>(envelope);
-            context.State.Semantic.ActiveSymbolContext = response;
+            if (context.EditorContextService != null)
+            {
+                context.EditorContextService.ApplySymbolContext(
+                    context.State,
+                    pending != null ? pending.ContextKey ?? string.Empty : string.Empty,
+                    response);
+            }
             if (response != null)
             {
                 context.State.StatusMessage = response.StatusMessage ?? string.Empty;
@@ -560,7 +584,9 @@ namespace Cortex
             }
 
             var inspector = context.State.Editor.MethodInspector;
-            var liveTarget = inspector != null && inspector.Invocation != null ? inspector.Invocation.Target : null;
+            var liveTarget = context.EditorContextService != null
+                ? context.EditorContextService.ResolveTarget(context.State, inspector != null ? inspector.ContextKey : string.Empty)
+                : null;
             if (inspector == null ||
                 !inspector.IsVisible ||
                 liveTarget == null ||

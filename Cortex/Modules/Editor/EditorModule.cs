@@ -68,10 +68,16 @@ namespace Cortex.Modules.Editor
         private Texture2D _statusModeBackground;
         private Texture2D _statusModeActiveBackground;
         private Texture2D _statusModeDisabledBackground;
-        private readonly CodeViewSurface _codeViewSurface = new CodeViewSurface();
-        private readonly EditableCodeViewSurface _editableCodeViewSurface = new EditableCodeViewSurface();
+        private readonly CodeViewSurface _codeViewSurface;
+        private readonly EditableCodeViewSurface _editableCodeViewSurface;
         private readonly IEditorService _editorService = new EditorService();
         private readonly EditorDocumentModeService _documentModeService = new EditorDocumentModeService();
+
+        internal EditorModule(IEditorContextService editorContextService)
+        {
+            _codeViewSurface = new CodeViewSurface(editorContextService);
+            _editableCodeViewSurface = new EditableCodeViewSurface(editorContextService);
+        }
 
         internal void Draw(
             IDocumentService documentService,

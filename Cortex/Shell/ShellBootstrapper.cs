@@ -173,6 +173,10 @@ namespace Cortex.Shell
             var harmonyPatchInsertionService = new HarmonyPatchInsertionService();
             var harmonyPatchGenerationService = new HarmonyPatchGenerationService(harmonyPatchTemplateService, harmonyPatchInsertionService);
             var generatedTemplateNavigationService = new GeneratedTemplateNavigationService();
+            var editorContextService = new EditorContextService(
+                new EditorService(),
+                new EditorCommandContextFactory(),
+                new EditorSymbolInteractionService());
 
             return new ShellServiceMap
             {
@@ -203,7 +207,8 @@ namespace Cortex.Shell
                 HarmonyPatchTemplateService = harmonyPatchTemplateService,
                 HarmonyPatchInsertionService = harmonyPatchInsertionService,
                 HarmonyPatchGenerationService = harmonyPatchGenerationService,
-                GeneratedTemplateNavigationService = generatedTemplateNavigationService
+                GeneratedTemplateNavigationService = generatedTemplateNavigationService,
+                EditorContextService = editorContextService
             };
         }
 
@@ -298,5 +303,6 @@ namespace Cortex.Shell
         public HarmonyPatchInsertionService HarmonyPatchInsertionService;
         public HarmonyPatchGenerationService HarmonyPatchGenerationService;
         public GeneratedTemplateNavigationService GeneratedTemplateNavigationService;
+        public IEditorContextService EditorContextService;
     }
 }

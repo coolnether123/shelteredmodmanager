@@ -28,14 +28,15 @@ namespace Cortex.Modules.Editor
         private readonly DocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
         private readonly EditorCompletionService _editorCompletionService = new EditorCompletionService();
         private readonly EditorSignatureHelpService _editorSignatureHelpService = new EditorSignatureHelpService();
-        private readonly EditorSemanticPopupSurface _semanticPopupSurface = new EditorSemanticPopupSurface();
+        private readonly EditorSemanticPopupSurface _semanticPopupSurface;
         private readonly EditorCommandContextFactory _commandContextFactory = new EditorCommandContextFactory();
+        private readonly IEditorContextService _contextService;
         private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
         private readonly EditorOverlayInteractionService _overlayInteractionService = new EditorOverlayInteractionService();
-        private readonly EditorMethodInspectorService _methodInspectorService = new EditorMethodInspectorService();
+        private readonly EditorMethodInspectorService _methodInspectorService;
         private readonly EditorMethodTargetOutlineService _methodTargetOutlineService = new EditorMethodTargetOutlineService();
-        private readonly EditorMethodInspectorSurface _methodInspectorSurface = new EditorMethodInspectorSurface();
+        private readonly EditorMethodInspectorSurface _methodInspectorSurface;
         private readonly EditorToolbarService _toolbarService = new EditorToolbarService();
         private readonly SourceEditorCommandRouterService _commandRouterService = new SourceEditorCommandRouterService();
         private readonly SourceEditorHoverService _hoverService = new SourceEditorHoverService();
@@ -90,23 +91,13 @@ namespace Cortex.Modules.Editor
         private LayoutCache _layout;
         private Rect _lastContextMenuRect;
         private Rect _lastMethodInspectorRect;
-        private CaretDebugProbe _caretDebugProbe;
 
-        private struct CaretDebugProbe
+        public EditableCodeViewSurface(IEditorContextService contextService)
         {
-            public int CharacterIndex;
-            public int LineNumber;
-            public int CandidateColumn;
-            public int RawLength;
-            public float ContentX;
-            public float ContentY;
-            public float TargetX;
-            public float LineWidth;
-            public DateTime CapturedUtc;
-            public bool LoggedPointerHit;
-            public bool LoggedRenderGate;
-            public bool LoggedDrawCaret;
-            public bool LoggedDrawIndicator;
+            _contextService = contextService;
+            _semanticPopupSurface = new EditorSemanticPopupSurface(contextService);
+            _methodInspectorService = new EditorMethodInspectorService(contextService);
+            _methodInspectorSurface = new EditorMethodInspectorSurface(contextService);
         }
 
         private struct PointerContext
@@ -232,12 +223,11 @@ namespace Cortex.Modules.Editor
                 }
 
                 scroll = EnsureCaretVisible(session, scroll, rect.height);
-                var activeMethodInspectorTarget = state != null &&
-                    state.Editor != null &&
-                    state.Editor.MethodInspector != null &&
-                    state.Editor.MethodInspector.Invocation != null
-                        ? state.Editor.MethodInspector.Invocation.Target
-                        : null;
+                var activeMethodInspectorTarget = _contextService.ResolveTarget(
+                    state,
+                    state != null && state.Editor != null && state.Editor.MethodInspector != null
+                        ? state.Editor.MethodInspector.ContextKey
+                        : string.Empty);
                 var predictedMethodInspectorRect = _methodInspectorSurface.PredictRect(
                     state,
                     session.FilePath,
@@ -252,6 +242,7 @@ namespace Cortex.Modules.Editor
                     ? FindMethodTargetAt(session, gutterWidth, pointerContext.ContentMouse)
                     : null;
                 HandlePointerInput(session, state, editingEnabled, current, pointerContext, hoveredMethodTarget, gutterWidth, commandRegistry, contributionRegistry, harmonyPatchGenerationService, pointerOnMethodInspector, pointerOnContextMenu);
+                RefreshActiveContext(session, state, editingEnabled);
                 var hoverTarget = hasMouse && !_isDraggingSelection
                     ? TryResolveHoverTarget(session, state, editingEnabled, pointerContext.ContentMouse, gutterWidth)
                     : null;
@@ -285,16 +276,22 @@ namespace Cortex.Modules.Editor
                         scroll = scrollBeforeDraw;
                     }
 
-                    _semanticPopupSurface.DrawQuickActions(state, GetViewportAnchorRect(session, state != null && state.Semantic != null ? state.Semantic.QuickActionsTarget : null, scroll, gutterWidth), rect.size, commandRegistry);
+                    _semanticPopupSurface.DrawQuickActions(
+                        state,
+                        GetViewportAnchorRect(session, _contextService.ResolveTarget(state, state != null && state.Semantic != null ? state.Semantic.QuickActionsContextKey : string.Empty), scroll, gutterWidth),
+                        rect.size,
+                        commandRegistry);
                     _lastMethodInspectorRect = _methodInspectorSurface.Draw(
                         state,
                         session,
                         session.FilePath,
                         GetMethodInspectorViewportAnchorRect(
                             session,
-                            state != null && state.Editor != null && state.Editor.MethodInspector != null && state.Editor.MethodInspector.Invocation != null
-                                ? state.Editor.MethodInspector.Invocation.Target
-                                : null,
+                            _contextService.ResolveTarget(
+                                state,
+                                state != null && state.Editor != null && state.Editor.MethodInspector != null
+                                    ? state.Editor.MethodInspector.ContextKey
+                                    : string.Empty),
                             scroll,
                             gutterWidth),
                         rect.size,
@@ -316,8 +313,15 @@ namespace Cortex.Modules.Editor
                         DrawCompletionPopup(session, state, scroll, rect.size, gutterWidth);
                     }
                     DrawSignatureHelpPopup(session, state, scroll, rect.size, gutterWidth);
-                    _semanticPopupSurface.DrawRename(state, GetViewportAnchorRect(session, state != null && state.Editor != null ? state.Editor.ActiveRenameTarget : null, scroll, gutterWidth), rect.size, commandRegistry);
-                    _semanticPopupSurface.DrawPeek(state, GetViewportAnchorRect(session, state != null && state.Editor != null ? state.Editor.ActivePeekTarget : null, scroll, gutterWidth), rect.size);
+                    _semanticPopupSurface.DrawRename(
+                        state,
+                        GetViewportAnchorRect(session, _contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.ActiveRenameContextKey : string.Empty), scroll, gutterWidth),
+                        rect.size,
+                        commandRegistry);
+                    _semanticPopupSurface.DrawPeek(
+                        state,
+                        GetViewportAnchorRect(session, _contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.ActivePeekContextKey : string.Empty), scroll, gutterWidth),
+                        rect.size);
                     DrawHoverTooltip(state, hoverTarget, pointerContext.SurfaceMouse, rect.size);
                     DrawContextMenu(state, current, pointerContext.SurfaceMouse, rect.size, commandRegistry, contextMenuStyle, contextMenuButtonStyle, contextMenuHeaderStyle);
                 }
@@ -873,18 +877,6 @@ namespace Cortex.Modules.Editor
                 editingEnabled,
                 hasNamedImGuiFocus,
                 isEditorContainerFocused);
-            TraceCaretRenderGate(
-                session,
-                editingEnabled,
-                firstLine,
-                lastLine,
-                primarySelection.CaretIndex,
-                primaryCaret,
-                hasNamedImGuiFocus,
-                isEditorContainerFocused,
-                shouldDrawCaret,
-                isReadyForInput,
-                showTypingIndicator);
             if (IsMethodTargetSelectionMode())
             {
                 DrawMethodTargetOutlines(session, firstLine, lastLine, gutterWidth);
@@ -914,14 +906,14 @@ namespace Cortex.Modules.Editor
                         var caret = _editorService.GetCaretPosition(session, selections[selectionIndex].CaretIndex);
                         if (caret.Line == i)
                         {
-                            DrawCaret(session, line, gutterWidth, selections[selectionIndex].CaretIndex, isReadyForInput);
+                            DrawCaret(line, gutterWidth, selections[selectionIndex].CaretIndex, isReadyForInput);
                         }
                     }
                 }
 
                 if (showTypingIndicator && primaryCaret.Line == i)
                 {
-                    DrawTypingIndicator(session, line, gutterWidth, primarySelection.CaretIndex);
+                    DrawTypingIndicator(line, gutterWidth, primarySelection.CaretIndex);
                 }
             }
 
@@ -971,16 +963,15 @@ namespace Cortex.Modules.Editor
             }
         }
 
-        private void DrawCaret(DocumentSession session, EditableLineLayout line, float gutterWidth, int caretIndex, bool isReadyForInput)
+        private void DrawCaret(EditableLineLayout line, float gutterWidth, int caretIndex, bool isReadyForInput)
         {
             var rawColumn = Mathf.Max(0, Mathf.Min(line.RawText.Length, caretIndex - line.StartIndex));
             var prefix = rawColumn > 0 ? line.RawText.Substring(0, rawColumn) : string.Empty;
             var x = gutterWidth + Measure(ExpandTabs(prefix));
-            TraceCaretDraw(session, line, caretIndex, rawColumn, x, "DrawCaret");
             GUI.DrawTexture(new Rect(x, line.Y + 1f, 1.5f, _lineHeight - 2f), isReadyForInput ? _caretReadyFill : _caretFill);
         }
 
-        private void DrawTypingIndicator(DocumentSession session, EditableLineLayout line, float gutterWidth, int caretIndex)
+        private void DrawTypingIndicator(EditableLineLayout line, float gutterWidth, int caretIndex)
         {
             if (_caretIndicatorFill == null)
             {
@@ -990,8 +981,7 @@ namespace Cortex.Modules.Editor
             var rawColumn = Mathf.Max(0, Mathf.Min(line.RawText.Length, caretIndex - line.StartIndex));
             var prefix = rawColumn > 0 ? line.RawText.Substring(0, rawColumn) : string.Empty;
             var x = gutterWidth + Measure(ExpandTabs(prefix));
-            TraceCaretDraw(session, line, caretIndex, rawColumn, x, "DrawIndicator");
-            GUI.DrawTexture(new Rect(x - 0.75f, line.Y + 1f, 3f, _lineHeight - 2f), _caretIndicatorFill);
+            GUI.DrawTexture(new Rect(x - 0.25f, line.Y + 1f, 2f, _lineHeight - 2f), _caretIndicatorFill);
         }
 
         private bool IsMethodTargetSelectionMode()
@@ -1412,12 +1402,8 @@ namespace Cortex.Modules.Editor
                 }
 
                 var hitTest = GetCharacterIndexAt(session, pointerContext.ContentMouse, gutterWidth);
-                CaptureCaretDebugProbe(hitTest, pointerContext.ContentMouse);
                 var selectionAction = ApplyPointerSelection(session, current, hitTest.CharacterIndex);
-                TraceCaretSelectionResult(session, selectionAction, hitTest);
                 LogPointerSelection(session, selectionAction, pointerContext, gutterWidth, hitTest);
-                WritePointerSelectionAudit(session, selectionAction, pointerContext, hitTest);
-
                 session.EditorState.ScrollToCaretPending = false;
                 _isDraggingSelection = true;
                 if (HandleHarmonyInsertionPick(session, state, hitTest, harmonyPatchGenerationService))
@@ -1887,12 +1873,36 @@ namespace Cortex.Modules.Editor
             }
 
             invocation = _commandContextFactory.CreateForTarget(state, target);
+            if (invocation != null)
+            {
+                _contextService.PublishInvocationContext(
+                    state,
+                    session,
+                    GetSurfaceId(session, state),
+                    state != null ? state.Workbench.FocusedContainerId : string.Empty,
+                    EditorSurfaceKind.Source,
+                    invocation,
+                    true);
+            }
             return invocation != null;
         }
 
         private EditorCommandInvocation BuildDocumentInvocation(DocumentSession session, CortexShellState state, bool editingEnabled, int absolutePosition)
         {
-            return _commandContextFactory.CreateDocumentInvocation(session, state, editingEnabled, absolutePosition);
+            var invocation = _commandContextFactory.CreateDocumentInvocation(session, state, editingEnabled, absolutePosition);
+            if (invocation != null)
+            {
+                _contextService.PublishInvocationContext(
+                    state,
+                    session,
+                    GetSurfaceId(session, state),
+                    state != null ? state.Workbench.FocusedContainerId : string.Empty,
+                    EditorSurfaceKind.Source,
+                    invocation,
+                    true);
+            }
+
+            return invocation;
         }
 
         private Rect GetViewportAnchorRect(DocumentSession session, EditorCommandTarget target, Vector2 scroll, float gutterWidth)
@@ -1916,6 +1926,28 @@ namespace Cortex.Modules.Editor
             }
 
             return GetViewportAnchorRect(session, target, scroll, gutterWidth);
+        }
+
+        private string GetSurfaceId(DocumentSession session, CortexShellState state)
+        {
+            return _contextService.BuildSurfaceId(
+                session != null ? session.FilePath ?? string.Empty : string.Empty,
+                EditorSurfaceKind.Source,
+                state != null && state.Workbench != null ? state.Workbench.FocusedContainerId : string.Empty);
+        }
+
+        private void RefreshActiveContext(DocumentSession session, CortexShellState state, bool editingEnabled)
+        {
+            if (session == null || state == null || session.EditorState == null)
+            {
+                return;
+            }
+
+            EditorCommandInvocation invocation;
+            if (!TryBuildCommandTarget(session, state, editingEnabled, session.EditorState.CaretIndex, out invocation))
+            {
+                BuildDocumentInvocation(session, state, editingEnabled, session.EditorState.CaretIndex);
+            }
         }
 
         private void PopulatePopupMenuItems(IList<EditorContextMenuItem> items)
@@ -2019,29 +2051,6 @@ namespace Cortex.Modules.Editor
                 hitTest.PreviousWidth,
                 hitTest.CandidateWidth,
                 _lineHeight);
-        }
-
-        private void WritePointerSelectionAudit(DocumentSession session, string action, PointerContext pointerContext, PointerHitTestResult hitTest)
-        {
-            if (!EditorInteractionLog.IsSelectionDiagnosticsEnabled || session == null || string.IsNullOrEmpty(action))
-            {
-                return;
-            }
-
-            var selection = _editorService.GetPrimarySelection(session);
-            var caret = _editorService.GetCaretPosition(session, selection.CaretIndex);
-            MMLog.WriteDebug("[Cortex.Editor] Pointer selection. Action=" + action +
-                ", File=" + (session.FilePath ?? string.Empty) +
-                ", RawMouse=(" + pointerContext.RawMouse.x.ToString("F1") + "," + pointerContext.RawMouse.y.ToString("F1") + ")" +
-                ", SurfaceMouse=(" + pointerContext.SurfaceMouse.x.ToString("F1") + "," + pointerContext.SurfaceMouse.y.ToString("F1") + ")" +
-                ", ContentMouse=(" + pointerContext.ContentMouse.x.ToString("F1") + "," + pointerContext.ContentMouse.y.ToString("F1") + ")" +
-                ", UsedRectOffset=" + pointerContext.UsedRectOffset +
-                ", HitLine=" + hitTest.LineNumber +
-                ", HitColumn=" + (hitTest.CandidateColumn + 1) +
-                ", HitIndex=" + hitTest.CharacterIndex +
-                ", SelectedLine=" + (caret.Line + 1) +
-                ", SelectedColumn=" + (caret.Column + 1) +
-                ", SelectedIndex=" + selection.CaretIndex + ".");
         }
 
         private void HandleKeyboardInput(
@@ -2726,167 +2735,6 @@ namespace Cortex.Modules.Editor
             result.CandidateColumn = candidate;
             result.CharacterIndex = line.StartIndex + candidate;
             return result;
-        }
-
-        private void CaptureCaretDebugProbe(PointerHitTestResult hitTest, Vector2 contentMouse)
-        {
-            if (!EditorInteractionLog.IsCaretDiagnosticsEnabled)
-            {
-                return;
-            }
-
-            _caretDebugProbe.CharacterIndex = hitTest.CharacterIndex;
-            _caretDebugProbe.LineNumber = hitTest.LineNumber;
-            _caretDebugProbe.CandidateColumn = hitTest.CandidateColumn;
-            _caretDebugProbe.RawLength = hitTest.RawLength;
-            _caretDebugProbe.ContentX = contentMouse.x;
-            _caretDebugProbe.ContentY = contentMouse.y;
-            _caretDebugProbe.TargetX = hitTest.TargetX;
-            _caretDebugProbe.LineWidth = hitTest.LineWidth;
-            _caretDebugProbe.CapturedUtc = DateTime.UtcNow;
-            _caretDebugProbe.LoggedPointerHit = false;
-            _caretDebugProbe.LoggedRenderGate = false;
-            _caretDebugProbe.LoggedDrawCaret = false;
-            _caretDebugProbe.LoggedDrawIndicator = false;
-        }
-
-        private void TraceCaretSelectionResult(DocumentSession session, string action, PointerHitTestResult hitTest)
-        {
-            if (!HasActiveCaretDebugProbe() ||
-                _caretDebugProbe.LoggedPointerHit ||
-                session == null ||
-                session.EditorState == null)
-            {
-                return;
-            }
-
-            var selection = _editorService.GetPrimarySelection(session);
-            var caret = _editorService.GetCaretPosition(session, selection.CaretIndex);
-            _caretDebugProbe.LoggedPointerHit = true;
-            EditorInteractionLog.WriteCaret(
-                "PointerHit",
-                session.FilePath,
-                "Action=" + (action ?? string.Empty) +
-                ", ContentMouse=(" + _caretDebugProbe.ContentX.ToString("F1") + "," + _caretDebugProbe.ContentY.ToString("F1") + ")" +
-                ", Line=" + hitTest.LineNumber +
-                ", TargetX=" + hitTest.TargetX.ToString("F1") +
-                ", LineWidth=" + hitTest.LineWidth.ToString("F1") +
-                ", CandidateColumn=" + hitTest.CandidateColumn +
-                ", RawLength=" + hitTest.RawLength +
-                ", CharacterIndex=" + hitTest.CharacterIndex +
-                ", PreviousWidth=" + hitTest.PreviousWidth.ToString("F1") +
-                ", CandidateWidth=" + hitTest.CandidateWidth.ToString("F1") +
-                ", SelectionCaretIndex=" + selection.CaretIndex +
-                ", SelectionAnchorIndex=" + selection.AnchorIndex +
-                ", CaretLine=" + (caret.Line + 1) +
-                ", CaretColumn=" + (caret.Column + 1) +
-                ", ClickPastLineWidth=" + (hitTest.TargetX > hitTest.LineWidth),
-                hitTest.LineNumber + "|" + hitTest.CharacterIndex + "|" + action,
-                0.02f);
-        }
-
-        private void TraceCaretRenderGate(
-            DocumentSession session,
-            bool editingEnabled,
-            int firstLine,
-            int lastLine,
-            int primaryCaretIndex,
-            EditorCaretPosition primaryCaret,
-            bool hasNamedImGuiFocus,
-            bool isEditorContainerFocused,
-            bool shouldDrawCaret,
-            bool isReadyForInput,
-            bool showTypingIndicator)
-        {
-            if (!HasActiveCaretDebugProbe() ||
-                _caretDebugProbe.LoggedRenderGate ||
-                session == null ||
-                session.EditorState == null ||
-                primaryCaretIndex != _caretDebugProbe.CharacterIndex)
-            {
-                return;
-            }
-
-            var focusedControl = GUI.GetNameOfFocusedControl() ?? string.Empty;
-            _caretDebugProbe.LoggedRenderGate = true;
-            EditorInteractionLog.WriteCaret(
-                "RenderGate",
-                session.FilePath,
-                "CaretIndex=" + primaryCaretIndex +
-                ", CaretLine=" + (primaryCaret.Line + 1) +
-                ", CaretColumn=" + (primaryCaret.Column + 1) +
-                ", VisibleLines=" + (firstLine + 1) + "-" + (lastLine + 1) +
-                ", HasFocus=" + _hasFocus +
-                ", EditingEnabled=" + editingEnabled +
-                ", HasNamedImGuiFocus=" + hasNamedImGuiFocus +
-                ", KeyboardControl=" + GUIUtility.keyboardControl +
-                ", FocusedControl='" + focusedControl + "'" +
-                ", EditorContainerFocused=" + isEditorContainerFocused +
-                ", ShouldDrawCaret=" + shouldDrawCaret +
-                ", IsReadyForInput=" + isReadyForInput +
-                ", ShowTypingIndicator=" + showTypingIndicator +
-                ", CaretLineVisible=" + (primaryCaret.Line >= firstLine && primaryCaret.Line <= lastLine),
-                primaryCaretIndex + "|" + shouldDrawCaret + "|" + isReadyForInput + "|" + showTypingIndicator + "|" + primaryCaret.Line,
-                0.1f);
-        }
-
-        private void TraceCaretDraw(
-            DocumentSession session,
-            EditableLineLayout line,
-            int caretIndex,
-            int rawColumn,
-            float x,
-            string stage)
-        {
-            if (!HasActiveCaretDebugProbe() ||
-                session == null ||
-                line == null ||
-                caretIndex != _caretDebugProbe.CharacterIndex)
-            {
-                return;
-            }
-
-            if (string.Equals(stage, "DrawCaret", StringComparison.Ordinal))
-            {
-                if (_caretDebugProbe.LoggedDrawCaret)
-                {
-                    return;
-                }
-
-                _caretDebugProbe.LoggedDrawCaret = true;
-            }
-            else if (string.Equals(stage, "DrawIndicator", StringComparison.Ordinal))
-            {
-                if (_caretDebugProbe.LoggedDrawIndicator)
-                {
-                    return;
-                }
-
-                _caretDebugProbe.LoggedDrawIndicator = true;
-            }
-
-            var rawLength = line.RawText != null ? line.RawText.Length : 0;
-            EditorInteractionLog.WriteCaret(
-                stage,
-                session.FilePath,
-                "Line=" + line.LineNumber +
-                ", CaretIndex=" + caretIndex +
-                ", RawColumn=" + rawColumn +
-                ", RawLength=" + rawLength +
-                ", LineWidth=" + line.Width.ToString("F1") +
-                ", CaretX=" + x.ToString("F1") +
-                ", ClickTargetX=" + _caretDebugProbe.TargetX.ToString("F1") +
-                ", ClickPastLineWidth=" + (_caretDebugProbe.TargetX > line.Width) +
-                ", EndOfLine=" + (rawColumn >= rawLength),
-                line.LineNumber + "|" + caretIndex + "|" + rawColumn + "|" + stage,
-                0f);
-        }
-
-        private bool HasActiveCaretDebugProbe()
-        {
-            return EditorInteractionLog.IsCaretDiagnosticsEnabled &&
-                _caretDebugProbe.CharacterIndex >= 0 &&
-                (DateTime.UtcNow - _caretDebugProbe.CapturedUtc).TotalSeconds <= 1.5d;
         }
 
         private GUIStyle GetClassificationStyle(string classification)

@@ -10,8 +10,14 @@ namespace Cortex.Services
     {
         private const int MaxHeaderSearchLines = 8;
 
+        private readonly IEditorContextService _contextService;
         private readonly EditorMethodTargetOutlineService _outlineService = new EditorMethodTargetOutlineService();
         private readonly EditorSemanticOperationService _semanticOperationService = new EditorSemanticOperationService();
+
+        public EditorMethodTargetMetadataService(IEditorContextService contextService)
+        {
+            _contextService = contextService;
+        }
 
         public void EnsureSymbolContextRequest(CortexShellState state, EditorCommandTarget target)
         {
@@ -20,7 +26,9 @@ namespace Cortex.Services
                 return;
             }
 
-            if (HasMatchingSymbolContext(target, state.Semantic.ActiveSymbolContext))
+            if (!string.IsNullOrEmpty(target.QualifiedSymbolDisplay) &&
+                !string.IsNullOrEmpty(target.SymbolKind) &&
+                !string.IsNullOrEmpty(target.DefinitionDocumentPath))
             {
                 return;
             }
@@ -42,7 +50,7 @@ namespace Cortex.Services
                 return;
             }
 
-            ApplySymbolContext(target, state != null && state.Semantic != null ? state.Semantic.ActiveSymbolContext : null);
+            ApplyStoredContext(target, state);
             if (NeedsSyntacticFallback(target))
             {
                 ApplySyntacticFallback(target, session);
@@ -58,58 +66,32 @@ namespace Cortex.Services
                  string.IsNullOrEmpty(target.DefinitionDocumentPath));
         }
 
-        private static bool HasMatchingSymbolContext(EditorCommandTarget target, LanguageServiceSymbolContextResponse response)
+        private void ApplyStoredContext(EditorCommandTarget target, CortexShellState state)
         {
-            if (target == null || response == null || !response.Success)
-            {
-                return false;
-            }
-
-            if (!string.Equals(response.DocumentPath ?? string.Empty, target.DocumentPath ?? string.Empty, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            if (response.Range != null)
-            {
-                var start = Math.Max(0, response.Range.Start);
-                var end = start + Math.Max(1, response.Range.Length);
-                if (target.AbsolutePosition >= start && target.AbsolutePosition <= end)
-                {
-                    return true;
-                }
-            }
-
-            if (!string.IsNullOrEmpty(response.MetadataName) &&
-                string.Equals(NormalizeIdentifier(response.MetadataName), NormalizeIdentifier(target.SymbolText), StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            return !string.IsNullOrEmpty(response.SymbolDisplay) &&
-                response.SymbolDisplay.IndexOf(target.SymbolText ?? string.Empty, StringComparison.Ordinal) >= 0;
-        }
-
-        private static void ApplySymbolContext(EditorCommandTarget target, LanguageServiceSymbolContextResponse response)
-        {
-            if (target == null || !HasMatchingSymbolContext(target, response))
+            if (target == null)
             {
                 return;
             }
 
-            target.QualifiedSymbolDisplay = response.QualifiedSymbolDisplay ?? target.QualifiedSymbolDisplay ?? string.Empty;
-            target.SymbolKind = response.SymbolKind ?? target.SymbolKind ?? string.Empty;
-            target.MetadataName = response.MetadataName ?? target.MetadataName ?? string.Empty;
-            target.ContainingTypeName = !string.IsNullOrEmpty(response.ContainingTypeName)
-                ? GetSimpleTypeName(response.ContainingTypeName)
+            var stored = _contextService.ResolveTarget(state, target.ContextKey);
+            if (stored == null)
+            {
+                return;
+            }
+
+            target.QualifiedSymbolDisplay = stored.QualifiedSymbolDisplay ?? target.QualifiedSymbolDisplay ?? string.Empty;
+            target.SymbolKind = stored.SymbolKind ?? target.SymbolKind ?? string.Empty;
+            target.MetadataName = stored.MetadataName ?? target.MetadataName ?? string.Empty;
+            target.ContainingTypeName = !string.IsNullOrEmpty(stored.ContainingTypeName)
+                ? GetSimpleTypeName(stored.ContainingTypeName)
                 : target.ContainingTypeName ?? string.Empty;
-            target.ContainingAssemblyName = response.ContainingAssemblyName ?? target.ContainingAssemblyName ?? string.Empty;
-            target.DocumentationCommentId = response.DocumentationCommentId ?? target.DocumentationCommentId ?? string.Empty;
-            target.DefinitionDocumentPath = response.DefinitionDocumentPath ?? target.DefinitionDocumentPath ?? string.Empty;
-            target.DefinitionStart = response.DefinitionRange != null ? response.DefinitionRange.Start : target.DefinitionStart;
-            target.DefinitionLength = response.DefinitionRange != null ? response.DefinitionRange.Length : target.DefinitionLength;
-            target.DefinitionLine = response.DefinitionRange != null ? response.DefinitionRange.StartLine : target.DefinitionLine;
-            target.DefinitionColumn = response.DefinitionRange != null ? response.DefinitionRange.StartColumn : target.DefinitionColumn;
+            target.ContainingAssemblyName = stored.ContainingAssemblyName ?? target.ContainingAssemblyName ?? string.Empty;
+            target.DocumentationCommentId = stored.DocumentationCommentId ?? target.DocumentationCommentId ?? string.Empty;
+            target.DefinitionDocumentPath = stored.DefinitionDocumentPath ?? target.DefinitionDocumentPath ?? string.Empty;
+            target.DefinitionStart = stored.DefinitionStart >= 0 ? stored.DefinitionStart : target.DefinitionStart;
+            target.DefinitionLength = stored.DefinitionLength >= 0 ? stored.DefinitionLength : target.DefinitionLength;
+            target.DefinitionLine = stored.DefinitionLine > 0 ? stored.DefinitionLine : target.DefinitionLine;
+            target.DefinitionColumn = stored.DefinitionColumn > 0 ? stored.DefinitionColumn : target.DefinitionColumn;
         }
 
         private void ApplySyntacticFallback(EditorCommandTarget target, DocumentSession session)

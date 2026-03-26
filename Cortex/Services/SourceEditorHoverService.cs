@@ -100,6 +100,7 @@ namespace Cortex.Services
             }
 
             state.Editor.RequestedHoverKey = hoverTarget.HoverKey;
+            state.EditorContext.Hover.RequestedContextKey = hoverTarget.Target.ContextKey ?? string.Empty;
             state.Editor.RequestedHoverDocumentPath = session != null ? session.FilePath ?? string.Empty : string.Empty;
             state.Editor.RequestedHoverLine = hoverTarget.Target.Line;
             state.Editor.RequestedHoverColumn = hoverTarget.Target.Column;

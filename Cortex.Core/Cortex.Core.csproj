@@ -41,6 +41,7 @@
     <Compile Include="Abstractions\Interfaces.cs" />
     <Compile Include="Abstractions\PlatformInterfaces.cs" />
     <Compile Include="Abstractions\WorkbenchInterfaces.cs" />
+    <Compile Include="Diagnostics\CortexDiagnostics.cs" />
     <Compile Include="Diagnostics\CortexLog.cs" />
     <Compile Include="Models\CommandModels.cs" />
     <Compile Include="Models\CompletionAugmentationModels.cs" />
@@ -50,6 +51,7 @@
     <Compile Include="Models\CortexSettings.cs" />
     <Compile Include="Models\CortexProjectDefinition.cs" />
     <Compile Include="Models\DocumentModels.cs" />
+    <Compile Include="Models\EditorContextModels.cs" />
     <Compile Include="Models\EditorKeybindingModels.cs" />
     <Compile Include="Models\EditorModels.cs" />
     <Compile Include="Models\HarmonyModels.cs" />

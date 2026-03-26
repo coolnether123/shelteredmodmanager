@@ -10,7 +10,6 @@ namespace Cortex.Services
         private const int MaxHeaderSearchLines = 8;
 
         private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
-        private readonly EditorMethodInspectorService _methodInspectorService = new EditorMethodInspectorService();
         private string _cachedKey = string.Empty;
         private EditorMethodTargetOutline[] _cachedOutlines = new EditorMethodTargetOutline[0];
 
@@ -157,7 +156,7 @@ namespace Cortex.Services
                 var resolvedClassification = _classificationPresentationService.ResolvePresentationClassification(
                     span.Classification,
                     span.SemanticTokenType);
-                if (!_methodInspectorService.CanInspectSymbol(symbolText, resolvedClassification, string.Empty))
+                if (!CanInspectSymbol(symbolText, resolvedClassification))
                 {
                     continue;
                 }
@@ -180,6 +179,20 @@ namespace Cortex.Services
             }
 
             return result;
+        }
+
+        private bool CanInspectSymbol(string symbolText, string classification)
+        {
+            if (string.IsNullOrEmpty(symbolText))
+            {
+                return false;
+            }
+
+            var normalizedClassification = _classificationPresentationService.NormalizeClassification(classification);
+            return !string.IsNullOrEmpty(normalizedClassification) &&
+                (normalizedClassification.IndexOf("method", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 normalizedClassification.IndexOf("property", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 normalizedClassification.IndexOf("event", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         private bool TryCreateOutline(
