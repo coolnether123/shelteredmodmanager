@@ -354,15 +354,15 @@ namespace Cortex.Modules.Editor
                     return;
                 }
 
-                _state.Editor.ActiveRenameContextKey = target.ContextKey ?? string.Empty;
-                _state.Editor.ActiveRenameText = target.SymbolText ?? string.Empty;
+                _state.Editor.Rename.ContextKey = target.ContextKey ?? string.Empty;
+                _state.Editor.Rename.ActiveText = target.SymbolText ?? string.Empty;
                 _state.StatusMessage = "Rename preview ready for " + (target.SymbolText ?? string.Empty) + ".";
             }
 
             private void PeekDefinition(CommandExecutionContext context)
             {
                 var target = GetTarget(context);
-                _state.Editor.ActivePeekContextKey = target != null ? target.ContextKey ?? string.Empty : string.Empty;
+                _state.Editor.Peek.ContextKey = target != null ? target.ContextKey ?? string.Empty : string.Empty;
                 QueueSemantic(context, SemanticRequestKind.PeekDefinition, SemanticWorkbenchViewKind.PeekDefinition, "Peek Definition");
             }
 
@@ -407,8 +407,8 @@ namespace Cortex.Modules.Editor
             {
                 var target = GetTarget(context);
                 var plan = _semanticOperationService.BuildUnitTestPlan(_state, target);
-                _state.Semantic.UnitTestGeneration = plan;
-                _state.Semantic.ActiveView = SemanticWorkbenchViewKind.UnitTestGeneration;
+                _state.Semantic.Workbench.UnitTestGeneration = plan;
+                _state.Semantic.Workbench.ActiveView = SemanticWorkbenchViewKind.UnitTestGeneration;
                 OpenSearchContainer();
                 _state.StatusMessage = plan != null ? plan.StatusMessage ?? string.Empty : "Unit test generation was not available.";
             }
@@ -555,7 +555,7 @@ namespace Cortex.Modules.Editor
                 }
 
                 _semanticOperationService.QueueRequest(_state, target, requestKind);
-                _state.Semantic.ActiveView = viewKind;
+                _state.Semantic.Workbench.ActiveView = viewKind;
                 OpenSearchContainer();
                 _state.StatusMessage = actionName + " requested for " + (target.SymbolText ?? string.Empty) + ".";
             }

@@ -9,7 +9,7 @@ namespace Cortex.Services
     {
         public CompletionRankingContext Analyze(
             DocumentSession session,
-            CortexEditorInteractionState editorState,
+            CortexCompletionInteractionState editorState,
             LanguageServiceCompletionResponse response)
         {
             var text = session != null ? session.Text ?? string.Empty : string.Empty;
@@ -56,7 +56,7 @@ namespace Cortex.Services
                 IsDeclarationContext = IsDeclarationContext(text, queryStart, previousToken),
                 RecentAcceptedCompletions = editorState != null ? editorState.RecentAcceptedCompletions : null,
                 DocumentPath = session != null ? session.FilePath ?? string.Empty : string.Empty,
-                AcceptanceSequence = editorState != null ? editorState.CompletionAcceptanceSequence : 0
+                AcceptanceSequence = editorState != null ? editorState.AcceptanceSequence : 0
             };
 
             PopulateObservedContext(text, caretIndex, context);

@@ -805,13 +805,15 @@ namespace Cortex.Modules.Editor
             }
 
             var editor = state != null ? state.Editor : null;
-            var providerId = editor != null ? editor.CompletionAugmentationProviderId ?? string.Empty : string.Empty;
-            var status = editor != null ? editor.CompletionAugmentationStatus ?? string.Empty : string.Empty;
-            var statusMessage = editor != null ? editor.CompletionAugmentationStatusMessage ?? string.Empty : string.Empty;
+            var completion = editor != null ? editor.Completion : null;
+            var providerId = completion != null ? completion.AugmentationProviderId ?? string.Empty : string.Empty;
+            var status = completion != null ? completion.AugmentationStatus ?? string.Empty : string.Empty;
+            var statusMessage = completion != null ? completion.AugmentationStatusMessage ?? string.Empty : string.Empty;
             var hasInlineSuggestion = editor != null &&
                 active != null &&
-                editor.ActiveInlineCompletionResponse != null &&
-                string.Equals(editor.ActiveInlineCompletionProviderId ?? string.Empty, providerId, StringComparison.OrdinalIgnoreCase);
+                completion != null &&
+                completion.InlineResponse != null &&
+                string.Equals(completion.InlineProviderId ?? string.Empty, providerId, StringComparison.OrdinalIgnoreCase);
 
             if (string.IsNullOrEmpty(providerId) &&
                 !string.IsNullOrEmpty(settings.CompletionAugmentationProviderId))

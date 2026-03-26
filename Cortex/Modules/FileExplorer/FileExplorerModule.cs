@@ -420,7 +420,7 @@ namespace Cortex.Modules.FileExplorer
         private static string GetVisibleHoverDefinitionPath(CortexShellState state)
         {
             return state != null && state.Editor != null
-                ? state.Editor.VisibleHoverDefinitionDocumentPath ?? string.Empty
+                ? state.Editor.Hover.VisibleDefinitionDocumentPath ?? string.Empty
                 : string.Empty;
         }
 

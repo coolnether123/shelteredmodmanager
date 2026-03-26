@@ -719,15 +719,26 @@ namespace Cortex.Services
 
         private static LanguageServiceHoverResponse GetMatchingHoverResponse(CortexShellState state, EditorCommandTarget target)
         {
-            if (state == null || state.Editor == null || target == null)
+            if (state == null || state.EditorContext == null || target == null)
             {
                 return null;
             }
 
             var key = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition;
-            return string.Equals(state.Editor.ActiveHoverKey, key, StringComparison.Ordinal)
-                ? state.Editor.ActiveHoverResponse
-                : null;
+            foreach (var pair in state.EditorContext.ContextsByKey)
+            {
+                var snapshot = pair.Value;
+                if (snapshot == null ||
+                    snapshot.Semantic == null ||
+                    !string.Equals(snapshot.HoverKey ?? string.Empty, key, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                return snapshot.Semantic.HoverResponse;
+            }
+
+            return null;
         }
 
         private bool TryBuildDocumentTarget(CortexShellState state, DocumentSession session, out EditorCommandTarget target)

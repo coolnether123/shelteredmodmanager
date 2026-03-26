@@ -15,7 +15,7 @@ namespace Cortex.Services
 
         public LanguageServiceCompletionResponse Rank(
             DocumentSession session,
-            CortexEditorInteractionState editorState,
+            CortexCompletionInteractionState editorState,
             LanguageServiceCompletionResponse response)
         {
             if (session == null || response == null || response.Items == null || response.Items.Length <= 1)

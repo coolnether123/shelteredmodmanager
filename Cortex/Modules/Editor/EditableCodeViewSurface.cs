@@ -39,7 +39,7 @@ namespace Cortex.Modules.Editor
         private readonly EditorMethodInspectorSurface _methodInspectorSurface;
         private readonly EditorToolbarService _toolbarService = new EditorToolbarService();
         private readonly SourceEditorCommandRouterService _commandRouterService = new SourceEditorCommandRouterService();
-        private readonly SourceEditorHoverService _hoverService = new SourceEditorHoverService();
+        private readonly SourceEditorHoverService _hoverService;
         private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
         private readonly EditorFallbackColoringService _fallbackColoringService = new EditorFallbackColoringService();
         private readonly EditorCaretIndicatorPresentationService _caretIndicatorPresentationService = new EditorCaretIndicatorPresentationService();
@@ -98,6 +98,7 @@ namespace Cortex.Modules.Editor
             _semanticPopupSurface = new EditorSemanticPopupSurface(contextService);
             _methodInspectorService = new EditorMethodInspectorService(contextService);
             _methodInspectorSurface = new EditorMethodInspectorSurface(contextService);
+            _hoverService = new SourceEditorHoverService(contextService);
         }
 
         private struct PointerContext
@@ -278,7 +279,7 @@ namespace Cortex.Modules.Editor
 
                     _semanticPopupSurface.DrawQuickActions(
                         state,
-                        GetViewportAnchorRect(session, _contextService.ResolveTarget(state, state != null && state.Semantic != null ? state.Semantic.QuickActionsContextKey : string.Empty), scroll, gutterWidth),
+                        GetViewportAnchorRect(session, _contextService.ResolveTarget(state, state != null && state.Semantic != null && state.Semantic.QuickActions != null ? state.Semantic.QuickActions.ContextKey : string.Empty), scroll, gutterWidth),
                         rect.size,
                         commandRegistry);
                     _lastMethodInspectorRect = _methodInspectorSurface.Draw(
@@ -312,15 +313,15 @@ namespace Cortex.Modules.Editor
                     {
                         DrawCompletionPopup(session, state, scroll, rect.size, gutterWidth);
                     }
-                    DrawSignatureHelpPopup(session, state, scroll, rect.size, gutterWidth);
+                        DrawSignatureHelpPopup(session, state, scroll, rect.size, gutterWidth);
                     _semanticPopupSurface.DrawRename(
                         state,
-                        GetViewportAnchorRect(session, _contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.ActiveRenameContextKey : string.Empty), scroll, gutterWidth),
+                        GetViewportAnchorRect(session, _contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.Rename.ContextKey : string.Empty), scroll, gutterWidth),
                         rect.size,
                         commandRegistry);
                     _semanticPopupSurface.DrawPeek(
                         state,
-                        GetViewportAnchorRect(session, _contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.ActivePeekContextKey : string.Empty), scroll, gutterWidth),
+                        GetViewportAnchorRect(session, _contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.Peek.ContextKey : string.Empty), scroll, gutterWidth),
                         rect.size);
                     DrawHoverTooltip(state, hoverTarget, pointerContext.SurfaceMouse, rect.size);
                     DrawContextMenu(state, current, pointerContext.SurfaceMouse, rect.size, commandRegistry, contextMenuStyle, contextMenuButtonStyle, contextMenuHeaderStyle);
@@ -1026,7 +1027,7 @@ namespace Cortex.Modules.Editor
             }
 
             string suffixText;
-            if (!_editorCompletionService.TryGetInlineSuggestionSuffix(state.Editor, session, out suffixText) ||
+            if (!_editorCompletionService.TryGetInlineSuggestionSuffix(state.Editor.Completion, session, out suffixText) ||
                 string.IsNullOrEmpty(suffixText))
             {
                 return;
@@ -1063,12 +1064,13 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            var response = state.Editor.ActiveCompletionResponse;
-            if (!_editorCompletionService.IsVisibleForSession(state.Editor, session))
+            var completion = state.Editor.Completion;
+            var response = completion.Response;
+            if (!_editorCompletionService.IsVisibleForSession(completion, session))
             {
                 if (HasVisibleCompletion(state))
                 {
-                    _editorCompletionService.ClearPopupCompletion(state.Editor);
+                    _editorCompletionService.ClearPopupCompletion(completion);
                 }
 
                 return;
@@ -1080,7 +1082,7 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            _editorCompletionService.SyncSelection(state.Editor);
+            _editorCompletionService.SyncSelection(completion);
             var caretRect = BuildCaretViewportRect(_layout.Lines[caret.Line], gutterWidth, session.EditorState.CaretIndex, scroll);
             var popupWidth = CalculateCompletionPopupWidth(response);
             var visibleCount = Math.Min(CompletionVisibleItemCount, response.Items.Length);
@@ -1100,7 +1102,7 @@ namespace Cortex.Modules.Editor
             GUI.DrawTexture(new Rect(popupRect.x, popupRect.y, popupRect.width, 1f), _completionBorderFill);
             GUI.DrawTexture(new Rect(popupRect.x, popupRect.yMax - 1f, popupRect.width, 1f), _completionBorderFill);
 
-            var selectedIndex = state.Editor.CompletionSelectedIndex;
+            var selectedIndex = completion.SelectedIndex;
             var firstVisible = Mathf.Clamp(selectedIndex - 3, 0, Math.Max(0, response.Items.Length - visibleCount));
             for (var i = 0; i < visibleCount; i++)
             {
@@ -1139,16 +1141,17 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            if (!_editorSignatureHelpService.HasVisibleSignatureHelp(state.Editor, session))
+            var signatureHelp = state.Editor.SignatureHelp;
+            if (!_editorSignatureHelpService.HasVisibleSignatureHelp(signatureHelp, session))
             {
-                if (state.Editor.ActiveSignatureHelpResponse != null)
+                if (signatureHelp.Response != null)
                 {
                     ClearSignatureHelp(state);
                 }
                 return;
             }
 
-            var response = state.Editor.ActiveSignatureHelpResponse;
+            var response = signatureHelp.Response;
             if (response == null || response.Items == null || response.Items.Length == 0)
             {
                 return;
@@ -2348,8 +2351,8 @@ namespace Cortex.Modules.Editor
                 return false;
             }
 
-            var hasInlineSuggestion = _editorCompletionService.HasVisibleInlineSuggestion(state != null ? state.Editor : null, session);
-            var response = state != null && state.Editor != null ? state.Editor.ActiveCompletionResponse : null;
+            var hasInlineSuggestion = _editorCompletionService.HasVisibleInlineSuggestion(state != null && state.Editor != null ? state.Editor.Completion : null, session);
+            var response = state != null && state.Editor != null ? state.Editor.Completion.Response : null;
             if (!hasInlineSuggestion && !_editorCompletionService.HasCompletionItems(response))
             {
                 return false;
@@ -2377,20 +2380,20 @@ namespace Cortex.Modules.Editor
                 return false;
             }
 
-            _editorCompletionService.SyncSelection(state.Editor);
+            _editorCompletionService.SyncSelection(state.Editor.Completion);
             switch (current.keyCode)
             {
                 case KeyCode.UpArrow:
-                    _editorCompletionService.MoveSelection(state.Editor, -1);
+                    _editorCompletionService.MoveSelection(state.Editor.Completion, -1);
                     return true;
                 case KeyCode.DownArrow:
-                    _editorCompletionService.MoveSelection(state.Editor, 1);
+                    _editorCompletionService.MoveSelection(state.Editor.Completion, 1);
                     return true;
                 case KeyCode.PageUp:
-                    _editorCompletionService.MoveSelection(state.Editor, -CompletionVisibleItemCount);
+                    _editorCompletionService.MoveSelection(state.Editor.Completion, -CompletionVisibleItemCount);
                     return true;
                 case KeyCode.PageDown:
-                    _editorCompletionService.MoveSelection(state.Editor, CompletionVisibleItemCount);
+                    _editorCompletionService.MoveSelection(state.Editor.Completion, CompletionVisibleItemCount);
                     return true;
                 case KeyCode.Return:
                 case KeyCode.KeypadEnter:
@@ -2412,7 +2415,7 @@ namespace Cortex.Modules.Editor
 
         private bool TryHandleSignatureHelpInput(DocumentSession session, CortexShellState state, Event current)
         {
-            if (state == null || state.Editor == null || !_editorSignatureHelpService.HasVisibleSignatureHelp(state.Editor, session))
+            if (state == null || state.Editor == null || !_editorSignatureHelpService.HasVisibleSignatureHelp(state.Editor.SignatureHelp, session))
             {
                 return false;
             }
@@ -2474,7 +2477,7 @@ namespace Cortex.Modules.Editor
                     ClearSignatureHelp(state);
                 }
                 else if (_editorSignatureHelpService.ShouldTriggerSignatureHelp(current.character) ||
-                    _editorSignatureHelpService.HasVisibleSignatureHelp(state.Editor, session))
+                    _editorSignatureHelpService.HasVisibleSignatureHelp(state.Editor.SignatureHelp, session))
                 {
                     QueueSignatureHelpRequest(session, state, false, current.character != '\0' ? current.character.ToString() : string.Empty);
                 }
@@ -2511,12 +2514,12 @@ namespace Cortex.Modules.Editor
                 string.Equals(commandId, "caret.document.end", StringComparison.Ordinal);
 
             if (movementCommand &&
-                (HasVisibleCompletion(state) || _editorCompletionService.HasVisibleInlineSuggestion(state != null ? state.Editor : null, session)))
+                (HasVisibleCompletion(state) || _editorCompletionService.HasVisibleInlineSuggestion(state != null && state.Editor != null ? state.Editor.Completion : null, session)))
             {
                 ClearCompletion(state);
             }
 
-            if (_editorSignatureHelpService.HasVisibleSignatureHelp(state.Editor, session) && movementCommand)
+            if (_editorSignatureHelpService.HasVisibleSignatureHelp(state.Editor.SignatureHelp, session) && movementCommand)
             {
                 ClearSignatureHelp(state);
             }
@@ -2531,7 +2534,7 @@ namespace Cortex.Modules.Editor
                 ", CaretIndex=" + (session != null && session.EditorState != null ? session.EditorState.CaretIndex.ToString() : "-1") + ".");
             if (!_editorCompletionService.QueueRequest(
                 session,
-                state != null ? state.Editor : null,
+                state != null && state.Editor != null ? state.Editor.Completion : null,
                 _editorService,
                 explicitInvocation,
                 triggerCharacter))
@@ -2552,7 +2555,7 @@ namespace Cortex.Modules.Editor
         {
             return _editorCompletionService.ApplySelectedCompletion(
                 session,
-                state != null ? state.Editor : null,
+                state != null && state.Editor != null ? state.Editor.Completion : null,
                 _editorService);
         }
 
@@ -2560,25 +2563,25 @@ namespace Cortex.Modules.Editor
         {
             return _editorCompletionService.ApplyInlineSuggestion(
                 session,
-                state != null ? state.Editor : null,
+                state != null && state.Editor != null ? state.Editor.Completion : null,
                 _editorService);
         }
 
         private bool HasVisibleCompletion(CortexShellState state)
         {
-            return state != null && _editorCompletionService.HasVisibleCompletion(state.Editor);
+            return state != null && state.Editor != null && _editorCompletionService.HasVisibleCompletion(state.Editor.Completion);
         }
 
         private void ClearCompletion(CortexShellState state)
         {
-            _editorCompletionService.Reset(state != null ? state.Editor : null);
+            _editorCompletionService.Reset(state != null && state.Editor != null ? state.Editor.Completion : null);
         }
 
         private void QueueSignatureHelpRequest(DocumentSession session, CortexShellState state, bool explicitInvocation, string triggerCharacter)
         {
             if (!_editorSignatureHelpService.QueueRequest(
                 session,
-                state != null ? state.Editor : null,
+                state != null && state.Editor != null ? state.Editor.SignatureHelp : null,
                 _editorService,
                 explicitInvocation,
                 triggerCharacter))
@@ -2589,7 +2592,7 @@ namespace Cortex.Modules.Editor
 
         private void ClearSignatureHelp(CortexShellState state)
         {
-            _editorSignatureHelpService.Reset(state != null ? state.Editor : null);
+            _editorSignatureHelpService.Reset(state != null && state.Editor != null ? state.Editor.SignatureHelp : null);
         }
 
         private static string[] BuildInlineSuggestionDisplayLines(string suffixText)

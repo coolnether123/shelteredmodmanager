@@ -35,7 +35,7 @@ namespace Cortex.Services
         }
 
         public static string GetSkipReason(
-            CortexEditorInteractionState editorState,
+            CortexCompletionInteractionState editorState,
             DocumentSession session,
             CompletionAugmentationRequest request,
             EditorCompletionService editorCompletionService)
@@ -51,7 +51,7 @@ namespace Cortex.Services
                 return string.Empty;
             }
 
-            if (!string.Equals(editorState.ActiveInlineCompletionProviderId ?? string.Empty, providerId, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(editorState.InlineProviderId ?? string.Empty, providerId, StringComparison.OrdinalIgnoreCase))
             {
                 return string.Empty;
             }

@@ -86,13 +86,14 @@ namespace Cortex
                 return;
             }
 
-            var requestKey = context.State.Editor.RequestedHoverKey ?? string.Empty;
-            if (string.IsNullOrEmpty(requestKey) || string.Equals(requestKey, context.State.Editor.ActiveHoverKey, StringComparison.Ordinal))
+            var hoverState = context.State.Editor.Hover;
+            var requestKey = hoverState.RequestedKey ?? string.Empty;
+            if (string.IsNullOrEmpty(requestKey))
             {
                 return;
             }
 
-            var session = context.FindOpenDocument(context.State.Editor.RequestedHoverDocumentPath);
+            var session = context.FindOpenDocument(hoverState.RequestedDocumentPath);
             if (session == null)
             {
                 return;
@@ -105,23 +106,23 @@ namespace Cortex
                 context.State.Settings,
                 project,
                 sourceRoots,
-                context.State.Editor.RequestedHoverLine,
-                context.State.Editor.RequestedHoverColumn,
-                context.State.Editor.RequestedHoverAbsolutePosition);
+                hoverState.RequestedLine,
+                hoverState.RequestedColumn,
+                hoverState.RequestedAbsolutePosition);
             var requestDocumentPath = request.DocumentPath ?? string.Empty;
             var requestDocumentVersion = request.DocumentVersion;
             runtime.HoverInFlight = true;
             MMLog.WriteDebug("[Cortex.Roslyn] Queueing hover for " +
-                (context.State.Editor.RequestedHoverTokenText ?? string.Empty) +
-                " @ " + context.State.Editor.RequestedHoverLine + ":" + context.State.Editor.RequestedHoverColumn +
+                (hoverState.RequestedTokenText ?? string.Empty) +
+                " @ " + hoverState.RequestedLine + ":" + hoverState.RequestedColumn +
                 " in " + Path.GetFileName(requestDocumentPath) + ".");
             var requestId = context.LanguageServiceClient != null ? context.LanguageServiceClient.QueueHover(request) : string.Empty;
             if (string.IsNullOrEmpty(requestId))
             {
                 runtime.HoverInFlight = false;
-                context.State.EditorContext.Hover.RequestedContextKey = string.Empty;
+                hoverState.RequestedContextKey = string.Empty;
                 MMLog.WriteWarning("[Cortex.Roslyn] Failed to queue hover for " +
-                    (context.State.Editor.RequestedHoverTokenText ?? string.Empty) +
+                    (hoverState.RequestedTokenText ?? string.Empty) +
                     ": " + (context.LanguageServiceClient != null ? context.LanguageServiceClient.LastError : "Roslyn client was not available."));
                 return;
             }
@@ -130,7 +131,7 @@ namespace Cortex
             {
                 RequestId = requestId,
                 Generation = runtime.ServiceGeneration,
-                ContextKey = context.State.EditorContext.Hover.RequestedContextKey ?? string.Empty,
+                ContextKey = hoverState.RequestedContextKey ?? string.Empty,
                 HoverKey = requestKey,
                 DocumentPath = requestDocumentPath,
                 DocumentVersion = requestDocumentVersion
@@ -145,13 +146,14 @@ namespace Cortex
                 return;
             }
 
-            var requestKey = context.State.Editor.RequestedDefinitionKey ?? string.Empty;
+            var definitionState = context.State.Editor.Definition;
+            var requestKey = definitionState.RequestedKey ?? string.Empty;
             if (string.IsNullOrEmpty(requestKey))
             {
                 return;
             }
 
-            var session = context.FindOpenDocument(context.State.Editor.RequestedDefinitionDocumentPath);
+            var session = context.FindOpenDocument(definitionState.RequestedDocumentPath);
             if (session == null)
             {
                 return;
@@ -164,18 +166,18 @@ namespace Cortex
                 context.State.Settings,
                 project,
                 sourceRoots,
-                context.State.Editor.RequestedDefinitionLine,
-                context.State.Editor.RequestedDefinitionColumn,
-                context.State.Editor.RequestedDefinitionAbsolutePosition);
+                definitionState.RequestedLine,
+                definitionState.RequestedColumn,
+                definitionState.RequestedAbsolutePosition);
             var requestDocumentPath = request.DocumentPath ?? string.Empty;
             var requestDocumentVersion = request.DocumentVersion;
             runtime.DefinitionInFlight = true;
-            context.State.Editor.RequestedDefinitionKey = string.Empty;
+            definitionState.RequestedKey = string.Empty;
             var requestId = context.LanguageServiceClient != null ? context.LanguageServiceClient.QueueGoToDefinition(request) : string.Empty;
             if (string.IsNullOrEmpty(requestId))
             {
                 runtime.DefinitionInFlight = false;
-                context.State.EditorContext.Definition.RequestedContextKey = string.Empty;
+                definitionState.RequestedContextKey = string.Empty;
                 context.State.StatusMessage = "Definition lookup failed: " + (context.LanguageServiceClient != null ? context.LanguageServiceClient.LastError : "Roslyn client was not available.");
                 return;
             }
@@ -184,10 +186,10 @@ namespace Cortex
             {
                 RequestId = requestId,
                 Generation = runtime.ServiceGeneration,
-                ContextKey = context.State.EditorContext.Definition.RequestedContextKey ?? string.Empty,
+                ContextKey = definitionState.RequestedContextKey ?? string.Empty,
                 DocumentPath = requestDocumentPath,
                 DocumentVersion = requestDocumentVersion,
-                TokenText = context.State.Editor.RequestedDefinitionTokenText ?? string.Empty
+                TokenText = definitionState.RequestedTokenText ?? string.Empty
             };
         }
 
@@ -201,12 +203,13 @@ namespace Cortex
 
             context.DispatchDeferredCompletionAugmentation();
 
-            if (!context.EditorCompletionService.ShouldDispatch(context.State.Editor, runtime.CompletionInFlight))
+            var completionState = context.State.Editor.Completion;
+            if (!context.EditorCompletionService.ShouldDispatch(completionState, runtime.CompletionInFlight))
             {
                 return;
             }
 
-            var session = context.FindOpenDocument(context.State.Editor.RequestedCompletionDocumentPath);
+            var session = context.FindOpenDocument(completionState.RequestedDocumentPath);
             if (session == null)
             {
                 return;
@@ -219,17 +222,18 @@ namespace Cortex
                 context.State.Settings,
                 project,
                 sourceRoots,
-                context.State.Editor);
+                completionState);
             if (request == null)
             {
                 return;
             }
 
-            var requestKey = context.State.Editor.RequestedCompletionKey ?? string.Empty;
+            var requestKey = completionState.RequestedKey ?? string.Empty;
             var augmentationPending = new DocumentLanguageCompletionRequestState
             {
                 Generation = runtime.ServiceGeneration,
                 RequestKey = requestKey,
+                ContextKey = completionState.RequestedContextKey ?? string.Empty,
                 DocumentPath = request.DocumentPath ?? string.Empty,
                 DocumentVersion = request.DocumentVersion,
                 AbsolutePosition = request.AbsolutePosition
@@ -247,6 +251,7 @@ namespace Cortex
                         RequestId = requestId,
                         Generation = runtime.ServiceGeneration,
                         RequestKey = requestKey,
+                        ContextKey = completionState.RequestedContextKey ?? string.Empty,
                         DocumentPath = request.DocumentPath ?? string.Empty,
                         DocumentVersion = request.DocumentVersion,
                         AbsolutePosition = request.AbsolutePosition
@@ -274,7 +279,7 @@ namespace Cortex
 
             if (!context.TryQueueCompletionAugmentation(session, augmentationPending, augmentationRequest, null))
             {
-                context.EditorCompletionService.ClearPendingRequest(context.State.Editor);
+                context.EditorCompletionService.ClearPendingRequest(completionState);
             }
         }
 
@@ -291,12 +296,13 @@ namespace Cortex
                 return;
             }
 
-            if (!context.EditorSignatureHelpService.ShouldDispatch(context.State.Editor, runtime.SignatureHelpInFlight))
+            var signatureHelpState = context.State.Editor.SignatureHelp;
+            if (!context.EditorSignatureHelpService.ShouldDispatch(signatureHelpState, runtime.SignatureHelpInFlight))
             {
                 return;
             }
 
-            var session = context.FindOpenDocument(context.State.Editor.RequestedSignatureHelpDocumentPath);
+            var session = context.FindOpenDocument(signatureHelpState.RequestedDocumentPath);
             if (session == null)
             {
                 return;
@@ -309,7 +315,7 @@ namespace Cortex
                 context.State.Settings,
                 project,
                 sourceRoots,
-                context.State.Editor);
+                signatureHelpState);
             if (request == null)
             {
                 return;
@@ -327,8 +333,8 @@ namespace Cortex
             {
                 RequestId = requestId,
                 Generation = runtime.ServiceGeneration,
-                ContextKey = context.State != null && context.State.EditorContext != null ? context.State.EditorContext.ActiveContextKey ?? string.Empty : string.Empty,
-                RequestKey = context.State.Editor.RequestedSignatureHelpKey ?? string.Empty,
+                ContextKey = signatureHelpState.RequestedContextKey ?? string.Empty,
+                RequestKey = signatureHelpState.RequestedKey ?? string.Empty,
                 DocumentPath = request.DocumentPath ?? string.Empty,
                 DocumentVersion = request.DocumentVersion,
                 AbsolutePosition = request.AbsolutePosition
@@ -339,18 +345,19 @@ namespace Cortex
         {
             var runtime = context != null ? context.RuntimeState : null;
             var semantic = context != null && context.State != null ? context.State.Semantic : null;
-            if (context == null || runtime == null || semantic == null || runtime.SemanticOperationInFlight || semantic.RequestedKind == SemanticRequestKind.None)
+            var requestState = semantic != null ? semantic.Request : null;
+            if (context == null || runtime == null || requestState == null || runtime.SemanticOperationInFlight || requestState.RequestedKind == SemanticRequestKind.None)
             {
                 return;
             }
 
-            var requestKey = semantic.RequestedKey ?? string.Empty;
+            var requestKey = requestState.RequestedKey ?? string.Empty;
             if (string.IsNullOrEmpty(requestKey))
             {
                 return;
             }
 
-            var session = context.FindOpenDocument(semantic.RequestedDocumentPath);
+            var session = context.FindOpenDocument(requestState.RequestedDocumentPath);
             if (session == null)
             {
                 return;
@@ -359,7 +366,7 @@ namespace Cortex
             var project = context.ResolveProjectForDocument(session.FilePath);
             var sourceRoots = context.BuildLanguageSourceRoots(context.State.Settings, project);
             var requestId = string.Empty;
-            switch (semantic.RequestedKind)
+            switch (requestState.RequestedKind)
             {
                 case SemanticRequestKind.SymbolContext:
                     requestId = context.LanguageServiceClient != null
@@ -369,9 +376,9 @@ namespace Cortex
                                 context.State.Settings,
                                 project,
                                 sourceRoots,
-                                semantic.RequestedLine,
-                                semantic.RequestedColumn,
-                                semantic.RequestedAbsolutePosition))
+                                requestState.RequestedLine,
+                                requestState.RequestedColumn,
+                                requestState.RequestedAbsolutePosition))
                         : string.Empty;
                     break;
                 case SemanticRequestKind.RenamePreview:
@@ -382,10 +389,10 @@ namespace Cortex
                                 context.State.Settings,
                                 project,
                                 sourceRoots,
-                                semantic.RequestedLine,
-                                semantic.RequestedColumn,
-                                semantic.RequestedAbsolutePosition,
-                                semantic.RequestedNewName))
+                                requestState.RequestedLine,
+                                requestState.RequestedColumn,
+                                requestState.RequestedAbsolutePosition,
+                                requestState.RequestedNewName))
                         : string.Empty;
                     break;
                 case SemanticRequestKind.References:
@@ -396,9 +403,9 @@ namespace Cortex
                                 context.State.Settings,
                                 project,
                                 sourceRoots,
-                                semantic.RequestedLine,
-                                semantic.RequestedColumn,
-                                semantic.RequestedAbsolutePosition))
+                                requestState.RequestedLine,
+                                requestState.RequestedColumn,
+                                requestState.RequestedAbsolutePosition))
                         : string.Empty;
                     break;
                 case SemanticRequestKind.PeekDefinition:
@@ -409,9 +416,9 @@ namespace Cortex
                                 context.State.Settings,
                                 project,
                                 sourceRoots,
-                                semantic.RequestedLine,
-                                semantic.RequestedColumn,
-                                semantic.RequestedAbsolutePosition))
+                                requestState.RequestedLine,
+                                requestState.RequestedColumn,
+                                requestState.RequestedAbsolutePosition))
                         : string.Empty;
                     break;
                 case SemanticRequestKind.BaseSymbol:
@@ -422,9 +429,9 @@ namespace Cortex
                                 context.State.Settings,
                                 project,
                                 sourceRoots,
-                                semantic.RequestedLine,
-                                semantic.RequestedColumn,
-                                semantic.RequestedAbsolutePosition))
+                                requestState.RequestedLine,
+                                requestState.RequestedColumn,
+                                requestState.RequestedAbsolutePosition))
                         : string.Empty;
                     break;
                 case SemanticRequestKind.Implementations:
@@ -435,9 +442,9 @@ namespace Cortex
                                 context.State.Settings,
                                 project,
                                 sourceRoots,
-                                semantic.RequestedLine,
-                                semantic.RequestedColumn,
-                                semantic.RequestedAbsolutePosition))
+                                requestState.RequestedLine,
+                                requestState.RequestedColumn,
+                                requestState.RequestedAbsolutePosition))
                         : string.Empty;
                     break;
                 case SemanticRequestKind.CallHierarchy:
@@ -448,9 +455,9 @@ namespace Cortex
                                 context.State.Settings,
                                 project,
                                 sourceRoots,
-                                semantic.RequestedLine,
-                                semantic.RequestedColumn,
-                                semantic.RequestedAbsolutePosition))
+                                requestState.RequestedLine,
+                                requestState.RequestedColumn,
+                                requestState.RequestedAbsolutePosition))
                         : string.Empty;
                     break;
                 case SemanticRequestKind.ValueSource:
@@ -461,9 +468,9 @@ namespace Cortex
                                 context.State.Settings,
                                 project,
                                 sourceRoots,
-                                semantic.RequestedLine,
-                                semantic.RequestedColumn,
-                                semantic.RequestedAbsolutePosition))
+                                requestState.RequestedLine,
+                                requestState.RequestedColumn,
+                                requestState.RequestedAbsolutePosition))
                         : string.Empty;
                     break;
                 case SemanticRequestKind.DocumentTransformPreview:
@@ -474,12 +481,12 @@ namespace Cortex
                                 context.State.Settings,
                                 project,
                                 sourceRoots,
-                                semantic.RequestedCommandId,
-                                semantic.RequestedTitle,
-                                semantic.RequestedApplyLabel,
-                                semantic.RequestedOrganizeImports,
-                                semantic.RequestedSimplifyNames,
-                                semantic.RequestedFormatDocument))
+                                requestState.RequestedCommandId,
+                                requestState.RequestedTitle,
+                                requestState.RequestedApplyLabel,
+                                requestState.RequestedOrganizeImports,
+                                requestState.RequestedSimplifyNames,
+                                requestState.RequestedFormatDocument))
                         : string.Empty;
                     break;
             }
@@ -487,8 +494,8 @@ namespace Cortex
             if (string.IsNullOrEmpty(requestId))
             {
                 context.State.StatusMessage = "Semantic operation failed: " + (context.LanguageServiceClient != null ? context.LanguageServiceClient.LastError : "Roslyn client was not available.");
-                semantic.RequestedKey = string.Empty;
-                semantic.RequestedKind = SemanticRequestKind.None;
+                requestState.RequestedKey = string.Empty;
+                requestState.RequestedKind = SemanticRequestKind.None;
                 return;
             }
 
@@ -497,17 +504,17 @@ namespace Cortex
             {
                 RequestId = requestId,
                 Generation = runtime.ServiceGeneration,
-                Kind = semantic.RequestedKind,
+                Kind = requestState.RequestedKind,
                 RequestKey = requestKey,
-                ContextKey = context.State.EditorContext.SemanticRequest.RequestedContextKey ?? string.Empty,
+                ContextKey = requestState.RequestedContextKey ?? string.Empty,
                 DocumentPath = session.FilePath ?? string.Empty,
                 DocumentVersion = session.TextVersion,
-                SymbolText = semantic.RequestedSymbolText ?? string.Empty,
-                NewName = semantic.RequestedNewName ?? string.Empty
+                SymbolText = requestState.RequestedSymbolText ?? string.Empty,
+                NewName = requestState.RequestedNewName ?? string.Empty
             };
-            semantic.RequestedKey = string.Empty;
-            context.State.EditorContext.SemanticRequest.RequestedContextKey = string.Empty;
-            semantic.RequestedKind = SemanticRequestKind.None;
+            requestState.RequestedKey = string.Empty;
+            requestState.RequestedContextKey = string.Empty;
+            requestState.RequestedKind = SemanticRequestKind.None;
         }
 
         public void UpdateMethodInspectorCallHierarchy(CortexShellLanguageRuntimeContext context)

@@ -60,7 +60,8 @@ namespace Cortex.Modules.Search
         {
             return state != null &&
                 state.Semantic != null &&
-                state.Semantic.ActiveView != SemanticWorkbenchViewKind.None;
+                state.Semantic.Workbench != null &&
+                state.Semantic.Workbench.ActiveView != SemanticWorkbenchViewKind.None;
         }
 
         private void DrawSemanticSummary(CortexShellState state)
@@ -73,31 +74,31 @@ namespace Cortex.Modules.Search
 
         private void DrawSemanticContent(CortexNavigationService navigationService, IDocumentService documentService, CortexShellState state)
         {
-            switch (state.Semantic.ActiveView)
+            switch (state.Semantic.Workbench.ActiveView)
             {
                 case SemanticWorkbenchViewKind.RenamePreview:
                     DrawRenamePreview(navigationService, documentService, state);
                     return;
                 case SemanticWorkbenchViewKind.References:
-                    DrawLocationList(state.Semantic.References != null ? state.Semantic.References.Locations : null, navigationService, state);
+                    DrawLocationList(state.Semantic.Workbench.References != null ? state.Semantic.Workbench.References.Locations : null, navigationService, state);
                     return;
                 case SemanticWorkbenchViewKind.PeekDefinition:
-                    DrawPeekDefinition(state.Semantic.PeekDefinition, navigationService, state);
+                    DrawPeekDefinition(state.Semantic.Workbench.PeekDefinition, navigationService, state);
                     return;
                 case SemanticWorkbenchViewKind.CallHierarchy:
-                    DrawCallHierarchy(state.Semantic.CallHierarchy, navigationService, state);
+                    DrawCallHierarchy(state.Semantic.Workbench.CallHierarchy, navigationService, state);
                     return;
                 case SemanticWorkbenchViewKind.ValueSource:
-                    DrawValueSource(state.Semantic.ValueSource, navigationService, state);
+                    DrawValueSource(state.Semantic.Workbench.ValueSource, navigationService, state);
                     return;
                 case SemanticWorkbenchViewKind.UnitTestGeneration:
-                    DrawUnitTestGeneration(state.Semantic.UnitTestGeneration, navigationService, state);
+                    DrawUnitTestGeneration(state.Semantic.Workbench.UnitTestGeneration, navigationService, state);
                     return;
                 case SemanticWorkbenchViewKind.BaseSymbols:
-                    DrawLocationList(state.Semantic.BaseSymbols != null ? state.Semantic.BaseSymbols.Locations : null, navigationService, state);
+                    DrawLocationList(state.Semantic.Workbench.BaseSymbols != null ? state.Semantic.Workbench.BaseSymbols.Locations : null, navigationService, state);
                     return;
                 case SemanticWorkbenchViewKind.Implementations:
-                    DrawLocationList(state.Semantic.Implementations != null ? state.Semantic.Implementations.Locations : null, navigationService, state);
+                    DrawLocationList(state.Semantic.Workbench.Implementations != null ? state.Semantic.Workbench.Implementations.Locations : null, navigationService, state);
                     return;
                 case SemanticWorkbenchViewKind.DocumentEditPreview:
                     DrawDocumentEditPreview(navigationService, documentService, state);
@@ -109,7 +110,7 @@ namespace Cortex.Modules.Search
 
         private void DrawRenamePreview(CortexNavigationService navigationService, IDocumentService documentService, CortexShellState state)
         {
-            var preview = state != null && state.Semantic != null ? state.Semantic.RenamePreview : null;
+            var preview = state != null && state.Semantic != null && state.Semantic.Workbench != null ? state.Semantic.Workbench.RenamePreview : null;
             if (preview == null)
             {
                 GUILayout.Label("Rename preview is not available.", _emptyStateStyle ?? GUI.skin.label);
@@ -142,7 +143,7 @@ namespace Cortex.Modules.Search
 
         private void DrawDocumentEditPreview(CortexNavigationService navigationService, IDocumentService documentService, CortexShellState state)
         {
-            var preview = state != null && state.Semantic != null ? state.Semantic.DocumentEditPreview : null;
+            var preview = state != null && state.Semantic != null && state.Semantic.Workbench != null ? state.Semantic.Workbench.DocumentEditPreview : null;
             if (preview == null)
             {
                 GUILayout.Label("Document edit preview is not available.", _emptyStateStyle ?? GUI.skin.label);
@@ -481,7 +482,7 @@ namespace Cortex.Modules.Search
 
         private string BuildSemanticTitle(CortexShellState state)
         {
-            switch (state.Semantic.ActiveView)
+            switch (state.Semantic.Workbench.ActiveView)
             {
                 case SemanticWorkbenchViewKind.RenamePreview:
                     return "Semantic Rename";
@@ -513,26 +514,26 @@ namespace Cortex.Modules.Search
                 return string.Empty;
             }
 
-            switch (state.Semantic.ActiveView)
+            switch (state.Semantic.Workbench.ActiveView)
             {
                 case SemanticWorkbenchViewKind.RenamePreview:
-                    return state.Semantic.RenamePreview != null ? state.Semantic.RenamePreview.StatusMessage ?? string.Empty : string.Empty;
+                    return state.Semantic.Workbench.RenamePreview != null ? state.Semantic.Workbench.RenamePreview.StatusMessage ?? string.Empty : string.Empty;
                 case SemanticWorkbenchViewKind.References:
-                    return state.Semantic.References != null ? state.Semantic.References.StatusMessage ?? string.Empty : string.Empty;
+                    return state.Semantic.Workbench.References != null ? state.Semantic.Workbench.References.StatusMessage ?? string.Empty : string.Empty;
                 case SemanticWorkbenchViewKind.PeekDefinition:
-                    return state.Semantic.PeekDefinition != null ? state.Semantic.PeekDefinition.StatusMessage ?? string.Empty : string.Empty;
+                    return state.Semantic.Workbench.PeekDefinition != null ? state.Semantic.Workbench.PeekDefinition.StatusMessage ?? string.Empty : string.Empty;
                 case SemanticWorkbenchViewKind.CallHierarchy:
-                    return state.Semantic.CallHierarchy != null ? state.Semantic.CallHierarchy.StatusMessage ?? string.Empty : string.Empty;
+                    return state.Semantic.Workbench.CallHierarchy != null ? state.Semantic.Workbench.CallHierarchy.StatusMessage ?? string.Empty : string.Empty;
                 case SemanticWorkbenchViewKind.ValueSource:
-                    return state.Semantic.ValueSource != null ? state.Semantic.ValueSource.StatusMessage ?? string.Empty : string.Empty;
+                    return state.Semantic.Workbench.ValueSource != null ? state.Semantic.Workbench.ValueSource.StatusMessage ?? string.Empty : string.Empty;
                 case SemanticWorkbenchViewKind.UnitTestGeneration:
-                    return state.Semantic.UnitTestGeneration != null ? state.Semantic.UnitTestGeneration.StatusMessage ?? string.Empty : string.Empty;
+                    return state.Semantic.Workbench.UnitTestGeneration != null ? state.Semantic.Workbench.UnitTestGeneration.StatusMessage ?? string.Empty : string.Empty;
                 case SemanticWorkbenchViewKind.BaseSymbols:
-                    return state.Semantic.BaseSymbols != null ? state.Semantic.BaseSymbols.StatusMessage ?? string.Empty : string.Empty;
+                    return state.Semantic.Workbench.BaseSymbols != null ? state.Semantic.Workbench.BaseSymbols.StatusMessage ?? string.Empty : string.Empty;
                 case SemanticWorkbenchViewKind.Implementations:
-                    return state.Semantic.Implementations != null ? state.Semantic.Implementations.StatusMessage ?? string.Empty : string.Empty;
+                    return state.Semantic.Workbench.Implementations != null ? state.Semantic.Workbench.Implementations.StatusMessage ?? string.Empty : string.Empty;
                 case SemanticWorkbenchViewKind.DocumentEditPreview:
-                    return state.Semantic.DocumentEditPreview != null ? state.Semantic.DocumentEditPreview.StatusMessage ?? string.Empty : string.Empty;
+                    return state.Semantic.Workbench.DocumentEditPreview != null ? state.Semantic.Workbench.DocumentEditPreview.StatusMessage ?? string.Empty : string.Empty;
                 default:
                     return string.Empty;
             }

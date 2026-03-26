@@ -244,7 +244,7 @@ namespace Cortex
             }
 
             var liveSession = context.FindOpenDocument(pending.DocumentPath);
-            if (!string.Equals(context.State.Editor.RequestedHoverKey, pending.HoverKey, StringComparison.Ordinal) ||
+            if (!string.Equals(context.State.Editor.Hover.RequestedKey, pending.HoverKey, StringComparison.Ordinal) ||
                 (liveSession != null &&
                  pending.DocumentVersion > 0 &&
                  liveSession.TextVersion > 0 &&
@@ -265,21 +265,19 @@ namespace Cortex
                 };
             }
 
-            context.State.Editor.ActiveHoverKey = pending.HoverKey;
-            context.State.EditorContext.Hover.ActiveContextKey = pending.ContextKey ?? string.Empty;
-            context.State.Editor.ActiveHoverResponse = response;
-            context.State.Editor.RequestedHoverKey = string.Empty;
-            context.State.EditorContext.Hover.RequestedContextKey = string.Empty;
-            context.State.Editor.RequestedHoverDocumentPath = string.Empty;
-            context.State.Editor.RequestedHoverLine = 0;
-            context.State.Editor.RequestedHoverColumn = 0;
-            context.State.Editor.RequestedHoverAbsolutePosition = -1;
+            context.State.Editor.Hover.ActiveContextKey = pending.ContextKey ?? string.Empty;
+            context.State.Editor.Hover.RequestedKey = string.Empty;
+            context.State.Editor.Hover.RequestedContextKey = string.Empty;
+            context.State.Editor.Hover.RequestedDocumentPath = string.Empty;
+            context.State.Editor.Hover.RequestedLine = 0;
+            context.State.Editor.Hover.RequestedColumn = 0;
+            context.State.Editor.Hover.RequestedAbsolutePosition = -1;
             if (context.EditorContextService != null)
             {
                 context.EditorContextService.ApplyHoverResponse(context.State, pending.ContextKey, pending.HoverKey, response);
             }
-            var requestedHoverTokenText = context.State.Editor.RequestedHoverTokenText ?? string.Empty;
-            context.State.Editor.RequestedHoverTokenText = string.Empty;
+            var requestedHoverTokenText = context.State.Editor.Hover.RequestedTokenText ?? string.Empty;
+            context.State.Editor.Hover.RequestedTokenText = string.Empty;
             if (response.Success)
             {
                 CortexDeveloperLog.WriteSymbolHoverPayload(requestedHoverTokenText, response);
@@ -318,15 +316,15 @@ namespace Cortex
                 var response = DeserializeEnvelopePayload<LanguageServiceDefinitionResponse>(envelope);
                 if (response == null || !response.Success)
                 {
-                    context.State.EditorContext.Definition.RequestedContextKey = string.Empty;
+                    context.State.Editor.Definition.RequestedContextKey = string.Empty;
                     context.State.StatusMessage = response != null && !string.IsNullOrEmpty(response.StatusMessage)
                         ? response.StatusMessage
                         : (envelope != null && !string.IsNullOrEmpty(envelope.ErrorMessage) ? envelope.ErrorMessage : "Definition was not found.");
                     return;
                 }
 
-                context.State.Editor.RequestedDefinitionAbsolutePosition = -1;
-                context.State.EditorContext.Definition.RequestedContextKey = string.Empty;
+                context.State.Editor.Definition.RequestedAbsolutePosition = -1;
+                context.State.Editor.Definition.RequestedContextKey = string.Empty;
 
                 var opened = context.NavigationService != null && context.NavigationService.OpenLanguageSymbolTarget(
                     context.State,
@@ -376,14 +374,14 @@ namespace Cortex
                 return;
             }
 
-            if (!string.Equals(context.State.Editor.RequestedCompletionKey ?? string.Empty, pending.RequestKey ?? string.Empty, StringComparison.Ordinal))
+            if (!string.Equals(context.State.Editor.Completion.RequestedKey ?? string.Empty, pending.RequestKey ?? string.Empty, StringComparison.Ordinal))
             {
                 return;
             }
 
             var response = DeserializeEnvelopePayload<LanguageServiceCompletionResponse>(envelope);
             var target = context.FindOpenDocument(response != null ? response.DocumentPath : pending.DocumentPath);
-            var accepted = context.EditorCompletionService.AcceptResponse(context.State.Editor, target, pending, response);
+            var accepted = context.EditorCompletionService.AcceptResponse(context.State.Editor.Completion, target, pending, response);
             MMLog.WriteInfo("[Cortex.Completion] Roslyn completion response received. Accepted=" +
                 accepted +
                 ", Success=" + (response != null && response.Success) +
@@ -407,7 +405,7 @@ namespace Cortex
 
             var response = DeserializeEnvelopePayload<LanguageServiceSignatureHelpResponse>(envelope);
             var target = context.FindOpenDocument(response != null ? response.DocumentPath : pending.DocumentPath);
-            context.EditorSignatureHelpService.AcceptResponse(context.State.Editor, target, pending, response);
+            context.EditorSignatureHelpService.AcceptResponse(context.State.Editor.SignatureHelp, target, pending, response);
         }
 
         private static void HandleSemanticOperationResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope, PendingSemanticOperationRequest pending)
@@ -480,33 +478,33 @@ namespace Cortex
         private static void HandleRenamePreviewResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
         {
             var response = DeserializeEnvelopePayload<LanguageServiceRenameResponse>(envelope);
-            context.State.Semantic.RenamePreview = response;
-            context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.RenamePreview;
+            context.State.Semantic.Workbench.RenamePreview = response;
+            context.State.Semantic.Workbench.ActiveView = SemanticWorkbenchViewKind.RenamePreview;
             context.State.StatusMessage = response != null ? response.StatusMessage ?? string.Empty : "Rename preview failed.";
         }
 
         private static void HandleReferencesResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
         {
             var response = DeserializeEnvelopePayload<LanguageServiceReferencesResponse>(envelope);
-            context.State.Semantic.References = response;
-            context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.References;
+            context.State.Semantic.Workbench.References = response;
+            context.State.Semantic.Workbench.ActiveView = SemanticWorkbenchViewKind.References;
             context.State.StatusMessage = response != null ? response.StatusMessage ?? string.Empty : "Reference lookup failed.";
         }
 
         private static void HandlePeekDefinitionResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
         {
             var response = DeserializeEnvelopePayload<LanguageServiceDefinitionResponse>(envelope);
-            context.State.Semantic.PeekDefinition = response;
-            context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.PeekDefinition;
+            context.State.Semantic.Workbench.PeekDefinition = response;
+            context.State.Semantic.Workbench.ActiveView = SemanticWorkbenchViewKind.PeekDefinition;
             context.State.StatusMessage = response != null ? response.StatusMessage ?? string.Empty : "Peek definition failed.";
         }
 
         private static void HandleBaseSymbolResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
         {
             var response = DeserializeEnvelopePayload<LanguageServiceBaseSymbolResponse>(envelope);
-            context.State.Semantic.BaseSymbols = response;
+            context.State.Semantic.Workbench.BaseSymbols = response;
             var opened = TryOpenSingleSemanticLocation(context, response != null ? response.Locations : null, "Opened base symbol.");
-            context.State.Semantic.ActiveView = opened ? SemanticWorkbenchViewKind.None : SemanticWorkbenchViewKind.BaseSymbols;
+            context.State.Semantic.Workbench.ActiveView = opened ? SemanticWorkbenchViewKind.None : SemanticWorkbenchViewKind.BaseSymbols;
             context.State.StatusMessage = response != null && !string.IsNullOrEmpty(response.StatusMessage)
                 ? response.StatusMessage
                 : (opened ? "Opened base symbol." : "Base symbol lookup failed.");
@@ -515,9 +513,9 @@ namespace Cortex
         private static void HandleImplementationResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
         {
             var response = DeserializeEnvelopePayload<LanguageServiceImplementationResponse>(envelope);
-            context.State.Semantic.Implementations = response;
+            context.State.Semantic.Workbench.Implementations = response;
             var opened = TryOpenSingleSemanticLocation(context, response != null ? response.Locations : null, "Opened implementation.");
-            context.State.Semantic.ActiveView = opened ? SemanticWorkbenchViewKind.None : SemanticWorkbenchViewKind.Implementations;
+            context.State.Semantic.Workbench.ActiveView = opened ? SemanticWorkbenchViewKind.None : SemanticWorkbenchViewKind.Implementations;
             context.State.StatusMessage = response != null && !string.IsNullOrEmpty(response.StatusMessage)
                 ? response.StatusMessage
                 : (opened ? "Opened implementation." : "Implementation lookup failed.");
@@ -526,16 +524,16 @@ namespace Cortex
         private static void HandleCallHierarchyResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
         {
             var response = DeserializeEnvelopePayload<LanguageServiceCallHierarchyResponse>(envelope);
-            context.State.Semantic.CallHierarchy = response;
-            context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.CallHierarchy;
+            context.State.Semantic.Workbench.CallHierarchy = response;
+            context.State.Semantic.Workbench.ActiveView = SemanticWorkbenchViewKind.CallHierarchy;
             context.State.StatusMessage = response != null ? response.StatusMessage ?? string.Empty : "Call hierarchy lookup failed.";
         }
 
         private static void HandleValueSourceResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
         {
             var response = DeserializeEnvelopePayload<LanguageServiceValueSourceResponse>(envelope);
-            context.State.Semantic.ValueSource = response;
-            context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.ValueSource;
+            context.State.Semantic.Workbench.ValueSource = response;
+            context.State.Semantic.Workbench.ActiveView = SemanticWorkbenchViewKind.ValueSource;
             context.State.StatusMessage = response != null ? response.StatusMessage ?? string.Empty : "Value source lookup failed.";
         }
 
@@ -557,7 +555,7 @@ namespace Cortex
                 return;
             }
 
-            context.State.Semantic.DocumentEditPreview = new DocumentEditPreviewPlan
+            context.State.Semantic.Workbench.DocumentEditPreview = new DocumentEditPreviewPlan
             {
                 CommandId = response.CommandId ?? string.Empty,
                 Title = response.Title ?? string.Empty,
@@ -567,7 +565,7 @@ namespace Cortex
                 Documents = documents,
                 CanApply = response.CanApply
             };
-            context.State.Semantic.ActiveView = SemanticWorkbenchViewKind.DocumentEditPreview;
+            context.State.Semantic.Workbench.ActiveView = SemanticWorkbenchViewKind.DocumentEditPreview;
             context.State.StatusMessage = response.StatusMessage ?? string.Empty;
         }
 

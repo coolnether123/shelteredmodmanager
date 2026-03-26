@@ -11,7 +11,7 @@ namespace Cortex.Services
             DocumentSession session,
             DocumentLanguageCompletionRequestState pending,
             CortexSettings settings,
-            CortexEditorInteractionState editorState,
+            CortexCompletionInteractionState editorState,
             IList<DocumentSession> openDocuments,
             string languageId)
         {
@@ -36,8 +36,8 @@ namespace Cortex.Services
                 DocumentText = session.Text ?? string.Empty,
                 DocumentVersion = session.TextVersion,
                 AbsolutePosition = pending.AbsolutePosition,
-                ExplicitInvocation = editorState != null && editorState.RequestedCompletionExplicit,
-                TriggerCharacter = editorState != null ? editorState.RequestedCompletionTriggerCharacter ?? string.Empty : string.Empty,
+                ExplicitInvocation = editorState != null && editorState.RequestedExplicit,
+                TriggerCharacter = editorState != null ? editorState.RequestedTriggerCharacter ?? string.Empty : string.Empty,
                 PrefixText = prefixText,
                 SuffixText = suffixText,
                 CurrentLinePrefixText = cursorContext != null ? cursorContext.CurrentLinePrefixText ?? string.Empty : string.Empty,

@@ -209,6 +209,13 @@ namespace Cortex
 
     public sealed class CortexSemanticInteractionState
     {
+        public readonly CortexSemanticRequestState Request = new CortexSemanticRequestState();
+        public readonly CortexQuickActionsInteractionState QuickActions = new CortexQuickActionsInteractionState();
+        public readonly CortexSemanticWorkbenchState Workbench = new CortexSemanticWorkbenchState();
+    }
+
+    public sealed class CortexSemanticRequestState
+    {
         public string RequestedKey = string.Empty;
         public string RequestedContextKey = string.Empty;
         public SemanticRequestKind RequestedKind = SemanticRequestKind.None;
@@ -224,13 +231,21 @@ namespace Cortex
         public bool RequestedOrganizeImports;
         public bool RequestedSimplifyNames;
         public bool RequestedFormatDocument;
+    }
+
+    public sealed class CortexQuickActionsInteractionState
+    {
+        public bool Visible;
+        public string Title = string.Empty;
+        public string FilterText = string.Empty;
+        public int SelectedIndex = -1;
+        public string ContextKey = string.Empty;
+        public EditorResolvedContextAction[] Actions = new EditorResolvedContextAction[0];
+    }
+
+    public sealed class CortexSemanticWorkbenchState
+    {
         public SemanticWorkbenchViewKind ActiveView = SemanticWorkbenchViewKind.None;
-        public bool QuickActionsVisible;
-        public string QuickActionsTitle = string.Empty;
-        public string QuickActionsFilterText = string.Empty;
-        public int QuickActionsSelectedIndex = -1;
-        public string QuickActionsContextKey = string.Empty;
-        public EditorResolvedContextAction[] QuickActions = new EditorResolvedContextAction[0];
         public LanguageServiceRenameResponse RenamePreview;
         public LanguageServiceReferencesResponse References;
         public LanguageServiceDefinitionResponse PeekDefinition;
