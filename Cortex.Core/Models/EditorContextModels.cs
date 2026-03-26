@@ -1,4 +1,5 @@
 using System;
+using Cortex.LanguageService.Protocol;
 
 namespace Cortex.Core.Models
 {
@@ -38,6 +39,7 @@ namespace Cortex.Core.Models
         public string ContainingMemberName = string.Empty;
         public DateTime CapturedUtc = DateTime.UtcNow;
         public EditorCommandTarget Target;
+        public EditorSemanticContext Semantic = new EditorSemanticContext();
 
         public EditorContextSnapshot Clone()
         {
@@ -62,7 +64,45 @@ namespace Cortex.Core.Models
                 HoverKey = HoverKey ?? string.Empty,
                 ContainingMemberName = ContainingMemberName ?? string.Empty,
                 CapturedUtc = CapturedUtc,
-                Target = Target != null ? Target.Clone() : null
+                Target = Target != null ? Target.Clone() : null,
+                Semantic = Semantic != null ? Semantic.Clone() : new EditorSemanticContext()
+            };
+        }
+    }
+
+    public sealed class EditorSemanticContext
+    {
+        public string QualifiedSymbolDisplay = string.Empty;
+        public string SymbolKind = string.Empty;
+        public string MetadataName = string.Empty;
+        public string ContainingTypeName = string.Empty;
+        public string ContainingAssemblyName = string.Empty;
+        public string DocumentationCommentId = string.Empty;
+        public string HoverText = string.Empty;
+        public string DefinitionDocumentPath = string.Empty;
+        public int DefinitionLine;
+        public int DefinitionColumn;
+        public int DefinitionStart = -1;
+        public int DefinitionLength = -1;
+        public LanguageServiceHoverResponse HoverResponse;
+
+        public EditorSemanticContext Clone()
+        {
+            return new EditorSemanticContext
+            {
+                QualifiedSymbolDisplay = QualifiedSymbolDisplay ?? string.Empty,
+                SymbolKind = SymbolKind ?? string.Empty,
+                MetadataName = MetadataName ?? string.Empty,
+                ContainingTypeName = ContainingTypeName ?? string.Empty,
+                ContainingAssemblyName = ContainingAssemblyName ?? string.Empty,
+                DocumentationCommentId = DocumentationCommentId ?? string.Empty,
+                HoverText = HoverText ?? string.Empty,
+                DefinitionDocumentPath = DefinitionDocumentPath ?? string.Empty,
+                DefinitionLine = DefinitionLine,
+                DefinitionColumn = DefinitionColumn,
+                DefinitionStart = DefinitionStart,
+                DefinitionLength = DefinitionLength,
+                HoverResponse = HoverResponse
             };
         }
     }

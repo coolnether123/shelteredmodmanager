@@ -98,13 +98,13 @@ namespace Cortex.Services
                 return;
             }
 
-            state.EditorContext.Definition.RequestedContextKey = target.ContextKey ?? string.Empty;
-            state.Editor.RequestedDefinitionKey = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition + "|" + DateTime.UtcNow.Ticks;
-            state.Editor.RequestedDefinitionDocumentPath = target.DocumentPath ?? string.Empty;
-            state.Editor.RequestedDefinitionLine = target.Line;
-            state.Editor.RequestedDefinitionColumn = target.Column;
-            state.Editor.RequestedDefinitionAbsolutePosition = target.AbsolutePosition;
-            state.Editor.RequestedDefinitionTokenText = target.SymbolText ?? string.Empty;
+            state.Editor.Definition.RequestedContextKey = target.ContextKey ?? string.Empty;
+            state.Editor.Definition.RequestedKey = (target.DocumentPath ?? string.Empty) + "|" + target.AbsolutePosition + "|" + DateTime.UtcNow.Ticks;
+            state.Editor.Definition.RequestedDocumentPath = target.DocumentPath ?? string.Empty;
+            state.Editor.Definition.RequestedLine = target.Line;
+            state.Editor.Definition.RequestedColumn = target.Column;
+            state.Editor.Definition.RequestedAbsolutePosition = target.AbsolutePosition;
+            state.Editor.Definition.RequestedTokenText = target.SymbolText ?? string.Empty;
         }
 
         public string BuildHoverCopyText(LanguageServiceHoverResponse hoverResponse)

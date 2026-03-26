@@ -10,6 +10,7 @@ namespace Cortex.Services
         public static readonly NullCortexPlatformModule Instance = new NullCortexPlatformModule();
 
         private readonly ICortexLogSink _logSink = new NullLogSink();
+        private readonly ICortexDiagnosticConfiguration _diagnosticConfiguration = new NullDiagnosticConfiguration();
         private readonly IHarmonyRuntimeInspectionService _harmonyRuntimeInspectionService = new NullHarmonyRuntimeInspectionService();
         private readonly ILoadedModCatalog _loadedModCatalog = new NullLoadedModCatalog();
         private readonly IRuntimeLogFeed _runtimeLogFeed = new NullRuntimeLogFeed();
@@ -30,6 +31,11 @@ namespace Cortex.Services
         public ICortexLogSink LogSink
         {
             get { return _logSink; }
+        }
+
+        public ICortexDiagnosticConfiguration DiagnosticConfiguration
+        {
+            get { return _diagnosticConfiguration; }
         }
 
         public ILoadedModCatalog LoadedModCatalog
@@ -102,6 +108,14 @@ namespace Cortex.Services
         {
             public void Write(CortexLogEntry entry)
             {
+            }
+        }
+
+        private sealed class NullDiagnosticConfiguration : ICortexDiagnosticConfiguration
+        {
+            public bool IsEnabled(string channel, CortexLogLevel level)
+            {
+                return false;
             }
         }
 

@@ -17,6 +17,8 @@ namespace Cortex.Core.Abstractions
     {
         ICortexLogSink LogSink { get; }
 
+        ICortexDiagnosticConfiguration DiagnosticConfiguration { get; }
+
         IHarmonyRuntimeInspectionService HarmonyRuntimeInspectionService { get; }
 
         ILoadedModCatalog LoadedModCatalog { get; }
