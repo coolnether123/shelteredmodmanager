@@ -2092,7 +2092,7 @@ namespace Cortex.Modules.Editor
 
         private bool IsRelatedSelectionToken(CortexShellState state, DocumentSession session, CodeViewToken token)
         {
-            var context = GetSurfaceContext(session, state);
+            var context = GetSelectionContext(session, state);
             var selectedText = context != null ? context.FocusTokenText ?? string.Empty : string.Empty;
             if (session == null || token == null || string.IsNullOrEmpty(selectedText))
             {
@@ -2116,7 +2116,7 @@ namespace Cortex.Modules.Editor
 
         private bool IsSelectedToken(CortexShellState state, DocumentSession session, CodeViewToken token)
         {
-            var context = GetSurfaceContext(session, state);
+            var context = GetSelectionContext(session, state);
             if (context == null || context.Target == null || token == null)
             {
                 return false;
@@ -2131,6 +2131,25 @@ namespace Cortex.Modules.Editor
         private EditorContextSnapshot GetSurfaceContext(DocumentSession session, CortexShellState state)
         {
             return _contextService.GetSurfaceContext(state, GetSurfaceId(session, state));
+        }
+
+        private EditorContextSnapshot GetSelectionContext(DocumentSession session, CortexShellState state)
+        {
+            var surfaceContext = GetSurfaceContext(session, state);
+            if (surfaceContext != null)
+            {
+                return surfaceContext;
+            }
+
+            var activeContext = _contextService.GetActiveContext(state);
+            if (activeContext == null)
+            {
+                return null;
+            }
+
+            return string.Equals(activeContext.DocumentPath ?? string.Empty, session != null ? session.FilePath ?? string.Empty : string.Empty, StringComparison.OrdinalIgnoreCase)
+                ? activeContext
+                : null;
         }
 
         private void PublishSelectedTokenContext(DocumentSession session, CortexShellState state, CodeViewToken token)
