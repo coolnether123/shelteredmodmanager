@@ -39,8 +39,12 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ImguiHoverTooltipRenderer.cs" />
+    <Compile Include="ImguiOverlayRendererFactory.cs" />
     <Compile Include="ImguiPanelRenderer.cs" />
     <Compile Include="ImguiPanelTheme.cs" />
+    <Compile Include="ImguiPopupMenuRenderer.cs" />
+    <Compile Include="ImguiRenderPipeline.cs" />
     <Compile Include="ImguiWorkbenchRenderer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

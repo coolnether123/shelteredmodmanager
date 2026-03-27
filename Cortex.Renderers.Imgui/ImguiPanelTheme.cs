@@ -1,8 +1,9 @@
+using Cortex.Rendering.Models;
 using UnityEngine;
 
 namespace Cortex.Renderers.Imgui
 {
-    public sealed class ImguiPanelTheme
+    internal sealed class ImguiPanelTheme
     {
         public Color BackgroundColor;
         public Color HeaderColor;
@@ -17,9 +18,30 @@ namespace Cortex.Renderers.Imgui
         public Color WarningColor;
     }
 
-    public sealed class PanelRenderResult
+    internal static class ImguiPanelThemeFactory
     {
-        public Vector2 Scroll = Vector2.zero;
-        public string ActivatedId = string.Empty;
+        public static ImguiPanelTheme Create(PanelThemePalette theme)
+        {
+            var resolvedTheme = theme ?? new PanelThemePalette();
+            return new ImguiPanelTheme
+            {
+                BackgroundColor = ToColor(resolvedTheme.BackgroundColor),
+                HeaderColor = ToColor(resolvedTheme.HeaderColor),
+                BorderColor = ToColor(resolvedTheme.BorderColor),
+                DividerColor = ToColor(resolvedTheme.DividerColor),
+                ActionFillColor = ToColor(resolvedTheme.ActionFillColor),
+                ActionActiveFillColor = ToColor(resolvedTheme.ActionActiveFillColor),
+                CardFillColor = ToColor(resolvedTheme.CardFillColor),
+                TextColor = ToColor(resolvedTheme.TextColor),
+                MutedTextColor = ToColor(resolvedTheme.MutedTextColor),
+                AccentColor = ToColor(resolvedTheme.AccentColor),
+                WarningColor = ToColor(resolvedTheme.WarningColor)
+            };
+        }
+
+        private static Color ToColor(RenderColor color)
+        {
+            return new Color(color.R, color.G, color.B, color.A);
+        }
     }
 }

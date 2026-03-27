@@ -4,6 +4,8 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
+using Cortex.Rendering.Abstractions;
+using Cortex.Rendering.Models;
 using Cortex.Services;
 using UnityEngine;
 
@@ -72,11 +74,14 @@ namespace Cortex.Modules.Editor
         private readonly EditableCodeViewSurface _editableCodeViewSurface;
         private readonly IEditorService _editorService = new EditorService();
         private readonly EditorDocumentModeService _documentModeService = new EditorDocumentModeService();
+        private readonly IRenderPipeline _renderPipeline;
 
-        internal EditorModule(IEditorContextService editorContextService)
+        internal EditorModule(IEditorContextService editorContextService, IRenderPipeline renderPipeline)
         {
-            _codeViewSurface = new CodeViewSurface(editorContextService);
-            _editableCodeViewSurface = new EditableCodeViewSurface(editorContextService);
+            _renderPipeline = renderPipeline;
+            var overlayRendererFactory = renderPipeline != null ? renderPipeline.OverlayRendererFactory : null;
+            _codeViewSurface = new CodeViewSurface(editorContextService, overlayRendererFactory);
+            _editableCodeViewSurface = new EditableCodeViewSurface(editorContextService, overlayRendererFactory);
         }
 
         internal void Draw(
@@ -93,6 +98,7 @@ namespace Cortex.Modules.Editor
             HarmonyPatchDisplayService harmonyPatchDisplayService,
             HarmonyPatchGenerationService harmonyPatchGenerationService,
             GeneratedTemplateNavigationService generatedTemplateNavigationService,
+            IRenderPipeline renderPipeline,
             CortexShellState state)
         {
             EditorCommandContributions.EnsureRegistered(commandRegistry, contributionRegistry, state);
@@ -124,6 +130,7 @@ namespace Cortex.Modules.Editor
                 harmonyPatchDisplayService,
                 harmonyPatchGenerationService,
                 generatedTemplateNavigationService,
+                renderPipeline ?? _renderPipeline,
                 state);
             DrawFindOverlay(commandRegistry, workbenchSearchService, state);
             DrawStatusBar(state);
@@ -524,6 +531,7 @@ namespace Cortex.Modules.Editor
             HarmonyPatchDisplayService harmonyPatchDisplayService,
             HarmonyPatchGenerationService harmonyPatchGenerationService,
             GeneratedTemplateNavigationService generatedTemplateNavigationService,
+            IRenderPipeline renderPipeline,
             CortexShellState state)
         {
             var active = state.Documents.ActiveDocument;
@@ -557,21 +565,12 @@ namespace Cortex.Modules.Editor
                     _editorScroll,
                     active,
                     isEditable,
-                    new EditorSurfaceRenderContext
+                    new EditorSurfaceServices
                     {
                         DocumentService = documentService,
                         CommandRegistry = commandRegistry,
                         ContributionRegistry = contributionRegistry,
                         State = state,
-                        ThemeKey = _appliedTheme,
-                        CodeStyle = _editorReadOnlyStyle,
-                        GutterStyle = _gutterReadOnlyStyle,
-                        TooltipStyle = _codeTooltipStyle,
-                        ContextMenuStyle = _contextMenuStyle,
-                        ContextMenuButtonStyle = _contextMenuButtonStyle,
-                        ContextMenuHeaderStyle = _contextMenuHeaderStyle,
-                        BlockedRect = overlayBlockRect,
-                        GutterWidth = GutterWidth,
                         HarmonyPatchGenerationService = harmonyPatchGenerationService,
                         GeneratedTemplateNavigationService = generatedTemplateNavigationService,
                         ProjectCatalog = projectCatalog,
@@ -580,6 +579,17 @@ namespace Cortex.Modules.Editor
                         HarmonyPatchInspectionService = harmonyPatchInspectionService,
                         HarmonyPatchResolutionService = harmonyPatchResolutionService,
                         HarmonyPatchDisplayService = harmonyPatchDisplayService
+                    },
+                    new EditorSurfaceRenderContext
+                    {
+                        ThemeKey = _appliedTheme,
+                        CodeStyle = _editorReadOnlyStyle,
+                        GutterStyle = _gutterReadOnlyStyle,
+                        PanelRenderer = renderPipeline != null ? renderPipeline.PanelRenderer : null,
+                        BlockedRect = new RenderRect(overlayBlockRect.x, overlayBlockRect.y, overlayBlockRect.width, overlayBlockRect.height),
+                        GutterWidth = GutterWidth,
+                        PopupMenuTheme = BuildPopupMenuThemePalette(),
+                        HoverTooltipTheme = BuildHoverTooltipThemePalette()
                     });
                 LogEditorScrollChange(active, previousEditorScroll, _editorScroll);
                 return;
@@ -598,10 +608,6 @@ namespace Cortex.Modules.Editor
                 _appliedTheme,
                 _editorReadOnlyStyle,
                 _gutterReadOnlyStyle,
-                _codeTooltipStyle,
-                _contextMenuStyle,
-                _contextMenuButtonStyle,
-                _contextMenuHeaderStyle,
                 overlayBlockRect,
                 GutterWidth,
                 projectCatalog,
@@ -610,7 +616,10 @@ namespace Cortex.Modules.Editor
                 harmonyPatchInspectionService,
                 harmonyPatchResolutionService,
                 harmonyPatchDisplayService,
-                harmonyPatchGenerationService);
+                harmonyPatchGenerationService,
+                renderPipeline != null ? renderPipeline.PanelRenderer : null,
+                BuildPopupMenuThemePalette(),
+                BuildHoverTooltipThemePalette());
             LogEditorScrollChange(active, previousReadOnlyScroll, _editorScroll);
         }
 
@@ -923,6 +932,38 @@ namespace Cortex.Modules.Editor
             }
 
             GUI.Box(tooltipRect, tooltip, tooltipStyle);
+        }
+
+        private static PopupMenuThemePalette BuildPopupMenuThemePalette()
+        {
+            return new PopupMenuThemePalette
+            {
+                BackgroundColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.55f)),
+                BorderColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.38f)),
+                TextColor = ToRenderColor(CortexIdeLayout.GetTextColor()),
+                MutedTextColor = ToRenderColor(CortexIdeLayout.GetMutedTextColor()),
+                AccentColor = ToRenderColor(CortexIdeLayout.GetAccentColor()),
+                HoverFillColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.18f)),
+                PressedFillColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f))
+            };
+        }
+
+        private static HoverTooltipThemePalette BuildHoverTooltipThemePalette()
+        {
+            return new HoverTooltipThemePalette
+            {
+                BackgroundColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetHeaderColor(), CortexIdeLayout.GetBackgroundColor(), 0.22f)),
+                BorderColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.38f)),
+                TextColor = ToRenderColor(CortexIdeLayout.GetTextColor()),
+                MutedTextColor = ToRenderColor(CortexIdeLayout.GetMutedTextColor()),
+                AccentColor = ToRenderColor(CortexIdeLayout.GetAccentColor()),
+                HoverFillColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.18f))
+            };
+        }
+
+        private static RenderColor ToRenderColor(Color color)
+        {
+            return new RenderColor(color.r, color.g, color.b, color.a);
         }
 
         private static string BuildCompactPath(string filePath)

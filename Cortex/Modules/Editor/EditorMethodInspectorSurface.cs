@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
-using Cortex.Renderers.Imgui;
 using Cortex.Services;
 using UnityEngine;
 
@@ -25,7 +25,6 @@ namespace Cortex.Modules.Editor
         private readonly EditorMethodTargetMetadataService _targetMetadataService;
         private readonly EditorMethodPatchCreationService _patchCreationService = new EditorMethodPatchCreationService();
         private readonly HarmonyPatchDisplayService _fallbackHarmonyDisplayService = new HarmonyPatchDisplayService();
-        private readonly ImguiPanelRenderer _panelRenderer = new ImguiPanelRenderer();
         private const float ScrollWheelStep = 28f;
 
         private Vector2 _scroll = Vector2.zero;
@@ -55,7 +54,8 @@ namespace Cortex.Modules.Editor
             HarmonyPatchInspectionService harmonyInspectionService,
             HarmonyPatchResolutionService harmonyResolutionService,
             HarmonyPatchDisplayService harmonyDisplayService,
-            HarmonyPatchGenerationService harmonyGenerationService)
+            HarmonyPatchGenerationService harmonyGenerationService,
+            IPanelRenderer panelRenderer)
         {
             if (!_inspectorService.IsVisibleForDocument(state, activeDocumentPath))
             {
@@ -134,8 +134,14 @@ namespace Cortex.Modules.Editor
                 canCreatePatch,
                 hasPreparedPatch,
                 patchAvailabilityReason);
-            var renderResult = _panelRenderer.Draw(popupRect, document, _scroll, BuildTheme());
-            _scroll = renderResult != null ? renderResult.Scroll : _scroll;
+            var renderResult = panelRenderer != null
+                ? panelRenderer.Draw(
+                    new RenderRect(popupRect.x, popupRect.y, popupRect.width, popupRect.height),
+                    document,
+                    new RenderPoint(_scroll.x, _scroll.y),
+                    BuildThemePalette())
+                : null;
+            _scroll = renderResult != null ? new Vector2(renderResult.Scroll.X, renderResult.Scroll.Y) : _scroll;
             HandleActivation(
                 renderResult != null ? renderResult.ActivatedId : string.Empty,
                 state,
@@ -744,23 +750,29 @@ namespace Cortex.Modules.Editor
             return new Vector2(width, height);
         }
 
-        private static ImguiPanelTheme BuildTheme()
+        private static PanelThemePalette BuildThemePalette()
         {
             var borderColor = CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetBorderColor(), 0.38f);
-            return new ImguiPanelTheme
+            return new PanelThemePalette
             {
-                BackgroundColor = CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetBackgroundColor(), 0.22f),
-                HeaderColor = CortexIdeLayout.Blend(CortexIdeLayout.GetHeaderColor(), CortexIdeLayout.GetSurfaceColor(), 0.18f),
-                BorderColor = borderColor,
-                DividerColor = CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(borderColor, CortexIdeLayout.GetTextColor(), 0.1f), 0.46f),
-                ActionFillColor = CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.72f),
-                ActionActiveFillColor = CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetHeaderColor(), 0.34f),
-                CardFillColor = CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.52f),
-                TextColor = CortexIdeLayout.GetTextColor(),
-                MutedTextColor = CortexIdeLayout.GetMutedTextColor(),
-                AccentColor = CortexIdeLayout.GetAccentColor(),
-                WarningColor = CortexIdeLayout.Blend(CortexIdeLayout.GetWarningColor(), CortexIdeLayout.GetTextColor(), 0.42f)
+                ThemeKey = "method-inspector",
+                BackgroundColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetBackgroundColor(), 0.22f)),
+                HeaderColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetHeaderColor(), CortexIdeLayout.GetSurfaceColor(), 0.18f)),
+                BorderColor = ToRenderColor(borderColor),
+                DividerColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(borderColor, CortexIdeLayout.GetTextColor(), 0.1f), 0.46f)),
+                ActionFillColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.72f)),
+                ActionActiveFillColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetHeaderColor(), 0.34f)),
+                CardFillColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.52f)),
+                TextColor = ToRenderColor(CortexIdeLayout.GetTextColor()),
+                MutedTextColor = ToRenderColor(CortexIdeLayout.GetMutedTextColor()),
+                AccentColor = ToRenderColor(CortexIdeLayout.GetAccentColor()),
+                WarningColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetWarningColor(), CortexIdeLayout.GetTextColor(), 0.42f))
             };
+        }
+
+        private static RenderColor ToRenderColor(Color color)
+        {
+            return new RenderColor(color.r, color.g, color.b, color.a);
         }
 
         private void TryLoadHarmonySummary(
