@@ -245,7 +245,7 @@ namespace Cortex
             {
                 if (_module == null && _services != null && _services.EditorContextService != null)
                 {
-                    _module = new EditorModule(_services.EditorContextService);
+                    _module = new EditorModule(_services.EditorContextService, _services.RenderPipeline);
                 }
 
                 HarmonyCommandContributions.EnsureRegistered(
@@ -270,6 +270,7 @@ namespace Cortex
                     _services != null ? _services.HarmonyPatchDisplayService : null,
                     _services != null ? _services.HarmonyPatchGenerationService : null,
                     _services != null ? _services.GeneratedTemplateNavigationService : null,
+                    _services != null ? _services.RenderPipeline : null,
                     _services != null ? _services.State : null);
             }
 
@@ -356,13 +357,17 @@ namespace Cortex
 
         private sealed class ReferenceShellModule : CortexShellModuleBase
         {
-            private readonly ReferenceModule _module = new ReferenceModule();
+            private readonly ReferenceModule _module;
             private readonly IReferenceModuleServices _services;
 
             public ReferenceShellModule(IReferenceModuleServices services)
                 : base(CortexWorkbenchIds.ReferenceContainer)
             {
                 _services = services;
+                _module = new ReferenceModule(
+                    _services != null && _services.RenderPipeline != null && _services.RenderPipeline.OverlayRendererFactory != null
+                        ? _services.RenderPipeline.OverlayRendererFactory.CreateHoverTooltipRenderer()
+                        : null);
             }
 
             public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)

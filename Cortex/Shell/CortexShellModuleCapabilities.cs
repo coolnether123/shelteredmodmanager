@@ -2,6 +2,7 @@ using System;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
+using Cortex.Rendering.Abstractions;
 using Cortex.Shell;
 using Cortex.Services;
 
@@ -54,6 +55,7 @@ namespace Cortex
     {
         WorkbenchSearchService WorkbenchSearchService { get; }
         IEditorContextService EditorContextService { get; }
+        IRenderPipeline RenderPipeline { get; }
     }
 
     internal interface IBuildModuleServices
@@ -71,6 +73,7 @@ namespace Cortex
         CortexShellState State { get; }
         CortexNavigationService NavigationService { get; }
         IReferenceCatalogService ReferenceCatalogService { get; }
+        IRenderPipeline RenderPipeline { get; }
     }
 
     internal interface ISearchModuleServices
@@ -121,6 +124,7 @@ namespace Cortex
         private readonly ShellServiceMap _services;
         private readonly Func<ICortexSettingsStore> _settingsStoreProvider;
         private readonly Func<IWorkbenchRuntime> _runtimeProvider;
+        private readonly Func<IRenderPipeline> _renderPipelineProvider;
         private readonly WorkbenchSearchService _workbenchSearchService;
 
         public CortexShellModuleServices(
@@ -128,12 +132,14 @@ namespace Cortex
             ShellServiceMap services,
             Func<ICortexSettingsStore> settingsStoreProvider,
             Func<IWorkbenchRuntime> runtimeProvider,
+            Func<IRenderPipeline> renderPipelineProvider,
             WorkbenchSearchService workbenchSearchService)
         {
             _state = state;
             _services = services;
             _settingsStoreProvider = settingsStoreProvider;
             _runtimeProvider = runtimeProvider;
+            _renderPipelineProvider = renderPipelineProvider;
             _workbenchSearchService = workbenchSearchService;
         }
 
@@ -163,6 +169,7 @@ namespace Cortex
         public HarmonyPatchGenerationService HarmonyPatchGenerationService => _services.HarmonyPatchGenerationService;
         public GeneratedTemplateNavigationService GeneratedTemplateNavigationService => _services.GeneratedTemplateNavigationService;
         public IEditorContextService EditorContextService => _services.EditorContextService;
+        public IRenderPipeline RenderPipeline => _renderPipelineProvider != null ? _renderPipelineProvider() : null;
 
         public ICommandRegistry CommandRegistry
         {

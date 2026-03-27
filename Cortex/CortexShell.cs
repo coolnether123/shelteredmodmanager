@@ -7,6 +7,7 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
+using Cortex.Rendering.Abstractions;
 using Cortex.Shell;
 using Cortex.Services;
 using UnityEngine;
@@ -47,6 +48,7 @@ namespace Cortex
         private readonly CortexShellOnboardingLifecycle _onboardingLifecycle = new CortexShellOnboardingLifecycle();
 
         private IWorkbenchRuntime _workbenchRuntime;
+        private IRenderPipeline _renderPipeline;
         private IProjectCatalog _projectCatalog;
         private ILoadedModCatalog _loadedModCatalog;
         private ISourceLookupIndex _sourceLookupIndex;

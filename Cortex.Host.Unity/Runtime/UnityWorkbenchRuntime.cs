@@ -15,6 +15,7 @@ namespace Cortex.Host.Unity.Runtime
         public readonly ICommandRegistry CommandRegistry;
         public readonly IContributionRegistry ContributionRegistry;
         public readonly IWorkbenchPresenter Presenter;
+        public readonly IRenderPipeline RenderPipeline;
         public readonly IWorkbenchRenderer Renderer;
         public readonly WorkbenchState WorkbenchState;
         public readonly LayoutState LayoutState;
@@ -27,7 +28,8 @@ namespace Cortex.Host.Unity.Runtime
             CommandRegistry = new CommandRegistry();
             ContributionRegistry = new ContributionRegistry();
             Presenter = new WorkbenchPresenter();
-            Renderer = new ImguiWorkbenchRenderer();
+            RenderPipeline = new ImguiRenderPipeline();
+            Renderer = RenderPipeline.WorkbenchRenderer;
             WorkbenchState = new WorkbenchState();
             LayoutState = new LayoutState();
             StatusState = new StatusState();

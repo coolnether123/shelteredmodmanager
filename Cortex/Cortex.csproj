@@ -84,6 +84,7 @@
     <Compile Include="Modules\Editor\EditorMethodInspectorSurface.cs" />
     <Compile Include="Modules\Editor\EditorModule.cs" />
     <Compile Include="Modules\Editor\EditorSemanticPopupSurface.cs" />
+    <Compile Include="Modules\Editor\EditorSurfaceServices.cs" />
     <Compile Include="Modules\Editor\EditorSurfaceRenderContext.cs" />
     <Compile Include="Modules\Editor\EditorSyntaxHighlighter.cs" />
     <Compile Include="Modules\Harmony\HarmonyCommandContributions.cs" />
@@ -96,8 +97,6 @@
     <Compile Include="Modules\Runtime\RuntimeToolsModule.cs" />
     <Compile Include="Modules\Search\SearchModule.cs" />
     <Compile Include="Modules\Settings\SettingsModule.cs" />
-    <Compile Include="Modules\Shared\HoverTooltipPresenter.cs" />
-    <Compile Include="Modules\Shared\PopupMenuSurface.cs" />
     <Compile Include="Modules\Shared\CortexModuleUtil.cs" />
     <Compile Include="Modules\Shared\CortexPathField.cs" />
     <Compile Include="Modules\Shared\RuntimeLogVisuals.cs" />

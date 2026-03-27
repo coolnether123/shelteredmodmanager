@@ -4,6 +4,8 @@ using System.IO;
 using Cortex.Core.Models;
 using Cortex.Modules.Editor;
 using Cortex.Modules.Shared;
+using Cortex.Renderers.Imgui;
+using Cortex.Rendering.Abstractions;
 using UnityEngine;
 
 namespace Cortex
@@ -53,10 +55,21 @@ namespace Cortex
                     _services,
                     () => _settingsStore,
                     () => _workbenchRuntime,
+                    () => GetRenderPipeline(),
                     _workbenchSearchService);
             }
 
             return _moduleServices;
+        }
+
+        private IRenderPipeline GetRenderPipeline()
+        {
+            if (_renderPipeline == null)
+            {
+                _renderPipeline = new ImguiRenderPipeline();
+            }
+
+            return _renderPipeline;
         }
 
         private void EnsureModuleContributionsRegistered()

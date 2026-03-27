@@ -4,6 +4,8 @@ using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
+using Cortex.Rendering.Abstractions;
+using Cortex.Rendering.Models;
 using Cortex.Services;
 using UnityEngine;
 
@@ -27,7 +29,7 @@ namespace Cortex.Modules.Reference
         private readonly List<ReferenceAssemblyDescriptor> _assemblies = new List<ReferenceAssemblyDescriptor>();
         private readonly List<ReferenceTypeDescriptor> _types = new List<ReferenceTypeDescriptor>();
         private readonly List<ReferenceMemberDescriptor> _members = new List<ReferenceMemberDescriptor>();
-        private readonly HoverTooltipPresenter _tooltipPresenter = new HoverTooltipPresenter();
+        private readonly IHoverTooltipRenderer _hoverTooltipRenderer;
         private ReferenceAssemblyDescriptor _selectedAssembly;
         private ReferenceTypeDescriptor _selectedType;
         private ReferenceMemberDescriptor _selectedMember;
@@ -55,11 +57,19 @@ namespace Cortex.Modules.Reference
         private Texture2D _selectedRowBorder;
         private Texture2D _tooltipBackground;
 
+        public ReferenceModule(IHoverTooltipRenderer hoverTooltipRenderer)
+        {
+            _hoverTooltipRenderer = hoverTooltipRenderer;
+        }
+
         public void Draw(IReferenceCatalogService referenceCatalogService, CortexNavigationService navigationService, CortexShellState state)
         {
             EnsureStyles();
             EnsureAssembliesLoaded(referenceCatalogService, state);
-            _tooltipPresenter.ResetTextTooltip();
+            if (_hoverTooltipRenderer != null)
+            {
+                _hoverTooltipRenderer.ResetTextTooltip();
+            }
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             CortexIdeLayout.DrawTwoPane(
@@ -69,7 +79,10 @@ namespace Cortex.Modules.Reference
                 delegate { DrawPreviewPane(navigationService, state); });
             GUILayout.EndVertical();
 
-            _tooltipPresenter.DrawTextTooltip(CreateTooltipStyleSet());
+            if (_hoverTooltipRenderer != null)
+            {
+                _hoverTooltipRenderer.DrawTextTooltip(BuildTooltipThemePalette());
+            }
         }
 
         private void DrawBrowserPane(IReferenceCatalogService referenceCatalogService, CortexNavigationService navigationService, CortexShellState state)
@@ -867,16 +880,28 @@ namespace Cortex.Modules.Reference
 
         private void RegisterHoverTooltip(Rect anchorRect, string text)
         {
-            _tooltipPresenter.RegisterTextTooltip(anchorRect, text);
+            if (_hoverTooltipRenderer != null)
+            {
+                _hoverTooltipRenderer.RegisterTextTooltip(new RenderRect(anchorRect.x, anchorRect.y, anchorRect.width, anchorRect.height), text);
+            }
         }
 
-        private HoverTooltipStyleSet CreateTooltipStyleSet()
+        private static HoverTooltipThemePalette BuildTooltipThemePalette()
         {
-            return new HoverTooltipStyleSet
+            return new HoverTooltipThemePalette
             {
-                ContainerStyle = _tooltipStyle,
-                BorderFill = _selectedRowBorder
+                BackgroundColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetHeaderColor(), CortexIdeLayout.GetBackgroundColor(), 0.18f)),
+                BorderColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.36f)),
+                TextColor = ToRenderColor(CortexIdeLayout.GetTextColor()),
+                MutedTextColor = ToRenderColor(CortexIdeLayout.GetMutedTextColor()),
+                AccentColor = ToRenderColor(CortexIdeLayout.GetAccentColor()),
+                HoverFillColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.18f))
             };
+        }
+
+        private static RenderColor ToRenderColor(Color color)
+        {
+            return new RenderColor(color.r, color.g, color.b, color.a);
         }
 
         private static void DrawBorder(Rect rect, Texture2D texture, float thickness)

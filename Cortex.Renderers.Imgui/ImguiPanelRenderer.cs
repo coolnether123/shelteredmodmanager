@@ -1,10 +1,11 @@
 using System;
+using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
 using UnityEngine;
 
 namespace Cortex.Renderers.Imgui
 {
-    public sealed class ImguiPanelRenderer
+    public sealed class ImguiPanelRenderer : IPanelRenderer
     {
         private const float HeaderHeight = 54f;
         private const float ActionStripHeight = 30f;
@@ -35,9 +36,10 @@ namespace Cortex.Renderers.Imgui
         private GUIStyle _sectionLabelStyle;
         private GUIStyle _cardStyle;
 
-        public PanelRenderResult Draw(Rect rect, PanelDocument document, Vector2 scroll, ImguiPanelTheme theme)
+        public PanelRenderResult Draw(RenderRect rect, PanelDocument document, RenderPoint scroll, PanelThemePalette theme)
         {
-            EnsureStyles(theme);
+            var unityRect = new Rect(rect.X, rect.Y, rect.Width, rect.Height);
+            EnsureStyles(ImguiPanelThemeFactory.Create(theme));
             var result = new PanelRenderResult();
             result.Scroll = scroll;
             if (document == null)
@@ -46,19 +48,19 @@ namespace Cortex.Renderers.Imgui
             }
 
             var hasHeaderActions = document.HeaderActions != null && document.HeaderActions.Length > 0;
-            var headerRect = new Rect(0f, 0f, rect.width, HeaderHeight);
+            var headerRect = new Rect(0f, 0f, unityRect.width, HeaderHeight);
             var actionsRect = hasHeaderActions
-                ? new Rect(Padding, HeaderHeight + 6f, rect.width - (Padding * 2f), ActionStripHeight)
-                : new Rect(Padding, HeaderHeight + 6f, rect.width - (Padding * 2f), 0f);
+                ? new Rect(Padding, HeaderHeight + 6f, unityRect.width - (Padding * 2f), ActionStripHeight)
+                : new Rect(Padding, HeaderHeight + 6f, unityRect.width - (Padding * 2f), 0f);
             var contentTop = hasHeaderActions ? actionsRect.yMax + 8f : headerRect.yMax + 10f;
             var contentViewport = new Rect(
                 Padding,
                 contentTop,
-                rect.width - (Padding * 2f),
-                Mathf.Max(24f, rect.height - contentTop - Padding));
+                unityRect.width - (Padding * 2f),
+                Mathf.Max(24f, unityRect.height - contentTop - Padding));
 
-            GUI.BeginGroup(rect);
-            DrawChrome(new Rect(0f, 0f, rect.width, rect.height), headerRect, actionsRect, hasHeaderActions);
+            GUI.BeginGroup(unityRect);
+            DrawChrome(new Rect(0f, 0f, unityRect.width, unityRect.height), headerRect, actionsRect, hasHeaderActions);
             DrawHeader(document, headerRect, ref result);
             if (hasHeaderActions)
             {
@@ -68,7 +70,13 @@ namespace Cortex.Renderers.Imgui
             var contentWidth = Mathf.Max(120f, contentViewport.width - 16f);
             var contentHeight = MeasureDocument(document, contentWidth);
             var contentRect = new Rect(0f, 0f, contentWidth, contentHeight);
-            result.Scroll = GUI.BeginScrollView(contentViewport, result.Scroll, contentRect, false, true);
+            var scrollPosition = GUI.BeginScrollView(
+                contentViewport,
+                new Vector2(result.Scroll.X, result.Scroll.Y),
+                contentRect,
+                false,
+                true);
+            result.Scroll = new RenderPoint(scrollPosition.x, scrollPosition.y);
             DrawSections(document, contentRect.width, ref result);
             GUI.EndScrollView();
             GUI.EndGroup();
