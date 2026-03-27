@@ -64,6 +64,9 @@ namespace Cortex.Modules.Editor
         private Texture2D _caretIndicatorFill;
         private Texture2D _currentLineFill;
         private Texture2D _currentLineEdgeFill;
+        private Texture2D _relatedSelectionFill;
+        private Texture2D _selectedOccurrenceFill;
+        private Texture2D _selectionOutlineFill;
         private Texture2D _surfaceFill;
         private Texture2D _completionPopupFill;
         private Texture2D _completionSelectedFill;
@@ -460,6 +463,9 @@ namespace Cortex.Modules.Editor
                 _caretIndicatorFill != null &&
                 _currentLineFill != null &&
                 _currentLineEdgeFill != null &&
+                _relatedSelectionFill != null &&
+                _selectedOccurrenceFill != null &&
+                _selectionOutlineFill != null &&
                 _completionPopupFill != null &&
                 _completionSelectedFill != null &&
                 _completionBorderFill != null &&
@@ -493,6 +499,9 @@ namespace Cortex.Modules.Editor
             _caretIndicatorFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), Color.white, 0.18f), 0.96f));
             _currentLineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), 0.16f));
             _currentLineEdgeFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f));
+            _relatedSelectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.14f));
+            _selectedOccurrenceFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f));
+            _selectionOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.92f));
             _completionPopupFill = MakeFill(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.55f));
             _completionSelectedFill = MakeFill(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetSurfaceColor(), 0.22f));
             _completionBorderFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.38f));
@@ -885,7 +894,7 @@ namespace Cortex.Modules.Editor
                 {
                     DrawSelection(line, gutterWidth, selections[selectionIndex].Start, selections[selectionIndex].End);
                 }
-                DrawCode(line, gutterWidth);
+                DrawCode(session, state, line, gutterWidth);
                 if (shouldDrawCaret)
                 {
                     for (var selectionIndex = 0; selectionIndex < selections.Length; selectionIndex++)
@@ -931,7 +940,7 @@ namespace Cortex.Modules.Editor
             GUI.DrawTexture(new Rect(startX, line.Y + 1f, width, _lineHeight - 2f), _selectionFill);
         }
 
-        private void DrawCode(EditableLineLayout line, float gutterWidth)
+        private void DrawCode(DocumentSession session, CortexShellState state, EditableLineLayout line, float gutterWidth)
         {
             var x = gutterWidth;
             for (var i = 0; i < line.Segments.Count; i++)
@@ -945,7 +954,24 @@ namespace Cortex.Modules.Editor
                 var style = GetClassificationStyle(segment.Classification);
                 var width = Measure(segment.DisplayText);
                 var segmentRect = new Rect(x, line.Y, width + 2f, _lineHeight);
+                var isSelectedOccurrence = IsSelectedOccurrence(state, session, line, segment);
+                var isRelatedOccurrence = !isSelectedOccurrence && IsRelatedOccurrence(state, session, line, segment);
+                if (isRelatedOccurrence)
+                {
+                    GUI.DrawTexture(segmentRect, _relatedSelectionFill);
+                }
+
+                if (isSelectedOccurrence)
+                {
+                    GUI.DrawTexture(segmentRect, _selectedOccurrenceFill);
+                }
+
                 GUI.Label(segmentRect, segment.DisplayText, style);
+                if (isSelectedOccurrence)
+                {
+                    DrawSelectionOutline(segmentRect);
+                }
+
                 x += width;
             }
         }
@@ -969,6 +995,111 @@ namespace Cortex.Modules.Editor
             var prefix = rawColumn > 0 ? line.RawText.Substring(0, rawColumn) : string.Empty;
             var x = gutterWidth + Measure(ExpandTabs(prefix));
             GUI.DrawTexture(new Rect(x - 0.25f, line.Y + 1f, 2f, _lineHeight - 2f), _caretIndicatorFill);
+        }
+
+        private void DrawSelectionOutline(Rect rect)
+        {
+            if (_selectionOutlineFill == null || rect.width <= 0f || rect.height <= 0f)
+            {
+                return;
+            }
+
+            const float thickness = 1f;
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, thickness), _selectionOutlineFill);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), _selectionOutlineFill);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), _selectionOutlineFill);
+            GUI.DrawTexture(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), _selectionOutlineFill);
+        }
+
+        private bool IsSelectedOccurrence(CortexShellState state, DocumentSession session, EditableLineLayout line, EditableSegment segment)
+        {
+            var context = GetSelectionContext(session, state);
+            if (context == null || context.Target == null || line == null || segment == null)
+            {
+                return false;
+            }
+
+            var rawText = GetSegmentRawText(line, segment);
+            if (string.IsNullOrEmpty(rawText))
+            {
+                return false;
+            }
+
+            var segmentStart = line.StartIndex + segment.StartInLine;
+            return string.Equals(context.DocumentPath ?? string.Empty, session != null ? session.FilePath ?? string.Empty : string.Empty, StringComparison.OrdinalIgnoreCase) &&
+                context.TargetStart == segmentStart &&
+                context.TargetLength == segment.Length &&
+                string.Equals(context.FocusTokenText ?? string.Empty, rawText, StringComparison.Ordinal);
+        }
+
+        private bool IsRelatedOccurrence(CortexShellState state, DocumentSession session, EditableLineLayout line, EditableSegment segment)
+        {
+            var context = GetSelectionContext(session, state);
+            var selectedText = context != null ? context.FocusTokenText ?? string.Empty : string.Empty;
+            if (session == null || line == null || segment == null || string.IsNullOrEmpty(selectedText))
+            {
+                return false;
+            }
+
+            if (context == null ||
+                !string.Equals(session.FilePath ?? string.Empty, context.DocumentPath ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var rawText = GetSegmentRawText(line, segment);
+            if (!CanParticipateInRelatedSelection(segment.Classification, rawText) ||
+                !CanParticipateInRelatedSelection(context.Semantic != null ? context.Semantic.SymbolKind : string.Empty, selectedText))
+            {
+                return false;
+            }
+
+            return string.Equals(rawText, selectedText, StringComparison.Ordinal);
+        }
+
+        private EditorContextSnapshot GetSelectionContext(DocumentSession session, CortexShellState state)
+        {
+            var surfaceContext = _contextService.GetSurfaceContext(state, GetSurfaceId(session, state));
+            if (surfaceContext != null)
+            {
+                return surfaceContext;
+            }
+
+            var activeContext = _contextService.GetActiveContext(state);
+            if (activeContext == null)
+            {
+                return null;
+            }
+
+            return string.Equals(activeContext.DocumentPath ?? string.Empty, session != null ? session.FilePath ?? string.Empty : string.Empty, StringComparison.OrdinalIgnoreCase)
+                ? activeContext
+                : null;
+        }
+
+        private bool CanParticipateInRelatedSelection(string classification, string rawText)
+        {
+            var normalizedText = NormalizeForDisplay(rawText ?? string.Empty).Trim();
+            if (normalizedText.Length <= 1 || !_classificationPresentationService.CanNavigateToDefinition(classification, normalizedText))
+            {
+                return false;
+            }
+
+            var normalizedClassification = _classificationPresentationService.NormalizeClassification(classification);
+            return normalizedClassification.IndexOf("keyword", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
+        private static string GetSegmentRawText(EditableLineLayout line, EditableSegment segment)
+        {
+            if (line == null || segment == null || string.IsNullOrEmpty(line.RawText) || segment.Length <= 0)
+            {
+                return string.Empty;
+            }
+
+            var start = Mathf.Max(0, Mathf.Min(line.RawText.Length, segment.StartInLine));
+            var length = Mathf.Max(0, Mathf.Min(segment.Length, line.RawText.Length - start));
+            return length > 0
+                ? line.RawText.Substring(start, length)
+                : string.Empty;
         }
 
         private bool IsMethodTargetSelectionMode()
@@ -2778,6 +2909,11 @@ namespace Cortex.Modules.Editor
             return string.IsNullOrEmpty(value)
                 ? string.Empty
                 : value.Replace("\t", "    ");
+        }
+
+        private static string NormalizeForDisplay(string raw)
+        {
+            return ExpandTabs(raw);
         }
 
         private static CharacterKind ClassifyCharacter(char c)
