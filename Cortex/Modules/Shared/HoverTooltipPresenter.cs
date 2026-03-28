@@ -45,16 +45,7 @@ namespace Cortex.Modules.Shared
     {
         private const float DefaultTooltipWidth = 420f;
         private const double StickyHoverGraceMs = 700d;
-        private static readonly Cortex.Rendering.Models.HoverTooltipPlacementOptions TooltipPlacementOptions = new Cortex.Rendering.Models.HoverTooltipPlacementOptions
-        {
-            AnchorVerticalOffset = -3f,
-            FallbackCursorOffsetX = 18f,
-            FallbackCursorOffsetY = 18f,
-            ClampMinX = 8f,
-            ClampMinY = 8f,
-            ClampRightMargin = 12f,
-            ClampBottomMargin = 12f
-        };
+        private static readonly Cortex.Rendering.Models.HoverTooltipPlacementOptions TooltipPlacementOptions = Cortex.Rendering.Models.HoverTooltipPlacement.CreateAnchoredOptions(-3f);
 
         private Rect _textTooltipAnchorRect = new Rect(0f, 0f, 0f, 0f);
         private string _textTooltipText = string.Empty;
@@ -102,14 +93,12 @@ namespace Cortex.Modules.Shared
             var content = new GUIContent(_textTooltipText);
             var width = Mathf.Min(maxWidth, Mathf.Max(240f, styles.ContainerStyle.CalcSize(content).x + 16f));
             var height = Mathf.Max(30f, styles.ContainerStyle.CalcHeight(content, width) + 2f);
-            var x = Mathf.Min(current.mousePosition.x + 18f, Mathf.Max(8f, Screen.width - width - 12f));
-            var y = current.mousePosition.y + 18f;
-            if (y + height > Screen.height - 12f)
-            {
-                y = Mathf.Max(8f, _textTooltipAnchorRect.yMin - height - 8f);
-            }
-
-            var rect = new Rect(x, y, width, height);
+            var rect = ToRect(Cortex.Rendering.Models.HoverTooltipPlacement.BuildTextRect(
+                ToRenderRect(_textTooltipAnchorRect),
+                new Cortex.Rendering.Models.RenderPoint(current.mousePosition.x, current.mousePosition.y),
+                new Cortex.Rendering.Models.RenderSize(Screen.width, Screen.height),
+                width,
+                height));
             GUI.Box(rect, content, styles.ContainerStyle);
             DrawBorder(rect, styles.BorderFill, 1f);
         }
@@ -452,37 +441,28 @@ namespace Cortex.Modules.Shared
                 _tooltipPlacementState,
                 hoverKey,
                 mousePosition.x);
-            if (HasArea(anchorRect))
-            {
-                var anchoredRect = Cortex.Rendering.Models.HoverTooltipPlacement.BuildRect(
-                    ToRenderRect(anchorRect),
-                    new Cortex.Rendering.Models.RenderPoint(mousePosition.x, mousePosition.y),
-                    tooltipSpawnX,
-                    new Cortex.Rendering.Models.RenderSize(viewportSize.x, viewportSize.y),
-                    tooltipWidth,
-                    height,
-                    TooltipPlacementOptions);
-                return ToRect(anchoredRect);
-            }
 
             if (HasArea(_stickyHoverTooltipRect))
             {
                 var stickyRect = _stickyHoverTooltipRect;
                 stickyRect.width = tooltipWidth;
                 stickyRect.height = height;
-                return ClampTooltipRect(stickyRect, viewportSize);
+                return ToRect(
+                    Cortex.Rendering.Models.HoverTooltipPlacement.ClampRect(
+                        ToRenderRect(stickyRect),
+                        new Cortex.Rendering.Models.RenderSize(viewportSize.x, viewportSize.y),
+                        TooltipPlacementOptions));
             }
 
-            return ClampTooltipRect(new Rect(mousePosition.x + 18f, mousePosition.y + 18f, tooltipWidth, height), viewportSize);
-        }
-
-        private static Rect ClampTooltipRect(Rect rect, Vector2 viewportSize)
-        {
-            rect.x = Mathf.Min(rect.x, Mathf.Max(8f, viewportSize.x - rect.width - 12f));
-            rect.y = Mathf.Min(rect.y, Mathf.Max(8f, viewportSize.y - rect.height - 12f));
-            rect.x = Mathf.Max(8f, rect.x);
-            rect.y = Mathf.Max(8f, rect.y);
-            return rect;
+            var tooltipRect = Cortex.Rendering.Models.HoverTooltipPlacement.BuildRect(
+                ToRenderRect(anchorRect),
+                new Cortex.Rendering.Models.RenderPoint(mousePosition.x, mousePosition.y),
+                tooltipSpawnX,
+                new Cortex.Rendering.Models.RenderSize(viewportSize.x, viewportSize.y),
+                tooltipWidth,
+                height,
+                TooltipPlacementOptions);
+            return ToRect(tooltipRect);
         }
 
         private bool IsPointerWithinRichHoverSurface(Vector2 mousePosition)

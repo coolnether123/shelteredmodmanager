@@ -252,7 +252,7 @@ namespace Cortex.Modules.Editor
                     ? TryResolveHoverTarget(session, state, editingEnabled, pointerContext.ContentMouse, scroll, gutterWidth)
                     : null;
                 var displayHoveredMethodTarget = ResolveDisplayedHoveredMethodTarget(session, state, hoverTarget, pointerOnHoverSurface);
-                HandlePointerInput(session, state, editingEnabled, current, pointerContext, hoveredMethodTarget, gutterWidth, commandRegistry, contributionRegistry, harmonyPatchGenerationService, pointerOnOverlaySurface, pointerOnContextMenu);
+                HandlePointerInput(session, state, editingEnabled, current, pointerContext, hoveredMethodTarget, gutterWidth, commandRegistry, contributionRegistry, harmonyPatchGenerationService, pointerOnMethodInspector, pointerOnContextMenu);
                 RefreshActiveContext(session, state, editingEnabled);
                 if (shouldUpdateHover)
                 {

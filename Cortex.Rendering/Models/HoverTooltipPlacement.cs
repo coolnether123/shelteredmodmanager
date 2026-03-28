@@ -21,6 +21,20 @@ namespace Cortex.Rendering.Models
 
     public static class HoverTooltipPlacement
     {
+        public static HoverTooltipPlacementOptions CreateAnchoredOptions(float anchorVerticalOffset)
+        {
+            return new HoverTooltipPlacementOptions
+            {
+                AnchorVerticalOffset = anchorVerticalOffset,
+                FallbackCursorOffsetX = 18f,
+                FallbackCursorOffsetY = 18f,
+                ClampMinX = 8f,
+                ClampMinY = 8f,
+                ClampRightMargin = 12f,
+                ClampBottomMargin = 12f
+            };
+        }
+
         public static float ResolveSpawnX(HoverTooltipPlacementState state, string hoverKey, float mouseX)
         {
             if (state == null)
@@ -49,6 +63,18 @@ namespace Cortex.Rendering.Models
             state.SpawnX = 0f;
         }
 
+        public static RenderRect BuildTextRect(RenderRect anchorRect, RenderPoint mousePosition, RenderSize viewportSize, float width, float height)
+        {
+            var x = Math.Min(mousePosition.X + 18f, Math.Max(8f, viewportSize.Width - width - 12f));
+            var y = mousePosition.Y + 18f;
+            if (y + height > viewportSize.Height - 12f)
+            {
+                y = Math.Max(8f, anchorRect.Y - height - 8f);
+            }
+
+            return new RenderRect(x, y, width, height);
+        }
+
         public static RenderRect BuildRect(
             RenderRect anchorRect,
             RenderPoint mousePosition,
@@ -68,6 +94,17 @@ namespace Cortex.Rendering.Models
             return ClampRect(rect, viewportSize, options);
         }
 
+        public static RenderRect ClampRect(RenderRect rect, RenderSize viewportSize, HoverTooltipPlacementOptions options)
+        {
+            var maxX = Math.Max(options.ClampMinX, viewportSize.Width - rect.Width - options.ClampRightMargin);
+            var maxY = Math.Max(options.ClampMinY, viewportSize.Height - rect.Height - options.ClampBottomMargin);
+            rect.X = Math.Min(rect.X, maxX);
+            rect.Y = Math.Min(rect.Y, maxY);
+            rect.X = Math.Max(options.ClampMinX, rect.X);
+            rect.Y = Math.Max(options.ClampMinY, rect.Y);
+            return rect;
+        }
+
         private static RenderRect BuildRectFromAnchor(
             RenderRect anchorRect,
             float anchoredX,
@@ -83,17 +120,6 @@ namespace Cortex.Rendering.Models
             }
 
             return new RenderRect(anchoredX, y, tooltipWidth, height);
-        }
-
-        private static RenderRect ClampRect(RenderRect rect, RenderSize viewportSize, HoverTooltipPlacementOptions options)
-        {
-            var maxX = Math.Max(options.ClampMinX, viewportSize.Width - rect.Width - options.ClampRightMargin);
-            var maxY = Math.Max(options.ClampMinY, viewportSize.Height - rect.Height - options.ClampBottomMargin);
-            rect.X = Math.Min(rect.X, maxX);
-            rect.Y = Math.Min(rect.Y, maxY);
-            rect.X = Math.Max(options.ClampMinX, rect.X);
-            rect.Y = Math.Max(options.ClampMinY, rect.Y);
-            return rect;
         }
 
         private static bool HasArea(RenderRect rect)
