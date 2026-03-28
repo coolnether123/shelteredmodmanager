@@ -112,8 +112,8 @@ namespace Cortex
         public int RequestedAbsolutePosition = -1;
         public string RequestedTokenText = string.Empty;
         public string ActiveContextKey = string.Empty;
-        public string VisibleContextKey = string.Empty;
-        public string VisibleDefinitionDocumentPath = string.Empty;
+        public string VisualRefreshHoverKey = string.Empty;
+        public DateTime VisualRefreshRequestedUtc = DateTime.MinValue;
     }
 
     public sealed class CortexDefinitionInteractionState
@@ -318,6 +318,8 @@ namespace Cortex
     {
         public string ActiveSurfaceId = string.Empty;
         public string ActiveContextKey = string.Empty;
+        public string HoveredContextKey = string.Empty;
+        public string HoveredDefinitionDocumentPath = string.Empty;
         public readonly Dictionary<string, string> SurfaceContextKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public readonly Dictionary<string, EditorContextSnapshot> ContextsByKey = new Dictionary<string, EditorContextSnapshot>(StringComparer.OrdinalIgnoreCase);
     }

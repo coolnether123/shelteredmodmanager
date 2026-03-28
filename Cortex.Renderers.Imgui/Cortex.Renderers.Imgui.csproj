@@ -49,6 +49,11 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Cortex.Core\Cortex.Core.csproj">
+      <Project>{A5F28666-878B-4C48-A7DA-4A19BFC79F02}</Project>
+      <Name>Cortex.Core</Name>
+      <Private>False</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Cortex.Rendering\Cortex.Rendering.csproj">
       <Project>{5B4B178C-9BB0-4297-A07A-5C69FA861A26}</Project>
       <Name>Cortex.Rendering</Name>

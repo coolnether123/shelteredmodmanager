@@ -243,6 +243,23 @@ namespace Cortex
                 return;
             }
 
+            CortexDeveloperLog.WriteHoverPipelineStage(
+                "ResponseReceived",
+                envelope != null && envelope.Success,
+                string.Empty,
+                string.Empty,
+                pending.HoverKey ?? string.Empty,
+                pending.ContextKey ?? string.Empty,
+                pending.DocumentPath ?? string.Empty,
+                pending.DocumentVersion,
+                -1,
+                context.State != null && context.State.Editor != null && context.State.Editor.Hover != null
+                    ? context.State.Editor.Hover.RequestedTokenText ?? string.Empty
+                    : string.Empty,
+                envelope != null && !string.IsNullOrEmpty(envelope.ErrorMessage)
+                    ? envelope.ErrorMessage
+                    : "request-id=" + (pending.RequestId ?? string.Empty));
+
             var liveSession = context.FindOpenDocument(pending.DocumentPath);
             if (!string.Equals(context.State.Editor.Hover.RequestedKey, pending.HoverKey, StringComparison.Ordinal) ||
                 (liveSession != null &&
@@ -250,6 +267,20 @@ namespace Cortex
                  liveSession.TextVersion > 0 &&
                  liveSession.TextVersion != pending.DocumentVersion))
             {
+                CortexDeveloperLog.WriteHoverPipelineStage(
+                    "ResponseApplied",
+                    false,
+                    string.Empty,
+                    string.Empty,
+                    pending.HoverKey ?? string.Empty,
+                    pending.ContextKey ?? string.Empty,
+                    pending.DocumentPath ?? string.Empty,
+                    liveSession != null ? liveSession.TextVersion : pending.DocumentVersion,
+                    -1,
+                    context.State.Editor.Hover.RequestedTokenText ?? string.Empty,
+                    !string.Equals(context.State.Editor.Hover.RequestedKey, pending.HoverKey, StringComparison.Ordinal)
+                        ? "stale-request-key"
+                        : "stale-document-version");
                 return;
             }
 
@@ -265,7 +296,8 @@ namespace Cortex
                 };
             }
 
-            context.State.Editor.Hover.ActiveContextKey = pending.ContextKey ?? string.Empty;
+            var requestedHoverTokenText = context.State.Editor.Hover.RequestedTokenText ?? string.Empty;
+            var effectiveContextKey = pending.ContextKey ?? string.Empty;
             context.State.Editor.Hover.RequestedKey = string.Empty;
             context.State.Editor.Hover.RequestedContextKey = string.Empty;
             context.State.Editor.Hover.RequestedDocumentPath = string.Empty;
@@ -274,10 +306,30 @@ namespace Cortex
             context.State.Editor.Hover.RequestedAbsolutePosition = -1;
             if (context.EditorContextService != null)
             {
-                context.EditorContextService.ApplyHoverResponse(context.State, pending.ContextKey, pending.HoverKey, response);
+                effectiveContextKey = context.EditorContextService.ApplyHoverResponse(context.State, pending.ContextKey, pending.HoverKey, response);
             }
-            var requestedHoverTokenText = context.State.Editor.Hover.RequestedTokenText ?? string.Empty;
+            context.State.Editor.Hover.ActiveContextKey = !string.IsNullOrEmpty(effectiveContextKey)
+                ? effectiveContextKey
+                : pending.ContextKey ?? string.Empty;
             context.State.Editor.Hover.RequestedTokenText = string.Empty;
+            context.State.Editor.Hover.VisualRefreshHoverKey = response.Success
+                ? pending.HoverKey ?? string.Empty
+                : string.Empty;
+            context.State.Editor.Hover.VisualRefreshRequestedUtc = response.Success
+                ? DateTime.UtcNow
+                : DateTime.MinValue;
+            CortexDeveloperLog.WriteHoverPipelineStage(
+                "ResponseApplied",
+                response.Success,
+                string.Empty,
+                string.Empty,
+                pending.HoverKey ?? string.Empty,
+                context.State.Editor.Hover.ActiveContextKey ?? string.Empty,
+                pending.DocumentPath ?? string.Empty,
+                response.DocumentVersion > 0 ? response.DocumentVersion : pending.DocumentVersion,
+                response.DefinitionRange != null ? response.DefinitionRange.Start : -1,
+                requestedHoverTokenText,
+                response != null ? response.StatusMessage ?? string.Empty : string.Empty);
             if (response.Success)
             {
                 CortexDeveloperLog.WriteSymbolHoverPayload(requestedHoverTokenText, response);

@@ -51,7 +51,7 @@ At a high level, Cortex is composed of these layers:
 - workbench presentation models and presenter logic
 
 4. `Cortex.Rendering` and `Cortex.Renderers.Imgui`
-- rendering abstractions and IMGUI renderer implementation
+- rendering abstractions, renderer-neutral surface models, and IMGUI renderer implementation
 
 5. `Cortex.Host.Unity`
 - Unity host composition and default workbench setup
@@ -88,6 +88,7 @@ That is why the architecture favors:
 Its responsibilities include:
 - initializing and shutting down Cortex services
 - owning workbench state
+- owning the active render pipeline
 - drawing the main IDE window
 - routing module rendering into dock hosts
 - persisting layout, open docs, and selection state
@@ -180,10 +181,13 @@ The editor currently has two modes:
 - line focus/navigation
 
 2. Editable text mode
-- currently still based on text input controls
+- custom writable code surface
+- custom caret, selection, scroll, completion, and overlay behavior
+- uses the same central editor context model as the read-only surface
 - used when editing is unlocked
 
-The long-term design intent is to move more IDE-grade behavior onto the custom code surface so Cortex can support:
+The current direction is not "read-only custom surface plus stock Unity text widgets."
+Both read and edit paths are moving onto custom code surfaces so Cortex can support:
 - precise symbol hit testing
 - custom caret/selection behavior
 - inline diagnostics
@@ -191,7 +195,61 @@ The long-term design intent is to move more IDE-grade behavior onto the custom c
 - richer interactions like rename, completion, and peek-like features
 
 Unity IMGUI is still the host/event layer.
-The important design choice is that Cortex should not depend on Unity's stock text widgets for IDE behavior.
+The important design choice is that Cortex should not depend on Unity's stock text widgets for IDE behavior, and non-renderer layers should not depend on Unity GUI types.
+
+## 8.1 Editor Context And Selection Model
+
+Cortex now treats editor interaction state as shared workbench state rather than local surface-only UI state.
+
+`EditorContextService` is the central seam for:
+- active editor context
+- per-surface context snapshots
+- selected symbol/target metadata
+- hover response attachment
+- semantic symbol context attachment
+
+This matters because the selected symbol or hovered symbol is not just a paint concern.
+Other workbench windows and workflows can build from the same cached context instead of scraping editor UI state.
+
+That shared context is what should back:
+- selected symbol highlighting
+- related symbol occurrence highlighting
+- hover metadata
+- method inspector targeting
+- future symbol-driven secondary panes
+
+## 8.2 Hover Direction
+
+The current hover design is:
+- one shared hover controller/service for read and edit surfaces
+- renderer-agnostic hover models in `Cortex.Rendering`
+- IMGUI-specific hover drawing only in `Cortex.Renderers.Imgui`
+- central hover publication through `EditorContextService`
+
+The intended user experience is Visual Studio-style hover behavior:
+- qualified symbol path
+- signature/display parts
+- overload summaries where available
+- documentation/details
+- sticky hover that remains active while moving from the token to the hover window
+- interactive hover parts that can be clicked for navigation
+
+That keeps hover behavior authoritative in one place instead of splitting semantic state and sticky-window behavior across the two editor surfaces.
+
+## 8.3 Overlay Rendering Direction
+
+Panels, popup menus, and hover surfaces are moving behind renderer abstractions.
+
+The design intent is:
+- keep `IRenderPipeline` small
+- keep overlay rendering behind narrow interfaces
+- keep render-time dependencies separate from editor service dependencies
+- allow IMGUI to remain the default backend without making the Cortex layer IMGUI-dependent
+
+In practice that means:
+- renderer-neutral geometry and color models belong in `Cortex.Rendering`
+- IMGUI drawing belongs in `Cortex.Renderers.Imgui`
+- editor surfaces should consume renderer contracts, not construct IMGUI overlay widgets directly
 
 ## 9. Syntax Coloring and Semantic Data
 
@@ -387,9 +445,11 @@ The current architecture supports that growth because the core responsibilities 
 The strongest parts of Cortex today are:
 - clear module boundaries
 - shell/service separation
+- central render pipeline direction instead of hardwiring IMGUI across the shell
 - out-of-process Roslyn design
 - decompiler fallback integration
 - document session model
+- central editor context model for symbol-driven workflows
 - modular workbench layout
 - compatibility with future external tools
 
@@ -398,7 +458,9 @@ Those choices are what make Cortex more than a prototype overlay.
 ## 21. Current Limitations
 
 The major current limitations are mostly about depth, not direction:
-- editable mode is not yet a full custom IDE text surface
+- shared hover is centralized, but richer cancellation/scheduling policies for language requests can still improve responsiveness under heavy churn
+- not every overlay or editor interaction has been fully pulled behind renderer-agnostic contracts yet
+- some editor investigation/debug logging is still temporary and local to the implementation path; that should be refactored later into a cleaner Cortex-wide debugging approach instead of remaining scattered long-term
 - transport is now queued, but there is still room for richer request scheduling and cancellation
 - worker communication still uses whole-document snapshots rather than incremental deltas
 - not every metadata symbol resolves to the most granular possible member in every case

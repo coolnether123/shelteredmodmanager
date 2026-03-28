@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Cortex.Core.Models;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
 using UnityEngine;
@@ -9,17 +10,10 @@ namespace Cortex.Renderers.Imgui
     internal sealed class ImguiHoverTooltipRenderer : IHoverTooltipRenderer
     {
         private const float DefaultTooltipWidth = 420f;
-        private const double StickyHoverGraceMs = 700d;
 
         private Rect _textTooltipAnchorRect = new Rect(0f, 0f, 0f, 0f);
         private string _textTooltipText = string.Empty;
-        private HoverTooltipRenderModel _stickyModel;
-        private string _stickyHoverKey = string.Empty;
-        private string _stickyHoverDocumentPath = string.Empty;
-        private Rect _stickyHoverAnchorRect = new Rect(0f, 0f, 0f, 0f);
-        private Rect _stickyHoverTooltipRect = new Rect(0f, 0f, 0f, 0f);
         private Vector2 _lastValidViewport = Vector2.zero;
-        private DateTime _stickyHoverKeepAliveUtc = DateTime.MinValue;
         private string _pressedTooltipPartKey = string.Empty;
 
         private string _themeCacheKey = string.Empty;
@@ -82,13 +76,7 @@ namespace Cortex.Renderers.Imgui
 
         public void ClearRichState()
         {
-            _stickyModel = null;
-            _stickyHoverKey = string.Empty;
-            _stickyHoverDocumentPath = string.Empty;
-            _stickyHoverAnchorRect = new Rect(0f, 0f, 0f, 0f);
-            _stickyHoverTooltipRect = new Rect(0f, 0f, 0f, 0f);
             _lastValidViewport = Vector2.zero;
-            _stickyHoverKeepAliveUtc = DateTime.MinValue;
             _pressedTooltipPartKey = string.Empty;
         }
 
@@ -103,76 +91,50 @@ namespace Cortex.Renderers.Imgui
         {
             EnsureTheme(theme);
             result = new HoverTooltipRenderResult();
+            var activeModel = currentModel;
+            if (activeModel == null)
+            {
+                result.HiddenReason = "model-null";
+                return false;
+            }
+
             var current = Event.current;
             var mouse = new Vector2(mousePosition.X, mousePosition.Y);
             var effectiveViewport = ResolveTooltipViewportSize(viewportSize);
             if (!IsUsableTooltipViewport(effectiveViewport) || _containerStyle == null)
             {
+                result.HiddenReason = !IsUsableTooltipViewport(effectiveViewport)
+                    ? "viewport-invalid|" + effectiveViewport.x.ToString("F1") + "x" + effectiveViewport.y.ToString("F1") +
+                      "|screen=" + Screen.width.ToString() + "x" + Screen.height.ToString()
+                    : "theme-uninitialized";
                 return false;
             }
 
-            var activeModel = ResolveVisibleModel(currentModel, mouse, hasMouse);
-            if (activeModel == null)
-            {
-                return false;
-            }
-
-            var effectiveWidth = tooltipWidth > 0f ? tooltipWidth : DefaultTooltipWidth;
+            var maxWidth = tooltipWidth > 0f ? tooltipWidth : DefaultTooltipWidth;
             var signatureParts = activeModel.SignatureParts != null && activeModel.SignatureParts.Length > 0
                 ? activeModel.SignatureParts
                 : BuildFallbackParts(activeModel);
-            var canUpdateTooltipVisuals = current == null ||
-                current.type == EventType.Repaint ||
-                current.type == EventType.MouseMove ||
-                current.type == EventType.MouseDrag ||
-                current.type == EventType.MouseDown ||
-                current.type == EventType.MouseUp;
-
-            var initialMetaText = BuildMetaText(activeModel, null);
-            var initialDetailText = BuildDetailText(activeModel, null);
-            var pathHeight = CalculateHeight(_pathStyle, activeModel.QualifiedPath, effectiveWidth - 16f, 16f);
-            var metaHeight = CalculateHeight(_metaStyle, initialMetaText, effectiveWidth - 16f, 16f);
+            var signatureWidth = MeasureTooltipPartsWidth(signatureParts);
+            var effectiveWidth = Mathf.Min(maxWidth, Mathf.Max(180f, signatureWidth + 20f));
             var signatureHeight = LayoutTooltipParts(new Rect(0f, 0f, effectiveWidth - 16f, 0f), signatureParts, null, false);
             if (signatureHeight <= 0f)
             {
+                result.HiddenReason = "signature-height-zero";
                 ClearRichState();
                 return false;
             }
 
-            var tooltipRect = BuildTooltipRect(activeModel.AnchorRect, mouse, effectiveViewport, effectiveWidth, BuildTooltipHeight(effectiveWidth, pathHeight, metaHeight, signatureHeight, initialDetailText));
+            var tooltipRect = BuildTooltipRect(activeModel.AnchorRect, mouse, effectiveViewport, effectiveWidth, BuildCompactTooltipHeight(signatureHeight));
             var partVisuals = new List<TooltipPartVisual>();
-            var signatureRect = BuildTooltipSignatureRect(tooltipRect, pathHeight, metaHeight);
+            var signatureRect = BuildCompactTooltipSignatureRect(tooltipRect);
             LayoutTooltipParts(signatureRect, signatureParts, partVisuals, false);
             var hoveredPart = FindHoveredTooltipPart(partVisuals, mouse);
 
-            var metaText = BuildMetaText(activeModel, hoveredPart);
-            metaHeight = CalculateHeight(_metaStyle, metaText, effectiveWidth - 16f, 16f);
-            var detailText = BuildDetailText(activeModel, hoveredPart);
-            var finalHeight = BuildTooltipHeight(effectiveWidth, pathHeight, metaHeight, signatureHeight, detailText);
-            if (canUpdateTooltipVisuals || !HasArea(_stickyHoverTooltipRect))
-            {
-                tooltipRect = BuildTooltipRect(activeModel.AnchorRect, mouse, effectiveViewport, effectiveWidth, finalHeight);
-                _stickyHoverTooltipRect = tooltipRect;
-            }
-            else
-            {
-                tooltipRect = _stickyHoverTooltipRect;
-            }
-
             GUI.Box(tooltipRect, GUIContent.none, _containerStyle);
             DrawBorder(tooltipRect, _borderFill, 1f);
-            if (!string.IsNullOrEmpty(activeModel.QualifiedPath) && _pathStyle != null)
-            {
-                GUI.Label(BuildTooltipPathRect(tooltipRect, pathHeight), activeModel.QualifiedPath, _pathStyle);
-            }
-
-            if (!string.IsNullOrEmpty(metaText) && _metaStyle != null)
-            {
-                GUI.Label(BuildTooltipMetaRect(tooltipRect, pathHeight, metaHeight), metaText, _metaStyle);
-            }
 
             partVisuals.Clear();
-            signatureRect = BuildTooltipSignatureRect(tooltipRect, pathHeight, metaHeight);
+            signatureRect = BuildCompactTooltipSignatureRect(tooltipRect);
             LayoutTooltipParts(signatureRect, signatureParts, partVisuals, true);
             hoveredPart = FindHoveredTooltipPart(partVisuals, mouse);
             if (hoveredPart != null && hoveredPart.IsInteractive && _hoverFill != null)
@@ -191,17 +153,6 @@ namespace Cortex.Renderers.Imgui
                         GUI.DrawTexture(new Rect(hoveredRect.x, hoveredRect.yMax - 1f, hoveredRect.width, 1f), _underlineFill);
                     }
                 }
-            }
-
-            if (!string.IsNullOrEmpty(detailText) && _detailStyle != null)
-            {
-                var detailRect = BuildTooltipDetailRect(tooltipRect, pathHeight, metaHeight, signatureHeight);
-                GUI.Label(detailRect, detailText, _detailStyle);
-            }
-
-            if (object.ReferenceEquals(activeModel, currentModel) || (hasMouse && IsPointerWithinRichHoverSurface(mouse)))
-            {
-                RefreshStickyHoverKeepAlive();
             }
 
             result.Visible = true;
@@ -268,40 +219,6 @@ namespace Cortex.Renderers.Imgui
             _detailStyle.alignment = TextAnchor.UpperLeft;
         }
 
-        private HoverTooltipRenderModel ResolveVisibleModel(HoverTooltipRenderModel currentModel, Vector2 mousePosition, bool hasMouse)
-        {
-            if (currentModel != null)
-            {
-                var currentKey = currentModel.Key ?? string.Empty;
-                if (!string.IsNullOrEmpty(_stickyHoverKey) &&
-                    !string.Equals(currentKey, _stickyHoverKey, StringComparison.Ordinal) &&
-                    (IsPointerWithinRichHoverSurface(mousePosition) || DateTime.UtcNow <= _stickyHoverKeepAliveUtc))
-                {
-                    return _stickyModel;
-                }
-
-                _stickyModel = currentModel;
-                _stickyHoverKey = currentKey;
-                _stickyHoverDocumentPath = currentModel.DocumentPath ?? string.Empty;
-                _stickyHoverAnchorRect = ToRect(currentModel.AnchorRect);
-                RefreshStickyHoverKeepAlive();
-                return currentModel;
-            }
-
-            if (_stickyModel == null)
-            {
-                return null;
-            }
-
-            if ((hasMouse && IsPointerWithinRichHoverSurface(mousePosition)) || DateTime.UtcNow <= _stickyHoverKeepAliveUtc)
-            {
-                return _stickyModel;
-            }
-
-            ClearRichState();
-            return null;
-        }
-
         private Vector2 ResolveTooltipViewportSize(RenderSize viewportSize)
         {
             var size = new Vector2(viewportSize.Width, viewportSize.Height);
@@ -309,6 +226,13 @@ namespace Cortex.Renderers.Imgui
             {
                 _lastValidViewport = size;
                 return size;
+            }
+
+            var screenViewport = new Vector2(Screen.width, Screen.height);
+            if (IsUsableTooltipViewport(screenViewport))
+            {
+                _lastValidViewport = screenViewport;
+                return screenViewport;
             }
 
             return _lastValidViewport;
@@ -319,11 +243,11 @@ namespace Cortex.Renderers.Imgui
             return viewportSize.x >= 64f && viewportSize.y >= 64f;
         }
 
-        private static HoverTooltipPartModel[] BuildFallbackParts(HoverTooltipRenderModel model)
+        private static EditorHoverContentPart[] BuildFallbackParts(HoverTooltipRenderModel model)
         {
             return new[]
             {
-                new HoverTooltipPartModel
+                new EditorHoverContentPart
                 {
                     Text = model != null ? model.SymbolDisplay ?? string.Empty : string.Empty,
                     IsInteractive = false
@@ -341,22 +265,47 @@ namespace Cortex.Renderers.Imgui
             return Mathf.Max(minimum, style.CalcHeight(new GUIContent(text), width));
         }
 
-        private static string BuildMetaText(HoverTooltipRenderModel model, HoverTooltipPartModel hoveredPart)
+        private float MeasureTooltipPartsWidth(EditorHoverContentPart[] parts)
         {
-            return model != null && model.BuildMetaText != null
-                ? model.BuildMetaText(hoveredPart)
-                : string.Empty;
+            var signatureStyle = _signatureStyle ?? GUI.skin.label;
+            var linkStyle = _linkStyle ?? signatureStyle;
+            var width = 0f;
+            for (var i = 0; parts != null && i < parts.Length; i++)
+            {
+                var part = parts[i];
+                var text = part != null ? part.Text ?? string.Empty : string.Empty;
+                if (string.IsNullOrEmpty(text))
+                {
+                    continue;
+                }
+
+                var style = part.IsInteractive ? linkStyle : signatureStyle;
+                width += Mathf.Max(2f, style.CalcSize(new GUIContent(text)).x);
+            }
+
+            return width;
         }
 
-        private static string BuildDetailText(HoverTooltipRenderModel model, HoverTooltipPartModel hoveredPart)
+        private static string BuildMetaText(HoverTooltipRenderModel model, EditorHoverContentPart hoveredPart)
+        {
+            return hoveredPart != null && !string.IsNullOrEmpty(hoveredPart.SummaryText)
+                ? hoveredPart.SummaryText ?? string.Empty
+                : (model != null ? model.SummaryText ?? string.Empty : string.Empty);
+        }
+
+        private static string BuildDetailText(HoverTooltipRenderModel model, EditorHoverContentPart hoveredPart)
         {
             if (model == null)
             {
                 return string.Empty;
             }
 
-            var detail = model.BuildDocumentationText != null ? model.BuildDocumentationText(hoveredPart) : string.Empty;
-            var supplemental = model.GetSupplementalSections != null ? FormatSupplementalSections(model.GetSupplementalSections(hoveredPart)) : string.Empty;
+            var detail = hoveredPart != null && !string.IsNullOrEmpty(hoveredPart.DocumentationText)
+                ? hoveredPart.DocumentationText ?? string.Empty
+                : model.DocumentationText ?? string.Empty;
+            var supplemental = hoveredPart != null
+                ? FormatSupplementalSections(hoveredPart.SupplementalSections)
+                : string.Empty;
 
             if (string.IsNullOrEmpty(detail))
             {
@@ -371,7 +320,7 @@ namespace Cortex.Renderers.Imgui
             return supplemental + Environment.NewLine + detail;
         }
 
-        private float LayoutTooltipParts(Rect bounds, HoverTooltipPartModel[] parts, List<TooltipPartVisual> visuals, bool draw)
+        private float LayoutTooltipParts(Rect bounds, EditorHoverContentPart[] parts, List<TooltipPartVisual> visuals, bool draw)
         {
             var signatureStyle = _signatureStyle ?? GUI.skin.label;
             var linkStyle = _linkStyle ?? signatureStyle;
@@ -414,7 +363,63 @@ namespace Cortex.Renderers.Imgui
             return Mathf.Max(lineHeight, (y - bounds.y) + lineHeight);
         }
 
-        private static HoverTooltipPartModel FindHoveredTooltipPart(List<TooltipPartVisual> visuals, Vector2 mousePosition)
+        private float MeasureSections(EditorHoverSection[] sections, float width)
+        {
+            var bounds = new Rect(0f, 0f, width, 0f);
+            return LayoutSections(bounds, sections, null, false);
+        }
+
+        private float LayoutSections(Rect bounds, EditorHoverSection[] sections, List<TooltipPartVisual> visuals, bool draw)
+        {
+            if (sections == null || sections.Length == 0)
+            {
+                return 0f;
+            }
+
+            var y = bounds.y;
+            for (var i = 0; i < sections.Length; i++)
+            {
+                var section = sections[i];
+                if (section == null)
+                {
+                    continue;
+                }
+
+                var titleText = HumanizeSectionTitle(section.Title);
+                if (!string.IsNullOrEmpty(titleText) && _metaStyle != null)
+                {
+                    var titleHeight = Mathf.Max(14f, _metaStyle.CalcHeight(new GUIContent(titleText), bounds.width));
+                    if (draw)
+                    {
+                        GUI.Label(new Rect(bounds.x, y, bounds.width, titleHeight), titleText, _metaStyle);
+                    }
+
+                    y += titleHeight + 2f;
+                }
+
+                if (section.DisplayParts != null && section.DisplayParts.Length > 0)
+                {
+                    var partHeight = LayoutTooltipParts(new Rect(bounds.x, y, bounds.width, 0f), section.DisplayParts, visuals, draw);
+                    y += partHeight + 4f;
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(section.Text) && _detailStyle != null)
+                {
+                    var textHeight = Mathf.Max(14f, _detailStyle.CalcHeight(new GUIContent(section.Text), bounds.width));
+                    if (draw)
+                    {
+                        GUI.Label(new Rect(bounds.x, y, bounds.width, textHeight), section.Text, _detailStyle);
+                    }
+
+                    y += textHeight + 4f;
+                }
+            }
+
+            return Mathf.Max(0f, y - bounds.y);
+        }
+
+        private static EditorHoverContentPart FindHoveredTooltipPart(List<TooltipPartVisual> visuals, Vector2 mousePosition)
         {
             if (visuals == null)
             {
@@ -433,7 +438,7 @@ namespace Cortex.Renderers.Imgui
             return null;
         }
 
-        private static Rect FindTooltipPartRect(List<TooltipPartVisual> visuals, HoverTooltipPartModel hoveredPart)
+        private static Rect FindTooltipPartRect(List<TooltipPartVisual> visuals, EditorHoverContentPart hoveredPart)
         {
             if (visuals == null || hoveredPart == null)
             {
@@ -452,10 +457,9 @@ namespace Cortex.Renderers.Imgui
             return new Rect(0f, 0f, 0f, 0f);
         }
 
-        private float BuildTooltipHeight(float tooltipWidth, float pathHeight, float metaHeight, float signatureHeight, string detailText)
+        private static float BuildCompactTooltipHeight(float signatureHeight)
         {
-            var detailHeight = string.IsNullOrEmpty(detailText) || _detailStyle == null ? 0f : _detailStyle.CalcHeight(new GUIContent(detailText), tooltipWidth - 16f);
-            return Mathf.Min(360f, 14f + pathHeight + metaHeight + signatureHeight + (detailHeight > 0f ? detailHeight + 8f : 0f));
+            return Mathf.Max(30f, signatureHeight + 16f);
         }
 
         private Rect BuildTooltipRect(RenderRect anchorRect, Vector2 mousePosition, Vector2 viewportSize, float tooltipWidth, float height)
@@ -466,24 +470,16 @@ namespace Cortex.Renderers.Imgui
                 return ClampTooltipRect(BuildTooltipRectFromAnchor(unityAnchorRect, viewportSize, tooltipWidth, height), viewportSize);
             }
 
-            if (HasArea(_stickyHoverTooltipRect))
-            {
-                var stickyRect = _stickyHoverTooltipRect;
-                stickyRect.width = tooltipWidth;
-                stickyRect.height = height;
-                return ClampTooltipRect(stickyRect, viewportSize);
-            }
-
             return ClampTooltipRect(new Rect(mousePosition.x + 18f, mousePosition.y + 18f, tooltipWidth, height), viewportSize);
         }
 
         private static Rect BuildTooltipRectFromAnchor(Rect anchorRect, Vector2 viewportSize, float tooltipWidth, float height)
         {
             var x = anchorRect.xMin - 4f;
-            var y = anchorRect.yMax - 3f;
+            var y = anchorRect.yMax - 10f;
             if (y + height > viewportSize.y - 12f)
             {
-                y = anchorRect.yMin - height + 3f;
+                y = anchorRect.yMin - height + 10f;
             }
 
             return new Rect(x, y, tooltipWidth, height);
@@ -498,91 +494,12 @@ namespace Cortex.Renderers.Imgui
             return rect;
         }
 
-        private bool IsPointerWithinRichHoverSurface(Vector2 mousePosition)
+        private static Rect BuildCompactTooltipSignatureRect(Rect tooltipRect)
         {
-            if (IsPointerWithinTooltip(mousePosition))
-            {
-                return true;
-            }
-
-            if (HasArea(_stickyHoverAnchorRect) && _stickyHoverAnchorRect.Contains(mousePosition))
-            {
-                return true;
-            }
-
-            var bridgeRect = BuildHoverBridgeRect();
-            return HasArea(bridgeRect) && bridgeRect.Contains(mousePosition);
+            return new Rect(tooltipRect.x + 8f, tooltipRect.y + 8f, tooltipRect.width - 16f, Mathf.Max(0f, tooltipRect.height - 16f));
         }
 
-        private bool IsPointerWithinTooltip(Vector2 mousePosition)
-        {
-            return HasArea(_stickyHoverTooltipRect) && _stickyHoverTooltipRect.Contains(mousePosition);
-        }
-
-        private Rect BuildHoverBridgeRect()
-        {
-            if (!HasArea(_stickyHoverAnchorRect) || !HasArea(_stickyHoverTooltipRect))
-            {
-                return new Rect(0f, 0f, 0f, 0f);
-            }
-
-            var overlapLeft = Mathf.Max(_stickyHoverAnchorRect.xMin, _stickyHoverTooltipRect.xMin);
-            var overlapRight = Mathf.Min(_stickyHoverAnchorRect.xMax, _stickyHoverTooltipRect.xMax);
-            if (overlapRight > overlapLeft)
-            {
-                return Rect.MinMaxRect(
-                    overlapLeft - 6f,
-                    Mathf.Min(_stickyHoverAnchorRect.yMin, _stickyHoverTooltipRect.yMin) - 4f,
-                    overlapRight + 6f,
-                    Mathf.Max(_stickyHoverAnchorRect.yMax, _stickyHoverTooltipRect.yMax) + 4f);
-            }
-
-            var overlapTop = Mathf.Max(_stickyHoverAnchorRect.yMin, _stickyHoverTooltipRect.yMin);
-            var overlapBottom = Mathf.Min(_stickyHoverAnchorRect.yMax, _stickyHoverTooltipRect.yMax);
-            if (overlapBottom > overlapTop)
-            {
-                return Rect.MinMaxRect(
-                    Mathf.Min(_stickyHoverAnchorRect.xMin, _stickyHoverTooltipRect.xMin) - 4f,
-                    overlapTop - 6f,
-                    Mathf.Max(_stickyHoverAnchorRect.xMax, _stickyHoverTooltipRect.xMax) + 4f,
-                    overlapBottom + 6f);
-            }
-
-            var anchorCenter = _stickyHoverAnchorRect.center;
-            var tooltipCenter = _stickyHoverTooltipRect.center;
-            return Rect.MinMaxRect(
-                Mathf.Min(anchorCenter.x, tooltipCenter.x) - 8f,
-                Mathf.Min(anchorCenter.y, tooltipCenter.y) - 8f,
-                Mathf.Max(anchorCenter.x, tooltipCenter.x) + 8f,
-                Mathf.Max(anchorCenter.y, tooltipCenter.y) + 8f);
-        }
-
-        private void RefreshStickyHoverKeepAlive()
-        {
-            _stickyHoverKeepAliveUtc = DateTime.UtcNow.AddMilliseconds(StickyHoverGraceMs);
-        }
-
-        private static Rect BuildTooltipPathRect(Rect tooltipRect, float pathHeight)
-        {
-            return new Rect(tooltipRect.x + 8f, tooltipRect.y + 7f, tooltipRect.width - 16f, Mathf.Max(0f, pathHeight));
-        }
-
-        private static Rect BuildTooltipMetaRect(Rect tooltipRect, float pathHeight, float metaHeight)
-        {
-            return new Rect(tooltipRect.x + 8f, tooltipRect.y + 7f + pathHeight, tooltipRect.width - 16f, Mathf.Max(0f, metaHeight));
-        }
-
-        private static Rect BuildTooltipSignatureRect(Rect tooltipRect, float pathHeight, float metaHeight)
-        {
-            return new Rect(tooltipRect.x + 8f, tooltipRect.y + 7f + pathHeight + metaHeight + (metaHeight > 0f ? 4f : 0f), tooltipRect.width - 16f, Mathf.Max(0f, tooltipRect.height - pathHeight - metaHeight - 14f));
-        }
-
-        private static Rect BuildTooltipDetailRect(Rect tooltipRect, float pathHeight, float metaHeight, float signatureHeight)
-        {
-            return new Rect(tooltipRect.x + 8f, tooltipRect.y + 7f + pathHeight + metaHeight + (metaHeight > 0f ? 4f : 0f) + signatureHeight + 6f, tooltipRect.width - 16f, Mathf.Max(0f, tooltipRect.height - pathHeight - metaHeight - signatureHeight - 20f));
-        }
-
-        private HoverTooltipPartModel HandleTooltipPartInteraction(Event current, HoverTooltipPartModel hoveredPart)
+        private EditorHoverContentPart HandleTooltipPartInteraction(Event current, EditorHoverContentPart hoveredPart)
         {
             if (current == null || current.button != 0)
             {
@@ -617,7 +534,7 @@ namespace Cortex.Renderers.Imgui
             return hoveredPart;
         }
 
-        private static string FormatSupplementalSections(HoverTooltipSectionModel[] sections)
+        private static string FormatSupplementalSections(EditorHoverSection[] sections)
         {
             if (sections == null || sections.Length == 0)
             {
@@ -673,9 +590,31 @@ namespace Cortex.Renderers.Imgui
             return rect.width > 0f && rect.height > 0f;
         }
 
-        private static string BuildTooltipPartKey(HoverTooltipPartModel part)
+        private static bool HasInlineOverloadSummary(EditorHoverContentPart[] signatureParts, string overloadSummary)
         {
-            return (part != null ? part.Text ?? string.Empty : string.Empty) + "|" + (part != null && part.Tag != null ? part.Tag.GetHashCode().ToString() : string.Empty);
+            if (signatureParts == null || signatureParts.Length == 0 || string.IsNullOrEmpty(overloadSummary))
+            {
+                return false;
+            }
+
+            for (var i = 0; i < signatureParts.Length; i++)
+            {
+                var text = signatureParts[i] != null ? signatureParts[i].Text ?? string.Empty : string.Empty;
+                if (!string.IsNullOrEmpty(text) && text.IndexOf(overloadSummary, StringComparison.Ordinal) >= 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string BuildTooltipPartKey(EditorHoverContentPart part)
+        {
+            var navigationTarget = part != null ? part.NavigationTarget : null;
+            return (part != null ? part.Text ?? string.Empty : string.Empty) + "|" +
+                (navigationTarget != null ? navigationTarget.MetadataName ?? string.Empty : string.Empty) + "|" +
+                (navigationTarget != null ? navigationTarget.DefinitionDocumentPath ?? string.Empty : string.Empty);
         }
 
         private static void DrawBorder(Rect rect, Texture2D texture, float thickness)
@@ -770,7 +709,7 @@ namespace Cortex.Renderers.Imgui
 
         private sealed class TooltipPartVisual
         {
-            public HoverTooltipPartModel Part;
+            public EditorHoverContentPart Part;
             public Rect Rect;
         }
     }

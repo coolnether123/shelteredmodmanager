@@ -31,6 +31,7 @@ namespace Cortex.Modules.Editor
         private const float MinimumUsableCodeAreaHeight = 64f;
         private const float StatusBarHeight = 20f;
         private const float GutterWidth = 52f;
+        private const double HoverVisualRefreshWindowMs = 10000d;
 
         private Vector2 _tabScroll = Vector2.zero;
         private Vector2 _editorScroll = Vector2.zero;
@@ -72,6 +73,7 @@ namespace Cortex.Modules.Editor
         private Texture2D _statusModeDisabledBackground;
         private readonly CodeViewSurface _codeViewSurface;
         private readonly EditableCodeViewSurface _editableCodeViewSurface;
+        private readonly EditorHoverService _hoverService;
         private readonly IEditorService _editorService = new EditorService();
         private readonly EditorDocumentModeService _documentModeService = new EditorDocumentModeService();
         private readonly IRenderPipeline _renderPipeline;
@@ -79,9 +81,10 @@ namespace Cortex.Modules.Editor
         internal EditorModule(IEditorContextService editorContextService, IRenderPipeline renderPipeline)
         {
             _renderPipeline = renderPipeline;
+            _hoverService = new EditorHoverService(editorContextService);
             var overlayRendererFactory = renderPipeline != null ? renderPipeline.OverlayRendererFactory : null;
-            _codeViewSurface = new CodeViewSurface(editorContextService, overlayRendererFactory);
-            _editableCodeViewSurface = new EditableCodeViewSurface(editorContextService, overlayRendererFactory);
+            _codeViewSurface = new CodeViewSurface(editorContextService, _hoverService, overlayRendererFactory);
+            _editableCodeViewSurface = new EditableCodeViewSurface(editorContextService, _hoverService, overlayRendererFactory);
         }
 
         internal void Draw(
@@ -103,6 +106,7 @@ namespace Cortex.Modules.Editor
         {
             EditorCommandContributions.EnsureRegistered(commandRegistry, contributionRegistry, state);
             EnsureStyles(state);
+            ApplyPendingHoverVisualRefresh(state);
             HandleSearchShortcuts(commandRegistry, state);
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(true));
@@ -136,6 +140,39 @@ namespace Cortex.Modules.Editor
             DrawStatusBar(state);
 
             GUILayout.EndVertical();
+        }
+
+        private void ApplyPendingHoverVisualRefresh(CortexShellState state)
+        {
+            if (state == null || state.Editor == null || state.Editor.Hover == null)
+            {
+                return;
+            }
+
+            var hoverState = state.Editor.Hover;
+            if (string.IsNullOrEmpty(hoverState.VisualRefreshHoverKey))
+            {
+                return;
+            }
+
+            if ((DateTime.UtcNow - hoverState.VisualRefreshRequestedUtc).TotalMilliseconds > HoverVisualRefreshWindowMs)
+            {
+                CortexDeveloperLog.WriteHoverDiagnostic(
+                    "force-hover-refresh-expired",
+                    hoverState.VisualRefreshHoverKey,
+                    "editor-module");
+                hoverState.VisualRefreshHoverKey = string.Empty;
+                hoverState.VisualRefreshRequestedUtc = DateTime.MinValue;
+                return;
+            }
+
+            _codeViewSurface.Invalidate();
+            _editableCodeViewSurface.Invalidate();
+            GUI.changed = true;
+            CortexDeveloperLog.WriteHoverDiagnostic(
+                "force-hover-refresh",
+                hoverState.VisualRefreshHoverKey,
+                "editor-module");
         }
 
         private void HandleSearchShortcuts(ICommandRegistry commandRegistry, CortexShellState state)
@@ -568,6 +605,7 @@ namespace Cortex.Modules.Editor
                     new EditorSurfaceServices
                     {
                         DocumentService = documentService,
+                        NavigationService = navigationService,
                         CommandRegistry = commandRegistry,
                         ContributionRegistry = contributionRegistry,
                         State = state,

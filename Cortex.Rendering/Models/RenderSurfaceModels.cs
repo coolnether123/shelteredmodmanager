@@ -1,3 +1,5 @@
+using Cortex.Core.Models;
+
 namespace Cortex.Rendering.Models
 {
     public struct RenderPoint
@@ -111,19 +113,6 @@ namespace Cortex.Rendering.Models
         public RenderRect MenuRect;
     }
 
-    public sealed class HoverTooltipPartModel
-    {
-        public string Text = string.Empty;
-        public bool IsInteractive;
-        public object Tag;
-    }
-
-    public sealed class HoverTooltipSectionModel
-    {
-        public string Title = string.Empty;
-        public string Text = string.Empty;
-    }
-
     public sealed class HoverTooltipThemePalette
     {
         public RenderColor BackgroundColor;
@@ -137,23 +126,29 @@ namespace Cortex.Rendering.Models
     public sealed class HoverTooltipRenderModel
     {
         public string Key = string.Empty;
+        public string ContextKey = string.Empty;
         public string DocumentPath = string.Empty;
+        public int DocumentVersion;
         public RenderRect AnchorRect = new RenderRect(0f, 0f, 0f, 0f);
         public string QualifiedPath = string.Empty;
         public string SymbolDisplay = string.Empty;
-        public HoverTooltipPartModel[] SignatureParts;
-        public System.Func<HoverTooltipPartModel, string> BuildMetaText;
-        public System.Func<HoverTooltipPartModel, string> BuildDocumentationText;
-        public System.Func<HoverTooltipPartModel, HoverTooltipSectionModel[]> GetSupplementalSections;
-        public object Tag;
+        public string SummaryText = string.Empty;
+        public string DocumentationText = string.Empty;
+        public EditorHoverContentPart[] SignatureParts = new EditorHoverContentPart[0];
+        public EditorHoverSection[] SupplementalSections = new EditorHoverSection[0];
+        public int OverloadIndex = -1;
+        public int OverloadCount;
+        public string OverloadSummary = string.Empty;
+        public EditorHoverNavigationTarget PrimaryNavigationTarget;
     }
 
     public sealed class HoverTooltipRenderResult
     {
         public bool Visible;
         public HoverTooltipRenderModel Model;
-        public HoverTooltipPartModel HoveredPart;
-        public HoverTooltipPartModel ActivatedPart;
+        public EditorHoverContentPart HoveredPart;
+        public EditorHoverContentPart ActivatedPart;
+        public string HiddenReason = string.Empty;
         public RenderRect TooltipRect = new RenderRect(0f, 0f, 0f, 0f);
     }
 }

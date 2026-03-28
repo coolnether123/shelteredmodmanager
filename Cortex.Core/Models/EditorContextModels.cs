@@ -85,6 +85,7 @@ namespace Cortex.Core.Models
         public int DefinitionStart = -1;
         public int DefinitionLength = -1;
         public LanguageServiceHoverResponse HoverResponse;
+        public EditorResolvedHoverContent HoverContent;
 
         public EditorSemanticContext Clone()
         {
@@ -102,7 +103,163 @@ namespace Cortex.Core.Models
                 DefinitionColumn = DefinitionColumn,
                 DefinitionStart = DefinitionStart,
                 DefinitionLength = DefinitionLength,
-                HoverResponse = HoverResponse
+                HoverResponse = HoverResponse,
+                HoverContent = HoverContent != null ? HoverContent.Clone() : null
+            };
+        }
+    }
+
+    public enum EditorHoverNavigationKind
+    {
+        None = 0,
+        Symbol = 1
+    }
+
+    public sealed class EditorHoverNavigationTarget
+    {
+        public EditorHoverNavigationKind Kind;
+        public string Label = string.Empty;
+        public string SymbolDisplay = string.Empty;
+        public string SymbolKind = string.Empty;
+        public string MetadataName = string.Empty;
+        public string ContainingTypeName = string.Empty;
+        public string ContainingAssemblyName = string.Empty;
+        public string DocumentationCommentId = string.Empty;
+        public string DefinitionDocumentPath = string.Empty;
+        public LanguageServiceRange DefinitionRange;
+
+        public EditorHoverNavigationTarget Clone()
+        {
+            return new EditorHoverNavigationTarget
+            {
+                Kind = Kind,
+                Label = Label ?? string.Empty,
+                SymbolDisplay = SymbolDisplay ?? string.Empty,
+                SymbolKind = SymbolKind ?? string.Empty,
+                MetadataName = MetadataName ?? string.Empty,
+                ContainingTypeName = ContainingTypeName ?? string.Empty,
+                ContainingAssemblyName = ContainingAssemblyName ?? string.Empty,
+                DocumentationCommentId = DocumentationCommentId ?? string.Empty,
+                DefinitionDocumentPath = DefinitionDocumentPath ?? string.Empty,
+                DefinitionRange = DefinitionRange
+            };
+        }
+    }
+
+    public sealed class EditorHoverSection
+    {
+        public string Title = string.Empty;
+        public string Text = string.Empty;
+        public EditorHoverContentPart[] DisplayParts = new EditorHoverContentPart[0];
+
+        public EditorHoverSection Clone()
+        {
+            return new EditorHoverSection
+            {
+                Title = Title ?? string.Empty,
+                Text = Text ?? string.Empty,
+                DisplayParts = CloneParts(DisplayParts)
+            };
+        }
+
+        private static EditorHoverContentPart[] CloneParts(EditorHoverContentPart[] parts)
+        {
+            if (parts == null || parts.Length == 0)
+            {
+                return new EditorHoverContentPart[0];
+            }
+
+            var clone = new EditorHoverContentPart[parts.Length];
+            for (var i = 0; i < parts.Length; i++)
+            {
+                clone[i] = parts[i] != null ? parts[i].Clone() : null;
+            }
+
+            return clone;
+        }
+    }
+
+    public sealed class EditorHoverContentPart
+    {
+        public string Text = string.Empty;
+        public string Classification = string.Empty;
+        public bool IsInteractive;
+        public string SummaryText = string.Empty;
+        public string DocumentationText = string.Empty;
+        public EditorHoverSection[] SupplementalSections = new EditorHoverSection[0];
+        public EditorHoverNavigationTarget NavigationTarget;
+
+        public EditorHoverContentPart Clone()
+        {
+            var supplemental = SupplementalSections;
+            var supplementalClone = new EditorHoverSection[supplemental != null ? supplemental.Length : 0];
+            for (var i = 0; supplemental != null && i < supplemental.Length; i++)
+            {
+                supplementalClone[i] = supplemental[i] != null ? supplemental[i].Clone() : null;
+            }
+
+            return new EditorHoverContentPart
+            {
+                Text = Text ?? string.Empty,
+                Classification = Classification ?? string.Empty,
+                IsInteractive = IsInteractive,
+                SummaryText = SummaryText ?? string.Empty,
+                DocumentationText = DocumentationText ?? string.Empty,
+                SupplementalSections = supplementalClone,
+                NavigationTarget = NavigationTarget != null ? NavigationTarget.Clone() : null
+            };
+        }
+    }
+
+    public sealed class EditorResolvedHoverContent
+    {
+        public string Key = string.Empty;
+        public string ContextKey = string.Empty;
+        public string DocumentPath = string.Empty;
+        public int DocumentVersion;
+        public string QualifiedPath = string.Empty;
+        public string SymbolDisplay = string.Empty;
+        public string SummaryText = string.Empty;
+        public string DocumentationText = string.Empty;
+        public EditorHoverContentPart[] SignatureParts = new EditorHoverContentPart[0];
+        public EditorHoverSection[] SupplementalSections = new EditorHoverSection[0];
+        public int OverloadIndex = -1;
+        public int OverloadCount;
+        public string OverloadSummary = string.Empty;
+        public EditorHoverNavigationTarget PrimaryNavigationTarget;
+
+        public EditorResolvedHoverContent Clone()
+        {
+            var signatureParts = SignatureParts;
+            var signatureClone = new EditorHoverContentPart[signatureParts != null ? signatureParts.Length : 0];
+            for (var i = 0; signatureParts != null && i < signatureParts.Length; i++)
+            {
+                signatureClone[i] = signatureParts[i] != null ? signatureParts[i].Clone() : null;
+            }
+
+            var supplementalSections = SupplementalSections;
+            var supplementalClone = new EditorHoverSection[supplementalSections != null ? supplementalSections.Length : 0];
+            for (var i = 0; supplementalSections != null && i < supplementalSections.Length; i++)
+            {
+                supplementalClone[i] = supplementalSections[i] != null ? supplementalSections[i].Clone() : null;
+            }
+
+            return new EditorResolvedHoverContent
+            {
+                Key = Key ?? string.Empty,
+                ContextKey = ContextKey ?? string.Empty,
+                DocumentPath = DocumentPath ?? string.Empty,
+                DocumentVersion = DocumentVersion,
+                QualifiedPath = QualifiedPath ?? string.Empty,
+                SymbolDisplay = SymbolDisplay ?? string.Empty,
+                SummaryText = SummaryText ?? string.Empty,
+                DocumentationText = DocumentationText ?? string.Empty,
+                SignatureParts = signatureClone,
+                SupplementalSections = supplementalClone,
+                OverloadIndex = OverloadIndex,
+                OverloadCount = OverloadCount,
+                OverloadSummary = OverloadSummary ?? string.Empty,
+                PrimaryNavigationTarget = PrimaryNavigationTarget != null ? PrimaryNavigationTarget.Clone() : null
             };
         }
     }

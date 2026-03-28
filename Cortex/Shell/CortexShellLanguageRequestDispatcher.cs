@@ -96,6 +96,25 @@ namespace Cortex
             var session = context.FindOpenDocument(hoverState.RequestedDocumentPath);
             if (session == null)
             {
+                CortexDeveloperLog.WriteHoverPipelineStage(
+                    "RequestDispatched",
+                    false,
+                    string.Empty,
+                    string.Empty,
+                    requestKey,
+                    hoverState.RequestedContextKey ?? string.Empty,
+                    hoverState.RequestedDocumentPath ?? string.Empty,
+                    0,
+                    hoverState.RequestedAbsolutePosition,
+                    hoverState.RequestedTokenText ?? string.Empty,
+                    "open-document-not-found");
+                hoverState.RequestedKey = string.Empty;
+                hoverState.RequestedContextKey = string.Empty;
+                hoverState.RequestedDocumentPath = string.Empty;
+                hoverState.RequestedLine = 0;
+                hoverState.RequestedColumn = 0;
+                hoverState.RequestedAbsolutePosition = -1;
+                hoverState.RequestedTokenText = string.Empty;
                 return;
             }
 
@@ -112,14 +131,34 @@ namespace Cortex
             var requestDocumentPath = request.DocumentPath ?? string.Empty;
             var requestDocumentVersion = request.DocumentVersion;
             runtime.HoverInFlight = true;
-            MMLog.WriteDebug("[Cortex.Roslyn] Queueing hover for " +
-                (hoverState.RequestedTokenText ?? string.Empty) +
-                " @ " + hoverState.RequestedLine + ":" + hoverState.RequestedColumn +
-                " in " + Path.GetFileName(requestDocumentPath) + ".");
+            CortexDeveloperLog.WriteHoverPipelineStage(
+                "RequestDispatched",
+                true,
+                string.Empty,
+                string.Empty,
+                requestKey,
+                hoverState.RequestedContextKey ?? string.Empty,
+                requestDocumentPath,
+                requestDocumentVersion,
+                hoverState.RequestedAbsolutePosition,
+                hoverState.RequestedTokenText ?? string.Empty,
+                "line=" + hoverState.RequestedLine + ",column=" + hoverState.RequestedColumn);
             var requestId = context.LanguageServiceClient != null ? context.LanguageServiceClient.QueueHover(request) : string.Empty;
             if (string.IsNullOrEmpty(requestId))
             {
                 runtime.HoverInFlight = false;
+                CortexDeveloperLog.WriteHoverPipelineStage(
+                    "RequestDispatched",
+                    false,
+                    string.Empty,
+                    string.Empty,
+                    requestKey,
+                    hoverState.RequestedContextKey ?? string.Empty,
+                    requestDocumentPath,
+                    requestDocumentVersion,
+                    hoverState.RequestedAbsolutePosition,
+                    hoverState.RequestedTokenText ?? string.Empty,
+                    context.LanguageServiceClient != null ? context.LanguageServiceClient.LastError : "roslyn-client-unavailable");
                 hoverState.RequestedContextKey = string.Empty;
                 MMLog.WriteWarning("[Cortex.Roslyn] Failed to queue hover for " +
                     (hoverState.RequestedTokenText ?? string.Empty) +
