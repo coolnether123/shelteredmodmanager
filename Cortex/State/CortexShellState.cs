@@ -187,6 +187,7 @@ namespace Cortex
         public bool RelationshipsExpanded;
         public bool HarmonyExpanded = true;
         public bool RelationshipsRequested;
+        public int RelationshipsCycle;
         public string RelationshipsTargetKey = string.Empty;
         public string RelationshipsRequestKey = string.Empty;
         public string RelationshipsStatusMessage = string.Empty;

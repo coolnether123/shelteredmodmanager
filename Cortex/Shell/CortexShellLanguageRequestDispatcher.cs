@@ -562,6 +562,7 @@ namespace Cortex
             var inspector = context != null && context.State != null && context.State.Editor != null
                 ? context.State.Editor.MethodInspector
                 : null;
+            ReconcileMethodInspectorRelationshipsRequest(context, runtime, inspector);
             if (context == null ||
                 runtime == null ||
                 inspector == null ||
@@ -616,12 +617,48 @@ namespace Cortex
             {
                 RequestId = requestId,
                 Generation = runtime.ServiceGeneration,
+                Cycle = inspector.RelationshipsCycle,
                 RequestKey = requestKey,
                 ContextKey = inspector.ContextKey ?? string.Empty,
                 TargetKey = inspector.RelationshipsTargetKey ?? string.Empty,
                 DocumentPath = request.DocumentPath ?? string.Empty,
                 DocumentVersion = request.DocumentVersion
             };
+        }
+
+        private static void ReconcileMethodInspectorRelationshipsRequest(
+            CortexShellLanguageRuntimeContext context,
+            CortexShellLanguageRuntimeState runtime,
+            CortexMethodInspectorState inspector)
+        {
+            var pending = runtime != null ? runtime.PendingMethodInspectorRelationships : null;
+            if (context == null || runtime == null || pending == null)
+            {
+                return;
+            }
+
+            var liveTarget = context.EditorContextService != null && inspector != null
+                ? context.EditorContextService.ResolveTarget(context.State, inspector.ContextKey ?? string.Empty)
+                : null;
+            var stillRelevant = inspector != null &&
+                inspector.IsVisible &&
+                inspector.RelationshipsExpanded &&
+                liveTarget != null &&
+                inspector.RelationshipsCycle == pending.Cycle &&
+                string.Equals(inspector.RelationshipsTargetKey ?? string.Empty, pending.TargetKey ?? string.Empty, StringComparison.Ordinal) &&
+                string.Equals(EditorMethodInspectorService.BuildTargetKey(liveTarget), pending.TargetKey ?? string.Empty, StringComparison.Ordinal);
+            if (stillRelevant)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(pending.RequestId) && context.LanguageServiceClient != null)
+            {
+                context.LanguageServiceClient.TryCancelRequest(pending.RequestId);
+            }
+
+            runtime.MethodInspectorRelationshipsInFlight = false;
+            runtime.PendingMethodInspectorRelationships = null;
         }
     }
 }

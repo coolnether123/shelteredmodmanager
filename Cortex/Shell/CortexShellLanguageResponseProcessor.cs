@@ -690,6 +690,7 @@ namespace Cortex
                 !inspector.IsVisible ||
                 !inspector.RelationshipsExpanded ||
                 liveTarget == null ||
+                inspector.RelationshipsCycle != pending.Cycle ||
                 !string.Equals(inspector.RelationshipsTargetKey ?? string.Empty, pending.TargetKey ?? string.Empty, StringComparison.Ordinal) ||
                 !string.Equals(EditorMethodInspectorService.BuildTargetKey(liveTarget), pending.TargetKey ?? string.Empty, StringComparison.Ordinal))
             {

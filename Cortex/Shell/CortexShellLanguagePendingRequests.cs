@@ -50,6 +50,7 @@ namespace Cortex
     {
         public string RequestId;
         public int Generation;
+        public int Cycle;
         public string RequestKey;
         public string ContextKey;
         public string TargetKey;

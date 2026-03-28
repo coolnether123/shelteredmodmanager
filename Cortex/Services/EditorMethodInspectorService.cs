@@ -59,6 +59,7 @@ namespace Cortex.Services
             inspector.Classification = string.Empty;
             inspector.ContextKey = string.Empty;
             inspector.RelationshipsRequested = false;
+            inspector.RelationshipsCycle++;
             inspector.RelationshipsTargetKey = string.Empty;
             inspector.RelationshipsRequestKey = string.Empty;
             inspector.RelationshipsStatusMessage = string.Empty;
@@ -182,6 +183,7 @@ namespace Cortex.Services
             }
 
             inspector.RelationshipsRequested = false;
+            inspector.RelationshipsCycle++;
             inspector.RelationshipsTargetKey = BuildTargetKey(target);
             inspector.RelationshipsRequestKey = string.Empty;
             inspector.RelationshipsStatusMessage = string.Empty;
