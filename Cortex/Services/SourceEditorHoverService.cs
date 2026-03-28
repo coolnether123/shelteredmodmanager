@@ -856,18 +856,21 @@ namespace Cortex.Services
                 hoverKey,
                 hoverTarget != null && hoverTarget.Target != null ? hoverTarget.Target.SymbolText ?? string.Empty : string.Empty,
                 hoverResponse);
-            MMLog.WriteInfo(
-                "[Cortex.Hover.Debug] Visible hover. SurfaceId='" + (surfaceId ?? string.Empty) +
-                "', SurfaceKind='" + (telemetrySurfaceKind ?? string.Empty) +
-                "', HoverKey='" + hoverKey +
-                "', ContextKey='" + (hoverTarget != null && hoverTarget.Target != null ? hoverTarget.Target.ContextKey ?? string.Empty : string.Empty) +
-                "', Symbol='" + (hoverTarget != null && hoverTarget.Target != null ? hoverTarget.Target.SymbolText ?? string.Empty : string.Empty) +
-                "', QualifiedPath='" + (hoverContent != null ? hoverContent.QualifiedPath ?? string.Empty : string.Empty) +
-                "', SignatureParts=" + CountParts(hoverContent != null ? hoverContent.SignatureParts : null) +
-                ", InteractiveParts=" + CountInteractiveParts(hoverContent) +
-                ", Sections=" + CountSections(hoverContent) +
-                ", Sticky=" + usedStickyHover +
-                ", StickyReason='" + (stickyReason ?? string.Empty) + "'.");
+            if (CortexDeveloperLog.IsHoverDebugEnabled)
+            {
+                MMLog.WriteInfo(
+                    "[Cortex.Hover.Debug] Visible hover. SurfaceId='" + (surfaceId ?? string.Empty) +
+                    "', SurfaceKind='" + (telemetrySurfaceKind ?? string.Empty) +
+                    "', HoverKey='" + hoverKey +
+                    "', ContextKey='" + (hoverTarget != null && hoverTarget.Target != null ? hoverTarget.Target.ContextKey ?? string.Empty : string.Empty) +
+                    "', Symbol='" + (hoverTarget != null && hoverTarget.Target != null ? hoverTarget.Target.SymbolText ?? string.Empty : string.Empty) +
+                    "', QualifiedPath='" + (hoverContent != null ? hoverContent.QualifiedPath ?? string.Empty : string.Empty) +
+                    "', SignatureParts=" + CountParts(hoverContent != null ? hoverContent.SignatureParts : null) +
+                    ", InteractiveParts=" + CountInteractiveParts(hoverContent) +
+                    ", Sections=" + CountSections(hoverContent) +
+                    ", Sticky=" + usedStickyHover +
+                    ", StickyReason='" + (stickyReason ?? string.Empty) + "'.");
+            }
         }
 
         private static void LogHoverRequestQueued(bool success, string surfaceId, EditorHoverTarget hoverTarget, CortexShellState state, string detail)
@@ -1017,12 +1020,15 @@ namespace Cortex.Services
                 return;
             }
 
-            MMLog.WriteInfo(
-                "[Cortex.Hover.Debug] Activated hover navigation. SurfaceId='" + (hoverTarget != null ? hoverTarget.SurfaceId ?? string.Empty : string.Empty) +
-                "', HoverKey='" + (hoverKey ?? string.Empty) +
-                "', PartText='" + (activatedPart.Text ?? string.Empty) +
-                "', Target='" + (navigationTarget.Label ?? string.Empty) +
-                "', DefinitionPath='" + (navigationTarget.DefinitionDocumentPath ?? string.Empty) + "'.");
+            if (CortexDeveloperLog.IsHoverDebugEnabled)
+            {
+                MMLog.WriteInfo(
+                    "[Cortex.Hover.Debug] Activated hover navigation. SurfaceId='" + (hoverTarget != null ? hoverTarget.SurfaceId ?? string.Empty : string.Empty) +
+                    "', HoverKey='" + (hoverKey ?? string.Empty) +
+                    "', PartText='" + (activatedPart.Text ?? string.Empty) +
+                    "', Target='" + (navigationTarget.Label ?? string.Empty) +
+                    "', DefinitionPath='" + (navigationTarget.DefinitionDocumentPath ?? string.Empty) + "'.");
+            }
         }
 
         private static void LogHoverCleared(SurfaceHoverState surfaceState, string surfaceId, string reason)
@@ -1040,11 +1046,14 @@ namespace Cortex.Services
             }
 
             surfaceState.LastClearLogKey = clearKey;
-            MMLog.WriteInfo(
-                "[Cortex.Hover.Debug] Cleared hover. SurfaceId='" + (surfaceId ?? string.Empty) +
-                "', HoverKey='" + (surfaceState.VisibleHoverKey ?? string.Empty) +
-                "', ContextKey='" + (surfaceState.VisibleContextKey ?? string.Empty) +
-                "', Reason='" + (reason ?? string.Empty) + "'.");
+            if (CortexDeveloperLog.IsHoverDebugEnabled)
+            {
+                MMLog.WriteInfo(
+                    "[Cortex.Hover.Debug] Cleared hover. SurfaceId='" + (surfaceId ?? string.Empty) +
+                    "', HoverKey='" + (surfaceState.VisibleHoverKey ?? string.Empty) +
+                    "', ContextKey='" + (surfaceState.VisibleContextKey ?? string.Empty) +
+                    "', Reason='" + (reason ?? string.Empty) + "'.");
+            }
         }
 
         private static string FlattenDisplayParts(LanguageServiceHoverDisplayPart[] parts)

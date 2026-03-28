@@ -62,6 +62,15 @@ namespace Cortex
             return _moduleServices;
         }
 
+        private void ResetModuleRuntime()
+        {
+            _moduleServices = null;
+            _moduleCompositionService = null;
+            _moduleActivationService = null;
+            _moduleRenderService = null;
+            _moduleContributionsRegistered = false;
+        }
+
         private IRenderPipeline GetRenderPipeline()
         {
             if (_renderPipeline == null)

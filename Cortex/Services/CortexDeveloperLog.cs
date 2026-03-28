@@ -6,12 +6,23 @@ namespace Cortex.Services
 {
     internal static class CortexDeveloperLog
     {
+        private const bool HoverDebugEnabled = false;
         private static string _lastSymbolEventKey = string.Empty;
         private static readonly Dictionary<string, string> _lastHoverPipelineStageEventKeys = new Dictionary<string, string>(StringComparer.Ordinal);
         private static readonly Dictionary<string, string> _lastHoverDiagnosticEventKeys = new Dictionary<string, string>(StringComparer.Ordinal);
 
+        public static bool IsHoverDebugEnabled
+        {
+            get { return HoverDebugEnabled; }
+        }
+
         public static void WriteSymbolHoverPayload(string tokenText, LanguageServiceHoverResponse response)
         {
+            if (!HoverDebugEnabled)
+            {
+                return;
+            }
+
             WriteSymbolEvent(
                 "hover-payload",
                 (response != null ? response.DocumentPath : string.Empty) +
@@ -27,6 +38,11 @@ namespace Cortex.Services
 
         public static void WriteSymbolTooltipVisible(string surfaceKind, string hoverKey, string tokenText, LanguageServiceHoverResponse response)
         {
+            if (!HoverDebugEnabled)
+            {
+                return;
+            }
+
             WriteSymbolEvent(
                 "tooltip-visible",
                 (surfaceKind ?? string.Empty) +
@@ -41,6 +57,11 @@ namespace Cortex.Services
 
         public static void WriteSymbolContextTarget(string surfaceKind, string symbolText, LanguageServiceHoverResponse response, int absolutePosition)
         {
+            if (!HoverDebugEnabled)
+            {
+                return;
+            }
+
             WriteSymbolEvent(
                 "context-target",
                 (surfaceKind ?? string.Empty) +
@@ -83,6 +104,11 @@ namespace Cortex.Services
 
         public static void WriteSymbolNavigation(string surfaceKind, LanguageServiceHoverDisplayPart part)
         {
+            if (!HoverDebugEnabled)
+            {
+                return;
+            }
+
             if (part == null)
             {
                 return;
@@ -114,6 +140,11 @@ namespace Cortex.Services
             string tokenText,
             string detail)
         {
+            if (!HoverDebugEnabled)
+            {
+                return;
+            }
+
             var normalizedHoverKey = hoverKey ?? string.Empty;
             var stageKey = (stage ?? string.Empty) + "|" +
                 (surfaceId ?? string.Empty) + "|" +
@@ -144,6 +175,11 @@ namespace Cortex.Services
             string hoverKey,
             string detail)
         {
+            if (!HoverDebugEnabled)
+            {
+                return;
+            }
+
             var eventKey = (category ?? string.Empty) + "|" +
                 (hoverKey ?? string.Empty) + "|" +
                 (detail ?? string.Empty);

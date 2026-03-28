@@ -476,10 +476,10 @@ namespace Cortex.Renderers.Imgui
         private static Rect BuildTooltipRectFromAnchor(Rect anchorRect, Vector2 viewportSize, float tooltipWidth, float height)
         {
             var x = anchorRect.xMin - 4f;
-            var y = anchorRect.yMax - 10f;
+            var y = anchorRect.yMax + 4f;
             if (y + height > viewportSize.y - 12f)
             {
-                y = anchorRect.yMin - height + 10f;
+                y = anchorRect.yMin - height - 4f;
             }
 
             return new Rect(x, y, tooltipWidth, height);

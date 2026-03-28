@@ -57,6 +57,7 @@ namespace Cortex.Modules.Editor
         private Texture2D _hoverFill;
         private Texture2D _hoverOutlineFill;
         private Texture2D _relatedSelectionFill;
+        private Texture2D _declarationSelectionFill;
         private Texture2D _selectedFill;
         private Texture2D _selectionOutlineFill;
         private Texture2D _lineHighlightFill;
@@ -451,6 +452,7 @@ namespace Cortex.Modules.Editor
             _hoverFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.18f));
             _hoverOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.78f));
             _relatedSelectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.14f));
+            _declarationSelectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), new Color(0.60f, 0.82f, 0.42f, 1f), 0.72f), 0.26f));
             _selectedFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f));
             _selectionOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.95f));
             _lineHighlightFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), 0.35f));
@@ -694,10 +696,16 @@ namespace Cortex.Modules.Editor
                     token.ContentRect = tokenRect;
                     var effectiveClassification = GetEffectiveTokenClassification(line, tokenIndex);
                     var isSelectedToken = IsSelectedToken(state, session, token);
-                    var isRelatedSelection = !isSelectedToken && IsRelatedSelectionToken(state, session, token);
+                    var isDeclarationToken = !isSelectedToken && IsDeclarationToken(state, session, token);
+                    var isRelatedSelection = !isSelectedToken && !isDeclarationToken && IsRelatedSelectionToken(state, session, token);
                     if (isRelatedSelection)
                     {
                         GUI.DrawTexture(tokenRect, _relatedSelectionFill);
+                    }
+
+                    if (isDeclarationToken)
+                    {
+                        GUI.DrawTexture(tokenRect, _declarationSelectionFill);
                     }
 
                     if (isSelectedToken)
@@ -1487,6 +1495,33 @@ namespace Cortex.Modules.Editor
             }
 
             return string.Equals(token.RawText ?? string.Empty, selectedText, StringComparison.Ordinal);
+        }
+
+        private bool IsDeclarationToken(CortexShellState state, DocumentSession session, CodeViewToken token)
+        {
+            var context = GetSelectionContext(session, state);
+            if (context == null || context.Semantic == null || token == null || session == null)
+            {
+                return false;
+            }
+
+            var semantic = context.Semantic;
+            if (semantic.DefinitionStart < 0 || semantic.DefinitionLength <= 0)
+            {
+                return false;
+            }
+
+            if (!string.Equals(
+                semantic.DefinitionDocumentPath ?? context.DocumentPath ?? string.Empty,
+                session.FilePath ?? string.Empty,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return semantic.DefinitionStart == token.Start &&
+                semantic.DefinitionLength == token.Length &&
+                string.Equals(context.FocusTokenText ?? string.Empty, token.RawText ?? string.Empty, StringComparison.Ordinal);
         }
 
         private bool IsSelectedToken(CortexShellState state, DocumentSession session, CodeViewToken token)
