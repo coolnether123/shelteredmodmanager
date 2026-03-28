@@ -664,6 +664,7 @@ namespace Cortex
             _sourcePathResolver = _services.SourcePathResolver;
             _sourceReferenceService = _services.SourceReferenceService;
             _runtimeLogFeed = _services.RuntimeLogFeed;
+            _pathInteractionService = _services.PathInteractionService;
             _runtimeToolBridge = _services.RuntimeToolBridge;
             _restartCoordinator = _services.RestartCoordinator;
             _overlayInputCaptureService = _services.OverlayInputCaptureService;
@@ -679,6 +680,7 @@ namespace Cortex
             _harmonyPatchInsertionService = _services.HarmonyPatchInsertionService;
             _harmonyPatchGenerationService = _services.HarmonyPatchGenerationService;
             _generatedTemplateNavigationService = _services.GeneratedTemplateNavigationService;
+            ResetModuleRuntime();
         }
 
         private CortexSettings BuildEffectiveSettings(CortexSettings settings, ICortexHostEnvironment hostEnvironment)
@@ -694,7 +696,7 @@ namespace Cortex
                 _projectCatalog,
                 _projectWorkspaceService,
                 _workbenchRuntime,
-                _pathInteractionService,
+                _services != null && _services.PathInteractionService != null ? _services.PathInteractionService : _pathInteractionService,
                 ActivateContainer,
                 PersistWorkbenchSession,
                 PersistWindowSettings);

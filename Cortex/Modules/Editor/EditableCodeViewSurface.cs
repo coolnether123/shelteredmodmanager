@@ -65,6 +65,7 @@ namespace Cortex.Modules.Editor
         private Texture2D _currentLineFill;
         private Texture2D _currentLineEdgeFill;
         private Texture2D _relatedSelectionFill;
+        private Texture2D _declarationOccurrenceFill;
         private Texture2D _selectedOccurrenceFill;
         private Texture2D _selectionOutlineFill;
         private Texture2D _surfaceFill;
@@ -505,6 +506,7 @@ namespace Cortex.Modules.Editor
             _currentLineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), 0.16f));
             _currentLineEdgeFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f));
             _relatedSelectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.14f));
+            _declarationOccurrenceFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), new Color(0.60f, 0.82f, 0.42f, 1f), 0.72f), 0.26f));
             _selectedOccurrenceFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f));
             _selectionOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.92f));
             _completionPopupFill = MakeFill(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.55f));
@@ -960,10 +962,16 @@ namespace Cortex.Modules.Editor
                 var width = Measure(segment.DisplayText);
                 var segmentRect = new Rect(x, line.Y, width + 2f, _lineHeight);
                 var isSelectedOccurrence = IsSelectedOccurrence(state, session, line, segment);
-                var isRelatedOccurrence = !isSelectedOccurrence && IsRelatedOccurrence(state, session, line, segment);
+                var isDeclarationOccurrence = !isSelectedOccurrence && IsDeclarationOccurrence(state, session, line, segment);
+                var isRelatedOccurrence = !isSelectedOccurrence && !isDeclarationOccurrence && IsRelatedOccurrence(state, session, line, segment);
                 if (isRelatedOccurrence)
                 {
                     GUI.DrawTexture(segmentRect, _relatedSelectionFill);
+                }
+
+                if (isDeclarationOccurrence)
+                {
+                    GUI.DrawTexture(segmentRect, _declarationOccurrenceFill);
                 }
 
                 if (isSelectedOccurrence)
@@ -1060,6 +1068,40 @@ namespace Cortex.Modules.Editor
             }
 
             return string.Equals(rawText, selectedText, StringComparison.Ordinal);
+        }
+
+        private bool IsDeclarationOccurrence(CortexShellState state, DocumentSession session, EditableLineLayout line, EditableSegment segment)
+        {
+            var context = GetSelectionContext(session, state);
+            if (context == null || context.Semantic == null || session == null || line == null || segment == null)
+            {
+                return false;
+            }
+
+            var rawText = GetSegmentRawText(line, segment);
+            if (string.IsNullOrEmpty(rawText))
+            {
+                return false;
+            }
+
+            var semantic = context.Semantic;
+            if (semantic.DefinitionStart < 0 || semantic.DefinitionLength <= 0)
+            {
+                return false;
+            }
+
+            if (!string.Equals(
+                semantic.DefinitionDocumentPath ?? context.DocumentPath ?? string.Empty,
+                session.FilePath ?? string.Empty,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var segmentStart = line.StartIndex + segment.StartInLine;
+            return semantic.DefinitionStart == segmentStart &&
+                semantic.DefinitionLength == segment.Length &&
+                string.Equals(context.FocusTokenText ?? string.Empty, rawText, StringComparison.Ordinal);
         }
 
         private EditorContextSnapshot GetSelectionContext(DocumentSession session, CortexShellState state)
