@@ -1,10 +1,16 @@
 using Cortex.Core.Models;
+using Cortex.Core.Services;
 using Cortex.Plugins.Abstractions;
+using Cortex.Shell;
 
 namespace Cortex.Host.Unity.Composition
 {
     internal sealed class DefaultWorkbenchSettingContributions
     {
+        private const string LanguageProviderSettingId = "LanguageProviderId";
+        private const string RoslynWorkerPathSettingId = "language.roslyn.workerPathOverride";
+        private const string RoslynTimeoutSettingId = "language.roslyn.requestTimeoutMs";
+
         public void Register(WorkbenchPluginContext context)
         {
             if (context == null)
@@ -15,7 +21,7 @@ namespace Cortex.Host.Unity.Composition
             context.RegisterSettingSection("Workspace", "workspace", "Workspace", "workspace.general", "General", "Workspace roots, project discovery, and source resolution.", new[] { "workspace", "paths", "roots", "mods" }, 0);
             context.RegisterSettingSection("Logs", "tooling", "Tooling", "logs.general", "Logs", "Live log feed retention, scrolling, and tail settings.", new[] { "logs", "tail", "history" }, 10);
             context.RegisterSettingSection("Decompiler", "tooling", "Tooling", "decompiler.general", "Decompiler", "Decompiler executable and cache settings.", new[] { "decompiler", "cache" }, 20);
-            context.RegisterSettingSection("Language Service", "tooling", "Tooling", "language.general", "Language Service", "Roslyn worker behavior and timeouts.", new[] { "language", "roslyn", "worker" }, 30);
+            context.RegisterSettingSection("Language Service", "tooling", "Tooling", "language.general", "Language Service", "Language provider selection and provider-scoped Roslyn worker overrides.", new[] { "language", "provider", "roslyn", "worker" }, 30);
             context.RegisterSettingSection("AI", "ai", "AI", "ai.general", "General", "Provider selection and shared completion augmentation settings.", new[] { "ai", "completion", "provider" }, 40);
             context.RegisterSettingSection("AI - Tabby", "ai", "AI", "ai.tabby", "Tabby", "Tabby provider settings.", new[] { "ai", "tabby" }, 50);
             context.RegisterSettingSection("AI - Ollama", "ai", "AI", "ai.ollama", "Ollama", "Ollama provider settings.", new[] { "ai", "ollama" }, 60);
@@ -40,9 +46,62 @@ namespace Cortex.Host.Unity.Composition
 
             context.RegisterSetting(nameof(CortexSettings.DecompilerPathOverride), "Decompiler Override", "Optional path to a custom decompiler executable.", "Decompiler", string.Empty, SettingValueKind.String, 0);
             context.RegisterSetting(nameof(CortexSettings.DecompilerCachePath), "Decompiler Cache", "Location used to cache generated source from runtime and reference browsing.", "Decompiler", string.Empty, SettingValueKind.String, 10);
-            context.RegisterSetting(nameof(CortexSettings.EnableRoslynLanguageService), "Enable Roslyn Worker", "Start the external Roslyn language service for diagnostics, hover info, and semantic classification.", "Language Service", "true", SettingValueKind.Boolean, 0);
-            context.RegisterSetting(nameof(CortexSettings.RoslynServicePathOverride), "Roslyn Worker Path", "Optional override for the external Cortex.Roslyn.Worker executable or DLL.", "Language Service", string.Empty, SettingValueKind.String, 10);
-            context.RegisterSetting(nameof(CortexSettings.RoslynServiceTimeoutMs), "Roslyn Timeout (ms)", "Maximum request time for the external Roslyn language service.", "Language Service", "15000", SettingValueKind.Integer, 20);
+            context.RegisterSetting(
+                LanguageProviderSettingId,
+                "Language Provider",
+                "Select which language runtime to use. Leave on host default to follow the active host policy.",
+                "Language Service",
+                string.Empty,
+                SettingValueKind.String,
+                0,
+                SettingEditorKind.Choice,
+                string.Empty,
+                string.Empty,
+                new[] { "language", "provider", "roslyn", "runtime" },
+                new[]
+                {
+                    new SettingChoiceOption { Value = string.Empty, DisplayName = "Host Default", Description = "Use the preferred language provider declared by the current host." },
+                    new SettingChoiceOption { Value = LanguageRuntimeConstants.NoneProviderId, DisplayName = "Disabled", Description = "Disable the language runtime explicitly." },
+                    new SettingChoiceOption { Value = RoslynLanguageProviderFactory.ProviderId, DisplayName = "Roslyn", Description = "Use the built-in Roslyn provider when available." }
+                },
+                false,
+                false,
+                ReadLanguageProviderId,
+                WriteLanguageProviderId);
+            context.RegisterSetting(
+                RoslynWorkerPathSettingId,
+                "Roslyn Worker Path",
+                "Optional override for the external Cortex.Roslyn.Worker executable or DLL.",
+                "Language Service",
+                string.Empty,
+                SettingValueKind.String,
+                10,
+                SettingEditorKind.Text,
+                string.Empty,
+                string.Empty,
+                new[] { "roslyn", "worker", "path", "language" },
+                new SettingChoiceOption[0],
+                false,
+                false,
+                ReadRoslynWorkerPathOverride,
+                WriteRoslynWorkerPathOverride);
+            context.RegisterSetting(
+                RoslynTimeoutSettingId,
+                "Roslyn Timeout (ms)",
+                "Maximum request time for the external Roslyn language service.",
+                "Language Service",
+                "15000",
+                SettingValueKind.Integer,
+                20,
+                SettingEditorKind.Text,
+                string.Empty,
+                string.Empty,
+                new[] { "roslyn", "timeout", "language", "worker" },
+                new SettingChoiceOption[0],
+                false,
+                false,
+                ReadRoslynRequestTimeout,
+                WriteRoslynRequestTimeout);
             context.RegisterSetting(nameof(CortexSettings.EnableCompletionAugmentation), "Enable AI Completion", "Enable the modular completion augmentation pipeline. Cortex remains in control of which document text and related snippets are supplied to providers.", "AI", "false", SettingValueKind.Boolean, 0);
             context.RegisterSetting(nameof(CortexSettings.CompletionAugmentationProviderId), "Active Provider", "Provider id used by the augmentation pipeline. Built-in ids are tabby, ollama, and openrouter.", "AI", CompletionAugmentationProviderIds.Tabby, SettingValueKind.String, 10, SettingEditorKind.Choice, string.Empty, string.Empty, new[] { "provider", "active provider", "tabby", "ollama", "openrouter" }, new[]
             {
@@ -93,6 +152,77 @@ namespace Cortex.Host.Unity.Composition
             context.RegisterSetting(nameof(CortexSettings.WindowY), "Window Y", "Saved shell position on the Y axis.", "Window", "70", SettingValueKind.Float, 10);
             context.RegisterSetting(nameof(CortexSettings.WindowWidth), "Window Width", "Saved shell width.", "Window", "1180", SettingValueKind.Float, 20);
             context.RegisterSetting(nameof(CortexSettings.WindowHeight), "Window Height", "Saved shell height.", "Window", "760", SettingValueKind.Float, 30);
+        }
+
+        private static string ReadRoslynWorkerPathOverride(CortexSettings settings)
+        {
+            return LanguageProviderConfigurationHelper.GetSettingValue(
+                settings,
+                RoslynLanguageProviderFactory.ProviderId,
+                RoslynLanguageProviderFactory.WorkerPathOverrideSettingId);
+        }
+
+        private static void WriteRoslynWorkerPathOverride(CortexSettings settings, string serializedValue)
+        {
+            if (settings == null)
+            {
+                return;
+            }
+
+            var value = serializedValue ?? string.Empty;
+            LanguageProviderConfigurationHelper.SetSettingValue(
+                settings,
+                RoslynLanguageProviderFactory.ProviderId,
+                RoslynLanguageProviderFactory.WorkerPathOverrideSettingId,
+                value);
+        }
+
+        private static string ReadRoslynRequestTimeout(CortexSettings settings)
+        {
+            var providerValue = LanguageProviderConfigurationHelper.GetSettingValue(
+                settings,
+                RoslynLanguageProviderFactory.ProviderId,
+                RoslynLanguageProviderFactory.RequestTimeoutMsSettingId);
+            return !string.IsNullOrEmpty(providerValue) ? providerValue : "15000";
+        }
+
+        private static void WriteRoslynRequestTimeout(CortexSettings settings, string serializedValue)
+        {
+            if (settings == null)
+            {
+                return;
+            }
+
+            var timeout = ParsePositiveInt(serializedValue, 15000);
+            var normalizedValue = timeout.ToString();
+            LanguageProviderConfigurationHelper.SetSettingValue(
+                settings,
+                RoslynLanguageProviderFactory.ProviderId,
+                RoslynLanguageProviderFactory.RequestTimeoutMsSettingId,
+                normalizedValue);
+        }
+
+        private static string ReadLanguageProviderId(CortexSettings settings)
+        {
+            return settings != null ? settings.LanguageProviderId ?? string.Empty : string.Empty;
+        }
+
+        private static void WriteLanguageProviderId(CortexSettings settings, string serializedValue)
+        {
+            if (settings == null)
+            {
+                return;
+            }
+
+            settings.LanguageProviderId = serializedValue ?? string.Empty;
+        }
+
+        private static int ParsePositiveInt(string serializedValue, int fallback)
+        {
+            int parsedValue;
+            return int.TryParse(serializedValue ?? string.Empty, out parsedValue) && parsedValue > 0
+                ? parsedValue
+                : fallback;
         }
     }
 }

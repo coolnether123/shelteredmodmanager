@@ -126,18 +126,14 @@ namespace Cortex
             runtime.ServiceInitializing = false;
             runtime.InitializeRequestId = string.Empty;
             runtime.StatusRequestId = string.Empty;
-            runtime.CurrentStatus = new LanguageServiceStatusResponse
+            runtime.LastStatusSucceeded = false;
+            runtime.RuntimeStatusMessage = message != null ? message.Message ?? "Language provider faulted." : "Language provider faulted.";
+            runtime.CachedProjectCount = 0;
+            runtime.CapabilityIds = new string[0];
+            context.State.StatusMessage = runtime.RuntimeStatusMessage;
+            if (!string.IsNullOrEmpty(runtime.RuntimeStatusMessage))
             {
-                Success = false,
-                StatusMessage = message != null ? message.Message ?? "Language provider faulted." : "Language provider faulted.",
-                IsRunning = false,
-                Capabilities = new string[0],
-                LoadedProjectPaths = new string[0]
-            };
-            context.State.StatusMessage = runtime.CurrentStatus.StatusMessage;
-            if (!string.IsNullOrEmpty(runtime.CurrentStatus.StatusMessage))
-            {
-                context.State.Diagnostics.Add("Language provider fault: " + runtime.CurrentStatus.StatusMessage);
+                context.State.Diagnostics.Add("Language provider fault: " + runtime.RuntimeStatusMessage);
             }
         }
 
@@ -151,15 +147,11 @@ namespace Cortex
             if (envelope == null || !envelope.Success)
             {
                 runtime.ServiceReady = false;
-                runtime.CurrentStatus = new LanguageServiceStatusResponse
-                {
-                    Success = false,
-                    StatusMessage = envelope != null ? envelope.ErrorMessage ?? "startup failed" : "startup failed",
-                    IsRunning = false,
-                    Capabilities = new string[0],
-                    LoadedProjectPaths = new string[0]
-                };
-                context.State.Diagnostics.Add("Roslyn worker failed to initialize: " + runtime.CurrentStatus.StatusMessage);
+                runtime.LastStatusSucceeded = false;
+                runtime.RuntimeStatusMessage = envelope != null ? envelope.ErrorMessage ?? "startup failed" : "startup failed";
+                runtime.CachedProjectCount = 0;
+                runtime.CapabilityIds = new string[0];
+                context.State.Diagnostics.Add("Language provider failed to initialize: " + runtime.RuntimeStatusMessage);
                 return;
             }
 
@@ -167,12 +159,22 @@ namespace Cortex
             runtime.ServiceReady = response != null && response.Success;
             if (!runtime.ServiceReady)
             {
-                var message = response != null ? response.StatusMessage : "Roslyn worker failed to initialize.";
-                context.State.Diagnostics.Add("Roslyn worker failed to initialize: " + message);
+                var message = response != null ? response.StatusMessage : "Language provider failed to initialize.";
+                runtime.LastStatusSucceeded = false;
+                runtime.RuntimeStatusMessage = message ?? string.Empty;
+                runtime.CachedProjectCount = 0;
+                runtime.CapabilityIds = new string[0];
+                context.State.Diagnostics.Add("Language provider failed to initialize: " + message);
                 return;
             }
 
-            context.State.Diagnostics.Add("Roslyn worker ready: " +
+            runtime.ProviderDisplayName = response.WorkerName ?? runtime.ProviderDisplayName ?? string.Empty;
+            runtime.ProviderVersion = response.WorkerVersion ?? runtime.ProviderVersion ?? string.Empty;
+            runtime.LastStatusSucceeded = true;
+            runtime.RuntimeStatusMessage = response.StatusMessage ?? runtime.RuntimeStatusMessage ?? string.Empty;
+            runtime.CapabilityIds = response.Capabilities != null ? (string[])response.Capabilities.Clone() : new string[0];
+
+            context.State.Diagnostics.Add("Language provider ready: " +
                 (response.WorkerVersion ?? string.Empty) +
                 " on " +
                 (response.RuntimeVersion ?? string.Empty) +
@@ -195,10 +197,15 @@ namespace Cortex
                 return;
             }
 
-            runtime.CurrentStatus = response;
+            runtime.ProviderDisplayName = response.WorkerName ?? string.Empty;
+            runtime.ProviderVersion = response.WorkerVersion ?? string.Empty;
+            runtime.LastStatusSucceeded = response.Success;
+            runtime.RuntimeStatusMessage = response.StatusMessage ?? string.Empty;
+            runtime.CachedProjectCount = response.CachedProjectCount;
+            runtime.CapabilityIds = response.Capabilities != null ? (string[])response.Capabilities.Clone() : new string[0];
             MMLog.WriteInfo("[Cortex.Roslyn] Worker ready. CachedProjects=" +
-                (runtime.CurrentStatus != null ? runtime.CurrentStatus.CachedProjectCount.ToString() : "0") +
-                ", Capabilities=" + BuildCapabilitySummary(runtime.CurrentStatus));
+                runtime.CachedProjectCount +
+                ", Capabilities=" + BuildCapabilitySummary(runtime.CapabilityIds));
         }
 
         private static void HandleLanguageAnalysisResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope, DocumentLanguageAnalysisRequestState pending)
@@ -444,9 +451,12 @@ namespace Cortex
                     return;
                 }
 
-                context.State.StatusMessage = !string.IsNullOrEmpty(response.StatusMessage)
-                    ? response.StatusMessage
-                    : "Definition was not found.";
+                if (string.IsNullOrEmpty(context.State.StatusMessage))
+                {
+                    context.State.StatusMessage = !string.IsNullOrEmpty(response.DocumentPath)
+                        ? "Could not open definition source file."
+                        : "Could not open decompiled definition.";
+                }
             }
             catch (Exception ex)
             {
@@ -767,14 +777,14 @@ namespace Cortex
             return response != null && response.Classifications != null ? response.Classifications.Length : 0;
         }
 
-        private static string BuildCapabilitySummary(LanguageServiceStatusResponse response)
+        private static string BuildCapabilitySummary(string[] capabilities)
         {
-            if (response == null || response.Capabilities == null || response.Capabilities.Length == 0)
+            if (capabilities == null || capabilities.Length == 0)
             {
                 return "(none)";
             }
 
-            return string.Join(",", response.Capabilities);
+            return string.Join(",", capabilities);
         }
 
         private static string BuildClassificationSummary(LanguageServiceAnalysisResponse response)

@@ -171,6 +171,8 @@ namespace Cortex.Core.Models
         public SettingChoiceOption[] Options;
         public bool IsSecret;
         public bool IsRequired;
+        public Func<CortexSettings, string> ReadSettingsValue;
+        public Action<CortexSettings, string> WriteSettingsValue;
         public Func<string> ReadValue;
         public Action<string> WriteValue;
         public Func<string> ReadDefaultValue;

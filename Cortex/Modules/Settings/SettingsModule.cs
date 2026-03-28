@@ -2289,6 +2289,11 @@ namespace Cortex.Modules.Settings
                 return string.Empty;
             }
 
+            if (contribution.ReadSettingsValue != null)
+            {
+                return NormalizeSerializedValue(contribution, contribution.ReadSettingsValue(settings));
+            }
+
             if (contribution.ReadValue != null)
             {
                 return NormalizeSerializedValue(contribution, contribution.ReadValue());
@@ -2333,6 +2338,12 @@ namespace Cortex.Modules.Settings
             }
 
             serializedValue = NormalizeSerializedValue(contribution, serializedValue);
+            if (contribution.WriteSettingsValue != null)
+            {
+                contribution.WriteSettingsValue(settings, serializedValue);
+                return;
+            }
+
             if (contribution.WriteValue != null)
             {
                 contribution.WriteValue(serializedValue);

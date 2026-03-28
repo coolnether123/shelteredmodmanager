@@ -85,6 +85,7 @@
     <Compile Include="Services\DecompilerCliClient.cs" />
     <Compile Include="Services\EditorService.cs" />
     <Compile Include="Services\FileDocumentService.cs" />
+    <Compile Include="Services\LanguageProviderConfigurationHelper.cs" />
     <Compile Include="Services\JsonCortexSettingsStore.cs" />
     <Compile Include="Services\JsonProjectConfigurationStore.cs" />
     <Compile Include="Services\JsonWorkbenchPersistenceService.cs" />

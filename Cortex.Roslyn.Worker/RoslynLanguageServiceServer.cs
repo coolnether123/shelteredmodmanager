@@ -17,10 +17,10 @@ namespace Cortex.Roslyn.Worker
         private string[] _projectFilePaths = new string[0];
         private string[] _solutionFilePaths = new string[0];
         private string[] _referenceAssemblyPaths = new string[0];
-        private readonly Dictionary<string, PortableExecutableReference> _metadataReferenceCache = new Dictionary<string, PortableExecutableReference>(StringComparer.OrdinalIgnoreCase);
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, PortableExecutableReference> _metadataReferenceCache = new System.Collections.Concurrent.ConcurrentDictionary<string, PortableExecutableReference>(StringComparer.OrdinalIgnoreCase);
         private readonly object _requestSync = new object();
         private readonly Dictionary<string, CancellationTokenSource> _activeRequests = new Dictionary<string, CancellationTokenSource>(StringComparer.OrdinalIgnoreCase);
-        private readonly SemaphoreSlim _operationGate = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim _projectLoadGate = new SemaphoreSlim(1, 1);
 
         public RoslynLanguageServiceServer()
         {
@@ -54,15 +54,6 @@ namespace Cortex.Roslyn.Worker
             RegisterActiveRequest(requestId, cancellationSource);
             try
             {
-                try
-                {
-                    await _operationGate.WaitAsync(cancellationSource.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    return BuildErrorEnvelope(request, "Operation cancelled.");
-                }
-
                 _ambientCancellationToken.Value = cancellationSource.Token;
                 try
                 {
@@ -75,7 +66,6 @@ namespace Cortex.Roslyn.Worker
                 finally
                 {
                     _ambientCancellationToken.Value = default(CancellationToken);
-                    _operationGate.Release();
                 }
             }
             finally
@@ -279,6 +269,7 @@ namespace Cortex.Roslyn.Worker
             _solutionFilePaths = payload.SolutionFilePaths ?? new string[0];
             _referenceAssemblyPaths = payload.ReferenceAssemblyPaths ?? new string[0];
             _documentContextCache.Clear();
+            _documentProjectPathCache.Clear();
             await WarmProjectCacheAsync(_projectFilePaths);
             Console.Error.WriteLine("Initialized Roslyn worker. WorkspaceRoot=" + _workspaceRootPath +
                 ", Projects=" + _projectFilePaths.Length +

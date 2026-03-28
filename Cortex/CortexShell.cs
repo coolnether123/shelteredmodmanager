@@ -596,13 +596,7 @@ namespace Cortex
                 return;
             }
 
-            var resolvedProviderId = _bootstrapper.ResolveLanguageProviderId(settings);
-            var configuration = new LanguageRuntimeConfiguration
-            {
-                ProviderId = resolvedProviderId,
-                HostBinPath = hostEnvironment != null ? hostEnvironment.HostBinPath : string.Empty,
-                Settings = settings
-            };
+            var configuration = _bootstrapper.BuildLanguageRuntimeConfiguration(hostEnvironment, settings);
 
             if (reload)
             {

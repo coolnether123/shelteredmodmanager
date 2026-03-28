@@ -4,12 +4,16 @@ using System.IO;
 using System.Text;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Core.Services;
 
 namespace Cortex.Shell
 {
     public sealed class RoslynLanguageProviderFactory : ILanguageProviderFactory
     {
         public const string ProviderId = "roslyn";
+        public const string WorkerPathOverrideSettingId = "workerPathOverride";
+        public const string RequestTimeoutMsSettingId = "requestTimeoutMs";
+        private const int DefaultRequestTimeoutMs = 15000;
 
         private readonly LanguageProviderDescriptor _descriptor = new LanguageProviderDescriptor
         {
@@ -26,15 +30,15 @@ namespace Cortex.Shell
 
         public string BuildConfigurationFingerprint(LanguageRuntimeConfiguration configuration)
         {
-            var settings = configuration != null ? configuration.Settings : null;
+            var providerSettings = ResolveProviderSettings(configuration);
             var builder = new StringBuilder();
             builder.Append(configuration != null ? configuration.ProviderId ?? string.Empty : string.Empty);
             builder.Append("|host=");
             builder.Append(configuration != null ? configuration.HostBinPath ?? string.Empty : string.Empty);
             builder.Append("|path=");
-            builder.Append(settings != null ? settings.RoslynServicePathOverride ?? string.Empty : string.Empty);
+            builder.Append(providerSettings.WorkerPathOverride ?? string.Empty);
             builder.Append("|timeout=");
-            builder.Append(settings != null ? settings.RoslynServiceTimeoutMs : 0);
+            builder.Append(providerSettings.RequestTimeoutMs);
             return builder.ToString();
         }
 
@@ -52,9 +56,7 @@ namespace Cortex.Shell
                 CloneDescriptor(_descriptor),
                 BuildConfigurationFingerprint(configuration),
                 workerPath,
-                configuration != null && configuration.Settings != null
-                    ? configuration.Settings.RoslynServiceTimeoutMs
-                    : 15000,
+                ResolveProviderSettings(configuration).RequestTimeoutMs,
                 0);
             unavailableReason = string.Empty;
             return true;
@@ -72,19 +74,17 @@ namespace Cortex.Shell
                 CloneDescriptor(_descriptor),
                 BuildConfigurationFingerprint(configuration),
                 workerPath,
-                configuration != null && configuration.Settings != null
-                    ? configuration.Settings.RoslynServiceTimeoutMs
-                    : 15000,
+                ResolveProviderSettings(configuration).RequestTimeoutMs,
                 generation);
         }
 
         private static string ResolveWorkerPath(LanguageRuntimeConfiguration configuration)
         {
-            var settings = configuration != null ? configuration.Settings : null;
+            var providerSettings = ResolveProviderSettings(configuration);
             var candidates = new List<string>();
-            if (settings != null && !string.IsNullOrEmpty(settings.RoslynServicePathOverride))
+            if (!string.IsNullOrEmpty(providerSettings.WorkerPathOverride))
             {
-                candidates.Add(settings.RoslynServicePathOverride);
+                candidates.Add(providerSettings.WorkerPathOverride);
             }
 
             var hostBinPath = configuration != null ? configuration.HostBinPath ?? string.Empty : string.Empty;
@@ -112,6 +112,38 @@ namespace Cortex.Shell
             return string.Empty;
         }
 
+        private static RoslynProviderSettings ResolveProviderSettings(LanguageRuntimeConfiguration configuration)
+        {
+            var resolved = new RoslynProviderSettings
+            {
+                WorkerPathOverride = string.Empty,
+                RequestTimeoutMs = DefaultRequestTimeoutMs
+            };
+
+            var providerConfiguration = configuration != null ? configuration.ProviderConfiguration : null;
+            if (providerConfiguration == null ||
+                !string.Equals(providerConfiguration.ProviderId ?? string.Empty, ProviderId, StringComparison.OrdinalIgnoreCase) ||
+                providerConfiguration.Settings == null)
+            {
+                return resolved;
+            }
+
+            var workerPathOverride = LanguageProviderConfigurationHelper.GetSettingValue(providerConfiguration, WorkerPathOverrideSettingId);
+            if (!string.IsNullOrEmpty(workerPathOverride))
+            {
+                resolved.WorkerPathOverride = workerPathOverride;
+            }
+
+            var requestTimeoutValue = LanguageProviderConfigurationHelper.GetSettingValue(providerConfiguration, RequestTimeoutMsSettingId);
+            int timeoutMs;
+            if (int.TryParse(requestTimeoutValue ?? string.Empty, out timeoutMs) && timeoutMs > 0)
+            {
+                resolved.RequestTimeoutMs = timeoutMs;
+            }
+
+            return resolved;
+        }
+
         private static string ResolveAssemblyVersion()
         {
             try
@@ -134,6 +166,12 @@ namespace Cortex.Shell
                 Version = descriptor != null ? descriptor.Version ?? string.Empty : string.Empty,
                 Source = descriptor != null ? descriptor.Source ?? string.Empty : string.Empty
             };
+        }
+
+        private sealed class RoslynProviderSettings
+        {
+            public string WorkerPathOverride = string.Empty;
+            public int RequestTimeoutMs = DefaultRequestTimeoutMs;
         }
     }
 }

@@ -25,8 +25,7 @@ namespace Cortex.Core.Services
             try
             {
                 var json = File.ReadAllText(_path);
-                var settings = ManualJson.Deserialize<CortexSettings>(json);
-                return settings ?? new CortexSettings();
+                return ManualJson.Deserialize<CortexSettings>(json) ?? new CortexSettings();
             }
             catch
             {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Text;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 
@@ -63,7 +64,7 @@ namespace Cortex.Core.Services
             }
 
             var desiredText = session.Text ?? string.Empty;
-            var currentDiskText = File.Exists(session.FilePath) ? File.ReadAllText(session.FilePath) : string.Empty;
+            var currentDiskText = File.Exists(session.FilePath) ? ReadAllTextSafe(session.FilePath) : string.Empty;
             var snapshotText = session.OriginalTextSnapshot ?? currentDiskText;
             string updatedDiskText;
             if (!TryBuildScopedSaveText(currentDiskText, snapshotText, desiredText, out updatedDiskText))
@@ -196,7 +197,7 @@ namespace Cortex.Core.Services
         {
             var fullPath = NormalizePath(filePath);
             var text = !string.IsNullOrEmpty(fullPath) && File.Exists(fullPath)
-                ? File.ReadAllText(fullPath)
+                ? ReadAllTextSafe(fullPath)
                 : string.Empty;
             StoreSnapshot(fullPath, text, lastWriteUtc);
             return new PreloadedDocumentSnapshot(fullPath, text, lastWriteUtc);
@@ -282,6 +283,28 @@ namespace Cortex.Core.Services
                 replacement +
                 (suffixLength > 0 ? currentDiskText.Substring(currentDiskText.Length - suffixLength) : string.Empty);
             return true;
+        }
+
+        private static string ReadAllTextSafe(string filePath)
+        {
+            var fullPath = NormalizePath(filePath);
+            if (string.IsNullOrEmpty(fullPath) || !File.Exists(fullPath))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                using (var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (var reader = new StreamReader(stream, Encoding.UTF8, true))
+                {
+                    return reader.ReadToEnd();
+                }
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private sealed class PreloadedDocumentSnapshot

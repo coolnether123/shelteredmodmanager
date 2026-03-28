@@ -53,7 +53,7 @@ namespace Cortex.Roslyn.Worker
             var quickInfoItem = TryGetQuickInfo(documentContext != null ? documentContext.Document : null, position);
             if (symbol == null && quickInfoItem != null && documentContext != null && documentContext.Document != null)
             {
-                symbol = TryResolveHoverSymbolFromQuickInfo(documentContext.Document, quickInfoItem, position);
+                symbol = TryResolveHoverSymbolFromQuickInfo(documentContext, quickInfoItem, position);
             }
 
             if (symbol == null && quickInfoItem == null)
@@ -71,14 +71,12 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var syntaxTree = documentContext != null && documentContext.Document != null
-                ? documentContext.Document.GetSyntaxTreeAsync(CurrentCancellationToken).GetAwaiter().GetResult()
-                : null;
+            var syntaxTree = GetDocumentSyntaxTree(documentContext);
             var documentationXml = symbol != null ? symbol.GetDocumentationCommentXml() : string.Empty;
             var sourceLocation = symbol != null
-                ? symbol.Locations.FirstOrDefault(location => location.IsInSource && location.SourceTree == syntaxTree)
+                ? GetPreferredSourceLocation(symbol, syntaxTree)
                 : null;
-            var definitionLocation = symbol != null ? symbol.Locations.FirstOrDefault(location => location.IsInSource) : null;
+            var definitionLocation = symbol != null ? GetDefinitionNavigationLocation(symbol, null) : null;
             var definitionText = definitionLocation != null && definitionLocation.SourceTree != null
                 ? definitionLocation.SourceTree.GetText()
                 : null;
@@ -89,6 +87,17 @@ namespace Cortex.Roslyn.Worker
             {
                 displayParts = BuildHoverDisplayParts(symbol);
             }
+
+            string navigationMetadataName;
+            string navigationContainingTypeName;
+            string navigationContainingAssemblyName;
+            string navigationDocumentationCommentId;
+            PopulateNavigationMetadata(
+                symbol,
+                out navigationMetadataName,
+                out navigationContainingTypeName,
+                out navigationContainingAssemblyName,
+                out navigationDocumentationCommentId);
 
             return new LanguageServiceHoverResponse
             {
@@ -106,10 +115,10 @@ namespace Cortex.Roslyn.Worker
                         : string.Empty,
                 QualifiedSymbolDisplay = symbol != null ? GetQualifiedSymbolDisplay(symbol) : string.Empty,
                 SymbolKind = symbol != null ? symbol.Kind.ToString() : string.Empty,
-                MetadataName = symbol != null ? symbol.MetadataName ?? string.Empty : string.Empty,
-                ContainingTypeName = symbol != null ? GetContainingTypeName(symbol) : string.Empty,
-                ContainingAssemblyName = symbol != null && symbol.ContainingAssembly != null ? symbol.ContainingAssembly.Identity.Name : string.Empty,
-                DocumentationCommentId = symbol != null ? symbol.GetDocumentationCommentId() ?? string.Empty : string.Empty,
+                MetadataName = navigationMetadataName,
+                ContainingTypeName = navigationContainingTypeName,
+                ContainingAssemblyName = navigationContainingAssemblyName,
+                DocumentationCommentId = navigationDocumentationCommentId,
                 DocumentationXml = documentationXml ?? string.Empty,
                 DocumentationText = BuildQuickInfoDocumentationText(quickInfoItem, FlattenDocumentation(documentationXml)),
                 SupplementalSections = supplementalSections,
@@ -559,9 +568,9 @@ namespace Cortex.Roslyn.Worker
             return null;
         }
 
-        private static ISymbol TryResolveHoverSymbolFromQuickInfo(Document document, QuickInfoItem quickInfoItem, int fallbackPosition)
+        private static ISymbol TryResolveHoverSymbolFromQuickInfo(DocumentContext documentContext, QuickInfoItem quickInfoItem, int fallbackPosition)
         {
-            if (document == null)
+            if (documentContext == null || documentContext.Document == null)
             {
                 return null;
             }
@@ -578,7 +587,7 @@ namespace Cortex.Roslyn.Worker
 
                 for (var i = 0; i < candidates.Length; i++)
                 {
-                    var symbol = ResolveSymbol(document, candidates[i]);
+                    var symbol = ResolveSymbol(documentContext, candidates[i]);
                     if (symbol != null)
                     {
                         return symbol;
@@ -586,7 +595,7 @@ namespace Cortex.Roslyn.Worker
                 }
             }
 
-            return ResolveSymbol(document, fallbackPosition);
+            return ResolveSymbol(documentContext, fallbackPosition);
         }
 
         private LanguageServiceDocumentTransformResponse PreviewDocumentTransform(LanguageServiceDocumentTransformRequest request)
@@ -798,7 +807,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+            var text = GetDocumentText(documentContext);
             var position = ResolveRequestPosition(text, request != null ? request.Line : 0, request != null ? request.Column : 0, request != null ? request.AbsolutePosition : -1);
             if (position < 0 || position > text.Length)
             {
