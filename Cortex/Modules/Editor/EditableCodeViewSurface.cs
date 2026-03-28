@@ -39,7 +39,7 @@ namespace Cortex.Modules.Editor
         private readonly EditorMethodInspectorSurface _methodInspectorSurface;
         private readonly EditorToolbarService _toolbarService = new EditorToolbarService();
         private readonly SourceEditorCommandRouterService _commandRouterService = new SourceEditorCommandRouterService();
-        private readonly SourceEditorHoverService _hoverService;
+        private readonly EditorHoverService _hoverService;
         private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
         private readonly EditorFallbackColoringService _fallbackColoringService = new EditorFallbackColoringService();
         private readonly EditorCaretIndicatorPresentationService _caretIndicatorPresentationService = new EditorCaretIndicatorPresentationService();
@@ -81,9 +81,6 @@ namespace Cortex.Modules.Editor
         private int _dragAnchorIndex;
         private int _lastClickIndex = -1;
         private DateTime _lastClickUtc = DateTime.MinValue;
-        private string _hoverCandidateKey = string.Empty;
-        private DateTime _hoverCandidateUtc = DateTime.MinValue;
-        private string _lastVisibleHoverLogKey = string.Empty;
         private bool _contextMenuOpen;
         private Vector2 _contextMenuPosition = Vector2.zero;
         private EditorCommandInvocation _contextInvocation;
@@ -93,13 +90,13 @@ namespace Cortex.Modules.Editor
         private Rect _lastContextMenuRect;
         private Rect _lastMethodInspectorRect;
 
-        public EditableCodeViewSurface(IEditorContextService contextService, IOverlayRendererFactory overlayRendererFactory)
+        public EditableCodeViewSurface(IEditorContextService contextService, EditorHoverService hoverService, IOverlayRendererFactory overlayRendererFactory)
         {
             _contextService = contextService;
             _semanticPopupSurface = new EditorSemanticPopupSurface(contextService);
             _methodInspectorService = new EditorMethodInspectorService(contextService);
             _methodInspectorSurface = new EditorMethodInspectorSurface(contextService);
-            _hoverService = new SourceEditorHoverService(contextService);
+            _hoverService = hoverService ?? new EditorHoverService(contextService);
             _popupMenuRenderer = overlayRendererFactory != null ? overlayRendererFactory.CreatePopupMenuRenderer() : null;
             _hoverTooltipRenderer = overlayRendererFactory != null ? overlayRendererFactory.CreateHoverTooltipRenderer() : null;
         }
@@ -239,24 +236,32 @@ namespace Cortex.Modules.Editor
                     rect.size);
                 _lastMethodInspectorRect = predictedMethodInspectorRect;
                 var pointerOnMethodInspector = _overlayInteractionService.IsPointerWithin(predictedMethodInspectorRect, localMouse);
-                _overlayInteractionService.TraceScrollOwner("source-editor", current, pointerOnMethodInspector, pointerOnContextMenu);
+                var pointerOnHoverSurface = hasMouse && _hoverService.IsPointerWithinHoverSurface(GetSurfaceId(session, state), ToRenderPoint(localMouse));
+                var pointerOnOverlaySurface = pointerOnMethodInspector || pointerOnHoverSurface;
+                _overlayInteractionService.TraceScrollOwner("source-editor", current, pointerOnOverlaySurface, pointerOnContextMenu);
                 _methodInspectorSurface.TryHandlePreDrawInput(current, predictedMethodInspectorRect, localMouse);
                 var pointerContext = BuildPointerContext(current, rect, hasMouse, localMouse, scroll, true);
-                var hoveredMethodTarget = hasMouse && !_isDraggingSelection && IsMethodTargetSelectionMode()
+                var shouldUpdateHover = current == null ||
+                    current.type == EventType.Repaint ||
+                    current.type == EventType.MouseMove;
+                var hoveredMethodTarget = hasMouse && !_isDraggingSelection && !pointerOnHoverSurface && IsMethodTargetSelectionMode()
                     ? FindMethodTargetAt(session, gutterWidth, pointerContext.ContentMouse)
                     : null;
-                HandlePointerInput(session, state, editingEnabled, current, pointerContext, hoveredMethodTarget, gutterWidth, commandRegistry, contributionRegistry, harmonyPatchGenerationService, pointerOnMethodInspector, pointerOnContextMenu);
+                HandlePointerInput(session, state, editingEnabled, current, pointerContext, hoveredMethodTarget, gutterWidth, commandRegistry, contributionRegistry, harmonyPatchGenerationService, pointerOnOverlaySurface, pointerOnContextMenu);
                 RefreshActiveContext(session, state, editingEnabled);
-                var hoverTarget = hasMouse && !_isDraggingSelection
-                    ? TryResolveHoverTarget(session, state, editingEnabled, pointerContext.ContentMouse, gutterWidth)
+                var hoverTarget = hasMouse && !_isDraggingSelection && !pointerOnHoverSurface
+                    ? TryResolveHoverTarget(session, state, editingEnabled, pointerContext.ContentMouse, scroll, gutterWidth)
                     : null;
-                _hoverService.UpdateHoverRequest(
-                    session,
-                    state,
-                    hoverTarget,
-                    hasMouse && !_contextMenuOpen && !_isDraggingSelection,
-                    ref _hoverCandidateKey,
-                    ref _hoverCandidateUtc);
+                if (shouldUpdateHover)
+                {
+                    _hoverService.UpdateHoverRequest(
+                        state,
+                        GetSurfaceId(session, state),
+                        hoverTarget,
+                        hasMouse && !_contextMenuOpen && !_isDraggingSelection && !pointerOnHoverSurface,
+                        hasMouse,
+                        ToRenderPoint(pointerContext.SurfaceMouse));
+                }
 
                 GUI.BeginGroup(rect);
                 try
@@ -327,7 +332,7 @@ namespace Cortex.Modules.Editor
                         state,
                         GetViewportAnchorRect(session, _contextService.ResolveTarget(state, state != null && state.Editor != null ? state.Editor.Peek.ContextKey : string.Empty), scroll, gutterWidth),
                         rect.size);
-                    DrawHoverTooltip(state, hoverTarget, pointerContext.SurfaceMouse, rect.size, hoverTooltipTheme);
+                    DrawHoverTooltip(services.NavigationService, state, GetSurfaceId(session, state), hoverTarget, pointerContext.SurfaceMouse, rect.size, hasMouse, hoverTooltipTheme);
                     DrawContextMenu(state, pointerContext.SurfaceMouse, rect.size, commandRegistry, popupMenuTheme);
                 }
                 finally
@@ -1773,88 +1778,137 @@ namespace Cortex.Modules.Editor
             }
         }
 
-        private SourceEditorHoverTarget TryResolveHoverTarget(
+        private EditorHoverTarget TryResolveHoverTarget(
             DocumentSession session,
             CortexShellState state,
             bool editingEnabled,
             Vector2 contentMouse,
+            Vector2 scroll,
             float gutterWidth)
         {
-            var hitTest = GetCharacterIndexAt(session, contentMouse, gutterWidth);
-            SourceEditorHoverTarget hoverTarget;
-            if (!_hoverService.TryCreateHoverTarget(session, state, editingEnabled, hitTest.CharacterIndex, out hoverTarget))
+            PointerHitTestResult hitTest;
+            Rect anchorRect;
+            string classification;
+            if (!TryGetHoverHitTest(session, contentMouse, gutterWidth, out hitTest, out anchorRect, out classification))
             {
                 return null;
             }
 
-            if (_contextService != null && hoverTarget.Target != null)
+            EditorCommandTarget interactionTarget;
+            if (!_hoverService.TryCreateInteractionTarget(session, state, editingEnabled, hitTest.CharacterIndex, out interactionTarget) ||
+                interactionTarget == null)
             {
-                _contextService.PublishTargetContext(
-                    state,
-                    session,
-                    GetSurfaceId(session, state),
-                    state != null ? state.Workbench.FocusedContainerId : string.Empty,
-                    EditorSurfaceKind.Source,
-                    hoverTarget.Target,
-                    false);
+                return null;
             }
 
-            return hoverTarget;
+            EditorHoverTarget hoverTarget;
+            return _hoverService.TryCreateSourceHoverTarget(
+                session,
+                state,
+                editingEnabled,
+                GetSurfaceId(session, state),
+                state != null ? state.Workbench.FocusedContainerId : string.Empty,
+                EditorSurfaceKind.Source,
+                interactionTarget.AbsolutePosition,
+                ToRenderRect(new Rect(anchorRect.x - scroll.x, anchorRect.y - scroll.y, anchorRect.width, anchorRect.height)),
+                classification,
+                out hoverTarget)
+                ? hoverTarget
+                : null;
         }
 
-        private void DrawHoverTooltip(CortexShellState state, SourceEditorHoverTarget hoverTarget, Vector2 localMouse, Vector2 viewportSize, HoverTooltipThemePalette hoverTooltipTheme)
+        private bool TryGetHoverHitTest(
+            DocumentSession session,
+            Vector2 contentMouse,
+            float gutterWidth,
+            out PointerHitTestResult hitTest,
+            out Rect anchorRect,
+            out string classification)
         {
-            var response = hoverTarget != null ? _hoverService.ResolveHoverResponse(state, hoverTarget.HoverKey) : null;
-            if (hoverTarget == null || hoverTarget.Target == null || response == null || !response.Success || _hoverTooltipRenderer == null)
+            hitTest = new PointerHitTestResult();
+            anchorRect = EmptyRect;
+            classification = string.Empty;
+            if (_layout == null || _layout.Lines.Count == 0)
             {
-                _lastVisibleHoverLogKey = string.Empty;
-                _hoverService.ClearVisibleHover(state);
+                return false;
+            }
+
+            var lineIndex = Mathf.Clamp(Mathf.FloorToInt(contentMouse.y / _lineHeight), 0, _layout.Lines.Count - 1);
+            var line = _layout.Lines[lineIndex];
+            if (line == null || line.Segments.Count == 0 || contentMouse.x <= gutterWidth)
+            {
+                return false;
+            }
+
+            var x = gutterWidth;
+            for (var i = 0; i < line.Segments.Count; i++)
+            {
+                var segment = line.Segments[i];
+                if (segment == null || string.IsNullOrEmpty(segment.DisplayText))
+                {
+                    continue;
+                }
+
+                var width = Measure(segment.DisplayText);
+                var segmentRect = new Rect(x, line.Y, width + 2f, _lineHeight);
+                x += width;
+                if (!segmentRect.Contains(contentMouse))
+                {
+                    continue;
+                }
+
+                var rawText = GetSegmentRawText(line, segment);
+                if (!_classificationPresentationService.IsHoverCandidate(segment.Classification, rawText))
+                {
+                    return false;
+                }
+
+                classification = segment.Classification ?? string.Empty;
+                anchorRect = segmentRect;
+                hitTest = GetCharacterIndexAt(session, contentMouse, gutterWidth);
+                return true;
+            }
+
+            return false;
+        }
+
+        private void DrawHoverTooltip(
+            CortexNavigationService navigationService,
+            CortexShellState state,
+            string surfaceId,
+            EditorHoverTarget hoverTarget,
+            Vector2 localMouse,
+            Vector2 viewportSize,
+            bool hasMouse,
+            HoverTooltipThemePalette hoverTooltipTheme)
+        {
+            var current = Event.current;
+            if (current != null &&
+                current.type != EventType.Layout &&
+                current.type != EventType.Repaint &&
+                current.type != EventType.MouseMove &&
+                current.type != EventType.MouseDown &&
+                current.type != EventType.MouseUp)
+            {
                 return;
             }
 
-            var title = !string.IsNullOrEmpty(response.SymbolDisplay)
-                ? response.SymbolDisplay
-                : (hoverTarget.Target.SymbolText ?? string.Empty);
-            if (string.IsNullOrEmpty(title))
-            {
-                _lastVisibleHoverLogKey = string.Empty;
-                _hoverService.ClearVisibleHover(state);
-                return;
-            }
-
-            HoverTooltipRenderResult tooltipResult;
-            if (!_hoverTooltipRenderer.DrawRichTooltip(
-                BuildHoverTooltipModel(hoverTarget, response),
+            if (_hoverService.DrawHover(
+                _hoverTooltipRenderer,
+                navigationService,
+                state,
+                surfaceId,
+                hoverTarget,
                 ToRenderPoint(localMouse),
                 ToRenderSize(viewportSize),
-                true,
+                hasMouse,
                 hoverTooltipTheme,
                 420f,
-                out tooltipResult))
-            {
-                _lastVisibleHoverLogKey = string.Empty;
-                _hoverService.ClearVisibleHover(state);
-                return;
-            }
-
-            LogVisibleHover(hoverTarget, response);
-            _hoverService.SetVisibleHover(state, hoverTarget.HoverKey, response);
-        }
-
-        private void LogVisibleHover(SourceEditorHoverTarget hoverTarget, LanguageServiceHoverResponse response)
-        {
-            var hoverKey = hoverTarget != null ? hoverTarget.HoverKey ?? string.Empty : string.Empty;
-            if (string.IsNullOrEmpty(hoverKey) || string.Equals(_lastVisibleHoverLogKey, hoverKey, StringComparison.Ordinal))
+                "source-editor"))
             {
                 return;
             }
 
-            _lastVisibleHoverLogKey = hoverKey;
-            CortexDeveloperLog.WriteSymbolTooltipVisible(
-                "source-editor",
-                hoverKey,
-                hoverTarget != null && hoverTarget.Target != null ? hoverTarget.Target.SymbolText ?? string.Empty : string.Empty,
-                response);
         }
 
         private void DrawContextMenu(
@@ -2092,39 +2146,6 @@ namespace Cortex.Modules.Editor
                 _popupMenuRenderer.Reset();
             }
             _popupMenuItems.Clear();
-        }
-
-        private HoverTooltipRenderModel BuildHoverTooltipModel(SourceEditorHoverTarget hoverTarget, LanguageServiceHoverResponse response)
-        {
-            var target = hoverTarget != null ? hoverTarget.Target : null;
-            return new HoverTooltipRenderModel
-            {
-                Key = hoverTarget != null ? hoverTarget.HoverKey ?? string.Empty : string.Empty,
-                DocumentPath = target != null ? target.DocumentPath ?? string.Empty : string.Empty,
-                AnchorRect = new RenderRect(0f, 0f, 0f, 0f),
-                QualifiedPath = response != null ? response.QualifiedSymbolDisplay ?? string.Empty : string.Empty,
-                SymbolDisplay = response != null ? response.SymbolDisplay ?? string.Empty : string.Empty,
-                SignatureParts = new[]
-                {
-                    new HoverTooltipPartModel
-                    {
-                        Text = response != null && !string.IsNullOrEmpty(response.SymbolDisplay)
-                            ? response.SymbolDisplay
-                            : (target != null ? target.SymbolText ?? string.Empty : string.Empty),
-                        IsInteractive = false,
-                        Tag = response
-                    }
-                },
-                BuildMetaText = delegate(HoverTooltipPartModel part)
-                {
-                    return target != null ? target.SymbolKind ?? string.Empty : string.Empty;
-                },
-                BuildDocumentationText = delegate(HoverTooltipPartModel part)
-                {
-                    return _symbolInteractionService.BuildHoverDetailText(response);
-                },
-                Tag = response
-            };
         }
 
         private static RenderPoint ToRenderPoint(Vector2 point)

@@ -206,6 +206,14 @@ Current public module contributions should assume:
 - command execution is the preferred integration path
 - internal shell services are not public plugin contracts yet
 
+That IMGUI note is about today's host implementation, not a license to couple module code to IMGUI-specific Cortex internals.
+Public module code should still prefer:
+- `WorkbenchModuleRenderContext`
+- `context.Ui`
+- commands and contribution metadata
+
+Do not build external modules against internal editor/rendering types from `Cortex.Renderers.Imgui` or private shell orchestration code.
+
 For shared module chrome, prefer `context.Ui` over directly reproducing the same `GUILayout` patterns in multiple modules.
 
 That means built-in Cortex modules still have richer internal dependencies than external modules. This is intentional for now. The public API is being kept narrow until those service contracts are ready to be made stable.

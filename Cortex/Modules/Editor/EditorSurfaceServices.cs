@@ -8,6 +8,7 @@ namespace Cortex.Modules.Editor
     internal sealed class EditorSurfaceServices
     {
         public IDocumentService DocumentService { get; set; }
+        public CortexNavigationService NavigationService { get; set; }
         public ICommandRegistry CommandRegistry { get; set; }
         public IContributionRegistry ContributionRegistry { get; set; }
         public CortexShellState State { get; set; }

@@ -13,31 +13,32 @@ namespace Cortex.Tests.Editor
         public void QueueRequest_CapturesCaretAndRequestMetadata()
         {
             var service = new EditorSignatureHelpService();
-            var state = new CortexEditorInteractionState();
+            var state = new CortexSignatureHelpInteractionState();
             var session = CreateSession("D:\\Temp\\Sample.cs", "Call(value);", 5);
 
             var queued = service.QueueRequest(session, state, new TestEditorService(), false, "(");
 
             Assert.True(queued);
-            Assert.Equal("D:\\Temp\\Sample.cs", state.RequestedSignatureHelpDocumentPath);
-            Assert.Equal(1, state.RequestedSignatureHelpLine);
-            Assert.Equal(6, state.RequestedSignatureHelpColumn);
-            Assert.Equal(5, state.RequestedSignatureHelpAbsolutePosition);
-            Assert.Equal("(", state.RequestedSignatureHelpTriggerCharacter);
+            Assert.Equal("D:\\Temp\\Sample.cs", state.RequestedDocumentPath);
+            Assert.Equal(1, state.RequestedLine);
+            Assert.Equal(6, state.RequestedColumn);
+            Assert.Equal(5, state.RequestedAbsolutePosition);
+            Assert.Equal("(", state.RequestedTriggerCharacter);
         }
 
         [Fact]
         public void AcceptResponse_StoresActiveSignatureHelpForMatchingRequest()
         {
             var service = new EditorSignatureHelpService();
-            var state = new CortexEditorInteractionState
+            var state = new CortexSignatureHelpInteractionState
             {
-                RequestedSignatureHelpKey = "request-key"
+                RequestedKey = "request-key"
             };
             var session = CreateSession("D:\\Temp\\Sample.cs", "Call(value);", 5);
             var pending = new PendingLanguageSignatureHelpRequest
             {
                 RequestKey = "request-key",
+                ContextKey = "context-key",
                 DocumentPath = session.FilePath,
                 DocumentVersion = session.TextVersion
             };
@@ -67,8 +68,9 @@ namespace Cortex.Tests.Editor
             var accepted = service.AcceptResponse(state, session, pending, response);
 
             Assert.True(accepted);
-            Assert.Equal("request-key", state.ActiveSignatureHelpKey);
-            Assert.NotNull(state.ActiveSignatureHelpResponse);
+            Assert.Equal(string.Empty, state.RequestedKey);
+            Assert.Equal("context-key", state.ActiveContextKey);
+            Assert.NotNull(state.Response);
             Assert.True(service.HasVisibleSignatureHelp(state, session));
         }
 
@@ -76,11 +78,11 @@ namespace Cortex.Tests.Editor
         public void AcceptResponse_RejectsMismatchedRequestKeyWithoutTouchingState()
         {
             var service = new EditorSignatureHelpService();
-            var state = new CortexEditorInteractionState
+            var state = new CortexSignatureHelpInteractionState
             {
-                RequestedSignatureHelpKey = "request-key",
-                ActiveSignatureHelpKey = "active-key",
-                ActiveSignatureHelpResponse = new LanguageServiceSignatureHelpResponse
+                RequestedKey = "request-key",
+                ActiveContextKey = "active-key",
+                Response = new LanguageServiceSignatureHelpResponse
                 {
                     Success = true,
                     DocumentPath = "D:\\Temp\\Sample.cs",
@@ -105,9 +107,9 @@ namespace Cortex.Tests.Editor
             var accepted = service.AcceptResponse(state, session, pending, response);
 
             Assert.False(accepted);
-            Assert.Equal("request-key", state.RequestedSignatureHelpKey);
-            Assert.Equal("active-key", state.ActiveSignatureHelpKey);
-            Assert.NotNull(state.ActiveSignatureHelpResponse);
+            Assert.Equal("request-key", state.RequestedKey);
+            Assert.Equal("active-key", state.ActiveContextKey);
+            Assert.NotNull(state.Response);
         }
 
         [Fact]
@@ -115,13 +117,13 @@ namespace Cortex.Tests.Editor
         {
             var service = new EditorSignatureHelpService();
             var session = CreateSession("D:\\Temp\\Sample.cs", "Call(value);", 5);
-            var state = new CortexEditorInteractionState
+            var state = new CortexSignatureHelpInteractionState
             {
-                RequestedSignatureHelpLine = 2,
-                RequestedSignatureHelpColumn = 6,
-                RequestedSignatureHelpAbsolutePosition = 5,
-                RequestedSignatureHelpTriggerCharacter = "(",
-                RequestedSignatureHelpExplicit = true
+                RequestedLine = 2,
+                RequestedColumn = 6,
+                RequestedAbsolutePosition = 5,
+                RequestedTriggerCharacter = "(",
+                RequestedExplicit = true
             };
             var project = new CortexProjectDefinition
             {
@@ -153,13 +155,13 @@ namespace Cortex.Tests.Editor
         public void Reset_ClearsRequestedAndActiveSignatureHelp()
         {
             var service = new EditorSignatureHelpService();
-            var state = new CortexEditorInteractionState
+            var state = new CortexSignatureHelpInteractionState
             {
-                RequestedSignatureHelpKey = "pending",
-                RequestedSignatureHelpDocumentPath = "D:\\Temp\\Sample.cs",
-                RequestedSignatureHelpAbsolutePosition = 4,
-                ActiveSignatureHelpKey = "active",
-                ActiveSignatureHelpResponse = new LanguageServiceSignatureHelpResponse
+                RequestedKey = "pending",
+                RequestedDocumentPath = "D:\\Temp\\Sample.cs",
+                RequestedAbsolutePosition = 4,
+                ActiveContextKey = "active",
+                Response = new LanguageServiceSignatureHelpResponse
                 {
                     Success = true,
                     Items = new[] { new LanguageServiceSignatureHelpItem() }
@@ -168,9 +170,9 @@ namespace Cortex.Tests.Editor
 
             service.Reset(state);
 
-            Assert.Equal(string.Empty, state.RequestedSignatureHelpKey);
-            Assert.Equal(string.Empty, state.ActiveSignatureHelpKey);
-            Assert.Null(state.ActiveSignatureHelpResponse);
+            Assert.Equal(string.Empty, state.RequestedKey);
+            Assert.Equal(string.Empty, state.ActiveContextKey);
+            Assert.Null(state.Response);
         }
 
         private static DocumentSession CreateSession(string filePath, string text, int caretIndex)

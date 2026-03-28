@@ -94,6 +94,16 @@ namespace Cortex.Services
             PreloadDocument(state, part.DefinitionDocumentPath);
         }
 
+        public void PreloadHoverNavigationTarget(CortexShellState state, EditorHoverNavigationTarget target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            PreloadDocument(state, target.DefinitionDocumentPath);
+        }
+
         public DecompilerResponse RequestDecompilerSource(CortexShellState state, string assemblyPath, int metadataToken, DecompilerEntityKind entityKind, bool ignoreCache)
         {
             return CortexModuleUtil.RequestDecompilerSource(
@@ -204,6 +214,32 @@ namespace Cortex.Services
                 part.DocumentationCommentId,
                 part.DefinitionDocumentPath,
                 part.DefinitionRange,
+                successStatusMessage,
+                failureStatusMessage);
+        }
+
+        public bool OpenHoverNavigationTarget(CortexShellState state, EditorHoverNavigationTarget target, string successStatusMessage, string failureStatusMessage)
+        {
+            if (target == null || target.Kind == EditorHoverNavigationKind.None)
+            {
+                if (!string.IsNullOrEmpty(failureStatusMessage))
+                {
+                    state.StatusMessage = failureStatusMessage;
+                }
+
+                return false;
+            }
+
+            return OpenLanguageSymbolTarget(
+                state,
+                target.SymbolDisplay,
+                target.SymbolKind,
+                target.MetadataName,
+                target.ContainingTypeName,
+                target.ContainingAssemblyName,
+                target.DocumentationCommentId,
+                target.DefinitionDocumentPath,
+                target.DefinitionRange,
                 successStatusMessage,
                 failureStatusMessage);
         }

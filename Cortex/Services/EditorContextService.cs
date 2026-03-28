@@ -13,15 +13,21 @@ namespace Cortex.Services
         EditorContextSnapshot PublishInvocationContext(CortexShellState state, DocumentSession session, string surfaceId, string paneId, EditorSurfaceKind surfaceKind, EditorCommandInvocation invocation, bool setActive);
         EditorContextSnapshot PublishTargetContext(CortexShellState state, DocumentSession session, string surfaceId, string paneId, EditorSurfaceKind surfaceKind, EditorCommandTarget target, bool setActive);
         EditorContextSnapshot GetActiveContext(CortexShellState state);
+        EditorContextSnapshot GetHoveredContext(CortexShellState state);
         EditorContextSnapshot GetContext(CortexShellState state, string contextKey);
         EditorContextSnapshot GetSurfaceContext(CortexShellState state, string surfaceId);
         EditorCommandTarget ResolveTarget(CortexShellState state, string contextKey);
         EditorCommandInvocation ResolveInvocation(CortexShellState state, string contextKey);
         LanguageServiceHoverResponse ResolveHoverResponse(CortexShellState state, string contextKey, string hoverKey);
         LanguageServiceHoverResponse ResolveHoverResponse(CortexShellState state, string hoverKey);
-        void ApplyHoverResponse(CortexShellState state, string contextKey, string hoverKey, LanguageServiceHoverResponse response);
+        EditorResolvedHoverContent ResolveHoverContent(CortexShellState state, string contextKey, string hoverKey);
+        EditorResolvedHoverContent ResolveHoverContent(CortexShellState state, string hoverKey);
+        string ApplyHoverResponse(CortexShellState state, string contextKey, string hoverKey, LanguageServiceHoverResponse response);
+        void ApplyHoverContent(CortexShellState state, string contextKey, string hoverKey, EditorResolvedHoverContent content);
         void ApplySymbolContext(CortexShellState state, string contextKey, LanguageServiceSymbolContextResponse response);
         void ClearHoverResponse(CortexShellState state, string contextKey);
+        void PublishHoveredContext(CortexShellState state, string contextKey, string definitionDocumentPath);
+        void ClearHoveredContext(CortexShellState state);
         string BuildContextKey(string surfaceId, string documentPath, int documentVersion, int caretIndex, int selectionStart, int selectionEnd, int targetStart, int targetLength, string symbolText);
     }
 
@@ -134,6 +140,11 @@ namespace Cortex.Services
             return GetContext(state, state != null && state.EditorContext != null ? state.EditorContext.ActiveContextKey : string.Empty);
         }
 
+        public EditorContextSnapshot GetHoveredContext(CortexShellState state)
+        {
+            return GetContext(state, state != null && state.EditorContext != null ? state.EditorContext.HoveredContextKey : string.Empty);
+        }
+
         public EditorContextSnapshot GetContext(CortexShellState state, string contextKey)
         {
             if (state == null || state.EditorContext == null || string.IsNullOrEmpty(contextKey))
@@ -190,6 +201,7 @@ namespace Cortex.Services
                 return null;
             }
 
+            EditorContextSnapshot bestSnapshot = null;
             foreach (var pair in state.EditorContext.ContextsByKey)
             {
                 var snapshot = pair.Value;
@@ -199,13 +211,99 @@ namespace Cortex.Services
                     continue;
                 }
 
-                return snapshot.Semantic != null ? snapshot.Semantic.HoverResponse : null;
+                if (snapshot.Semantic == null || snapshot.Semantic.HoverResponse == null)
+                {
+                    continue;
+                }
+
+                if (bestSnapshot == null || snapshot.CapturedUtc > bestSnapshot.CapturedUtc)
+                {
+                    bestSnapshot = snapshot;
+                }
             }
 
-            return null;
+            return bestSnapshot != null && bestSnapshot.Semantic != null
+                ? bestSnapshot.Semantic.HoverResponse
+                : null;
         }
 
-        public void ApplyHoverResponse(CortexShellState state, string contextKey, string hoverKey, LanguageServiceHoverResponse response)
+        public EditorResolvedHoverContent ResolveHoverContent(CortexShellState state, string contextKey, string hoverKey)
+        {
+            var snapshot = GetContext(state, contextKey);
+            if (snapshot == null || snapshot.Semantic == null)
+            {
+                return null;
+            }
+
+            return string.IsNullOrEmpty(hoverKey) || string.Equals(snapshot.HoverKey ?? string.Empty, hoverKey, StringComparison.Ordinal)
+                ? snapshot.Semantic.HoverContent
+                : null;
+        }
+
+        public EditorResolvedHoverContent ResolveHoverContent(CortexShellState state, string hoverKey)
+        {
+            if (state == null || state.EditorContext == null || string.IsNullOrEmpty(hoverKey))
+            {
+                return null;
+            }
+
+            EditorContextSnapshot bestSnapshot = null;
+            foreach (var pair in state.EditorContext.ContextsByKey)
+            {
+                var snapshot = pair.Value;
+                if (snapshot == null ||
+                    !string.Equals(snapshot.HoverKey ?? string.Empty, hoverKey, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (snapshot.Semantic == null || snapshot.Semantic.HoverContent == null)
+                {
+                    continue;
+                }
+
+                if (bestSnapshot == null || snapshot.CapturedUtc > bestSnapshot.CapturedUtc)
+                {
+                    bestSnapshot = snapshot;
+                }
+            }
+
+            return bestSnapshot != null && bestSnapshot.Semantic != null
+                ? bestSnapshot.Semantic.HoverContent
+                : null;
+        }
+
+        public string ApplyHoverResponse(CortexShellState state, string contextKey, string hoverKey, LanguageServiceHoverResponse response)
+        {
+            var snapshot = ResolveHoverMutationSnapshot(state, contextKey, hoverKey);
+            if (snapshot == null)
+            {
+                return string.Empty;
+            }
+
+            if (snapshot.Semantic == null)
+            {
+                snapshot.Semantic = new EditorSemanticContext();
+            }
+
+            snapshot.HoverKey = hoverKey ?? snapshot.HoverKey ?? string.Empty;
+            snapshot.Semantic.HoverResponse = response;
+            snapshot.Semantic.HoverContent = null;
+            var projected = ProjectTarget(snapshot);
+            _symbolInteractionService.ApplyHoverMetadata(projected, response);
+            CopySemanticFields(projected, snapshot.Semantic);
+            snapshot.FocusTokenText = !string.IsNullOrEmpty(projected.SymbolText)
+                ? projected.SymbolText
+                : snapshot.FocusTokenText ?? string.Empty;
+            snapshot.TargetStart = projected.AbsolutePosition;
+            snapshot.TargetLength = !string.IsNullOrEmpty(projected.SymbolText)
+                ? projected.SymbolText.Length
+                : snapshot.TargetLength;
+            snapshot.ContainingMemberName = ResolveContainingMemberName(projected, snapshot.Semantic);
+            return snapshot.ContextKey ?? string.Empty;
+        }
+
+        public void ApplyHoverContent(CortexShellState state, string contextKey, string hoverKey, EditorResolvedHoverContent content)
         {
             var snapshot = GetContext(state, contextKey);
             if (snapshot == null)
@@ -219,18 +317,7 @@ namespace Cortex.Services
             }
 
             snapshot.HoverKey = hoverKey ?? snapshot.HoverKey ?? string.Empty;
-            snapshot.Semantic.HoverResponse = response;
-            var projected = ProjectTarget(snapshot);
-            _symbolInteractionService.ApplyHoverMetadata(projected, response);
-            CopySemanticFields(projected, snapshot.Semantic);
-            snapshot.FocusTokenText = !string.IsNullOrEmpty(projected.SymbolText)
-                ? projected.SymbolText
-                : snapshot.FocusTokenText ?? string.Empty;
-            snapshot.TargetStart = projected.AbsolutePosition;
-            snapshot.TargetLength = !string.IsNullOrEmpty(projected.SymbolText)
-                ? projected.SymbolText.Length
-                : snapshot.TargetLength;
-            snapshot.ContainingMemberName = ResolveContainingMemberName(projected, snapshot.Semantic);
+            snapshot.Semantic.HoverContent = content != null ? content.Clone() : null;
         }
 
         public void ApplySymbolContext(CortexShellState state, string contextKey, LanguageServiceSymbolContextResponse response)
@@ -301,6 +388,29 @@ namespace Cortex.Services
             }
 
             snapshot.Semantic.HoverResponse = null;
+            snapshot.Semantic.HoverContent = null;
+        }
+
+        public void PublishHoveredContext(CortexShellState state, string contextKey, string definitionDocumentPath)
+        {
+            if (state == null || state.EditorContext == null)
+            {
+                return;
+            }
+
+            state.EditorContext.HoveredContextKey = contextKey ?? string.Empty;
+            state.EditorContext.HoveredDefinitionDocumentPath = definitionDocumentPath ?? string.Empty;
+        }
+
+        public void ClearHoveredContext(CortexShellState state)
+        {
+            if (state == null || state.EditorContext == null)
+            {
+                return;
+            }
+
+            state.EditorContext.HoveredContextKey = string.Empty;
+            state.EditorContext.HoveredDefinitionDocumentPath = string.Empty;
         }
 
         public string BuildContextKey(
@@ -436,6 +546,33 @@ namespace Cortex.Services
                 symbolKind.IndexOf("method", StringComparison.OrdinalIgnoreCase) >= 0
                 ? target.SymbolText
                 : string.Empty;
+        }
+
+        private EditorContextSnapshot ResolveHoverMutationSnapshot(CortexShellState state, string contextKey, string hoverKey)
+        {
+            var snapshot = GetContext(state, contextKey);
+            if (snapshot != null || state == null || state.EditorContext == null || string.IsNullOrEmpty(hoverKey))
+            {
+                return snapshot;
+            }
+
+            EditorContextSnapshot latestSnapshot = null;
+            foreach (var pair in state.EditorContext.ContextsByKey)
+            {
+                var candidate = pair.Value;
+                if (candidate == null ||
+                    !string.Equals(candidate.HoverKey ?? string.Empty, hoverKey, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (latestSnapshot == null || candidate.CapturedUtc > latestSnapshot.CapturedUtc)
+                {
+                    latestSnapshot = candidate;
+                }
+            }
+
+            return latestSnapshot;
         }
 
         private static EditorCommandTarget BuildBaseTarget(EditorCommandTarget source)

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Cortex.LanguageService.Protocol;
 
 namespace Cortex.Services
@@ -6,6 +7,8 @@ namespace Cortex.Services
     internal static class CortexDeveloperLog
     {
         private static string _lastSymbolEventKey = string.Empty;
+        private static readonly Dictionary<string, string> _lastHoverPipelineStageEventKeys = new Dictionary<string, string>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, string> _lastHoverDiagnosticEventKeys = new Dictionary<string, string>(StringComparer.Ordinal);
 
         public static void WriteSymbolHoverPayload(string tokenText, LanguageServiceHoverResponse response)
         {
@@ -96,6 +99,64 @@ namespace Cortex.Services
                 null,
                 part,
                 "Surface='" + (surfaceKind ?? string.Empty) + "'");
+        }
+
+        public static void WriteHoverPipelineStage(
+            string stage,
+            bool success,
+            string surfaceId,
+            string surfaceKind,
+            string hoverKey,
+            string contextKey,
+            string documentPath,
+            int documentVersion,
+            int absolutePosition,
+            string tokenText,
+            string detail)
+        {
+            var normalizedHoverKey = hoverKey ?? string.Empty;
+            var stageKey = (stage ?? string.Empty) + "|" +
+                (surfaceId ?? string.Empty) + "|" +
+                normalizedHoverKey + "|" +
+                success;
+            if (_lastHoverPipelineStageEventKeys.ContainsKey(stageKey))
+            {
+                return;
+            }
+
+            _lastHoverPipelineStageEventKeys[stageKey] = stageKey;
+            MMLog.WriteInfo(
+                "[Cortex.Hover.Trace] Stage='" + (stage ?? string.Empty) +
+                "', Success=" + success +
+                ", SurfaceId='" + (surfaceId ?? string.Empty) +
+                "', SurfaceKind='" + (surfaceKind ?? string.Empty) +
+                "', HoverKey='" + (hoverKey ?? string.Empty) +
+                "', ContextKey='" + (contextKey ?? string.Empty) +
+                "', Document='" + (documentPath ?? string.Empty) +
+                "', DocumentVersion=" + documentVersion +
+                ", AbsolutePosition=" + absolutePosition +
+                ", Token='" + (tokenText ?? string.Empty) +
+                "', Detail='" + (detail ?? string.Empty) + "'.");
+        }
+
+        public static void WriteHoverDiagnostic(
+            string category,
+            string hoverKey,
+            string detail)
+        {
+            var eventKey = (category ?? string.Empty) + "|" +
+                (hoverKey ?? string.Empty) + "|" +
+                (detail ?? string.Empty);
+            if (_lastHoverDiagnosticEventKeys.ContainsKey(eventKey))
+            {
+                return;
+            }
+
+            _lastHoverDiagnosticEventKeys[eventKey] = eventKey;
+            MMLog.WriteInfo(
+                "[Cortex.Hover.Diagnostic] Category='" + (category ?? string.Empty) +
+                "', HoverKey='" + (hoverKey ?? string.Empty) +
+                "', Detail='" + (detail ?? string.Empty) + "'.");
         }
 
         private static void WriteSymbolEvent(

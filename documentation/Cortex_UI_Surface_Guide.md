@@ -8,6 +8,9 @@ Its job is simple:
 - reduce direct dependence on raw IMGUI patterns
 - let Cortex evolve its runtime UI implementation without forcing every module to rewrite the same controls
 
+This guide is about the public workbench UI surface for modules.
+It is not the same thing as the internal renderer pipeline used by the shell/editor.
+
 ## When to use `context.Ui`
 
 Use `context.Ui` for shared Cortex patterns such as:
@@ -33,6 +36,9 @@ The rule is:
 
 - shared shell chrome goes through `context.Ui`
 - module-specific widgets can still use IMGUI directly inside that shared chrome
+
+Built-in Cortex editor surfaces are moving further than this by using renderer abstractions for overlays and panels.
+External modules should still treat `context.Ui` as the preferred public contract.
 
 ## Current surface
 
@@ -107,3 +113,12 @@ Today the default implementation is IMGUI-backed inside Cortex.
 That is an implementation detail, not the module contract.
 
 Modules should code against `IWorkbenchUiSurface`, not against `CortexUi` or `CortexShell`.
+
+Internally, Cortex is also moving toward renderer-agnostic shell/editor infrastructure:
+- the shell owns the active render pipeline
+- renderer-neutral geometry/color models live in `Cortex.Rendering`
+- IMGUI implementations live in `Cortex.Renderers.Imgui`
+
+That does not change the module authoring rule:
+- public workbench modules should target `IWorkbenchUiSurface`
+- they should not depend on IMGUI-only editor internals or renderer-specific classes
