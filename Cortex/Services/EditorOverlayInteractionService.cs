@@ -3,6 +3,17 @@ using UnityEngine;
 
 namespace Cortex.Services
 {
+    internal sealed class EditorOverlayPointerState
+    {
+        public bool PointerWithinSurface;
+        public bool PointerOnMethodInspector;
+        public bool PointerOnContextMenu;
+        public bool PointerOnHoverSurface;
+        public bool PointerOnOverlaySurface;
+        public string PointerRoute = string.Empty;
+        public string ScrollOwner = string.Empty;
+    }
+
     internal sealed class EditorOverlayInteractionService
     {
         private string _lastScrollOwnerKey = string.Empty;
@@ -14,7 +25,36 @@ namespace Cortex.Services
                 rect.Contains(pointer);
         }
 
-        public bool ShouldBypassSurfaceInput(Event current, bool pointerOnMethodInspector, bool pointerOnContextMenu)
+        public EditorOverlayPointerState ResolvePointerState(
+            Rect methodInspectorRect,
+            Rect contextMenuRect,
+            bool contextMenuOpen,
+            bool pointerOnHoverSurface,
+            bool pointerWithinSurface,
+            Vector2 pointer)
+        {
+            var state = new EditorOverlayPointerState();
+            state.PointerWithinSurface = pointerWithinSurface;
+            state.PointerOnHoverSurface = pointerOnHoverSurface;
+            state.PointerOnMethodInspector = IsPointerWithin(methodInspectorRect, pointer);
+            state.PointerOnContextMenu = contextMenuOpen && IsPointerWithin(contextMenuRect, pointer);
+            state.PointerOnOverlaySurface = state.PointerOnMethodInspector || state.PointerOnHoverSurface;
+            state.PointerRoute = state.PointerOnMethodInspector
+                ? "method-inspector"
+                : state.PointerOnContextMenu
+                    ? "context-menu"
+                    : state.PointerWithinSurface
+                        ? "editor-surface"
+                        : "outside-surface";
+            state.ScrollOwner = state.PointerOnOverlaySurface
+                ? "method-inspector"
+                : state.PointerOnContextMenu
+                    ? "context-menu"
+                    : "editor-surface";
+            return state;
+        }
+
+        public bool ShouldBypassSurfaceInput(Event current, EditorOverlayPointerState pointerState)
         {
             if (current == null)
             {
@@ -26,28 +66,29 @@ namespace Cortex.Services
                 return false;
             }
 
-            return pointerOnMethodInspector || pointerOnContextMenu;
+            return pointerState != null &&
+                (pointerState.PointerOnMethodInspector || pointerState.PointerOnContextMenu);
         }
 
         public bool ShouldCloseMethodInspectorOnPointerDown(
             Event current,
-            bool pointerOnMethodInspector,
-            bool pointerOnContextMenu,
+            EditorOverlayPointerState pointerState,
             CortexShellState state)
         {
             return current != null &&
                 current.type == EventType.MouseDown &&
-                !pointerOnMethodInspector &&
-                !pointerOnContextMenu &&
+                (pointerState == null || !pointerState.PointerOnMethodInspector) &&
+                (pointerState == null || !pointerState.PointerOnContextMenu) &&
                 state != null &&
                 state.Editor != null &&
                 state.Editor.MethodInspector != null &&
                 state.Editor.MethodInspector.IsVisible;
         }
 
-        public bool ShouldPreserveEditorScroll(Event current, bool contextMenuOpen, bool pointerOnMethodInspector)
+        public bool ShouldPreserveEditorScroll(Event current, bool contextMenuOpen, EditorOverlayPointerState pointerState)
         {
-            if (!contextMenuOpen && !pointerOnMethodInspector)
+            if (!contextMenuOpen &&
+                (pointerState == null || !pointerState.PointerOnOverlaySurface))
             {
                 return false;
             }
@@ -64,9 +105,7 @@ namespace Cortex.Services
         public void TracePointerRouting(
             string surfaceName,
             Event current,
-            bool pointerOnMethodInspector,
-            bool pointerOnContextMenu,
-            bool pointerWithinSurface,
+            EditorOverlayPointerState pointerState,
             bool methodInspectorVisible)
         {
             if (current == null || current.type != EventType.MouseDown)
@@ -74,38 +113,27 @@ namespace Cortex.Services
                 return;
             }
 
-            var route = pointerOnMethodInspector
-                ? "method-inspector"
-                : pointerOnContextMenu
-                    ? "context-menu"
-                    : pointerWithinSurface
-                        ? "editor-surface"
-                        : "outside-surface";
             var closesInspector = methodInspectorVisible &&
-                !pointerOnMethodInspector &&
-                !pointerOnContextMenu;
+                (pointerState == null || !pointerState.PointerOnMethodInspector) &&
+                (pointerState == null || !pointerState.PointerOnContextMenu);
 
             MMLog.WriteInfo("[Cortex.Overlay] Pointer down. Surface='" +
                 (surfaceName ?? string.Empty) +
                 "', Button=" + current.button +
-                ", Route='" + route +
-                "', PointerWithinSurface=" + pointerWithinSurface +
+                ", Route='" + (pointerState != null ? pointerState.PointerRoute ?? string.Empty : string.Empty) +
+                "', PointerWithinSurface=" + (pointerState != null && pointerState.PointerWithinSurface) +
                 ", MethodInspectorVisible=" + methodInspectorVisible +
                 ", ClosesMethodInspector=" + closesInspector + ".");
         }
 
-        public void TraceScrollOwner(string surfaceName, Event current, bool pointerOnMethodInspector, bool pointerOnContextMenu)
+        public void TraceScrollOwner(string surfaceName, Event current, EditorOverlayPointerState pointerState)
         {
             if (current == null || current.type != EventType.ScrollWheel)
             {
                 return;
             }
 
-            var owner = pointerOnMethodInspector
-                ? "method-inspector"
-                : pointerOnContextMenu
-                    ? "context-menu"
-                    : "editor-surface";
+            var owner = pointerState != null ? pointerState.ScrollOwner ?? string.Empty : "editor-surface";
             var ownerKey = (surfaceName ?? string.Empty) + "|" + owner;
             if (string.Equals(_lastScrollOwnerKey, ownerKey, StringComparison.Ordinal))
             {
@@ -116,8 +144,9 @@ namespace Cortex.Services
             MMLog.WriteInfo("[Cortex.Overlay] Scroll owner changed. Surface='" +
                 (surfaceName ?? string.Empty) +
                 "', Owner='" + owner +
-                "', PointerOnMethodInspector=" + pointerOnMethodInspector +
-                ", PointerOnContextMenu=" + pointerOnContextMenu + ".");
+                "', PointerOnMethodInspector=" + (pointerState != null && pointerState.PointerOnMethodInspector) +
+                ", PointerOnContextMenu=" + (pointerState != null && pointerState.PointerOnContextMenu) +
+                ", PointerOnHoverSurface=" + (pointerState != null && pointerState.PointerOnHoverSurface) + ".");
         }
 
         private static bool IsMouseLikeEvent(EventType type)
