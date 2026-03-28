@@ -422,7 +422,7 @@ namespace Cortex
                 " | Panel: " + (_state.Logs.ShowDetachedWindow ? "Detached Logs" : GetContainerTitle(snapshot, _state.Workbench.PanelContainerId)) +
                 " | Theme: " + (snapshot != null && !string.IsNullOrEmpty(snapshot.ActiveThemeId) ? snapshot.ActiveThemeId : "cortex.vs-dark") +
                 " | Open docs: " + _state.Documents.OpenDocuments.Count +
-                " | Projects: " + _projectCatalog.GetProjects().Count +
+                " | Projects: " + ProjectCatalog.GetProjects().Count +
                 " | Logs window: " + (_state.Logs.ShowDetachedWindow ? "Open" : "Docked") +
                 (string.IsNullOrEmpty(renderer) ? string.Empty : " | " + renderer);
         }

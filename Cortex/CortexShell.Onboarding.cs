@@ -17,9 +17,9 @@ namespace Cortex
                 _state,
                 _state.Settings,
                 _workbenchRuntime.ContributionRegistry,
-                _loadedModCatalog,
-                _projectCatalog,
-                _projectWorkspaceService,
+                LoadedModCatalog,
+                ProjectCatalog,
+                ProjectWorkspaceService,
                 reopenedByUser);
             _sessionCoordinator.Visible = true;
             _openMenuGroup = string.Empty;
@@ -44,8 +44,8 @@ namespace Cortex
                 _state,
                 _workbenchRuntime,
                 _workbenchRuntime?.ContributionRegistry,
-                _projectCatalog,
-                _projectWorkspaceService,
+                ProjectCatalog,
+                ProjectWorkspaceService,
                 PersistWorkbenchSession,
                 PersistWindowSettings,
                 ActivateOnboardingContainers);

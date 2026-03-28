@@ -231,7 +231,7 @@ namespace Cortex
                     _editorSignatureHelpService,
                     _services != null ? _services.EditorContextService : null,
                     delegate { return _languageServiceClient; },
-                    delegate { return _navigationService; },
+                    delegate { return NavigationService; },
                     delegate { return _completionAugmentationInFlight; },
                     LanguageAnalysisDebounceMs,
                     delegate { EnsureLanguageServiceStarted(); },
@@ -442,7 +442,7 @@ namespace Cortex
 
         private CortexProjectDefinition ResolveProjectForDocument(string filePath)
         {
-            if (string.IsNullOrEmpty(filePath) || _projectCatalog == null)
+            if (string.IsNullOrEmpty(filePath) || ProjectCatalog == null)
             {
                 return _state.SelectedProject;
             }
@@ -453,7 +453,7 @@ namespace Cortex
                 return _state.SelectedProject;
             }
 
-            var projects = _projectCatalog.GetProjects();
+            var projects = ProjectCatalog.GetProjects();
             for (var i = 0; i < projects.Count; i++)
             {
                 var project = projects[i];

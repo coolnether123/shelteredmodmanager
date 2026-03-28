@@ -101,7 +101,7 @@ namespace Cortex
 
         private void ExecuteSearchOrAdvance(int step)
         {
-            if (_workbenchSearchService == null || _textSearchService == null || _state.Search == null)
+            if (_workbenchSearchService == null || TextSearchService == null || _state.Search == null)
             {
                 return;
             }
@@ -126,7 +126,7 @@ namespace Cortex
                 _state.Search.Results == null ||
                 !string.Equals(_state.Search.LastExecutedFingerprint, fingerprint, StringComparison.Ordinal);
             var priorIndex = queryChanged ? -1 : _state.Search.ActiveMatchIndex;
-            _state.Search.Results = _workbenchSearchService.Search(query, _state, _projectCatalog, _sourceLookupIndex, _textSearchService);
+            _state.Search.Results = _workbenchSearchService.Search(query, _state, ProjectCatalog, SourceLookupIndex, TextSearchService);
             _state.Search.LastExecutedFingerprint = fingerprint;
             _state.Search.PendingRefresh = false;
             _state.Search.ActiveMatchIndex = priorIndex;
@@ -167,7 +167,7 @@ namespace Cortex
             MMLog.WriteInfo("[Cortex.Find] Navigating to match " + (nextIndex + 1) + "/" + totalMatches +
                 " -> " + (match.DocumentPath ?? string.Empty) +
                 ":" + match.LineNumber + ":" + match.ColumnNumber + ".");
-            _workbenchSearchService.NavigateToMatch(match, _state, _navigationService);
+            _workbenchSearchService.NavigateToMatch(match, _state, NavigationService);
         }
     }
 }

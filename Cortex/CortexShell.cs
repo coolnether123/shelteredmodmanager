@@ -49,30 +49,6 @@ namespace Cortex
 
         private IWorkbenchRuntime _workbenchRuntime;
         private IRenderPipeline _renderPipeline;
-        private IProjectCatalog _projectCatalog;
-        private ILoadedModCatalog _loadedModCatalog;
-        private ISourceLookupIndex _sourceLookupIndex;
-        private IProjectWorkspaceService _projectWorkspaceService;
-        private IWorkspaceBrowserService _workspaceBrowserService;
-        private IReferenceCatalogService _referenceCatalogService;
-        private IDecompilerExplorerService _decompilerExplorerService;
-        private IDocumentService _documentService;
-        private IBuildCommandResolver _buildCommandResolver;
-        private IBuildExecutor _buildExecutor;
-        private ISourcePathResolver _sourcePathResolver;
-        private ISourceReferenceService _sourceReferenceService;
-        private IRuntimeLogFeed _runtimeLogFeed;
-        private IRuntimeToolBridge _runtimeToolBridge;
-        private IRestartCoordinator _restartCoordinator;
-        private IOverlayInputCaptureService _overlayInputCaptureService;
-        private ITextSearchService _textSearchService;
-        private CortexNavigationService _navigationService;
-        private IEditorContextService _editorContextService;
-        private HarmonyPatchOwnershipService _harmonyPatchOwnershipService;
-        private HarmonyPatchDisplayService _harmonyPatchDisplayService;
-        private HarmonyPatchOrderService _harmonyPatchOrderService;
-        private HarmonyPatchInspectionService _harmonyPatchInspectionService;
-        private HarmonyPatchResolutionService _harmonyPatchResolutionService;
         private ICortexSettingsStore _settingsStore;
         private IWorkbenchPersistenceService _workbenchPersistenceService;
         private IPathInteractionService _pathInteractionService;
@@ -109,12 +85,58 @@ namespace Cortex
         private readonly Dictionary<string, Rect> _menuGroupRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
 
         private ShellServiceMap _services;
-        private HarmonyPatchTemplateService _harmonyPatchTemplateService;
-        private HarmonyPatchInsertionService _harmonyPatchInsertionService;
-        private HarmonyPatchGenerationService _harmonyPatchGenerationService;
-        private GeneratedTemplateNavigationService _generatedTemplateNavigationService;
         private bool _lastOverlayMouseCapture;
         private bool _lastOverlayKeyboardCapture;
+
+        private IProjectCatalog ProjectCatalog
+        {
+            get { return _services != null ? _services.ProjectCatalog : null; }
+        }
+
+        private ILoadedModCatalog LoadedModCatalog
+        {
+            get { return _services != null ? _services.LoadedModCatalog : null; }
+        }
+
+        private ISourceLookupIndex SourceLookupIndex
+        {
+            get { return _services != null ? _services.SourceLookupIndex : null; }
+        }
+
+        private IProjectWorkspaceService ProjectWorkspaceService
+        {
+            get { return _services != null ? _services.ProjectWorkspaceService : null; }
+        }
+
+        private IDocumentService DocumentService
+        {
+            get { return _services != null ? _services.DocumentService : null; }
+        }
+
+        private IOverlayInputCaptureService OverlayInputCaptureService
+        {
+            get { return _services != null ? _services.OverlayInputCaptureService : null; }
+        }
+
+        private ITextSearchService TextSearchService
+        {
+            get { return _services != null ? _services.TextSearchService : null; }
+        }
+
+        private CortexNavigationService NavigationService
+        {
+            get { return _services != null ? _services.NavigationService : null; }
+        }
+
+        private IPathInteractionService PathInteractionService
+        {
+            get
+            {
+                return _services != null && _services.PathInteractionService != null
+                    ? _services.PathInteractionService
+                    : _pathInteractionService;
+            }
+        }
 
         public CortexShellController()
         {
@@ -123,9 +145,9 @@ namespace Cortex
             _sessionCoordinator = new ShellSessionCoordinator(
                 _state,
                 _lifecycleCoordinator,
-                () => _navigationService,
-                () => _loadedModCatalog,
-                () => _projectCatalog,
+                () => NavigationService,
+                () => LoadedModCatalog,
+                () => ProjectCatalog,
                 () => _workbenchPersistenceService,
                 () => _settingsStore);
             _layoutCoordinator = new ShellLayoutCoordinator(
@@ -142,7 +164,7 @@ namespace Cortex
                 _onboardingCoordinator,
                 _onboardingLifecycle,
                 () => ResolveShellHostUi(),
-                () => _overlayInputCaptureService,
+                () => OverlayInputCaptureService,
                 () => GetCurrentMousePosition(),
                 () => GetPointerPosition(),
                 () => HasCurrentInputEvent(),
@@ -154,7 +176,7 @@ namespace Cortex
                 _state,
                 _commandRouter,
                 () => _workbenchRuntime,
-                () => _documentService,
+                () => DocumentService,
                 () => _sessionCoordinator.Visible,
                 value => _sessionCoordinator.Visible = value,
                 PersistWorkbenchSession,
@@ -395,7 +417,7 @@ namespace Cortex
 
         private IOverlayInputCaptureService ResolveOverlayInputCaptureService()
         {
-            return _overlayInputCaptureService;
+            return OverlayInputCaptureService;
         }
 
         private ICortexShellHostUi ResolveShellHostUi()
@@ -611,75 +633,7 @@ namespace Cortex
 
         private void ApplyServiceMap(ShellServiceMap services)
         {
-            if (services == null)
-            {
-                return;
-            }
-
-            if (_services == null)
-            {
-                _services = new ShellServiceMap();
-            }
-
-            _services.ProjectCatalog = services.ProjectCatalog;
-            _services.LoadedModCatalog = services.LoadedModCatalog;
-            _services.SourceLookupIndex = services.SourceLookupIndex;
-            _services.ProjectWorkspaceService = services.ProjectWorkspaceService;
-            _services.WorkspaceBrowserService = services.WorkspaceBrowserService;
-            _services.ReferenceCatalogService = services.ReferenceCatalogService;
-            _services.DecompilerExplorerService = services.DecompilerExplorerService;
-            _services.DocumentService = services.DocumentService;
-            _services.BuildCommandResolver = services.BuildCommandResolver;
-            _services.BuildExecutor = services.BuildExecutor;
-            _services.SourcePathResolver = services.SourcePathResolver;
-            _services.SourceReferenceService = services.SourceReferenceService;
-            _services.RuntimeLogFeed = services.RuntimeLogFeed;
-            _services.PathInteractionService = services.PathInteractionService;
-            _services.RuntimeToolBridge = services.RuntimeToolBridge;
-            _services.RestartCoordinator = services.RestartCoordinator;
-            _services.OverlayInputCaptureService = services.OverlayInputCaptureService;
-            _services.TextSearchService = services.TextSearchService;
-            _services.NavigationService = services.NavigationService;
-            _services.EditorContextService = services.EditorContextService;
-            _services.HarmonyPatchOwnershipService = services.HarmonyPatchOwnershipService;
-            _services.HarmonyPatchDisplayService = services.HarmonyPatchDisplayService;
-            _services.HarmonyPatchOrderService = services.HarmonyPatchOrderService;
-            _services.HarmonyPatchInspectionService = services.HarmonyPatchInspectionService;
-            _services.HarmonyPatchResolutionService = services.HarmonyPatchResolutionService;
-            _services.HarmonyPatchTemplateService = services.HarmonyPatchTemplateService;
-            _services.HarmonyPatchInsertionService = services.HarmonyPatchInsertionService;
-            _services.HarmonyPatchGenerationService = services.HarmonyPatchGenerationService;
-            _services.GeneratedTemplateNavigationService = services.GeneratedTemplateNavigationService;
-
-            _projectCatalog = _services.ProjectCatalog;
-            _loadedModCatalog = _services.LoadedModCatalog;
-            _sourceLookupIndex = _services.SourceLookupIndex;
-            _projectWorkspaceService = _services.ProjectWorkspaceService;
-            _workspaceBrowserService = _services.WorkspaceBrowserService;
-            _referenceCatalogService = _services.ReferenceCatalogService;
-            _decompilerExplorerService = _services.DecompilerExplorerService;
-            _documentService = _services.DocumentService;
-            _buildCommandResolver = _services.BuildCommandResolver;
-            _buildExecutor = _services.BuildExecutor;
-            _sourcePathResolver = _services.SourcePathResolver;
-            _sourceReferenceService = _services.SourceReferenceService;
-            _runtimeLogFeed = _services.RuntimeLogFeed;
-            _pathInteractionService = _services.PathInteractionService;
-            _runtimeToolBridge = _services.RuntimeToolBridge;
-            _restartCoordinator = _services.RestartCoordinator;
-            _overlayInputCaptureService = _services.OverlayInputCaptureService;
-            _textSearchService = _services.TextSearchService;
-            _navigationService = _services.NavigationService;
-            _editorContextService = _services.EditorContextService;
-            _harmonyPatchOwnershipService = _services.HarmonyPatchOwnershipService;
-            _harmonyPatchDisplayService = _services.HarmonyPatchDisplayService;
-            _harmonyPatchOrderService = _services.HarmonyPatchOrderService;
-            _harmonyPatchInspectionService = _services.HarmonyPatchInspectionService;
-            _harmonyPatchResolutionService = _services.HarmonyPatchResolutionService;
-            _harmonyPatchTemplateService = _services.HarmonyPatchTemplateService;
-            _harmonyPatchInsertionService = _services.HarmonyPatchInsertionService;
-            _harmonyPatchGenerationService = _services.HarmonyPatchGenerationService;
-            _generatedTemplateNavigationService = _services.GeneratedTemplateNavigationService;
+            _services = services ?? new ShellServiceMap();
             ResetModuleRuntime();
         }
 
@@ -692,11 +646,11 @@ namespace Cortex
         {
             _overlayCoordinator.DrawOnboardingOverlay(
                 _hostEnvironment ?? NullCortexHostServices.Instance.Environment,
-                _loadedModCatalog,
-                _projectCatalog,
-                _projectWorkspaceService,
+                LoadedModCatalog,
+                ProjectCatalog,
+                ProjectWorkspaceService,
                 _workbenchRuntime,
-                _services != null && _services.PathInteractionService != null ? _services.PathInteractionService : _pathInteractionService,
+                PathInteractionService,
                 ActivateContainer,
                 PersistWorkbenchSession,
                 PersistWindowSettings);
