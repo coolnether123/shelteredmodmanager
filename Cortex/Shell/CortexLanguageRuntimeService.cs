@@ -305,14 +305,10 @@ namespace Cortex.Shell
                 return;
             }
 
-            runtime.CurrentStatus = new LanguageServiceStatusResponse
-            {
-                Success = isRunning,
-                StatusMessage = statusMessage ?? string.Empty,
-                IsRunning = isRunning,
-                Capabilities = new string[0],
-                LoadedProjectPaths = new string[0]
-            };
+            runtime.LastStatusSucceeded = isRunning;
+            runtime.RuntimeStatusMessage = statusMessage ?? string.Empty;
+            runtime.CachedProjectCount = 0;
+            runtime.CapabilityIds = new string[0];
         }
 
         private void PublishSnapshot(LanguageRuntimeLifecycleState lifecycleState, LanguageRuntimeHealthState healthState, string statusMessage, string lastErrorSummary, LanguageProviderDescriptor provider)
@@ -332,7 +328,6 @@ namespace Cortex.Shell
         private void PublishSnapshotFromCurrentState()
         {
             var runtime = GetRuntimeState();
-            var status = runtime != null ? runtime.CurrentStatus : null;
             var provider = _activeSession != null ? _activeSession.Descriptor : (_state.LanguageRuntime != null ? _state.LanguageRuntime.Provider : new LanguageProviderDescriptor());
             var lifecycleState = LanguageRuntimeLifecycleState.Disabled;
             if (_activeSession != null)
@@ -351,41 +346,48 @@ namespace Cortex.Shell
             {
                 healthState = LanguageRuntimeHealthState.Faulted;
             }
-            else if (status != null && !status.Success && !string.IsNullOrEmpty(status.StatusMessage) && !string.Equals(status.StatusMessage, "starting", StringComparison.OrdinalIgnoreCase) && !string.Equals(status.StatusMessage, "reloading", StringComparison.OrdinalIgnoreCase) && !string.Equals(status.StatusMessage, "standby", StringComparison.OrdinalIgnoreCase))
+            else if (runtime != null &&
+                !runtime.LastStatusSucceeded &&
+                !string.IsNullOrEmpty(runtime.RuntimeStatusMessage) &&
+                !string.Equals(runtime.RuntimeStatusMessage, "starting", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(runtime.RuntimeStatusMessage, "reloading", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(runtime.RuntimeStatusMessage, "standby", StringComparison.OrdinalIgnoreCase))
             {
                 healthState = LanguageRuntimeHealthState.Faulted;
             }
 
-            var statusMessage = status != null && !string.IsNullOrEmpty(status.StatusMessage) ? status.StatusMessage : (_state.LanguageRuntime != null ? _state.LanguageRuntime.StatusMessage : string.Empty);
+            var statusMessage = runtime != null && !string.IsNullOrEmpty(runtime.RuntimeStatusMessage)
+                ? runtime.RuntimeStatusMessage
+                : (_state.LanguageRuntime != null ? _state.LanguageRuntime.StatusMessage : string.Empty);
             var lastError = !string.IsNullOrEmpty(_activeSession != null ? _activeSession.LastError : string.Empty) ? _activeSession.LastError : (_state.LanguageRuntime != null ? _state.LanguageRuntime.LastErrorSummary : string.Empty);
             _state.LanguageRuntime = new LanguageRuntimeSnapshot
             {
-                Provider = BuildProviderDescriptor(provider, status),
+                Provider = BuildProviderDescriptor(provider, runtime),
                 LifecycleState = lifecycleState,
                 HealthState = healthState,
-                Capabilities = BuildCapabilities(status),
+                Capabilities = BuildCapabilities(runtime != null ? runtime.CapabilityIds : null),
                 StatusMessage = statusMessage ?? string.Empty,
                 LastErrorSummary = lastError ?? string.Empty,
                 ActiveGeneration = runtime != null ? runtime.ServiceGeneration : _activeGeneration
             };
         }
 
-        private static LanguageProviderDescriptor BuildProviderDescriptor(LanguageProviderDescriptor source, LanguageServiceStatusResponse status)
+        private static LanguageProviderDescriptor BuildProviderDescriptor(LanguageProviderDescriptor source, CortexShellLanguageRuntimeState runtime)
         {
             var descriptor = CloneDescriptor(source);
-            if (status != null)
+            if (runtime != null)
             {
-                if (!string.IsNullOrEmpty(status.WorkerName)) descriptor.DisplayName = status.WorkerName;
-                if (!string.IsNullOrEmpty(status.WorkerVersion)) descriptor.Version = status.WorkerVersion;
+                if (!string.IsNullOrEmpty(runtime.ProviderDisplayName)) descriptor.DisplayName = runtime.ProviderDisplayName;
+                if (!string.IsNullOrEmpty(runtime.ProviderVersion)) descriptor.Version = runtime.ProviderVersion;
             }
 
             return descriptor;
         }
 
-        private static LanguageCapabilitiesSnapshot BuildCapabilities(LanguageServiceStatusResponse status)
+        private static LanguageCapabilitiesSnapshot BuildCapabilities(string[] ids)
         {
             var capabilities = new LanguageCapabilitiesSnapshot();
-            var ids = status != null && status.Capabilities != null ? status.Capabilities : new string[0];
+            ids = ids ?? new string[0];
             capabilities.CapabilityIds = (string[])ids.Clone();
             capabilities.SupportsAnalysis = HasCapability(ids, "analysis");
             capabilities.SupportsDiagnostics = HasCapability(ids, "diagnostics");

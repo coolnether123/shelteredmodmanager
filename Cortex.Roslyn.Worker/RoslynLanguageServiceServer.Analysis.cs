@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,9 +23,11 @@ namespace Cortex.Roslyn.Worker
     internal sealed partial class RoslynLanguageServiceServer
     {
         private const int CompletionCandidateLimit = 512;
-        private readonly Dictionary<string, Project> _projectCache = new Dictionary<string, Project>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, MSBuildWorkspace> _workspaceCache = new Dictionary<string, MSBuildWorkspace>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, CachedDocumentContext> _documentContextCache = new Dictionary<string, CachedDocumentContext>(StringComparer.OrdinalIgnoreCase);
+        private const int ExactCompletionCommitChangeLimit = 96;
+        private readonly ConcurrentDictionary<string, Project> _projectCache = new ConcurrentDictionary<string, Project>(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, MSBuildWorkspace> _workspaceCache = new ConcurrentDictionary<string, MSBuildWorkspace>(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, CachedDocumentContext> _documentContextCache = new ConcurrentDictionary<string, CachedDocumentContext>(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, string> _documentProjectPathCache = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         private LanguageServiceAnalysisResponse AnalyzeDocument(LanguageServiceDocumentRequest request)
         {
@@ -50,7 +53,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+            var text = GetDocumentText(documentContext);
             return new LanguageServiceAnalysisResponse
             {
                 Success = true,
@@ -59,10 +62,10 @@ namespace Cortex.Roslyn.Worker
                 ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
                 DocumentVersion = request.DocumentVersion,
                 Diagnostics = request.IncludeDiagnostics
-                    ? CollectDiagnostics(documentContext.Document)
+                    ? CollectDiagnostics(documentContext)
                     : new LanguageServiceDiagnostic[0],
                 Classifications = request.IncludeClassifications
-                    ? CollectClassifications(documentContext.Document, text, request.ClassificationRangeStart, request.ClassificationRangeLength)
+                    ? CollectClassifications(documentContext, text, request.ClassificationRangeStart, request.ClassificationRangeLength)
                     : new LanguageServiceClassifiedSpan[0]
             };
         }
@@ -94,7 +97,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+            var text = GetDocumentText(documentContext);
             var position = ResolveRequestPosition(text, request.Line, request.Column, request.AbsolutePosition);
             if (position < 0 || position > text.Length)
             {
@@ -113,7 +116,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var symbol = ResolveSymbol(documentContext.Document, position);
+            var symbol = ResolveSymbol(documentContext, position);
             return BuildHoverResponse(documentContext, request, text, position, symbol);
         }
 
@@ -141,7 +144,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+            var text = GetDocumentText(documentContext);
             var position = ResolveRequestPosition(text, request.Line, request.Column, request.AbsolutePosition);
             if (position < 0 || position > text.Length)
             {
@@ -157,7 +160,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var symbol = ResolveSymbol(documentContext.Document, position);
+            var symbol = ResolveSymbol(documentContext, position);
             if (symbol == null)
             {
                 return new LanguageServiceDefinitionResponse
@@ -172,7 +175,18 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var sourceLocation = symbol.Locations.FirstOrDefault(location => location.IsInSource);
+            string navigationMetadataName;
+            string navigationContainingTypeName;
+            string navigationContainingAssemblyName;
+            string navigationDocumentationCommentId;
+            PopulateNavigationMetadata(
+                symbol,
+                out navigationMetadataName,
+                out navigationContainingTypeName,
+                out navigationContainingAssemblyName,
+                out navigationDocumentationCommentId);
+
+            var sourceLocation = GetDefinitionNavigationLocation(symbol, null);
             if (sourceLocation == null)
             {
                 return new LanguageServiceDefinitionResponse
@@ -184,10 +198,10 @@ namespace Cortex.Roslyn.Worker
                     DocumentVersion = request.DocumentVersion,
                     SymbolDisplay = symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
                     SymbolKind = symbol.Kind.ToString(),
-                    MetadataName = symbol.MetadataName ?? string.Empty,
-                    ContainingTypeName = GetContainingTypeName(symbol),
-                    ContainingAssemblyName = symbol.ContainingAssembly != null ? symbol.ContainingAssembly.Identity.Name : string.Empty,
-                    DocumentationCommentId = symbol.GetDocumentationCommentId() ?? string.Empty,
+                    MetadataName = navigationMetadataName,
+                    ContainingTypeName = navigationContainingTypeName,
+                    ContainingAssemblyName = navigationContainingAssemblyName,
+                    DocumentationCommentId = navigationDocumentationCommentId,
                     DocumentationXml = symbol.GetDocumentationCommentXml() ?? string.Empty,
                     DocumentationText = FlattenDocumentation(symbol.GetDocumentationCommentXml()),
                     Range = new LanguageServiceRange()
@@ -213,10 +227,10 @@ namespace Cortex.Roslyn.Worker
                 DocumentVersion = request.DocumentVersion,
                 SymbolDisplay = symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
                 SymbolKind = symbol.Kind.ToString(),
-                MetadataName = symbol.MetadataName ?? string.Empty,
-                ContainingTypeName = GetContainingTypeName(symbol),
-                ContainingAssemblyName = symbol.ContainingAssembly != null ? symbol.ContainingAssembly.Identity.Name : string.Empty,
-                DocumentationCommentId = symbol.GetDocumentationCommentId() ?? string.Empty,
+                MetadataName = navigationMetadataName,
+                ContainingTypeName = navigationContainingTypeName,
+                ContainingAssemblyName = navigationContainingAssemblyName,
+                DocumentationCommentId = navigationDocumentationCommentId,
                 DocumentationXml = symbol.GetDocumentationCommentXml() ?? string.Empty,
                 DocumentationText = FlattenDocumentation(symbol.GetDocumentationCommentXml()),
                 Range = BuildRange(definitionText, sourceLocation.SourceSpan),
@@ -249,7 +263,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+            var text = GetDocumentText(documentContext);
             var position = ResolveRequestPosition(text, request.Line, request.Column, request.AbsolutePosition);
             if (position < 0 || position > text.Length)
             {
@@ -298,11 +312,22 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var items = completionList.ItemsList
-                .Take(CompletionCandidateLimit)
-                .Select(item => ToProtocolCompletionItem(completionService, documentContext.Document, completionList, item))
-                .Where(item => item != null)
-                .ToArray();
+            var completionItems = completionList.ItemsList.Take(CompletionCandidateLimit).ToArray();
+            var items = new List<LanguageServiceCompletionItem>(completionItems.Length);
+            for (var i = 0; i < completionItems.Length; i++)
+            {
+                var protocolItem = ToProtocolCompletionItem(
+                    completionService,
+                    documentContext.Document,
+                    completionList,
+                    completionItems[i],
+                    i < ExactCompletionCommitChangeLimit);
+                if (protocolItem != null)
+                {
+                    items.Add(protocolItem);
+                }
+            }
+
             return new LanguageServiceCompletionResponse
             {
                 Success = true,
@@ -311,7 +336,7 @@ namespace Cortex.Roslyn.Worker
                 ProjectFilePath = documentContext.ProjectPath ?? string.Empty,
                 DocumentVersion = request.DocumentVersion,
                 ReplacementRange = BuildRange(text, completionList.Span),
-                Items = items
+                Items = items.ToArray()
             };
         }
 
@@ -350,21 +375,41 @@ namespace Cortex.Roslyn.Worker
             CompletionService completionService,
             Document document,
             CompletionList completionList,
-            CompletionItem item)
+            CompletionItem item,
+            bool resolveCommitChange)
         {
             if (completionService == null || document == null || completionList == null || item == null)
             {
                 return null;
             }
 
-            var change = completionService.GetChangeAsync(document, item, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
+            var insertText = CompletionInsertTextBuilder.BuildFastInsertText(item);
+            if (resolveCommitChange)
+            {
+                try
+                {
+                    var change = completionService.GetChangeAsync(document, item, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
+                    if (change.TextChange.NewText != null)
+                    {
+                        insertText = change.TextChange.NewText;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch
+                {
+                }
+            }
+
             return new LanguageServiceCompletionItem
             {
                 DisplayText = item.DisplayText ?? string.Empty,
-                InsertText = change.TextChange.NewText ?? item.DisplayText ?? string.Empty,
+                InsertText = insertText,
                 FilterText = item.FilterText ?? item.DisplayText ?? string.Empty,
                 SortText = item.SortText ?? item.DisplayText ?? string.Empty,
-                InlineDescription = string.Empty,
+                InlineDescription = item.InlineDescription ?? string.Empty,
                 Kind = item.Tags.Length > 0 ? item.Tags[0] ?? string.Empty : string.Empty,
                 IsPreselected = completionList.SuggestionModeItem != null && item == completionList.SuggestionModeItem
             };
@@ -422,7 +467,18 @@ namespace Cortex.Roslyn.Worker
                 return;
             }
 
-            var definitionLocation = symbol.Locations.FirstOrDefault(location => location.IsInSource);
+            string navigationMetadataName;
+            string navigationContainingTypeName;
+            string navigationContainingAssemblyName;
+            string navigationDocumentationCommentId;
+            PopulateNavigationMetadata(
+                symbol,
+                out navigationMetadataName,
+                out navigationContainingTypeName,
+                out navigationContainingAssemblyName,
+                out navigationDocumentationCommentId);
+
+            var definitionLocation = GetDefinitionNavigationLocation(symbol, null);
             var definitionText = definitionLocation != null && definitionLocation.SourceTree != null
                 ? definitionLocation.SourceTree.GetText()
                 : null;
@@ -430,10 +486,10 @@ namespace Cortex.Roslyn.Worker
 
             part.SymbolDisplay = symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
             part.SymbolKind = symbol.Kind.ToString();
-            part.MetadataName = symbol.MetadataName ?? string.Empty;
-            part.ContainingTypeName = GetContainingTypeName(symbol);
-            part.ContainingAssemblyName = symbol.ContainingAssembly != null ? symbol.ContainingAssembly.Identity.Name : string.Empty;
-            part.DocumentationCommentId = symbol.GetDocumentationCommentId() ?? string.Empty;
+            part.MetadataName = navigationMetadataName;
+            part.ContainingTypeName = navigationContainingTypeName;
+            part.ContainingAssemblyName = navigationContainingAssemblyName;
+            part.DocumentationCommentId = navigationDocumentationCommentId;
             part.DocumentationXml = documentationXml ?? string.Empty;
             part.DocumentationText = FlattenDocumentation(documentationXml);
             part.SupplementalSections = BuildSymbolSupplementalSections(symbol);
@@ -446,13 +502,15 @@ namespace Cortex.Roslyn.Worker
         private DocumentContext ResolveDocument(string documentPath, string projectPath, string workspaceRootPath, string[] sourceRoots, string documentText, int documentVersion)
         {
             var effectivePath = NormalizePath(documentPath);
-            var cacheKey = BuildDocumentCacheKey(effectivePath, documentVersion);
+            var cacheKey = BuildDocumentCacheKey(effectivePath);
             if (!string.IsNullOrEmpty(cacheKey))
             {
                 CachedDocumentContext cachedContext;
-                if (_documentContextCache.TryGetValue(cacheKey, out cachedContext) && cachedContext != null && cachedContext.Context != null)
+                if (_documentContextCache.TryGetValue(cacheKey, out cachedContext) &&
+                    cachedContext != null &&
+                    CanReuseCachedDocumentContext(cachedContext, projectPath, documentText, documentVersion))
                 {
-                    return cachedContext.Context;
+                    return cachedContext.CreateDocumentContext();
                 }
             }
 
@@ -465,18 +523,28 @@ namespace Cortex.Roslyn.Worker
 
             if (document == null)
             {
-                document = CreateAdhocDocument(effectivePath, documentText);
+                document = project != null
+                    ? CreateDetachedProjectDocument(project, effectivePath, documentText)
+                    : CreateAdhocDocument(effectivePath, documentText);
             }
             else if (documentText != null)
             {
-                var solution = document.Project.Solution.WithDocumentText(document.Id, SourceText.From(documentText, Encoding.UTF8));
-                document = solution.GetDocument(document.Id);
+                document = document.WithText(SourceText.From(documentText, Encoding.UTF8));
             }
 
             var context = new DocumentContext(document, project != null ? project.FilePath : NormalizePath(projectPath));
+            context.DocumentVersion = documentVersion;
+            if (documentText != null)
+            {
+                context.Text = SourceText.From(documentText, Encoding.UTF8);
+            }
             if (!string.IsNullOrEmpty(cacheKey))
             {
                 _documentContextCache[cacheKey] = new CachedDocumentContext(context);
+            }
+            if (!string.IsNullOrEmpty(context.ProjectPath))
+            {
+                RememberDocumentProjectPath(effectivePath, context.ProjectPath);
             }
 
             return context;
@@ -490,7 +558,18 @@ namespace Cortex.Roslyn.Worker
                 var loadedProject = LoadProject(explicitProjectPath);
                 if (loadedProject != null)
                 {
+                    RememberDocumentProjectPath(documentPath, loadedProject.FilePath);
                     return loadedProject;
+                }
+            }
+
+            var mappedProjectPath = GetRememberedDocumentProjectPath(documentPath);
+            if (!string.IsNullOrEmpty(mappedProjectPath))
+            {
+                var mappedProject = LoadProject(mappedProjectPath);
+                if (mappedProject != null)
+                {
+                    return mappedProject;
                 }
             }
 
@@ -498,15 +577,17 @@ namespace Cortex.Roslyn.Worker
             {
                 if (FindDocument(cached, documentPath) != null)
                 {
+                    RememberDocumentProjectPath(documentPath, cached.FilePath);
                     return cached;
                 }
             }
 
             var candidateProjectPaths = new List<string>();
-            AddCandidateProjects(candidateProjectPaths, _projectFilePaths);
-            AddCandidateProjects(candidateProjectPaths, FindProjectsUnderRoots(sourceRoots));
-            AddCandidateProjects(candidateProjectPaths, FindProjectsUnderRoots(new[] { workspaceRootPath, _workspaceRootPath }));
-            AddCandidateProjects(candidateProjectPaths, FindProjectsNearDocument(documentPath));
+            var seenProjectPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AddCandidateProjects(candidateProjectPaths, seenProjectPaths, _projectFilePaths);
+            AddCandidateProjects(candidateProjectPaths, seenProjectPaths, FindProjectsUnderRoots(sourceRoots));
+            AddCandidateProjects(candidateProjectPaths, seenProjectPaths, FindProjectsUnderRoots(new[] { workspaceRootPath, _workspaceRootPath }));
+            AddCandidateProjects(candidateProjectPaths, seenProjectPaths, FindProjectsNearDocument(documentPath));
 
             for (var i = 0; i < candidateProjectPaths.Count; i++)
             {
@@ -514,6 +595,7 @@ namespace Cortex.Roslyn.Worker
                 var loaded = LoadProject(candidate);
                 if (loaded != null && (string.IsNullOrEmpty(documentPath) || FindDocument(loaded, documentPath) != null))
                 {
+                    RememberDocumentProjectPath(documentPath, loaded.FilePath);
                     return loaded;
                 }
             }
@@ -521,9 +603,9 @@ namespace Cortex.Roslyn.Worker
             return null;
         }
 
-        private void AddCandidateProjects(List<string> candidates, IEnumerable<string> paths)
+        private void AddCandidateProjects(List<string> candidates, HashSet<string> seen, IEnumerable<string> paths)
         {
-            if (candidates == null || paths == null)
+            if (candidates == null || seen == null || paths == null)
             {
                 return;
             }
@@ -531,7 +613,7 @@ namespace Cortex.Roslyn.Worker
             foreach (var path in paths)
             {
                 var normalized = NormalizePath(path);
-                if (string.IsNullOrEmpty(normalized) || IsBuildArtifact(normalized) || candidates.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+                if (string.IsNullOrEmpty(normalized) || IsBuildArtifact(normalized) || !seen.Add(normalized))
                 {
                     continue;
                 }
@@ -603,17 +685,39 @@ namespace Cortex.Roslyn.Worker
 
             try
             {
-                var workspace = MSBuildWorkspace.Create();
-                workspace.WorkspaceFailed += delegate(object sender, WorkspaceDiagnosticEventArgs args)
+                var gateHeld = false;
+                try
                 {
-                    Console.Error.WriteLine(args.Diagnostic.Message);
-                };
-                project = workspace.OpenProjectAsync(normalized, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
-                project = AddSupplementalMetadataReferences(project);
+                    _projectLoadGate.Wait(CurrentCancellationToken);
+                    gateHeld = true;
+                    if (_projectCache.TryGetValue(normalized, out project))
+                    {
+                        return project;
+                    }
 
-                _projectCache[normalized] = project;
-                _workspaceCache[normalized] = workspace;
-                return project;
+                    var workspace = MSBuildWorkspace.Create();
+                    workspace.WorkspaceFailed += delegate(object sender, WorkspaceDiagnosticEventArgs args)
+                    {
+                        Console.Error.WriteLine(args.Diagnostic.Message);
+                    };
+                    project = workspace.OpenProjectAsync(normalized, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
+                    project = AddSupplementalMetadataReferences(project);
+
+                    _projectCache[normalized] = project;
+                    _workspaceCache[normalized] = workspace;
+                    return project;
+                }
+                finally
+                {
+                    if (gateHeld)
+                    {
+                        _projectLoadGate.Release();
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -669,6 +773,20 @@ namespace Cortex.Roslyn.Worker
                 loader: TextLoader.From(TextAndVersion.Create(text, VersionStamp.Create(), documentPath ?? "Document.cs")),
                 filePath: documentPath ?? "Document.cs");
             return workspace.AddDocument(documentInfo);
+        }
+
+        private static Document CreateDetachedProjectDocument(Project project, string documentPath, string documentText)
+        {
+            if (project == null)
+            {
+                return null;
+            }
+
+            var text = SourceText.From(documentText ?? ReadAllTextSafe(documentPath), Encoding.UTF8);
+            return project.AddDocument(
+                Path.GetFileName(documentPath ?? "Document.cs"),
+                text,
+                filePath: documentPath ?? "Document.cs");
         }
 
         private Project AddSupplementalMetadataReferences(Project project)
@@ -758,9 +876,10 @@ namespace Cortex.Roslyn.Worker
             }
         }
 
-        private static LanguageServiceDiagnostic[] CollectDiagnostics(Document document)
+        private static LanguageServiceDiagnostic[] CollectDiagnostics(DocumentContext documentContext)
         {
-            var syntaxTree = document.GetSyntaxTreeAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+            var document = documentContext != null ? documentContext.Document : null;
+            var syntaxTree = GetDocumentSyntaxTree(documentContext);
             if (syntaxTree == null)
             {
                 return new LanguageServiceDiagnostic[0];
@@ -769,10 +888,10 @@ namespace Cortex.Roslyn.Worker
             var diagnostics = new List<Diagnostic>();
             diagnostics.AddRange(syntaxTree.GetDiagnostics());
 
-            var compilation = document.Project.GetCompilationAsync(CurrentCancellationToken).GetAwaiter().GetResult();
-            if (compilation != null)
+            var semanticModel = GetDocumentSemanticModel(documentContext);
+            if (semanticModel != null)
             {
-                diagnostics.AddRange(compilation.GetDiagnostics().Where(diagnostic =>
+                diagnostics.AddRange(semanticModel.GetDiagnostics().Where(diagnostic =>
                     diagnostic.Location.IsInSource &&
                     diagnostic.Location.SourceTree == syntaxTree));
             }
@@ -783,19 +902,37 @@ namespace Cortex.Roslyn.Worker
                 .ToArray();
         }
 
-        private static LanguageServiceClassifiedSpan[] CollectClassifications(Document document, SourceText text, int rangeStart, int rangeLength)
+        private static LanguageServiceClassifiedSpan[] CollectClassifications(DocumentContext documentContext, SourceText text, int rangeStart, int rangeLength)
         {
             var classificationSpan = BuildClassificationSpan(text, rangeStart, rangeLength);
+            var document = documentContext != null ? documentContext.Document : null;
+            if (document == null)
+            {
+                return new LanguageServiceClassifiedSpan[0];
+            }
+
             var spans = Classifier.GetClassifiedSpansAsync(document, classificationSpan, CurrentCancellationToken).GetAwaiter().GetResult();
             var classificationService = new RoslynSemanticTokenClassificationService();
             var merged = new Dictionary<string, LanguageServiceClassifiedSpan>(StringComparer.Ordinal);
+            var genericSymbolCache = new Dictionary<int, ISymbol>();
             foreach (var span in spans)
             {
+                ISymbol resolvedSymbol = null;
+                if (Cortex.Core.Models.SemanticTokenClassification.IsGeneric(span.ClassificationType))
+                {
+                    genericSymbolCache.TryGetValue(span.TextSpan.Start, out resolvedSymbol);
+                    if (!genericSymbolCache.ContainsKey(span.TextSpan.Start))
+                    {
+                        resolvedSymbol = ResolveSymbol(documentContext, span.TextSpan.Start);
+                        genericSymbolCache[span.TextSpan.Start] = resolvedSymbol;
+                    }
+                }
+
                 var classifiedSpan = classificationService.CreateClassifiedSpan(
                     text,
                     span.ClassificationType,
                     span.TextSpan,
-                    ResolveSymbol(document, span.TextSpan.Start));
+                    resolvedSymbol);
                 var key = classifiedSpan.Start + ":" + classifiedSpan.Length;
                 LanguageServiceClassifiedSpan existing;
                 if (!merged.TryGetValue(key, out existing))
@@ -849,9 +986,10 @@ namespace Cortex.Roslyn.Worker
             };
         }
 
-        private static ISymbol ResolveSymbol(Document document, int position)
+        private static ISymbol ResolveSymbol(DocumentContext documentContext, int position)
         {
-            var text = document != null ? document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult() : null;
+            var document = documentContext != null ? documentContext.Document : null;
+            var text = GetDocumentText(documentContext);
             if (document == null || text == null)
             {
                 return null;
@@ -860,7 +998,7 @@ namespace Cortex.Roslyn.Worker
             var candidatePositions = BuildSymbolCandidatePositions(text, position);
             for (var i = 0; i < candidatePositions.Count; i++)
             {
-                var symbol = TryResolveSymbolAtPosition(document, candidatePositions[i]);
+                var symbol = TryResolveSymbolAtPosition(documentContext, candidatePositions[i]);
                 if (symbol != null)
                 {
                     return symbol;
@@ -870,10 +1008,11 @@ namespace Cortex.Roslyn.Worker
             return null;
         }
 
-        private static ISymbol TryResolveSymbolAtPosition(Document document, int position)
+        private static ISymbol TryResolveSymbolAtPosition(DocumentContext documentContext, int position)
         {
-            var semanticModel = document.GetSemanticModelAsync(CurrentCancellationToken).GetAwaiter().GetResult();
-            var root = document.GetSyntaxRootAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+            var document = documentContext != null ? documentContext.Document : null;
+            var semanticModel = GetDocumentSemanticModel(documentContext);
+            var root = GetDocumentSyntaxRoot(documentContext);
             if (semanticModel == null || root == null)
             {
                 return null;
@@ -890,19 +1029,17 @@ namespace Cortex.Roslyn.Worker
                 return null;
             }
 
-            var symbol = SymbolFinder.FindSymbolAtPositionAsync(document, position, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
-            if (symbol != null)
-            {
-                return symbol;
-            }
-
             var symbolFromAncestors = TryResolveSymbolFromAncestors(semanticModel, token, position);
             if (symbolFromAncestors != null)
             {
                 return symbolFromAncestors;
             }
 
-            return null;
+            return SymbolFinder.FindSymbolAtPositionAsync(
+                semanticModel,
+                position,
+                document.Project.Solution.Workspace,
+                cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
         }
 
         private static ISymbol TryResolveSymbolFromAncestors(SemanticModel semanticModel, SyntaxToken token, int position)
@@ -1238,14 +1375,14 @@ namespace Cortex.Roslyn.Worker
             }
         }
 
-        private static string BuildDocumentCacheKey(string documentPath, int documentVersion)
+        private static string BuildDocumentCacheKey(string documentPath)
         {
-            if (string.IsNullOrEmpty(documentPath) || documentVersion <= 0)
+            if (string.IsNullOrEmpty(documentPath))
             {
                 return string.Empty;
             }
 
-            return documentPath + "|" + documentVersion;
+            return documentPath;
         }
 
         private int GetCachedProjectCount()
@@ -1323,18 +1460,287 @@ namespace Cortex.Roslyn.Worker
                 ProjectPath = projectPath ?? string.Empty;
             }
 
+            public CachedDocumentContext Cache;
             public Document Document;
             public string ProjectPath;
+            public int DocumentVersion;
+            public SourceText Text;
+            public SyntaxTree SyntaxTree;
+            public SyntaxNode SyntaxRoot;
+            public SemanticModel SemanticModel;
         }
 
         private sealed class CachedDocumentContext
         {
+            private readonly object _sync = new object();
+
             public CachedDocumentContext(DocumentContext context)
             {
-                Context = context;
+                Document = context != null ? context.Document : null;
+                ProjectPath = context != null ? context.ProjectPath ?? string.Empty : string.Empty;
+                DocumentVersion = context != null ? context.DocumentVersion : 0;
+                Text = context != null ? context.Text : null;
             }
 
-            public DocumentContext Context;
+            public readonly Document Document;
+            public readonly string ProjectPath;
+            public readonly int DocumentVersion;
+            public SourceText Text;
+            public SyntaxTree SyntaxTree;
+            public SyntaxNode SyntaxRoot;
+            public SemanticModel SemanticModel;
+            public DocumentTextFingerprint TextFingerprint;
+
+            public DocumentContext CreateDocumentContext()
+            {
+                var context = new DocumentContext(Document, ProjectPath)
+                {
+                    Cache = this,
+                    DocumentVersion = DocumentVersion,
+                    Text = Text,
+                    SyntaxTree = SyntaxTree,
+                    SyntaxRoot = SyntaxRoot,
+                    SemanticModel = SemanticModel
+                };
+                return context;
+            }
+
+            public SourceText GetOrLoadText()
+            {
+                lock (_sync)
+                {
+                    if (Text == null && Document != null)
+                    {
+                        if (!Document.TryGetText(out Text))
+                        {
+                            Text = Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+                        }
+                    }
+
+                    if (Text != null && !TextFingerprint.HasValue)
+                    {
+                        TextFingerprint = DocumentTextFingerprint.From(Text);
+                    }
+
+                    return Text;
+                }
+            }
+
+            public SyntaxTree GetOrLoadSyntaxTree()
+            {
+                lock (_sync)
+                {
+                    if (SyntaxTree == null && Document != null)
+                    {
+                        if (!Document.TryGetSyntaxTree(out SyntaxTree))
+                        {
+                            SyntaxTree = Document.GetSyntaxTreeAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+                        }
+                    }
+
+                    return SyntaxTree;
+                }
+            }
+
+            public SyntaxNode GetOrLoadSyntaxRoot()
+            {
+                lock (_sync)
+                {
+                    if (SyntaxRoot == null && Document != null)
+                    {
+                        if (!Document.TryGetSyntaxRoot(out SyntaxRoot))
+                        {
+                            SyntaxRoot = Document.GetSyntaxRootAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+                        }
+                    }
+
+                    return SyntaxRoot;
+                }
+            }
+
+            public SemanticModel GetOrLoadSemanticModel()
+            {
+                lock (_sync)
+                {
+                    if (SemanticModel == null && Document != null)
+                    {
+                        if (!Document.TryGetSemanticModel(out SemanticModel))
+                        {
+                            SemanticModel = Document.GetSemanticModelAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+                        }
+                    }
+
+                    return SemanticModel;
+                }
+            }
+        }
+
+        private static bool CanReuseCachedDocumentContext(CachedDocumentContext cachedContext, string projectPath, string documentText, int documentVersion)
+        {
+            if (cachedContext == null || cachedContext.Document == null)
+            {
+                return false;
+            }
+
+            // Invariant: a cached Roslyn document is reusable only when the request still targets the
+            // same project association and the live text identity matches. Otherwise semantic results
+            // can drift under document-version churn or decompiled/source re-binding.
+            var normalizedProjectPath = NormalizePath(projectPath);
+            if (!string.IsNullOrEmpty(normalizedProjectPath))
+            {
+                if (string.IsNullOrEmpty(cachedContext.ProjectPath) ||
+                    !string.Equals(normalizedProjectPath, cachedContext.ProjectPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+
+            if (documentVersion > 0 && cachedContext.DocumentVersion > 0 && cachedContext.DocumentVersion != documentVersion)
+            {
+                return false;
+            }
+
+            if (documentText == null)
+            {
+                return documentVersion <= 0 ||
+                    (cachedContext.DocumentVersion > 0 && cachedContext.DocumentVersion == documentVersion);
+            }
+
+            var requestFingerprint = DocumentTextFingerprint.From(documentText);
+            if (!requestFingerprint.HasValue)
+            {
+                return false;
+            }
+
+            var cachedText = cachedContext.GetOrLoadText();
+            if (cachedText == null)
+            {
+                return false;
+            }
+
+            return cachedContext.TextFingerprint.Equals(requestFingerprint);
+        }
+
+        private string GetRememberedDocumentProjectPath(string documentPath)
+        {
+            var normalizedDocumentPath = NormalizePath(documentPath);
+            if (string.IsNullOrEmpty(normalizedDocumentPath))
+            {
+                return string.Empty;
+            }
+
+            string projectPath;
+            return _documentProjectPathCache.TryGetValue(normalizedDocumentPath, out projectPath)
+                ? projectPath ?? string.Empty
+                : string.Empty;
+        }
+
+        private void RememberDocumentProjectPath(string documentPath, string projectPath)
+        {
+            var normalizedDocumentPath = NormalizePath(documentPath);
+            var normalizedProjectPath = NormalizePath(projectPath);
+            if (string.IsNullOrEmpty(normalizedDocumentPath) || string.IsNullOrEmpty(normalizedProjectPath))
+            {
+                return;
+            }
+
+            _documentProjectPathCache[normalizedDocumentPath] = normalizedProjectPath;
+        }
+
+        private static SourceText GetDocumentText(DocumentContext documentContext)
+        {
+            if (documentContext == null || documentContext.Document == null)
+            {
+                return null;
+            }
+
+            if (documentContext.Cache != null)
+            {
+                documentContext.Text = documentContext.Cache.GetOrLoadText();
+                return documentContext.Text;
+            }
+
+            if (documentContext.Text == null)
+            {
+                if (!documentContext.Document.TryGetText(out documentContext.Text))
+                {
+                    documentContext.Text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+                }
+            }
+
+            return documentContext.Text;
+        }
+
+        private static SyntaxTree GetDocumentSyntaxTree(DocumentContext documentContext)
+        {
+            if (documentContext == null || documentContext.Document == null)
+            {
+                return null;
+            }
+
+            if (documentContext.Cache != null)
+            {
+                documentContext.SyntaxTree = documentContext.Cache.GetOrLoadSyntaxTree();
+                return documentContext.SyntaxTree;
+            }
+
+            if (documentContext.SyntaxTree == null)
+            {
+                if (!documentContext.Document.TryGetSyntaxTree(out documentContext.SyntaxTree))
+                {
+                    documentContext.SyntaxTree = documentContext.Document.GetSyntaxTreeAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+                }
+            }
+
+            return documentContext.SyntaxTree;
+        }
+
+        private static SyntaxNode GetDocumentSyntaxRoot(DocumentContext documentContext)
+        {
+            if (documentContext == null || documentContext.Document == null)
+            {
+                return null;
+            }
+
+            if (documentContext.Cache != null)
+            {
+                documentContext.SyntaxRoot = documentContext.Cache.GetOrLoadSyntaxRoot();
+                return documentContext.SyntaxRoot;
+            }
+
+            if (documentContext.SyntaxRoot == null)
+            {
+                if (!documentContext.Document.TryGetSyntaxRoot(out documentContext.SyntaxRoot))
+                {
+                    documentContext.SyntaxRoot = documentContext.Document.GetSyntaxRootAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+                }
+            }
+
+            return documentContext.SyntaxRoot;
+        }
+
+        private static SemanticModel GetDocumentSemanticModel(DocumentContext documentContext)
+        {
+            if (documentContext == null || documentContext.Document == null)
+            {
+                return null;
+            }
+
+            if (documentContext.Cache != null)
+            {
+                documentContext.SemanticModel = documentContext.Cache.GetOrLoadSemanticModel();
+                return documentContext.SemanticModel;
+            }
+
+            if (documentContext.SemanticModel == null)
+            {
+                if (!documentContext.Document.TryGetSemanticModel(out documentContext.SemanticModel))
+                {
+                    documentContext.SemanticModel = documentContext.Document.GetSemanticModelAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+                }
+            }
+
+            return documentContext.SemanticModel;
         }
     }
 }

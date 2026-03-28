@@ -99,17 +99,45 @@ namespace Cortex.Core.Models
     }
 
     [Serializable]
+    public sealed class LanguageProviderSettingValue
+    {
+        public string SettingId;
+        public string Value;
+
+        public LanguageProviderSettingValue()
+        {
+            SettingId = string.Empty;
+            Value = string.Empty;
+        }
+    }
+
+    [Serializable]
+    public sealed class LanguageProviderConfiguration
+    {
+        public string ProviderId;
+        public LanguageProviderSettingValue[] Settings;
+
+        public LanguageProviderConfiguration()
+        {
+            ProviderId = string.Empty;
+            Settings = new LanguageProviderSettingValue[0];
+        }
+    }
+
+    [Serializable]
     public sealed class LanguageRuntimeConfiguration
     {
         public string ProviderId;
         public string HostBinPath;
         public CortexSettings Settings;
+        public LanguageProviderConfiguration ProviderConfiguration;
 
         public LanguageRuntimeConfiguration()
         {
             ProviderId = string.Empty;
             HostBinPath = string.Empty;
             Settings = null;
+            ProviderConfiguration = new LanguageProviderConfiguration();
         }
     }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using Cortex.LanguageService.Protocol;
 using Microsoft.CodeAnalysis;
@@ -18,12 +19,23 @@ namespace Cortex.Roslyn.Worker
             public SourceText Text;
             public int Position;
             public ISymbol Symbol;
+            public SyntaxTree SyntaxTree;
+            public SyntaxNode SyntaxRoot;
+            public SemanticModel SemanticModel;
         }
 
         private sealed class OutgoingCallGroup
         {
             public ISymbol Symbol;
             public readonly List<LanguageServiceSymbolLocation> Locations = new List<LanguageServiceSymbolLocation>();
+        }
+
+        private sealed class ProtocolLocationConversionContext
+        {
+            public readonly Dictionary<SyntaxTree, SourceText> SourceTextCache = new Dictionary<SyntaxTree, SourceText>();
+            public readonly Dictionary<SyntaxTree, Document> DocumentCache = new Dictionary<SyntaxTree, Document>();
+
+            public ProtocolLocationConversionContext(Solution solution) { }
         }
 
         private LanguageServiceSymbolContextResponse GetSymbolContext(LanguageServiceSymbolContextRequest request)
@@ -196,7 +208,7 @@ namespace Cortex.Roslyn.Worker
                 return false;
             }
 
-            var text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+            var text = GetDocumentText(documentContext);
             var position = ResolveRequestPosition(
                 text,
                 request != null ? request.Line : 0,
@@ -208,7 +220,7 @@ namespace Cortex.Roslyn.Worker
                 return false;
             }
 
-            var symbol = ResolveSymbol(documentContext.Document, position);
+            var symbol = ResolveSymbol(documentContext, position);
             if (symbol == null)
             {
                 failureMessage = "No Roslyn symbol was found at that position.";
@@ -221,7 +233,10 @@ namespace Cortex.Roslyn.Worker
                 Document = documentContext.Document,
                 Text = text,
                 Position = position,
-                Symbol = symbol
+                Symbol = symbol,
+                SyntaxTree = GetDocumentSyntaxTree(documentContext),
+                SyntaxRoot = GetDocumentSyntaxRoot(documentContext),
+                SemanticModel = GetDocumentSemanticModel(documentContext)
             };
             return true;
         }
@@ -370,20 +385,30 @@ namespace Cortex.Roslyn.Worker
             }
 
             var symbol = context.Symbol;
-            var preferredLocation = GetPreferredSourceLocation(symbol, context.Document.GetSyntaxTreeAsync(CurrentCancellationToken).GetAwaiter().GetResult());
+            string navigationMetadataName;
+            string navigationContainingTypeName;
+            string navigationContainingAssemblyName;
+            string navigationDocumentationCommentId;
+            PopulateNavigationMetadata(
+                symbol,
+                out navigationMetadataName,
+                out navigationContainingTypeName,
+                out navigationContainingAssemblyName,
+                out navigationDocumentationCommentId);
+            var preferredLocation = GetDefinitionNavigationLocation(symbol, context.SyntaxTree);
             response.DocumentPath = context.Document.FilePath ?? (request != null ? request.DocumentPath ?? string.Empty : string.Empty);
             response.ProjectFilePath = context.Document.Project != null ? context.Document.Project.FilePath ?? string.Empty : string.Empty;
             response.DocumentVersion = request != null ? request.DocumentVersion : 0;
             response.SymbolDisplay = symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
             response.QualifiedSymbolDisplay = GetQualifiedSymbolDisplay(symbol);
             response.SymbolKind = symbol.Kind.ToString();
-            response.MetadataName = symbol.MetadataName ?? string.Empty;
-            response.ContainingTypeName = GetContainingTypeName(symbol);
-            response.ContainingAssemblyName = symbol.ContainingAssembly != null ? symbol.ContainingAssembly.Identity.Name : string.Empty;
-            response.DocumentationCommentId = symbol.GetDocumentationCommentId() ?? string.Empty;
+            response.MetadataName = navigationMetadataName;
+            response.ContainingTypeName = navigationContainingTypeName;
+            response.ContainingAssemblyName = navigationContainingAssemblyName;
+            response.DocumentationCommentId = navigationDocumentationCommentId;
             response.DocumentationXml = symbol.GetDocumentationCommentXml() ?? string.Empty;
             response.DocumentationText = FlattenDocumentation(response.DocumentationXml);
-            response.Range = BuildRange(context.Text, preferredLocation != null && preferredLocation.SourceTree == context.Document.GetSyntaxTreeAsync(CurrentCancellationToken).GetAwaiter().GetResult()
+            response.Range = BuildRange(context.Text, preferredLocation != null && preferredLocation.SourceTree == context.SyntaxTree
                 ? preferredLocation.SourceSpan
                 : default(TextSpan));
             response.DefinitionDocumentPath = preferredLocation != null && preferredLocation.SourceTree != null
@@ -489,6 +514,8 @@ namespace Cortex.Roslyn.Worker
         {
             var results = new List<LanguageServiceSymbolLocation>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var syntaxRootCache = new Dictionary<DocumentId, SyntaxNode>();
+            var locationContext = new ProtocolLocationConversionContext(solution);
             if (symbol == null || solution == null)
             {
                 return results;
@@ -496,10 +523,15 @@ namespace Cortex.Roslyn.Worker
 
             if (includeDefinitions)
             {
-                AddSymbolPrimaryLocations(results, solution, symbol, "Definition", seen);
+                AddSymbolPrimaryLocations(results, solution, symbol, "Definition", seen, locationContext);
             }
 
-            var references = SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
+            var scopedDocuments = GetReferenceSearchDocuments(symbol, solution);
+            var references = SymbolFinder.FindReferencesAsync(
+                symbol,
+                solution,
+                documents: scopedDocuments,
+                cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
             foreach (var referencedSymbol in references)
             {
                 if (referencedSymbol == null)
@@ -524,8 +556,9 @@ namespace Cortex.Roslyn.Worker
                             "Reference",
                             false,
                             false,
-                            IsWriteReference(solution, referenceLocation),
-                            false));
+                            IsWriteReference(solution, referenceLocation, syntaxRootCache),
+                            false,
+                            locationContext));
                 }
             }
 
@@ -534,10 +567,10 @@ namespace Cortex.Roslyn.Worker
 
         private void AddSymbolPrimaryLocations(IList<LanguageServiceSymbolLocation> results, Solution solution, ISymbol symbol, string relationship)
         {
-            AddSymbolPrimaryLocations(results, solution, symbol, relationship, null);
+            AddSymbolPrimaryLocations(results, solution, symbol, relationship, null, new ProtocolLocationConversionContext(solution));
         }
 
-        private void AddSymbolPrimaryLocations(IList<LanguageServiceSymbolLocation> results, Solution solution, ISymbol symbol, string relationship, HashSet<string> seen)
+        private void AddSymbolPrimaryLocations(IList<LanguageServiceSymbolLocation> results, Solution solution, ISymbol symbol, string relationship, HashSet<string> seen, ProtocolLocationConversionContext locationContext)
         {
             if (results == null || solution == null || symbol == null)
             {
@@ -551,7 +584,7 @@ namespace Cortex.Roslyn.Worker
                     continue;
                 }
 
-                AddUniqueLocation(results, seen, ToProtocolLocation(solution, symbol, location, relationship, true, true, false, true));
+                AddUniqueLocation(results, seen, ToProtocolLocation(solution, symbol, location, relationship, true, true, false, true, locationContext));
             }
         }
 
@@ -713,6 +746,7 @@ namespace Cortex.Roslyn.Worker
         private LanguageServiceCallHierarchyItem[] BuildIncomingCallItems(ISymbol symbol, Solution solution)
         {
             var items = new List<LanguageServiceCallHierarchyItem>();
+            var locationContext = new ProtocolLocationConversionContext(solution);
             var callers = SymbolFinder.FindCallersAsync(symbol, solution, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
             foreach (var caller in callers)
             {
@@ -731,7 +765,7 @@ namespace Cortex.Roslyn.Worker
                         continue;
                     }
 
-                    locations.Add(ToProtocolLocation(solution, caller.CallingSymbol, location, "Incoming Call", false, false, false, false));
+                    locations.Add(ToProtocolLocation(solution, caller.CallingSymbol, location, "Incoming Call", false, false, false, false, locationContext));
                 }
 
                 items.Add(new LanguageServiceCallHierarchyItem
@@ -739,10 +773,10 @@ namespace Cortex.Roslyn.Worker
                     SymbolDisplay = caller.CallingSymbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
                     QualifiedSymbolDisplay = GetQualifiedSymbolDisplay(caller.CallingSymbol),
                     SymbolKind = caller.CallingSymbol.Kind.ToString(),
-                    MetadataName = caller.CallingSymbol.MetadataName ?? string.Empty,
-                    ContainingTypeName = GetContainingTypeName(caller.CallingSymbol),
-                    ContainingAssemblyName = caller.CallingSymbol.ContainingAssembly != null ? caller.CallingSymbol.ContainingAssembly.Identity.Name : string.Empty,
-                    DocumentationCommentId = caller.CallingSymbol.GetDocumentationCommentId() ?? string.Empty,
+                    MetadataName = GetNavigationMetadataName(caller.CallingSymbol),
+                    ContainingTypeName = GetNavigationContainingTypeName(caller.CallingSymbol),
+                    ContainingAssemblyName = GetNavigationContainingAssemblyName(caller.CallingSymbol),
+                    DocumentationCommentId = GetNavigationDocumentationCommentId(caller.CallingSymbol),
                     Relationship = "Incoming Call",
                     CallCount = locations.Count,
                     Locations = locations.ToArray()
@@ -755,6 +789,8 @@ namespace Cortex.Roslyn.Worker
         private LanguageServiceCallHierarchyItem[] BuildOutgoingCallItems(ISymbol symbol, Solution solution)
         {
             var grouped = new Dictionary<string, OutgoingCallGroup>(StringComparer.OrdinalIgnoreCase);
+            var semanticModelCache = new Dictionary<DocumentId, SemanticModel>();
+            var locationContext = new ProtocolLocationConversionContext(solution);
             if (symbol == null || solution == null)
             {
                 return new LanguageServiceCallHierarchyItem[0];
@@ -774,13 +810,13 @@ namespace Cortex.Roslyn.Worker
                     continue;
                 }
 
-                var semanticModel = document.GetSemanticModelAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+                var semanticModel = GetCachedSemanticModel(document, semanticModelCache);
                 if (semanticModel == null)
                 {
                     continue;
                 }
 
-                CollectOutgoingSymbols(grouped, solution, semanticModel, syntax);
+                CollectOutgoingSymbols(grouped, solution, semanticModel, syntax, locationContext);
             }
 
             var items = new List<LanguageServiceCallHierarchyItem>();
@@ -797,10 +833,10 @@ namespace Cortex.Roslyn.Worker
                     SymbolDisplay = group.Symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
                     QualifiedSymbolDisplay = GetQualifiedSymbolDisplay(group.Symbol),
                     SymbolKind = group.Symbol.Kind.ToString(),
-                    MetadataName = group.Symbol.MetadataName ?? string.Empty,
-                    ContainingTypeName = GetContainingTypeName(group.Symbol),
-                    ContainingAssemblyName = group.Symbol.ContainingAssembly != null ? group.Symbol.ContainingAssembly.Identity.Name : string.Empty,
-                    DocumentationCommentId = group.Symbol.GetDocumentationCommentId() ?? string.Empty,
+                    MetadataName = GetNavigationMetadataName(group.Symbol),
+                    ContainingTypeName = GetNavigationContainingTypeName(group.Symbol),
+                    ContainingAssemblyName = GetNavigationContainingAssemblyName(group.Symbol),
+                    DocumentationCommentId = GetNavigationDocumentationCommentId(group.Symbol),
                     Relationship = "Outgoing Call",
                     CallCount = group.Locations.Count,
                     Locations = group.Locations.ToArray()
@@ -814,7 +850,8 @@ namespace Cortex.Roslyn.Worker
             IDictionary<string, OutgoingCallGroup> grouped,
             Solution solution,
             SemanticModel semanticModel,
-            SyntaxNode syntax)
+            SyntaxNode syntax,
+            ProtocolLocationConversionContext locationContext)
         {
             if (grouped == null || solution == null || semanticModel == null || syntax == null)
             {
@@ -823,16 +860,16 @@ namespace Cortex.Roslyn.Worker
 
             foreach (var invocation in syntax.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                AddOutgoingGroup(grouped, solution, semanticModel.GetSymbolInfo(invocation).Symbol, invocation.GetLocation());
+                AddOutgoingGroup(grouped, solution, semanticModel.GetSymbolInfo(invocation).Symbol, invocation.GetLocation(), locationContext);
             }
 
             foreach (var creation in syntax.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
             {
-                AddOutgoingGroup(grouped, solution, semanticModel.GetSymbolInfo(creation).Symbol, creation.GetLocation());
+                AddOutgoingGroup(grouped, solution, semanticModel.GetSymbolInfo(creation).Symbol, creation.GetLocation(), locationContext);
             }
         }
 
-        private void AddOutgoingGroup(IDictionary<string, OutgoingCallGroup> grouped, Solution solution, ISymbol symbol, Location location)
+        private void AddOutgoingGroup(IDictionary<string, OutgoingCallGroup> grouped, Solution solution, ISymbol symbol, Location location, ProtocolLocationConversionContext locationContext)
         {
             if (grouped == null || solution == null || symbol == null || location == null || !location.IsInSource)
             {
@@ -851,13 +888,15 @@ namespace Cortex.Roslyn.Worker
                 grouped[key] = group;
             }
 
-            group.Locations.Add(ToProtocolLocation(solution, symbol, location, "Outgoing Call", false, false, false, false));
+            group.Locations.Add(ToProtocolLocation(solution, symbol, location, "Outgoing Call", false, false, false, false, locationContext));
         }
 
         private LanguageServiceValueSourceItem[] BuildValueSourceItems(ResolvedSymbolRequestContext context)
         {
             var items = new List<LanguageServiceValueSourceItem>();
-            var declarationLocation = GetPreferredSourceLocation(context.Symbol, context.Document.GetSyntaxTreeAsync(CurrentCancellationToken).GetAwaiter().GetResult());
+            var declarationLocation = GetPreferredSourceLocation(context.Symbol, context.SyntaxTree);
+            var syntaxRootCache = new Dictionary<DocumentId, SyntaxNode>();
+            var locationContext = new ProtocolLocationConversionContext(context.Document.Project.Solution);
             if (declarationLocation != null && declarationLocation.IsInSource)
             {
                 items.Add(new LanguageServiceValueSourceItem
@@ -865,11 +904,16 @@ namespace Cortex.Roslyn.Worker
                     FlowKind = "Declaration",
                     SymbolDisplay = context.Symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
                     Relationship = "Declared here",
-                    Location = ToProtocolLocation(context.Document.Project.Solution, context.Symbol, declarationLocation, "Declaration", true, true, false, true)
+                    Location = ToProtocolLocation(context.Document.Project.Solution, context.Symbol, declarationLocation, "Declaration", true, true, false, true, locationContext)
                 });
             }
 
-            var references = SymbolFinder.FindReferencesAsync(context.Symbol, context.Document.Project.Solution, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
+            var scopedDocuments = GetReferenceSearchDocuments(context.Symbol, context.Document.Project.Solution);
+            var references = SymbolFinder.FindReferencesAsync(
+                context.Symbol,
+                context.Document.Project.Solution,
+                documents: scopedDocuments,
+                cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
             foreach (var referencedSymbol in references)
             {
                 if (referencedSymbol == null)
@@ -884,7 +928,7 @@ namespace Cortex.Roslyn.Worker
                         continue;
                     }
 
-                    if (!IsWriteReference(context.Document.Project.Solution, referenceLocation))
+                    if (!IsWriteReference(context.Document.Project.Solution, referenceLocation, syntaxRootCache))
                     {
                         continue;
                     }
@@ -894,7 +938,7 @@ namespace Cortex.Roslyn.Worker
                         FlowKind = "Write",
                         SymbolDisplay = context.Symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
                         Relationship = "Assigned here",
-                        Location = ToProtocolLocation(context.Document.Project.Solution, context.Symbol, referenceLocation.Location, "Value Source", false, false, true, false)
+                        Location = ToProtocolLocation(context.Document.Project.Solution, context.Symbol, referenceLocation.Location, "Value Source", false, false, true, false, locationContext)
                     });
                 }
             }
@@ -902,7 +946,7 @@ namespace Cortex.Roslyn.Worker
             return items.ToArray();
         }
 
-        private static bool IsWriteReference(Solution solution, ReferenceLocation referenceLocation)
+        private static bool IsWriteReference(Solution solution, ReferenceLocation referenceLocation, IDictionary<DocumentId, SyntaxNode> syntaxRootCache)
         {
             if (solution == null || referenceLocation.Location == null || !referenceLocation.Location.IsInSource)
             {
@@ -915,7 +959,7 @@ namespace Cortex.Roslyn.Worker
                 return false;
             }
 
-            var root = document.GetSyntaxRootAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+            var root = GetCachedSyntaxRoot(document, syntaxRootCache);
             if (root == null)
             {
                 return false;
@@ -967,6 +1011,128 @@ namespace Cortex.Roslyn.Worker
             return false;
         }
 
+        private static IImmutableSet<Document> GetReferenceSearchDocuments(ISymbol symbol, Solution solution)
+        {
+            if (symbol == null || solution == null)
+            {
+                return null;
+            }
+
+            var declaringDocument = GetFirstDeclaringSourceDocument(symbol, solution);
+            if (declaringDocument == null)
+            {
+                return null;
+            }
+
+            // Narrow only when Roslyn's symbol rules make the search scope provably local.
+            if (IsDocumentScopedReferenceSymbol(symbol))
+            {
+                return ImmutableHashSet.Create(declaringDocument);
+            }
+
+            if (symbol.DeclaredAccessibility == Accessibility.Private)
+            {
+                return declaringDocument.Project.Documents.ToImmutableHashSet();
+            }
+
+            return null;
+        }
+
+        private static bool IsDocumentScopedReferenceSymbol(ISymbol symbol)
+        {
+            if (symbol == null)
+            {
+                return false;
+            }
+
+            switch (symbol.Kind)
+            {
+                case SymbolKind.Alias:
+                case SymbolKind.Label:
+                case SymbolKind.Local:
+                case SymbolKind.Parameter:
+                case SymbolKind.RangeVariable:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static Document GetFirstDeclaringSourceDocument(ISymbol symbol, Solution solution)
+        {
+            if (symbol == null || solution == null)
+            {
+                return null;
+            }
+
+            for (var i = 0; i < symbol.Locations.Length; i++)
+            {
+                var location = symbol.Locations[i];
+                if (location == null || !location.IsInSource || location.SourceTree == null)
+                {
+                    continue;
+                }
+
+                var document = solution.GetDocument(location.SourceTree);
+                if (document != null)
+                {
+                    return document;
+                }
+            }
+
+            return null;
+        }
+
+        private static SemanticModel GetCachedSemanticModel(Document document, IDictionary<DocumentId, SemanticModel> semanticModelCache)
+        {
+            if (document == null)
+            {
+                return null;
+            }
+
+            SemanticModel semanticModel;
+            if (semanticModelCache != null && semanticModelCache.TryGetValue(document.Id, out semanticModel))
+            {
+                return semanticModel;
+            }
+
+            if (!document.TryGetSemanticModel(out semanticModel))
+            {
+                semanticModel = document.GetSemanticModelAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+            }
+            if (semanticModelCache != null && semanticModel != null)
+            {
+                semanticModelCache[document.Id] = semanticModel;
+            }
+
+            return semanticModel;
+        }
+
+        private static SyntaxNode GetCachedSyntaxRoot(Document document, IDictionary<DocumentId, SyntaxNode> syntaxRootCache)
+        {
+            if (document == null)
+            {
+                return null;
+            }
+
+            SyntaxNode root;
+            if (syntaxRootCache != null && syntaxRootCache.TryGetValue(document.Id, out root))
+            {
+                return root;
+            }
+
+            if (!document.TryGetSyntaxRoot(out root))
+            {
+                root = document.GetSyntaxRootAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+            }
+            if (syntaxRootCache != null && root != null)
+            {
+                syntaxRootCache[document.Id] = root;
+            }
+
+            return root;
+        }
+
         private LanguageServiceSymbolLocation ToProtocolLocation(
             Solution solution,
             ISymbol symbol,
@@ -975,16 +1141,17 @@ namespace Cortex.Roslyn.Worker
             bool isPrimary,
             bool isDefinition,
             bool isWrite,
-            bool isDeclaration)
+            bool isDeclaration,
+            ProtocolLocationConversionContext locationContext)
         {
             if (location == null || !location.IsInSource || location.SourceTree == null)
             {
                 return new LanguageServiceSymbolLocation();
             }
 
-            var text = location.SourceTree.GetText();
+            var text = GetCachedSourceText(location.SourceTree, locationContext);
             var range = BuildRange(text, location.SourceSpan);
-            var document = solution != null ? solution.GetDocument(location.SourceTree) : null;
+            var document = GetCachedDocument(solution, location.SourceTree, locationContext);
             string lineText;
             string previewText;
             BuildLocationText(text, location.SourceSpan, out lineText, out previewText);
@@ -994,10 +1161,10 @@ namespace Cortex.Roslyn.Worker
                 ProjectFilePath = document != null && document.Project != null ? document.Project.FilePath ?? string.Empty : string.Empty,
                 SymbolDisplay = symbol != null ? symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) : string.Empty,
                 SymbolKind = symbol != null ? symbol.Kind.ToString() : string.Empty,
-                MetadataName = symbol != null ? symbol.MetadataName ?? string.Empty : string.Empty,
-                ContainingTypeName = GetContainingTypeName(symbol),
-                ContainingAssemblyName = symbol != null && symbol.ContainingAssembly != null ? symbol.ContainingAssembly.Identity.Name : string.Empty,
-                DocumentationCommentId = symbol != null ? symbol.GetDocumentationCommentId() ?? string.Empty : string.Empty,
+                MetadataName = GetNavigationMetadataName(symbol),
+                ContainingTypeName = GetNavigationContainingTypeName(symbol),
+                ContainingAssemblyName = GetNavigationContainingAssemblyName(symbol),
+                DocumentationCommentId = GetNavigationDocumentationCommentId(symbol),
                 Range = range,
                 LineText = lineText,
                 PreviewText = previewText,
@@ -1007,6 +1174,50 @@ namespace Cortex.Roslyn.Worker
                 IsWrite = isWrite,
                 IsDeclaration = isDeclaration
             };
+        }
+
+        private static SourceText GetCachedSourceText(SyntaxTree syntaxTree, ProtocolLocationConversionContext locationContext)
+        {
+            if (syntaxTree == null)
+            {
+                return null;
+            }
+
+            SourceText text;
+            if (locationContext != null && locationContext.SourceTextCache.TryGetValue(syntaxTree, out text))
+            {
+                return text;
+            }
+
+            text = syntaxTree.GetText();
+            if (locationContext != null && text != null)
+            {
+                locationContext.SourceTextCache[syntaxTree] = text;
+            }
+
+            return text;
+        }
+
+        private static Document GetCachedDocument(Solution solution, SyntaxTree syntaxTree, ProtocolLocationConversionContext locationContext)
+        {
+            if (syntaxTree == null)
+            {
+                return null;
+            }
+
+            Document document;
+            if (locationContext != null && locationContext.DocumentCache.TryGetValue(syntaxTree, out document))
+            {
+                return document;
+            }
+
+            document = solution != null ? solution.GetDocument(syntaxTree) : null;
+            if (locationContext != null && document != null)
+            {
+                locationContext.DocumentCache[syntaxTree] = document;
+            }
+
+            return document;
         }
 
         private static void BuildLocationText(SourceText text, TextSpan span, out string lineText, out string previewText)
@@ -1059,6 +1270,195 @@ namespace Cortex.Roslyn.Worker
             }
 
             return fallback;
+        }
+
+        private static Location GetDefinitionNavigationLocation(ISymbol symbol, SyntaxTree preferredTree)
+        {
+            var preferred = GetPreferredSourceLocation(symbol, preferredTree);
+            if (preferred != null)
+            {
+                return preferred;
+            }
+
+            return GetPreferredSourceLocation(GetNavigationMetadataSymbol(symbol), preferredTree);
+        }
+
+        private static void PopulateNavigationMetadata(
+            ISymbol symbol,
+            out string metadataName,
+            out string containingTypeName,
+            out string containingAssemblyName,
+            out string documentationCommentId)
+        {
+            var navigationSymbol = GetNavigationMetadataSymbol(symbol);
+            metadataName = navigationSymbol != null ? navigationSymbol.MetadataName ?? string.Empty : string.Empty;
+            containingTypeName = GetContainingTypeName(navigationSymbol);
+            containingAssemblyName = navigationSymbol != null && navigationSymbol.ContainingAssembly != null
+                ? navigationSymbol.ContainingAssembly.Identity.Name
+                : string.Empty;
+            documentationCommentId = navigationSymbol != null ? navigationSymbol.GetDocumentationCommentId() ?? string.Empty : string.Empty;
+        }
+
+        private static string GetNavigationMetadataName(ISymbol symbol)
+        {
+            string metadataName;
+            string containingTypeName;
+            string containingAssemblyName;
+            string documentationCommentId;
+            PopulateNavigationMetadata(
+                symbol,
+                out metadataName,
+                out containingTypeName,
+                out containingAssemblyName,
+                out documentationCommentId);
+            return metadataName;
+        }
+
+        private static string GetNavigationContainingTypeName(ISymbol symbol)
+        {
+            string metadataName;
+            string containingTypeName;
+            string containingAssemblyName;
+            string documentationCommentId;
+            PopulateNavigationMetadata(
+                symbol,
+                out metadataName,
+                out containingTypeName,
+                out containingAssemblyName,
+                out documentationCommentId);
+            return containingTypeName;
+        }
+
+        private static string GetNavigationContainingAssemblyName(ISymbol symbol)
+        {
+            string metadataName;
+            string containingTypeName;
+            string containingAssemblyName;
+            string documentationCommentId;
+            PopulateNavigationMetadata(
+                symbol,
+                out metadataName,
+                out containingTypeName,
+                out containingAssemblyName,
+                out documentationCommentId);
+            return containingAssemblyName;
+        }
+
+        private static string GetNavigationDocumentationCommentId(ISymbol symbol)
+        {
+            string metadataName;
+            string containingTypeName;
+            string containingAssemblyName;
+            string documentationCommentId;
+            PopulateNavigationMetadata(
+                symbol,
+                out metadataName,
+                out containingTypeName,
+                out containingAssemblyName,
+                out documentationCommentId);
+            return documentationCommentId;
+        }
+
+        internal static ISymbol GetNavigationMetadataSymbol(ISymbol symbol)
+        {
+            var namespaceSymbol = symbol as INamespaceSymbol;
+            if (namespaceSymbol == null || namespaceSymbol.IsGlobalNamespace)
+            {
+                return symbol;
+            }
+
+            var representativeType = FindRepresentativeNamespaceType(namespaceSymbol);
+            return representativeType ?? symbol;
+        }
+
+        private static INamedTypeSymbol FindRepresentativeNamespaceType(INamespaceSymbol namespaceSymbol)
+        {
+            if (namespaceSymbol == null || namespaceSymbol.IsGlobalNamespace)
+            {
+                return null;
+            }
+
+            var preferredType = SelectPreferredNamespaceType(namespaceSymbol.GetTypeMembers(), namespaceSymbol.Name);
+            if (preferredType != null)
+            {
+                return preferredType;
+            }
+
+            var namespaceMembers = namespaceSymbol.GetNamespaceMembers().ToArray();
+            var orderedMembers = new List<INamespaceSymbol>(namespaceMembers.Length);
+            for (var i = 0; i < namespaceMembers.Length; i++)
+            {
+                var member = namespaceMembers[i];
+                if (member != null && !member.IsGlobalNamespace)
+                {
+                    orderedMembers.Add(member);
+                }
+            }
+
+            orderedMembers.Sort(delegate(INamespaceSymbol left, INamespaceSymbol right)
+            {
+                return string.Compare(left != null ? left.ToDisplayString() : string.Empty, right != null ? right.ToDisplayString() : string.Empty, StringComparison.OrdinalIgnoreCase);
+            });
+
+            for (var i = 0; i < orderedMembers.Count; i++)
+            {
+                var nested = FindRepresentativeNamespaceType(orderedMembers[i]);
+                if (nested != null)
+                {
+                    return nested;
+                }
+            }
+
+            return null;
+        }
+
+        private static INamedTypeSymbol SelectPreferredNamespaceType(ImmutableArray<INamedTypeSymbol> candidates, string namespaceName)
+        {
+            var trimmedNamespaceName = !string.IsNullOrEmpty(namespaceName) && namespaceName.EndsWith("Lib", StringComparison.OrdinalIgnoreCase)
+                ? namespaceName.Substring(0, namespaceName.Length - 3)
+                : string.Empty;
+            INamedTypeSymbol best = null;
+            var bestRank = int.MaxValue;
+            var bestLength = int.MaxValue;
+            var bestDisplay = string.Empty;
+
+            for (var i = 0; i < candidates.Length; i++)
+            {
+                var candidate = candidates[i];
+                if (candidate == null || candidate.IsImplicitlyDeclared || candidate.TypeKind == TypeKind.Error)
+                {
+                    continue;
+                }
+
+                var rank = 3;
+                if (!string.IsNullOrEmpty(namespaceName) && string.Equals(candidate.Name, namespaceName, StringComparison.OrdinalIgnoreCase))
+                {
+                    rank = 0;
+                }
+                else if (!string.IsNullOrEmpty(trimmedNamespaceName) && string.Equals(candidate.Name, trimmedNamespaceName, StringComparison.OrdinalIgnoreCase))
+                {
+                    rank = 1;
+                }
+                else if (candidate.DeclaredAccessibility == Accessibility.Public && !candidate.IsGenericType)
+                {
+                    rank = 2;
+                }
+
+                var display = candidate.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+                var length = candidate.Name != null ? candidate.Name.Length : int.MaxValue;
+                if (best == null ||
+                    rank < bestRank ||
+                    (rank == bestRank && length < bestLength) ||
+                    (rank == bestRank && length == bestLength && string.Compare(display, bestDisplay, StringComparison.OrdinalIgnoreCase) < 0))
+                {
+                    best = candidate;
+                    bestRank = rank;
+                    bestLength = length;
+                    bestDisplay = display;
+                }
+            }
+
+            return best;
         }
     }
 }

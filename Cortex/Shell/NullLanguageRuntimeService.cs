@@ -107,14 +107,8 @@ namespace Cortex.Shell
 
         private static bool IsExplicitlyDisabled(LanguageRuntimeConfiguration configuration)
         {
-            var settings = configuration != null ? configuration.Settings : null;
             var providerId = configuration != null ? configuration.ProviderId ?? string.Empty : string.Empty;
-            if (string.Equals(providerId, LanguageRuntimeConstants.NoneProviderId, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            return settings != null && !settings.EnableRoslynLanguageService;
+            return string.Equals(providerId, LanguageRuntimeConstants.NoneProviderId, StringComparison.OrdinalIgnoreCase);
         }
 
         private static LanguageProviderDescriptor BuildDescriptor(LanguageRuntimeConfiguration configuration)

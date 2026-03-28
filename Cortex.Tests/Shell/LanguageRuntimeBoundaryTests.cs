@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Presentation.Abstractions;
 using Cortex.Services;
@@ -24,8 +26,7 @@ namespace Cortex.Tests.Shell
                     ProviderId = LanguageRuntimeConstants.NoneProviderId,
                     Settings = new CortexSettings
                     {
-                        LanguageProviderId = LanguageRuntimeConstants.NoneProviderId,
-                        EnableRoslynLanguageService = false
+                        LanguageProviderId = LanguageRuntimeConstants.NoneProviderId
                     }
                 });
 
@@ -50,8 +51,7 @@ namespace Cortex.Tests.Shell
                     ProviderId = "custom",
                     Settings = new CortexSettings
                     {
-                        LanguageProviderId = "custom",
-                        EnableRoslynLanguageService = true
+                        LanguageProviderId = "custom"
                     }
                 });
 
@@ -80,8 +80,7 @@ namespace Cortex.Tests.Shell
                     ProviderId = "missing",
                     Settings = new CortexSettings
                     {
-                        LanguageProviderId = "missing",
-                        EnableRoslynLanguageService = true
+                        LanguageProviderId = "missing"
                     }
                 });
 
@@ -106,8 +105,7 @@ namespace Cortex.Tests.Shell
                     ProviderId = RoslynLanguageProviderFactory.ProviderId,
                     Settings = new CortexSettings
                     {
-                        LanguageProviderId = RoslynLanguageProviderFactory.ProviderId,
-                        EnableRoslynLanguageService = true
+                        LanguageProviderId = RoslynLanguageProviderFactory.ProviderId
                     }
                 });
 
@@ -129,8 +127,7 @@ namespace Cortex.Tests.Shell
                 var settings = bootstrapper.BuildEffectiveSettings(
                     new CortexSettings
                     {
-                        LanguageProviderId = string.Empty,
-                        EnableRoslynLanguageService = true
+                        LanguageProviderId = string.Empty
                     },
                     new TestHostEnvironment());
 
@@ -149,8 +146,7 @@ namespace Cortex.Tests.Shell
                 var providerId = bootstrapper.ResolveLanguageProviderId(
                     new CortexSettings
                     {
-                        LanguageProviderId = string.Empty,
-                        EnableRoslynLanguageService = true
+                        LanguageProviderId = string.Empty
                     });
 
                 Assert.Equal(RoslynLanguageProviderFactory.ProviderId, providerId);
@@ -168,8 +164,7 @@ namespace Cortex.Tests.Shell
                 var providerId = bootstrapper.ResolveLanguageProviderId(
                     new CortexSettings
                     {
-                        LanguageProviderId = string.Empty,
-                        EnableRoslynLanguageService = true
+                        LanguageProviderId = string.Empty
                     });
 
                 Assert.Equal(LanguageRuntimeConstants.NoneProviderId, providerId);
@@ -177,7 +172,7 @@ namespace Cortex.Tests.Shell
         }
 
         [Fact]
-        public void Bootstrapper_ResolveLanguageProviderId_UsesNone_WhenLegacyFlagDisablesRuntime()
+        public void Bootstrapper_ResolveLanguageProviderId_UsesExplicitNone_WhenConfigured()
         {
             UnityManagedAssemblyResolver.Run(delegate
             {
@@ -187,12 +182,168 @@ namespace Cortex.Tests.Shell
                 var providerId = bootstrapper.ResolveLanguageProviderId(
                     new CortexSettings
                     {
-                        LanguageProviderId = string.Empty,
-                        EnableRoslynLanguageService = false
+                        LanguageProviderId = LanguageRuntimeConstants.NoneProviderId
                     });
 
                 Assert.Equal(LanguageRuntimeConstants.NoneProviderId, providerId);
             });
+        }
+
+        [Fact]
+        public void Bootstrapper_BuildLanguageRuntimeConfiguration_SelectsProviderScopedConfiguration()
+        {
+            UnityManagedAssemblyResolver.Run(delegate
+            {
+                var bootstrapper = CreateBootstrapper();
+                bootstrapper.ConfigureHostServices(new TestHostServices(RoslynLanguageProviderFactory.ProviderId));
+                var settings = new CortexSettings
+                {
+                    LanguageProviderId = string.Empty,
+                    LanguageProviderConfigurations = new[]
+                    {
+                        new LanguageProviderConfiguration
+                        {
+                            ProviderId = RoslynLanguageProviderFactory.ProviderId,
+                            Settings = new[]
+                            {
+                                new LanguageProviderSettingValue
+                                {
+                                    SettingId = RoslynLanguageProviderFactory.RequestTimeoutMsSettingId,
+                                    Value = "23000"
+                                }
+                            }
+                        },
+                        new LanguageProviderConfiguration
+                        {
+                            ProviderId = "custom",
+                            Settings = new[]
+                            {
+                                new LanguageProviderSettingValue
+                                {
+                                    SettingId = "ignored",
+                                    Value = "value"
+                                }
+                            }
+                        }
+                    }
+                };
+
+                var configuration = bootstrapper.BuildLanguageRuntimeConfiguration(new TestHostEnvironment("host-bin"), settings);
+
+                Assert.Equal(RoslynLanguageProviderFactory.ProviderId, configuration.ProviderId);
+                Assert.Equal("host-bin", configuration.HostBinPath);
+                Assert.NotNull(configuration.ProviderConfiguration);
+                Assert.Equal(RoslynLanguageProviderFactory.ProviderId, configuration.ProviderConfiguration.ProviderId);
+                Assert.Single(configuration.ProviderConfiguration.Settings);
+                Assert.Equal(RoslynLanguageProviderFactory.RequestTimeoutMsSettingId, configuration.ProviderConfiguration.Settings[0].SettingId);
+                Assert.Equal("23000", configuration.ProviderConfiguration.Settings[0].Value);
+            });
+        }
+
+        [Fact]
+        public void RoslynFactory_BuildConfigurationFingerprint_PrefersProviderScopedConfiguration()
+        {
+            var factory = new RoslynLanguageProviderFactory();
+            var configuration = new LanguageRuntimeConfiguration
+            {
+                ProviderId = RoslynLanguageProviderFactory.ProviderId,
+                HostBinPath = "host",
+                Settings = new CortexSettings(),
+                ProviderConfiguration = new LanguageProviderConfiguration
+                {
+                    ProviderId = RoslynLanguageProviderFactory.ProviderId,
+                    Settings = new[]
+                    {
+                        new LanguageProviderSettingValue
+                        {
+                            SettingId = RoslynLanguageProviderFactory.WorkerPathOverrideSettingId,
+                            Value = "scoped-path"
+                        },
+                        new LanguageProviderSettingValue
+                        {
+                            SettingId = RoslynLanguageProviderFactory.RequestTimeoutMsSettingId,
+                            Value = "23000"
+                        }
+                    }
+                }
+            };
+
+            var fingerprint = factory.BuildConfigurationFingerprint(configuration);
+
+            Assert.Contains("|path=scoped-path|", fingerprint);
+            Assert.Contains("|timeout=23000", fingerprint);
+        }
+
+        [Fact]
+        public void LanguageProviderConfigurationHelper_SetSettingValue_UpsertsSetting_WithoutDroppingOtherProviders()
+        {
+            var settings = new CortexSettings
+            {
+                LanguageProviderConfigurations = new[]
+                {
+                    new LanguageProviderConfiguration
+                    {
+                        ProviderId = RoslynLanguageProviderFactory.ProviderId,
+                        Settings = new[]
+                        {
+                            new LanguageProviderSettingValue
+                            {
+                                SettingId = RoslynLanguageProviderFactory.WorkerPathOverrideSettingId,
+                                Value = "old-path"
+                            }
+                        }
+                    },
+                    new LanguageProviderConfiguration
+                    {
+                        ProviderId = "custom",
+                        Settings = new[]
+                        {
+                            new LanguageProviderSettingValue
+                            {
+                                SettingId = "mode",
+                                Value = "strict"
+                            }
+                        }
+                    }
+                }
+            };
+
+            LanguageProviderConfigurationHelper.SetSettingValue(
+                settings,
+                RoslynLanguageProviderFactory.ProviderId,
+                RoslynLanguageProviderFactory.RequestTimeoutMsSettingId,
+                "23000");
+
+            Assert.Equal("23000", LanguageProviderConfigurationHelper.GetSettingValue(
+                settings,
+                RoslynLanguageProviderFactory.ProviderId,
+                RoslynLanguageProviderFactory.RequestTimeoutMsSettingId));
+            Assert.Equal("old-path", LanguageProviderConfigurationHelper.GetSettingValue(
+                settings,
+                RoslynLanguageProviderFactory.ProviderId,
+                RoslynLanguageProviderFactory.WorkerPathOverrideSettingId));
+            Assert.Equal("strict", LanguageProviderConfigurationHelper.GetSettingValue(
+                settings,
+                "custom",
+                "mode"));
+        }
+
+        [Fact]
+        public void LanguageProviderConfigurationHelper_SetSettingValue_AddsProviderConfiguration_WhenMissing()
+        {
+            var settings = new CortexSettings();
+
+            LanguageProviderConfigurationHelper.SetSettingValue(
+                settings,
+                RoslynLanguageProviderFactory.ProviderId,
+                RoslynLanguageProviderFactory.WorkerPathOverrideSettingId,
+                "scoped-path");
+
+            Assert.Single(settings.LanguageProviderConfigurations);
+            Assert.Equal("scoped-path", LanguageProviderConfigurationHelper.GetSettingValue(
+                settings,
+                RoslynLanguageProviderFactory.ProviderId,
+                RoslynLanguageProviderFactory.WorkerPathOverrideSettingId));
         }
 
         [Fact]
@@ -219,6 +370,67 @@ namespace Cortex.Tests.Shell
                 Assert.False(enabled);
                 Assert.Contains("selected language provider could not be created", disabledReason);
             });
+        }
+
+        [Fact]
+        public void JsonSettingsStore_Load_UsesProviderScopedLanguageConfigurationOnly()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "cortex-settings-" + System.Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                File.WriteAllText(
+                    path,
+                    "{\"LanguageProviderId\":\"roslyn\",\"LanguageProviderConfigurations\":[{\"ProviderId\":\"roslyn\",\"Settings\":[{\"SettingId\":\"workerPathOverride\",\"Value\":\"provider-worker\"},{\"SettingId\":\"requestTimeoutMs\",\"Value\":\"23000\"}]}]}");
+
+                var store = new JsonCortexSettingsStore(path);
+                var settings = store.Load();
+
+                Assert.Equal(RoslynLanguageProviderFactory.ProviderId, settings.LanguageProviderId);
+                Assert.Equal(
+                    "provider-worker",
+                    LanguageProviderConfigurationHelper.GetSettingValue(
+                        settings,
+                        RoslynLanguageProviderFactory.ProviderId,
+                        RoslynLanguageProviderFactory.WorkerPathOverrideSettingId));
+                Assert.Equal(
+                    "23000",
+                    LanguageProviderConfigurationHelper.GetSettingValue(
+                        settings,
+                        RoslynLanguageProviderFactory.ProviderId,
+                        RoslynLanguageProviderFactory.RequestTimeoutMsSettingId));
+            }
+            finally
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+
+        [Fact]
+        public void JsonSettingsStore_Load_DoesNotMigrateLegacyRoslynFields()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "cortex-settings-" + System.Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                File.WriteAllText(
+                    path,
+                    "{\"EnableRoslynLanguageService\":false,\"RoslynServicePathOverride\":\"legacy-worker\",\"RoslynServiceTimeoutMs\":23000}");
+
+                var store = new JsonCortexSettingsStore(path);
+                var settings = store.Load();
+
+                Assert.Equal(string.Empty, settings.LanguageProviderId);
+                Assert.Empty(settings.LanguageProviderConfigurations);
+            }
+            finally
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
         }
 
         private static CortexLanguageRuntimeService CreateRuntimeService(
@@ -327,9 +539,21 @@ namespace Cortex.Tests.Shell
 
         private sealed class TestHostEnvironment : ICortexHostEnvironment
         {
+            private readonly string _hostBinPath;
+
+            public TestHostEnvironment()
+                : this(string.Empty)
+            {
+            }
+
+            public TestHostEnvironment(string hostBinPath)
+            {
+                _hostBinPath = hostBinPath ?? string.Empty;
+            }
+
             public string GameRootPath => string.Empty;
             public string HostRootPath => string.Empty;
-            public string HostBinPath => string.Empty;
+            public string HostBinPath => _hostBinPath;
             public string ManagedAssemblyRootPath => string.Empty;
             public string ModsRootPath => string.Empty;
             public string SettingsFilePath => string.Empty;

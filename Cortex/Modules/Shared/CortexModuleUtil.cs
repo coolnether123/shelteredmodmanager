@@ -2,10 +2,13 @@ using System;
 using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Core.Services;
 namespace Cortex.Modules.Shared
 {
     internal static class CortexModuleUtil
     {
+        private static readonly IEditorService NavigationEditorService = new EditorService();
+
         public static bool IsDecompilerDocumentPath(CortexShellState state, string filePath)
         {
             string reason;
@@ -125,9 +128,9 @@ namespace Cortex.Modules.Shared
             if (existing != null)
             {
                 ApplyDocumentMetadata(existing, fullPath, documentKind, state);
+                ApplyNavigationTarget(existing, highlightedLine);
                 state.Documents.ActiveDocument = existing;
                 state.Documents.ActiveDocumentPath = fullPath;
-                state.Documents.ActiveDocument.HighlightedLine = highlightedLine;
                 LogOpenedDocument(existing, highlightedLine, true, state);
                 return state.Documents.ActiveDocument;
             }
@@ -137,18 +140,20 @@ namespace Cortex.Modules.Shared
             {
                 session = documentService.Open(fullPath);
             }
-            catch
+            catch (Exception ex)
             {
+                MMLog.WriteError("[Cortex.Documents] Failed to open document '" + fullPath + "': " + ex);
                 return null;
             }
 
             if (session == null)
             {
+                MMLog.WriteWarning("[Cortex.Documents] Document service returned null for '" + fullPath + "'.");
                 return null;
             }
 
             ApplyDocumentMetadata(session, fullPath, documentKind, state);
-            session.HighlightedLine = highlightedLine;
+            ApplyNavigationTarget(session, highlightedLine);
             state.Documents.OpenDocuments.Add(session);
             state.Documents.ActiveDocument = session;
             state.Documents.ActiveDocumentPath = fullPath;
@@ -260,6 +265,27 @@ namespace Cortex.Modules.Shared
                     session.IsReadOnly = true;
                     break;
             }
+        }
+
+        private static void ApplyNavigationTarget(DocumentSession session, int highlightedLine)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            session.HighlightedLine = highlightedLine > 0 ? highlightedLine : 0;
+            if (highlightedLine <= 0)
+            {
+                return;
+            }
+
+            // Navigation requests must override any remembered caret/selection state so
+            // repeat symbol jumps into already-open documents still land on the target line.
+            NavigationEditorService.EnsureDocumentState(session);
+            var targetIndex = NavigationEditorService.GetCharacterIndex(session, Math.Max(0, highlightedLine - 1), 0);
+            NavigationEditorService.SetCaret(session, targetIndex, false, false);
+            session.HighlightedLine = highlightedLine;
         }
 
         private static void LogOpenedDocument(DocumentSession session, int highlightedLine, bool existing, CortexShellState state)

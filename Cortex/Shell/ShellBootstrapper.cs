@@ -243,10 +243,10 @@ namespace Cortex.Shell
             if (string.IsNullOrEmpty(effective.ProjectCatalogPath)) effective.ProjectCatalogPath = hostEnvironment.ProjectCatalogPath;
             if (string.IsNullOrEmpty(effective.DecompilerCachePath)) effective.DecompilerCachePath = hostEnvironment.DecompilerCachePath;
             if (string.IsNullOrEmpty(effective.AdditionalDecompilerCacheRoots)) effective.AdditionalDecompilerCacheRoots = (_platformModule ?? NullCortexPlatformModule.Instance).AdditionalDecompilerCacheRoots;
+            if (effective.LanguageProviderConfigurations == null) effective.LanguageProviderConfigurations = new LanguageProviderConfiguration[0];
 
             if (string.IsNullOrEmpty(effective.DefaultBuildConfiguration)) effective.DefaultBuildConfiguration = "Debug";
             if (effective.BuildTimeoutMs <= 0) effective.BuildTimeoutMs = 300000;
-            if (effective.RoslynServiceTimeoutMs <= 0) effective.RoslynServiceTimeoutMs = 15000;
 
             if (string.IsNullOrEmpty(effective.CompletionAugmentationProviderId)) effective.CompletionAugmentationProviderId = CompletionAugmentationProviderIds.Tabby;
             if (effective.EnableTabbyCompletion && !effective.EnableCompletionAugmentation)
@@ -290,6 +290,18 @@ namespace Cortex.Shell
             return effective;
         }
 
+        public LanguageRuntimeConfiguration BuildLanguageRuntimeConfiguration(ICortexHostEnvironment hostEnvironment, CortexSettings settings)
+        {
+            var resolvedProviderId = ResolveLanguageProviderId(settings);
+            return new LanguageRuntimeConfiguration
+            {
+                ProviderId = resolvedProviderId,
+                HostBinPath = hostEnvironment != null ? hostEnvironment.HostBinPath : string.Empty,
+                Settings = settings,
+                ProviderConfiguration = LanguageProviderConfigurationHelper.FindConfiguration(settings, resolvedProviderId)
+            };
+        }
+
         public string ResolveLanguageProviderId(CortexSettings settings)
         {
             if (settings == null)
@@ -300,11 +312,6 @@ namespace Cortex.Shell
             if (!string.IsNullOrEmpty(settings.LanguageProviderId))
             {
                 return settings.LanguageProviderId;
-            }
-
-            if (!settings.EnableRoslynLanguageService)
-            {
-                return LanguageRuntimeConstants.NoneProviderId;
             }
 
             return !string.IsNullOrEmpty(_preferredLanguageProviderId)

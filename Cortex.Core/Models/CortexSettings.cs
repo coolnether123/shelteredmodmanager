@@ -23,9 +23,6 @@ namespace Cortex.Core.Models
         public string DecompilerCachePath;
         public string AdditionalDecompilerCacheRoots;
         public string LanguageProviderId;
-        public bool EnableRoslynLanguageService;
-        public string RoslynServicePathOverride;
-        public int RoslynServiceTimeoutMs;
         public bool EnableCompletionAugmentation;
         public string CompletionAugmentationProviderId;
         public string CompletionAugmentationAdditionalInstructions;
@@ -77,6 +74,7 @@ namespace Cortex.Core.Models
         public float SettingsContentScrollY;
         public string SettingsSearchQuery;
         public bool SettingsShowModifiedOnly;
+        public LanguageProviderConfiguration[] LanguageProviderConfigurations;
         public ModuleSettingValue[] ModuleSettings;
 
         public CortexSettings()
@@ -92,9 +90,6 @@ namespace Cortex.Core.Models
             DecompilerCachePath = string.Empty;
             AdditionalDecompilerCacheRoots = string.Empty;
             LanguageProviderId = string.Empty;
-            EnableRoslynLanguageService = true;
-            RoslynServicePathOverride = string.Empty;
-            RoslynServiceTimeoutMs = 15000;
             EnableCompletionAugmentation = false;
             CompletionAugmentationProviderId = CompletionAugmentationProviderIds.Tabby;
             CompletionAugmentationAdditionalInstructions = string.Empty;
@@ -146,6 +141,7 @@ namespace Cortex.Core.Models
             SettingsContentScrollY = 0f;
             SettingsSearchQuery = string.Empty;
             SettingsShowModifiedOnly = false;
+            LanguageProviderConfigurations = new LanguageProviderConfiguration[0];
             ModuleSettings = new ModuleSettingValue[0];
         }
     }
