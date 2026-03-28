@@ -10,16 +10,7 @@ namespace Cortex.Renderers.Imgui
     internal sealed class ImguiHoverTooltipRenderer : IHoverTooltipRenderer
     {
         private const float DefaultTooltipWidth = 420f;
-        private static readonly HoverTooltipPlacementOptions TooltipPlacementOptions = new HoverTooltipPlacementOptions
-        {
-            AnchorVerticalOffset = 4f,
-            FallbackCursorOffsetX = 18f,
-            FallbackCursorOffsetY = 18f,
-            ClampMinX = 8f,
-            ClampMinY = 8f,
-            ClampRightMargin = 12f,
-            ClampBottomMargin = 12f
-        };
+        private static readonly HoverTooltipPlacementOptions TooltipPlacementOptions = HoverTooltipPlacement.CreateAnchoredOptions(4f);
 
         private Rect _textTooltipAnchorRect = new Rect(0f, 0f, 0f, 0f);
         private string _textTooltipText = string.Empty;
@@ -73,14 +64,12 @@ namespace Cortex.Renderers.Imgui
             var content = new GUIContent(_textTooltipText);
             var width = Mathf.Min(maxWidth, Mathf.Max(240f, _containerStyle.CalcSize(content).x + 16f));
             var height = Mathf.Max(30f, _containerStyle.CalcHeight(content, width) + 2f);
-            var x = Mathf.Min(current.mousePosition.x + 18f, Mathf.Max(8f, Screen.width - width - 12f));
-            var y = current.mousePosition.y + 18f;
-            if (y + height > Screen.height - 12f)
-            {
-                y = Mathf.Max(8f, _textTooltipAnchorRect.yMin - height - 8f);
-            }
-
-            var rect = new Rect(x, y, width, height);
+            var rect = ToRect(HoverTooltipPlacement.BuildTextRect(
+                ToRenderRect(_textTooltipAnchorRect),
+                new RenderPoint(current.mousePosition.x, current.mousePosition.y),
+                new RenderSize(Screen.width, Screen.height),
+                width,
+                height));
             GUI.Box(rect, content, _containerStyle);
             DrawBorder(rect, _borderFill, 1f);
         }
