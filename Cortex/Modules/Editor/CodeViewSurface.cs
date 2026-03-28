@@ -179,6 +179,8 @@ namespace Cortex.Modules.Editor
                 var hoveredToken = hoveredFoldRegion == null && editorHoverActive ? FindTokenAt(contentMouse, gutterWidth) : null;
                 hoveredToken = CanHoverToken(hoveredToken) ? hoveredToken : null;
                 var hoverTarget = hoveredToken != null ? TryResolveHoverTarget(session, state, hoveredToken, scroll) : null;
+                var displayHoveredToken = ResolveDisplayedHoveredToken(session, state, hoveredToken, pointerOnTooltip);
+                var displayHoveredMethodTarget = ResolveDisplayedHoveredMethodTarget(session, state, hoverTarget, pointerOnTooltip);
                 if (editorHoverActive &&
                     hoveredToken == null &&
                     state != null &&
@@ -216,7 +218,7 @@ namespace Cortex.Modules.Editor
                         scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
                         try
                         {
-                            DrawVisibleLines(state, session, scroll, rect.height, hoveredToken, hoveredMethodTarget, hoveredFoldRegion, gutterWidth);
+                            DrawVisibleLines(state, session, scroll, rect.height, displayHoveredToken, displayHoveredMethodTarget, hoveredFoldRegion, gutterWidth);
                         }
                         finally
                         {
@@ -1636,6 +1638,57 @@ namespace Cortex.Modules.Editor
         {
             var contentRect = GetTargetContentRect(target, gutterWidth);
             return new Rect(contentRect.x - scroll.x, contentRect.y - scroll.y, contentRect.width, contentRect.height);
+        }
+
+        private CodeViewToken ResolveDisplayedHoveredToken(DocumentSession session, CortexShellState state, CodeViewToken hoveredToken, bool pointerOnTooltip)
+        {
+            if (hoveredToken != null || !pointerOnTooltip)
+            {
+                return hoveredToken;
+            }
+
+            var activeHoverTarget = ResolveActiveHoverTarget(session, state);
+            return activeHoverTarget != null ? FindTokenByTarget(activeHoverTarget) : null;
+        }
+
+        private EditorMethodTargetOutline ResolveDisplayedHoveredMethodTarget(
+            DocumentSession session,
+            CortexShellState state,
+            EditorHoverTarget hoverTarget,
+            bool pointerOnTooltip)
+        {
+            if (hoverTarget != null && hoverTarget.Target != null)
+            {
+                return _methodTargetOutlineService.FindOutline(session, hoverTarget.Target);
+            }
+
+            if (!pointerOnTooltip || !IsMethodTargetSelectionMode())
+            {
+                return null;
+            }
+
+            var activeHoverTarget = ResolveActiveHoverTarget(session, state);
+            return activeHoverTarget != null ? _methodTargetOutlineService.FindOutline(session, activeHoverTarget) : null;
+        }
+
+        private EditorCommandTarget ResolveActiveHoverTarget(DocumentSession session, CortexShellState state)
+        {
+            if (session == null || state == null || state.Editor == null || state.Editor.Hover == null)
+            {
+                return null;
+            }
+
+            var activeContextKey = state.Editor.Hover.ActiveContextKey ?? string.Empty;
+            if (string.IsNullOrEmpty(activeContextKey))
+            {
+                return null;
+            }
+
+            var target = _contextService.ResolveTarget(state, activeContextKey);
+            return target != null &&
+                string.Equals(target.DocumentPath ?? string.Empty, session.FilePath ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+                ? target
+                : null;
         }
 
         private Rect GetMethodInspectorViewportAnchorRect(DocumentSession session, EditorCommandTarget target, Vector2 scroll, float gutterWidth)

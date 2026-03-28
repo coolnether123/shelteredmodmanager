@@ -36,6 +36,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Abstractions\Interfaces.cs" />
+    <Compile Include="Models\HoverTooltipPlacement.cs" />
     <Compile Include="Models\PanelModels.cs" />
     <Compile Include="Models\RenderSurfaceModels.cs" />
     <Compile Include="Models\RendererModels.cs" />
