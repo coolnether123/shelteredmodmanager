@@ -10,10 +10,21 @@ namespace Cortex.Renderers.Imgui
     internal sealed class ImguiHoverTooltipRenderer : IHoverTooltipRenderer
     {
         private const float DefaultTooltipWidth = 420f;
+        private static readonly HoverTooltipPlacementOptions TooltipPlacementOptions = new HoverTooltipPlacementOptions
+        {
+            AnchorVerticalOffset = 4f,
+            FallbackCursorOffsetX = 18f,
+            FallbackCursorOffsetY = 18f,
+            ClampMinX = 8f,
+            ClampMinY = 8f,
+            ClampRightMargin = 12f,
+            ClampBottomMargin = 12f
+        };
 
         private Rect _textTooltipAnchorRect = new Rect(0f, 0f, 0f, 0f);
         private string _textTooltipText = string.Empty;
         private Vector2 _lastValidViewport = Vector2.zero;
+        private readonly HoverTooltipPlacementState _tooltipPlacementState = new HoverTooltipPlacementState();
         private string _pressedTooltipPartKey = string.Empty;
 
         private string _themeCacheKey = string.Empty;
@@ -77,6 +88,7 @@ namespace Cortex.Renderers.Imgui
         public void ClearRichState()
         {
             _lastValidViewport = Vector2.zero;
+            HoverTooltipPlacement.Reset(_tooltipPlacementState);
             _pressedTooltipPartKey = string.Empty;
         }
 
@@ -124,7 +136,8 @@ namespace Cortex.Renderers.Imgui
                 return false;
             }
 
-            var tooltipRect = BuildTooltipRect(activeModel.AnchorRect, mouse, effectiveViewport, effectiveWidth, BuildCompactTooltipHeight(signatureHeight));
+            var tooltipSpawnX = HoverTooltipPlacement.ResolveSpawnX(_tooltipPlacementState, activeModel.Key ?? string.Empty, mouse.x);
+            var tooltipRect = BuildTooltipRect(activeModel.AnchorRect, mouse, tooltipSpawnX, effectiveViewport, effectiveWidth, BuildCompactTooltipHeight(signatureHeight));
             var partVisuals = new List<TooltipPartVisual>();
             var signatureRect = BuildCompactTooltipSignatureRect(tooltipRect);
             LayoutTooltipParts(signatureRect, signatureParts, partVisuals, false);
@@ -462,36 +475,17 @@ namespace Cortex.Renderers.Imgui
             return Mathf.Max(30f, signatureHeight + 16f);
         }
 
-        private Rect BuildTooltipRect(RenderRect anchorRect, Vector2 mousePosition, Vector2 viewportSize, float tooltipWidth, float height)
+        private Rect BuildTooltipRect(RenderRect anchorRect, Vector2 mousePosition, float tooltipSpawnX, Vector2 viewportSize, float tooltipWidth, float height)
         {
-            var unityAnchorRect = ToRect(anchorRect);
-            if (HasArea(unityAnchorRect))
-            {
-                return ClampTooltipRect(BuildTooltipRectFromAnchor(unityAnchorRect, viewportSize, tooltipWidth, height), viewportSize);
-            }
-
-            return ClampTooltipRect(new Rect(mousePosition.x + 18f, mousePosition.y + 18f, tooltipWidth, height), viewportSize);
-        }
-
-        private static Rect BuildTooltipRectFromAnchor(Rect anchorRect, Vector2 viewportSize, float tooltipWidth, float height)
-        {
-            var x = anchorRect.xMin - 4f;
-            var y = anchorRect.yMax + 4f;
-            if (y + height > viewportSize.y - 12f)
-            {
-                y = anchorRect.yMin - height - 4f;
-            }
-
-            return new Rect(x, y, tooltipWidth, height);
-        }
-
-        private static Rect ClampTooltipRect(Rect rect, Vector2 viewportSize)
-        {
-            rect.x = Mathf.Min(rect.x, Mathf.Max(8f, viewportSize.x - rect.width - 12f));
-            rect.y = Mathf.Min(rect.y, Mathf.Max(8f, viewportSize.y - rect.height - 12f));
-            rect.x = Mathf.Max(8f, rect.x);
-            rect.y = Mathf.Max(8f, rect.y);
-            return rect;
+            var rect = HoverTooltipPlacement.BuildRect(
+                anchorRect,
+                new RenderPoint(mousePosition.x, mousePosition.y),
+                tooltipSpawnX,
+                new RenderSize(viewportSize.x, viewportSize.y),
+                tooltipWidth,
+                height,
+                TooltipPlacementOptions);
+            return ToRect(rect);
         }
 
         private static Rect BuildCompactTooltipSignatureRect(Rect tooltipRect)

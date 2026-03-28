@@ -248,11 +248,12 @@ namespace Cortex.Modules.Editor
                 var hoveredMethodTarget = hasMouse && !_isDraggingSelection && !pointerOnHoverSurface && IsMethodTargetSelectionMode()
                     ? FindMethodTargetAt(session, gutterWidth, pointerContext.ContentMouse)
                     : null;
-                HandlePointerInput(session, state, editingEnabled, current, pointerContext, hoveredMethodTarget, gutterWidth, commandRegistry, contributionRegistry, harmonyPatchGenerationService, pointerOnOverlaySurface, pointerOnContextMenu);
-                RefreshActiveContext(session, state, editingEnabled);
                 var hoverTarget = hasMouse && !_isDraggingSelection && !pointerOnHoverSurface
                     ? TryResolveHoverTarget(session, state, editingEnabled, pointerContext.ContentMouse, scroll, gutterWidth)
                     : null;
+                var displayHoveredMethodTarget = ResolveDisplayedHoveredMethodTarget(session, state, hoverTarget, pointerOnHoverSurface);
+                HandlePointerInput(session, state, editingEnabled, current, pointerContext, hoveredMethodTarget, gutterWidth, commandRegistry, contributionRegistry, harmonyPatchGenerationService, pointerOnOverlaySurface, pointerOnContextMenu);
+                RefreshActiveContext(session, state, editingEnabled);
                 if (shouldUpdateHover)
                 {
                     _hoverService.UpdateHoverRequest(
@@ -274,7 +275,7 @@ namespace Cortex.Modules.Editor
                     {
                         scroll = GUI.BeginScrollView(new Rect(0f, 0f, rect.width, rect.height), scroll, contentRect);
                         GUI.DrawTexture(new Rect(0f, 0f, contentRect.width, contentRect.height), _surfaceFill);
-                        DrawLines(session, state, editingEnabled, scroll, rect.height, gutterWidth);
+                        DrawLines(session, state, editingEnabled, scroll, rect.height, gutterWidth, displayHoveredMethodTarget);
                     }
                     finally
                     {
@@ -854,7 +855,14 @@ namespace Cortex.Modules.Editor
             return scroll;
         }
 
-        private void DrawLines(DocumentSession session, CortexShellState state, bool editingEnabled, Vector2 scroll, float viewportHeight, float gutterWidth)
+        private void DrawLines(
+            DocumentSession session,
+            CortexShellState state,
+            bool editingEnabled,
+            Vector2 scroll,
+            float viewportHeight,
+            float gutterWidth,
+            EditorMethodTargetOutline hoveredMethodTarget)
         {
             if (_layout == null || _layout.Lines.Count == 0)
             {
@@ -882,7 +890,7 @@ namespace Cortex.Modules.Editor
                 isEditorContainerFocused);
             if (IsMethodTargetSelectionMode())
             {
-                DrawMethodTargetOutlines(session, firstLine, lastLine, gutterWidth);
+                DrawMethodTargetOutlines(session, firstLine, lastLine, gutterWidth, hoveredMethodTarget);
             }
 
             for (var i = firstLine; i <= lastLine; i++)
@@ -1157,7 +1165,12 @@ namespace Cortex.Modules.Editor
                 Input.GetKey(KeyCode.RightControl);
         }
 
-        private void DrawMethodTargetOutlines(DocumentSession session, int firstLineIndex, int lastLineIndex, float gutterWidth)
+        private void DrawMethodTargetOutlines(
+            DocumentSession session,
+            int firstLineIndex,
+            int lastLineIndex,
+            float gutterWidth,
+            EditorMethodTargetOutline hoveredMethodTarget)
         {
             var outlines = _methodTargetOutlineService.GetOutlines(session);
             for (var i = 0; i < outlines.Length; i++)
@@ -1180,6 +1193,13 @@ namespace Cortex.Modules.Editor
                 DrawMethodTargetGlow(blockRect);
                 GUI.DrawTexture(blockRect, _methodTargetFill);
                 DrawMethodTargetOutline(blockRect);
+                if (hoveredMethodTarget != null &&
+                    hoveredMethodTarget.AnchorStart == outline.AnchorStart &&
+                    hoveredMethodTarget.StartLineNumber == outline.StartLineNumber &&
+                    hoveredMethodTarget.EndLineNumber == outline.EndLineNumber)
+                {
+                    DrawSelectionOutline(blockRect);
+                }
             }
         }
 
@@ -1699,6 +1719,46 @@ namespace Cortex.Modules.Editor
             rect = EmptyRect;
             var outline = _methodTargetOutlineService.FindOutline(session, target);
             return TryBuildMethodTargetRect(outline, gutterWidth, out rect);
+        }
+
+        private EditorMethodTargetOutline ResolveDisplayedHoveredMethodTarget(
+            DocumentSession session,
+            CortexShellState state,
+            EditorHoverTarget hoverTarget,
+            bool pointerOnHoverSurface)
+        {
+            if (hoverTarget != null && hoverTarget.Target != null)
+            {
+                return _methodTargetOutlineService.FindOutline(session, hoverTarget.Target);
+            }
+
+            if (!pointerOnHoverSurface || !IsMethodTargetSelectionMode())
+            {
+                return null;
+            }
+
+            var activeHoverTarget = ResolveActiveHoverTarget(session, state);
+            return activeHoverTarget != null ? _methodTargetOutlineService.FindOutline(session, activeHoverTarget) : null;
+        }
+
+        private EditorCommandTarget ResolveActiveHoverTarget(DocumentSession session, CortexShellState state)
+        {
+            if (session == null || state == null || state.Editor == null || state.Editor.Hover == null)
+            {
+                return null;
+            }
+
+            var activeContextKey = state.Editor.Hover.ActiveContextKey ?? string.Empty;
+            if (string.IsNullOrEmpty(activeContextKey))
+            {
+                return null;
+            }
+
+            var target = _contextService.ResolveTarget(state, activeContextKey);
+            return target != null &&
+                string.Equals(target.DocumentPath ?? string.Empty, session.FilePath ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+                ? target
+                : null;
         }
 
         private float GetMethodTargetLineLeft(EditableLineLayout line, float gutterWidth)

@@ -45,6 +45,16 @@ namespace Cortex.Modules.Shared
     {
         private const float DefaultTooltipWidth = 420f;
         private const double StickyHoverGraceMs = 700d;
+        private static readonly Cortex.Rendering.Models.HoverTooltipPlacementOptions TooltipPlacementOptions = new Cortex.Rendering.Models.HoverTooltipPlacementOptions
+        {
+            AnchorVerticalOffset = -3f,
+            FallbackCursorOffsetX = 18f,
+            FallbackCursorOffsetY = 18f,
+            ClampMinX = 8f,
+            ClampMinY = 8f,
+            ClampRightMargin = 12f,
+            ClampBottomMargin = 12f
+        };
 
         private Rect _textTooltipAnchorRect = new Rect(0f, 0f, 0f, 0f);
         private string _textTooltipText = string.Empty;
@@ -53,6 +63,7 @@ namespace Cortex.Modules.Shared
         private string _stickyHoverDocumentPath = string.Empty;
         private Rect _stickyHoverAnchorRect = new Rect(0f, 0f, 0f, 0f);
         private Rect _stickyHoverTooltipRect = new Rect(0f, 0f, 0f, 0f);
+        private readonly Cortex.Rendering.Models.HoverTooltipPlacementState _tooltipPlacementState = new Cortex.Rendering.Models.HoverTooltipPlacementState();
         private Vector2 _lastValidViewport = Vector2.zero;
         private DateTime _stickyHoverKeepAliveUtc = DateTime.MinValue;
         private string _pressedTooltipPartKey = string.Empty;
@@ -110,6 +121,7 @@ namespace Cortex.Modules.Shared
             _stickyHoverDocumentPath = string.Empty;
             _stickyHoverAnchorRect = new Rect(0f, 0f, 0f, 0f);
             _stickyHoverTooltipRect = new Rect(0f, 0f, 0f, 0f);
+            Cortex.Rendering.Models.HoverTooltipPlacement.Reset(_tooltipPlacementState);
             _lastValidViewport = Vector2.zero;
             _stickyHoverKeepAliveUtc = DateTime.MinValue;
             _pressedTooltipPartKey = string.Empty;
@@ -159,7 +171,7 @@ namespace Cortex.Modules.Shared
                 return false;
             }
 
-            var tooltipRect = BuildTooltipRect(activeModel.AnchorRect, mousePosition, effectiveViewport, tooltipWidth, BuildTooltipHeight(styles, tooltipWidth, pathHeight, metaHeight, signatureHeight, initialDetailText));
+            var tooltipRect = BuildTooltipRect(activeModel.Key ?? string.Empty, activeModel.AnchorRect, mousePosition, effectiveViewport, tooltipWidth, BuildTooltipHeight(styles, tooltipWidth, pathHeight, metaHeight, signatureHeight, initialDetailText));
             var partVisuals = new List<TooltipPartVisual>();
             var signatureRect = BuildTooltipSignatureRect(tooltipRect, pathHeight, metaHeight);
             LayoutTooltipParts(signatureRect, signatureParts, partVisuals, false, styles);
@@ -171,7 +183,7 @@ namespace Cortex.Modules.Shared
             var finalHeight = BuildTooltipHeight(styles, tooltipWidth, pathHeight, metaHeight, signatureHeight, detailText);
             if (canUpdateTooltipVisuals || !HasArea(_stickyHoverTooltipRect))
             {
-                tooltipRect = BuildTooltipRect(activeModel.AnchorRect, mousePosition, effectiveViewport, tooltipWidth, finalHeight);
+                tooltipRect = BuildTooltipRect(activeModel.Key ?? string.Empty, activeModel.AnchorRect, mousePosition, effectiveViewport, tooltipWidth, finalHeight);
                 _stickyHoverTooltipRect = tooltipRect;
             }
             else
@@ -434,11 +446,23 @@ namespace Cortex.Modules.Shared
             return Mathf.Min(360f, 14f + pathHeight + metaHeight + signatureHeight + (detailHeight > 0f ? detailHeight + 8f : 0f));
         }
 
-        private Rect BuildTooltipRect(Rect anchorRect, Vector2 mousePosition, Vector2 viewportSize, float tooltipWidth, float height)
+        private Rect BuildTooltipRect(string hoverKey, Rect anchorRect, Vector2 mousePosition, Vector2 viewportSize, float tooltipWidth, float height)
         {
+            var tooltipSpawnX = Cortex.Rendering.Models.HoverTooltipPlacement.ResolveSpawnX(
+                _tooltipPlacementState,
+                hoverKey,
+                mousePosition.x);
             if (HasArea(anchorRect))
             {
-                return ClampTooltipRect(BuildTooltipRectFromAnchor(anchorRect, viewportSize, tooltipWidth, height), viewportSize);
+                var anchoredRect = Cortex.Rendering.Models.HoverTooltipPlacement.BuildRect(
+                    ToRenderRect(anchorRect),
+                    new Cortex.Rendering.Models.RenderPoint(mousePosition.x, mousePosition.y),
+                    tooltipSpawnX,
+                    new Cortex.Rendering.Models.RenderSize(viewportSize.x, viewportSize.y),
+                    tooltipWidth,
+                    height,
+                    TooltipPlacementOptions);
+                return ToRect(anchoredRect);
             }
 
             if (HasArea(_stickyHoverTooltipRect))
@@ -450,18 +474,6 @@ namespace Cortex.Modules.Shared
             }
 
             return ClampTooltipRect(new Rect(mousePosition.x + 18f, mousePosition.y + 18f, tooltipWidth, height), viewportSize);
-        }
-
-        private static Rect BuildTooltipRectFromAnchor(Rect anchorRect, Vector2 viewportSize, float tooltipWidth, float height)
-        {
-            var x = anchorRect.xMin - 4f;
-            var y = anchorRect.yMax - 3f;
-            if (y + height > viewportSize.y - 12f)
-            {
-                y = anchorRect.yMin - height + 3f;
-            }
-
-            return new Rect(x, y, tooltipWidth, height);
         }
 
         private static Rect ClampTooltipRect(Rect rect, Vector2 viewportSize)
@@ -681,6 +693,16 @@ namespace Cortex.Modules.Shared
         private static bool HasArea(Rect rect)
         {
             return rect.width > 0f && rect.height > 0f;
+        }
+
+        private static Rect ToRect(Cortex.Rendering.Models.RenderRect rect)
+        {
+            return new Rect(rect.X, rect.Y, rect.Width, rect.Height);
+        }
+
+        private static Cortex.Rendering.Models.RenderRect ToRenderRect(Rect rect)
+        {
+            return new Cortex.Rendering.Models.RenderRect(rect.x, rect.y, rect.width, rect.height);
         }
 
         private static string BuildTooltipPartKey(LanguageServiceHoverDisplayPart part)
