@@ -148,7 +148,6 @@ namespace Cortex.Modules.Editor
                     }
                 }
                 PreHandleContextMenuInput(current, localMouse);
-                var pointerOnContextMenu = _contextMenuOpen && _overlayInteractionService.IsPointerWithin(_lastContextMenuRect, localMouse);
                 var activeMethodInspectorTarget = _contextService.ResolveTarget(
                     state,
                     state != null && state.Editor != null && state.Editor.MethodInspector != null
@@ -160,13 +159,18 @@ namespace Cortex.Modules.Editor
                     GetMethodInspectorViewportAnchorRect(session, activeMethodInspectorTarget, scroll, gutterWidth),
                     rect.size);
                 _lastMethodInspectorRect = predictedMethodInspectorRect;
-                var pointerOnMethodInspector = _overlayInteractionService.IsPointerWithin(predictedMethodInspectorRect, localMouse);
                 var hoverSurfaceId = GetSurfaceId(session, state);
                 var pointerOnTooltip = hasMouse && _hoverService.IsPointerWithinHoverSurface(hoverSurfaceId, ToRenderPoint(localMouse));
-                var pointerOnOverlaySurface = pointerOnMethodInspector || pointerOnTooltip;
-                _overlayInteractionService.TraceScrollOwner("decompiled-editor", current, pointerOnOverlaySurface, pointerOnContextMenu);
+                var overlayPointerState = _overlayInteractionService.ResolvePointerState(
+                    predictedMethodInspectorRect,
+                    _lastContextMenuRect,
+                    _contextMenuOpen,
+                    pointerOnTooltip,
+                    hasMouse,
+                    localMouse);
+                _overlayInteractionService.TraceScrollOwner("decompiled-editor", current, overlayPointerState);
                 _methodInspectorSurface.TryHandlePreDrawInput(current, predictedMethodInspectorRect, localMouse);
-                var pointerOnHoverSurface = hasMouse && pointerOnOverlaySurface;
+                var pointerOnHoverSurface = hasMouse && overlayPointerState.PointerOnOverlaySurface;
                 var editorHoverActive = hasMouse && !pointerOnHoverSurface;
                 var shouldUpdateHover = current == null ||
                     current.type == EventType.Repaint ||
@@ -205,13 +209,13 @@ namespace Cortex.Modules.Editor
                         hasMouse,
                         ToRenderPoint(localMouse));
                 }
-                HandlePointerInput(session, state, hoverSurfaceId, hoveredToken, hoverTarget, hoveredMethodTarget, hoveredFoldRegion, editorHoverActive, current, localMouse, rect.size, commandRegistry, contributionRegistry, pointerOnMethodInspector, pointerOnContextMenu);
+                HandlePointerInput(session, state, hoverSurfaceId, hoveredToken, hoverTarget, hoveredMethodTarget, hoveredFoldRegion, editorHoverActive, current, localMouse, rect.size, commandRegistry, contributionRegistry, overlayPointerState);
 
                 GUI.BeginGroup(rect);
                 try
                 {
                     var contentRect = new Rect(0f, 0f, Mathf.Max(rect.width - 18f, _layout.ContentWidth), Mathf.Max(rect.height - 18f, _layout.ContentHeight));
-                    var preserveEditorScroll = _overlayInteractionService.ShouldPreserveEditorScroll(current, _contextMenuOpen, pointerOnOverlaySurface);
+                    var preserveEditorScroll = _overlayInteractionService.ShouldPreserveEditorScroll(current, _contextMenuOpen, overlayPointerState);
                     var scrollBeforeDraw = scroll;
                     try
                     {
@@ -756,8 +760,7 @@ namespace Cortex.Modules.Editor
             Vector2 viewportSize,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
-            bool pointerOnMethodInspector,
-            bool pointerOnContextMenu)
+            EditorOverlayPointerState overlayPointerState)
         {
             if (current == null)
             {
@@ -767,20 +770,18 @@ namespace Cortex.Modules.Editor
             _overlayInteractionService.TracePointerRouting(
                 "decompiled-editor",
                 current,
-                pointerOnMethodInspector,
-                pointerOnContextMenu,
-                hasMouse,
+                overlayPointerState,
                 state != null &&
                     state.Editor != null &&
                     state.Editor.MethodInspector != null &&
                     state.Editor.MethodInspector.IsVisible);
 
-            if (_overlayInteractionService.ShouldBypassSurfaceInput(current, pointerOnMethodInspector, pointerOnContextMenu))
+            if (_overlayInteractionService.ShouldBypassSurfaceInput(current, overlayPointerState))
             {
                 return;
             }
 
-            if (_overlayInteractionService.ShouldCloseMethodInspectorOnPointerDown(current, pointerOnMethodInspector, pointerOnContextMenu, state))
+            if (_overlayInteractionService.ShouldCloseMethodInspectorOnPointerDown(current, overlayPointerState, state))
             {
                 _methodInspectorService.Close(state);
             }
