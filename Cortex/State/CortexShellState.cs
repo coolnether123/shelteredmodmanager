@@ -340,7 +340,7 @@ namespace Cortex
         public CortexProjectDefinition SelectedProject;
         public BuildResult LastBuildResult;
         public DecompilerResponse LastReferenceResult;
-        public LanguageServiceStatusResponse LanguageServiceStatus;
+        public LanguageRuntimeSnapshot LanguageRuntime = new LanguageRuntimeSnapshot();
         public CortexSettings Settings;
         public string StatusMessage;
         public bool ReloadSettingsRequested;

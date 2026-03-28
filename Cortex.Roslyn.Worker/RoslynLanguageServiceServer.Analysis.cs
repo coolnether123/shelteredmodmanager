@@ -50,7 +50,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var text = documentContext.Document.GetTextAsync().Result;
+            var text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
             return new LanguageServiceAnalysisResponse
             {
                 Success = true,
@@ -94,7 +94,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var text = documentContext.Document.GetTextAsync().Result;
+            var text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
             var position = ResolveRequestPosition(text, request.Line, request.Column, request.AbsolutePosition);
             if (position < 0 || position > text.Length)
             {
@@ -141,7 +141,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var text = documentContext.Document.GetTextAsync().Result;
+            var text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
             var position = ResolveRequestPosition(text, request.Line, request.Column, request.AbsolutePosition);
             if (position < 0 || position > text.Length)
             {
@@ -249,7 +249,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var text = documentContext.Document.GetTextAsync().Result;
+            var text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
             var position = ResolveRequestPosition(text, request.Line, request.Column, request.AbsolutePosition);
             if (position < 0 || position > text.Length)
             {
@@ -283,7 +283,7 @@ namespace Cortex.Roslyn.Worker
             var trigger = request.ExplicitInvocation
                 ? CompletionTrigger.Invoke
                 : BuildCompletionTrigger(request.TriggerCharacter);
-            var completionList = completionService.GetCompletionsAsync(documentContext.Document, position, trigger: trigger).Result;
+            var completionList = completionService.GetCompletionsAsync(documentContext.Document, position, trigger: trigger, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
             if (completionList == null)
             {
                 return new LanguageServiceCompletionResponse
@@ -357,7 +357,7 @@ namespace Cortex.Roslyn.Worker
                 return null;
             }
 
-            var change = completionService.GetChangeAsync(document, item).Result;
+            var change = completionService.GetChangeAsync(document, item, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
             return new LanguageServiceCompletionItem
             {
                 DisplayText = item.DisplayText ?? string.Empty,
@@ -608,7 +608,7 @@ namespace Cortex.Roslyn.Worker
                 {
                     Console.Error.WriteLine(args.Diagnostic.Message);
                 };
-                project = workspace.OpenProjectAsync(normalized).Result;
+                project = workspace.OpenProjectAsync(normalized, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
                 project = AddSupplementalMetadataReferences(project);
 
                 _projectCache[normalized] = project;
@@ -760,7 +760,7 @@ namespace Cortex.Roslyn.Worker
 
         private static LanguageServiceDiagnostic[] CollectDiagnostics(Document document)
         {
-            var syntaxTree = document.GetSyntaxTreeAsync().Result;
+            var syntaxTree = document.GetSyntaxTreeAsync(CurrentCancellationToken).GetAwaiter().GetResult();
             if (syntaxTree == null)
             {
                 return new LanguageServiceDiagnostic[0];
@@ -769,7 +769,7 @@ namespace Cortex.Roslyn.Worker
             var diagnostics = new List<Diagnostic>();
             diagnostics.AddRange(syntaxTree.GetDiagnostics());
 
-            var compilation = document.Project.GetCompilationAsync().Result;
+            var compilation = document.Project.GetCompilationAsync(CurrentCancellationToken).GetAwaiter().GetResult();
             if (compilation != null)
             {
                 diagnostics.AddRange(compilation.GetDiagnostics().Where(diagnostic =>
@@ -786,7 +786,7 @@ namespace Cortex.Roslyn.Worker
         private static LanguageServiceClassifiedSpan[] CollectClassifications(Document document, SourceText text, int rangeStart, int rangeLength)
         {
             var classificationSpan = BuildClassificationSpan(text, rangeStart, rangeLength);
-            var spans = Classifier.GetClassifiedSpansAsync(document, classificationSpan).Result;
+            var spans = Classifier.GetClassifiedSpansAsync(document, classificationSpan, CurrentCancellationToken).GetAwaiter().GetResult();
             var classificationService = new RoslynSemanticTokenClassificationService();
             var merged = new Dictionary<string, LanguageServiceClassifiedSpan>(StringComparer.Ordinal);
             foreach (var span in spans)
@@ -851,7 +851,7 @@ namespace Cortex.Roslyn.Worker
 
         private static ISymbol ResolveSymbol(Document document, int position)
         {
-            var text = document != null ? document.GetTextAsync().Result : null;
+            var text = document != null ? document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult() : null;
             if (document == null || text == null)
             {
                 return null;
@@ -872,8 +872,8 @@ namespace Cortex.Roslyn.Worker
 
         private static ISymbol TryResolveSymbolAtPosition(Document document, int position)
         {
-            var semanticModel = document.GetSemanticModelAsync().Result;
-            var root = document.GetSyntaxRootAsync().Result;
+            var semanticModel = document.GetSemanticModelAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+            var root = document.GetSyntaxRootAsync(CurrentCancellationToken).GetAwaiter().GetResult();
             if (semanticModel == null || root == null)
             {
                 return null;
@@ -890,7 +890,7 @@ namespace Cortex.Roslyn.Worker
                 return null;
             }
 
-            var symbol = SymbolFinder.FindSymbolAtPositionAsync(document, position).Result;
+            var symbol = SymbolFinder.FindSymbolAtPositionAsync(document, position, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
             if (symbol != null)
             {
                 return symbol;

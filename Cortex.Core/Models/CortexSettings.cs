@@ -22,6 +22,7 @@ namespace Cortex.Core.Models
         public string DecompilerPathOverride;
         public string DecompilerCachePath;
         public string AdditionalDecompilerCacheRoots;
+        public string LanguageProviderId;
         public bool EnableRoslynLanguageService;
         public string RoslynServicePathOverride;
         public int RoslynServiceTimeoutMs;
@@ -90,6 +91,7 @@ namespace Cortex.Core.Models
             DecompilerPathOverride = string.Empty;
             DecompilerCachePath = string.Empty;
             AdditionalDecompilerCacheRoots = string.Empty;
+            LanguageProviderId = string.Empty;
             EnableRoslynLanguageService = true;
             RoslynServicePathOverride = string.Empty;
             RoslynServiceTimeoutMs = 15000;

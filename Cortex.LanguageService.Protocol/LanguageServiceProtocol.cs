@@ -16,6 +16,11 @@ namespace Cortex.LanguageService.Protocol
         public const string Status = "status";
 
         /// <summary>
+        /// Requests cancellation for an in-flight worker operation.
+        /// </summary>
+        public const string CancelRequest = "cancel-request";
+
+        /// <summary>
         /// Requests diagnostics and semantic classifications for a document.
         /// </summary>
         public const string AnalyzeDocument = "analyze-document";
@@ -195,6 +200,23 @@ namespace Cortex.LanguageService.Protocol
     /// </summary>
     public sealed class LanguageServiceStatusRequest
     {
+    }
+
+    /// <summary>
+    /// Cancellation payload sent to the worker.
+    /// </summary>
+    public sealed class LanguageServiceCancelRequest
+    {
+        public string TargetRequestId;
+    }
+
+    /// <summary>
+    /// Response returned after a cancellation attempt.
+    /// </summary>
+    public sealed class LanguageServiceCancelResponse : LanguageServiceOperationResponse
+    {
+        public string TargetRequestId;
+        public bool Cancelled;
     }
 
     /// <summary>

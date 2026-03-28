@@ -33,5 +33,13 @@ namespace Cortex
         public DateTime LastInitializationProgressLogUtc = DateTime.MinValue;
         public string ServiceConfigurationFingerprint = string.Empty;
         public LanguageServiceInitializeRequest InitializeRequest;
+        public LanguageServiceStatusResponse CurrentStatus = new LanguageServiceStatusResponse
+        {
+            Success = false,
+            StatusMessage = string.Empty,
+            IsRunning = false,
+            Capabilities = new string[0],
+            LoadedProjectPaths = new string[0]
+        };
     }
 }

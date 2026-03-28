@@ -53,9 +53,13 @@
     <Compile Include="Shell\CortexShellLanguageResponseProcessor.cs" />
     <Compile Include="Shell\CortexShellLanguageRuntimeContext.cs" />
     <Compile Include="Shell\CortexShellLanguageRuntimeState.cs" />
+    <Compile Include="Shell\CortexLanguageRuntimeService.cs" />
     <Compile Include="Shell\CortexShellLayoutContext.cs" />
     <Compile Include="Shell\CortexShellLayoutHostRouter.cs" />
     <Compile Include="Shell\CortexShellLifecycleCoordinator.cs" />
+    <Compile Include="Shell\NullLanguageRuntimeService.cs" />
+    <Compile Include="Shell\RoslynLanguageProviderFactory.cs" />
+    <Compile Include="Shell\RoslynLanguageProviderSession.cs" />
     <Compile Include="Shell\CortexShellModuleActivationService.cs" />
     <Compile Include="Shell\CortexShellBuiltInModuleContributions.cs" />
     <Compile Include="Shell\CortexShellModuleCapabilities.cs" />

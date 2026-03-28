@@ -748,7 +748,7 @@ namespace Cortex.Modules.Editor
             var analysis = active.LanguageAnalysis;
             var errorCount = CountDiagnostics(analysis, "Error");
             var warningCount = CountDiagnostics(analysis, "Warning");
-            var roslynLabel = BuildRoslynLabel(state, analysis, errorCount, warningCount);
+            var roslynLabel = BuildLanguageRuntimeLabel(state, analysis, errorCount, warningCount);
             var augmentationLabel = BuildCompletionAugmentationLabel(state, active);
             var modeTooltip = _documentModeService.BuildEditModeTooltip(active, settings);
             var modeContent = new GUIContent(isEditing ? "EDIT" : "READ", modeTooltip);
@@ -812,35 +812,72 @@ namespace Cortex.Modules.Editor
             return count;
         }
 
-        private static string BuildRoslynLabel(CortexShellState state, LanguageServiceAnalysisResponse analysis, int errorCount, int warningCount)
+        private static string BuildLanguageRuntimeLabel(CortexShellState state, LanguageServiceAnalysisResponse analysis, int errorCount, int warningCount)
         {
-            var status = state != null ? state.LanguageServiceStatus : null;
-            if (status == null)
+            var runtime = state != null ? state.LanguageRuntime : null;
+            var providerLabel = runtime != null &&
+                runtime.Provider != null &&
+                !string.IsNullOrEmpty(runtime.Provider.DisplayName)
+                ? runtime.Provider.DisplayName
+                : "Language";
+            if (runtime == null)
             {
-                return "Roslyn: offline";
+                return providerLabel + ": offline";
             }
 
-            if (!status.IsRunning)
+            if (IsExplicitlyDisabled(runtime))
             {
-                return "Roslyn: " + (string.IsNullOrEmpty(status.StatusMessage) ? "standby" : status.StatusMessage);
+                return providerLabel + ": off";
+            }
+
+            if (runtime.HealthState == LanguageRuntimeHealthState.NoProviders)
+            {
+                return providerLabel + ": no providers";
+            }
+
+            if (runtime.HealthState == LanguageRuntimeHealthState.Unavailable)
+            {
+                return providerLabel + ": unavailable";
+            }
+
+            if (runtime.HealthState == LanguageRuntimeHealthState.Faulted)
+            {
+                return providerLabel + ": faulted";
+            }
+
+            if (runtime.LifecycleState == LanguageRuntimeLifecycleState.Starting)
+            {
+                return providerLabel + ": starting";
+            }
+
+            if (runtime.LifecycleState == LanguageRuntimeLifecycleState.Reloading)
+            {
+                return providerLabel + ": reloading";
             }
 
             if (analysis == null)
             {
-                return "Roslyn: ready";
+                return providerLabel + ": ready";
             }
 
             if (!HasResolvedAnalysis(analysis))
             {
-                return "Roslyn: analyzing";
+                return providerLabel + ": analyzing";
             }
 
             if (!analysis.Success)
             {
-                return "Roslyn: " + (string.IsNullOrEmpty(analysis.StatusMessage) ? "analysis failed" : analysis.StatusMessage);
+                return providerLabel + ": " + (string.IsNullOrEmpty(analysis.StatusMessage) ? "analysis failed" : analysis.StatusMessage);
             }
 
-            return "Roslyn E:" + errorCount + " W:" + warningCount;
+            return providerLabel + " E:" + errorCount + " W:" + warningCount;
+        }
+
+        private static bool IsExplicitlyDisabled(LanguageRuntimeSnapshot runtime)
+        {
+            return runtime != null &&
+                runtime.LifecycleState == LanguageRuntimeLifecycleState.Disabled &&
+                runtime.HealthState == LanguageRuntimeHealthState.Healthy;
         }
 
         private static string BuildCompletionAugmentationLabel(CortexShellState state, DocumentSession active)

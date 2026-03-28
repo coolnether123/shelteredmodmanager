@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Presentation.Abstractions;
 
@@ -58,6 +59,16 @@ namespace Cortex.Host.Unity.Runtime
         public ICortexShellHostUi ShellHostUi
         {
             get { return _shellHostUi; }
+        }
+
+        public string PreferredLanguageProviderId
+        {
+            get { return Cortex.Shell.RoslynLanguageProviderFactory.ProviderId; }
+        }
+
+        public IList<ILanguageProviderFactory> LanguageProviderFactories
+        {
+            get { return new List<ILanguageProviderFactory>(); }
         }
     }
 }
