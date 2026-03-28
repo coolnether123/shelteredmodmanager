@@ -109,11 +109,11 @@ namespace Cortex
                     continue;
                 }
 
-                if (runtime.PendingMethodInspectorCallHierarchy != null &&
-                    string.Equals(envelope.RequestId, runtime.PendingMethodInspectorCallHierarchy.RequestId, StringComparison.Ordinal))
+                if (runtime.PendingMethodInspectorRelationships != null &&
+                    string.Equals(envelope.RequestId, runtime.PendingMethodInspectorRelationships.RequestId, StringComparison.Ordinal))
                 {
-                    var pending = runtime.PendingMethodInspectorCallHierarchy;
-                    runtime.PendingMethodInspectorCallHierarchy = null;
+                    var pending = runtime.PendingMethodInspectorRelationships;
+                    runtime.PendingMethodInspectorRelationships = null;
                     HandleMethodInspectorCallHierarchyResponse(context, envelope, pending);
                 }
             }
@@ -673,10 +673,10 @@ namespace Cortex
         private static void HandleMethodInspectorCallHierarchyResponse(
             CortexShellLanguageRuntimeContext context,
             LanguageServiceEnvelope envelope,
-            PendingMethodInspectorCallHierarchyRequest pending)
+            PendingMethodInspectorRelationshipsRequest pending)
         {
             var runtime = context.RuntimeState;
-            runtime.MethodInspectorCallHierarchyInFlight = false;
+            runtime.MethodInspectorRelationshipsInFlight = false;
             if (pending == null || pending.Generation != runtime.ServiceGeneration || context.State == null || context.State.Editor == null)
             {
                 return;
@@ -688,8 +688,9 @@ namespace Cortex
                 : null;
             if (inspector == null ||
                 !inspector.IsVisible ||
+                !inspector.RelationshipsExpanded ||
                 liveTarget == null ||
-                !string.Equals(inspector.CallHierarchyTargetKey ?? string.Empty, pending.TargetKey ?? string.Empty, StringComparison.Ordinal) ||
+                !string.Equals(inspector.RelationshipsTargetKey ?? string.Empty, pending.TargetKey ?? string.Empty, StringComparison.Ordinal) ||
                 !string.Equals(EditorMethodInspectorService.BuildTargetKey(liveTarget), pending.TargetKey ?? string.Empty, StringComparison.Ordinal))
             {
                 return;
@@ -701,7 +702,7 @@ namespace Cortex
                 liveSession.TextVersion > 0 &&
                 liveSession.TextVersion != pending.DocumentVersion)
             {
-                inspector.CallHierarchyStatusMessage = "Incoming-call inference was skipped because the document changed.";
+                inspector.RelationshipsStatusMessage = "Method relationships were skipped because the document changed.";
                 return;
             }
 
@@ -713,12 +714,12 @@ namespace Cortex
                     Success = false,
                     StatusMessage = envelope != null && !string.IsNullOrEmpty(envelope.ErrorMessage)
                         ? envelope.ErrorMessage
-                        : "Incoming-call inference payload was unreadable."
+                        : "Method relationship payload was unreadable."
                 };
             }
 
-            inspector.CallHierarchy = response;
-            inspector.CallHierarchyStatusMessage = response.StatusMessage ?? string.Empty;
+            inspector.RelationshipsCallHierarchy = response;
+            inspector.RelationshipsStatusMessage = response.StatusMessage ?? string.Empty;
         }
 
         private static bool TryOpenSingleSemanticLocation(CortexShellLanguageRuntimeContext context, LanguageServiceSymbolLocation[] locations, string successMessage)

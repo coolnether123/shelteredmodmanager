@@ -566,8 +566,9 @@ namespace Cortex
                 runtime == null ||
                 inspector == null ||
                 !inspector.IsVisible ||
-                runtime.MethodInspectorCallHierarchyInFlight ||
-                string.IsNullOrEmpty(inspector.CallHierarchyRequestKey))
+                !inspector.RelationshipsExpanded ||
+                runtime.MethodInspectorRelationshipsInFlight ||
+                string.IsNullOrEmpty(inspector.RelationshipsRequestKey))
             {
                 return;
             }
@@ -583,8 +584,8 @@ namespace Cortex
             var session = context.FindOpenDocument(target.DocumentPath);
             if (session == null)
             {
-                inspector.CallHierarchyRequestKey = string.Empty;
-                inspector.CallHierarchyStatusMessage = "Incoming-call inference is not available because the source document is no longer open.";
+                inspector.RelationshipsRequestKey = string.Empty;
+                inspector.RelationshipsStatusMessage = "Method relationships are not available because the source document is no longer open.";
                 return;
             }
 
@@ -598,26 +599,26 @@ namespace Cortex
                 target.Line,
                 target.Column,
                 target.AbsolutePosition);
-            var requestKey = inspector.CallHierarchyRequestKey ?? string.Empty;
+            var requestKey = inspector.RelationshipsRequestKey ?? string.Empty;
             var requestId = context.LanguageServiceClient != null
                 ? context.LanguageServiceClient.QueueCallHierarchy(request)
                 : string.Empty;
-            inspector.CallHierarchyRequestKey = string.Empty;
+            inspector.RelationshipsRequestKey = string.Empty;
             if (string.IsNullOrEmpty(requestId))
             {
-                inspector.CallHierarchyStatusMessage = "Incoming-call inference failed: " +
+                inspector.RelationshipsStatusMessage = "Method relationships failed: " +
                     (context.LanguageServiceClient != null ? context.LanguageServiceClient.LastError : "Roslyn client was not available.");
                 return;
             }
 
-            runtime.MethodInspectorCallHierarchyInFlight = true;
-            runtime.PendingMethodInspectorCallHierarchy = new PendingMethodInspectorCallHierarchyRequest
+            runtime.MethodInspectorRelationshipsInFlight = true;
+            runtime.PendingMethodInspectorRelationships = new PendingMethodInspectorRelationshipsRequest
             {
                 RequestId = requestId,
                 Generation = runtime.ServiceGeneration,
                 RequestKey = requestKey,
                 ContextKey = inspector.ContextKey ?? string.Empty,
-                TargetKey = inspector.CallHierarchyTargetKey ?? string.Empty,
+                TargetKey = inspector.RelationshipsTargetKey ?? string.Empty,
                 DocumentPath = request.DocumentPath ?? string.Empty,
                 DocumentVersion = request.DocumentVersion
             };

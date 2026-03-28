@@ -184,14 +184,13 @@ namespace Cortex
         public string ContextKey = string.Empty;
         public bool OverviewExpanded = true;
         public bool NavigationExpanded = true;
-        public bool ReferencesExpanded = true;
+        public bool RelationshipsExpanded;
         public bool HarmonyExpanded = true;
-        public bool IndirectHarmonyExpanded = true;
-        public bool CallHierarchyRequested;
-        public string CallHierarchyTargetKey = string.Empty;
-        public string CallHierarchyRequestKey = string.Empty;
-        public string CallHierarchyStatusMessage = string.Empty;
-        public LanguageServiceCallHierarchyResponse CallHierarchy;
+        public bool RelationshipsRequested;
+        public string RelationshipsTargetKey = string.Empty;
+        public string RelationshipsRequestKey = string.Empty;
+        public string RelationshipsStatusMessage = string.Empty;
+        public LanguageServiceCallHierarchyResponse RelationshipsCallHierarchy;
     }
 
     public sealed class CortexSearchInteractionState

@@ -85,6 +85,7 @@
     <Compile Include="Modules\Editor\EditableCodeViewSurface.cs" />
     <Compile Include="Modules\Editor\EditorCommandContributions.cs" />
     <Compile Include="Modules\Editor\EditorInteractionLog.cs" />
+    <Compile Include="Modules\Editor\EditorMethodInspectorOverlayController.cs" />
     <Compile Include="Modules\Editor\EditorMethodInspectorSurface.cs" />
     <Compile Include="Modules\Editor\EditorModule.cs" />
     <Compile Include="Modules\Editor\EditorSemanticPopupSurface.cs" />
@@ -131,6 +132,8 @@
     <Compile Include="Services\EditorMethodPatchCreationService.cs" />
     <Compile Include="Services\EditorMethodHarmonyContextService.cs" />
     <Compile Include="Services\EditorMethodInspectorService.cs" />
+    <Compile Include="Services\EditorMethodInspectorPresentationService.cs" />
+    <Compile Include="Services\EditorMethodRelationshipsContextService.cs" />
     <Compile Include="Services\EditorMethodTargetMetadataService.cs" />
     <Compile Include="Services\EditorOverlayInteractionService.cs" />
     <Compile Include="Services\EditorMethodTargetOutlineService.cs" />

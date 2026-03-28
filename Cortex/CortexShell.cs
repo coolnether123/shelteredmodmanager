@@ -221,6 +221,7 @@ namespace Cortex
         public void ShutdownShell()
         {
             _lifecycleCoordinator.Destroy(this);
+            DisposeRenderPipeline();
         }
 
         public void UpdateShell()

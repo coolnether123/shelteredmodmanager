@@ -34,14 +34,13 @@ namespace Cortex.Services
             {
                 inspector.OverviewExpanded = true;
                 inspector.NavigationExpanded = true;
-                inspector.ReferencesExpanded = false;
+                inspector.RelationshipsExpanded = false;
                 inspector.HarmonyExpanded = true;
-                inspector.IndirectHarmonyExpanded = true;
             }
 
             if (!preserveSections)
             {
-                ResetCallHierarchy(inspector, target);
+                ResetRelationships(inspector, target);
             }
 
             return true;
@@ -59,11 +58,11 @@ namespace Cortex.Services
             inspector.Title = string.Empty;
             inspector.Classification = string.Empty;
             inspector.ContextKey = string.Empty;
-            inspector.CallHierarchyRequested = false;
-            inspector.CallHierarchyTargetKey = string.Empty;
-            inspector.CallHierarchyRequestKey = string.Empty;
-            inspector.CallHierarchyStatusMessage = string.Empty;
-            inspector.CallHierarchy = null;
+            inspector.RelationshipsRequested = false;
+            inspector.RelationshipsTargetKey = string.Empty;
+            inspector.RelationshipsRequestKey = string.Empty;
+            inspector.RelationshipsStatusMessage = string.Empty;
+            inspector.RelationshipsCallHierarchy = null;
         }
 
         public bool IsVisibleForDocument(CortexShellState state, string documentPath)
@@ -102,27 +101,57 @@ namespace Cortex.Services
             return IsMethodLike(_classificationPresentationService.NormalizeClassification(symbolKind));
         }
 
-        public bool EnsureCallHierarchyRequest(CortexShellState state)
+        public bool EnsureRelationshipsRequest(CortexShellState state)
         {
             var inspector = state != null && state.Editor != null ? state.Editor.MethodInspector : null;
             var target = _contextService != null ? _contextService.ResolveTarget(state, inspector != null ? inspector.ContextKey : string.Empty) : null;
-            if (inspector == null || !inspector.IsVisible || target == null)
+            if (inspector == null || !inspector.IsVisible || !inspector.RelationshipsExpanded || target == null)
             {
                 return false;
             }
 
             var targetKey = BuildTargetKey(target);
-            if (inspector.CallHierarchyRequested &&
-                string.Equals(inspector.CallHierarchyTargetKey, targetKey, StringComparison.Ordinal))
+            if (inspector.RelationshipsRequested &&
+                string.Equals(inspector.RelationshipsTargetKey, targetKey, StringComparison.Ordinal))
             {
                 return false;
             }
 
-            ResetCallHierarchy(inspector, target);
-            inspector.CallHierarchyRequested = true;
-            inspector.CallHierarchyRequestKey = targetKey + "|call-hierarchy";
-            inspector.CallHierarchyStatusMessage = "Analyzing incoming callers for Harmony context.";
+            ResetRelationships(inspector, target);
+            inspector.RelationshipsRequested = true;
+            inspector.RelationshipsRequestKey = targetKey + "|relationships";
+            inspector.RelationshipsStatusMessage = "Analyzing method relationships.";
             return true;
+        }
+
+        public void ToggleSection(CortexShellState state, string sectionId)
+        {
+            var inspector = state != null && state.Editor != null ? state.Editor.MethodInspector : null;
+            if (inspector == null)
+            {
+                return;
+            }
+
+            switch (sectionId ?? string.Empty)
+            {
+                case "structure":
+                    inspector.OverviewExpanded = !inspector.OverviewExpanded;
+                    break;
+                case "source":
+                    inspector.NavigationExpanded = !inspector.NavigationExpanded;
+                    break;
+                case "relationships":
+                    inspector.RelationshipsExpanded = !inspector.RelationshipsExpanded;
+                    if (!inspector.RelationshipsExpanded)
+                    {
+                        var target = _contextService != null ? _contextService.ResolveTarget(state, inspector.ContextKey ?? string.Empty) : null;
+                        ResetRelationships(inspector, target);
+                    }
+                    break;
+                case "harmony":
+                    inspector.HarmonyExpanded = !inspector.HarmonyExpanded;
+                    break;
+            }
         }
 
         public static string BuildTargetKey(EditorCommandTarget target)
@@ -145,18 +174,18 @@ namespace Cortex.Services
                  classification.IndexOf("event", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
-        private static void ResetCallHierarchy(CortexMethodInspectorState inspector, EditorCommandTarget target)
+        private static void ResetRelationships(CortexMethodInspectorState inspector, EditorCommandTarget target)
         {
             if (inspector == null)
             {
                 return;
             }
 
-            inspector.CallHierarchyRequested = false;
-            inspector.CallHierarchyTargetKey = BuildTargetKey(target);
-            inspector.CallHierarchyRequestKey = string.Empty;
-            inspector.CallHierarchyStatusMessage = string.Empty;
-            inspector.CallHierarchy = null;
+            inspector.RelationshipsRequested = false;
+            inspector.RelationshipsTargetKey = BuildTargetKey(target);
+            inspector.RelationshipsRequestKey = string.Empty;
+            inspector.RelationshipsStatusMessage = string.Empty;
+            inspector.RelationshipsCallHierarchy = null;
         }
     }
 }

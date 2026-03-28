@@ -36,7 +36,7 @@ namespace Cortex.Modules.Editor
         private readonly EditorOverlayInteractionService _overlayInteractionService = new EditorOverlayInteractionService();
         private readonly EditorMethodInspectorService _methodInspectorService;
         private readonly EditorMethodTargetOutlineService _methodTargetOutlineService = new EditorMethodTargetOutlineService();
-        private readonly EditorMethodInspectorSurface _methodInspectorSurface;
+        private readonly IEditorMethodInspectorOverlayController _methodInspectorOverlayController;
         private readonly EditorToolbarService _toolbarService = new EditorToolbarService();
         private readonly SourceEditorCommandRouterService _commandRouterService = new SourceEditorCommandRouterService();
         private readonly EditorHoverService _hoverService;
@@ -91,12 +91,16 @@ namespace Cortex.Modules.Editor
         private Rect _lastContextMenuRect;
         private Rect _lastMethodInspectorRect;
 
-        public EditableCodeViewSurface(IEditorContextService contextService, EditorHoverService hoverService, IOverlayRendererFactory overlayRendererFactory)
+        public EditableCodeViewSurface(
+            IEditorContextService contextService,
+            EditorHoverService hoverService,
+            IOverlayRendererFactory overlayRendererFactory,
+            IEditorMethodInspectorOverlayController methodInspectorOverlayController = null)
         {
             _contextService = contextService;
             _semanticPopupSurface = new EditorSemanticPopupSurface(contextService);
             _methodInspectorService = new EditorMethodInspectorService(contextService);
-            _methodInspectorSurface = new EditorMethodInspectorSurface(contextService);
+            _methodInspectorOverlayController = methodInspectorOverlayController ?? new EditorMethodInspectorOverlayController(contextService);
             _hoverService = hoverService ?? new EditorHoverService(contextService);
             _popupMenuRenderer = overlayRendererFactory != null ? overlayRendererFactory.CreatePopupMenuRenderer() : null;
             _hoverTooltipRenderer = overlayRendererFactory != null ? overlayRendererFactory.CreateHoverTooltipRenderer() : null;
@@ -229,9 +233,9 @@ namespace Cortex.Modules.Editor
                     state != null && state.Editor != null && state.Editor.MethodInspector != null
                         ? state.Editor.MethodInspector.ContextKey
                         : string.Empty);
-                var predictedMethodInspectorRect = _methodInspectorSurface.PredictRect(
+                var predictedMethodInspectorRect = _methodInspectorOverlayController.PredictRect(
                     state,
-                    session.FilePath,
+                    session,
                     GetMethodInspectorViewportAnchorRect(session, activeMethodInspectorTarget, scroll, gutterWidth),
                     rect.size);
                 _lastMethodInspectorRect = predictedMethodInspectorRect;
@@ -244,7 +248,7 @@ namespace Cortex.Modules.Editor
                     hasMouse,
                     localMouse);
                 _overlayInteractionService.TraceScrollOwner("source-editor", current, overlayPointerState);
-                _methodInspectorSurface.TryHandlePreDrawInput(current, predictedMethodInspectorRect, localMouse);
+                _methodInspectorOverlayController.HandlePreDrawInput(current, predictedMethodInspectorRect, localMouse);
                 var pointerContext = BuildPointerContext(current, rect, hasMouse, localMouse, scroll, true);
                 var shouldUpdateHover = current == null ||
                     current.type == EventType.Repaint ||
@@ -296,10 +300,9 @@ namespace Cortex.Modules.Editor
                         GetViewportAnchorRect(session, _contextService.ResolveTarget(state, state != null && state.Semantic != null && state.Semantic.QuickActions != null ? state.Semantic.QuickActions.ContextKey : string.Empty), scroll, gutterWidth),
                         rect.size,
                         commandRegistry);
-                    _lastMethodInspectorRect = _methodInspectorSurface.Draw(
+                    _lastMethodInspectorRect = _methodInspectorOverlayController.Draw(
                         state,
                         session,
-                        session.FilePath,
                         GetMethodInspectorViewportAnchorRect(
                             session,
                             _contextService.ResolveTarget(

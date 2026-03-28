@@ -81,7 +81,7 @@ namespace Cortex.Services
 
         public EditorIndirectHarmonyContext BuildIndirectContext(
             CortexShellState state,
-            CortexMethodInspectorState inspector,
+            EditorMethodRelationshipsContext relationshipsContext,
             ILoadedModCatalog loadedModCatalog,
             IProjectCatalog projectCatalog,
             ISourceLookupIndex sourceLookupIndex,
@@ -89,39 +89,36 @@ namespace Cortex.Services
             HarmonyPatchResolutionService harmonyResolutionService)
         {
             var context = new EditorIndirectHarmonyContext();
-            if (state == null || inspector == null || harmonyInspectionService == null || harmonyResolutionService == null || projectCatalog == null)
+            if (state == null || relationshipsContext == null || harmonyInspectionService == null || harmonyResolutionService == null || projectCatalog == null)
             {
                 context.StatusMessage = "Indirect Harmony context is not available.";
                 return context;
             }
 
-            if (!inspector.CallHierarchyRequested || !string.IsNullOrEmpty(inspector.CallHierarchyRequestKey))
+            if (!relationshipsContext.IsExpanded)
+            {
+                context.StatusMessage = "Expand Relationships to analyze indirect Harmony relevance.";
+                return context;
+            }
+
+            if (relationshipsContext.IsLoading)
             {
                 context.IsLoading = true;
-                context.StatusMessage = !string.IsNullOrEmpty(inspector.CallHierarchyStatusMessage)
-                    ? inspector.CallHierarchyStatusMessage
-                    : "Analyzing incoming callers for Harmony context.";
+                context.StatusMessage = !string.IsNullOrEmpty(relationshipsContext.StatusMessage)
+                    ? relationshipsContext.StatusMessage
+                    : "Analyzing method relationships.";
                 return context;
             }
 
-            var response = inspector.CallHierarchy;
-            if (response == null)
+            if (!relationshipsContext.HasResponse)
             {
-                context.StatusMessage = !string.IsNullOrEmpty(inspector.CallHierarchyStatusMessage)
-                    ? inspector.CallHierarchyStatusMessage
-                    : "Incoming-call analysis has not produced any results yet.";
+                context.StatusMessage = !string.IsNullOrEmpty(relationshipsContext.StatusMessage)
+                    ? relationshipsContext.StatusMessage
+                    : "Method relationship analysis has not produced any results yet.";
                 return context;
             }
 
-            if (!response.Success)
-            {
-                context.StatusMessage = !string.IsNullOrEmpty(response.StatusMessage)
-                    ? response.StatusMessage
-                    : "Incoming-call analysis failed for the selected method.";
-                return context;
-            }
-
-            var incomingCalls = response.IncomingCalls ?? new LanguageServiceCallHierarchyItem[0];
+            var incomingCalls = relationshipsContext.IncomingCalls ?? new LanguageServiceCallHierarchyItem[0];
             context.IncomingCallerCount = incomingCalls.Length;
             if (incomingCalls.Length == 0)
             {

@@ -2,142 +2,228 @@ using System;
 using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
-using Cortex.Rendering.Abstractions;
+using Cortex.LanguageService.Protocol;
 using Cortex.Rendering.Models;
-using Cortex.Services;
-using UnityEngine;
 
-namespace Cortex.Modules.Editor
+namespace Cortex.Services
 {
-    internal sealed class EditorMethodInspectorSurface
+    internal sealed class EditorMethodInspectorPreparedView
     {
-        private const float PreferredPanelWidth = 430f;
-        private const float MinimumPanelWidth = 320f;
-        private const float PreferredPanelHeight = 520f;
-        private const float MinimumPanelHeight = 260f;
-        private const float PopupMargin = 8f;
-        private const float PopupGap = 12f;
+        public CortexMethodInspectorState Inspector;
+        public EditorCommandInvocation Invocation;
+        public EditorCommandTarget Target;
+        public PanelDocument Document;
+    }
+
+    internal sealed class EditorMethodInspectorPresentationService
+    {
         private const int SnippetContextLineCount = 2;
+
+        private readonly IEditorContextService _contextService;
         private readonly EditorMethodInspectorService _inspectorService;
-        private readonly EditorMethodInspectorPresentationService _presentationService;
+        private readonly EditorMethodHarmonyContextService _harmonyContextService = new EditorMethodHarmonyContextService();
+        private readonly EditorMethodRelationshipsContextService _relationshipsContextService = new EditorMethodRelationshipsContextService();
+        private readonly EditorMethodTargetMetadataService _targetMetadataService;
         private readonly EditorMethodPatchCreationService _patchCreationService = new EditorMethodPatchCreationService();
-        private const float ScrollWheelStep = 28f;
+        private readonly HarmonyPatchDisplayService _fallbackHarmonyDisplayService = new HarmonyPatchDisplayService();
 
-        private Vector2 _scroll = Vector2.zero;
-
-        public EditorMethodInspectorSurface(IEditorContextService contextService)
+        public EditorMethodInspectorPresentationService(IEditorContextService contextService)
         {
+            _contextService = contextService;
             _inspectorService = new EditorMethodInspectorService(contextService);
-            _presentationService = new EditorMethodInspectorPresentationService(contextService);
+            _targetMetadataService = new EditorMethodTargetMetadataService(contextService);
         }
 
-        public Rect Draw(
+        public EditorMethodInspectorPreparedView Prepare(
             CortexShellState state,
             DocumentSession session,
-            string activeDocumentPath,
-            Rect anchorRect,
-            Vector2 surfaceSize,
-            ICommandRegistry commandRegistry,
-            IContributionRegistry contributionRegistry,
-            GUIStyle containerStyle,
-            GUIStyle buttonStyle,
-            GUIStyle headerStyle,
-            IDocumentService documentService,
             IProjectCatalog projectCatalog,
             ILoadedModCatalog loadedModCatalog,
             ISourceLookupIndex sourceLookupIndex,
             HarmonyPatchInspectionService harmonyInspectionService,
             HarmonyPatchResolutionService harmonyResolutionService,
             HarmonyPatchDisplayService harmonyDisplayService,
-            HarmonyPatchGenerationService harmonyGenerationService,
-            IPanelRenderer panelRenderer)
+            HarmonyPatchGenerationService harmonyGenerationService)
         {
-            if (!_inspectorService.IsVisibleForDocument(state, activeDocumentPath))
+            var inspector = state != null && state.Editor != null ? state.Editor.MethodInspector : null;
+            var invocation = _contextService != null ? _contextService.ResolveInvocation(state, inspector != null ? inspector.ContextKey : string.Empty) : null;
+            var target = invocation != null ? invocation.Target : null;
+            if (target == null)
             {
-                return new Rect(0f, 0f, 0f, 0f);
+                _inspectorService.Close(state);
+                return null;
             }
 
-            var preparedView = _presentationService.Prepare(
+            _targetMetadataService.EnsureSymbolContextRequest(state, target);
+            _targetMetadataService.Enrich(target, session, state);
+
+            if (inspector != null && inspector.RelationshipsExpanded)
+            {
+                _inspectorService.EnsureRelationshipsRequest(state);
+            }
+
+            var relationshipsContext = _relationshipsContextService.BuildContext(inspector);
+            var sourceHarmonyContext = _harmonyContextService.BuildSourcePatchContext(
                 state,
-                session,
+                target,
+                projectCatalog,
+                harmonyResolutionService);
+
+            string harmonyStatusMessage;
+            var harmonySummary = TryLoadConditionalHarmonySummary(
+                state,
+                target,
+                sourceHarmonyContext,
                 projectCatalog,
                 loadedModCatalog,
                 sourceLookupIndex,
                 harmonyInspectionService,
                 harmonyResolutionService,
-                harmonyDisplayService,
-                harmonyGenerationService);
-            if (preparedView == null || preparedView.Document == null)
-            {
-                return new Rect(0f, 0f, 0f, 0f);
-            }
+                out harmonyStatusMessage);
 
-            var popupRect = ResolvePanelRect(anchorRect, surfaceSize);
-            var renderResult = panelRenderer != null
-                ? panelRenderer.Draw(
-                    new RenderRect(popupRect.x, popupRect.y, popupRect.width, popupRect.height),
-                    preparedView.Document,
-                    new RenderPoint(_scroll.x, _scroll.y),
-                    BuildThemePalette())
-                : null;
-            _scroll = renderResult != null ? new Vector2(renderResult.Scroll.X, renderResult.Scroll.Y) : _scroll;
-            HandleActivation(
-                renderResult != null ? renderResult.ActivatedId : string.Empty,
+            var indirectHarmonyContext = _harmonyContextService.BuildIndirectContext(
                 state,
-                preparedView.Inspector,
-                preparedView.Invocation,
-                commandRegistry,
-                documentService,
+                relationshipsContext,
+                loadedModCatalog,
                 projectCatalog,
                 sourceLookupIndex,
-                harmonyResolutionService,
-                harmonyGenerationService);
-            return popupRect;
+                harmonyInspectionService,
+                harmonyResolutionService);
+
+            var showHarmony = ShouldShowHarmony(sourceHarmonyContext, harmonySummary, indirectHarmonyContext);
+
+            string patchAvailabilityReason = string.Empty;
+            var canCreatePatch = false;
+            var hasPreparedPatch = false;
+            if (showHarmony)
+            {
+                canCreatePatch = _patchCreationService.CanPreparePatch(
+                    state,
+                    target,
+                    projectCatalog,
+                    sourceLookupIndex,
+                    harmonyResolutionService,
+                    harmonyGenerationService,
+                    out patchAvailabilityReason);
+                hasPreparedPatch = _patchCreationService.IsPreparedForTarget(
+                    state,
+                    target,
+                    projectCatalog,
+                    sourceLookupIndex,
+                    harmonyResolutionService);
+            }
+
+            return new EditorMethodInspectorPreparedView
+            {
+                Inspector = inspector,
+                Invocation = invocation,
+                Target = target,
+                Document = BuildDocument(
+                    state,
+                    session,
+                    inspector,
+                    target,
+                    relationshipsContext,
+                    sourceHarmonyContext,
+                    harmonySummary,
+                    harmonyStatusMessage,
+                    indirectHarmonyContext,
+                    harmonyDisplayService ?? _fallbackHarmonyDisplayService,
+                    showHarmony,
+                    canCreatePatch,
+                    hasPreparedPatch,
+                    patchAvailabilityReason)
+            };
         }
 
-        public Rect PredictRect(CortexShellState state, string activeDocumentPath, Rect anchorRect, Vector2 surfaceSize)
+        internal static bool ShouldShowHarmony(
+            EditorSourceHarmonyContext sourceHarmonyContext,
+            HarmonyMethodPatchSummary harmonySummary,
+            EditorIndirectHarmonyContext indirectHarmonyContext)
         {
-            if (!_inspectorService.IsVisibleForDocument(state, activeDocumentPath))
-            {
-                return new Rect(0f, 0f, 0f, 0f);
-            }
-
-            return ResolvePanelRect(anchorRect, surfaceSize);
+            return (sourceHarmonyContext != null && sourceHarmonyContext.IsPatchMethod) ||
+                (harmonySummary != null && harmonySummary.IsPatched) ||
+                (indirectHarmonyContext != null && indirectHarmonyContext.PatchedCallerCount > 0);
         }
 
-        public bool TryHandlePreDrawInput(Event current, Rect panelRect, Vector2 localPointer)
+        private HarmonyMethodPatchSummary TryLoadConditionalHarmonySummary(
+            CortexShellState state,
+            EditorCommandTarget target,
+            EditorSourceHarmonyContext sourceHarmonyContext,
+            IProjectCatalog projectCatalog,
+            ILoadedModCatalog loadedModCatalog,
+            ISourceLookupIndex sourceLookupIndex,
+            HarmonyPatchInspectionService harmonyInspectionService,
+            HarmonyPatchResolutionService harmonyResolutionService,
+            out string statusMessage)
         {
-            if (current == null ||
-                panelRect.width <= 0f ||
-                panelRect.height <= 0f ||
-                !panelRect.Contains(localPointer))
+            statusMessage = string.Empty;
+            if (state == null || harmonyInspectionService == null || projectCatalog == null)
             {
-                return false;
+                return null;
             }
 
-            if (current.type == EventType.ScrollWheel)
+            HarmonyPatchInspectionRequest inspectionRequest = null;
+            if (sourceHarmonyContext != null &&
+                sourceHarmonyContext.IsPatchMethod &&
+                sourceHarmonyContext.TargetInspectionRequest != null)
             {
-                _scroll.y = Mathf.Max(0f, _scroll.y + (current.delta.y * ScrollWheelStep));
-                current.Use();
+                inspectionRequest = sourceHarmonyContext.TargetInspectionRequest;
+            }
+            else
+            {
+                if (target == null || harmonyResolutionService == null)
+                {
+                    return null;
+                }
+
+                HarmonyResolvedMethodTarget resolvedTarget;
+                string resolutionReason;
+                if (!harmonyResolutionService.TryResolveFromEditorTarget(state, sourceLookupIndex, projectCatalog, target, out resolvedTarget, out resolutionReason) ||
+                    resolvedTarget == null ||
+                    resolvedTarget.InspectionRequest == null)
+                {
+                    statusMessage = resolutionReason ?? string.Empty;
+                    return null;
+                }
+
+                inspectionRequest = resolvedTarget.InspectionRequest;
             }
 
-            return current.type == EventType.MouseDown ||
-                current.type == EventType.MouseUp ||
-                current.type == EventType.MouseDrag ||
-                current.type == EventType.ScrollWheel ||
-                current.type == EventType.ContextClick;
+            string snapshotStatus;
+            var summary = harmonyInspectionService.GetCachedSummary(
+                state,
+                inspectionRequest,
+                loadedModCatalog,
+                projectCatalog,
+                true,
+                out snapshotStatus);
+            if (summary != null && summary.IsPatched)
+            {
+                statusMessage = !string.IsNullOrEmpty(snapshotStatus)
+                    ? snapshotStatus
+                    : "Loaded Harmony patch details for the resolved runtime method.";
+                return summary;
+            }
+
+            statusMessage = sourceHarmonyContext != null && sourceHarmonyContext.IsPatchMethod
+                ? "No live Harmony patches are registered for the patched runtime target."
+                : "No live Harmony patches are registered for this method.";
+            return null;
         }
 
-        private PanelDocument BuildDocument(
+        internal PanelDocument BuildDocument(
             CortexShellState state,
             DocumentSession session,
             CortexMethodInspectorState inspector,
             EditorCommandTarget target,
+            EditorMethodRelationshipsContext relationshipsContext,
             EditorSourceHarmonyContext sourceHarmonyContext,
             HarmonyMethodPatchSummary harmonySummary,
             string harmonyStatusMessage,
             EditorIndirectHarmonyContext indirectHarmonyContext,
             HarmonyPatchDisplayService harmonyDisplayService,
+            bool showHarmony,
             bool canCreatePatch,
             bool hasPreparedPatch,
             string patchAvailabilityReason)
@@ -148,23 +234,27 @@ namespace Cortex.Modules.Editor
 
             var sections = new List<PanelSection>();
             sections.Add(BuildStructureSection(inspector, target));
-            sections.Add(BuildHarmonySection(
-                inspector,
-                state,
-                sourceHarmonyContext,
-                harmonySummary,
-                harmonyStatusMessage,
-                indirectHarmonyContext,
-                harmonyDisplayService,
-                canCreatePatch,
-                hasPreparedPatch,
-                patchAvailabilityReason));
+            sections.Add(BuildRelationshipsSection(inspector, relationshipsContext));
+            if (showHarmony)
+            {
+                sections.Add(BuildHarmonySection(
+                    inspector,
+                    state,
+                    sourceHarmonyContext,
+                    harmonySummary,
+                    harmonyStatusMessage,
+                    indirectHarmonyContext,
+                    harmonyDisplayService,
+                    canCreatePatch,
+                    hasPreparedPatch,
+                    patchAvailabilityReason));
+            }
             sections.Add(BuildSourceSection(inspector, session, target));
             document.Sections = sections.ToArray();
             return document;
         }
 
-        private PanelSection BuildStructureSection(CortexMethodInspectorState inspector, EditorCommandTarget target)
+        private static PanelSection BuildStructureSection(CortexMethodInspectorState inspector, EditorCommandTarget target)
         {
             var section = new PanelSection();
             section.Id = "structure";
@@ -204,7 +294,85 @@ namespace Cortex.Modules.Editor
             return section;
         }
 
-        private PanelSection BuildSourceSection(CortexMethodInspectorState inspector, DocumentSession session, EditorCommandTarget target)
+        private static PanelSection BuildRelationshipsSection(CortexMethodInspectorState inspector, EditorMethodRelationshipsContext relationshipsContext)
+        {
+            var section = new PanelSection();
+            section.Id = "relationships";
+            section.Title = "Relationships";
+            section.Expanded = inspector != null ? inspector.RelationshipsExpanded : false;
+
+            var elements = new List<PanelElement>();
+            if (relationshipsContext == null)
+            {
+                elements.Add(CreateTextElement(string.Empty, "Method relationships are not available.", false));
+            }
+            else if (!relationshipsContext.IsExpanded)
+            {
+                elements.Add(CreateTextElement(string.Empty, relationshipsContext.StatusMessage, false));
+            }
+            else if (relationshipsContext.IsLoading || !relationshipsContext.HasResponse)
+            {
+                elements.Add(CreateTextElement(string.Empty, relationshipsContext.StatusMessage, false));
+            }
+            else
+            {
+                elements.Add(CreateMetadataElement("Depends On", relationshipsContext.OutgoingCallCount.ToString()));
+                elements.Add(CreateMetadataElement("Used By", relationshipsContext.IncomingCallCount.ToString()));
+                AppendRelationshipGroup(elements, "Depends On", relationshipsContext.OutgoingCalls, "This method does not call any resolved symbols.");
+                elements.Add(new PanelSpacerElement { Height = 4f });
+                AppendRelationshipGroup(elements, "Used By", relationshipsContext.IncomingCalls, "No incoming callers were found for this method.");
+            }
+
+            section.Elements = elements.ToArray();
+            return section;
+        }
+
+        private static void AppendRelationshipGroup(
+            List<PanelElement> elements,
+            string title,
+            LanguageServiceCallHierarchyItem[] items,
+            string emptyMessage)
+        {
+            elements.Add(CreateTextElement(title, string.Empty, false));
+            var safeItems = items ?? new LanguageServiceCallHierarchyItem[0];
+            if (safeItems.Length == 0)
+            {
+                elements.Add(CreateTextElement(string.Empty, emptyMessage, false));
+                return;
+            }
+
+            var rendered = 0;
+            for (var i = 0; i < safeItems.Length && rendered < 4; i++)
+            {
+                var item = safeItems[i];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                rendered++;
+                var rows = new List<PanelMetadataElement>();
+                rows.Add(CreateMetadataElement("Type", item.ContainingTypeName));
+                rows.Add(CreateMetadataElement("Relationship", (item.Relationship ?? "Call") + " (" + item.CallCount + ")"));
+                if (!string.IsNullOrEmpty(item.ContainingAssemblyName))
+                {
+                    rows.Add(CreateMetadataElement("Assembly", item.ContainingAssemblyName));
+                }
+
+                elements.Add(CreateCardElement(
+                    item.SymbolDisplay ?? "Unknown",
+                    rows.ToArray(),
+                    string.Empty,
+                    new PanelAction[0]));
+            }
+
+            if (safeItems.Length > rendered)
+            {
+                elements.Add(CreateTextElement(string.Empty, "Additional relationship entries are available beyond this preview.", false));
+            }
+        }
+
+        private static PanelSection BuildSourceSection(CortexMethodInspectorState inspector, DocumentSession session, EditorCommandTarget target)
         {
             var section = new PanelSection();
             section.Id = "source";
@@ -309,14 +477,17 @@ namespace Cortex.Modules.Editor
                     }
                 }
             }
-            else if (!hasSourceHarmonyContext)
+            else if (!hasSourceHarmonyContext && !string.IsNullOrEmpty(harmonyStatusMessage))
             {
-                elements.Add(CreateTextElement(string.Empty, !string.IsNullOrEmpty(harmonyStatusMessage) ? harmonyStatusMessage : "No Harmony patch details are available for this method.", false));
+                elements.Add(CreateTextElement(string.Empty, harmonyStatusMessage, false));
             }
 
-            elements.Add(new PanelSpacerElement { Height = 4f });
-            elements.Add(CreateTextElement("Indirect Harmony Context", BuildIndirectStatus(indirectHarmonyContext), false));
-            AppendIndirectHarmonyElements(elements, indirectHarmonyContext, harmonyDisplayService);
+            if (indirectHarmonyContext != null && indirectHarmonyContext.PatchedCallerCount > 0)
+            {
+                elements.Add(new PanelSpacerElement { Height = 4f });
+                elements.Add(CreateTextElement("Indirect Harmony", indirectHarmonyContext.StatusMessage, false));
+                AppendIndirectHarmonyElements(elements, indirectHarmonyContext, harmonyDisplayService);
+            }
 
             if (canCreatePatch || hasPreparedPatch)
             {
@@ -348,16 +519,9 @@ namespace Cortex.Modules.Editor
             return true;
         }
 
-        private static string BuildIndirectStatus(EditorIndirectHarmonyContext indirectContext)
-        {
-            return indirectContext != null
-                ? indirectContext.StatusMessage
-                : "Indirect Harmony context is not available for this method.";
-        }
-
         private void AppendIndirectHarmonyElements(List<PanelElement> elements, EditorIndirectHarmonyContext indirectContext, HarmonyPatchDisplayService harmonyDisplayService)
         {
-            if (elements == null || indirectContext == null || indirectContext.IsLoading)
+            if (elements == null || indirectContext == null || indirectContext.IsLoading || indirectContext.PatchedCallerCount <= 0)
             {
                 return;
             }
@@ -404,7 +568,7 @@ namespace Cortex.Modules.Editor
             return "Choose Prefix or Postfix, then pick where the generated patch should go.";
         }
 
-        private void AppendPatchCreationElements(List<PanelElement> elements, CortexShellState state, bool canCreatePatch, bool hasPreparedPatch)
+        private static void AppendPatchCreationElements(List<PanelElement> elements, CortexShellState state, bool canCreatePatch, bool hasPreparedPatch)
         {
             if (elements == null)
             {
@@ -464,118 +628,6 @@ namespace Cortex.Modules.Editor
             }
         }
 
-        private void HandleActivation(
-            string activatedId,
-            CortexShellState state,
-            CortexMethodInspectorState inspector,
-            EditorCommandInvocation invocation,
-            ICommandRegistry commandRegistry,
-            IDocumentService documentService,
-            IProjectCatalog projectCatalog,
-            ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchResolutionService harmonyResolutionService,
-            HarmonyPatchGenerationService harmonyGenerationService)
-        {
-            if (string.IsNullOrEmpty(activatedId))
-            {
-                return;
-            }
-
-            if (string.Equals(activatedId, PanelCommandIds.Close, StringComparison.Ordinal))
-            {
-                MMLog.WriteInfo("[Cortex.Overlay] Method inspector closed. Reason='close-button'.");
-                _inspectorService.Close(state);
-                return;
-            }
-
-            string sectionId;
-            if (PanelCommandIds.TryGetSectionToggle(activatedId, out sectionId))
-            {
-                _inspectorService.ToggleSection(state, sectionId);
-                return;
-            }
-
-            if (invocation == null || invocation.Target == null)
-            {
-                return;
-            }
-
-            if (string.Equals(activatedId, "patch:create:prefix", StringComparison.Ordinal))
-            {
-                PreparePatch(state, invocation.Target, projectCatalog, sourceLookupIndex, harmonyResolutionService, harmonyGenerationService, HarmonyPatchGenerationKind.Prefix);
-                return;
-            }
-
-            if (string.Equals(activatedId, "patch:create:postfix", StringComparison.Ordinal))
-            {
-                PreparePatch(state, invocation.Target, projectCatalog, sourceLookupIndex, harmonyResolutionService, harmonyGenerationService, HarmonyPatchGenerationKind.Postfix);
-                return;
-            }
-
-            if (activatedId.StartsWith("patch:open:", StringComparison.Ordinal))
-            {
-                var indexText = activatedId.Substring("patch:open:".Length);
-                int index;
-                if (int.TryParse(indexText, out index))
-                {
-                    OpenInsertionTarget(state, documentService, harmonyGenerationService, index);
-                }
-            }
-        }
-
-        private void PreparePatch(
-            CortexShellState state,
-            EditorCommandTarget target,
-            IProjectCatalog projectCatalog,
-            ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchResolutionService harmonyResolutionService,
-            HarmonyPatchGenerationService harmonyGenerationService,
-            HarmonyPatchGenerationKind kind)
-        {
-            string statusMessage;
-            if (_patchCreationService.PreparePatch(
-                state,
-                target,
-                projectCatalog,
-                sourceLookupIndex,
-                harmonyResolutionService,
-                harmonyGenerationService,
-                kind,
-                out statusMessage))
-            {
-                state.StatusMessage = statusMessage;
-            }
-            else if (!string.IsNullOrEmpty(statusMessage))
-            {
-                state.StatusMessage = statusMessage;
-            }
-        }
-
-        private void OpenInsertionTarget(CortexShellState state, IDocumentService documentService, HarmonyPatchGenerationService harmonyGenerationService, int index)
-        {
-            if (state == null || state.Harmony == null || state.Harmony.InsertionTargets == null || index < 0 || index >= state.Harmony.InsertionTargets.Count)
-            {
-                return;
-            }
-
-            var insertionTarget = state.Harmony.InsertionTargets[index];
-            if (insertionTarget == null)
-            {
-                return;
-            }
-
-            string statusMessage;
-            if (_patchCreationService.OpenInsertionTarget(state, documentService, harmonyGenerationService, insertionTarget, out statusMessage))
-            {
-                _inspectorService.Close(state);
-            }
-
-            if (!string.IsNullOrEmpty(statusMessage))
-            {
-                state.StatusMessage = statusMessage;
-            }
-        }
-
         private static PanelMetadataElement CreateMetadataElement(string label, string value)
         {
             return CreateMetadataElement(label, value, true);
@@ -619,134 +671,6 @@ namespace Cortex.Modules.Editor
                 Body = body ?? string.Empty,
                 Actions = actions ?? new PanelAction[0]
             };
-        }
-
-        private static Rect ResolvePanelRect(Rect anchorRect, Vector2 viewportSize)
-        {
-            var panelSize = ResolvePanelSize(viewportSize);
-            var panelRect = new Rect(
-                anchorRect.xMax + PopupGap,
-                anchorRect.y - 2f,
-                panelSize.x,
-                panelSize.y);
-
-            if (viewportSize.x <= 0f || viewportSize.y <= 0f)
-            {
-                return panelRect;
-            }
-
-            var maxX = Mathf.Max(PopupMargin, viewportSize.x - panelRect.width - PopupMargin);
-            var maxY = Mathf.Max(PopupMargin, viewportSize.y - panelRect.height - PopupMargin);
-            if (panelRect.x > maxX)
-            {
-                var leftX = anchorRect.x - panelRect.width - PopupGap;
-                panelRect.x = leftX >= PopupMargin ? leftX : maxX;
-            }
-
-            panelRect.x = Mathf.Max(PopupMargin, panelRect.x);
-            panelRect.y = Mathf.Clamp(panelRect.y, PopupMargin, maxY);
-            return panelRect;
-        }
-
-        private static Vector2 ResolvePanelSize(Vector2 viewportSize)
-        {
-            if (viewportSize.x <= 0f || viewportSize.y <= 0f)
-            {
-                return new Vector2(PreferredPanelWidth, PreferredPanelHeight);
-            }
-
-            var availableWidth = Mathf.Max(180f, viewportSize.x - (PopupMargin * 2f));
-            var availableHeight = Mathf.Max(MinimumPanelHeight, viewportSize.y - (PopupMargin * 2f));
-            var width = availableWidth < MinimumPanelWidth
-                ? availableWidth
-                : Mathf.Min(PreferredPanelWidth, availableWidth);
-            var height = availableHeight < MinimumPanelHeight
-                ? availableHeight
-                : Mathf.Min(PreferredPanelHeight, availableHeight);
-            return new Vector2(width, height);
-        }
-
-        private static PanelThemePalette BuildThemePalette()
-        {
-            var borderColor = CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetBorderColor(), 0.38f);
-            return new PanelThemePalette
-            {
-                ThemeKey = "method-inspector",
-                BackgroundColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetBackgroundColor(), 0.22f)),
-                HeaderColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetHeaderColor(), CortexIdeLayout.GetSurfaceColor(), 0.18f)),
-                BorderColor = ToRenderColor(borderColor),
-                DividerColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(borderColor, CortexIdeLayout.GetTextColor(), 0.1f), 0.46f)),
-                ActionFillColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.72f)),
-                ActionActiveFillColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetHeaderColor(), 0.34f)),
-                CardFillColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.52f)),
-                TextColor = ToRenderColor(CortexIdeLayout.GetTextColor()),
-                MutedTextColor = ToRenderColor(CortexIdeLayout.GetMutedTextColor()),
-                AccentColor = ToRenderColor(CortexIdeLayout.GetAccentColor()),
-                WarningColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetWarningColor(), CortexIdeLayout.GetTextColor(), 0.42f))
-            };
-        }
-
-        private static RenderColor ToRenderColor(Color color)
-        {
-            return new RenderColor(color.r, color.g, color.b, color.a);
-        }
-
-        private void TryLoadHarmonySummary(
-            CortexShellState state,
-            EditorCommandTarget target,
-            EditorSourceHarmonyContext sourceHarmonyContext,
-            IProjectCatalog projectCatalog,
-            ILoadedModCatalog loadedModCatalog,
-            ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchInspectionService harmonyInspectionService,
-            HarmonyPatchResolutionService harmonyResolutionService,
-            out HarmonyMethodPatchSummary summary,
-            out string statusMessage)
-        {
-            summary = null;
-            statusMessage = string.Empty;
-            if (state == null ||
-                harmonyInspectionService == null ||
-                projectCatalog == null)
-            {
-                return;
-            }
-
-            HarmonyPatchInspectionRequest inspectionRequest = null;
-            if (sourceHarmonyContext != null &&
-                sourceHarmonyContext.IsPatchMethod &&
-                sourceHarmonyContext.TargetInspectionRequest != null)
-            {
-                inspectionRequest = sourceHarmonyContext.TargetInspectionRequest;
-                statusMessage = "Loaded Harmony target context for the patched runtime method.";
-            }
-            else
-            {
-                if (target == null || harmonyResolutionService == null)
-                {
-                    return;
-                }
-
-                HarmonyResolvedMethodTarget resolvedTarget;
-                string resolutionReason;
-                if (!harmonyResolutionService.TryResolveFromEditorTarget(state, sourceLookupIndex, projectCatalog, target, out resolvedTarget, out resolutionReason) ||
-                    resolvedTarget == null ||
-                    resolvedTarget.InspectionRequest == null)
-                {
-                    statusMessage = resolutionReason;
-                    return;
-                }
-
-                inspectionRequest = resolvedTarget.InspectionRequest;
-            }
-
-            summary = harmonyInspectionService.GetSummary(
-                state,
-                inspectionRequest,
-                loadedModCatalog,
-                projectCatalog,
-                false,
-                out statusMessage);
         }
 
         private static string BuildHeaderSubtitle(EditorCommandTarget target)

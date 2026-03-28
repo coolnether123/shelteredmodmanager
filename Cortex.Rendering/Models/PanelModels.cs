@@ -1,5 +1,30 @@
+using System;
+
 namespace Cortex.Rendering.Models
 {
+    public static class PanelCommandIds
+    {
+        public const string Close = "close";
+        private const string SectionTogglePrefix = "section:";
+
+        public static string CreateSectionToggle(string sectionId)
+        {
+            return SectionTogglePrefix + (sectionId ?? string.Empty);
+        }
+
+        public static bool TryGetSectionToggle(string commandId, out string sectionId)
+        {
+            sectionId = string.Empty;
+            if (string.IsNullOrEmpty(commandId) || !commandId.StartsWith(SectionTogglePrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            sectionId = commandId.Substring(SectionTogglePrefix.Length);
+            return true;
+        }
+    }
+
     public enum PanelElementKind
     {
         Metadata,

@@ -64,6 +64,7 @@ namespace Cortex
 
         private void ResetModuleRuntime()
         {
+            DisposeRenderPipeline();
             _moduleServices = null;
             _moduleCompositionService = null;
             _moduleActivationService = null;
@@ -79,6 +80,17 @@ namespace Cortex
             }
 
             return _renderPipeline;
+        }
+
+        private void DisposeRenderPipeline()
+        {
+            var disposable = _renderPipeline as IDisposable;
+            if (disposable != null)
+            {
+                disposable.Dispose();
+            }
+
+            _renderPipeline = null;
         }
 
         private void EnsureModuleContributionsRegistered()
