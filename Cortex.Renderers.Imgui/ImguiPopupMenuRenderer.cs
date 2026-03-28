@@ -1,11 +1,13 @@
+using System;
 using System.Collections.Generic;
+using System.Text;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
 using UnityEngine;
 
 namespace Cortex.Renderers.Imgui
 {
-    internal sealed class ImguiPopupMenuRenderer : IPopupMenuRenderer
+    internal sealed class ImguiPopupMenuRenderer : IPopupMenuRenderer, IDisposable
     {
         private const float HeaderHeight = 28f;
         private const float ItemHeight = 24f;
@@ -17,6 +19,10 @@ namespace Cortex.Renderers.Imgui
         private const float HorizontalPadding = 8f;
         private const float VerticalPadding = 6f;
         private const float HoverAccentWidth = 3f;
+
+        private readonly ImguiModuleResources _moduleResources;
+        private readonly bool _ownsModuleResources;
+        private readonly PopupThemeResources _themeResources = new PopupThemeResources();
 
         private Vector2 _scrollPosition = new Vector2(0f, 0f);
         private string _scrollKey = string.Empty;
@@ -31,13 +37,29 @@ namespace Cortex.Renderers.Imgui
         private Vector2 _queuedMouseDownPosition = Vector2.zero;
         private Vector2 _queuedMouseUpPosition = Vector2.zero;
 
-        private string _themeCacheKey = string.Empty;
-        private GUIStyle _menuStyle;
-        private GUIStyle _buttonStyle;
-        private GUIStyle _headerStyle;
-        private Texture2D _hoverFill;
-        private Texture2D _pressedFill;
-        private Texture2D _hoverAccentFill;
+        public ImguiPopupMenuRenderer()
+            : this(new ImguiModuleResources(), true)
+        {
+        }
+
+        internal ImguiPopupMenuRenderer(ImguiModuleResources moduleResources)
+            : this(moduleResources, false)
+        {
+        }
+
+        private ImguiPopupMenuRenderer(ImguiModuleResources moduleResources, bool ownsModuleResources)
+        {
+            _moduleResources = moduleResources ?? new ImguiModuleResources();
+            _ownsModuleResources = ownsModuleResources;
+        }
+
+        public void Dispose()
+        {
+            if (_ownsModuleResources)
+            {
+                _moduleResources.Dispose();
+            }
+        }
 
         public void Reset()
         {
@@ -46,13 +68,7 @@ namespace Cortex.Renderers.Imgui
             _pendingScrollDelta = 0f;
             _pressedCommandId = string.Empty;
             _lastRawScrollFrame = -1;
-            _queuedMouseDown = false;
-            _queuedMouseUp = false;
-            _queuedOutsideClickClose = false;
-            _queuedMouseDownButton = -1;
-            _queuedMouseUpButton = -1;
-            _queuedMouseDownPosition = Vector2.zero;
-            _queuedMouseUpPosition = Vector2.zero;
+            ClearQueuedPointerState();
         }
 
         public void QueueScrollDelta(float delta)
@@ -75,9 +91,7 @@ namespace Cortex.Renderers.Imgui
             {
                 if (isInsideMenu)
                 {
-                    _queuedMouseDown = true;
-                    _queuedMouseDownButton = current.button;
-                    _queuedMouseDownPosition = unityMouse;
+                    QueuePointerDown(current.button, unityMouse);
                     current.Use();
                     return true;
                 }
@@ -91,9 +105,7 @@ namespace Cortex.Renderers.Imgui
             {
                 if (isInsideMenu)
                 {
-                    _queuedMouseUp = true;
-                    _queuedMouseUpButton = current.button;
-                    _queuedMouseUpPosition = unityMouse;
+                    QueuePointerUp(current.button, unityMouse);
                     current.Use();
                     return true;
                 }
@@ -119,9 +131,7 @@ namespace Cortex.Renderers.Imgui
                 return false;
             }
 
-            var smoothedAxis = Input.GetAxis("Mouse ScrollWheel");
-            var instantAxis = Input.GetAxisRaw("Mouse ScrollWheel");
-            var rawAxis = Mathf.Abs(instantAxis) > Mathf.Abs(smoothedAxis) ? instantAxis : smoothedAxis;
+            var rawAxis = ReadRawScrollAxis();
             if (Mathf.Abs(rawAxis) <= 0.0001f)
             {
                 return false;
@@ -143,14 +153,7 @@ namespace Cortex.Renderers.Imgui
             EnsureTheme(theme);
             var result = new PopupMenuRenderResult();
             var safeItems = items ?? new PopupMenuItemModel[0];
-            var menuKey = BuildMenuKey(headerText, safeItems);
-            if (!string.Equals(_scrollKey, menuKey))
-            {
-                _scrollKey = menuKey;
-                _scrollPosition = new Vector2(0f, 0f);
-                _pendingScrollDelta = 0f;
-                _pressedCommandId = string.Empty;
-            }
+            ResetScrollStateForMenu(headerText, safeItems);
 
             float contentHeight;
             var menuRect = BuildMenuRect(position, viewportSize, safeItems, out contentHeight);
@@ -158,11 +161,11 @@ namespace Cortex.Renderers.Imgui
             var unityMouse = new Vector2(localMouse.X, localMouse.Y);
             result.MenuRect = menuRect;
 
-            GUI.Box(unityMenuRect, GUIContent.none, _menuStyle);
+            GUI.Box(unityMenuRect, GUIContent.none, _themeResources.MenuStyle);
             GUI.Label(
                 new Rect(unityMenuRect.x + HorizontalPadding, unityMenuRect.y + VerticalPadding, unityMenuRect.width - (HorizontalPadding * 2f), 18f),
                 headerText ?? string.Empty,
-                _headerStyle);
+                _themeResources.HeaderStyle);
 
             var viewportRect = new Rect(
                 unityMenuRect.x + 4f,
@@ -192,78 +195,7 @@ namespace Cortex.Renderers.Imgui
                 GUI.BeginGroup(new Rect(0f, 0f, contentWidth, viewportRect.height));
                 try
                 {
-                    var y = -_scrollPosition.y;
-                    for (var i = 0; i < safeItems.Count; i++)
-                    {
-                        var item = safeItems[i];
-                        if (item == null)
-                        {
-                            continue;
-                        }
-
-                        if (item.IsSeparator)
-                        {
-                            GUI.Box(new Rect(HorizontalPadding, y + 3f, contentWidth - (HorizontalPadding * 2f), 1f), GUIContent.none);
-                            y += SeparatorHeight;
-                            continue;
-                        }
-
-                        if (item.IsSectionHeader)
-                        {
-                            GUI.Label(new Rect(10f, y + 3f, contentWidth - 20f, 18f), item.Label ?? string.Empty, _headerStyle);
-                            y += ItemHeight;
-                            continue;
-                        }
-
-                        var itemRect = new Rect(6f, y, contentWidth - 12f, ItemHeight);
-                        var isPointerOverItem = itemRect.Contains(viewportMouse);
-                        var isQueuedMouseDownOnItem = _queuedMouseDown && _queuedMouseDownButton == 0 && itemRect.Contains(queuedDownViewportMouse);
-                        var isQueuedMouseUpOnItem = _queuedMouseUp && _queuedMouseUpButton == 0 && itemRect.Contains(queuedUpViewportMouse);
-                        var isPressedVisual = item.Enabled &&
-                            (!string.IsNullOrEmpty(_pressedCommandId) && string.Equals(_pressedCommandId, item.CommandId ?? string.Empty));
-
-                        var previousEnabled = GUI.enabled;
-                        GUI.enabled = item.Enabled;
-                        DrawItemBackground(itemRect, item.Enabled, isPointerOverItem, isPressedVisual);
-
-                        if (item.Enabled && ((current != null && current.type == EventType.MouseDown && current.button == 0 && isPointerOverItem) || isQueuedMouseDownOnItem))
-                        {
-                            _pressedCommandId = item.CommandId ?? string.Empty;
-                            if (current != null && current.type == EventType.MouseDown && current.button == 0 && isPointerOverItem)
-                            {
-                                current.Use();
-                            }
-                        }
-
-                        var canActivateFromRelease = string.IsNullOrEmpty(_pressedCommandId) ||
-                            string.Equals(_pressedCommandId, item.CommandId ?? string.Empty);
-                        if (item.Enabled &&
-                            (((current != null && current.type == EventType.MouseUp && current.button == 0 && isPointerOverItem) || isQueuedMouseUpOnItem) && canActivateFromRelease))
-                        {
-                            result.ActivatedCommandId = item.CommandId ?? string.Empty;
-                            result.ShouldClose = true;
-                            _pressedCommandId = string.Empty;
-                            if (current != null && current.type == EventType.MouseUp && current.button == 0 && isPointerOverItem)
-                            {
-                                current.Use();
-                            }
-                        }
-
-                        if ((current != null && current.type == EventType.MouseUp && current.button == 0) || (_queuedMouseUp && _queuedMouseUpButton == 0))
-                        {
-                            _pressedCommandId = string.Empty;
-                        }
-
-                        GUI.enabled = previousEnabled;
-                        GUI.Label(new Rect(itemRect.x + 8f, itemRect.y + 3f, itemRect.width - 70f, 18f), item.Label ?? string.Empty);
-                        if (!string.IsNullOrEmpty(item.ShortcutText))
-                        {
-                            var gestureRect = new Rect(itemRect.xMax - 78f, itemRect.y + 3f, 70f, 18f);
-                            GUI.Label(gestureRect, item.ShortcutText, _headerStyle);
-                        }
-
-                        y += ItemHeight + 2f;
-                    }
+                    DrawItems(safeItems, contentWidth, viewportMouse, queuedDownViewportMouse, queuedUpViewportMouse, current, ref result);
                 }
                 finally
                 {
@@ -290,12 +222,7 @@ namespace Cortex.Renderers.Imgui
                 result.ShouldClose = true;
             }
 
-            _queuedMouseDown = false;
-            _queuedMouseUp = false;
-            _queuedOutsideClickClose = false;
-            _queuedMouseDownButton = -1;
-            _queuedMouseUpButton = -1;
-
+            ClearQueuedPointerState();
             return result;
         }
 
@@ -308,44 +235,137 @@ namespace Cortex.Renderers.Imgui
         private void EnsureTheme(PopupMenuThemePalette theme)
         {
             var effectiveTheme = theme ?? new PopupMenuThemePalette();
-            var themeKey = BuildThemeKey(effectiveTheme);
-            if (string.Equals(_themeCacheKey, themeKey) && _menuStyle != null)
+            var themeKey = ImguiThemeUtility.BuildKey(
+                effectiveTheme.BackgroundColor,
+                effectiveTheme.BorderColor,
+                effectiveTheme.TextColor,
+                effectiveTheme.MutedTextColor,
+                effectiveTheme.AccentColor,
+                effectiveTheme.HoverFillColor,
+                effectiveTheme.PressedFillColor);
+            if (string.Equals(_themeResources.ThemeKey, themeKey, StringComparison.Ordinal) && _themeResources.MenuStyle != null)
             {
                 return;
             }
 
-            _themeCacheKey = themeKey;
-            var backgroundColor = ToColor(effectiveTheme.BackgroundColor, new Color(0.12f, 0.13f, 0.15f, 0.98f));
-            var borderColor = ToColor(effectiveTheme.BorderColor, new Color(0.24f, 0.27f, 0.31f, 1f));
-            var textColor = ToColor(effectiveTheme.TextColor, new Color(0.95f, 0.95f, 0.96f, 1f));
-            var mutedTextColor = ToColor(effectiveTheme.MutedTextColor, new Color(0.69f, 0.72f, 0.77f, 1f));
-            var accentColor = ToColor(effectiveTheme.AccentColor, new Color(0.31f, 0.54f, 0.84f, 1f));
-            var hoverFillColor = ToColor(effectiveTheme.HoverFillColor, new Color(accentColor.r, accentColor.g, accentColor.b, 0.18f));
-            var pressedFillColor = ToColor(effectiveTheme.PressedFillColor, new Color(accentColor.r, accentColor.g, accentColor.b, 0.28f));
+            _themeResources.ThemeKey = themeKey;
+            var backgroundColor = ImguiThemeUtility.ResolveColor(effectiveTheme.BackgroundColor, new Color(0.12f, 0.13f, 0.15f, 0.98f));
+            var borderColor = ImguiThemeUtility.ResolveColor(effectiveTheme.BorderColor, new Color(0.24f, 0.27f, 0.31f, 1f));
+            var textColor = ImguiThemeUtility.ResolveColor(effectiveTheme.TextColor, new Color(0.95f, 0.95f, 0.96f, 1f));
+            var mutedTextColor = ImguiThemeUtility.ResolveColor(effectiveTheme.MutedTextColor, new Color(0.69f, 0.72f, 0.77f, 1f));
+            var accentColor = ImguiThemeUtility.ResolveColor(effectiveTheme.AccentColor, new Color(0.31f, 0.54f, 0.84f, 1f));
+            var hoverFillColor = ImguiThemeUtility.ResolveColor(effectiveTheme.HoverFillColor, new Color(accentColor.r, accentColor.g, accentColor.b, 0.18f));
+            var pressedFillColor = ImguiThemeUtility.ResolveColor(effectiveTheme.PressedFillColor, new Color(accentColor.r, accentColor.g, accentColor.b, 0.28f));
 
-            _menuStyle = new GUIStyle(GUI.skin.box);
-            ApplyBackgroundToAllStates(_menuStyle, MakeFill(backgroundColor));
-            ApplyTextColorToAllStates(_menuStyle, textColor);
-            _menuStyle.padding = new RectOffset(6, 6, 6, 6);
-            _menuStyle.margin = new RectOffset(0, 0, 0, 0);
-            _menuStyle.border = new RectOffset(1, 1, 1, 1);
+            var textureCache = _moduleResources.TextureCache;
+            _themeResources.MenuStyle = new GUIStyle(GUI.skin.box);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_themeResources.MenuStyle, textureCache.GetFill(backgroundColor));
+            ImguiStyleUtil.ApplyTextColorToAllStates(_themeResources.MenuStyle, textColor);
+            _themeResources.MenuStyle.padding = new RectOffset(6, 6, 6, 6);
+            _themeResources.MenuStyle.margin = new RectOffset(0, 0, 0, 0);
+            _themeResources.MenuStyle.border = new RectOffset(1, 1, 1, 1);
 
-            _buttonStyle = new GUIStyle(GUI.skin.box);
-            ApplyBackgroundToAllStates(_buttonStyle, null);
-            ApplyTextColorToAllStates(_buttonStyle, textColor);
-            _buttonStyle.alignment = TextAnchor.MiddleLeft;
-            _buttonStyle.padding = new RectOffset(8, 8, 3, 3);
-            _buttonStyle.margin = new RectOffset(0, 0, 0, 0);
-            _buttonStyle.border = new RectOffset(0, 0, 0, 0);
+            _themeResources.ButtonStyle = new GUIStyle(GUI.skin.box);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_themeResources.ButtonStyle, null);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_themeResources.ButtonStyle, textColor);
+            _themeResources.ButtonStyle.alignment = TextAnchor.MiddleLeft;
+            _themeResources.ButtonStyle.padding = new RectOffset(8, 8, 3, 3);
+            _themeResources.ButtonStyle.margin = new RectOffset(0, 0, 0, 0);
+            _themeResources.ButtonStyle.border = new RectOffset(0, 0, 0, 0);
 
-            _headerStyle = new GUIStyle(GUI.skin.label);
-            ApplyTextColorToAllStates(_headerStyle, mutedTextColor);
-            _headerStyle.fontStyle = FontStyle.Bold;
-            _headerStyle.wordWrap = false;
+            _themeResources.HeaderStyle = new GUIStyle(GUI.skin.label);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_themeResources.HeaderStyle, mutedTextColor);
+            _themeResources.HeaderStyle.fontStyle = FontStyle.Bold;
+            _themeResources.HeaderStyle.wordWrap = false;
 
-            _hoverFill = MakeFill(hoverFillColor);
-            _pressedFill = MakeFill(pressedFillColor);
-            _hoverAccentFill = MakeFill(accentColor);
+            _themeResources.BorderFill = textureCache.GetFill(borderColor);
+            _themeResources.HoverFill = textureCache.GetFill(hoverFillColor);
+            _themeResources.PressedFill = textureCache.GetFill(pressedFillColor);
+            _themeResources.HoverAccentFill = textureCache.GetFill(accentColor);
+        }
+
+        private void DrawItems(
+            IList<PopupMenuItemModel> items,
+            float contentWidth,
+            Vector2 viewportMouse,
+            Vector2 queuedDownViewportMouse,
+            Vector2 queuedUpViewportMouse,
+            Event current,
+            ref PopupMenuRenderResult result)
+        {
+            var y = -_scrollPosition.y;
+            for (var i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                if (item.IsSeparator)
+                {
+                    GUI.DrawTexture(new Rect(HorizontalPadding, y + 3f, contentWidth - (HorizontalPadding * 2f), 1f), _themeResources.BorderFill);
+                    y += SeparatorHeight;
+                    continue;
+                }
+
+                if (item.IsSectionHeader)
+                {
+                    GUI.Label(new Rect(10f, y + 3f, contentWidth - 20f, 18f), item.Label ?? string.Empty, _themeResources.HeaderStyle);
+                    y += ItemHeight;
+                    continue;
+                }
+
+                var itemRect = new Rect(6f, y, contentWidth - 12f, ItemHeight);
+                var isPointerOverItem = itemRect.Contains(viewportMouse);
+                var isQueuedMouseDownOnItem = _queuedMouseDown && _queuedMouseDownButton == 0 && itemRect.Contains(queuedDownViewportMouse);
+                var isQueuedMouseUpOnItem = _queuedMouseUp && _queuedMouseUpButton == 0 && itemRect.Contains(queuedUpViewportMouse);
+                var commandId = item.CommandId ?? string.Empty;
+                var isPressedVisual = item.Enabled &&
+                    (!string.IsNullOrEmpty(_pressedCommandId) && string.Equals(_pressedCommandId, commandId, StringComparison.Ordinal));
+
+                var previousEnabled = GUI.enabled;
+                GUI.enabled = item.Enabled;
+                DrawItemBackground(itemRect, item.Enabled, isPointerOverItem, isPressedVisual);
+
+                if (item.Enabled && ((current != null && current.type == EventType.MouseDown && current.button == 0 && isPointerOverItem) || isQueuedMouseDownOnItem))
+                {
+                    _pressedCommandId = commandId;
+                    if (current != null && current.type == EventType.MouseDown && current.button == 0 && isPointerOverItem)
+                    {
+                        current.Use();
+                    }
+                }
+
+                var canActivateFromRelease = string.IsNullOrEmpty(_pressedCommandId) ||
+                    string.Equals(_pressedCommandId, commandId, StringComparison.Ordinal);
+                if (item.Enabled &&
+                    (((current != null && current.type == EventType.MouseUp && current.button == 0 && isPointerOverItem) || isQueuedMouseUpOnItem) && canActivateFromRelease))
+                {
+                    result.ActivatedCommandId = commandId;
+                    result.ShouldClose = true;
+                    _pressedCommandId = string.Empty;
+                    if (current != null && current.type == EventType.MouseUp && current.button == 0 && isPointerOverItem)
+                    {
+                        current.Use();
+                    }
+                }
+
+                if ((current != null && current.type == EventType.MouseUp && current.button == 0) || (_queuedMouseUp && _queuedMouseUpButton == 0))
+                {
+                    _pressedCommandId = string.Empty;
+                }
+
+                GUI.enabled = previousEnabled;
+                GUI.Label(new Rect(itemRect.x + 8f, itemRect.y + 3f, itemRect.width - 70f, 18f), item.Label ?? string.Empty);
+                if (!string.IsNullOrEmpty(item.ShortcutText))
+                {
+                    var shortcutRect = new Rect(itemRect.xMax - 78f, itemRect.y + 3f, 70f, 18f);
+                    GUI.Label(shortcutRect, item.ShortcutText, _themeResources.HeaderStyle);
+                }
+
+                y += ItemHeight + 2f;
+            }
         }
 
         private void DrawScrollChrome(Event current, Rect viewportRect, Vector2 viewportMouse, float contentWidth, float maxScroll, Vector2 queuedUpViewportMouse)
@@ -426,17 +446,14 @@ namespace Cortex.Renderers.Imgui
 
         private void DrawItemBackground(Rect itemRect, bool enabled, bool hovered, bool pressed)
         {
-            GUI.Box(itemRect, GUIContent.none, _buttonStyle);
-            if (!enabled)
+            GUI.Box(itemRect, GUIContent.none, _themeResources.ButtonStyle);
+            if (!enabled || !hovered)
             {
                 return;
             }
 
-            if (hovered)
-            {
-                GUI.DrawTexture(itemRect, pressed ? _pressedFill : _hoverFill);
-                GUI.DrawTexture(new Rect(itemRect.x, itemRect.y, HoverAccentWidth, itemRect.height), _hoverAccentFill);
-            }
+            GUI.DrawTexture(itemRect, pressed ? _themeResources.PressedFill : _themeResources.HoverFill);
+            GUI.DrawTexture(new Rect(itemRect.x, itemRect.y, HoverAccentWidth, itemRect.height), _themeResources.HoverAccentFill);
         }
 
         private static bool ShouldHandleScrollWheel(Event current, Rect viewportRect, Vector2 localMouse, float maxScroll)
@@ -454,9 +471,7 @@ namespace Cortex.Renderers.Imgui
                 return;
             }
 
-            var smoothedAxis = Input.GetAxis("Mouse ScrollWheel");
-            var instantAxis = Input.GetAxisRaw("Mouse ScrollWheel");
-            var rawAxis = Mathf.Abs(instantAxis) > Mathf.Abs(smoothedAxis) ? instantAxis : smoothedAxis;
+            var rawAxis = ReadRawScrollAxis();
             if (Mathf.Abs(rawAxis) <= 0.0001f)
             {
                 return;
@@ -472,6 +487,52 @@ namespace Cortex.Renderers.Imgui
             }
         }
 
+        private static float ReadRawScrollAxis()
+        {
+            var smoothedAxis = Input.GetAxis("Mouse ScrollWheel");
+            var instantAxis = Input.GetAxisRaw("Mouse ScrollWheel");
+            return Mathf.Abs(instantAxis) > Mathf.Abs(smoothedAxis) ? instantAxis : smoothedAxis;
+        }
+
+        private void ResetScrollStateForMenu(string headerText, IList<PopupMenuItemModel> items)
+        {
+            var menuKey = BuildMenuKey(headerText, items);
+            if (string.Equals(_scrollKey, menuKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _scrollKey = menuKey;
+            _scrollPosition = new Vector2(0f, 0f);
+            _pendingScrollDelta = 0f;
+            _pressedCommandId = string.Empty;
+        }
+
+        private void QueuePointerDown(int button, Vector2 position)
+        {
+            _queuedMouseDown = true;
+            _queuedMouseDownButton = button;
+            _queuedMouseDownPosition = position;
+        }
+
+        private void QueuePointerUp(int button, Vector2 position)
+        {
+            _queuedMouseUp = true;
+            _queuedMouseUpButton = button;
+            _queuedMouseUpPosition = position;
+        }
+
+        private void ClearQueuedPointerState()
+        {
+            _queuedMouseDown = false;
+            _queuedMouseUp = false;
+            _queuedOutsideClickClose = false;
+            _queuedMouseDownButton = -1;
+            _queuedMouseUpButton = -1;
+            _queuedMouseDownPosition = Vector2.zero;
+            _queuedMouseUpPosition = Vector2.zero;
+        }
+
         private static float ClampScrollOffset(float scrollOffset, float maxScroll)
         {
             return Mathf.Clamp(scrollOffset, 0f, Mathf.Max(0f, maxScroll));
@@ -479,10 +540,10 @@ namespace Cortex.Renderers.Imgui
 
         private static string BuildMenuKey(string headerText, IList<PopupMenuItemModel> items)
         {
-            var key = headerText ?? string.Empty;
+            var builder = new StringBuilder(headerText ?? string.Empty);
             if (items == null)
             {
-                return key;
+                return builder.ToString();
             }
 
             for (var i = 0; i < items.Count; i++)
@@ -493,10 +554,18 @@ namespace Cortex.Renderers.Imgui
                     continue;
                 }
 
-                key += "|" + (item.CommandId ?? string.Empty) + ":" + (item.Label ?? string.Empty) + ":" + (item.IsSeparator ? "1" : "0") + ":" + (item.IsSectionHeader ? "1" : "0");
+                builder
+                    .Append('|')
+                    .Append(item.CommandId ?? string.Empty)
+                    .Append(':')
+                    .Append(item.Label ?? string.Empty)
+                    .Append(':')
+                    .Append(item.IsSeparator ? '1' : '0')
+                    .Append(':')
+                    .Append(item.IsSectionHeader ? '1' : '0');
             }
 
-            return key;
+            return builder.ToString();
         }
 
         private static RenderRect BuildMenuRect(RenderPoint position, RenderSize viewportSize, IList<PopupMenuItemModel> items, out float contentHeight)
@@ -528,77 +597,21 @@ namespace Cortex.Renderers.Imgui
             return new RenderRect(x, y, 280f, height);
         }
 
-        private static string BuildThemeKey(PopupMenuThemePalette theme)
-        {
-            return FormatColor(theme.BackgroundColor) + "|" +
-                FormatColor(theme.BorderColor) + "|" +
-                FormatColor(theme.TextColor) + "|" +
-                FormatColor(theme.MutedTextColor) + "|" +
-                FormatColor(theme.AccentColor) + "|" +
-                FormatColor(theme.HoverFillColor) + "|" +
-                FormatColor(theme.PressedFillColor);
-        }
-
-        private static string FormatColor(RenderColor color)
-        {
-            return color.R.ToString("F3") + "|" + color.G.ToString("F3") + "|" + color.B.ToString("F3") + "|" + color.A.ToString("F3");
-        }
-
-        private static Color ToColor(RenderColor color, Color fallback)
-        {
-            if (color.A == 0f && color.R == 0f && color.G == 0f && color.B == 0f)
-            {
-                return fallback;
-            }
-
-            return new Color(color.R, color.G, color.B, color.A);
-        }
-
-        private static Texture2D MakeFill(Color color)
-        {
-            var texture = new Texture2D(1, 1);
-            texture.SetPixel(0, 0, color);
-            texture.Apply();
-            return texture;
-        }
-
-        private static void ApplyBackgroundToAllStates(GUIStyle style, Texture2D texture)
-        {
-            if (style == null)
-            {
-                return;
-            }
-
-            style.normal.background = texture;
-            style.hover.background = texture;
-            style.active.background = texture;
-            style.focused.background = texture;
-            style.onNormal.background = texture;
-            style.onHover.background = texture;
-            style.onActive.background = texture;
-            style.onFocused.background = texture;
-        }
-
-        private static void ApplyTextColorToAllStates(GUIStyle style, Color color)
-        {
-            if (style == null)
-            {
-                return;
-            }
-
-            style.normal.textColor = color;
-            style.hover.textColor = color;
-            style.active.textColor = color;
-            style.focused.textColor = color;
-            style.onNormal.textColor = color;
-            style.onHover.textColor = color;
-            style.onActive.textColor = color;
-            style.onFocused.textColor = color;
-        }
-
         private static Rect ToRect(RenderRect rect)
         {
             return new Rect(rect.X, rect.Y, rect.Width, rect.Height);
+        }
+
+        private sealed class PopupThemeResources
+        {
+            public string ThemeKey = string.Empty;
+            public GUIStyle MenuStyle;
+            public GUIStyle ButtonStyle;
+            public GUIStyle HeaderStyle;
+            public Texture2D BorderFill;
+            public Texture2D HoverFill;
+            public Texture2D PressedFill;
+            public Texture2D HoverAccentFill;
         }
     }
 }

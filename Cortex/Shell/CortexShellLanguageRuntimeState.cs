@@ -17,7 +17,7 @@ namespace Cortex
         public bool CompletionInFlight;
         public bool SignatureHelpInFlight;
         public bool SemanticOperationInFlight;
-        public bool MethodInspectorCallHierarchyInFlight;
+        public bool MethodInspectorRelationshipsInFlight;
         public string InitializeRequestId = string.Empty;
         public string StatusRequestId = string.Empty;
         public DocumentLanguageAnalysisRequestState PendingAnalysis;
@@ -26,7 +26,7 @@ namespace Cortex
         public DocumentLanguageCompletionRequestState PendingCompletion;
         public PendingLanguageSignatureHelpRequest PendingSignatureHelp;
         public PendingSemanticOperationRequest PendingSemanticOperation;
-        public PendingMethodInspectorCallHierarchyRequest PendingMethodInspectorCallHierarchy;
+        public PendingMethodInspectorRelationshipsRequest PendingMethodInspectorRelationships;
         public int ServiceGeneration;
         public DateTime LastAnalysisRequestUtc = DateTime.MinValue;
         public DateTime InitializeQueuedUtc = DateTime.MinValue;

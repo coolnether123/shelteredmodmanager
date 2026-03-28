@@ -46,7 +46,7 @@ namespace Cortex
         public string NewName;
     }
 
-    internal sealed class PendingMethodInspectorCallHierarchyRequest
+    internal sealed class PendingMethodInspectorRelationshipsRequest
     {
         public string RequestId;
         public int Generation;

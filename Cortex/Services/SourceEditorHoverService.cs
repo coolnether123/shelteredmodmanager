@@ -316,6 +316,7 @@ namespace Cortex.Services
                     : "renderer-hidden";
                 LogHoverDiagnostic("renderer-hidden", visibleTarget, surfaceState, hiddenReason);
                 LogHoverDrawResolved(false, surfaceId, telemetrySurfaceKind, visibleTarget, surfaceState, state, hoverResponse, hiddenReason);
+                ClearVisibleHover(state, surfaceId, hoverTooltipRenderer, hiddenReason);
                 return false;
             }
 

@@ -25,23 +25,18 @@ namespace Cortex.Renderers.Imgui
             var resolvedTheme = theme ?? new PanelThemePalette();
             return new ImguiPanelTheme
             {
-                BackgroundColor = ToColor(resolvedTheme.BackgroundColor),
-                HeaderColor = ToColor(resolvedTheme.HeaderColor),
-                BorderColor = ToColor(resolvedTheme.BorderColor),
-                DividerColor = ToColor(resolvedTheme.DividerColor),
-                ActionFillColor = ToColor(resolvedTheme.ActionFillColor),
-                ActionActiveFillColor = ToColor(resolvedTheme.ActionActiveFillColor),
-                CardFillColor = ToColor(resolvedTheme.CardFillColor),
-                TextColor = ToColor(resolvedTheme.TextColor),
-                MutedTextColor = ToColor(resolvedTheme.MutedTextColor),
-                AccentColor = ToColor(resolvedTheme.AccentColor),
-                WarningColor = ToColor(resolvedTheme.WarningColor)
+                BackgroundColor = ImguiThemeUtility.ToColor(resolvedTheme.BackgroundColor),
+                HeaderColor = ImguiThemeUtility.ToColor(resolvedTheme.HeaderColor),
+                BorderColor = ImguiThemeUtility.ToColor(resolvedTheme.BorderColor),
+                DividerColor = ImguiThemeUtility.ToColor(resolvedTheme.DividerColor),
+                ActionFillColor = ImguiThemeUtility.ToColor(resolvedTheme.ActionFillColor),
+                ActionActiveFillColor = ImguiThemeUtility.ToColor(resolvedTheme.ActionActiveFillColor),
+                CardFillColor = ImguiThemeUtility.ToColor(resolvedTheme.CardFillColor),
+                TextColor = ImguiThemeUtility.ToColor(resolvedTheme.TextColor),
+                MutedTextColor = ImguiThemeUtility.ToColor(resolvedTheme.MutedTextColor),
+                AccentColor = ImguiThemeUtility.ToColor(resolvedTheme.AccentColor),
+                WarningColor = ImguiThemeUtility.ToColor(resolvedTheme.WarningColor)
             };
-        }
-
-        private static Color ToColor(RenderColor color)
-        {
-            return new Color(color.R, color.G, color.B, color.A);
         }
     }
 }
