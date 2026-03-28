@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Presentation.Abstractions;
 
@@ -37,6 +38,16 @@ namespace Cortex.Services
         public ICortexShellHostUi ShellHostUi
         {
             get { return _shellHostUi; }
+        }
+
+        public string PreferredLanguageProviderId
+        {
+            get { return string.Empty; }
+        }
+
+        public IList<ILanguageProviderFactory> LanguageProviderFactories
+        {
+            get { return new List<ILanguageProviderFactory>(); }
         }
 
         private sealed class NullCortexHostEnvironment : ICortexHostEnvironment

@@ -72,7 +72,7 @@ namespace Cortex.Roslyn.Worker
             }
 
             var syntaxTree = documentContext != null && documentContext.Document != null
-                ? documentContext.Document.GetSyntaxTreeAsync().Result
+                ? documentContext.Document.GetSyntaxTreeAsync(CurrentCancellationToken).GetAwaiter().GetResult()
                 : null;
             var documentationXml = symbol != null ? symbol.GetDocumentationCommentXml() : string.Empty;
             var sourceLocation = symbol != null
@@ -130,7 +130,7 @@ namespace Cortex.Roslyn.Worker
             {
                 var quickInfoService = document != null ? QuickInfoService.GetService(document) : null;
                 return quickInfoService != null
-                    ? quickInfoService.GetQuickInfoAsync(document, position, CancellationToken.None).Result
+                    ? quickInfoService.GetQuickInfoAsync(document, position, CurrentCancellationToken).GetAwaiter().GetResult()
                     : null;
             }
             catch
@@ -688,7 +688,7 @@ namespace Cortex.Roslyn.Worker
 
             try
             {
-                var reduced = Simplifier.ReduceAsync(document).Result;
+                var reduced = Simplifier.ReduceAsync(document).WaitAsync(CurrentCancellationToken).GetAwaiter().GetResult();
                 return reduced ?? document;
             }
             catch
@@ -706,7 +706,7 @@ namespace Cortex.Roslyn.Worker
 
             try
             {
-                var formatted = Formatter.FormatAsync(document).Result;
+                var formatted = Formatter.FormatAsync(document).WaitAsync(CurrentCancellationToken).GetAwaiter().GetResult();
                 return formatted ?? document;
             }
             catch
@@ -733,8 +733,8 @@ namespace Cortex.Roslyn.Worker
                         continue;
                     }
 
-                    var originalText = originalDocument.GetTextAsync().Result;
-                    var updatedText = updatedDocument.GetTextAsync().Result;
+                    var originalText = originalDocument.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
+                    var updatedText = updatedDocument.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
                     var textChanges = updatedText.GetTextChanges(originalText);
                     if (textChanges == null || textChanges.Count == 0)
                     {
@@ -798,7 +798,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var text = documentContext.Document.GetTextAsync().Result;
+            var text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
             var position = ResolveRequestPosition(text, request != null ? request.Line : 0, request != null ? request.Column : 0, request != null ? request.AbsolutePosition : -1);
             if (position < 0 || position > text.Length)
             {
@@ -1034,7 +1034,7 @@ namespace Cortex.Roslyn.Worker
 
             if (parameter.ParameterType == typeof(CancellationToken))
             {
-                return CancellationToken.None;
+                return CurrentCancellationToken;
             }
 
             return parameter.ParameterType.IsValueType
@@ -1056,7 +1056,7 @@ namespace Cortex.Roslyn.Worker
             }
 
             var task = (System.Threading.Tasks.Task)result;
-            task.Wait();
+            task.Wait(CurrentCancellationToken);
             var resultProperty = resultType.GetProperty("Result", BindingFlags.Public | BindingFlags.Instance);
             return resultProperty != null ? resultProperty.GetValue(result, null) : null;
         }

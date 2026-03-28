@@ -66,8 +66,10 @@ namespace Cortex.Services
                 return true;
             }
 
-            var status = state != null ? state.LanguageServiceStatus : null;
-            var capabilities = status != null ? status.Capabilities : null;
+            var runtime = state != null ? state.LanguageRuntime : null;
+            var capabilities = runtime != null && runtime.Capabilities != null
+                ? runtime.Capabilities.CapabilityIds
+                : null;
             if (capabilities == null)
             {
                 return false;
@@ -93,7 +95,7 @@ namespace Cortex.Services
 
             if (!HasCapability(state, capability))
             {
-                return Disabled(actionLabel + " is not supported by the active language service.");
+                return Disabled(BuildCapabilityDisabledReason(state, actionLabel));
             }
 
             return Enabled();
@@ -109,7 +111,7 @@ namespace Cortex.Services
 
             if (!HasCapability(state, capability))
             {
-                return Disabled(actionLabel + " is not supported by the active language service.");
+                return Disabled(BuildCapabilityDisabledReason(state, actionLabel));
             }
 
             return Enabled();
@@ -173,6 +175,39 @@ namespace Cortex.Services
             }
 
             return Disabled("Select text or place the caret on a symbol before copying.");
+        }
+
+        private static string BuildCapabilityDisabledReason(CortexShellState state, string actionLabel)
+        {
+            var runtime = state != null ? state.LanguageRuntime : null;
+            if (runtime == null)
+            {
+                return actionLabel + " is not available because the language runtime is offline.";
+            }
+
+            if (IsExplicitlyDisabled(runtime))
+            {
+                return actionLabel + " is unavailable because the language runtime is disabled.";
+            }
+
+            switch (runtime.HealthState)
+            {
+                case LanguageRuntimeHealthState.NoProviders:
+                    return actionLabel + " is unavailable because no language providers are registered.";
+                case LanguageRuntimeHealthState.Unavailable:
+                    return actionLabel + " is unavailable because the selected language provider could not be created.";
+                case LanguageRuntimeHealthState.Faulted:
+                    return actionLabel + " is unavailable because the active language provider faulted.";
+            }
+
+            return actionLabel + " is not supported by the active language provider.";
+        }
+
+        private static bool IsExplicitlyDisabled(LanguageRuntimeSnapshot runtime)
+        {
+            return runtime != null &&
+                runtime.LifecycleState == LanguageRuntimeLifecycleState.Disabled &&
+                runtime.HealthState == LanguageRuntimeHealthState.Healthy;
         }
 
         private static EditorCommandAvailability Enabled()

@@ -98,6 +98,7 @@ namespace Cortex.Core.Abstractions
         string QueueCallHierarchy(LanguageServiceCallHierarchyRequest request);
         string QueueValueSource(LanguageServiceValueSourceRequest request);
         string QueueDocumentTransformPreview(LanguageServiceDocumentTransformRequest request);
+        bool CancelRequest(string requestId);
         bool TryDequeueResponse(out LanguageServiceEnvelope envelope);
         LanguageServiceInitializeResponse Initialize(LanguageServiceInitializeRequest request);
         LanguageServiceStatusResponse GetStatus();

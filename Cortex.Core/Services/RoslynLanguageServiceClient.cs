@@ -16,6 +16,7 @@ namespace Cortex.Core.Services
         private readonly int _timeoutMs;
         private readonly Action<string> _log;
         private readonly object _sync = new object();
+        private readonly Queue<PendingRequest> _priorityOutgoing = new Queue<PendingRequest>();
         private readonly Queue<PendingRequest> _outgoing = new Queue<PendingRequest>();
         private readonly Queue<LanguageServiceEnvelope> _completed = new Queue<LanguageServiceEnvelope>();
         private readonly Dictionary<string, PendingRequest> _pendingById = new Dictionary<string, PendingRequest>(StringComparer.OrdinalIgnoreCase);
@@ -142,6 +143,39 @@ namespace Cortex.Core.Services
                 }
 
                 envelope = _completed.Dequeue();
+                return true;
+            }
+        }
+
+        public bool CancelRequest(string requestId)
+        {
+            lock (_sync)
+            {
+                PendingRequest pending;
+                if (!_pendingById.TryGetValue(requestId ?? string.Empty, out pending) || pending == null)
+                {
+                    return false;
+                }
+
+                pending.Cancelled = true;
+                if (pending.Dispatched &&
+                    _process != null &&
+                    !_process.HasExited)
+                {
+                    _priorityOutgoing.Enqueue(CreateControlRequest(
+                        LanguageServiceCommands.CancelRequest,
+                        new LanguageServiceCancelRequest
+                        {
+                            TargetRequestId = requestId ?? string.Empty
+                        }));
+                    _outgoingSignal.Set();
+                }
+
+                if (pending.WaitHandle != null)
+                {
+                    pending.WaitHandle.Set();
+                }
+
                 return true;
             }
         }
@@ -358,6 +392,24 @@ namespace Cortex.Core.Services
             };
         }
 
+        private PendingRequest CreateControlRequest<TRequest>(string command, TRequest payload)
+        {
+            return new PendingRequest
+            {
+                Envelope = new LanguageServiceEnvelope
+                {
+                    RequestId = "req-" + Interlocked.Increment(ref _nextRequestId),
+                    Command = command ?? string.Empty,
+                    Success = true,
+                    PayloadJson = ManualJson.Serialize(payload),
+                    ErrorMessage = string.Empty
+                },
+                QueuedUtc = DateTime.UtcNow,
+                TimeoutMs = _timeoutMs,
+                IgnoreResponse = true
+            };
+        }
+
         private int GetInitializeTimeoutMs()
         {
             return Math.Max(_timeoutMs, MinimumInitializeTimeoutMs);
@@ -480,7 +532,11 @@ namespace Cortex.Core.Services
                     }
 
                     PumpTimeouts_NoLock();
-                    if (_outgoing.Count > 0)
+                    if (_priorityOutgoing.Count > 0)
+                    {
+                        pending = _priorityOutgoing.Dequeue();
+                    }
+                    else if (_outgoing.Count > 0)
                     {
                         pending = _outgoing.Dequeue();
                     }
@@ -496,6 +552,12 @@ namespace Cortex.Core.Services
                 {
                     lock (_sync)
                     {
+                        if (pending.Cancelled)
+                        {
+                            _pendingById.Remove(pending.Envelope != null ? pending.Envelope.RequestId ?? string.Empty : string.Empty);
+                            continue;
+                        }
+
                         if (_process == null || _process.HasExited)
                         {
                             FailPending_NoLock(pending.Envelope.RequestId, "Roslyn worker is not running.");
@@ -507,6 +569,7 @@ namespace Cortex.Core.Services
                             ", RequestId=" + (pending.Envelope != null ? pending.Envelope.RequestId ?? string.Empty : string.Empty) + ".");
                         _process.StandardInput.WriteLine(ManualJson.Serialize(pending.Envelope));
                         _process.StandardInput.Flush();
+                        pending.Dispatched = true;
                         Log("Request write complete. RequestId=" +
                             (pending.Envelope != null ? pending.Envelope.RequestId ?? string.Empty : string.Empty) + ".");
                     }
@@ -610,11 +673,31 @@ namespace Cortex.Core.Services
                         if (_pendingById.TryGetValue(envelope.RequestId ?? string.Empty, out pending))
                         {
                             _pendingById.Remove(envelope.RequestId ?? string.Empty);
+                            if (pending != null && pending.Cancelled)
+                            {
+                                if (pending.WaitHandle != null)
+                                {
+                                    pending.WaitHandle.Set();
+                                }
+
+                                continue;
+                            }
+
                             pending.Response = envelope;
                             if (pending.WaitHandle != null)
                             {
                                 pending.WaitHandle.Set();
                             }
+
+                            if (pending.IgnoreResponse)
+                            {
+                                continue;
+                            }
+                        }
+
+                        if (string.Equals(envelope.Command, LanguageServiceCommands.CancelRequest, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
                         }
 
                         _completed.Enqueue(envelope);
@@ -643,6 +726,11 @@ namespace Cortex.Core.Services
             var expiredIds = new List<string>();
             foreach (var pair in _pendingById)
             {
+                if (pair.Value == null || pair.Value.Cancelled)
+                {
+                    continue;
+                }
+
                 if ((now - pair.Value.QueuedUtc).TotalMilliseconds > pair.Value.TimeoutMs)
                 {
                     expiredIds.Add(pair.Key);
@@ -737,6 +825,7 @@ namespace Cortex.Core.Services
                 _readerThread = null;
                 _writerThread = null;
                 FailAllPending_NoLock(string.IsNullOrEmpty(_lastError) ? "Roslyn worker stopped." : _lastError);
+                _priorityOutgoing.Clear();
                 _outgoing.Clear();
             }
         }
@@ -855,6 +944,9 @@ namespace Cortex.Core.Services
             public int TimeoutMs;
             public ManualResetEvent WaitHandle;
             public LanguageServiceEnvelope Response;
+            public bool Cancelled;
+            public bool Dispatched;
+            public bool IgnoreResponse;
         }
     }
 }

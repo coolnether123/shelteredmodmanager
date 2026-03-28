@@ -196,7 +196,7 @@ namespace Cortex.Roslyn.Worker
                 return false;
             }
 
-            var text = documentContext.Document.GetTextAsync().Result;
+            var text = documentContext.Document.GetTextAsync(CurrentCancellationToken).GetAwaiter().GetResult();
             var position = ResolveRequestPosition(
                 text,
                 request != null ? request.Line : 0,
@@ -280,7 +280,7 @@ namespace Cortex.Roslyn.Worker
                 };
             }
 
-            var implementationSymbols = SymbolFinder.FindImplementationsAsync(context.Symbol, context.Document.Project.Solution).Result
+            var implementationSymbols = SymbolFinder.FindImplementationsAsync(context.Symbol, context.Document.Project.Solution, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult()
                 .Where(symbol => symbol != null)
                 .ToList();
             var locations = new List<LanguageServiceSymbolLocation>();
@@ -370,7 +370,7 @@ namespace Cortex.Roslyn.Worker
             }
 
             var symbol = context.Symbol;
-            var preferredLocation = GetPreferredSourceLocation(symbol, context.Document.GetSyntaxTreeAsync().Result);
+            var preferredLocation = GetPreferredSourceLocation(symbol, context.Document.GetSyntaxTreeAsync(CurrentCancellationToken).GetAwaiter().GetResult());
             response.DocumentPath = context.Document.FilePath ?? (request != null ? request.DocumentPath ?? string.Empty : string.Empty);
             response.ProjectFilePath = context.Document.Project != null ? context.Document.Project.FilePath ?? string.Empty : string.Empty;
             response.DocumentVersion = request != null ? request.DocumentVersion : 0;
@@ -383,7 +383,7 @@ namespace Cortex.Roslyn.Worker
             response.DocumentationCommentId = symbol.GetDocumentationCommentId() ?? string.Empty;
             response.DocumentationXml = symbol.GetDocumentationCommentXml() ?? string.Empty;
             response.DocumentationText = FlattenDocumentation(response.DocumentationXml);
-            response.Range = BuildRange(context.Text, preferredLocation != null && preferredLocation.SourceTree == context.Document.GetSyntaxTreeAsync().Result
+            response.Range = BuildRange(context.Text, preferredLocation != null && preferredLocation.SourceTree == context.Document.GetSyntaxTreeAsync(CurrentCancellationToken).GetAwaiter().GetResult()
                 ? preferredLocation.SourceSpan
                 : default(TextSpan));
             response.DefinitionDocumentPath = preferredLocation != null && preferredLocation.SourceTree != null
@@ -499,7 +499,7 @@ namespace Cortex.Roslyn.Worker
                 AddSymbolPrimaryLocations(results, solution, symbol, "Definition", seen);
             }
 
-            var references = SymbolFinder.FindReferencesAsync(symbol, solution).Result;
+            var references = SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
             foreach (var referencedSymbol in references)
             {
                 if (referencedSymbol == null)
@@ -713,7 +713,7 @@ namespace Cortex.Roslyn.Worker
         private LanguageServiceCallHierarchyItem[] BuildIncomingCallItems(ISymbol symbol, Solution solution)
         {
             var items = new List<LanguageServiceCallHierarchyItem>();
-            var callers = SymbolFinder.FindCallersAsync(symbol, solution).Result;
+            var callers = SymbolFinder.FindCallersAsync(symbol, solution, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
             foreach (var caller in callers)
             {
                 if (caller.CallingSymbol == null)
@@ -767,14 +767,14 @@ namespace Cortex.Roslyn.Worker
                     continue;
                 }
 
-                var syntax = syntaxReference.GetSyntaxAsync().Result;
+                var syntax = syntaxReference.GetSyntaxAsync(CurrentCancellationToken).GetAwaiter().GetResult();
                 var document = solution.GetDocument(syntax.SyntaxTree);
                 if (document == null)
                 {
                     continue;
                 }
 
-                var semanticModel = document.GetSemanticModelAsync().Result;
+                var semanticModel = document.GetSemanticModelAsync(CurrentCancellationToken).GetAwaiter().GetResult();
                 if (semanticModel == null)
                 {
                     continue;
@@ -857,7 +857,7 @@ namespace Cortex.Roslyn.Worker
         private LanguageServiceValueSourceItem[] BuildValueSourceItems(ResolvedSymbolRequestContext context)
         {
             var items = new List<LanguageServiceValueSourceItem>();
-            var declarationLocation = GetPreferredSourceLocation(context.Symbol, context.Document.GetSyntaxTreeAsync().Result);
+            var declarationLocation = GetPreferredSourceLocation(context.Symbol, context.Document.GetSyntaxTreeAsync(CurrentCancellationToken).GetAwaiter().GetResult());
             if (declarationLocation != null && declarationLocation.IsInSource)
             {
                 items.Add(new LanguageServiceValueSourceItem
@@ -869,7 +869,7 @@ namespace Cortex.Roslyn.Worker
                 });
             }
 
-            var references = SymbolFinder.FindReferencesAsync(context.Symbol, context.Document.Project.Solution).Result;
+            var references = SymbolFinder.FindReferencesAsync(context.Symbol, context.Document.Project.Solution, cancellationToken: CurrentCancellationToken).GetAwaiter().GetResult();
             foreach (var referencedSymbol in references)
             {
                 if (referencedSymbol == null)
@@ -915,7 +915,7 @@ namespace Cortex.Roslyn.Worker
                 return false;
             }
 
-            var root = document.GetSyntaxRootAsync().Result;
+            var root = document.GetSyntaxRootAsync(CurrentCancellationToken).GetAwaiter().GetResult();
             if (root == null)
             {
                 return false;

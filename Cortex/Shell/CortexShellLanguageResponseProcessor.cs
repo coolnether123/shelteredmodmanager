@@ -18,9 +18,26 @@ namespace Cortex
                 return;
             }
 
-            LanguageServiceEnvelope envelope;
-            while (context.LanguageServiceClient.TryDequeueResponse(out envelope))
+            LanguageRuntimeMessage message;
+            while (context.LanguageServiceClient.TryDequeueMessage(out message))
             {
+                if (message == null)
+                {
+                    continue;
+                }
+
+                if (message.Generation != runtime.ServiceGeneration)
+                {
+                    continue;
+                }
+
+                if (message.Kind == LanguageRuntimeMessageKind.ProviderFault)
+                {
+                    HandleProviderFault(context, message);
+                    continue;
+                }
+
+                var envelope = message.Envelope;
                 if (envelope == null || string.IsNullOrEmpty(envelope.RequestId))
                 {
                     continue;
@@ -102,6 +119,28 @@ namespace Cortex
             }
         }
 
+        private static void HandleProviderFault(CortexShellLanguageRuntimeContext context, LanguageRuntimeMessage message)
+        {
+            var runtime = context.RuntimeState;
+            runtime.ServiceReady = false;
+            runtime.ServiceInitializing = false;
+            runtime.InitializeRequestId = string.Empty;
+            runtime.StatusRequestId = string.Empty;
+            runtime.CurrentStatus = new LanguageServiceStatusResponse
+            {
+                Success = false,
+                StatusMessage = message != null ? message.Message ?? "Language provider faulted." : "Language provider faulted.",
+                IsRunning = false,
+                Capabilities = new string[0],
+                LoadedProjectPaths = new string[0]
+            };
+            context.State.StatusMessage = runtime.CurrentStatus.StatusMessage;
+            if (!string.IsNullOrEmpty(runtime.CurrentStatus.StatusMessage))
+            {
+                context.State.Diagnostics.Add("Language provider fault: " + runtime.CurrentStatus.StatusMessage);
+            }
+        }
+
         private static void HandleLanguageInitializeResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope)
         {
             var runtime = context.RuntimeState;
@@ -112,7 +151,7 @@ namespace Cortex
             if (envelope == null || !envelope.Success)
             {
                 runtime.ServiceReady = false;
-                context.State.LanguageServiceStatus = new LanguageServiceStatusResponse
+                runtime.CurrentStatus = new LanguageServiceStatusResponse
                 {
                     Success = false,
                     StatusMessage = envelope != null ? envelope.ErrorMessage ?? "startup failed" : "startup failed",
@@ -120,7 +159,7 @@ namespace Cortex
                     Capabilities = new string[0],
                     LoadedProjectPaths = new string[0]
                 };
-                context.State.Diagnostics.Add("Roslyn worker failed to initialize: " + context.State.LanguageServiceStatus.StatusMessage);
+                context.State.Diagnostics.Add("Roslyn worker failed to initialize: " + runtime.CurrentStatus.StatusMessage);
                 return;
             }
 
@@ -156,10 +195,10 @@ namespace Cortex
                 return;
             }
 
-            context.State.LanguageServiceStatus = response;
+            runtime.CurrentStatus = response;
             MMLog.WriteInfo("[Cortex.Roslyn] Worker ready. CachedProjects=" +
-                (context.State.LanguageServiceStatus != null ? context.State.LanguageServiceStatus.CachedProjectCount.ToString() : "0") +
-                ", Capabilities=" + BuildCapabilitySummary(context.State.LanguageServiceStatus));
+                (runtime.CurrentStatus != null ? runtime.CurrentStatus.CachedProjectCount.ToString() : "0") +
+                ", Capabilities=" + BuildCapabilitySummary(runtime.CurrentStatus));
         }
 
         private static void HandleLanguageAnalysisResponse(CortexShellLanguageRuntimeContext context, LanguageServiceEnvelope envelope, DocumentLanguageAnalysisRequestState pending)

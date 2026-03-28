@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Diagnostics;
 
@@ -37,6 +38,10 @@ namespace Cortex.Presentation.Abstractions
         ICortexPlatformModule PlatformModule { get; }
 
         ICortexShellHostUi ShellHostUi { get; }
+
+        string PreferredLanguageProviderId { get; }
+
+        IList<ILanguageProviderFactory> LanguageProviderFactories { get; }
     }
 
     public enum CortexShellInputEventKind

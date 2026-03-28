@@ -8,7 +8,7 @@ namespace Cortex
 {
     internal sealed class CortexShellLanguageRuntimeContext
     {
-        private readonly Func<ILanguageServiceClient> _languageServiceClientAccessor;
+        private readonly Func<ILanguageProviderSession> _languageServiceClientAccessor;
         private readonly Func<CortexNavigationService> _navigationServiceAccessor;
         private readonly Func<bool> _completionAugmentationInFlightAccessor;
         private readonly Action _ensureLanguageServiceStarted;
@@ -31,7 +31,7 @@ namespace Cortex
             EditorCompletionService editorCompletionService,
             EditorSignatureHelpService editorSignatureHelpService,
             IEditorContextService editorContextService,
-            Func<ILanguageServiceClient> languageServiceClientAccessor,
+            Func<ILanguageProviderSession> languageServiceClientAccessor,
             Func<CortexNavigationService> navigationServiceAccessor,
             Func<bool> completionAugmentationInFlightAccessor,
             double languageAnalysisDebounceMs,
@@ -85,7 +85,7 @@ namespace Cortex
 
         public IEditorContextService EditorContextService { get; private set; }
 
-        public ILanguageServiceClient LanguageServiceClient
+        public ILanguageProviderSession LanguageServiceClient
         {
             get { return _languageServiceClientAccessor != null ? _languageServiceClientAccessor() : null; }
         }
@@ -109,8 +109,10 @@ namespace Cortex
 
         public bool HasLanguageCapability(string capability)
         {
-            var status = State != null ? State.LanguageServiceStatus : null;
-            var capabilities = status != null ? status.Capabilities : null;
+            var runtime = State != null ? State.LanguageRuntime : null;
+            var capabilities = runtime != null && runtime.Capabilities != null
+                ? runtime.Capabilities.CapabilityIds
+                : null;
             if (capabilities == null || string.IsNullOrEmpty(capability))
             {
                 return false;

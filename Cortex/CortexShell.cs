@@ -40,10 +40,7 @@ namespace Cortex
         private readonly CortexShellBuiltInModuleRegistrar _moduleRegistrar = new CortexShellBuiltInModuleRegistrar();
         private readonly CortexShellCommandRouter _commandRouter = new CortexShellCommandRouter();
         private readonly CortexShellLayoutHostRouter _layoutHostRouter = new CortexShellLayoutHostRouter();
-        private readonly CortexShellLanguageCoordinator _languageCoordinator = new CortexShellLanguageCoordinator();
-        private readonly CortexShellLanguageRequestDispatcher _languageRequestDispatcher = new CortexShellLanguageRequestDispatcher();
-        private readonly CortexShellLanguageResponseProcessor _languageResponseProcessor = new CortexShellLanguageResponseProcessor();
-        private readonly CortexShellLanguageRuntimeState _languageRuntime = new CortexShellLanguageRuntimeState();
+        private readonly CortexLanguageRuntimeService _languageRuntimeService;
         private readonly CortexOnboardingCoordinator _onboardingCoordinator = new CortexOnboardingCoordinator();
         private readonly CortexShellOnboardingLifecycle _onboardingLifecycle = new CortexShellOnboardingLifecycle();
 
@@ -62,7 +59,6 @@ namespace Cortex
         private CortexShellModuleCompositionService _moduleCompositionService;
         private CortexShellModuleActivationService _moduleActivationService;
         private CortexShellModuleRenderService _moduleRenderService;
-        private CortexShellLanguageRuntimeContext _languageRuntimeContext;
         private bool _moduleContributionsRegistered;
 
         private GUIStyle _titleStyle;
@@ -87,6 +83,7 @@ namespace Cortex
         private ShellServiceMap _services;
         private bool _lastOverlayMouseCapture;
         private bool _lastOverlayKeyboardCapture;
+        private IList<ILanguageProviderFactory> _hostLanguageProviderFactories = new List<ILanguageProviderFactory>();
 
         private IProjectCatalog ProjectCatalog
         {
@@ -138,10 +135,32 @@ namespace Cortex
             }
         }
 
+        private ILanguageRuntimeControl LanguageRuntimeControl
+        {
+            get { return _services != null ? _services.LanguageRuntimeControl : null; }
+        }
+
         public CortexShellController()
         {
             _services = new ShellServiceMap();
-            _bootstrapper = new ShellBootstrapper(_state, _moduleContributionRegistry, null, _moduleRegistrar);
+            _languageRuntimeService = new CortexLanguageRuntimeService(
+                _state,
+                delegate { return _services; },
+                delegate { return _completionAugmentationInFlight; },
+                ProcessCompletionAugmentationResponses,
+                DispatchDeferredCompletionAugmentation,
+                BuildCompletionAugmentationRequest,
+                TryQueueCompletionAugmentation,
+                delegate { return _hostLanguageProviderFactories; },
+                null);
+            _bootstrapper = new ShellBootstrapper(
+                _state,
+                _moduleContributionRegistry,
+                null,
+                _moduleRegistrar,
+                _languageRuntimeService,
+                _languageRuntimeService,
+                _languageRuntimeService);
             _sessionCoordinator = new ShellSessionCoordinator(
                 _state,
                 _lifecycleCoordinator,
@@ -374,13 +393,14 @@ namespace Cortex
             _platformModule = resolvedHostServices.PlatformModule ?? NullCortexPlatformModule.Instance;
             _hostEnvironment = resolvedHostServices.Environment ?? NullCortexHostServices.Instance.Environment;
             _shellHostUi = resolvedHostServices.ShellHostUi ?? NullCortexHostServices.Instance.ShellHostUi;
+            _hostLanguageProviderFactories = resolvedHostServices.LanguageProviderFactories ?? new List<ILanguageProviderFactory>();
             _bootstrapper.ConfigureHostServices(resolvedHostServices);
         }
 
         private void InitializeServices(ICortexHostEnvironment hostEnvironment, CortexSettings settings)
         {
             ApplyServiceMap(_bootstrapper.InitializeServices(settings));
-            InitializeLanguageService(hostEnvironment.HostBinPath, settings);
+            ApplyLanguageRuntimeConfiguration(hostEnvironment, settings, false);
             EnableRuntimeLogIntegration();
         }
 
@@ -517,6 +537,7 @@ namespace Cortex
             var hostEnv = _bootstrapper.HostEnvironment;
             _state.Settings = _bootstrapper.BuildEffectiveSettings(_state.Settings, hostEnv);
             ApplyServiceMap(_bootstrapper.InitializeServices(_state.Settings));
+            ApplyLanguageRuntimeConfiguration(hostEnv, _state.Settings, true);
             if (_settingsStore != null)
             {
                 _settingsStore.Save(_state.Settings);
@@ -566,6 +587,32 @@ namespace Cortex
 
         private void EnableRuntimeLogIntegration() => (_bootstrapper.PlatformModule ?? NullCortexPlatformModule.Instance).ConfigureRuntimeLogging(true);
         private void DisableRuntimeLogIntegration() => (_bootstrapper.PlatformModule ?? NullCortexPlatformModule.Instance).ConfigureRuntimeLogging(false);
+
+        private void ApplyLanguageRuntimeConfiguration(ICortexHostEnvironment hostEnvironment, CortexSettings settings, bool reload)
+        {
+            var control = LanguageRuntimeControl;
+            if (control == null)
+            {
+                return;
+            }
+
+            var resolvedProviderId = _bootstrapper.ResolveLanguageProviderId(settings);
+            var configuration = new LanguageRuntimeConfiguration
+            {
+                ProviderId = resolvedProviderId,
+                HostBinPath = hostEnvironment != null ? hostEnvironment.HostBinPath : string.Empty,
+                Settings = settings
+            };
+
+            if (reload)
+            {
+                control.Reload(configuration);
+            }
+            else
+            {
+                control.Start(configuration);
+            }
+        }
 
         private void RegisterToggleAction() => (_bootstrapper.PlatformModule ?? NullCortexPlatformModule.Instance).EnsureShellToggleRegistered(ToggleActionId);
 

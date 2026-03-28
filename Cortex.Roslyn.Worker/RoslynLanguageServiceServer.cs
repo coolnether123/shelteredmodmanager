@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using Cortex.LanguageService.Protocol;
 using GameModding.Shared.Serialization;
 using Microsoft.CodeAnalysis;
@@ -9,98 +11,155 @@ namespace Cortex.Roslyn.Worker
 {
     internal sealed partial class RoslynLanguageServiceServer
     {
+        private static readonly AsyncLocal<CancellationToken> _ambientCancellationToken = new AsyncLocal<CancellationToken>();
         private string _workspaceRootPath = string.Empty;
         private string[] _sourceRoots = new string[0];
         private string[] _projectFilePaths = new string[0];
         private string[] _solutionFilePaths = new string[0];
         private string[] _referenceAssemblyPaths = new string[0];
         private readonly Dictionary<string, PortableExecutableReference> _metadataReferenceCache = new Dictionary<string, PortableExecutableReference>(StringComparer.OrdinalIgnoreCase);
+        private readonly object _requestSync = new object();
+        private readonly Dictionary<string, CancellationTokenSource> _activeRequests = new Dictionary<string, CancellationTokenSource>(StringComparer.OrdinalIgnoreCase);
+        private readonly SemaphoreSlim _operationGate = new SemaphoreSlim(1, 1);
 
         public RoslynLanguageServiceServer()
         {
             RegisterMsBuild();
         }
 
-        public LanguageServiceEnvelope Handle(LanguageServiceEnvelope request)
+        public Task<LanguageServiceEnvelope> HandleQueuedAsync(LanguageServiceEnvelope request)
         {
-            return HandleAsync(request).GetAwaiter().GetResult();
+            if (request == null)
+            {
+                return Task.FromResult(BuildErrorEnvelope(null, "Language request was empty."));
+            }
+
+            if (string.Equals(request.Command, LanguageServiceCommands.CancelRequest, StringComparison.OrdinalIgnoreCase))
+            {
+                return Task.FromResult(HandleCancel(request));
+            }
+
+            if (string.Equals(request.Command, LanguageServiceCommands.Shutdown, StringComparison.OrdinalIgnoreCase))
+            {
+                CancelAllActiveRequests();
+            }
+
+            return ProcessRequestAsync(request);
         }
 
-        private System.Threading.Tasks.Task WarmProjectCacheAsync(string[] projectFilePaths)
+        private async Task<LanguageServiceEnvelope> ProcessRequestAsync(LanguageServiceEnvelope request)
+        {
+            var requestId = request != null ? request.RequestId ?? string.Empty : string.Empty;
+            var cancellationSource = new CancellationTokenSource();
+            RegisterActiveRequest(requestId, cancellationSource);
+            try
+            {
+                try
+                {
+                    await _operationGate.WaitAsync(cancellationSource.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return BuildErrorEnvelope(request, "Operation cancelled.");
+                }
+
+                _ambientCancellationToken.Value = cancellationSource.Token;
+                try
+                {
+                    return await HandleAsync(request, cancellationSource.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return BuildErrorEnvelope(request, "Operation cancelled.");
+                }
+                finally
+                {
+                    _ambientCancellationToken.Value = default(CancellationToken);
+                    _operationGate.Release();
+                }
+            }
+            finally
+            {
+                UnregisterActiveRequest(requestId, cancellationSource);
+            }
+        }
+
+        private Task WarmProjectCacheAsync(string[] projectFilePaths)
         {
             WarmProjectCache(projectFilePaths);
-            return System.Threading.Tasks.Task.CompletedTask;
+            return Task.CompletedTask;
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceAnalysisResponse> AnalyzeDocumentAsync(LanguageServiceDocumentRequest request)
+        private Task<LanguageServiceAnalysisResponse> AnalyzeDocumentAsync(LanguageServiceDocumentRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(AnalyzeDocument(request));
+            return Task.FromResult(AnalyzeDocument(request));
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceHoverResponse> GetHoverAsync(LanguageServiceHoverRequest request)
+        private Task<LanguageServiceHoverResponse> GetHoverAsync(LanguageServiceHoverRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(GetHover(request));
+            return Task.FromResult(GetHover(request));
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceDefinitionResponse> GoToDefinitionAsync(LanguageServiceDefinitionRequest request)
+        private Task<LanguageServiceDefinitionResponse> GoToDefinitionAsync(LanguageServiceDefinitionRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(GoToDefinition(request));
+            return Task.FromResult(GoToDefinition(request));
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceCompletionResponse> GetCompletionAsync(LanguageServiceCompletionRequest request)
+        private Task<LanguageServiceCompletionResponse> GetCompletionAsync(LanguageServiceCompletionRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(GetCompletion(request));
+            return Task.FromResult(GetCompletion(request));
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceSignatureHelpResponse> GetSignatureHelpAsync(LanguageServiceSignatureHelpRequest request)
+        private Task<LanguageServiceSignatureHelpResponse> GetSignatureHelpAsync(LanguageServiceSignatureHelpRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(GetSignatureHelp(request));
+            return Task.FromResult(GetSignatureHelp(request));
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceSymbolContextResponse> GetSymbolContextAsync(LanguageServiceSymbolContextRequest request)
+        private Task<LanguageServiceSymbolContextResponse> GetSymbolContextAsync(LanguageServiceSymbolContextRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(GetSymbolContext(request));
+            return Task.FromResult(GetSymbolContext(request));
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceRenameResponse> PreviewRenameAsync(LanguageServiceRenameRequest request)
+        private Task<LanguageServiceRenameResponse> PreviewRenameAsync(LanguageServiceRenameRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(PreviewRename(request));
+            return Task.FromResult(PreviewRename(request));
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceReferencesResponse> FindReferencesAsync(LanguageServiceReferencesRequest request)
+        private Task<LanguageServiceReferencesResponse> FindReferencesAsync(LanguageServiceReferencesRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(FindReferences(request));
+            return Task.FromResult(FindReferences(request));
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceBaseSymbolResponse> GetBaseSymbolsAsync(LanguageServiceBaseSymbolRequest request)
+        private Task<LanguageServiceBaseSymbolResponse> GetBaseSymbolsAsync(LanguageServiceBaseSymbolRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(GetBaseSymbols(request));
+            return Task.FromResult(GetBaseSymbols(request));
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceImplementationResponse> GetImplementationsAsync(LanguageServiceImplementationRequest request)
+        private Task<LanguageServiceImplementationResponse> GetImplementationsAsync(LanguageServiceImplementationRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(GetImplementations(request));
+            return Task.FromResult(GetImplementations(request));
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceCallHierarchyResponse> GetCallHierarchyAsync(LanguageServiceCallHierarchyRequest request)
+        private Task<LanguageServiceCallHierarchyResponse> GetCallHierarchyAsync(LanguageServiceCallHierarchyRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(GetCallHierarchy(request));
+            return Task.FromResult(GetCallHierarchy(request));
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceValueSourceResponse> GetValueSourceAsync(LanguageServiceValueSourceRequest request)
+        private Task<LanguageServiceValueSourceResponse> GetValueSourceAsync(LanguageServiceValueSourceRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(GetValueSource(request));
+            return Task.FromResult(GetValueSource(request));
         }
 
-        private System.Threading.Tasks.Task<LanguageServiceDocumentTransformResponse> PreviewDocumentTransformAsync(LanguageServiceDocumentTransformRequest request)
+        private Task<LanguageServiceDocumentTransformResponse> PreviewDocumentTransformAsync(LanguageServiceDocumentTransformRequest request)
         {
-            return System.Threading.Tasks.Task.FromResult(PreviewDocumentTransform(request));
+            return Task.FromResult(PreviewDocumentTransform(request));
         }
 
-        public async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleAsync(LanguageServiceEnvelope request)
+        public async Task<LanguageServiceEnvelope> HandleAsync(LanguageServiceEnvelope request, CancellationToken cancellationToken)
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var command = request != null ? request.Command : string.Empty;
                 if (string.Equals(command, LanguageServiceCommands.Initialize, StringComparison.OrdinalIgnoreCase))
                 {
@@ -195,7 +254,23 @@ namespace Cortex.Roslyn.Worker
             }
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleInitializeAsync(LanguageServiceEnvelope request)
+        private LanguageServiceEnvelope HandleCancel(LanguageServiceEnvelope request)
+        {
+            var payload = DeserializePayload<LanguageServiceCancelRequest>(request);
+            var targetRequestId = payload != null ? payload.TargetRequestId ?? string.Empty : string.Empty;
+            var cancelled = TryCancelRequest(targetRequestId);
+            return BuildSuccessEnvelope(request, new LanguageServiceCancelResponse
+            {
+                Success = cancelled,
+                StatusMessage = cancelled
+                    ? "Cancellation requested."
+                    : "The target request was not active.",
+                TargetRequestId = targetRequestId,
+                Cancelled = cancelled
+            });
+        }
+
+        private async Task<LanguageServiceEnvelope> HandleInitializeAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceInitializeRequest>(request);
             _workspaceRootPath = payload.WorkspaceRootPath ?? string.Empty;
@@ -241,79 +316,79 @@ namespace Cortex.Roslyn.Worker
             });
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleAnalyzeDocumentAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleAnalyzeDocumentAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceDocumentRequest>(request);
             return BuildSuccessEnvelope(request, await AnalyzeDocumentAsync(payload));
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleHoverAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleHoverAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceHoverRequest>(request);
             return BuildSuccessEnvelope(request, await GetHoverAsync(payload));
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleGoToDefinitionAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleGoToDefinitionAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceDefinitionRequest>(request);
             return BuildSuccessEnvelope(request, await GoToDefinitionAsync(payload));
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleCompletionAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleCompletionAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceCompletionRequest>(request);
             return BuildSuccessEnvelope(request, await GetCompletionAsync(payload));
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleSignatureHelpAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleSignatureHelpAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceSignatureHelpRequest>(request);
             return BuildSuccessEnvelope(request, await GetSignatureHelpAsync(payload));
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleSymbolContextAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleSymbolContextAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceSymbolContextRequest>(request);
             return BuildSuccessEnvelope(request, await GetSymbolContextAsync(payload));
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleRenamePreviewAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleRenamePreviewAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceRenameRequest>(request);
             return BuildSuccessEnvelope(request, await PreviewRenameAsync(payload));
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleReferencesAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleReferencesAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceReferencesRequest>(request);
             return BuildSuccessEnvelope(request, await FindReferencesAsync(payload));
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleGoToBaseAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleGoToBaseAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceBaseSymbolRequest>(request);
             return BuildSuccessEnvelope(request, await GetBaseSymbolsAsync(payload));
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleGoToImplementationAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleGoToImplementationAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceImplementationRequest>(request);
             return BuildSuccessEnvelope(request, await GetImplementationsAsync(payload));
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleCallHierarchyAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleCallHierarchyAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceCallHierarchyRequest>(request);
             return BuildSuccessEnvelope(request, await GetCallHierarchyAsync(payload));
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleValueSourceAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleValueSourceAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceValueSourceRequest>(request);
             return BuildSuccessEnvelope(request, await GetValueSourceAsync(payload));
         }
 
-        private async System.Threading.Tasks.Task<LanguageServiceEnvelope> HandleDocumentTransformPreviewAsync(LanguageServiceEnvelope request)
+        private async Task<LanguageServiceEnvelope> HandleDocumentTransformPreviewAsync(LanguageServiceEnvelope request)
         {
             var payload = DeserializePayload<LanguageServiceDocumentTransformRequest>(request);
             return BuildSuccessEnvelope(request, await PreviewDocumentTransformAsync(payload));
@@ -351,6 +426,82 @@ namespace Cortex.Roslyn.Worker
                 PayloadJson = string.Empty,
                 ErrorMessage = message ?? "Roslyn worker failed."
             };
+        }
+
+        private void RegisterActiveRequest(string requestId, CancellationTokenSource cancellationSource)
+        {
+            if (string.IsNullOrEmpty(requestId) || cancellationSource == null)
+            {
+                return;
+            }
+
+            lock (_requestSync)
+            {
+                _activeRequests[requestId] = cancellationSource;
+            }
+        }
+
+        private void UnregisterActiveRequest(string requestId, CancellationTokenSource cancellationSource)
+        {
+            if (!string.IsNullOrEmpty(requestId))
+            {
+                lock (_requestSync)
+                {
+                    _activeRequests.Remove(requestId);
+                }
+            }
+
+            if (cancellationSource != null)
+            {
+                cancellationSource.Dispose();
+            }
+        }
+
+        private bool TryCancelRequest(string requestId)
+        {
+            if (string.IsNullOrEmpty(requestId))
+            {
+                return false;
+            }
+
+            lock (_requestSync)
+            {
+                CancellationTokenSource cancellationSource;
+                if (!_activeRequests.TryGetValue(requestId, out cancellationSource) || cancellationSource == null)
+                {
+                    return false;
+                }
+
+                cancellationSource.Cancel();
+                return true;
+            }
+        }
+
+        private void CancelAllActiveRequests()
+        {
+            lock (_requestSync)
+            {
+                foreach (var pair in _activeRequests)
+                {
+                    if (pair.Value != null)
+                    {
+                        pair.Value.Cancel();
+                    }
+                }
+            }
+        }
+
+        private static CancellationToken CurrentCancellationToken
+        {
+            get { return _ambientCancellationToken.Value; }
+        }
+
+        private static void ThrowIfCancellationRequested()
+        {
+            if (CurrentCancellationToken.CanBeCanceled)
+            {
+                CurrentCancellationToken.ThrowIfCancellationRequested();
+            }
         }
 
         private static string[] BuildCapabilities()

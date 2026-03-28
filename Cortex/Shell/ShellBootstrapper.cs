@@ -17,6 +17,9 @@ namespace Cortex.Shell
         private readonly CortexShellModuleContributionRegistry _moduleContributionRegistry;
         private readonly CortexShellModuleServices _moduleServices;
         private readonly CortexShellBuiltInModuleRegistrar _moduleRegistrar;
+        private readonly ILanguageRuntimeControl _languageRuntimeControl;
+        private readonly ILanguageRuntimeQuery _languageRuntimeQuery;
+        private readonly ILanguageEditorOperations _languageEditorOperations;
 
         private ICortexSettingsStore _settingsStore;
         private IWorkbenchPersistenceService _workbenchPersistenceService;
@@ -25,18 +28,25 @@ namespace Cortex.Shell
         private ICortexHostEnvironment _hostEnvironment;
         private ICortexShellHostUi _shellHostUi;
         private IPathInteractionService _pathInteractionService;
+        private string _preferredLanguageProviderId;
         private ExternalWorkbenchPluginLoader _externalPluginLoader;
 
         public ShellBootstrapper(
             CortexShellState state,
             CortexShellModuleContributionRegistry moduleContributionRegistry,
             CortexShellModuleServices moduleServices,
-            CortexShellBuiltInModuleRegistrar moduleRegistrar)
+            CortexShellBuiltInModuleRegistrar moduleRegistrar,
+            ILanguageRuntimeControl languageRuntimeControl,
+            ILanguageRuntimeQuery languageRuntimeQuery,
+            ILanguageEditorOperations languageEditorOperations)
         {
             _state = state;
             _moduleContributionRegistry = moduleContributionRegistry;
             _moduleServices = moduleServices;
             _moduleRegistrar = moduleRegistrar;
+            _languageRuntimeControl = languageRuntimeControl;
+            _languageRuntimeQuery = languageRuntimeQuery;
+            _languageEditorOperations = languageEditorOperations;
         }
 
         public ICortexSettingsStore SettingsStore => _settingsStore;
@@ -56,6 +66,7 @@ namespace Cortex.Shell
             _hostEnvironment = resolvedHostServices.Environment ?? NullCortexHostServices.Instance.Environment;
             _shellHostUi = resolvedHostServices.ShellHostUi ?? NullCortexHostServices.Instance.ShellHostUi;
             _pathInteractionService = resolvedHostServices.PathInteractionService;
+            _preferredLanguageProviderId = resolvedHostServices.PreferredLanguageProviderId ?? string.Empty;
         }
 
         public void InitializeSettings(out Rect windowRect, out Rect logWindowRect)
@@ -135,11 +146,15 @@ namespace Cortex.Shell
         {
             var hostEnvironment = _hostEnvironment ?? NullCortexHostServices.Instance.Environment;
             var platformModule = _platformModule ?? NullCortexPlatformModule.Instance;
+            var languageRuntimeControl = _languageRuntimeControl ?? new NullLanguageRuntimeService();
+            var languageRuntimeQuery = _languageRuntimeQuery ?? (languageRuntimeControl as ILanguageRuntimeQuery) ?? new NullLanguageRuntimeService();
+            var languageEditorOperations = _languageEditorOperations ?? (languageRuntimeControl as ILanguageEditorOperations) ?? new NullLanguageRuntimeService();
+            var resolvedLanguageProviderId = ResolveLanguageProviderId(settings);
 
             MMLog.WriteInfo("[Cortex] Initializing runtime. WorkspaceRoot=" +
                 (settings != null ? settings.WorkspaceRootPath ?? string.Empty : string.Empty) +
                 ", ManagedRoot=" + (settings != null ? settings.ManagedAssemblyRootPath ?? string.Empty : string.Empty) +
-                ", LanguageServiceEnabled=" + (settings != null && settings.EnableRoslynLanguageService) + ".");
+                ", LanguageProvider=" + resolvedLanguageProviderId + ".");
 
             var projectCatalogPath = string.IsNullOrEmpty(settings.ProjectCatalogPath)
                 ? hostEnvironment.ProjectCatalogPath
@@ -208,7 +223,10 @@ namespace Cortex.Shell
                 HarmonyPatchInsertionService = harmonyPatchInsertionService,
                 HarmonyPatchGenerationService = harmonyPatchGenerationService,
                 GeneratedTemplateNavigationService = generatedTemplateNavigationService,
-                EditorContextService = editorContextService
+                EditorContextService = editorContextService,
+                LanguageRuntimeControl = languageRuntimeControl,
+                LanguageRuntimeQuery = languageRuntimeQuery,
+                LanguageEditorOperations = languageEditorOperations
             };
         }
 
@@ -271,6 +289,28 @@ namespace Cortex.Shell
 
             return effective;
         }
+
+        public string ResolveLanguageProviderId(CortexSettings settings)
+        {
+            if (settings == null)
+            {
+                return LanguageRuntimeConstants.NoneProviderId;
+            }
+
+            if (!string.IsNullOrEmpty(settings.LanguageProviderId))
+            {
+                return settings.LanguageProviderId;
+            }
+
+            if (!settings.EnableRoslynLanguageService)
+            {
+                return LanguageRuntimeConstants.NoneProviderId;
+            }
+
+            return !string.IsNullOrEmpty(_preferredLanguageProviderId)
+                ? _preferredLanguageProviderId
+                : LanguageRuntimeConstants.NoneProviderId;
+        }
     }
 
     internal sealed class ShellServiceMap
@@ -304,5 +344,8 @@ namespace Cortex.Shell
         public HarmonyPatchGenerationService HarmonyPatchGenerationService;
         public GeneratedTemplateNavigationService GeneratedTemplateNavigationService;
         public IEditorContextService EditorContextService;
+        public ILanguageRuntimeControl LanguageRuntimeControl;
+        public ILanguageRuntimeQuery LanguageRuntimeQuery;
+        public ILanguageEditorOperations LanguageEditorOperations;
     }
 }

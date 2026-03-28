@@ -36,6 +36,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Abstractions\LanguageRuntimeInterfaces.cs" />
     <Compile Include="Abstractions\EditorInterfaces.cs" />
     <Compile Include="Abstractions\HarmonyInterfaces.cs" />
     <Compile Include="Abstractions\Interfaces.cs" />
@@ -44,6 +45,7 @@
     <Compile Include="Diagnostics\CortexDiagnostics.cs" />
     <Compile Include="Diagnostics\CortexLog.cs" />
     <Compile Include="Models\CommandModels.cs" />
+    <Compile Include="Models\LanguageRuntimeModels.cs" />
     <Compile Include="Models\CompletionAugmentationModels.cs" />
     <Compile Include="Models\CompletionAugmentationProviderSupport.cs" />
     <Compile Include="Models\ContributionModels.cs" />
