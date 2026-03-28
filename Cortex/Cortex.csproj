@@ -86,6 +86,7 @@
     <Compile Include="Modules\Editor\EditorCommandContributions.cs" />
     <Compile Include="Modules\Editor\EditorInteractionLog.cs" />
     <Compile Include="Modules\Editor\EditorMethodInspectorOverlayController.cs" />
+    <Compile Include="Modules\Editor\EditorMethodInspectorPanelDocumentAdapter.cs" />
     <Compile Include="Modules\Editor\EditorMethodInspectorSurface.cs" />
     <Compile Include="Modules\Editor\EditorModule.cs" />
     <Compile Include="Modules\Editor\EditorSemanticPopupSurface.cs" />

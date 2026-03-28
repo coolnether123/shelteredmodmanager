@@ -2,6 +2,8 @@ using System.Linq;
 using Cortex;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
+using Cortex.Modules.Editor;
+using Cortex.Presentation.Models;
 using Cortex.Rendering.Models;
 using Cortex.Services;
 using Cortex.Tests.Testing;
@@ -59,7 +61,7 @@ namespace Cortex.Tests.Editor
         }
 
         [Fact]
-        public void BuildDocument_NonHarmonyMethod_OmitsHarmonySection_AndShowsRelationships()
+        public void BuildViewModel_NonHarmonyMethod_OmitsHarmonySection_AndShowsRelationships()
         {
             var service = new EditorMethodInspectorPresentationService(null);
             var inspector = new CortexMethodInspectorState
@@ -115,7 +117,7 @@ namespace Cortex.Tests.Editor
                 OutgoingCallCount = 1
             };
 
-            var document = service.BuildDocument(
+            var document = service.BuildViewModel(
                 null,
                 session,
                 inspector,
@@ -134,14 +136,14 @@ namespace Cortex.Tests.Editor
             Assert.DoesNotContain(document.Sections, section => section.Title == "Harmony Context");
 
             var relationshipsSection = document.Sections.Single(section => section.Title == "Relationships");
-            Assert.Contains(relationshipsSection.Elements.OfType<PanelMetadataElement>(), element => element.Label == "Depends On" && element.Value == "1");
-            Assert.Contains(relationshipsSection.Elements.OfType<PanelMetadataElement>(), element => element.Label == "Used By" && element.Value == "1");
-            Assert.Contains(relationshipsSection.Elements.OfType<PanelCardElement>(), element => element.Title == "DependencyA()");
-            Assert.Contains(relationshipsSection.Elements.OfType<PanelCardElement>(), element => element.Title == "CallerA()");
+            Assert.Contains(relationshipsSection.Elements.OfType<MethodInspectorMetadataViewModel>(), element => element.Label == "Depends On" && element.Value == "1");
+            Assert.Contains(relationshipsSection.Elements.OfType<MethodInspectorMetadataViewModel>(), element => element.Label == "Used By" && element.Value == "1");
+            Assert.Contains(relationshipsSection.Elements.OfType<MethodInspectorCardViewModel>(), element => element.Title == "DependencyA()");
+            Assert.Contains(relationshipsSection.Elements.OfType<MethodInspectorCardViewModel>(), element => element.Title == "CallerA()");
         }
 
         [Fact]
-        public void BuildDocument_DirectHarmonyPatch_IncludesHarmonySection()
+        public void BuildViewModel_DirectHarmonyPatch_IncludesHarmonySection()
         {
             var service = new EditorMethodInspectorPresentationService(null);
             var inspector = new CortexMethodInspectorState
@@ -163,7 +165,7 @@ namespace Cortex.Tests.Editor
                 QualifiedSymbolDisplay = "Sample.Namespace.PatchType.Prefix()"
             };
 
-            var document = service.BuildDocument(
+            var document = service.BuildViewModel(
                 null,
                 new DocumentSession { FilePath = target.DocumentPath, Text = "class PatchType { void Prefix() { } }" },
                 inspector,
@@ -191,11 +193,11 @@ namespace Cortex.Tests.Editor
                 string.Empty);
 
             var harmonySection = document.Sections.Single(section => section.Title == "Harmony Context");
-            Assert.Contains(harmonySection.Elements.OfType<PanelMetadataElement>(), element => element.Label == "Patch Kind" && element.Value == "Prefix");
+            Assert.Contains(harmonySection.Elements.OfType<MethodInspectorMetadataViewModel>(), element => element.Label == "Patch Kind" && element.Value == "Prefix");
         }
 
         [Fact]
-        public void BuildDocument_IndirectHarmonyContext_ShowsHarmonyOnlyWhenPatchedCallersExist()
+        public void BuildViewModel_IndirectHarmonyContext_ShowsHarmonyOnlyWhenPatchedCallersExist()
         {
             var service = new EditorMethodInspectorPresentationService(null);
             var inspector = new CortexMethodInspectorState
@@ -216,7 +218,7 @@ namespace Cortex.Tests.Editor
                 QualifiedSymbolDisplay = "Sample.Namespace.WorkerType.Worker()"
             };
             var relationships = new EditorMethodRelationshipsContext();
-            var noIndirectDocument = service.BuildDocument(
+            var noIndirectDocument = service.BuildViewModel(
                 null,
                 new DocumentSession { FilePath = target.DocumentPath, Text = "class WorkerType { void Worker() { } }" },
                 inspector,
@@ -231,7 +233,7 @@ namespace Cortex.Tests.Editor
                 false,
                 false,
                 string.Empty);
-            var indirectDocument = service.BuildDocument(
+            var indirectDocument = service.BuildViewModel(
                 null,
                 new DocumentSession { FilePath = target.DocumentPath, Text = "class WorkerType { void Worker() { } }" },
                 inspector,
@@ -254,6 +256,42 @@ namespace Cortex.Tests.Editor
 
             Assert.DoesNotContain(noIndirectDocument.Sections, section => section.Title == "Harmony Context");
             Assert.Contains(indirectDocument.Sections, section => section.Title == "Harmony Context");
+        }
+
+        [Fact]
+        public void PanelDocumentAdapter_MapsPresentationModel_ToRenderDocument()
+        {
+            var adapter = new EditorMethodInspectorPanelDocumentAdapter();
+            var viewModel = new MethodInspectorViewModel
+            {
+                Title = "Method Info: Example",
+                Subtitle = "Sample.Namespace | SampleType",
+                Sections = new[]
+                {
+                    new MethodInspectorSectionViewModel
+                    {
+                        Id = "relationships",
+                        Title = "Relationships",
+                        Expanded = true,
+                        Elements = new MethodInspectorElementViewModel[]
+                        {
+                            new MethodInspectorMetadataViewModel
+                            {
+                                Label = "Depends On",
+                                Value = "2"
+                            }
+                        }
+                    }
+                }
+            };
+
+            var document = adapter.Build(viewModel);
+
+            Assert.Equal("Method Info: Example", document.Title);
+            Assert.Equal("Sample.Namespace | SampleType", document.Subtitle);
+            Assert.Single(document.Sections);
+            Assert.Equal("relationships", document.Sections[0].Id);
+            Assert.Contains(document.Sections[0].Elements.OfType<PanelMetadataElement>(), element => element.Label == "Depends On" && element.Value == "2");
         }
     }
 }

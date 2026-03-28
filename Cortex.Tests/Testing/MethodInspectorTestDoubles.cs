@@ -50,6 +50,9 @@ namespace Cortex.Tests.Testing
     internal sealed class TestLanguageProviderSession : ILanguageProviderSession
     {
         private readonly Queue<LanguageRuntimeMessage> _messages = new Queue<LanguageRuntimeMessage>();
+        public int CancelRequestCallCount;
+        public string LastCanceledRequestId = string.Empty;
+        public string NextCallHierarchyRequestId = string.Empty;
 
         public LanguageProviderDescriptor Descriptor { get { return new LanguageProviderDescriptor(); } }
         public string ConfigurationFingerprint { get { return string.Empty; } }
@@ -63,7 +66,12 @@ namespace Cortex.Tests.Testing
 
         public void Start(LanguageServiceInitializeRequest request) { }
         public void Advance() { }
-        public bool TryCancelRequest(string requestId) { return false; }
+        public bool TryCancelRequest(string requestId)
+        {
+            CancelRequestCallCount++;
+            LastCanceledRequestId = requestId ?? string.Empty;
+            return true;
+        }
         public bool TryDequeueMessage(out LanguageRuntimeMessage message)
         {
             if (_messages.Count > 0)
@@ -87,7 +95,7 @@ namespace Cortex.Tests.Testing
         public string QueueReferences(LanguageServiceReferencesRequest request) { return string.Empty; }
         public string QueueGoToBase(LanguageServiceBaseSymbolRequest request) { return string.Empty; }
         public string QueueGoToImplementation(LanguageServiceImplementationRequest request) { return string.Empty; }
-        public string QueueCallHierarchy(LanguageServiceCallHierarchyRequest request) { return string.Empty; }
+        public string QueueCallHierarchy(LanguageServiceCallHierarchyRequest request) { return NextCallHierarchyRequestId; }
         public string QueueValueSource(LanguageServiceValueSourceRequest request) { return string.Empty; }
         public string QueueDocumentTransformPreview(LanguageServiceDocumentTransformRequest request) { return string.Empty; }
         public void Shutdown() { }

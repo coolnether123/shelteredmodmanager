@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using Cortex.Rendering.Models;
+using Cortex.Presentation.Models;
 
 namespace Cortex.Services
 {
@@ -12,7 +12,7 @@ namespace Cortex.Services
         public CortexMethodInspectorState Inspector;
         public EditorCommandInvocation Invocation;
         public EditorCommandTarget Target;
-        public PanelDocument Document;
+        public MethodInspectorViewModel ViewModel;
     }
 
     internal sealed class EditorMethodInspectorPresentationService
@@ -118,7 +118,7 @@ namespace Cortex.Services
                 Inspector = inspector,
                 Invocation = invocation,
                 Target = target,
-                Document = BuildDocument(
+                ViewModel = BuildViewModel(
                     state,
                     session,
                     inspector,
@@ -212,7 +212,7 @@ namespace Cortex.Services
             return null;
         }
 
-        internal PanelDocument BuildDocument(
+        internal MethodInspectorViewModel BuildViewModel(
             CortexShellState state,
             DocumentSession session,
             CortexMethodInspectorState inspector,
@@ -228,11 +228,11 @@ namespace Cortex.Services
             bool hasPreparedPatch,
             string patchAvailabilityReason)
         {
-            var document = new PanelDocument();
-            document.Title = "Method Info: " + (inspector != null ? inspector.Title ?? string.Empty : string.Empty);
-            document.Subtitle = BuildHeaderSubtitle(target);
+            var viewModel = new MethodInspectorViewModel();
+            viewModel.Title = "Method Info: " + (inspector != null ? inspector.Title ?? string.Empty : string.Empty);
+            viewModel.Subtitle = BuildHeaderSubtitle(target);
 
-            var sections = new List<PanelSection>();
+            var sections = new List<MethodInspectorSectionViewModel>();
             sections.Add(BuildStructureSection(inspector, target));
             sections.Add(BuildRelationshipsSection(inspector, relationshipsContext));
             if (showHarmony)
@@ -250,18 +250,18 @@ namespace Cortex.Services
                     patchAvailabilityReason));
             }
             sections.Add(BuildSourceSection(inspector, session, target));
-            document.Sections = sections.ToArray();
-            return document;
+            viewModel.Sections = sections.ToArray();
+            return viewModel;
         }
 
-        private static PanelSection BuildStructureSection(CortexMethodInspectorState inspector, EditorCommandTarget target)
+        private static MethodInspectorSectionViewModel BuildStructureSection(CortexMethodInspectorState inspector, EditorCommandTarget target)
         {
-            var section = new PanelSection();
+            var section = new MethodInspectorSectionViewModel();
             section.Id = "structure";
             section.Title = "Structure";
             section.Expanded = inspector != null ? inspector.OverviewExpanded : true;
 
-            var elements = new List<PanelElement>();
+            var elements = new List<MethodInspectorElementViewModel>();
             if (target == null)
             {
                 elements.Add(CreateTextElement(string.Empty, "No method target is selected.", false));
@@ -280,7 +280,7 @@ namespace Cortex.Services
                 var signature = BuildSignature(target);
                 if (!string.IsNullOrEmpty(signature))
                 {
-                    elements.Add(new PanelSpacerElement { Height = 2f });
+                    elements.Add(new MethodInspectorSpacerViewModel { Height = 2f });
                     elements.Add(CreateTextElement("Signature", signature, true));
                 }
 
@@ -294,14 +294,14 @@ namespace Cortex.Services
             return section;
         }
 
-        private static PanelSection BuildRelationshipsSection(CortexMethodInspectorState inspector, EditorMethodRelationshipsContext relationshipsContext)
+        private static MethodInspectorSectionViewModel BuildRelationshipsSection(CortexMethodInspectorState inspector, EditorMethodRelationshipsContext relationshipsContext)
         {
-            var section = new PanelSection();
+            var section = new MethodInspectorSectionViewModel();
             section.Id = "relationships";
             section.Title = "Relationships";
             section.Expanded = inspector != null ? inspector.RelationshipsExpanded : false;
 
-            var elements = new List<PanelElement>();
+            var elements = new List<MethodInspectorElementViewModel>();
             if (relationshipsContext == null)
             {
                 elements.Add(CreateTextElement(string.Empty, "Method relationships are not available.", false));
@@ -319,7 +319,7 @@ namespace Cortex.Services
                 elements.Add(CreateMetadataElement("Depends On", relationshipsContext.OutgoingCallCount.ToString()));
                 elements.Add(CreateMetadataElement("Used By", relationshipsContext.IncomingCallCount.ToString()));
                 AppendRelationshipGroup(elements, "Depends On", relationshipsContext.OutgoingCalls, "This method does not call any resolved symbols.");
-                elements.Add(new PanelSpacerElement { Height = 4f });
+                elements.Add(new MethodInspectorSpacerViewModel { Height = 4f });
                 AppendRelationshipGroup(elements, "Used By", relationshipsContext.IncomingCalls, "No incoming callers were found for this method.");
             }
 
@@ -328,7 +328,7 @@ namespace Cortex.Services
         }
 
         private static void AppendRelationshipGroup(
-            List<PanelElement> elements,
+            List<MethodInspectorElementViewModel> elements,
             string title,
             LanguageServiceCallHierarchyItem[] items,
             string emptyMessage)
@@ -351,7 +351,7 @@ namespace Cortex.Services
                 }
 
                 rendered++;
-                var rows = new List<PanelMetadataElement>();
+                var rows = new List<MethodInspectorMetadataViewModel>();
                 rows.Add(CreateMetadataElement("Type", item.ContainingTypeName));
                 rows.Add(CreateMetadataElement("Relationship", (item.Relationship ?? "Call") + " (" + item.CallCount + ")"));
                 if (!string.IsNullOrEmpty(item.ContainingAssemblyName))
@@ -363,7 +363,7 @@ namespace Cortex.Services
                     item.SymbolDisplay ?? "Unknown",
                     rows.ToArray(),
                     string.Empty,
-                    new PanelAction[0]));
+                    new MethodInspectorActionViewModel[0]));
             }
 
             if (safeItems.Length > rendered)
@@ -372,14 +372,14 @@ namespace Cortex.Services
             }
         }
 
-        private static PanelSection BuildSourceSection(CortexMethodInspectorState inspector, DocumentSession session, EditorCommandTarget target)
+        private static MethodInspectorSectionViewModel BuildSourceSection(CortexMethodInspectorState inspector, DocumentSession session, EditorCommandTarget target)
         {
-            var section = new PanelSection();
+            var section = new MethodInspectorSectionViewModel();
             section.Id = "source";
             section.Title = "Source Context";
             section.Expanded = inspector != null ? inspector.NavigationExpanded : true;
 
-            var elements = new List<PanelElement>();
+            var elements = new List<MethodInspectorElementViewModel>();
             if (session == null || target == null || string.IsNullOrEmpty(session.Text))
             {
                 elements.Add(CreateTextElement(string.Empty, "Source context is not available for the selected method.", false));
@@ -403,7 +403,7 @@ namespace Cortex.Services
             return section;
         }
 
-        private PanelSection BuildHarmonySection(
+        private MethodInspectorSectionViewModel BuildHarmonySection(
             CortexMethodInspectorState inspector,
             CortexShellState state,
             EditorSourceHarmonyContext sourceHarmonyContext,
@@ -415,16 +415,16 @@ namespace Cortex.Services
             bool hasPreparedPatch,
             string patchAvailabilityReason)
         {
-            var section = new PanelSection();
+            var section = new MethodInspectorSectionViewModel();
             section.Id = "harmony";
             section.Title = "Harmony Context";
             section.Expanded = inspector != null ? inspector.HarmonyExpanded : true;
 
-            var elements = new List<PanelElement>();
+            var elements = new List<MethodInspectorElementViewModel>();
             var hasSourceHarmonyContext = AppendSourceHarmonyElements(elements, sourceHarmonyContext);
             if (hasSourceHarmonyContext)
             {
-                elements.Add(new PanelSpacerElement { Height = 4f });
+                elements.Add(new MethodInspectorSpacerViewModel { Height = 4f });
             }
 
             if (harmonySummary != null)
@@ -455,7 +455,7 @@ namespace Cortex.Services
                         }
 
                         rendered++;
-                        var rows = new List<PanelMetadataElement>();
+                        var rows = new List<MethodInspectorMetadataViewModel>();
                         rows.Add(CreateMetadataElement("Owner", !string.IsNullOrEmpty(entry.OwnerDisplayName) ? entry.OwnerDisplayName : entry.OwnerId));
                         rows.Add(CreateMetadataElement("Priority", entry.Priority.ToString()));
                         rows.Add(CreateMetadataElement("Patch Method", BuildPatchMethodSignature(entry), (entry.Before == null || entry.Before.Length == 0) && (entry.After == null || entry.After.Length == 0)));
@@ -468,7 +468,7 @@ namespace Cortex.Services
                             harmonyDisplayService.GetPatchKindLabel(entry.PatchKind) + ": " + BuildPatchTitle(entry),
                             rows.ToArray(),
                             string.Empty,
-                            new PanelAction[0]));
+                            new MethodInspectorActionViewModel[0]));
                     }
 
                     if (entries.Length > rendered)
@@ -484,14 +484,14 @@ namespace Cortex.Services
 
             if (indirectHarmonyContext != null && indirectHarmonyContext.PatchedCallerCount > 0)
             {
-                elements.Add(new PanelSpacerElement { Height = 4f });
+                elements.Add(new MethodInspectorSpacerViewModel { Height = 4f });
                 elements.Add(CreateTextElement("Indirect Harmony", indirectHarmonyContext.StatusMessage, false));
                 AppendIndirectHarmonyElements(elements, indirectHarmonyContext, harmonyDisplayService);
             }
 
             if (canCreatePatch || hasPreparedPatch)
             {
-                elements.Add(new PanelSpacerElement { Height = 4f });
+                elements.Add(new MethodInspectorSpacerViewModel { Height = 4f });
                 elements.Add(CreateTextElement("Patch Creation", BuildPatchCreationStatus(state, canCreatePatch, hasPreparedPatch, patchAvailabilityReason), false));
                 AppendPatchCreationElements(elements, state, canCreatePatch, hasPreparedPatch);
             }
@@ -500,7 +500,7 @@ namespace Cortex.Services
             return section;
         }
 
-        private static bool AppendSourceHarmonyElements(List<PanelElement> elements, EditorSourceHarmonyContext sourceHarmonyContext)
+        private static bool AppendSourceHarmonyElements(List<MethodInspectorElementViewModel> elements, EditorSourceHarmonyContext sourceHarmonyContext)
         {
             if (elements == null || sourceHarmonyContext == null || !sourceHarmonyContext.IsPatchMethod)
             {
@@ -519,7 +519,7 @@ namespace Cortex.Services
             return true;
         }
 
-        private void AppendIndirectHarmonyElements(List<PanelElement> elements, EditorIndirectHarmonyContext indirectContext, HarmonyPatchDisplayService harmonyDisplayService)
+        private void AppendIndirectHarmonyElements(List<MethodInspectorElementViewModel> elements, EditorIndirectHarmonyContext indirectContext, HarmonyPatchDisplayService harmonyDisplayService)
         {
             if (elements == null || indirectContext == null || indirectContext.IsLoading || indirectContext.PatchedCallerCount <= 0)
             {
@@ -542,12 +542,12 @@ namespace Cortex.Services
                     continue;
                 }
 
-                var rows = new List<PanelMetadataElement>();
+                var rows = new List<MethodInspectorMetadataViewModel>();
                 rows.Add(CreateMetadataElement("Type", caller.Caller.ContainingTypeName));
                 rows.Add(CreateMetadataElement("Relationship", (caller.Caller.Relationship ?? "Incoming Call") + " (" + caller.Caller.CallCount + ")"));
                 rows.Add(CreateMetadataElement("Patch Counts", harmonyDisplayService.BuildCountBreakdown(caller.Summary.Counts)));
                 rows.Add(CreateMetadataElement("Owners", harmonyDisplayService.BuildOwnerSummary(caller.Summary), false));
-                elements.Add(CreateCardElement(caller.Caller.SymbolDisplay ?? "Patched Caller", rows.ToArray(), string.Empty, new PanelAction[0]));
+                elements.Add(CreateCardElement(caller.Caller.SymbolDisplay ?? "Patched Caller", rows.ToArray(), string.Empty, new MethodInspectorActionViewModel[0]));
             }
         }
 
@@ -568,7 +568,7 @@ namespace Cortex.Services
             return "Choose Prefix or Postfix, then pick where the generated patch should go.";
         }
 
-        private static void AppendPatchCreationElements(List<PanelElement> elements, CortexShellState state, bool canCreatePatch, bool hasPreparedPatch)
+        private static void AppendPatchCreationElements(List<MethodInspectorElementViewModel> elements, CortexShellState state, bool canCreatePatch, bool hasPreparedPatch)
         {
             if (elements == null)
             {
@@ -576,7 +576,7 @@ namespace Cortex.Services
             }
 
             elements.Add(CreateActionElement(
-                new PanelAction
+                new MethodInspectorActionViewModel
                 {
                     Id = "patch:create:prefix",
                     Label = "Create Prefix Patch",
@@ -584,7 +584,7 @@ namespace Cortex.Services
                 },
                 "Generate a Prefix scaffold for the selected runtime method."));
             elements.Add(CreateActionElement(
-                new PanelAction
+                new MethodInspectorActionViewModel
                 {
                     Id = "patch:create:postfix",
                     Label = "Create Postfix Patch",
@@ -614,11 +614,11 @@ namespace Cortex.Services
 
                 elements.Add(CreateCardElement(
                     insertionTarget.DisplayName ?? insertionTarget.FilePath ?? string.Empty,
-                    new PanelMetadataElement[0],
+                    new MethodInspectorMetadataViewModel[0],
                     insertionTarget.Reason ?? string.Empty,
                     new[]
                     {
-                        new PanelAction
+                        new MethodInspectorActionViewModel
                         {
                             Id = "patch:open:" + i,
                             Label = "Open And Place Here",
@@ -628,14 +628,14 @@ namespace Cortex.Services
             }
         }
 
-        private static PanelMetadataElement CreateMetadataElement(string label, string value)
+        private static MethodInspectorMetadataViewModel CreateMetadataElement(string label, string value)
         {
             return CreateMetadataElement(label, value, true);
         }
 
-        private static PanelMetadataElement CreateMetadataElement(string label, string value, bool drawDivider)
+        private static MethodInspectorMetadataViewModel CreateMetadataElement(string label, string value, bool drawDivider)
         {
-            return new PanelMetadataElement
+            return new MethodInspectorMetadataViewModel
             {
                 Label = label ?? string.Empty,
                 Value = !string.IsNullOrEmpty(value) ? value : "Unknown",
@@ -643,9 +643,9 @@ namespace Cortex.Services
             };
         }
 
-        private static PanelTextElement CreateTextElement(string label, string value, bool monospace)
+        private static MethodInspectorTextViewModel CreateTextElement(string label, string value, bool monospace)
         {
-            return new PanelTextElement
+            return new MethodInspectorTextViewModel
             {
                 Label = label ?? string.Empty,
                 Value = value ?? string.Empty,
@@ -653,23 +653,23 @@ namespace Cortex.Services
             };
         }
 
-        private static PanelActionElement CreateActionElement(PanelAction action, string hint)
+        private static MethodInspectorActionElementViewModel CreateActionElement(MethodInspectorActionViewModel action, string hint)
         {
-            return new PanelActionElement
+            return new MethodInspectorActionElementViewModel
             {
-                Action = action ?? new PanelAction(),
+                Action = action ?? new MethodInspectorActionViewModel(),
                 Hint = hint ?? string.Empty
             };
         }
 
-        private static PanelCardElement CreateCardElement(string title, PanelMetadataElement[] rows, string body, PanelAction[] actions)
+        private static MethodInspectorCardViewModel CreateCardElement(string title, MethodInspectorMetadataViewModel[] rows, string body, MethodInspectorActionViewModel[] actions)
         {
-            return new PanelCardElement
+            return new MethodInspectorCardViewModel
             {
                 Title = title ?? string.Empty,
-                Rows = rows ?? new PanelMetadataElement[0],
+                Rows = rows ?? new MethodInspectorMetadataViewModel[0],
                 Body = body ?? string.Empty,
-                Actions = actions ?? new PanelAction[0]
+                Actions = actions ?? new MethodInspectorActionViewModel[0]
             };
         }
 
