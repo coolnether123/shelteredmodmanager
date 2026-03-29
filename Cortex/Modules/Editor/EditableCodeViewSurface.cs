@@ -31,7 +31,6 @@ namespace Cortex.Modules.Editor
         private readonly EditorSemanticPopupSurface _semanticPopupSurface;
         private readonly EditorCommandContextFactory _commandContextFactory = new EditorCommandContextFactory();
         private readonly IEditorContextService _contextService;
-        private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
         private readonly EditorOverlayInteractionService _overlayInteractionService = new EditorOverlayInteractionService();
         private readonly EditorMethodInspectorService _methodInspectorService;
@@ -149,6 +148,7 @@ namespace Cortex.Modules.Editor
             try
             {
                 var documentService = services != null ? services.DocumentService : null;
+                var navigationService = services != null ? services.NavigationService : null;
                 var commandRegistry = services != null ? services.CommandRegistry : null;
                 var contributionRegistry = services != null ? services.ContributionRegistry : null;
                 var state = services != null ? services.State : null;
@@ -313,6 +313,7 @@ namespace Cortex.Modules.Editor
                             scroll,
                             gutterWidth),
                         rect.size,
+                        navigationService,
                         commandRegistry,
                         contributionRegistry,
                         null,
@@ -1616,19 +1617,6 @@ namespace Cortex.Modules.Editor
 
                 // Ctrl+Double-click → Go to Definition (Visual Studio convention).
                 // Plain double-click → word selection only; no navigation.
-                if (string.Equals(selectionAction, "double-click", StringComparison.Ordinal) &&
-                    current != null && current.control)
-                {
-                    EditorCommandInvocation invocation;
-                    if (TryBuildCommandTarget(session, state, editingEnabled, hitTest.CharacterIndex, out invocation) &&
-                        invocation != null &&
-                        invocation.Target != null &&
-                        invocation.Target.CanGoToDefinition)
-                    {
-                        _symbolInteractionService.RequestDefinition(state, invocation.Target);
-                    }
-                }
-
                 current.Use();
                 return;
             }

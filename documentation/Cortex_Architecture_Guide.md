@@ -341,6 +341,13 @@ Definition behavior is intended to be:
 - source if source exists
 - decompiler fallback when the symbol lives in an assembly only
 
+In hooked projects, this is a hard precedence rule for editor navigation:
+- real workspace/project source must win over cache-backed decompiled output
+- decompiled cache documents are fallback only when no source-backed file can be resolved
+- if a navigation target points at a decompiler cache path for a symbol that also exists in the hooked project, Cortex should remap the open to the real source file
+
+This matters because decompiled output is reconstructed from metadata, not read from the user's `.cs` file. It can be close to source, but it is not source truth and may emit placeholders such as `/*Could not decode attribute arguments.*/` when attribute reconstruction fails.
+
 That is what enables navigating into things like:
 - ModAPI helpers
 - game assemblies

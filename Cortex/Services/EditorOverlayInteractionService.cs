@@ -41,13 +41,15 @@ namespace Cortex.Services
             state.PointerOnOverlaySurface = state.PointerOnMethodInspector || state.PointerOnHoverSurface;
             state.PointerRoute = state.PointerOnMethodInspector
                 ? "method-inspector"
-                : state.PointerOnContextMenu
+                : state.PointerOnHoverSurface
+                    ? "hover-surface"
+                    : state.PointerOnContextMenu
                     ? "context-menu"
                     : state.PointerWithinSurface
                         ? "editor-surface"
                         : "outside-surface";
             state.ScrollOwner = state.PointerOnOverlaySurface
-                ? "method-inspector"
+                ? (state.PointerOnMethodInspector ? "method-inspector" : "hover-surface")
                 : state.PointerOnContextMenu
                     ? "context-menu"
                     : "editor-surface";
@@ -67,7 +69,7 @@ namespace Cortex.Services
             }
 
             return pointerState != null &&
-                (pointerState.PointerOnMethodInspector || pointerState.PointerOnContextMenu);
+                (pointerState.PointerOnMethodInspector || pointerState.PointerOnContextMenu || pointerState.PointerOnHoverSurface);
         }
 
         public bool ShouldCloseMethodInspectorOnPointerDown(
@@ -79,6 +81,7 @@ namespace Cortex.Services
                 current.type == EventType.MouseDown &&
                 (pointerState == null || !pointerState.PointerOnMethodInspector) &&
                 (pointerState == null || !pointerState.PointerOnContextMenu) &&
+                (pointerState == null || !pointerState.PointerOnHoverSurface) &&
                 state != null &&
                 state.Editor != null &&
                 state.Editor.MethodInspector != null &&
@@ -115,7 +118,8 @@ namespace Cortex.Services
 
             var closesInspector = methodInspectorVisible &&
                 (pointerState == null || !pointerState.PointerOnMethodInspector) &&
-                (pointerState == null || !pointerState.PointerOnContextMenu);
+                (pointerState == null || !pointerState.PointerOnContextMenu) &&
+                (pointerState == null || !pointerState.PointerOnHoverSurface);
 
             MMLog.WriteInfo("[Cortex.Overlay] Pointer down. Surface='" +
                 (surfaceName ?? string.Empty) +

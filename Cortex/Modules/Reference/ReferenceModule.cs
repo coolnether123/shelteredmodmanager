@@ -187,7 +187,23 @@ namespace Cortex.Modules.Reference
                 {
                     if (navigationService != null)
                     {
-                        navigationService.OpenDecompilerResult(state, state.LastReferenceResult, "Opened decompiled cache file.", "Could not open decompiled cache file.");
+                        if (_selectedMember != null)
+                        {
+                            navigationService.OpenDecompilerMethodTarget(
+                                state,
+                                _selectedMember.AssemblyPath,
+                                _selectedMember.MetadataToken,
+                                string.Empty,
+                                _selectedMember.DeclaringTypeName,
+                                string.Empty,
+                                _ignoreCache,
+                                "Opened decompiled source.",
+                                "Could not open decompiled source.");
+                        }
+                        else
+                        {
+                            navigationService.OpenDecompilerResult(state, state.LastReferenceResult, "Opened decompiled cache file.", "Could not open decompiled cache file.");
+                        }
                     }
                 }
 
@@ -568,7 +584,22 @@ namespace Cortex.Modules.Reference
             }
 
             _selectedMember = member;
-            navigationService.RequestDecompilerSource(state, member.AssemblyPath, member.MetadataToken, DecompilerEntityKind.Method, _ignoreCache);
+            int highlightedLine;
+            var response = navigationService.RequestDecompilerMethodView(
+                state,
+                member.AssemblyPath,
+                member.MetadataToken,
+                string.Empty,
+                member.DeclaringTypeName,
+                string.Empty,
+                _ignoreCache,
+                out highlightedLine);
+            if (response == null)
+            {
+                state.StatusMessage = "Could not decompile " + member.DeclaringTypeName + "." + member.DisplayName;
+                return;
+            }
+
             state.StatusMessage = "Decompiled " + member.DeclaringTypeName + "." + member.DisplayName;
         }
 

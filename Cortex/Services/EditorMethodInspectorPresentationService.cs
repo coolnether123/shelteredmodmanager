@@ -62,7 +62,7 @@ namespace Cortex.Services
                 _inspectorService.EnsureRelationshipsRequest(state);
             }
 
-            var relationshipsContext = _relationshipsContextService.BuildContext(inspector);
+            var relationshipsContext = _relationshipsContextService.BuildContext(inspector, target);
             var sourceHarmonyContext = _harmonyContextService.BuildSourcePatchContext(
                 state,
                 target,
@@ -330,11 +330,11 @@ namespace Cortex.Services
         private static void AppendRelationshipGroup(
             List<MethodInspectorElementViewModel> elements,
             string title,
-            LanguageServiceCallHierarchyItem[] items,
+            EditorMethodRelationshipItem[] items,
             string emptyMessage)
         {
             elements.Add(CreateTextElement(title, string.Empty, false));
-            var safeItems = items ?? new LanguageServiceCallHierarchyItem[0];
+            var safeItems = items ?? new EditorMethodRelationshipItem[0];
             if (safeItems.Length == 0)
             {
                 elements.Add(CreateTextElement(string.Empty, emptyMessage, false));
@@ -352,7 +352,16 @@ namespace Cortex.Services
 
                 rendered++;
                 var rows = new List<MethodInspectorMetadataViewModel>();
-                rows.Add(CreateMetadataElement("Type", item.ContainingTypeName));
+                if (!string.IsNullOrEmpty(item.Detail))
+                {
+                    rows.Add(CreateMetadataElement("Context", item.Detail));
+                }
+
+                if (!string.IsNullOrEmpty(item.ContainingTypeName))
+                {
+                    rows.Add(CreateMetadataElement("Type", item.ContainingTypeName));
+                }
+
                 rows.Add(CreateMetadataElement("Relationship", (item.Relationship ?? "Call") + " (" + item.CallCount + ")"));
                 if (!string.IsNullOrEmpty(item.ContainingAssemblyName))
                 {
@@ -360,16 +369,43 @@ namespace Cortex.Services
                 }
 
                 elements.Add(CreateCardElement(
-                    item.SymbolDisplay ?? "Unknown",
+                    item.Title ?? "Unknown",
                     rows.ToArray(),
                     string.Empty,
-                    new MethodInspectorActionViewModel[0]));
+                    BuildRelationshipActions(item)));
             }
 
             if (safeItems.Length > rendered)
             {
                 elements.Add(CreateTextElement(string.Empty, "Additional relationship entries are available beyond this preview.", false));
             }
+        }
+
+        private static MethodInspectorActionViewModel[] BuildRelationshipActions(EditorMethodRelationshipItem item)
+        {
+            if (item == null ||
+                string.IsNullOrEmpty(item.SymbolKind) ||
+                (string.IsNullOrEmpty(item.MetadataName) && string.IsNullOrEmpty(item.DocumentationCommentId)) ||
+                string.IsNullOrEmpty(item.ContainingAssemblyName))
+            {
+                return new MethodInspectorActionViewModel[0];
+            }
+
+            return new[]
+            {
+                new MethodInspectorActionViewModel
+                {
+                    Id = EditorMethodInspectorNavigationActionCodec.Create(
+                        item.SymbolKind,
+                        item.MetadataName,
+                        item.ContainingTypeName,
+                        item.ContainingAssemblyName,
+                        item.DocumentationCommentId),
+                    Label = "Open",
+                    Hint = "Open this dependency or caller.",
+                    Enabled = true
+                }
+            };
         }
 
         private static MethodInspectorSectionViewModel BuildSourceSection(CortexMethodInspectorState inspector, DocumentSession session, EditorCommandTarget target)

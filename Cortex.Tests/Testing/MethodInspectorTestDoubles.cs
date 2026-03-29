@@ -126,6 +126,7 @@ namespace Cortex.Tests.Testing
             DocumentSession session,
             Rect anchorRect,
             Vector2 surfaceSize,
+            CortexNavigationService navigationService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             GUIStyle containerStyle,

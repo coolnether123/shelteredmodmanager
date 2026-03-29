@@ -118,7 +118,7 @@ namespace Cortex.Services
                 return context;
             }
 
-            var incomingCalls = relationshipsContext.IncomingCalls ?? new LanguageServiceCallHierarchyItem[0];
+            var incomingCalls = relationshipsContext.IncomingCallHierarchy ?? new LanguageServiceCallHierarchyItem[0];
             context.IncomingCallerCount = incomingCalls.Length;
             if (incomingCalls.Length == 0)
             {

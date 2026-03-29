@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Reflection;
 using Cortex;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
@@ -13,6 +14,29 @@ namespace Cortex.Tests.Editor
 {
     public sealed class EditorMethodInspectorPresentationServiceTests
     {
+        private interface IContractExample
+        {
+            void Execute(string input);
+        }
+
+        private sealed class ContractExample : IContractExample
+        {
+            public void Execute(string input)
+            {
+            }
+        }
+
+        private sealed class OverloadedExample
+        {
+            public void Execute(string input)
+            {
+            }
+
+            public void Execute(int input)
+            {
+            }
+        }
+
         [Fact]
         public void ShouldShowHarmony_ReturnsFalseForOrdinaryMethod()
         {
@@ -95,22 +119,28 @@ namespace Cortex.Tests.Editor
                 StatusMessage = "Semantic call hierarchy resolved.",
                 IncomingCalls = new[]
                 {
-                    new LanguageServiceCallHierarchyItem
+                    new EditorMethodRelationshipItem
                     {
-                        SymbolDisplay = "CallerA()",
+                        Title = "CallerA()",
                         ContainingTypeName = "IncomingType",
                         Relationship = "Incoming Call",
-                        CallCount = 2
+                        CallCount = 2,
+                        SymbolKind = "Method",
+                        MetadataName = "CallerA",
+                        ContainingAssemblyName = "Incoming.Assembly"
                     }
                 },
                 OutgoingCalls = new[]
                 {
-                    new LanguageServiceCallHierarchyItem
+                    new EditorMethodRelationshipItem
                     {
-                        SymbolDisplay = "DependencyA()",
+                        Title = "DependencyA()",
                         ContainingTypeName = "OutgoingType",
                         Relationship = "Outgoing Call",
-                        CallCount = 1
+                        CallCount = 1,
+                        SymbolKind = "Method",
+                        MetadataName = "DependencyA",
+                        ContainingAssemblyName = "Outgoing.Assembly"
                     }
                 },
                 IncomingCallCount = 1,
@@ -140,6 +170,7 @@ namespace Cortex.Tests.Editor
             Assert.Contains(relationshipsSection.Elements.OfType<MethodInspectorMetadataViewModel>(), element => element.Label == "Used By" && element.Value == "1");
             Assert.Contains(relationshipsSection.Elements.OfType<MethodInspectorCardViewModel>(), element => element.Title == "DependencyA()");
             Assert.Contains(relationshipsSection.Elements.OfType<MethodInspectorCardViewModel>(), element => element.Title == "CallerA()");
+            Assert.Contains(relationshipsSection.Elements.OfType<MethodInspectorCardViewModel>(), element => element.Actions.Length == 1 && element.Actions[0].Label == "Open");
         }
 
         [Fact]
@@ -292,6 +323,101 @@ namespace Cortex.Tests.Editor
             Assert.Single(document.Sections);
             Assert.Equal("relationships", document.Sections[0].Id);
             Assert.Contains(document.Sections[0].Elements.OfType<PanelMetadataElement>(), element => element.Label == "Depends On" && element.Value == "2");
+        }
+
+        [Fact]
+        public void RelationshipsContext_AddsSignatureDependencies_AndContractUsage()
+        {
+            var method = typeof(ContractExample).GetMethod("Execute", BindingFlags.Instance | BindingFlags.Public);
+            Assert.NotNull(method);
+
+            var inspector = new CortexMethodInspectorState
+            {
+                RelationshipsExpanded = true,
+                RelationshipsRequested = true,
+                RelationshipsRequestKey = string.Empty,
+                RelationshipsCallHierarchy = new LanguageServiceCallHierarchyResponse
+                {
+                    Success = true,
+                    IncomingCalls = new LanguageServiceCallHierarchyItem[0],
+                    OutgoingCalls = new LanguageServiceCallHierarchyItem[0]
+                }
+            };
+            var target = new EditorCommandTarget
+            {
+                MetadataName = method.Name,
+                SymbolText = method.Name,
+                SymbolKind = "Method",
+                ContainingAssemblyName = method.DeclaringType.Assembly.GetName().Name,
+                ContainingTypeName = method.DeclaringType.FullName,
+                DocumentationCommentId = "M:" + method.DeclaringType.FullName.Replace('+', '.') + "." + method.Name + "(System.String)"
+            };
+
+            var context = new EditorMethodRelationshipsContextService().BuildContext(inspector, target);
+
+            Assert.Contains(context.OutgoingCalls, item => item.Relationship == "Parameter Type" && item.Title == "String");
+            Assert.Contains(context.IncomingCalls, item => item.Relationship == "Implemented Contract" && item.ContainingTypeName == typeof(IContractExample).FullName);
+        }
+
+        [Fact]
+        public void RelationshipsContext_UsesQualifiedSignature_ToResolveCorrectOverload()
+        {
+            var inspector = new CortexMethodInspectorState
+            {
+                RelationshipsExpanded = true,
+                RelationshipsRequested = true,
+                RelationshipsRequestKey = string.Empty,
+                RelationshipsCallHierarchy = new LanguageServiceCallHierarchyResponse
+                {
+                    Success = true,
+                    IncomingCalls = new LanguageServiceCallHierarchyItem[0],
+                    OutgoingCalls = new LanguageServiceCallHierarchyItem[0]
+                }
+            };
+            var target = new EditorCommandTarget
+            {
+                MetadataName = "Execute",
+                SymbolText = "Execute",
+                SymbolKind = "Method",
+                ContainingAssemblyName = typeof(OverloadedExample).Assembly.GetName().Name,
+                ContainingTypeName = typeof(OverloadedExample).Name,
+                QualifiedSymbolDisplay = typeof(OverloadedExample).FullName + ".Execute(string input)"
+            };
+
+            var context = new EditorMethodRelationshipsContextService().BuildContext(inspector, target);
+
+            Assert.Contains(context.OutgoingCalls, item => item.Relationship == "Parameter Type" && item.Title == "String");
+            Assert.DoesNotContain(context.OutgoingCalls, item => item.Relationship == "Parameter Type" && item.Title == "Int32");
+        }
+
+        [Fact]
+        public void RelationshipsContext_SkipsAmbiguousAugmentation_WhenExactMethodIdentityIsUnavailable()
+        {
+            var inspector = new CortexMethodInspectorState
+            {
+                RelationshipsExpanded = true,
+                RelationshipsRequested = true,
+                RelationshipsRequestKey = string.Empty,
+                RelationshipsCallHierarchy = new LanguageServiceCallHierarchyResponse
+                {
+                    Success = true,
+                    IncomingCalls = new LanguageServiceCallHierarchyItem[0],
+                    OutgoingCalls = new LanguageServiceCallHierarchyItem[0]
+                }
+            };
+            var target = new EditorCommandTarget
+            {
+                MetadataName = "Execute",
+                SymbolText = "Execute",
+                SymbolKind = "Method",
+                ContainingAssemblyName = typeof(OverloadedExample).Assembly.GetName().Name,
+                ContainingTypeName = typeof(OverloadedExample).Name
+            };
+
+            var context = new EditorMethodRelationshipsContextService().BuildContext(inspector, target);
+
+            Assert.DoesNotContain(context.OutgoingCalls, item => item.Relationship == "Parameter Type");
+            Assert.DoesNotContain(context.IncomingCalls, item => item.Relationship == "Implemented Contract" || item.Relationship == "Override Contract");
         }
     }
 }

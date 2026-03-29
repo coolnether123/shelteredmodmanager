@@ -314,27 +314,20 @@ namespace Cortex.Modules.FileExplorer
                 return;
             }
 
-            var response = navigationService != null
-                ? navigationService.RequestDecompilerSource(state, node.AssemblyPath, node.MetadataToken, node.EntityKind, false)
-                : null;
-
-            if (response == null)
-            {
-                state.StatusMessage = "Decompiler request failed.";
-                return;
-            }
-
             if (navigationService != null &&
-                navigationService.OpenDecompilerResult(
+                navigationService.DecompileAndOpen(
                     state,
-                    response,
+                    node.AssemblyPath,
+                    node.MetadataToken,
+                    node.EntityKind,
+                    false,
                     "Opened " + (node.Name ?? "decompiled source") + ".",
-                    response.StatusMessage ?? ("Generated decompiled source for " + (node.Name ?? "symbol") + ".")))
+                    "Decompiler request failed."))
             {
                 return;
             }
 
-            state.StatusMessage = response.StatusMessage ?? ("Generated decompiled source for " + (node.Name ?? "symbol") + ".");
+            state.StatusMessage = "Decompiler request failed.";
         }
 
         private bool MatchesFilter(WorkspaceTreeNode node, IDecompilerExplorerService decompilerExplorerService)
