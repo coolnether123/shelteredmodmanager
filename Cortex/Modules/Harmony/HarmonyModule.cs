@@ -3,21 +3,37 @@ using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
-using Cortex.Services;
+using Cortex.Services.Harmony.Generation;
+using Cortex.Services.Harmony.Inspection;
+using Cortex.Services.Harmony.Presentation;
+using Cortex.Services.Harmony.Resolution;
+using Cortex.Services.Navigation;
 using UnityEngine;
+using Cortex.Services.Harmony.Workflow;
 
 namespace Cortex.Modules.Harmony
 {
     public sealed class HarmonyModule
     {
+        private readonly HarmonyPatchWorkspaceService _workspaceService;
         private Vector2 _summaryScroll = Vector2.zero;
         private Vector2 _patchScroll = Vector2.zero;
         private Vector2 _previewScroll = Vector2.zero;
 
+        public HarmonyModule()
+            : this(null)
+        {
+        }
+
+        internal HarmonyModule(HarmonyPatchWorkspaceService workspaceService)
+        {
+            _workspaceService = workspaceService ?? new HarmonyPatchWorkspaceService();
+        }
+
         internal void Draw(
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             IDocumentService documentService,
             IProjectCatalog projectCatalog,
             ILoadedModCatalog loadedModCatalog,
@@ -36,7 +52,7 @@ namespace Cortex.Modules.Harmony
                 return;
             }
 
-            EnsureSummary(state, loadedModCatalog, projectCatalog, inspectionService);
+            _workspaceService.EnsureSummary(state, loadedModCatalog, projectCatalog, inspectionService);
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             DrawHeader(navigationService, pathInteractionService, projectCatalog, loadedModCatalog, inspectionService, resolutionService, displayService, generationService, state);
@@ -62,7 +78,7 @@ namespace Cortex.Modules.Harmony
         }
 
         private void DrawHeader(
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             IPathInteractionService pathInteractionService,
             IProjectCatalog projectCatalog,
             ILoadedModCatalog loadedModCatalog,
@@ -91,7 +107,7 @@ namespace Cortex.Modules.Harmony
                 }
                 else
                 {
-                    var generationAvailabilityReason = GetGenerationAvailabilityReason(state, projectCatalog, resolutionService, generationService);
+                    var generationAvailabilityReason = _workspaceService.GetGenerationAvailabilityReason(state, projectCatalog, resolutionService, generationService);
                     if (!string.IsNullOrEmpty(generationAvailabilityReason))
                     {
                         GUILayout.Label(generationAvailabilityReason);
@@ -102,7 +118,7 @@ namespace Cortex.Modules.Harmony
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Refresh", GUILayout.Width(88f)))
                 {
-                    RefreshSummary(state, loadedModCatalog, projectCatalog, inspectionService);
+                    _workspaceService.RefreshSummary(state, loadedModCatalog, projectCatalog, inspectionService);
                 }
 
                 GUI.enabled = summary != null && displayService != null;
@@ -121,22 +137,18 @@ namespace Cortex.Modules.Harmony
                 GUI.enabled = hasTypeScope && summary != null;
                 if (GUILayout.Button("Back To Type", GUILayout.Width(118f)))
                 {
-                    state.Harmony.ActiveSummary = null;
-                    state.Harmony.ActiveInspectionRequest = null;
-                    state.Harmony.ActiveSummaryKey = string.Empty;
-                    ClearGenerationState(state);
-                    state.StatusMessage = "Showing patched methods for " + GetTypeScopeLabel(state) + ".";
+                    _workspaceService.ReturnToTypeScope(state);
                 }
 
-                GUI.enabled = CanBeginGeneration(state, projectCatalog, resolutionService, generationService);
+                GUI.enabled = _workspaceService.CanBeginGeneration(state, projectCatalog, resolutionService, generationService);
                 if (GUILayout.Button("Generate Prefix", GUILayout.Width(126f)))
                 {
-                    BeginGeneration(state, projectCatalog, resolutionService, generationService, HarmonyPatchGenerationKind.Prefix);
+                    _workspaceService.BeginGeneration(state, projectCatalog, resolutionService, generationService, HarmonyPatchGenerationKind.Prefix);
                 }
 
                 if (GUILayout.Button("Generate Postfix", GUILayout.Width(132f)))
                 {
-                    BeginGeneration(state, projectCatalog, resolutionService, generationService, HarmonyPatchGenerationKind.Postfix);
+                    _workspaceService.BeginGeneration(state, projectCatalog, resolutionService, generationService, HarmonyPatchGenerationKind.Postfix);
                 }
 
                 GUI.enabled = true;
@@ -178,7 +190,7 @@ namespace Cortex.Modules.Harmony
             });
         }
 
-        private void DrawPatchList(CortexNavigationService navigationService, IPathInteractionService pathInteractionService, HarmonyPatchDisplayService displayService, CortexShellState state)
+        private void DrawPatchList(ICortexNavigationService navigationService, IPathInteractionService pathInteractionService, HarmonyPatchDisplayService displayService, CortexShellState state)
         {
             var summary = state.Harmony.ActiveSummary;
             CortexIdeLayout.DrawGroup("Patch List", delegate
@@ -336,7 +348,7 @@ namespace Cortex.Modules.Harmony
                     return;
                 }
 
-                var generationAvailabilityReason = GetGenerationAvailabilityReason(state, projectCatalog, resolutionService, generationService);
+                var generationAvailabilityReason = _workspaceService.GetGenerationAvailabilityReason(state, projectCatalog, resolutionService, generationService);
                 request = state.Harmony.GenerationRequest;
                 if (!string.IsNullOrEmpty(generationAvailabilityReason))
                 {
@@ -355,7 +367,7 @@ namespace Cortex.Modules.Harmony
                 if (GUILayout.Toggle(request.GenerationKind == HarmonyPatchGenerationKind.Prefix, "Prefix", GUI.skin.button, GUILayout.Width(92f)) &&
                     request.GenerationKind != HarmonyPatchGenerationKind.Prefix)
                 {
-                    BeginGeneration(state, projectCatalog, resolutionService, generationService, HarmonyPatchGenerationKind.Prefix);
+                    _workspaceService.BeginGeneration(state, projectCatalog, resolutionService, generationService, HarmonyPatchGenerationKind.Prefix);
                     request = state.Harmony.GenerationRequest;
                     changed = true;
                 }
@@ -363,7 +375,7 @@ namespace Cortex.Modules.Harmony
                 if (GUILayout.Toggle(request.GenerationKind == HarmonyPatchGenerationKind.Postfix, "Postfix", GUI.skin.button, GUILayout.Width(92f)) &&
                     request.GenerationKind != HarmonyPatchGenerationKind.Postfix)
                 {
-                    BeginGeneration(state, projectCatalog, resolutionService, generationService, HarmonyPatchGenerationKind.Postfix);
+                    _workspaceService.BeginGeneration(state, projectCatalog, resolutionService, generationService, HarmonyPatchGenerationKind.Postfix);
                     request = state.Harmony.GenerationRequest;
                     changed = true;
                 }
@@ -489,7 +501,7 @@ namespace Cortex.Modules.Harmony
 
                 if (changed || state.Harmony.GenerationPreview == null)
                 {
-                    RefreshGenerationPreview(state, projectCatalog, resolutionService, generationService);
+                    _workspaceService.RefreshGenerationPreview(state, projectCatalog, resolutionService, generationService);
                 }
 
                 GUILayout.Space(4f);
@@ -500,20 +512,29 @@ namespace Cortex.Modules.Harmony
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Refresh Preview", GUILayout.Width(120f)))
                 {
-                    RefreshGenerationPreview(state, projectCatalog, resolutionService, generationService);
+                    _workspaceService.RefreshGenerationPreview(state, projectCatalog, resolutionService, generationService);
                     preview = state.Harmony.GenerationPreview;
                 }
 
                 GUI.enabled = preview != null && preview.CanApply;
                 if (GUILayout.Button("Insert Patch", GUILayout.Width(108f)))
                 {
-                    ApplyGeneration(
+                    string applyStatusMessage;
+                    if (_workspaceService.ApplyGeneration(
+                        state,
                         documentService,
                         projectCatalog,
                         resolutionService,
                         generationService,
                         templateNavigationService,
-                        state);
+                        out applyStatusMessage))
+                    {
+                        state.StatusMessage = applyStatusMessage;
+                    }
+                    else if (!string.IsNullOrEmpty(applyStatusMessage))
+                    {
+                        state.StatusMessage = applyStatusMessage;
+                    }
                     preview = state.Harmony.GenerationPreview;
                 }
                 GUI.enabled = true;
@@ -562,239 +583,6 @@ namespace Cortex.Modules.Harmony
             return changed;
         }
 
-        private void EnsureSummary(CortexShellState state, ILoadedModCatalog loadedModCatalog, IProjectCatalog projectCatalog, HarmonyPatchInspectionService inspectionService)
-        {
-            if (state == null || state.Harmony == null || inspectionService == null || state.Harmony.ActiveInspectionRequest == null)
-            {
-                if (state != null &&
-                    state.Harmony != null &&
-                    HasActiveTypeScope(state) &&
-                    state.Harmony.RefreshRequested)
-                {
-                    string typeStatusMessage;
-                    state.Harmony.ActiveTypeSummaries = inspectionService.GetTypeSummaries(
-                        state,
-                        state.Harmony.ActiveTypeAssemblyPath,
-                        state.Harmony.ActiveTypeName,
-                        loadedModCatalog,
-                        projectCatalog,
-                        true,
-                        out typeStatusMessage);
-                    state.Harmony.RefreshRequested = false;
-                    if (!string.IsNullOrEmpty(typeStatusMessage))
-                    {
-                        state.StatusMessage = typeStatusMessage;
-                    }
-                }
-
-                return;
-            }
-
-            if (!state.Harmony.RefreshRequested && state.Harmony.ActiveSummary != null)
-            {
-                return;
-            }
-
-            string statusMessage;
-            state.Harmony.ActiveSummary = inspectionService.GetSummary(
-                state,
-                state.Harmony.ActiveInspectionRequest,
-                loadedModCatalog,
-                projectCatalog,
-                state.Harmony.RefreshRequested,
-                out statusMessage);
-            state.Harmony.ActiveSummaryKey = inspectionService.BuildKey(state.Harmony.ActiveInspectionRequest);
-            state.Harmony.RefreshRequested = false;
-            if (!string.IsNullOrEmpty(statusMessage))
-            {
-                state.StatusMessage = statusMessage;
-            }
-        }
-
-        private void RefreshSummary(CortexShellState state, ILoadedModCatalog loadedModCatalog, IProjectCatalog projectCatalog, HarmonyPatchInspectionService inspectionService)
-        {
-            if (state == null || state.Harmony == null)
-            {
-                return;
-            }
-
-            state.Harmony.RefreshRequested = true;
-            EnsureSummary(state, loadedModCatalog, projectCatalog, inspectionService);
-        }
-
-        private static bool CanBeginGeneration(CortexShellState state, IProjectCatalog projectCatalog, HarmonyPatchResolutionService resolutionService, HarmonyPatchGenerationService generationService)
-        {
-            HarmonyResolvedMethodTarget resolvedTarget;
-            string reason;
-            return TryResolveGenerationTarget(state, projectCatalog, resolutionService, generationService, out resolvedTarget, out reason);
-        }
-
-        private static string GetGenerationAvailabilityReason(CortexShellState state, IProjectCatalog projectCatalog, HarmonyPatchResolutionService resolutionService, HarmonyPatchGenerationService generationService)
-        {
-            HarmonyResolvedMethodTarget resolvedTarget;
-            string reason;
-            if (TryResolveGenerationTarget(state, projectCatalog, resolutionService, generationService, out resolvedTarget, out reason))
-            {
-                return string.Empty;
-            }
-
-            return reason ?? string.Empty;
-        }
-
-        private static bool TryResolveGenerationTarget(CortexShellState state, IProjectCatalog projectCatalog, HarmonyPatchResolutionService resolutionService, HarmonyPatchGenerationService generationService, out HarmonyResolvedMethodTarget resolvedTarget, out string reason)
-        {
-            resolvedTarget = null;
-            reason = string.Empty;
-            if (state == null || state.Harmony == null || resolutionService == null || generationService == null || state.Harmony.ActiveInspectionRequest == null)
-            {
-                reason = "Select a resolvable external runtime method before generating a Harmony patch.";
-                return false;
-            }
-
-            if (!resolutionService.TryResolveFromInspectionRequest(projectCatalog, state.Harmony.ActiveInspectionRequest, out resolvedTarget, out reason))
-            {
-                return false;
-            }
-
-            return generationService.TryValidateGenerationTarget(state, resolvedTarget, out reason);
-        }
-
-        private void BeginGeneration(CortexShellState state, IProjectCatalog projectCatalog, HarmonyPatchResolutionService resolutionService, HarmonyPatchGenerationService generationService, HarmonyPatchGenerationKind generationKind)
-        {
-            if (state == null || state.Harmony == null || generationService == null || resolutionService == null || state.Harmony.ActiveInspectionRequest == null)
-            {
-                return;
-            }
-
-            HarmonyResolvedMethodTarget resolvedTarget;
-            string reason;
-            if (!TryResolveGenerationTarget(state, projectCatalog, resolutionService, generationService, out resolvedTarget, out reason))
-            {
-                ClearGenerationState(state);
-                state.Harmony.GenerationStatusMessage = reason;
-                state.StatusMessage = reason;
-                MMLog.WriteWarning("[Cortex.Harmony] Rejected " + generationKind +
-                    " generation from Harmony panel. Reason=" + (reason ?? string.Empty) + ".");
-                return;
-            }
-
-            MMLog.WriteInfo("[Cortex.Harmony] Starting " + generationKind +
-                " generation from Harmony panel for '" + (resolvedTarget.DisplayName ?? string.Empty) + "'.");
-            var request = generationService.CreateDefaultRequest(resolvedTarget, generationKind);
-            var insertionTargets = generationService.BuildInsertionTargets(state, projectCatalog, resolvedTarget, request);
-            state.Harmony.InsertionTargets.Clear();
-            for (var i = 0; i < insertionTargets.Length; i++)
-            {
-                state.Harmony.InsertionTargets.Add(insertionTargets[i]);
-            }
-
-            if (insertionTargets.Length > 0)
-            {
-                request.DestinationFilePath = insertionTargets[0].FilePath ?? string.Empty;
-                request.InsertionAnchorKind = insertionTargets[0].DefaultAnchorKind;
-                request.InsertionLine = insertionTargets[0].SuggestedLine;
-            }
-
-            state.Harmony.GenerationRequest = request;
-            RefreshGenerationPreview(state, projectCatalog, resolutionService, generationService);
-            generationService.ArmEditorInsertionPick(state);
-            MMLog.WriteInfo("[Cortex.Harmony] Editor insertion pick armed for " + generationKind + " generation from the Harmony panel.");
-        }
-
-        private void RefreshGenerationPreview(CortexShellState state, IProjectCatalog projectCatalog, HarmonyPatchResolutionService resolutionService, HarmonyPatchGenerationService generationService)
-        {
-            if (state == null || state.Harmony == null || generationService == null || resolutionService == null || state.Harmony.GenerationRequest == null)
-            {
-                return;
-            }
-
-            HarmonyResolvedMethodTarget resolvedTarget;
-            string reason;
-            if (!TryResolveGenerationTarget(state, projectCatalog, resolutionService, generationService, out resolvedTarget, out reason))
-            {
-                ClearGenerationState(state);
-                state.Harmony.GenerationStatusMessage = reason;
-                state.StatusMessage = reason;
-                MMLog.WriteWarning("[Cortex.Harmony] Preview refresh rejected. Reason=" + (reason ?? string.Empty) + ".");
-                return;
-            }
-
-            state.Harmony.GenerationPreview = generationService.BuildPreview(state, resolvedTarget, state.Harmony.GenerationRequest);
-            if (state.Harmony.GenerationRequest != null && state.Harmony.GenerationPreview != null)
-            {
-                state.Harmony.GenerationRequest.InsertionContextLabel = state.Harmony.GenerationPreview.InsertionContextLabel ?? state.Harmony.GenerationRequest.InsertionContextLabel;
-            }
-            state.Harmony.GenerationStatusMessage = state.Harmony.GenerationPreview != null
-                ? state.Harmony.GenerationPreview.StatusMessage ?? string.Empty
-                : "Harmony patch preview is not available.";
-            MMLog.WriteInfo("[Cortex.Harmony] Preview refreshed for '" + (resolvedTarget.DisplayName ?? string.Empty) +
-                "'. CanApply=" + (state.Harmony.GenerationPreview != null && state.Harmony.GenerationPreview.CanApply) +
-                ", Destination='" + (state.Harmony.GenerationRequest != null ? state.Harmony.GenerationRequest.DestinationFilePath ?? string.Empty : string.Empty) + "'.");
-        }
-
-        private void ApplyGeneration(
-            IDocumentService documentService,
-            IProjectCatalog projectCatalog,
-            HarmonyPatchResolutionService resolutionService,
-            HarmonyPatchGenerationService generationService,
-            GeneratedTemplateNavigationService templateNavigationService,
-            CortexShellState state)
-        {
-            if (state == null || state.Harmony == null || generationService == null || resolutionService == null)
-            {
-                return;
-            }
-
-            RefreshGenerationPreview(state, projectCatalog, resolutionService, generationService);
-            var request = state.Harmony.GenerationRequest;
-            var preview = state.Harmony.GenerationPreview;
-            if (request == null || preview == null || !preview.CanApply)
-            {
-                state.StatusMessage = "Harmony patch preview is not ready to apply.";
-                MMLog.WriteWarning("[Cortex.Harmony] Insert Patch requested without an applicable preview.");
-                return;
-            }
-
-            DocumentSession session;
-            string statusMessage;
-            if (!generationService.Apply(state, documentService, request, preview, out session, out statusMessage))
-            {
-                state.StatusMessage = statusMessage;
-                return;
-            }
-
-            if (session != null && session.EditorState != null)
-            {
-                session.EditorState.EditModeEnabled = true;
-            }
-
-            if (templateNavigationService != null && session != null)
-            {
-                templateNavigationService.StartSession(
-                    state,
-                    session,
-                    preview.Placeholders,
-                    preview.InsertionOffset,
-                    preview.InsertionOffset + ((preview.SnippetText ?? string.Empty).Length));
-            }
-
-            generationService.ClearEditorInsertionPick(state);
-            state.StatusMessage = statusMessage;
-        }
-
-        private static void ClearGenerationState(CortexShellState state)
-        {
-            if (state == null || state.Harmony == null)
-            {
-                return;
-            }
-
-            state.Harmony.GenerationRequest = null;
-            state.Harmony.GenerationPreview = null;
-            state.Harmony.IsInsertionPickActive = false;
-            state.Harmony.InsertionTargets.Clear();
-        }
-
         private void DrawTypePatchList(CortexShellState state, HarmonyPatchDisplayService displayService)
         {
             var summaries = state != null && state.Harmony != null
@@ -822,62 +610,13 @@ namespace Cortex.Modules.Harmony
                 DrawMetadataRow("Conflict Hint", !string.IsNullOrEmpty(current.ConflictHint) ? current.ConflictHint : "None");
                 if (GUILayout.Button("Inspect Method", GUILayout.Width(132f)))
                 {
-                    ActivateMethodSummary(state, current);
+                    _workspaceService.ActivateMethodSummary(state, current);
                 }
                 GUILayout.EndVertical();
                 GUILayout.Space(4f);
             }
 
             GUILayout.EndScrollView();
-        }
-
-        private static void ActivateMethodSummary(CortexShellState state, HarmonyMethodPatchSummary summary)
-        {
-            if (state == null || state.Harmony == null || summary == null)
-            {
-                return;
-            }
-
-            state.Harmony.ActiveSummary = summary;
-            state.Harmony.ActiveSummaryKey = BuildSummaryKey(summary);
-            state.Harmony.ActiveInspectionRequest = BuildInspectionRequest(summary);
-            state.Harmony.ResolutionFailureReason = string.Empty;
-            state.StatusMessage = "Loaded Harmony patch details for " + (summary.MethodName ?? string.Empty) + ".";
-        }
-
-        private static HarmonyPatchInspectionRequest BuildInspectionRequest(HarmonyMethodPatchSummary summary)
-        {
-            return summary == null
-                ? null
-                : new HarmonyPatchInspectionRequest
-                {
-                    AssemblyPath = summary.AssemblyPath ?? string.Empty,
-                    MetadataToken = summary.Target != null ? summary.Target.MetadataToken : 0,
-                    DeclaringTypeName = summary.DeclaringType ?? string.Empty,
-                    MethodName = summary.MethodName ?? string.Empty,
-                    Signature = summary.Signature ?? string.Empty,
-                    DisplayName = summary.ResolvedMemberDisplayName ?? string.Empty,
-                    DocumentPath = summary.DocumentPath ?? string.Empty,
-                    CachePath = summary.CachePath ?? string.Empty
-                };
-        }
-
-        private static string BuildSummaryKey(HarmonyMethodPatchSummary summary)
-        {
-            if (summary == null)
-            {
-                return string.Empty;
-            }
-
-            if (!string.IsNullOrEmpty(summary.AssemblyPath) && summary.Target != null && summary.Target.MetadataToken > 0)
-            {
-                return summary.AssemblyPath + "|0x" + summary.Target.MetadataToken.ToString("X8");
-            }
-
-            return (summary.AssemblyPath ?? string.Empty) + "|" +
-                (summary.DeclaringType ?? string.Empty) + "|" +
-                (summary.MethodName ?? string.Empty) + "|" +
-                (summary.Signature ?? string.Empty);
         }
 
         private static bool HasActiveTypeScope(CortexShellState state)
@@ -927,7 +666,7 @@ namespace Cortex.Modules.Harmony
                 : counts.TotalCount.ToString();
         }
 
-        private static void OpenNavigationTarget(CortexNavigationService navigationService, CortexShellState state, HarmonyPatchNavigationTarget target, string successMessage, string failureMessage)
+        private static void OpenNavigationTarget(ICortexNavigationService navigationService, CortexShellState state, HarmonyPatchNavigationTarget target, string successMessage, string failureMessage)
         {
             if (navigationService == null || state == null || target == null)
             {
