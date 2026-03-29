@@ -455,13 +455,14 @@ namespace Cortex
 
         private sealed class HarmonyShellModule : CortexShellModuleBase
         {
-            private readonly HarmonyModule _module = new HarmonyModule();
+            private readonly HarmonyModule _module;
             private readonly IHarmonyModuleServices _services;
 
             public HarmonyShellModule(IHarmonyModuleServices services)
                 : base(CortexWorkbenchIds.HarmonyContainer)
             {
                 _services = services;
+                _module = new HarmonyModule(_services != null ? _services.HarmonyPatchWorkspaceService : null);
             }
 
             public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)

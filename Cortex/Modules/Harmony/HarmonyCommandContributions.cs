@@ -1,7 +1,10 @@
 using System;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
-using Cortex.Services;
+using Cortex.Services.Harmony.Generation;
+using Cortex.Services.Harmony.Inspection;
+using Cortex.Services.Harmony.Presentation;
+using Cortex.Services.Harmony.Resolution;
 using UnityEngine;
 
 namespace Cortex.Modules.Harmony
@@ -216,15 +219,11 @@ namespace Cortex.Modules.Harmony
                 state.Harmony.RefreshRequested = true;
                 if (state.Harmony.ActiveInspectionRequest != null)
                 {
-                    string statusMessage;
-                    state.Harmony.ActiveSummary = _services.HarmonyPatchInspectionService.GetSummary(
+                    _services.HarmonyPatchWorkspaceService.RefreshSummary(
                         state,
-                        state.Harmony.ActiveInspectionRequest,
                         _services.LoadedModCatalog,
                         _services.ProjectCatalog,
-                        true,
-                        out statusMessage);
-                    state.StatusMessage = statusMessage;
+                        _services.HarmonyPatchInspectionService);
                     OpenHarmonyWindow();
                     return;
                 }
@@ -298,21 +297,12 @@ namespace Cortex.Modules.Harmony
                     return;
                 }
 
-                string statusMessage;
-                var summary = _services.HarmonyPatchInspectionService.GetSummary(
+                _services.HarmonyPatchWorkspaceService.LoadMethodSummary(
                     state,
-                    resolvedTarget.InspectionRequest,
+                    resolvedTarget,
                     _services.LoadedModCatalog,
                     _services.ProjectCatalog,
-                    forceRefresh,
-                    out statusMessage);
-
-                ClearTypeScope();
-                state.Harmony.ActiveInspectionRequest = resolvedTarget.InspectionRequest;
-                state.Harmony.ActiveSummaryKey = _services.HarmonyPatchInspectionService.BuildKey(resolvedTarget.InspectionRequest);
-                state.Harmony.ActiveSummary = summary;
-                state.Harmony.ResolutionFailureReason = string.Empty;
-                state.StatusMessage = statusMessage;
+                    _services.HarmonyPatchInspectionService);
                 MMLog.WriteInfo("[Cortex.Harmony] Opened Harmony details for '" +
                     (resolvedTarget.DisplayName ?? string.Empty) +
                     "'. PrepareGeneration=" + prepareGeneration +
@@ -332,26 +322,13 @@ namespace Cortex.Modules.Harmony
                     return;
                 }
 
-                ClearGenerationState();
-                string statusMessage;
-                var summaries = _services.HarmonyPatchInspectionService.GetTypeSummaries(
+                _services.HarmonyPatchWorkspaceService.LoadTypeSummary(
                     state,
-                    resolvedTypeTarget.AssemblyPath,
-                    resolvedTypeTarget.DeclaringType.FullName ?? resolvedTypeTarget.DeclaringType.Name ?? string.Empty,
+                    resolvedTypeTarget,
                     _services.LoadedModCatalog,
                     _services.ProjectCatalog,
-                    forceRefresh,
-                    out statusMessage);
-
-                state.Harmony.ActiveInspectionRequest = null;
-                state.Harmony.ActiveSummaryKey = string.Empty;
-                state.Harmony.ActiveSummary = null;
-                state.Harmony.ActiveTypeAssemblyPath = resolvedTypeTarget.AssemblyPath ?? string.Empty;
-                state.Harmony.ActiveTypeName = resolvedTypeTarget.DeclaringType.FullName ?? resolvedTypeTarget.DeclaringType.Name ?? string.Empty;
-                state.Harmony.ActiveTypeDisplayName = resolvedTypeTarget.DisplayName ?? state.Harmony.ActiveTypeName;
-                state.Harmony.ActiveTypeSummaries = summaries ?? new HarmonyMethodPatchSummary[0];
-                state.Harmony.ResolutionFailureReason = string.Empty;
-                state.StatusMessage = statusMessage;
+                    _services.HarmonyPatchInspectionService,
+                    forceRefresh);
                 MMLog.WriteInfo("[Cortex.Harmony] Opened Harmony type details for '" +
                     (state.Harmony.ActiveTypeDisplayName ?? string.Empty) +
                     "'. PatchedMethods=" + state.Harmony.ActiveTypeSummaries.Length +
@@ -366,49 +343,23 @@ namespace Cortex.Modules.Harmony
                     return;
                 }
 
-                var reason = string.Empty;
                 if (_services.HarmonyPatchGenerationService == null ||
-                    !_services.HarmonyPatchGenerationService.TryValidateGenerationTarget(_services.State, resolvedTarget, out reason))
+                    !_services.HarmonyPatchWorkspaceService.BeginGeneration(
+                        state,
+                        _services.ProjectCatalog,
+                        _services.HarmonyPatchResolutionService,
+                        _services.HarmonyPatchGenerationService,
+                        generationKind))
                 {
-                    ClearGenerationState();
-                    state.Harmony.GenerationStatusMessage = !string.IsNullOrEmpty(reason)
-                        ? reason
-                        : "Harmony patch generation is not available for the selected method.";
                     state.StatusMessage = state.Harmony.GenerationStatusMessage;
                     MMLog.WriteWarning("[Cortex.Harmony] Rejected " + generationKind +
                         " generation for '" + (resolvedTarget.DisplayName ?? string.Empty) +
                         "'. Reason=" + (state.Harmony.GenerationStatusMessage ?? string.Empty) + ".");
                     return;
                 }
-
-                var request = _services.HarmonyPatchGenerationService.CreateDefaultRequest(resolvedTarget, generationKind);
-                var targets = _services.HarmonyPatchGenerationService.BuildInsertionTargets(state, _services.ProjectCatalog, resolvedTarget, request);
-                state.Harmony.InsertionTargets.Clear();
-                for (var i = 0; i < targets.Length; i++)
-                {
-                    state.Harmony.InsertionTargets.Add(targets[i]);
-                }
-
-                if (targets.Length > 0)
-                {
-                    request.DestinationFilePath = targets[0].FilePath;
-                    request.InsertionAnchorKind = targets[0].DefaultAnchorKind;
-                    request.InsertionLine = targets[0].SuggestedLine;
-                }
-
-                state.Harmony.GenerationRequest = request;
-                state.Harmony.GenerationPreview = _services.HarmonyPatchGenerationService.BuildPreview(state, resolvedTarget, request);
-                if (state.Harmony.GenerationPreview != null)
-                {
-                    request.InsertionContextLabel = state.Harmony.GenerationPreview.InsertionContextLabel ?? request.InsertionContextLabel;
-                }
-                state.Harmony.GenerationStatusMessage = state.Harmony.GenerationPreview != null
-                    ? state.Harmony.GenerationPreview.StatusMessage ?? string.Empty
-                    : string.Empty;
-                _services.HarmonyPatchGenerationService.ArmEditorInsertionPick(state);
                 MMLog.WriteInfo("[Cortex.Harmony] Prepared " + generationKind +
                     " generation preview for '" + (resolvedTarget.DisplayName ?? string.Empty) +
-                    "'. Destination='" + (request.DestinationFilePath ?? string.Empty) + "'. EditorInsertionPickArmed=True.");
+                    "'. Destination='" + (state.Harmony.GenerationRequest != null ? state.Harmony.GenerationRequest.DestinationFilePath ?? string.Empty : string.Empty) + "'. EditorInsertionPickArmed=True.");
             }
 
             private void ClearGenerationState()
