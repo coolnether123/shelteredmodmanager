@@ -25,7 +25,6 @@ namespace Cortex.Modules.Editor
         private readonly EditorSemanticPopupSurface _semanticPopupSurface;
         private readonly IEditorContextService _contextService;
         private readonly EditorCommandContextFactory _commandContextFactory = new EditorCommandContextFactory();
-        private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
         private readonly EditorSelectionInspectionService _selectionInspectionService = new EditorSelectionInspectionService();
         private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
@@ -266,6 +265,7 @@ namespace Cortex.Modules.Editor
                             scroll,
                             gutterWidth),
                         rect.size,
+                        navigationService,
                         commandRegistry,
                         contributionRegistry,
                         _contextMenuStyle,
@@ -866,18 +866,6 @@ namespace Cortex.Modules.Editor
                     current.Use();
                     return;
                 }
-            }
-
-            if (current.clickCount >= 2)
-            {
-                    EditorCommandInvocation invocation;
-                    if (TryBuildCommandTarget(session, state, hoveredToken, out invocation) &&
-                        invocation != null &&
-                        invocation.Target != null &&
-                        invocation.Target.CanGoToDefinition)
-                    {
-                        _symbolInteractionService.RequestDefinition(state, invocation.Target);
-                    }
             }
 
             current.Use();

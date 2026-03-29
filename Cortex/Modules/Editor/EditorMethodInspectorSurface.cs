@@ -37,6 +37,7 @@ namespace Cortex.Modules.Editor
             string activeDocumentPath,
             Rect anchorRect,
             Vector2 surfaceSize,
+            CortexNavigationService navigationService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             GUIStyle containerStyle,
@@ -86,6 +87,7 @@ namespace Cortex.Modules.Editor
                 renderResult != null ? renderResult.ActivatedId : string.Empty,
                 state,
                 preparedView.Invocation,
+                navigationService,
                 documentService,
                 projectCatalog,
                 sourceLookupIndex,
@@ -131,6 +133,7 @@ namespace Cortex.Modules.Editor
             string activatedId,
             CortexShellState state,
             EditorCommandInvocation invocation,
+            CortexNavigationService navigationService,
             IDocumentService documentService,
             IProjectCatalog projectCatalog,
             ISourceLookupIndex sourceLookupIndex,
@@ -153,6 +156,38 @@ namespace Cortex.Modules.Editor
             if (PanelCommandIds.TryGetSectionToggle(activatedId, out sectionId))
             {
                 _inspectorService.ToggleSection(state, sectionId);
+                return;
+            }
+
+            string symbolKind;
+            string metadataName;
+            string containingTypeName;
+            string containingAssemblyName;
+            string documentationCommentId;
+            if (EditorMethodInspectorNavigationActionCodec.TryParse(
+                activatedId,
+                out symbolKind,
+                out metadataName,
+                out containingTypeName,
+                out containingAssemblyName,
+                out documentationCommentId))
+            {
+                if (navigationService != null)
+                {
+                    navigationService.OpenLanguageSymbolTarget(
+                        state,
+                        metadataName,
+                        symbolKind,
+                        metadataName,
+                        containingTypeName,
+                        containingAssemblyName,
+                        documentationCommentId,
+                        string.Empty,
+                        null,
+                        "Opened relationship target.",
+                        "Could not open relationship target.");
+                }
+
                 return;
             }
 

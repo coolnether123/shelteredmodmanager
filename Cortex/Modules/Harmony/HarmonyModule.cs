@@ -940,20 +940,37 @@ namespace Cortex.Modules.Harmony
 
             if (!string.IsNullOrEmpty(target.DocumentPath) && File.Exists(target.DocumentPath))
             {
-                navigationService.OpenDocument(state, target.DocumentPath, target.Line > 0 ? target.Line : 1, successMessage, failureMessage);
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(target.CachePath) && File.Exists(target.CachePath))
-            {
-                navigationService.OpenDocument(state, target.CachePath, target.Line > 0 ? target.Line : 1, successMessage, failureMessage);
-                return;
+                if (!CortexModuleUtil.IsDecompilerDocumentPath(state, target.DocumentPath))
+                {
+                    if (navigationService.OpenDocument(state, target.DocumentPath, target.Line > 0 ? target.Line : 1, successMessage, failureMessage) != null)
+                    {
+                        return;
+                    }
+                }
             }
 
             if (!string.IsNullOrEmpty(target.AssemblyPath) && target.MetadataToken > 0)
             {
-                navigationService.DecompileAndOpen(state, target.AssemblyPath, target.MetadataToken, DecompilerEntityKind.Method, false, successMessage, failureMessage);
-                return;
+                if (navigationService.DecompileAndOpen(state, target.AssemblyPath, target.MetadataToken, DecompilerEntityKind.Method, false, successMessage, failureMessage))
+                {
+                    return;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(target.CachePath) && File.Exists(target.CachePath))
+            {
+                if (navigationService.OpenDocument(state, target.CachePath, target.Line > 0 ? target.Line : 1, successMessage, failureMessage) != null)
+                {
+                    return;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(target.DocumentPath) && File.Exists(target.DocumentPath))
+            {
+                if (navigationService.OpenDocument(state, target.DocumentPath, target.Line > 0 ? target.Line : 1, successMessage, failureMessage) != null)
+                {
+                    return;
+                }
             }
 
             state.StatusMessage = failureMessage;

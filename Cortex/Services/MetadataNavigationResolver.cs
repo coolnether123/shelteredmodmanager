@@ -122,6 +122,61 @@ namespace Cortex.Services
             return true;
         }
 
+        public static bool TryResolveMethodNavigationTarget(
+            string assemblyPath,
+            int methodMetadataToken,
+            out int declaringTypeMetadataToken,
+            out string methodName,
+            out string containingTypeName,
+            out string symbolKind)
+        {
+            declaringTypeMetadataToken = 0;
+            methodName = string.Empty;
+            containingTypeName = string.Empty;
+            symbolKind = "Method";
+
+            var assembly = LoadAssemblyForMetadata(assemblyPath);
+            if (assembly == null)
+            {
+                return false;
+            }
+
+            var method = ResolveMethodByMetadataToken(assembly, methodMetadataToken);
+            if (method == null || method.DeclaringType == null)
+            {
+                return false;
+            }
+
+            declaringTypeMetadataToken = method.DeclaringType.MetadataToken;
+            methodName = method.Name ?? string.Empty;
+            containingTypeName = method.DeclaringType.FullName ?? method.DeclaringType.Name ?? string.Empty;
+            symbolKind = method.IsConstructor ? "Constructor" : "Method";
+            return declaringTypeMetadataToken > 0;
+        }
+
+        public static bool TryResolveTypeNavigationTarget(
+            string assemblyPath,
+            int typeMetadataToken,
+            out string fullTypeName)
+        {
+            fullTypeName = string.Empty;
+
+            var assembly = LoadAssemblyForMetadata(assemblyPath);
+            if (assembly == null)
+            {
+                return false;
+            }
+
+            var type = ResolveTypeByMetadataToken(assembly, typeMetadataToken);
+            if (type == null)
+            {
+                return false;
+            }
+
+            fullTypeName = (type.FullName ?? type.Name ?? string.Empty).Replace('+', '.');
+            return !string.IsNullOrEmpty(fullTypeName);
+        }
+
         private static void AddSearchRoot(List<string> roots, string root)
         {
             if (roots == null || string.IsNullOrEmpty(root))
@@ -261,6 +316,40 @@ namespace Cortex.Services
             }
 
             return null;
+        }
+
+        private static MethodBase ResolveMethodByMetadataToken(Assembly assembly, int metadataToken)
+        {
+            if (assembly == null || metadataToken <= 0)
+            {
+                return null;
+            }
+
+            try
+            {
+                return assembly.ManifestModule.ResolveMethod(metadataToken);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static Type ResolveTypeByMetadataToken(Assembly assembly, int metadataToken)
+        {
+            if (assembly == null || metadataToken <= 0)
+            {
+                return null;
+            }
+
+            try
+            {
+                return assembly.ManifestModule.ResolveType(metadataToken);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static string BuildMethodDocumentationId(MethodBase method)

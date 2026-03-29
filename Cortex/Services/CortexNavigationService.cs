@@ -13,6 +13,7 @@ namespace Cortex.Services
         private readonly ISourceReferenceService _sourceReferenceService;
         private readonly IRuntimeSourceNavigationService _runtimeSourceNavigationService;
         private readonly ISourceLookupIndex _sourceLookupIndex;
+        private readonly SourcePreferredDocumentResolver _sourcePreferredDocumentResolver = new SourcePreferredDocumentResolver();
 
         public CortexNavigationService(
             IDocumentService documentService,
@@ -147,6 +148,43 @@ namespace Cortex.Services
 
         public bool DecompileAndOpen(CortexShellState state, string assemblyPath, int metadataToken, DecompilerEntityKind entityKind, bool ignoreCache, string successStatusMessage, string failureStatusMessage)
         {
+            if (entityKind == DecompilerEntityKind.Method)
+            {
+                return OpenDecompilerMethodTarget(
+                    state,
+                    assemblyPath,
+                    metadataToken,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    ignoreCache,
+                    successStatusMessage,
+                    failureStatusMessage);
+            }
+
+            if (entityKind == DecompilerEntityKind.Type)
+            {
+                string fullTypeName;
+                if (MetadataNavigationResolver.TryResolveTypeNavigationTarget(assemblyPath, metadataToken, out fullTypeName))
+                {
+                    string sourceDocumentPath;
+                    if (_sourcePreferredDocumentResolver.TryResolveFromTypeName(state, _sourceLookupIndex, fullTypeName, out sourceDocumentPath))
+                    {
+                        var sourceLine = ResolveSourceNavigationLine(
+                            ReadAllTextSafe(sourceDocumentPath),
+                            "NamedType",
+                            GetTypeLeafName(fullTypeName),
+                            fullTypeName);
+                        return OpenDocument(
+                            state,
+                            sourceDocumentPath,
+                            sourceLine,
+                            successStatusMessage,
+                            failureStatusMessage) != null;
+                    }
+                }
+            }
+
             var response = RequestDecompilerSource(state, assemblyPath, metadataToken, entityKind, ignoreCache);
             if (response == null)
             {
@@ -159,6 +197,136 @@ namespace Cortex.Services
             }
 
             return OpenDecompilerResult(state, response, successStatusMessage, failureStatusMessage);
+        }
+
+        public bool OpenDecompilerMethodTarget(
+            CortexShellState state,
+            string assemblyPath,
+            int methodMetadataToken,
+            string metadataName,
+            string containingTypeName,
+            string symbolKind,
+            bool ignoreCache,
+            string successStatusMessage,
+            string failureStatusMessage)
+        {
+            int declaringTypeMetadataToken;
+            string resolvedMethodName;
+            string resolvedContainingTypeName;
+            string resolvedSymbolKind;
+            if (!MetadataNavigationResolver.TryResolveMethodNavigationTarget(
+                assemblyPath,
+                methodMetadataToken,
+                out declaringTypeMetadataToken,
+                out resolvedMethodName,
+                out resolvedContainingTypeName,
+                out resolvedSymbolKind))
+            {
+                if (!string.IsNullOrEmpty(failureStatusMessage))
+                {
+                    state.StatusMessage = failureStatusMessage;
+                }
+
+                return false;
+            }
+
+            var effectiveMetadataName = !string.IsNullOrEmpty(metadataName) ? metadataName : resolvedMethodName;
+            var effectiveContainingTypeName = !string.IsNullOrEmpty(containingTypeName) ? containingTypeName : resolvedContainingTypeName;
+            var effectiveSymbolKind = !string.IsNullOrEmpty(symbolKind) ? symbolKind : resolvedSymbolKind;
+            string sourceDocumentPath;
+            if (_sourcePreferredDocumentResolver.TryResolveFromSymbol(
+                state,
+                _sourceLookupIndex,
+                string.Empty,
+                string.Empty,
+                effectiveContainingTypeName,
+                effectiveMetadataName,
+                effectiveSymbolKind,
+                out sourceDocumentPath))
+            {
+                var sourceLine = ResolveSourceNavigationLine(
+                    ReadAllTextSafe(sourceDocumentPath),
+                    effectiveSymbolKind,
+                    effectiveMetadataName,
+                    effectiveContainingTypeName);
+                return OpenDocument(state, sourceDocumentPath, sourceLine, successStatusMessage, failureStatusMessage) != null;
+            }
+
+            int highlightedLine;
+            var decompiled = RequestDecompilerMethodView(
+                state,
+                assemblyPath,
+                methodMetadataToken,
+                effectiveMetadataName,
+                effectiveContainingTypeName,
+                effectiveSymbolKind,
+                ignoreCache,
+                out highlightedLine);
+            if (decompiled == null)
+            {
+                if (!string.IsNullOrEmpty(failureStatusMessage))
+                {
+                    state.StatusMessage = failureStatusMessage;
+                }
+
+                return false;
+            }
+
+            return OpenDecompilerResult(state, decompiled, highlightedLine, successStatusMessage, failureStatusMessage);
+        }
+
+        public DecompilerResponse RequestDecompilerMethodView(
+            CortexShellState state,
+            string assemblyPath,
+            int methodMetadataToken,
+            string metadataName,
+            string containingTypeName,
+            string symbolKind,
+            bool ignoreCache,
+            out int highlightedLine)
+        {
+            highlightedLine = 1;
+            if (state == null || string.IsNullOrEmpty(assemblyPath) || methodMetadataToken <= 0)
+            {
+                return null;
+            }
+
+            int declaringTypeMetadataToken;
+            string resolvedMethodName;
+            string resolvedContainingTypeName;
+            string resolvedSymbolKind;
+            if (!MetadataNavigationResolver.TryResolveMethodNavigationTarget(
+                assemblyPath,
+                methodMetadataToken,
+                out declaringTypeMetadataToken,
+                out resolvedMethodName,
+                out resolvedContainingTypeName,
+                out resolvedSymbolKind))
+            {
+                return null;
+            }
+
+            var decompiled = RequestDecompilerSource(state, assemblyPath, declaringTypeMetadataToken, DecompilerEntityKind.Type, ignoreCache);
+            if (decompiled == null)
+            {
+                return null;
+            }
+
+            var effectiveMetadataName = !string.IsNullOrEmpty(metadataName) ? metadataName : resolvedMethodName;
+            var effectiveContainingTypeName = !string.IsNullOrEmpty(containingTypeName) ? containingTypeName : resolvedContainingTypeName;
+            var effectiveSymbolKind = !string.IsNullOrEmpty(symbolKind) ? symbolKind : resolvedSymbolKind;
+            highlightedLine = ResolveSourceNavigationLine(
+                !string.IsNullOrEmpty(decompiled.SourceText) ? decompiled.SourceText : ReadAllTextSafe(decompiled.CachePath),
+                effectiveSymbolKind,
+                effectiveMetadataName,
+                effectiveContainingTypeName);
+
+            MMLog.WriteInfo("[Cortex.Navigation] Prepared decompiled method view via declaring type. CachePath=" + (decompiled.CachePath ?? string.Empty) +
+                ", Line=" + highlightedLine +
+                ", MethodToken=0x" + methodMetadataToken.ToString("X8") +
+                ", DeclaringTypeToken=0x" + declaringTypeMetadataToken.ToString("X8") + ".");
+
+            return decompiled;
         }
 
         public SourceNavigationTarget ResolveRuntimeTarget(RuntimeLogEntry entry, int frameIndex, CortexShellState state)
@@ -259,7 +427,9 @@ namespace Cortex.Services
         {
             var displayName = !string.IsNullOrEmpty(symbolDisplay) ? symbolDisplay : metadataName ?? string.Empty;
             var lineNumber = GetPreferredNavigationLine(definitionRange);
-            if (!string.IsNullOrEmpty(definitionDocumentPath) && File.Exists(definitionDocumentPath))
+            if (!string.IsNullOrEmpty(definitionDocumentPath) &&
+                File.Exists(definitionDocumentPath) &&
+                !CortexModuleUtil.IsDecompilerDocumentPath(state, definitionDocumentPath))
             {
                 if (lineNumber <= 0)
                 {
@@ -293,6 +463,37 @@ namespace Cortex.Services
                 return false;
             }
 
+            string sourceDocumentPath;
+            if (_sourcePreferredDocumentResolver.TryResolveFromSymbol(
+                state,
+                _sourceLookupIndex,
+                definitionDocumentPath,
+                documentationCommentId,
+                containingTypeName,
+                metadataName,
+                symbolKind,
+                out sourceDocumentPath))
+            {
+                var sourceLine = ShouldTrustSourceLineMapping(state, definitionDocumentPath, sourceDocumentPath) && lineNumber > 0
+                    ? lineNumber
+                    : ResolveSourceNavigationLine(
+                        ReadAllTextSafe(sourceDocumentPath),
+                        symbolKind,
+                        metadataName,
+                        containingTypeName);
+
+                MMLog.WriteInfo("[Cortex.Navigation] Opening preferred source symbol target. Symbol=" + displayName +
+                    ", File=" + sourceDocumentPath +
+                    ", Line=" + sourceLine +
+                    ", SourcePreferred=True.");
+                return OpenDocument(
+                    state,
+                    sourceDocumentPath,
+                    sourceLine,
+                    successStatusMessage,
+                    failureStatusMessage) != null;
+            }
+
             int metadataToken;
             DecompilerEntityKind entityKind;
             if (!MetadataNavigationResolver.TryResolveMetadataTarget(assemblyPath, documentationCommentId, containingTypeName, symbolKind, out metadataToken, out entityKind))
@@ -303,6 +504,20 @@ namespace Cortex.Services
                 }
 
                 return false;
+            }
+
+            if (entityKind == DecompilerEntityKind.Method)
+            {
+                return OpenDecompilerMethodTarget(
+                    state,
+                    assemblyPath,
+                    metadataToken,
+                    metadataName,
+                    containingTypeName,
+                    symbolKind,
+                    false,
+                    !string.IsNullOrEmpty(successStatusMessage) ? successStatusMessage : "Opened decompiled definition: " + displayName,
+                    failureStatusMessage);
             }
 
             var decompiled = RequestDecompilerSource(state, assemblyPath, metadataToken, entityKind, false);
@@ -342,6 +557,15 @@ namespace Cortex.Services
                 : 0;
         }
 
+        private static bool ShouldTrustSourceLineMapping(CortexShellState state, string definitionDocumentPath, string sourceDocumentPath)
+        {
+            return !string.IsNullOrEmpty(definitionDocumentPath) &&
+                !string.IsNullOrEmpty(sourceDocumentPath) &&
+                File.Exists(definitionDocumentPath) &&
+                !CortexModuleUtil.IsDecompilerDocumentPath(state, definitionDocumentPath) &&
+                PathsEqual(definitionDocumentPath, sourceDocumentPath);
+        }
+
         private static int ResolveSourceNavigationLine(string sourceText, string symbolKind, string metadataName, string containingTypeName)
         {
             var lines = CortexModuleUtil.SplitLines(sourceText);
@@ -371,6 +595,20 @@ namespace Cortex.Services
             return symbolLine > 0 ? symbolLine : 1;
         }
 
+        private static string GetTypeLeafName(string fullTypeName)
+        {
+            if (string.IsNullOrEmpty(fullTypeName))
+            {
+                return string.Empty;
+            }
+
+            var normalized = fullTypeName.Replace('+', '.');
+            var lastDot = normalized.LastIndexOf('.');
+            return lastDot >= 0 && lastDot + 1 < normalized.Length
+                ? normalized.Substring(lastDot + 1)
+                : normalized;
+        }
+
         private static int FindPatternLine(string[] lines, string pattern)
         {
             if (lines == null || lines.Length == 0 || string.IsNullOrEmpty(pattern))
@@ -388,6 +626,26 @@ namespace Cortex.Services
             }
 
             return 0;
+        }
+
+        private static bool PathsEqual(string left, string right)
+        {
+            if (string.IsNullOrEmpty(left) || string.IsNullOrEmpty(right))
+            {
+                return false;
+            }
+
+            try
+            {
+                return string.Equals(
+                    Path.GetFullPath(left),
+                    Path.GetFullPath(right),
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+            }
         }
 
         private static string GetNavigationSymbolName(string metadataName, string containingTypeName)
@@ -428,7 +686,9 @@ namespace Cortex.Services
 
             if (string.Equals(normalizedKind, "Constructor", StringComparison.OrdinalIgnoreCase))
             {
-                var typeName = GetNavigationSymbolName(symbolName, containingTypeName);
+                var typeName = !string.IsNullOrEmpty(containingTypeName)
+                    ? GetNavigationSymbolName(string.Empty, containingTypeName)
+                    : GetNavigationSymbolName(symbolName, containingTypeName);
                 return "\\b" + Regex.Escape(typeName) + "\\s*\\(";
             }
 

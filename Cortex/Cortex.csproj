@@ -134,6 +134,7 @@
     <Compile Include="Services\EditorMethodHarmonyContextService.cs" />
     <Compile Include="Services\EditorMethodInspectorService.cs" />
     <Compile Include="Services\EditorMethodInspectorPresentationService.cs" />
+    <Compile Include="Services\EditorMethodInspectorNavigationActionCodec.cs" />
     <Compile Include="Services\EditorMethodRelationshipsContextService.cs" />
     <Compile Include="Services\EditorMethodTargetMetadataService.cs" />
     <Compile Include="Services\EditorOverlayInteractionService.cs" />
@@ -157,6 +158,7 @@
     <Compile Include="Services\EditorSemanticOperationService.cs" />
     <Compile Include="Services\SourceEditorCommandRouterService.cs" />
     <Compile Include="Services\SourceEditorHoverService.cs" />
+    <Compile Include="Services\SourcePreferredDocumentResolver.cs" />
     <Compile Include="Services\SemanticWorkspaceEditService.cs" />
     <Compile Include="Services\UsingDirectiveOrganizationService.cs" />
     <Compile Include="Services\WorkbenchSearchService.cs" />
