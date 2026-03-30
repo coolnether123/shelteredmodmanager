@@ -226,6 +226,16 @@ namespace ModAPI.Core
             {
                 MMLog.WriteWarning("[PluginManager] Optional runtime assembly 'Cortex.Host.Unity' was not resolved. Unity host bootstrap will be unavailable.");
             }
+
+            var cortexPlatformAssembly = SharedAssemblyResolver.ResolveSharedAssembly("Cortex.Platform.ModAPI");
+            if (cortexPlatformAssembly != null)
+            {
+                MMLog.WriteInfo("[PluginManager] Optional runtime assembly available: " + cortexPlatformAssembly.GetName().Name + " @ " + cortexPlatformAssembly.Location);
+            }
+            else
+            {
+                MMLog.WriteWarning("[PluginManager] Optional runtime assembly 'Cortex.Platform.ModAPI' was not resolved. Cortex ModAPI bootstrap will be unavailable.");
+            }
             HarmonyBootstrap.EnsurePatched();
             
             // Force injection in case SaveManager.Awake already ran before we could patch it
@@ -275,6 +285,9 @@ namespace ModAPI.Core
             failures += LogAssembly("ModAPI", Assembly.GetExecutingAssembly());
             failures += LogAssembly("0Harmony", ResolveAssemblyByType("HarmonyLib.Harmony, 0Harmony"));
             failures += LogAssembly("ShelteredAPI", SharedAssemblyResolver.ResolveSharedAssembly("ShelteredAPI"));
+            failures += LogAssembly("Cortex", SharedAssemblyResolver.ResolveSharedAssembly("Cortex"));
+            failures += LogAssembly("Cortex.Host.Unity", SharedAssemblyResolver.ResolveSharedAssembly("Cortex.Host.Unity"));
+            failures += LogAssembly("Cortex.Platform.ModAPI", SharedAssemblyResolver.ResolveSharedAssembly("Cortex.Platform.ModAPI"));
 
             MMLog.WriteDebug($"Assembly Resolution: Failed Assemblies: {failures}");
         }

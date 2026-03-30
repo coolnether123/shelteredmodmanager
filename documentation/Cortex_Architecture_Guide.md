@@ -55,6 +55,9 @@ At a high level, Cortex is composed of these layers:
 
 5. `Cortex.Host.Unity`
 - Unity host composition and default workbench setup
+- host-only bootstrap primitives for applying a composed Cortex shell into Unity
+- the host/platform seam where a loader-specific `ICortexPlatformModule` is attached
+- must not choose a concrete mod loader or implement a loader bootstrap API itself
 
 6. `Cortex.Roslyn.Worker`
 - out-of-process Roslyn worker on a modern .NET runtime
@@ -486,6 +489,23 @@ Cortex should continue following these principles:
 - stale-response rejection
 - extension-friendly workbench design
 - runtime-safe dependencies for the in-game process
+
+## 22.1 Host And Loader Composition Boundary
+
+`Cortex.Host.Unity` is the reusable Unity host layer, not a mod-loader integration assembly.
+
+That means:
+- `Cortex.Host.Unity` may depend on Cortex host abstractions, presentation/runtime wiring, rendering, and Unity
+- `Cortex.Host.Unity` must not directly depend on a concrete loader such as ModAPI
+- concrete loader bootstraps must live in loader-specific assemblies
+- loader-specific assemblies attach their `ICortexPlatformModule` through the host composition seam, not by patching host internals
+
+The intended composition flow is:
+1. a loader-specific assembly creates its concrete `ICortexPlatformModule`
+2. that assembly attaches the module through `UnityCortexShellBootstrapper.EnsureShell(...)`
+3. the Unity host creates its default host composition internally from that platform module
+
+This keeps all loader-dependent runtime behavior behind one explicit attachment point while preserving a reusable Unity host for future loaders.
 
 ## 23. Practical Summary
 

@@ -1,28 +1,37 @@
 using System;
+using Cortex.Core.Abstractions;
 using Cortex.Core.Diagnostics;
-using Cortex.Platform.ModAPI.Runtime;
-using ModAPI.Core;
 using UnityEngine;
 
 namespace Cortex.Host.Unity.Runtime
 {
     /// <summary>
-    /// Boots the Cortex shell into the live Unity runtime when the Unity host assembly is present.
+    /// Applies the Unity host with a single platform-module attachment point.
+    /// Loader-specific assemblies provide their <see cref="ICortexPlatformModule"/> here and the
+    /// host performs the default host-only composition internally.
     /// </summary>
-    public sealed class CortexUnityRuntimeBootstrap : IGameRuntimeBootstrap
+    public static class UnityCortexShellBootstrapper
     {
         private static readonly CortexLogger Log = CortexLog.ForSource("Cortex.Host.Unity");
 
-        /// <summary>
-        /// Ensures a single persistent Cortex shell exists in the active Unity runtime.
-        /// </summary>
-        public void Initialize()
+        public static void EnsureShell(ICortexPlatformModule platformModule)
+        {
+            if (platformModule == null)
+            {
+                throw new ArgumentNullException("platformModule");
+            }
+
+            EnsureShell(UnityCortexHostCompositionRoot.CreateDefault(platformModule));
+        }
+
+        private static void EnsureShell(UnityCortexHostCompositionRoot compositionRoot)
         {
             try
             {
-                var compositionRoot = new UnityCortexHostCompositionRoot(new ModApiCortexPlatformModule());
                 CortexLog.Configure(compositionRoot.LogSink);
-                CortexDiagnostics.Configure(compositionRoot.PlatformModule != null ? compositionRoot.PlatformModule.DiagnosticConfiguration : null);
+
+                var platformModule = compositionRoot.HostServices.PlatformModule;
+                CortexDiagnostics.Configure(platformModule != null ? platformModule.DiagnosticConfiguration : null);
 
                 var existingShell = UnityEngine.Object.FindObjectOfType<UnityCortexShellBehaviour>();
                 if (existingShell != null)

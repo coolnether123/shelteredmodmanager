@@ -13,7 +13,9 @@ namespace ModAPI.Core
             "ModAPI.Core",
             "ShelteredAPI",
             "0Harmony",
-            "Cortex"
+            "Cortex",
+            "Cortex.Host.Unity",
+            "Cortex.Platform.ModAPI"
         };
 
         internal static bool IsSharedRuntimeAssemblyName(string simpleName)
