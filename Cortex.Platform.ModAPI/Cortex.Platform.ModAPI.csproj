@@ -44,6 +44,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Runtime\MmLogCortexLogSink.cs" />
+    <Compile Include="Runtime\ModApiCortexRuntimeBootstrap.cs" />
     <Compile Include="Runtime\ModApiCortexDiagnosticConfiguration.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Runtime\HarmonyRuntimeInspectionService.cs" />
@@ -54,6 +55,11 @@
     <ProjectReference Include="..\Cortex.Core\Cortex.Core.csproj">
       <Project>{A5F28666-878B-4C48-A7DA-4A19BFC79F02}</Project>
       <Name>Cortex.Core</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj">
+      <Project>{7A570620-E51D-499E-A28E-13A1D8156417}</Project>
+      <Name>Cortex.Host.Unity</Name>
       <Private>False</Private>
     </ProjectReference>
     <ProjectReference Include="..\GameModding.Shared\GameModding.Shared.csproj">

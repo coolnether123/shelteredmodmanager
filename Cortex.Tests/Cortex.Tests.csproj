@@ -27,5 +27,6 @@
     <ProjectReference Include="..\Cortex\Cortex.csproj" />
     <ProjectReference Include="..\Cortex.Core\Cortex.Core.csproj" />
     <ProjectReference Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj" />
+    <ProjectReference Include="..\Cortex.Platform.ModAPI\Cortex.Platform.ModAPI.csproj" />
   </ItemGroup>
 </Project>

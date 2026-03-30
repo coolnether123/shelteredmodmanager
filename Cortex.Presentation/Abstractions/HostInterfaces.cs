@@ -35,6 +35,10 @@ namespace Cortex.Presentation.Abstractions
 
         IWorkbenchRuntimeFactory WorkbenchRuntimeFactory { get; }
 
+        /// <summary>
+        /// The single loader/platform attachment point consumed by the Cortex host.
+        /// Host code must use this abstraction rather than reference loader-specific types.
+        /// </summary>
         ICortexPlatformModule PlatformModule { get; }
 
         ICortexShellHostUi ShellHostUi { get; }
