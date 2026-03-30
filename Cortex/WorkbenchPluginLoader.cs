@@ -116,7 +116,11 @@ namespace Cortex
                 var normalizedRoot = Path.GetFullPath(rootPath);
                 if (File.Exists(normalizedRoot))
                 {
-                    TryAddAssemblyDescriptor(normalizedRoot, string.Empty, string.Empty, descriptors, seenAssemblyPaths);
+                    if (string.Equals(Path.GetFileName(normalizedRoot), ManifestFileName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        TryAddManifestDescriptor(normalizedRoot, descriptors, seenAssemblyPaths);
+                    }
+
                     return;
                 }
 
@@ -134,10 +138,7 @@ namespace Cortex
                 {
                     var pluginManifest = Path.Combine(pluginsDirectory, ManifestFileName);
                     TryAddManifestDescriptor(pluginManifest, descriptors, seenAssemblyPaths);
-                    AddAssembliesFromDirectory(pluginsDirectory, descriptors, seenAssemblyPaths);
                 }
-
-                AddAssembliesFromDirectory(normalizedRoot, descriptors, seenAssemblyPaths);
             }
             catch
             {
@@ -195,32 +196,6 @@ namespace Cortex
             }
             catch
             {
-            }
-        }
-
-        private void AddAssembliesFromDirectory(
-            string directoryPath,
-            IList<WorkbenchPluginDescriptor> descriptors,
-            HashSet<string> seenAssemblyPaths)
-        {
-            string[] assemblies;
-            try
-            {
-                assemblies = Directory.GetFiles(directoryPath, "*.dll", SearchOption.TopDirectoryOnly);
-            }
-            catch
-            {
-                assemblies = new string[0];
-            }
-
-            for (var i = 0; i < assemblies.Length; i++)
-            {
-                if (assemblies[i].IndexOf("Cortex.Plugins.Abstractions", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    continue;
-                }
-
-                TryAddAssemblyDescriptor(assemblies[i], string.Empty, string.Empty, descriptors, seenAssemblyPaths);
             }
         }
 

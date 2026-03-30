@@ -59,6 +59,11 @@
     <Compile Include="Services\HarmonyMethodResolver.cs" />
     <Compile Include="Services\HarmonyTemplateNavigationService.cs" />
     <Compile Include="Services\HarmonyWorkflowController.cs" />
+    <Compile Include="Services\HarmonyWorkflowController.Generation.cs" />
+    <Compile Include="Services\HarmonyWorkflowController.Inspection.cs" />
+    <Compile Include="Services\HarmonyWorkflowController.Inspection.Shared.cs" />
+    <Compile Include="Services\HarmonyWorkflowController.Presentation.cs" />
+    <Compile Include="Services\HarmonyWorkflowController.Shared.cs" />
     <Compile Include="Services\Editor\HarmonyMethodInspectorNavigationActionCodec.cs" />
     <Compile Include="Services\Editor\HarmonyMethodInspectorNavigationActionFactory.cs" />
     <Compile Include="Services\Generation\HarmonyPatchInsertionService.cs" />

@@ -53,7 +53,16 @@ namespace Cortex.Plugin.Harmony
 
         public HarmonyDocumentState GetDocument(IWorkbenchModuleRuntime runtime, EditorContextSnapshot context, bool create)
         {
-            return GetDocument(runtime, context != null ? context.DocumentPath : string.Empty, create);
+            var store = runtime != null && runtime.State != null ? runtime.State.Contexts : null;
+            var scope = runtime != null && runtime.Editor != null && context != null ? runtime.Editor.CreateDocumentScope(context) : null;
+            if (store == null || scope == null)
+            {
+                return GetDocument(runtime, context != null ? context.DocumentPath : string.Empty, create);
+            }
+
+            return create
+                ? store.GetOrCreate<HarmonyDocumentState>(scope, DocumentStateKey, delegate { return new HarmonyDocumentState(); })
+                : store.Get<HarmonyDocumentState>(scope, DocumentStateKey);
         }
 
         public HarmonyDocumentState GetDocument(IWorkbenchModuleRuntime runtime, string documentPath, bool create)

@@ -101,6 +101,48 @@ namespace Cortex.Tests.Shell
             });
         }
 
+        [Fact]
+        public void LoadPlugins_IgnoresDllsWithoutPluginManifest()
+        {
+            UnityManagedAssemblyResolver.Run(delegate
+            {
+                var tempRoot = Path.Combine(Path.GetTempPath(), "cortex-plugin-loader-manifest-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(tempRoot);
+
+                try
+                {
+                    var bundledRoot = Path.Combine(tempRoot, "bin", "plugins");
+                    Directory.CreateDirectory(bundledRoot);
+                    var copiedAssemblyPath = Path.Combine(bundledRoot, "ReviewNotesWorkbenchPlugin.dll");
+                    File.Copy(typeof(ReviewNotesWorkbenchPlugin).Assembly.Location, copiedAssemblyPath, true);
+
+                    var runtime = new TestWorkbenchRuntime(new CommandRegistry(), new ContributionRegistry());
+                    var loader = new WorkbenchPluginLoader();
+                    var moduleRegistry = new CortexShellModuleContributionRegistry();
+                    var extensionRegistry = new WorkbenchExtensionRegistry();
+                    var runtimeAccess = new WorkbenchRuntimeAccess(new CortexShellState(), delegate { return null; });
+                    var hostEnvironment = new TestHostEnvironment(Path.Combine(tempRoot, "bin"), bundledRoot);
+
+                    var results = loader.LoadPlugins(
+                        new CortexSettings { ModsRootPath = Path.Combine(tempRoot, "mods") },
+                        hostEnvironment,
+                        runtime.CommandRegistry,
+                        runtime.ContributionRegistry,
+                        moduleRegistry,
+                        extensionRegistry,
+                        runtimeAccess);
+
+                    Assert.Empty(results);
+                    Assert.DoesNotContain(runtime.ContributionRegistry.GetViewContainers(), container => string.Equals(container.ContainerId, ReviewNotesWorkbenchPlugin.ContainerId, StringComparison.Ordinal));
+                    Assert.Null(moduleRegistry.FindContribution(ReviewNotesWorkbenchPlugin.ContainerId));
+                }
+                finally
+                {
+                    TryDeleteDirectory(tempRoot);
+                }
+            });
+        }
+
         private static CortexShellModuleServices CreateModuleServices(CortexShellState state, TestWorkbenchRuntime runtime)
         {
             return new CortexShellModuleServices(
