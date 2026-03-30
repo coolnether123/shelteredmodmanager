@@ -36,6 +36,7 @@ namespace Cortex.Plugin.Harmony
             var editorContext = runtime.Editor != null ? runtime.Editor.GetActiveContext() : null;
             var documentState = _stateStore.GetDocument(runtime, editorContext, false);
             var editorState = _stateStore.GetEditor(runtime, editorContext, false);
+            var activeTarget = editorContext != null ? editorContext.Target : null;
             var ui = context.Ui;
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
@@ -47,16 +48,16 @@ namespace Cortex.Plugin.Harmony
                     : "Select a method or use the Harmony actions to inspect live patch data.");
 
             GUILayout.BeginHorizontal();
+            GUI.enabled = runtime.Commands != null && runtime.Commands.CanExecute(HarmonyPluginIds.RefreshCommandId, null);
             if (GUILayout.Button("Refresh", GUILayout.Width(100f)))
             {
-                string statusMessage;
-                _workflowController.Refresh(runtime, out statusMessage);
+                runtime.Commands.Execute(HarmonyPluginIds.RefreshCommandId, null);
             }
 
-            GUI.enabled = workflow != null && workflow.ActiveSummary != null;
+            GUI.enabled = runtime.Commands != null && runtime.Commands.CanExecute(HarmonyPluginIds.CopySummaryCommandId, null);
             if (GUILayout.Button("Copy Summary", GUILayout.Width(120f)))
             {
-                GUIUtility.systemCopyBuffer = _workflowController.BuildSummaryText(runtime);
+                runtime.Commands.Execute(HarmonyPluginIds.CopySummaryCommandId, null);
             }
             GUI.enabled = true;
             GUI.enabled = workflow != null && workflow.ActiveSummary != null && workflow.ActiveSummary.Target != null;
@@ -92,15 +93,15 @@ namespace Cortex.Plugin.Harmony
             });
 
             GUILayout.BeginHorizontal();
+            GUI.enabled = runtime.Commands != null && runtime.Commands.CanExecute(HarmonyPluginIds.GeneratePrefixCommandId, activeTarget);
             if (GUILayout.Button("Generate Prefix", GUILayout.Width(140f)))
             {
-                string statusMessage;
-                _workflowController.PrepareGeneration(runtime, runtime.Editor != null && runtime.Editor.GetActiveContext() != null ? runtime.Editor.GetActiveContext().Target : null, HarmonyPatchGenerationKind.Prefix, out statusMessage);
+                runtime.Commands.Execute(HarmonyPluginIds.GeneratePrefixCommandId, activeTarget);
             }
+            GUI.enabled = runtime.Commands != null && runtime.Commands.CanExecute(HarmonyPluginIds.GeneratePostfixCommandId, activeTarget);
             if (GUILayout.Button("Generate Postfix", GUILayout.Width(140f)))
             {
-                string statusMessage;
-                _workflowController.PrepareGeneration(runtime, runtime.Editor != null && runtime.Editor.GetActiveContext() != null ? runtime.Editor.GetActiveContext().Target : null, HarmonyPatchGenerationKind.Postfix, out statusMessage);
+                runtime.Commands.Execute(HarmonyPluginIds.GeneratePostfixCommandId, activeTarget);
             }
             GUI.enabled = workflow != null && workflow.GenerationPreview != null && workflow.GenerationPreview.CanApply;
             if (GUILayout.Button("Insert Patch", GUILayout.Width(120f)))
