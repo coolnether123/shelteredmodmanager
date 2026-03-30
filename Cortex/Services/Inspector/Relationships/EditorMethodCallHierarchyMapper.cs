@@ -25,6 +25,8 @@ namespace Cortex.Services.Inspector.Relationships
                     continue;
                 }
 
+                var definitionLocation = FindPreferredDefinitionLocation(item.Locations);
+
                 EditorMethodRelationshipSet.AddDistinct(items, new EditorMethodRelationshipItem
                 {
                     Title = item.SymbolDisplay ?? string.Empty,
@@ -34,10 +36,40 @@ namespace Cortex.Services.Inspector.Relationships
                     ContainingTypeName = item.ContainingTypeName ?? string.Empty,
                     ContainingAssemblyName = item.ContainingAssemblyName ?? string.Empty,
                     DocumentationCommentId = item.DocumentationCommentId ?? string.Empty,
+                    DefinitionDocumentPath = definitionLocation != null ? definitionLocation.DocumentPath ?? string.Empty : string.Empty,
+                    DefinitionRange = definitionLocation != null ? definitionLocation.Range : null,
                     Relationship = item.Relationship ?? "Call",
                     CallCount = item.CallCount > 0 ? item.CallCount : 1
                 });
             }
+        }
+
+        private static LanguageServiceSymbolLocation FindPreferredDefinitionLocation(LanguageServiceSymbolLocation[] locations)
+        {
+            if (locations == null || locations.Length == 0)
+            {
+                return null;
+            }
+
+            for (var i = 0; i < locations.Length; i++)
+            {
+                var location = locations[i];
+                if (location != null && location.IsDefinition)
+                {
+                    return location;
+                }
+            }
+
+            for (var i = 0; i < locations.Length; i++)
+            {
+                var location = locations[i];
+                if (location != null && location.IsPrimary)
+                {
+                    return location;
+                }
+            }
+
+            return locations[0];
         }
     }
 }

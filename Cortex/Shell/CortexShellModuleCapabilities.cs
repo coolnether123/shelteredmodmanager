@@ -55,6 +55,7 @@ namespace Cortex
     internal interface IFileExplorerModuleServices
     {
         CortexShellState State { get; }
+        IContributionRegistry ContributionRegistry { get; }
         ICortexNavigationService NavigationService { get; }
         IWorkspaceBrowserService WorkspaceBrowserService { get; }
         IDecompilerExplorerService DecompilerExplorerService { get; }

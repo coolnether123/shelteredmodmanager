@@ -94,7 +94,7 @@ namespace ModAPI.Core
                     byte[] assemblyBytes = File.ReadAllBytes(dllPath);
                     var asm = Assembly.Load(assemblyBytes);
                     assemblies.Add(asm);
-                    ModRegistry.RegisterAssemblyForMod(asm, entry);
+                    ModRegistry.RegisterAssemblyForMod(asm, entry, dllPath);
                 }
                 catch (Exception ex)
                 {

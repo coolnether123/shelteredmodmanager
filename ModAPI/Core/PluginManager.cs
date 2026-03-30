@@ -694,7 +694,7 @@ namespace ModAPI.Core
                     if (preparedAssembly == null || preparedAssembly.Assembly == null)
                         continue;
 
-                    ModRegistry.RegisterAssemblyForMod(preparedAssembly.Assembly, entry);
+                    ModRegistry.RegisterAssemblyForMod(preparedAssembly.Assembly, entry, preparedAssembly.Path);
                 }
             }
         }

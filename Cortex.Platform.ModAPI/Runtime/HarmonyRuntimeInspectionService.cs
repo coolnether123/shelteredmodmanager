@@ -650,9 +650,25 @@ namespace Cortex.Platform.ModAPI.Runtime
         {
             try
             {
-                return method != null && method.DeclaringType != null && method.DeclaringType.Assembly != null
-                    ? method.DeclaringType.Assembly.Location ?? string.Empty
-                    : string.Empty;
+                if (method == null || method.DeclaringType == null || method.DeclaringType.Assembly == null)
+                {
+                    return string.Empty;
+                }
+
+                var assembly = method.DeclaringType.Assembly;
+                var location = assembly.Location ?? string.Empty;
+                if (!string.IsNullOrEmpty(location))
+                {
+                    return location;
+                }
+
+                string registeredPath;
+                if (global::ModAPI.Core.ModRegistry.TryGetAssemblyPath(assembly, out registeredPath))
+                {
+                    return registeredPath ?? string.Empty;
+                }
+
+                return string.Empty;
             }
             catch
             {

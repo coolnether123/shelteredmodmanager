@@ -11,6 +11,7 @@ namespace ModAPI.Core
     {
         private static Dictionary<string, ModEntry> _modsById = new Dictionary<string, ModEntry>(System.StringComparer.OrdinalIgnoreCase);
         private static Dictionary<Assembly, ModEntry> _modByAssembly = new Dictionary<Assembly, ModEntry>();
+        private static Dictionary<Assembly, string> _assemblyPathByAssembly = new Dictionary<Assembly, string>();
 
         /// <summary>
         /// Registers or updates a mod entry by id.
@@ -36,9 +37,21 @@ namespace ModAPI.Core
         /// </summary>
         public static void RegisterAssemblyForMod(Assembly assembly, ModEntry mod)
         {
+            RegisterAssemblyForMod(assembly, mod, string.Empty);
+        }
+
+        /// <summary>
+        /// Associates a loaded assembly with its owning mod entry and on-disk assembly path.
+        /// </summary>
+        public static void RegisterAssemblyForMod(Assembly assembly, ModEntry mod, string assemblyPath)
+        {
             if (assembly != null && mod != null)
             {
                 _modByAssembly[assembly] = mod;
+                if (!string.IsNullOrEmpty(assemblyPath))
+                {
+                    _assemblyPathByAssembly[assembly] = assemblyPath;
+                }
             }
         }
 
@@ -63,6 +76,21 @@ namespace ModAPI.Core
                 return false;
             }
             return _modByAssembly.TryGetValue(assembly, out mod);
+        }
+
+        /// <summary>
+        /// Resolves the on-disk DLL path for a previously loaded assembly when available.
+        /// </summary>
+        public static bool TryGetAssemblyPath(Assembly assembly, out string assemblyPath)
+        {
+            assemblyPath = string.Empty;
+            if (assembly == null)
+            {
+                return false;
+            }
+
+            return _assemblyPathByAssembly.TryGetValue(assembly, out assemblyPath) &&
+                !string.IsNullOrEmpty(assemblyPath);
         }
 
         /// <summary>
@@ -121,6 +149,7 @@ namespace ModAPI.Core
         {
             _modsById.Clear();
             _modByAssembly.Clear();
+            _assemblyPathByAssembly.Clear();
         }
     }
 }

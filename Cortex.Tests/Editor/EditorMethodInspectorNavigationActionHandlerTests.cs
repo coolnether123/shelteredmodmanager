@@ -1,8 +1,10 @@
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
 using Cortex.Services.Inspector.Actions;
+using Cortex.Services.Harmony.Navigation;
 using Cortex.Services.Inspector.Relationships;
 using Cortex.Services.Navigation;
+using Cortex.Services.Navigation.Symbols;
 using Xunit;
 
 namespace Cortex.Tests.Editor
@@ -21,7 +23,15 @@ namespace Cortex.Tests.Editor
                 MetadataName = "Execute",
                 ContainingTypeName = "Sample.TargetType",
                 ContainingAssemblyName = "Sample.Assembly",
-                DocumentationCommentId = "M:Sample.TargetType.Execute"
+                DocumentationCommentId = "M:Sample.TargetType.Execute",
+                DefinitionDocumentPath = @"D:\workspace\Sample.cs",
+                DefinitionRange = new LanguageServiceRange
+                {
+                    StartLine = 12,
+                    StartColumn = 5,
+                    EndLine = 12,
+                    EndColumn = 18
+                }
             })[0];
 
             var handled = handler.TryHandle(new CortexShellState(), navigationService, action.Id);
@@ -32,6 +42,101 @@ namespace Cortex.Tests.Editor
             Assert.Equal("Sample.TargetType", navigationService.ContainingTypeName);
             Assert.Equal("Sample.Assembly", navigationService.ContainingAssemblyName);
             Assert.Equal("M:Sample.TargetType.Execute", navigationService.DocumentationCommentId);
+            Assert.Equal(@"D:\workspace\Sample.cs", navigationService.DefinitionDocumentPath);
+            Assert.NotNull(navigationService.DefinitionRange);
+            Assert.Equal(12, navigationService.DefinitionRange.StartLine);
+        }
+
+        [Fact]
+        public void Handle_OpensHarmonyPatchTarget_WithEncodedHarmonyPayload()
+        {
+            var factory = new EditorMethodInspectorNavigationActionFactory();
+            var handler = new EditorMethodInspectorNavigationActionHandler();
+            var navigationService = new RecordingNavigationService();
+            var action = factory.CreateHarmonyNavigationActions(
+                new HarmonyPatchNavigationTarget
+                {
+                    AssemblyPath = "Sample.Patches",
+                    MetadataToken = 77,
+                    MethodName = "Prefix"
+                },
+                "Open",
+                "Open the patch method.")[0];
+
+            var handled = handler.TryHandle(new CortexShellState(), navigationService, action.Id);
+
+            Assert.True(handled);
+            Assert.Equal("Sample.Patches", navigationService.DecompiledAssemblyPath);
+            Assert.Equal(77, navigationService.DecompiledMetadataToken);
+        }
+
+        [Fact]
+        public void ResolvePreferredPatchTarget_MatchesDecompilerRelationship_ToSelectedProjectPatch()
+        {
+            var state = new CortexShellState
+            {
+                SelectedProject = new CortexProjectDefinition
+                {
+                    ModId = "coolnether123.sheltereddisplayfixes",
+                    SourceRootPath = @"D:\Projects\Sheltered Modding\Sheltered Display Fixes"
+                },
+                Settings = new CortexSettings
+                {
+                    DecompilerCachePath = @"C:\Program Files (x86)\GOG Galaxy\Games\Sheltered\SMM\bin\cortex_cache"
+                }
+            };
+            state.Harmony.SnapshotMethods = new[]
+            {
+                new HarmonyMethodPatchSummary
+                {
+                    IsPatched = true,
+                    DeclaringType = "CustomisationPanel",
+                    MethodName = "OnShow",
+                    AssemblyPath = @"C:\Program Files (x86)\GOG Galaxy\Games\Sheltered\Sheltered_Data\Managed\Assembly-CSharp.dll",
+                    Entries = new[]
+                    {
+                        new HarmonyPatchEntry
+                        {
+                            OwnerAssociation = new HarmonyPatchOwnerAssociation
+                            {
+                                ProjectModId = "coolnether123.sheltereddisplayfixes",
+                                ProjectSourceRootPath = @"D:\Projects\Sheltered Modding\Sheltered Display Fixes",
+                                HasMatch = true
+                            },
+                            NavigationTarget = new HarmonyPatchNavigationTarget
+                            {
+                                AssemblyPath = "Sheltered.DisplayFixes",
+                                MetadataToken = 42,
+                                MethodName = "OnShowPatch"
+                            }
+                        }
+                    }
+                }
+            };
+            var request = new LanguageSymbolNavigationRequest
+            {
+                SymbolKind = "Method",
+                MetadataName = "OnShow",
+                ContainingTypeName = "CustomisationPanel",
+                ContainingAssemblyName = "Sheltered Display Fixes",
+                DocumentationCommentId = "M:CustomisationPanel.OnShow",
+                DefinitionDocumentPath = @"C:\Program Files (x86)\GOG Galaxy\Games\Sheltered\SMM\bin\cortex_cache\Assembly-CSharp\CustomisationPanel.cs",
+                DefinitionRange = new LanguageServiceRange
+                {
+                    StartLine = 182,
+                    StartColumn = 14,
+                    EndLine = 182,
+                    EndColumn = 20
+                }
+            };
+            HarmonyPatchNavigationTarget target;
+
+            var handled = HarmonyAssociatedSymbolNavigationResolver.TryResolvePreferredPatchTarget(state, request, out target);
+
+            Assert.True(handled);
+            Assert.NotNull(target);
+            Assert.Equal("Sheltered.DisplayFixes", target.AssemblyPath);
+            Assert.Equal(42, target.MetadataToken);
         }
 
         private sealed class RecordingNavigationService : ICortexNavigationService
@@ -41,6 +146,10 @@ namespace Cortex.Tests.Editor
             public string ContainingTypeName = string.Empty;
             public string ContainingAssemblyName = string.Empty;
             public string DocumentationCommentId = string.Empty;
+            public string DefinitionDocumentPath = string.Empty;
+            public LanguageServiceRange DefinitionRange;
+            public string DecompiledAssemblyPath = string.Empty;
+            public int DecompiledMetadataToken;
 
             public DocumentSession OpenDocument(CortexShellState state, string filePath, int highlightedLine, string successStatusMessage, string failureStatusMessage) { return null; }
             public void PreloadDocument(CortexShellState state, string filePath) { }
@@ -50,7 +159,12 @@ namespace Cortex.Tests.Editor
             public DecompilerResponse RequestDecompilerSource(CortexShellState state, string assemblyPath, int metadataToken, DecompilerEntityKind entityKind, bool ignoreCache) { return null; }
             public bool OpenDecompilerResult(CortexShellState state, DecompilerResponse response, string successStatusMessage, string failureStatusMessage) { return false; }
             public bool OpenDecompilerResult(CortexShellState state, DecompilerResponse response, int highlightedLine, string successStatusMessage, string failureStatusMessage) { return false; }
-            public bool DecompileAndOpen(CortexShellState state, string assemblyPath, int metadataToken, DecompilerEntityKind entityKind, bool ignoreCache, string successStatusMessage, string failureStatusMessage) { return false; }
+            public bool DecompileAndOpen(CortexShellState state, string assemblyPath, int metadataToken, DecompilerEntityKind entityKind, bool ignoreCache, string successStatusMessage, string failureStatusMessage)
+            {
+                DecompiledAssemblyPath = assemblyPath ?? string.Empty;
+                DecompiledMetadataToken = metadataToken;
+                return true;
+            }
             public bool OpenDecompilerMethodTarget(CortexShellState state, string assemblyPath, int methodMetadataToken, string metadataName, string containingTypeName, string symbolKind, bool ignoreCache, string successStatusMessage, string failureStatusMessage) { return false; }
             public DecompilerResponse RequestDecompilerMethodView(CortexShellState state, string assemblyPath, int methodMetadataToken, string metadataName, string containingTypeName, string symbolKind, bool ignoreCache, out int highlightedLine) { highlightedLine = 0; return null; }
             public SourceNavigationTarget ResolveRuntimeTarget(RuntimeLogEntry entry, int frameIndex, CortexShellState state) { return null; }
@@ -76,6 +190,8 @@ namespace Cortex.Tests.Editor
                 ContainingTypeName = containingTypeName ?? string.Empty;
                 ContainingAssemblyName = containingAssemblyName ?? string.Empty;
                 DocumentationCommentId = documentationCommentId ?? string.Empty;
+                DefinitionDocumentPath = definitionDocumentPath ?? string.Empty;
+                DefinitionRange = definitionRange;
                 return true;
             }
         }

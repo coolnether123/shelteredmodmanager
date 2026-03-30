@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Cortex.Core.Models;
 using Cortex.Services.Harmony.Editor;
+using Cortex.Services.Harmony.Inspection;
 using Cortex.Services.Harmony.Presentation;
 using Cortex.Presentation.Models;
 using Cortex.Services.Inspector.Actions;
@@ -315,7 +316,9 @@ namespace Cortex.Services.Inspector.Composition
                             harmonyDisplayService.GetPatchKindLabel(entry.PatchKind) + ": " + BuildPatchTitle(entry),
                             rows.ToArray(),
                             string.Empty,
-                            new MethodInspectorActionViewModel[0]));
+                            _actionFactory != null
+                                ? _actionFactory.CreateHarmonyNavigationActions(entry.NavigationTarget, "Open Patch Method", "Open this Harmony patch method.")
+                                : new MethodInspectorActionViewModel[0]));
                     }
 
                     if (entries.Length > rendered)
@@ -333,7 +336,7 @@ namespace Cortex.Services.Inspector.Composition
             {
                 elements.Add(new MethodInspectorSpacerViewModel { Height = 4f });
                 elements.Add(CreateTextElement("Indirect Harmony", indirectHarmonyContext.StatusMessage, false));
-                AppendIndirectHarmonyElements(elements, indirectHarmonyContext, harmonyDisplayService);
+                AppendIndirectHarmonyElements(state, elements, indirectHarmonyContext, harmonyDisplayService);
             }
 
             if (canCreatePatch || hasPreparedPatch)
@@ -366,7 +369,11 @@ namespace Cortex.Services.Inspector.Composition
             return true;
         }
 
-        private void AppendIndirectHarmonyElements(List<MethodInspectorElementViewModel> elements, EditorIndirectHarmonyContext indirectContext, HarmonyPatchDisplayService harmonyDisplayService)
+        private void AppendIndirectHarmonyElements(
+            CortexShellState state,
+            List<MethodInspectorElementViewModel> elements,
+            EditorIndirectHarmonyContext indirectContext,
+            HarmonyPatchDisplayService harmonyDisplayService)
         {
             if (elements == null || indirectContext == null || indirectContext.IsLoading || indirectContext.PatchedCallerCount <= 0)
             {
@@ -394,7 +401,16 @@ namespace Cortex.Services.Inspector.Composition
                 rows.Add(CreateMetadataElement("Relationship", (caller.Caller.Relationship ?? "Incoming Call") + " (" + caller.Caller.CallCount + ")"));
                 rows.Add(CreateMetadataElement("Patch Counts", harmonyDisplayService.BuildCountBreakdown(caller.Summary.Counts)));
                 rows.Add(CreateMetadataElement("Owners", harmonyDisplayService.BuildOwnerSummary(caller.Summary), false));
-                elements.Add(CreateCardElement(caller.Caller.SymbolDisplay ?? "Patched Caller", rows.ToArray(), string.Empty, new MethodInspectorActionViewModel[0]));
+                elements.Add(CreateCardElement(
+                    caller.Caller.SymbolDisplay ?? "Patched Caller",
+                    rows.ToArray(),
+                    string.Empty,
+                    _actionFactory != null
+                        ? _actionFactory.CreateHarmonyNavigationActions(
+                            HarmonyPatchOwnerAssociationMatcher.GetPreferredPatchNavigationTarget(caller.Summary, state != null ? state.SelectedProject : null),
+                            "Open Patch Method",
+                            "Open the matching Harmony patch method.")
+                        : new MethodInspectorActionViewModel[0]));
             }
         }
 

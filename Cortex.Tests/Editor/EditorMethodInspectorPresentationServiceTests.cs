@@ -293,6 +293,160 @@ namespace Cortex.Tests.Editor
         }
 
         [Fact]
+        public void BuildViewModel_UsedByRelationship_KeepsGenericSymbolAction_WhenHarmonyAssociationExists()
+        {
+            var service = new EditorMethodInspectorPresentationService(null);
+            var state = new CortexShellState
+            {
+                SelectedProject = new CortexProjectDefinition
+                {
+                    ModId = "coolnether123.sheltereddisplayfixes",
+                    SourceRootPath = @"D:\Projects\Sheltered Modding\Sheltered Display Fixes"
+                }
+            };
+            var inspector = new CortexMethodInspectorState
+            {
+                Title = "Worker",
+                RelationshipsExpanded = true
+            };
+            var target = new EditorCommandTarget
+            {
+                SymbolText = "Worker",
+                SymbolKind = "Method",
+                DocumentPath = @"D:\workspace\Worker.cs",
+                DefinitionDocumentPath = @"D:\workspace\Worker.cs",
+                DefinitionLine = 3,
+                DefinitionColumn = 5,
+                Line = 3,
+                Column = 5,
+                ContainingTypeName = "WorkerType",
+                QualifiedSymbolDisplay = "Sample.Namespace.WorkerType.Worker()"
+            };
+            var relationships = new EditorMethodRelationshipsContext
+            {
+                IsExpanded = true,
+                HasResponse = true,
+                IncomingCalls = new[]
+                {
+                    new EditorMethodRelationshipItem
+                    {
+                        Title = "OnShow()",
+                        SymbolKind = "Method",
+                        MetadataName = "OnShow",
+                        ContainingTypeName = "CustomisationPanel",
+                        ContainingAssemblyName = "Sheltered Display Fixes",
+                        DocumentationCommentId = "M:ShelteredDisplayFixes.CustomisationPanel.OnShow",
+                        Relationship = "Incoming Call",
+                        CallCount = 1
+                    }
+                },
+                IncomingCallCount = 1
+            };
+            var indirectHarmonyContext = new EditorIndirectHarmonyContext
+            {
+                PatchedCallerCount = 1,
+                IncomingCallerCount = 1,
+                PatchedCallers = new[]
+                {
+                    new EditorIndirectHarmonyCallerContext
+                    {
+                        Caller = new LanguageServiceCallHierarchyItem
+                        {
+                            SymbolDisplay = "OnShow()",
+                            SymbolKind = "Method",
+                            MetadataName = "OnShow",
+                            ContainingTypeName = "CustomisationPanel",
+                            ContainingAssemblyName = "Assembly-CSharp",
+                            DocumentationCommentId = "M:Game.CustomisationPanel.OnShow",
+                            Relationship = "Incoming Call",
+                            CallCount = 1
+                        },
+                        Summary = new HarmonyMethodPatchSummary
+                        {
+                            IsPatched = true,
+                            Counts = new HarmonyPatchCounts { PrefixCount = 1, TotalCount = 1 },
+                            Owners = new[] { "coolnether123.sheltereddisplayfixes" },
+                            Entries = new[]
+                            {
+                                new HarmonyPatchEntry
+                                {
+                                    OwnerId = "modapi.core",
+                                    OwnerAssociation = new HarmonyPatchOwnerAssociation
+                                    {
+                                        LoadedModId = "modapi.core",
+                                        HasMatch = true
+                                    },
+                                    NavigationTarget = new HarmonyPatchNavigationTarget
+                                    {
+                                        AssemblyPath = "ModAPI",
+                                        MetadataToken = 10,
+                                        MethodName = "Prefix"
+                                    }
+                                },
+                                new HarmonyPatchEntry
+                                {
+                                    OwnerId = "coolnether123.sheltereddisplayfixes",
+                                    OwnerAssociation = new HarmonyPatchOwnerAssociation
+                                    {
+                                        ProjectModId = "coolnether123.sheltereddisplayfixes",
+                                        ProjectSourceRootPath = @"D:\Projects\Sheltered Modding\Sheltered Display Fixes",
+                                        HasMatch = true
+                                    },
+                                    NavigationTarget = new HarmonyPatchNavigationTarget
+                                    {
+                                        AssemblyPath = "Sheltered.DisplayFixes",
+                                        MetadataToken = 42,
+                                        MethodName = "OnShowPatch"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            var document = service.BuildViewModel(
+                state,
+                new DocumentSession { FilePath = target.DocumentPath, Text = "class WorkerType { void Worker() { } }" },
+                inspector,
+                target,
+                relationships,
+                new EditorSourceHarmonyContext(),
+                null,
+                string.Empty,
+                indirectHarmonyContext,
+                new HarmonyPatchDisplayService(),
+                true,
+                false,
+                false,
+                string.Empty);
+
+            var relationshipsSection = document.Sections.Single(section => section.Title == "Relationships");
+            var callerCard = relationshipsSection.Elements.OfType<MethodInspectorCardViewModel>().Single(element => element.Title == "OnShow()");
+            string symbolKind;
+            string metadataName;
+            string containingTypeName;
+            string containingAssemblyName;
+            string documentationCommentId;
+            string definitionDocumentPath;
+            LanguageServiceRange definitionRange;
+
+            Assert.Single(callerCard.Actions);
+            Assert.True(EditorMethodInspectorNavigationActionCodec.TryParse(
+                callerCard.Actions[0].Id,
+                out symbolKind,
+                out metadataName,
+                out containingTypeName,
+                out containingAssemblyName,
+                out documentationCommentId,
+                out definitionDocumentPath,
+                out definitionRange));
+            Assert.Equal("Method", symbolKind);
+            Assert.Equal("OnShow", metadataName);
+            Assert.Equal("CustomisationPanel", containingTypeName);
+        }
+
+        [Fact]
         public void PanelDocumentAdapter_MapsPresentationModel_ToRenderDocument()
         {
             var adapter = new EditorMethodInspectorPanelDocumentAdapter();

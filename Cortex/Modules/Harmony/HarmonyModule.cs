@@ -1,10 +1,10 @@
 using System;
-using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
 using Cortex.Services.Harmony.Generation;
 using Cortex.Services.Harmony.Inspection;
+using Cortex.Services.Harmony.Navigation;
 using Cortex.Services.Harmony.Presentation;
 using Cortex.Services.Harmony.Resolution;
 using Cortex.Services.Navigation;
@@ -131,7 +131,7 @@ namespace Cortex.Modules.Harmony
                 GUI.enabled = summary != null;
                 if (GUILayout.Button("Navigate To Target", GUILayout.Width(136f)))
                 {
-                    OpenNavigationTarget(navigationService, state, summary != null ? summary.Target : null, "Opened Harmony target method.", "Could not open the Harmony target method.");
+                    HarmonyPatchNavigationTargetNavigator.TryOpen(navigationService, state, summary != null ? summary.Target : null, "Opened Harmony target method.", "Could not open the Harmony target method.");
                 }
 
                 GUI.enabled = hasTypeScope && summary != null;
@@ -242,7 +242,7 @@ namespace Cortex.Modules.Harmony
                         GUI.enabled = entry.NavigationTarget != null;
                         if (GUILayout.Button("Navigate To Patch Method", GUILayout.Width(172f)))
                         {
-                            OpenNavigationTarget(navigationService, state, entry.NavigationTarget, "Opened Harmony patch method.", "Could not open the Harmony patch method.");
+                            HarmonyPatchNavigationTargetNavigator.TryOpen(navigationService, state, entry.NavigationTarget, "Opened Harmony patch method.", "Could not open the Harmony patch method.");
                         }
 
                         GUI.enabled = HasOwnerPath(entry.OwnerAssociation);
@@ -664,55 +664,6 @@ namespace Cortex.Modules.Harmony
             return displayService != null
                 ? displayService.BuildCountBreakdown(counts)
                 : counts.TotalCount.ToString();
-        }
-
-        private static void OpenNavigationTarget(ICortexNavigationService navigationService, CortexShellState state, HarmonyPatchNavigationTarget target, string successMessage, string failureMessage)
-        {
-            if (navigationService == null || state == null || target == null)
-            {
-                if (state != null)
-                {
-                    state.StatusMessage = failureMessage;
-                }
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(target.DocumentPath) && File.Exists(target.DocumentPath))
-            {
-                if (!CortexModuleUtil.IsDecompilerDocumentPath(state, target.DocumentPath))
-                {
-                    if (navigationService.OpenDocument(state, target.DocumentPath, target.Line > 0 ? target.Line : 1, successMessage, failureMessage) != null)
-                    {
-                        return;
-                    }
-                }
-            }
-
-            if (!string.IsNullOrEmpty(target.AssemblyPath) && target.MetadataToken > 0)
-            {
-                if (navigationService.DecompileAndOpen(state, target.AssemblyPath, target.MetadataToken, DecompilerEntityKind.Method, false, successMessage, failureMessage))
-                {
-                    return;
-                }
-            }
-
-            if (!string.IsNullOrEmpty(target.CachePath) && File.Exists(target.CachePath))
-            {
-                if (navigationService.OpenDocument(state, target.CachePath, target.Line > 0 ? target.Line : 1, successMessage, failureMessage) != null)
-                {
-                    return;
-                }
-            }
-
-            if (!string.IsNullOrEmpty(target.DocumentPath) && File.Exists(target.DocumentPath))
-            {
-                if (navigationService.OpenDocument(state, target.DocumentPath, target.Line > 0 ? target.Line : 1, successMessage, failureMessage) != null)
-                {
-                    return;
-                }
-            }
-
-            state.StatusMessage = failureMessage;
         }
 
         private static void OpenOwnerAssociation(IPathInteractionService pathInteractionService, HarmonyPatchOwnerAssociation association, CortexShellState state)

@@ -94,6 +94,7 @@
     <Compile Include="Modules\Editor\EditorSurfaceRenderContext.cs" />
     <Compile Include="Modules\Editor\EditorSyntaxHighlighter.cs" />
     <Compile Include="Modules\Harmony\HarmonyCommandContributions.cs" />
+    <Compile Include="Modules\Harmony\HarmonyExplorerFilterContributions.cs" />
     <Compile Include="Modules\Harmony\HarmonyModule.cs" />
     <Compile Include="Modules\FileExplorer\FileExplorerModule.cs" />
     <Compile Include="Modules\Logs\LogsModule.cs" />
@@ -141,7 +142,10 @@
     <Compile Include="Services\Harmony\Generation\HarmonyPatchTemplateService.cs" />
     <Compile Include="Services\Harmony\Inspection\HarmonyPatchInspectionKeyService.cs" />
     <Compile Include="Services\Harmony\Inspection\HarmonyPatchInspectionService.cs" />
+    <Compile Include="Services\Harmony\Inspection\HarmonyPatchOwnerAssociationMatcher.cs" />
     <Compile Include="Services\Harmony\Inspection\HarmonyPatchSummaryNormalizer.cs" />
+    <Compile Include="Services\Harmony\Navigation\HarmonyAssociatedSymbolNavigationResolver.cs" />
+    <Compile Include="Services\Harmony\Navigation\HarmonyPatchNavigationTargetNavigator.cs" />
     <Compile Include="Services\Harmony\Policy\HarmonyPatchOrderService.cs" />
     <Compile Include="Services\Harmony\Policy\HarmonyPatchOwnershipService.cs" />
     <Compile Include="Services\Harmony\Presentation\HarmonyPatchDisplayService.cs" />
@@ -166,6 +170,7 @@
     <Compile Include="Services\Editor\Commands\SourceEditorCommandRouterService.cs" />
     <Compile Include="Services\Semantics\Workbench\SemanticWorkspaceEditService.cs" />
     <Compile Include="Services\Editor\Commands\UsingDirectiveOrganizationService.cs" />
+    <Compile Include="Services\Explorer\ExplorerFilterPlanBuilder.cs" />
     <Compile Include="Services\Search\WorkbenchSearchService.cs" />
     <Compile Include="Services\Inspector\Actions\EditorMethodInspectorNavigationActionCodec.cs" />
     <Compile Include="Services\Inspector\Actions\EditorMethodInspectorNavigationActionFactory.cs" />

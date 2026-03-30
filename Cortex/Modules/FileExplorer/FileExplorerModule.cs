@@ -4,6 +4,7 @@ using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
+using Cortex.Services.Explorer;
 using Cortex.Services.Navigation;
 using UnityEngine;
 
@@ -17,10 +18,10 @@ namespace Cortex.Modules.FileExplorer
     public sealed class FileExplorerModule
     {
         private Vector2 _scroll = Vector2.zero;
-        private string _filterText = string.Empty;
         private string _cachedSourceRoot = string.Empty;
         private string _cachedManagedAssemblyRoot = string.Empty;
         private readonly Dictionary<string, bool> _expandedNodes = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        private readonly ExplorerFilterPlanBuilder _filterPlanBuilder = new ExplorerFilterPlanBuilder();
 
         private string _appliedTheme = string.Empty;
         private GUIStyle _folderLabelStyle;
@@ -43,21 +44,31 @@ namespace Cortex.Modules.FileExplorer
         private const float RowHeight = 20f;
 
         public void Draw(
+            IContributionRegistry contributionRegistry,
             IWorkspaceBrowserService browserService,
             IDecompilerExplorerService decompilerExplorerService,
             ICortexNavigationService navigationService,
             CortexShellState state)
         {
+            if (state == null)
+            {
+                return;
+            }
+
             EnsureStyles(state);
             RefreshIfNeeded(browserService, decompilerExplorerService, state);
+            var explorerState = state.Explorer;
+            SynchronizeFriendlyFilters(explorerState);
+            var workspaceFilterPlan = _filterPlanBuilder.Build(contributionRegistry, state, ExplorerFilterScope.Workspace);
+            var decompilerFilterPlan = _filterPlanBuilder.Build(contributionRegistry, state, ExplorerFilterScope.Decompiler);
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(true));
-            DrawFilterBar(browserService, decompilerExplorerService, state);
+            DrawFilterBar(explorerState, browserService, decompilerExplorerService, state, workspaceFilterPlan, decompilerFilterPlan);
             GUILayout.Space(2f);
             _scroll = GUILayout.BeginScrollView(_scroll, false, true, GUILayout.ExpandHeight(true));
-            DrawSection("Workspace", _sourceTree, decompilerExplorerService, navigationService, state);
+            DrawSection("Workspace", _sourceTree, decompilerExplorerService, navigationService, state, workspaceFilterPlan);
             GUILayout.Space(6f);
-            DrawSection("Decompiler", _decompilerTree, decompilerExplorerService, navigationService, state);
+            DrawSection("Decompiler", _decompilerTree, decompilerExplorerService, navigationService, state, decompilerFilterPlan);
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
         }
@@ -82,14 +93,24 @@ namespace Cortex.Modules.FileExplorer
             RefreshTrees(browserService, decompilerExplorerService);
         }
 
-        private void DrawFilterBar(IWorkspaceBrowserService browserService, IDecompilerExplorerService decompilerExplorerService, CortexShellState state)
+        private void DrawFilterBar(
+            CortexExplorerInteractionState explorerState,
+            IWorkspaceBrowserService browserService,
+            IDecompilerExplorerService decompilerExplorerService,
+            CortexShellState state,
+            ExplorerFilterPlan workspaceFilterPlan,
+            ExplorerFilterPlan decompilerFilterPlan)
         {
             GUILayout.BeginHorizontal(_filterBoxStyle ?? GUI.skin.box, GUILayout.Height(26f));
             GUILayout.Label("F", GUILayout.Width(14f));
-            _filterText = GUILayout.TextField(_filterText ?? string.Empty, _filterBoxStyle ?? GUI.skin.textField, GUILayout.ExpandWidth(true));
-            if (!string.IsNullOrEmpty(_filterText) && GUILayout.Button("x", GUILayout.Width(18f), GUILayout.Height(20f)))
+            explorerState.FilterText = GUILayout.TextField(explorerState.FilterText ?? string.Empty, _filterBoxStyle ?? GUI.skin.textField, GUILayout.ExpandWidth(true));
+            if (!string.IsNullOrEmpty(explorerState.FilterText) && GUILayout.Button("x", GUILayout.Width(18f), GUILayout.Height(20f)))
             {
-                _filterText = string.Empty;
+                explorerState.FilterText = string.Empty;
+            }
+            if (GUILayout.Button(BuildRefineButtonLabel(explorerState), GUILayout.Width(108f), GUILayout.Height(20f)))
+            {
+                explorerState.FiltersVisible = !explorerState.FiltersVisible;
             }
             if (GUILayout.Button("Refresh", GUILayout.Width(64f), GUILayout.Height(20f)))
             {
@@ -97,6 +118,11 @@ namespace Cortex.Modules.FileExplorer
                 state.StatusMessage = "Explorer refreshed.";
             }
             GUILayout.EndHorizontal();
+
+            if (explorerState.FiltersVisible)
+            {
+                DrawFilterPanel(explorerState, workspaceFilterPlan, decompilerFilterPlan);
+            }
         }
 
         private void RefreshTrees(IWorkspaceBrowserService browserService, IDecompilerExplorerService decompilerExplorerService)
@@ -121,7 +147,8 @@ namespace Cortex.Modules.FileExplorer
             WorkspaceTreeNode root,
             IDecompilerExplorerService decompilerExplorerService,
             ICortexNavigationService navigationService,
-            CortexShellState state)
+            CortexShellState state,
+            ExplorerFilterPlan filterPlan)
         {
             GUILayout.Label(title.ToUpperInvariant(), _sectionHeaderStyle ?? GUI.skin.label);
             if (root == null || (!root.HasChildren && root.NodeKind == WorkspaceTreeNodeKind.DecompilerRoot))
@@ -134,9 +161,9 @@ namespace Cortex.Modules.FileExplorer
             }
 
             var hoverHighlightPath = string.Equals(title, "Workspace", StringComparison.Ordinal)
-                ? ResolveVisibleHoverTargetPath(root, GetVisibleHoverDefinitionPath(state), 0)
+                ? ResolveVisibleHoverTargetPath(root, GetVisibleHoverDefinitionPath(state), filterPlan, 0)
                 : string.Empty;
-            DrawTreeNode(root, decompilerExplorerService, navigationService, state, hoverHighlightPath, 0, true);
+            DrawTreeNode(root, decompilerExplorerService, navigationService, state, hoverHighlightPath, filterPlan, 0, true);
         }
 
         private void DrawTreeNode(
@@ -145,6 +172,7 @@ namespace Cortex.Modules.FileExplorer
             ICortexNavigationService navigationService,
             CortexShellState state,
             string hoverHighlightPath,
+            ExplorerFilterPlan filterPlan,
             int depth,
             bool drawSelf)
         {
@@ -155,14 +183,14 @@ namespace Cortex.Modules.FileExplorer
 
             if (drawSelf)
             {
-                if (!MatchesFilter(node, decompilerExplorerService))
+                if (filterPlan != null && !filterPlan.Matches(node))
                 {
                     return;
                 }
 
                 if (node.HasChildren)
                 {
-                    DrawExpandableNode(node, decompilerExplorerService, navigationService, state, hoverHighlightPath, depth);
+                    DrawExpandableNode(node, decompilerExplorerService, navigationService, state, hoverHighlightPath, filterPlan, depth);
                 }
                 else
                 {
@@ -174,7 +202,7 @@ namespace Cortex.Modules.FileExplorer
 
             for (var i = 0; i < node.Children.Count; i++)
             {
-                DrawTreeNode(node.Children[i], decompilerExplorerService, navigationService, state, hoverHighlightPath, depth, true);
+                DrawTreeNode(node.Children[i], decompilerExplorerService, navigationService, state, hoverHighlightPath, filterPlan, depth, true);
             }
         }
 
@@ -184,19 +212,29 @@ namespace Cortex.Modules.FileExplorer
             ICortexNavigationService navigationService,
             CortexShellState state,
             string hoverHighlightPath,
+            ExplorerFilterPlan filterPlan,
             int depth)
         {
             var key = BuildNodeKey(node);
-            var expanded = GetExpandedState(node, key, depth);
-            var autoExpandedByFilter = false;
-            if (!string.IsNullOrEmpty(_filterText))
+            bool expanded;
+            var hasStoredState = _expandedNodes.TryGetValue(key, out expanded);
+            if (!hasStoredState)
             {
-                expanded = true;
-                autoExpandedByFilter = true;
+                expanded = depth == 0 || node.NodeKind == WorkspaceTreeNodeKind.DecompilerRoot;
+                if (filterPlan != null && filterPlan.HasAnyFilter)
+                {
+                    expanded = true;
+                }
+
+                _expandedNodes[key] = expanded;
+            }
+
+            if (filterPlan != null && filterPlan.HasAnyFilter && !hasStoredState)
+            {
                 _expandedNodes[key] = true;
             }
 
-            if (expanded && (!autoExpandedByFilter || node.ChildrenLoaded || !node.IsVirtual))
+            if (expanded)
             {
                 EnsureChildrenLoaded(node, decompilerExplorerService);
             }
@@ -233,7 +271,7 @@ namespace Cortex.Modules.FileExplorer
 
             for (var i = 0; i < node.Children.Count; i++)
             {
-                DrawTreeNode(node.Children[i], decompilerExplorerService, navigationService, state, hoverHighlightPath, depth + 1, true);
+                DrawTreeNode(node.Children[i], decompilerExplorerService, navigationService, state, hoverHighlightPath, filterPlan, depth + 1, true);
             }
         }
 
@@ -330,46 +368,48 @@ namespace Cortex.Modules.FileExplorer
             state.StatusMessage = "Decompiler request failed.";
         }
 
-        private bool MatchesFilter(WorkspaceTreeNode node, IDecompilerExplorerService decompilerExplorerService)
+        private void DrawFilterPanel(
+            CortexExplorerInteractionState explorerState,
+            ExplorerFilterPlan workspaceFilterPlan,
+            ExplorerFilterPlan decompilerFilterPlan)
         {
-            if (node == null)
+            GUILayout.BeginVertical(_filterBoxStyle ?? GUI.skin.box);
+            GUILayout.Space(2f);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Explorer View", _treeHeaderStyle ?? GUI.skin.label);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Clear", GUILayout.Width(52f), GUILayout.Height(20f)))
             {
-                return false;
+                explorerState.FilterText = string.Empty;
+                explorerState.ActiveFilterIds.Clear();
+                explorerState.FocusMode = CortexExplorerFocusMode.Everything;
+            }
+            GUILayout.EndHorizontal();
+
+            DrawModeRow("Scope", delegate
+            {
+                DrawScopeButton(explorerState, CortexExplorerScopeMode.CurrentMod, "Current Mod");
+                DrawScopeButton(explorerState, CortexExplorerScopeMode.AllRuntime, "All Runtime");
+            });
+
+            DrawModeRow("Focus", delegate
+            {
+                DrawFocusButton(explorerState, CortexExplorerFocusMode.Everything, "Everything");
+                DrawFocusButton(explorerState, CortexExplorerFocusMode.HarmonyPatched, "Harmony Patched");
+            });
+
+            if (GUILayout.Button(explorerState.AdvancedFiltersVisible ? "Hide Advanced" : "Advanced", GUILayout.Width(108f), GUILayout.Height(20f)))
+            {
+                explorerState.AdvancedFiltersVisible = !explorerState.AdvancedFiltersVisible;
             }
 
-            if (string.IsNullOrEmpty(_filterText))
+            if (explorerState.AdvancedFiltersVisible)
             {
-                return true;
+                DrawAdvancedFilterPanel(workspaceFilterPlan, decompilerFilterPlan, explorerState);
             }
 
-            var filter = _filterText;
-            if ((node.Name ?? string.Empty).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                (node.RelativePath ?? string.Empty).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                (node.AssemblyPath ?? string.Empty).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                (node.TypeName ?? string.Empty).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return true;
-            }
-
-            if (!node.HasChildren)
-            {
-                return false;
-            }
-
-            if (!node.ChildrenLoaded)
-            {
-                return false;
-            }
-
-            for (var i = 0; i < node.Children.Count; i++)
-            {
-                if (MatchesFilter(node.Children[i], decompilerExplorerService))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            GUILayout.Space(2f);
+            GUILayout.EndVertical();
         }
 
         private void EnsureChildrenLoaded(WorkspaceTreeNode node, IDecompilerExplorerService decompilerExplorerService)
@@ -417,7 +457,7 @@ namespace Cortex.Modules.FileExplorer
                 : string.Empty;
         }
 
-        private string ResolveVisibleHoverTargetPath(WorkspaceTreeNode node, string hoverDefinitionPath, int depth)
+        private string ResolveVisibleHoverTargetPath(WorkspaceTreeNode node, string hoverDefinitionPath, ExplorerFilterPlan filterPlan, int depth)
         {
             if (node == null || string.IsNullOrEmpty(hoverDefinitionPath))
             {
@@ -438,7 +478,7 @@ namespace Cortex.Modules.FileExplorer
 
             var key = BuildNodeKey(node);
             var expanded = GetExpandedState(node, key, depth);
-            if (!string.IsNullOrEmpty(_filterText))
+            if (filterPlan != null && filterPlan.HasAnyFilter)
             {
                 expanded = true;
             }
@@ -456,7 +496,7 @@ namespace Cortex.Modules.FileExplorer
                     continue;
                 }
 
-                var childTarget = ResolveVisibleHoverTargetPath(child, hoverDefinitionPath, depth + 1);
+                var childTarget = ResolveVisibleHoverTargetPath(child, hoverDefinitionPath, filterPlan, depth + 1);
                 if (!string.IsNullOrEmpty(childTarget))
                 {
                     return childTarget;
@@ -503,6 +543,198 @@ namespace Cortex.Modules.FileExplorer
             }
 
             return path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        }
+
+        private void DrawAdvancedFilterPanel(
+            ExplorerFilterPlan workspaceFilterPlan,
+            ExplorerFilterPlan decompilerFilterPlan,
+            CortexExplorerInteractionState explorerState)
+        {
+            var drewAny = false;
+            if (workspaceFilterPlan != null && HasVisibleAdvancedContribution(workspaceFilterPlan))
+            {
+                DrawContributionGroup("Workspace", workspaceFilterPlan, explorerState);
+                drewAny = true;
+            }
+
+            if (decompilerFilterPlan != null && HasVisibleAdvancedContribution(decompilerFilterPlan))
+            {
+                DrawContributionGroup("Decompiler", decompilerFilterPlan, explorerState);
+                drewAny = true;
+            }
+
+            if (!drewAny)
+            {
+                GUILayout.Label("No additional explorer filters are available.", GUI.skin.label);
+            }
+        }
+
+        private void DrawModeRow(string title, Action drawButtons)
+        {
+            GUILayout.Space(2f);
+            GUILayout.Label(title, _sectionHeaderStyle ?? GUI.skin.label);
+            GUILayout.BeginHorizontal();
+            drawButtons?.Invoke();
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawScopeButton(CortexExplorerInteractionState explorerState, CortexExplorerScopeMode scopeMode, string label)
+        {
+            if (explorerState == null)
+            {
+                return;
+            }
+
+            var isActive = explorerState.ScopeMode == scopeMode;
+            var style = isActive
+                ? (_activeFileButtonStyle ?? GUI.skin.button)
+                : (_fileButtonStyle ?? GUI.skin.button);
+            if (GUILayout.Button(label, style, GUILayout.Height(20f)))
+            {
+                explorerState.ScopeMode = scopeMode;
+            }
+        }
+
+        private void DrawFocusButton(CortexExplorerInteractionState explorerState, CortexExplorerFocusMode focusMode, string label)
+        {
+            if (explorerState == null)
+            {
+                return;
+            }
+
+            var isActive = explorerState.FocusMode == focusMode;
+            var style = isActive
+                ? (_activeFileButtonStyle ?? GUI.skin.button)
+                : (_fileButtonStyle ?? GUI.skin.button);
+            if (GUILayout.Button(label, style, GUILayout.Height(20f)))
+            {
+                explorerState.FocusMode = focusMode;
+            }
+        }
+
+        private void DrawContributionGroup(string title, ExplorerFilterPlan filterPlan, CortexExplorerInteractionState explorerState)
+        {
+            if (filterPlan == null || explorerState == null || filterPlan.Contributions.Count == 0)
+            {
+                return;
+            }
+
+            GUILayout.Space(2f);
+            GUILayout.Label(title, _sectionHeaderStyle ?? GUI.skin.label);
+            for (var i = 0; i < filterPlan.Contributions.Count; i++)
+            {
+                var contribution = filterPlan.Contributions[i];
+                if (contribution == null ||
+                    string.IsNullOrEmpty(contribution.FilterId) ||
+                    !ShouldShowInAdvanced(contribution.FilterId))
+                {
+                    continue;
+                }
+
+                var available = filterPlan.IsFilterAvailable(contribution.FilterId);
+                var active = filterPlan.IsFilterActive(contribution.FilterId);
+
+                GUI.enabled = available;
+                var nextActive = GUILayout.Toggle(
+                    active,
+                    BuildContributionLabel(contribution),
+                    GUILayout.Height(20f));
+                GUI.enabled = true;
+
+                if (nextActive != active)
+                {
+                    SetContributionActive(explorerState, contribution.FilterId, nextActive && available);
+                }
+
+                if (!string.IsNullOrEmpty(contribution.Description))
+                {
+                    GUILayout.Label(contribution.Description, GUI.skin.label);
+                }
+            }
+        }
+
+        private static void SynchronizeFriendlyFilters(CortexExplorerInteractionState explorerState)
+        {
+            if (explorerState == null)
+            {
+                return;
+            }
+
+            SetContributionActive(
+                explorerState,
+                ExplorerFilterWellKnownIds.HarmonyPatched,
+                explorerState.FocusMode == CortexExplorerFocusMode.HarmonyPatched);
+        }
+
+        private static string BuildRefineButtonLabel(CortexExplorerInteractionState explorerState)
+        {
+            if (explorerState == null)
+            {
+                return "Refine";
+            }
+
+            if (explorerState.FocusMode == CortexExplorerFocusMode.HarmonyPatched)
+            {
+                return explorerState.ScopeMode == CortexExplorerScopeMode.AllRuntime
+                    ? "All | Harmony"
+                    : "Mod | Harmony";
+            }
+
+            return explorerState.ScopeMode == CortexExplorerScopeMode.AllRuntime
+                ? "All Runtime"
+                : "Current Mod";
+        }
+
+        private static bool HasVisibleAdvancedContribution(ExplorerFilterPlan filterPlan)
+        {
+            if (filterPlan == null)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < filterPlan.Contributions.Count; i++)
+            {
+                var contribution = filterPlan.Contributions[i];
+                if (contribution != null && ShouldShowInAdvanced(contribution.FilterId))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ShouldShowInAdvanced(string filterId)
+        {
+            return !string.Equals(filterId, ExplorerFilterWellKnownIds.HarmonyPatched, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void SetContributionActive(CortexExplorerInteractionState explorerState, string filterId, bool isActive)
+        {
+            if (explorerState == null || string.IsNullOrEmpty(filterId))
+            {
+                return;
+            }
+
+            if (isActive)
+            {
+                explorerState.ActiveFilterIds.Add(filterId);
+                return;
+            }
+
+            explorerState.ActiveFilterIds.Remove(filterId);
+        }
+
+        private static string BuildContributionLabel(ExplorerFilterContribution contribution)
+        {
+            if (contribution == null)
+            {
+                return string.Empty;
+            }
+
+            return !string.IsNullOrEmpty(contribution.DisplayName)
+                ? contribution.DisplayName
+                : contribution.FilterId ?? string.Empty;
         }
 
         private void EnsureStyles(CortexShellState state)

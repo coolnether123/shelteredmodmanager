@@ -155,6 +155,8 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
+            MMLog.WriteInfo("[Cortex.Inspector] Activated inspector action. Id='" + activatedId + "'.");
+
             if (string.Equals(activatedId, PanelCommandIds.Close, StringComparison.Ordinal))
             {
                 MMLog.WriteInfo("[Cortex.Overlay] Method inspector closed. Reason='close-button'.");
