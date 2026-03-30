@@ -2,14 +2,11 @@ using System;
 using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Plugins.Abstractions;
 using Cortex.Modules.Shared;
 using Cortex.LanguageService.Protocol;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
-using Cortex.Services.Harmony.Generation;
-using Cortex.Services.Harmony.Inspection;
-using Cortex.Services.Harmony.Presentation;
-using Cortex.Services.Harmony.Resolution;
 using Cortex.Services.Navigation;
 using Cortex.Services.Semantics.Context;
 using Cortex.Services.Semantics.Hover;
@@ -121,10 +118,7 @@ namespace Cortex.Modules.Editor
             IProjectCatalog projectCatalog,
             ILoadedModCatalog loadedModCatalog,
             ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchInspectionService harmonyPatchInspectionService,
-            HarmonyPatchResolutionService harmonyPatchResolutionService,
-            HarmonyPatchDisplayService harmonyPatchDisplayService,
-            HarmonyPatchGenerationService harmonyPatchGenerationService,
+            IEditorContributionRuntime extensionRuntime,
             IPanelRenderer panelRenderer,
             PopupMenuThemePalette popupMenuTheme,
             HoverTooltipThemePalette hoverTooltipTheme)
@@ -225,7 +219,7 @@ namespace Cortex.Modules.Editor
                         hasMouse,
                         ToRenderPoint(localMouse));
                 }
-                HandlePointerInput(session, state, hoverSurfaceId, hoveredToken, hoverTarget, hoveredMethodTarget, hoveredFoldRegion, editorHoverActive, current, localMouse, rect.size, commandRegistry, contributionRegistry, overlayPointerState);
+                HandlePointerInput(session, state, hoverSurfaceId, hoveredToken, hoverTarget, hoveredMethodTarget, hoveredFoldRegion, editorHoverActive, current, localMouse, rect.size, commandRegistry, contributionRegistry, extensionRuntime, overlayPointerState);
 
                 GUI.BeginGroup(rect);
                 try
@@ -254,17 +248,7 @@ namespace Cortex.Modules.Editor
                     }
 
                     DrawTooltip(navigationService, state, hoverSurfaceId, hoverTarget, localMouse, rect.size, hasMouse, hoverTooltipTheme);
-                    DrawHarmonyBadge(
-                        session,
-                        state,
-                        rect.size,
-                        commandRegistry,
-                        projectCatalog,
-                        loadedModCatalog,
-                        sourceLookupIndex,
-                        harmonyPatchInspectionService,
-                        harmonyPatchResolutionService,
-                        harmonyPatchDisplayService);
+                    DrawAdornments(state, session, hoverSurfaceId, rect.size, commandRegistry, extensionRuntime);
                     _lastMethodInspectorRect = _methodInspectorOverlayController.Draw(
                         state,
                         session,
@@ -288,10 +272,7 @@ namespace Cortex.Modules.Editor
                         projectCatalog,
                         loadedModCatalog,
                         sourceLookupIndex,
-                        harmonyPatchInspectionService,
-                        harmonyPatchResolutionService,
-                        harmonyPatchDisplayService,
-                        harmonyPatchGenerationService,
+                        extensionRuntime,
                         panelRenderer);
                     _semanticPopupSurface.DrawQuickActions(
                         state,
@@ -333,77 +314,52 @@ namespace Cortex.Modules.Editor
             CloseContextMenu();
         }
 
-        private void DrawHarmonyBadge(
-            DocumentSession session,
+        private void DrawAdornments(
             CortexShellState state,
+            DocumentSession session,
+            string surfaceId,
             Vector2 viewportSize,
             ICommandRegistry commandRegistry,
-            IProjectCatalog projectCatalog,
-            ILoadedModCatalog loadedModCatalog,
-            ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchInspectionService harmonyPatchInspectionService,
-            HarmonyPatchResolutionService harmonyPatchResolutionService,
-            HarmonyPatchDisplayService harmonyPatchDisplayService)
+            IEditorContributionRuntime contributionRuntime)
         {
-            if (session == null ||
-                state == null ||
-                commandRegistry == null ||
-                harmonyPatchInspectionService == null ||
-                harmonyPatchResolutionService == null ||
-                harmonyPatchDisplayService == null ||
-                !CortexModuleUtil.IsDecompilerDocumentPath(state, session.FilePath))
+            if (contributionRuntime == null || commandRegistry == null)
             {
                 return;
             }
 
-            HarmonyResolvedMethodTarget resolvedTarget;
-            string reason;
-            if (!harmonyPatchResolutionService.TryResolveFromDocument(state, sourceLookupIndex, projectCatalog, session, out resolvedTarget, out reason) ||
-                resolvedTarget == null ||
-                resolvedTarget.InspectionRequest == null)
+            var adornments = contributionRuntime.BuildAdornments(state, session, surfaceId);
+            if (adornments == null || adornments.Count == 0)
             {
                 return;
             }
 
-            string statusMessage;
-            var summary = harmonyPatchInspectionService.GetCachedSummary(
-                state,
-                resolvedTarget.InspectionRequest,
-                loadedModCatalog,
-                projectCatalog,
-                true,
-                out statusMessage);
-            if (summary == null || !summary.IsPatched)
+            var right = Mathf.Max(8f, viewportSize.x - 16f);
+            for (var i = adornments.Count - 1; i >= 0; i--)
             {
-                return;
-            }
-
-            var label = harmonyPatchDisplayService.BuildBadgeText(summary);
-            if (string.IsNullOrEmpty(label))
-            {
-                label = "H";
-            }
-
-            var buttonWidth = Mathf.Max(72f, GUI.skin.button.CalcSize(new GUIContent(label)).x + 18f);
-            var buttonRect = new Rect(
-                Mathf.Max(8f, viewportSize.x - buttonWidth - 16f),
-                8f,
-                buttonWidth,
-                24f);
-            var content = new GUIContent(label, harmonyPatchDisplayService.BuildCountBreakdown(summary.Counts));
-            if (GUI.Button(buttonRect, content))
-            {
-                state.Harmony.ActiveInspectionRequest = resolvedTarget.InspectionRequest;
-                state.Harmony.ActiveSummaryKey = harmonyPatchInspectionService.BuildKey(resolvedTarget.InspectionRequest);
-                state.Harmony.ActiveSummary = summary;
-                state.Harmony.ResolutionFailureReason = string.Empty;
-                state.Workbench.AssignHost(CortexWorkbenchIds.HarmonyContainer, WorkbenchHostLocation.SecondarySideHost);
-                commandRegistry.Execute("cortex.window.harmony", new CommandExecutionContext
+                var adornment = adornments[i];
+                if (adornment == null || adornment.Placement != WorkbenchEditorAdornmentPlacement.TopRight)
                 {
-                    ActiveContainerId = state.Workbench.FocusedContainerId,
-                    ActiveDocumentId = state.Documents.ActiveDocumentPath,
-                    FocusedRegionId = state.Workbench.FocusedContainerId
-                });
+                    continue;
+                }
+
+                var label = !string.IsNullOrEmpty(adornment.Label) ? adornment.Label : "?";
+                var width = Mathf.Max(72f, GUI.skin.button.CalcSize(new GUIContent(label)).x + 18f);
+                var rect = new Rect(right - width, 8f, width, 24f);
+                var previousEnabled = GUI.enabled;
+                GUI.enabled = adornment.Enabled;
+                if (GUI.Button(rect, new GUIContent(label, adornment.ToolTip ?? string.Empty)))
+                {
+                    commandRegistry.Execute(adornment.CommandId, new CommandExecutionContext
+                    {
+                        ActiveContainerId = state != null && state.Workbench != null ? state.Workbench.FocusedContainerId : string.Empty,
+                        ActiveDocumentId = session != null ? session.FilePath ?? string.Empty : string.Empty,
+                        FocusedRegionId = state != null && state.Workbench != null ? state.Workbench.FocusedContainerId : string.Empty,
+                        Parameter = adornment.CommandParameter
+                    });
+                }
+
+                GUI.enabled = previousEnabled;
+                right = rect.x - 8f;
             }
         }
 
@@ -776,6 +732,7 @@ namespace Cortex.Modules.Editor
             Vector2 viewportSize,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
+            IEditorContributionRuntime extensionRuntime,
             EditorOverlayPointerState overlayPointerState)
         {
             if (current == null)
@@ -807,14 +764,24 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            if (current.button == 0 && state != null && state.Harmony != null && state.Harmony.IsInsertionPickActive)
+            if (current.button == 0 && extensionRuntime != null)
             {
-                state.Harmony.GenerationStatusMessage = "Select the Harmony insertion point from a writable source editor, not decompiled code.";
-                state.StatusMessage = state.Harmony.GenerationStatusMessage;
-                MMLog.WriteWarning("[Cortex.Harmony] Rejected insertion-point pick from decompiled editor '" +
-                    (session != null ? session.FilePath ?? string.Empty : string.Empty) + "'.");
-                current.Use();
-                return;
+                var workflowResult = extensionRuntime.HandlePointer(
+                    state,
+                    session,
+                    GetSurfaceId(session, state),
+                    false,
+                    hoveredToken != null ? hoveredToken.LineNumber : 0,
+                    hoveredToken != null ? hoveredToken.Start : -1);
+                if (workflowResult != null && workflowResult.Handled)
+                {
+                    if (workflowResult.ConsumeInput)
+                    {
+                        current.Use();
+                    }
+
+                    return;
+                }
             }
 
             if (current.button == 0 && hoveredFoldRegion != null)
@@ -1398,7 +1365,7 @@ namespace Cortex.Modules.Editor
             EditorCommandInvocation invocation;
             if (!TryBuildCommandTarget(session, state, token, out invocation))
             {
-                MMLog.WriteWarning("[Cortex.Harmony] Context menu target creation failed for decompiled token. Document='" +
+                MMLog.WriteWarning("[Cortex.Editor] Context menu target creation failed for decompiled token. Document='" +
                     (session != null ? session.FilePath ?? string.Empty : string.Empty) +
                     "', Token='" + (token != null ? token.RawText ?? string.Empty : string.Empty) + "'.");
                 CloseContextMenu();
@@ -1406,7 +1373,7 @@ namespace Cortex.Modules.Editor
             }
 
             var target = invocation != null ? invocation.Target : null;
-            MMLog.WriteInfo("[Cortex.Harmony] Opening editor context menu. Document='" +
+            MMLog.WriteInfo("[Cortex.Editor] Opening editor context menu. Document='" +
                 (target != null ? target.DocumentPath ?? string.Empty : string.Empty) +
                 "', Symbol='" + (target != null ? target.SymbolText ?? string.Empty : string.Empty) +
                 "', Position=" + (target != null ? target.AbsolutePosition : -1) +
@@ -1416,7 +1383,7 @@ namespace Cortex.Modules.Editor
             var items = _contextMenuService.BuildItems(state, commandRegistry, contributionRegistry, invocation);
             if (items == null || items.Count == 0)
             {
-                MMLog.WriteInfo("[Cortex.Harmony] Context menu produced no visible items for symbol '" +
+                MMLog.WriteInfo("[Cortex.Editor] Context menu produced no visible items for symbol '" +
                     (target != null ? target.SymbolText ?? string.Empty : string.Empty) + "'.");
                 CloseContextMenu();
                 return;

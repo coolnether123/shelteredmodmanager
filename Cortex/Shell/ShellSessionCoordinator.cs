@@ -74,6 +74,10 @@ namespace Cortex.Shell
             if (workbenchPersistenceService == null) return;
 
             var persisted = workbenchPersistenceService.Load(DefaultWorkspaceId) ?? new PersistedWorkbenchState();
+            if (_state.Modules != null)
+            {
+                _state.Modules.ImportPersistentEntries(persisted.ModulePersistentStateEntries);
+            }
             _state.Workbench.FocusedContainerId = NormalizeContainerId(persisted.FocusedContainerId, CortexWorkbenchIds.EditorContainer);
             _state.Workbench.SideContainerId = NormalizeWorkspaceContainer(persisted.SideContainerId, string.Empty);
             _state.Workbench.SecondarySideContainerId = NormalizeWorkspaceContainer(persisted.SecondarySideContainerId, CortexWorkbenchIds.FileExplorerContainer);
@@ -153,7 +157,10 @@ namespace Cortex.Shell
                 ActiveDocumentPath = _state.Documents.ActiveDocumentPath ?? string.Empty,
                 OpenDocumentPaths = openPaths.ToArray(),
                 ContainerHostAssignments = assignments.ToArray(),
-                HiddenContainerIds = new List<string>(_state.Workbench.HiddenContainerIds).ToArray()
+                HiddenContainerIds = new List<string>(_state.Workbench.HiddenContainerIds).ToArray(),
+                ModulePersistentStateEntries = _state.Modules != null
+                    ? _state.Modules.ExportPersistentEntries()
+                    : new PersistedModuleStateEntry[0]
             };
 
             workbenchPersistenceService.Save(DefaultWorkspaceId, persistedState);

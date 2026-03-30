@@ -6,17 +6,12 @@ using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
-using Cortex.Services.Harmony.Generation;
-using Cortex.Services.Harmony.Inspection;
-using Cortex.Services.Harmony.Presentation;
-using Cortex.Services.Harmony.Resolution;
 using Cortex.Services.Navigation;
 using Cortex.Services.Semantics.Context;
 using Cortex.Services.Semantics.Hover;
 using Cortex.Services.Semantics.Diagnostics;
 using UnityEngine;
 using Cortex.Services.Editor.Context;
-using Cortex.Services.Harmony.Workflow;
 using Cortex.Services.Search;
 
 namespace Cortex.Modules.Editor
@@ -106,11 +101,7 @@ namespace Cortex.Modules.Editor
             IProjectCatalog projectCatalog,
             ILoadedModCatalog loadedModCatalog,
             ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchInspectionService harmonyPatchInspectionService,
-            HarmonyPatchResolutionService harmonyPatchResolutionService,
-            HarmonyPatchDisplayService harmonyPatchDisplayService,
-            HarmonyPatchGenerationService harmonyPatchGenerationService,
-            GeneratedTemplateNavigationService generatedTemplateNavigationService,
+            IEditorContributionRuntime extensionRuntime,
             IRenderPipeline renderPipeline,
             CortexShellState state)
         {
@@ -139,11 +130,7 @@ namespace Cortex.Modules.Editor
                 projectCatalog,
                 loadedModCatalog,
                 sourceLookupIndex,
-                harmonyPatchInspectionService,
-                harmonyPatchResolutionService,
-                harmonyPatchDisplayService,
-                harmonyPatchGenerationService,
-                generatedTemplateNavigationService,
+                extensionRuntime,
                 renderPipeline ?? _renderPipeline,
                 state);
             DrawFindOverlay(commandRegistry, workbenchSearchService, state);
@@ -573,11 +560,7 @@ namespace Cortex.Modules.Editor
             IProjectCatalog projectCatalog,
             ILoadedModCatalog loadedModCatalog,
             ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchInspectionService harmonyPatchInspectionService,
-            HarmonyPatchResolutionService harmonyPatchResolutionService,
-            HarmonyPatchDisplayService harmonyPatchDisplayService,
-            HarmonyPatchGenerationService harmonyPatchGenerationService,
-            GeneratedTemplateNavigationService generatedTemplateNavigationService,
+            IEditorContributionRuntime extensionRuntime,
             IRenderPipeline renderPipeline,
             CortexShellState state)
         {
@@ -619,14 +602,10 @@ namespace Cortex.Modules.Editor
                         CommandRegistry = commandRegistry,
                         ContributionRegistry = contributionRegistry,
                         State = state,
-                        HarmonyPatchGenerationService = harmonyPatchGenerationService,
-                        GeneratedTemplateNavigationService = generatedTemplateNavigationService,
                         ProjectCatalog = projectCatalog,
                         LoadedModCatalog = loadedModCatalog,
                         SourceLookupIndex = sourceLookupIndex,
-                        HarmonyPatchInspectionService = harmonyPatchInspectionService,
-                        HarmonyPatchResolutionService = harmonyPatchResolutionService,
-                        HarmonyPatchDisplayService = harmonyPatchDisplayService
+                        ExtensionRuntime = extensionRuntime
                     },
                     new EditorSurfaceRenderContext
                     {
@@ -661,10 +640,7 @@ namespace Cortex.Modules.Editor
                 projectCatalog,
                 loadedModCatalog,
                 sourceLookupIndex,
-                harmonyPatchInspectionService,
-                harmonyPatchResolutionService,
-                harmonyPatchDisplayService,
-                harmonyPatchGenerationService,
+                extensionRuntime,
                 renderPipeline != null ? renderPipeline.PanelRenderer : null,
                 BuildPopupMenuThemePalette(),
                 BuildHoverTooltipThemePalette());

@@ -41,6 +41,7 @@ namespace Cortex
         private readonly CortexShellLifecycleCoordinator _lifecycleCoordinator = new CortexShellLifecycleCoordinator();
         private readonly CortexShellModuleContributionRegistry _moduleContributionRegistry = new CortexShellModuleContributionRegistry();
         private readonly CortexShellBuiltInModuleRegistrar _moduleRegistrar = new CortexShellBuiltInModuleRegistrar();
+        private readonly WorkbenchExtensionRegistry _extensionRegistry = new WorkbenchExtensionRegistry();
         private readonly CortexShellCommandRouter _commandRouter = new CortexShellCommandRouter();
         private readonly CortexShellLayoutHostRouter _layoutHostRouter = new CortexShellLayoutHostRouter();
         private readonly CortexLanguageRuntimeService _languageRuntimeService;
@@ -63,6 +64,7 @@ namespace Cortex
         private CortexShellModuleActivationService _moduleActivationService;
         private CortexShellModuleRenderService _moduleRenderService;
         private bool _moduleContributionsRegistered;
+        private readonly WorkbenchRuntimeAccess _runtimeAccess;
 
         private GUIStyle _titleStyle;
         private GUIStyle _menuStyle;
@@ -146,6 +148,7 @@ namespace Cortex
         public CortexShellController()
         {
             _services = new ShellServiceMap();
+            _runtimeAccess = new WorkbenchRuntimeAccess(_state, () => _moduleCompositionService ?? GetModuleCompositionService());
             _languageRuntimeService = new CortexLanguageRuntimeService(
                 _state,
                 delegate { return _services; },
@@ -161,6 +164,8 @@ namespace Cortex
                 _moduleContributionRegistry,
                 null,
                 _moduleRegistrar,
+                _extensionRegistry,
+                _runtimeAccess,
                 _languageRuntimeService,
                 _languageRuntimeService,
                 _languageRuntimeService);

@@ -3,7 +3,6 @@ using Cortex.Core.Models;
 using Cortex.Modules.Build;
 using Cortex.Modules.Editor;
 using Cortex.Modules.FileExplorer;
-using Cortex.Modules.Harmony;
 using Cortex.Modules.Logs;
 using Cortex.Modules.Projects;
 using Cortex.Modules.Reference;
@@ -17,22 +16,26 @@ namespace Cortex
 {
     internal sealed class CortexShellBuiltInModuleRegistrar
     {
-        public void RegisterBuiltIns(CortexShellModuleContributionRegistry registry, CortexShellModuleServices services)
+        public void RegisterBuiltIns(
+            CortexShellModuleContributionRegistry registry,
+            IWorkbenchExtensionRegistry extensionRegistry,
+            IWorkbenchRuntimeAccess runtimeAccess,
+            CortexShellModuleServices services)
         {
             if (registry == null || services == null)
             {
                 return;
             }
 
-            HarmonyExplorerFilterContributions.EnsureRegistered(services.ContributionRegistry, services);
             registry.Register(new LogsModuleContribution(services));
             registry.Register(new ProjectsModuleContribution(services));
             registry.Register(new FileExplorerModuleContribution(services));
-            registry.Register(new EditorModuleContribution(services));
+            registry.Register(new EditorModuleContribution(
+                services,
+                new EditorContributionRuntime(extensionRegistry, runtimeAccess, services.EditorContextService)));
             registry.Register(new BuildModuleContribution(services));
             registry.Register(new ReferenceModuleContribution(services));
             registry.Register(new SearchModuleContribution(services));
-            registry.Register(new HarmonyModuleContribution(services));
             registry.Register(new RuntimeToolsModuleContribution(services));
             registry.Register(new SettingsModuleContribution(services));
         }
@@ -78,12 +81,12 @@ namespace Cortex
         public LogsModuleContribution(ILogsModuleServices services)
         {
             _services = services;
-            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.LogsContainer, typeof(LogsShellModule));
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.LogsContainer, CortexWorkbenchIds.LogsContainer, typeof(LogsShellModule));
         }
 
         public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public IWorkbenchModule CreateModule()
+        public IWorkbenchModule CreateModule(IWorkbenchModuleRuntime runtime)
         {
             return new LogsShellModule(_services);
         }
@@ -126,12 +129,12 @@ namespace Cortex
         public ProjectsModuleContribution(IProjectsModuleServices services)
         {
             _services = services;
-            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.ProjectsContainer, typeof(ProjectsShellModule));
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.ProjectsContainer, CortexWorkbenchIds.ProjectsContainer, typeof(ProjectsShellModule));
         }
 
         public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public IWorkbenchModule CreateModule()
+        public IWorkbenchModule CreateModule(IWorkbenchModuleRuntime runtime)
         {
             return new ProjectsShellModule(_services);
         }
@@ -174,12 +177,12 @@ namespace Cortex
         public FileExplorerModuleContribution(IFileExplorerModuleServices services)
         {
             _services = services;
-            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.FileExplorerContainer, typeof(FileExplorerShellModule));
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.FileExplorerContainer, CortexWorkbenchIds.FileExplorerContainer, typeof(FileExplorerShellModule));
         }
 
         public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public IWorkbenchModule CreateModule()
+        public IWorkbenchModule CreateModule(IWorkbenchModuleRuntime runtime)
         {
             return new FileExplorerShellModule(_services);
         }
@@ -219,29 +222,33 @@ namespace Cortex
     internal sealed class EditorModuleContribution : IWorkbenchModuleContribution
     {
         private readonly IEditorModuleServices _services;
+        private readonly IEditorContributionRuntime _extensionRuntime;
 
-        public EditorModuleContribution(IEditorModuleServices services)
+        public EditorModuleContribution(IEditorModuleServices services, IEditorContributionRuntime extensionRuntime)
         {
             _services = services;
-            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.EditorContainer, typeof(EditorShellModule));
+            _extensionRuntime = extensionRuntime;
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.EditorContainer, CortexWorkbenchIds.EditorContainer, typeof(EditorShellModule));
         }
 
         public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public IWorkbenchModule CreateModule()
+        public IWorkbenchModule CreateModule(IWorkbenchModuleRuntime runtime)
         {
-            return new EditorShellModule(_services);
+            return new EditorShellModule(_services, _extensionRuntime);
         }
 
         private sealed class EditorShellModule : CortexShellModuleBase
         {
             private EditorModule _module;
             private readonly IEditorModuleServices _services;
+            private readonly IEditorContributionRuntime _extensionRuntime;
 
-            public EditorShellModule(IEditorModuleServices services)
+            public EditorShellModule(IEditorModuleServices services, IEditorContributionRuntime extensionRuntime)
                 : base(CortexWorkbenchIds.EditorContainer)
             {
                 _services = services;
+                _extensionRuntime = extensionRuntime;
             }
 
             public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
@@ -251,10 +258,6 @@ namespace Cortex
                     _module = new EditorModule(_services.EditorContextService, _services.RenderPipeline);
                 }
 
-                HarmonyCommandContributions.EnsureRegistered(
-                    _services != null ? _services.CommandRegistry : null,
-                    _services != null ? _services.ContributionRegistry : null,
-                    _services);
                 if (_module == null)
                 {
                     return;
@@ -268,11 +271,7 @@ namespace Cortex
                     _services != null ? _services.ProjectCatalog : null,
                     _services != null ? _services.LoadedModCatalog : null,
                     _services != null ? _services.SourceLookupIndex : null,
-                    _services != null ? _services.HarmonyPatchInspectionService : null,
-                    _services != null ? _services.HarmonyPatchResolutionService : null,
-                    _services != null ? _services.HarmonyPatchDisplayService : null,
-                    _services != null ? _services.HarmonyPatchGenerationService : null,
-                    _services != null ? _services.GeneratedTemplateNavigationService : null,
+                    _extensionRuntime,
                     _services != null ? _services.RenderPipeline : null,
                     _services != null ? _services.State : null);
             }
@@ -297,12 +296,12 @@ namespace Cortex
         public BuildModuleContribution(IBuildModuleServices services)
         {
             _services = services;
-            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.BuildContainer, typeof(BuildShellModule));
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.BuildContainer, CortexWorkbenchIds.BuildContainer, typeof(BuildShellModule));
         }
 
         public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public IWorkbenchModule CreateModule()
+        public IWorkbenchModule CreateModule(IWorkbenchModuleRuntime runtime)
         {
             return new BuildShellModule(_services);
         }
@@ -348,12 +347,12 @@ namespace Cortex
         public ReferenceModuleContribution(IReferenceModuleServices services)
         {
             _services = services;
-            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.ReferenceContainer, typeof(ReferenceShellModule));
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.ReferenceContainer, CortexWorkbenchIds.ReferenceContainer, typeof(ReferenceShellModule));
         }
 
         public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public IWorkbenchModule CreateModule()
+        public IWorkbenchModule CreateModule(IWorkbenchModuleRuntime runtime)
         {
             return new ReferenceShellModule(_services);
         }
@@ -397,12 +396,12 @@ namespace Cortex
         public SearchModuleContribution(ISearchModuleServices services)
         {
             _services = services;
-            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.SearchContainer, typeof(SearchShellModule));
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.SearchContainer, CortexWorkbenchIds.SearchContainer, typeof(SearchShellModule));
         }
 
         public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public IWorkbenchModule CreateModule()
+        public IWorkbenchModule CreateModule(IWorkbenchModuleRuntime runtime)
         {
             return new SearchShellModule(_services);
         }
@@ -439,71 +438,6 @@ namespace Cortex
         }
     }
 
-    internal sealed class HarmonyModuleContribution : IWorkbenchModuleContribution
-    {
-        private readonly IHarmonyModuleServices _services;
-
-        public HarmonyModuleContribution(IHarmonyModuleServices services)
-        {
-            _services = services;
-            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.HarmonyContainer, typeof(HarmonyShellModule));
-        }
-
-        public WorkbenchModuleDescriptor Descriptor { get; private set; }
-
-        public IWorkbenchModule CreateModule()
-        {
-            return new HarmonyShellModule(_services);
-        }
-
-        private sealed class HarmonyShellModule : CortexShellModuleBase
-        {
-            private readonly HarmonyModule _module;
-            private readonly IHarmonyModuleServices _services;
-
-            public HarmonyShellModule(IHarmonyModuleServices services)
-                : base(CortexWorkbenchIds.HarmonyContainer)
-            {
-                _services = services;
-                _module = new HarmonyModule(_services != null ? _services.HarmonyPatchWorkspaceService : null);
-            }
-
-            public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
-            {
-                HarmonyCommandContributions.EnsureRegistered(
-                    _services != null ? _services.CommandRegistry : null,
-                    _services != null ? _services.ContributionRegistry : null,
-                    _services);
-                _module.Draw(
-                    _services != null ? _services.CommandRegistry : null,
-                    _services != null ? _services.ContributionRegistry : null,
-                    _services != null ? _services.NavigationService : null,
-                    _services != null ? _services.DocumentService : null,
-                    _services != null ? _services.ProjectCatalog : null,
-                    _services != null ? _services.LoadedModCatalog : null,
-                    _services != null ? _services.PathInteractionService : null,
-                    _services != null ? _services.SourceLookupIndex : null,
-                    _services != null ? _services.HarmonyPatchInspectionService : null,
-                    _services != null ? _services.HarmonyPatchResolutionService : null,
-                    _services != null ? _services.HarmonyPatchDisplayService : null,
-                    _services != null ? _services.HarmonyPatchGenerationService : null,
-                    _services != null ? _services.GeneratedTemplateNavigationService : null,
-                    _services != null ? _services.State : null);
-            }
-
-            protected override void CollectMissingDependencies(List<string> missingDependencies)
-            {
-                AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
-                AddMissing(missingDependencies, "NavigationService", _services != null ? _services.NavigationService : null);
-                AddMissing(missingDependencies, "DocumentService", _services != null ? _services.DocumentService : null);
-                AddMissing(missingDependencies, "ProjectCatalog", _services != null ? _services.ProjectCatalog : null);
-                AddMissing(missingDependencies, "SourceLookupIndex", _services != null ? _services.SourceLookupIndex : null);
-                AddMissing(missingDependencies, "HarmonyPatchInspectionService", _services != null ? _services.HarmonyPatchInspectionService : null);
-                AddMissing(missingDependencies, "HarmonyPatchGenerationService", _services != null ? _services.HarmonyPatchGenerationService : null);
-            }
-        }
-    }
-
     internal sealed class RuntimeToolsModuleContribution : IWorkbenchModuleContribution
     {
         private readonly IRuntimeToolsModuleServices _services;
@@ -511,12 +445,12 @@ namespace Cortex
         public RuntimeToolsModuleContribution(IRuntimeToolsModuleServices services)
         {
             _services = services;
-            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.RuntimeContainer, typeof(RuntimeToolsShellModule));
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.RuntimeContainer, CortexWorkbenchIds.RuntimeContainer, typeof(RuntimeToolsShellModule));
         }
 
         public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public IWorkbenchModule CreateModule()
+        public IWorkbenchModule CreateModule(IWorkbenchModuleRuntime runtime)
         {
             return new RuntimeToolsShellModule(_services);
         }
@@ -554,12 +488,12 @@ namespace Cortex
         public SettingsModuleContribution(ISettingsModuleServices services)
         {
             _services = services;
-            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.SettingsContainer, typeof(SettingsShellModule));
+            Descriptor = new WorkbenchModuleDescriptor(CortexWorkbenchIds.SettingsContainer, CortexWorkbenchIds.SettingsContainer, typeof(SettingsShellModule));
         }
 
         public WorkbenchModuleDescriptor Descriptor { get; private set; }
 
-        public IWorkbenchModule CreateModule()
+        public IWorkbenchModule CreateModule(IWorkbenchModuleRuntime runtime)
         {
             return new SettingsShellModule(_services);
         }

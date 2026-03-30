@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Cortex.Core.Models;
 using Cortex.Services.Semantics.Context;
 using Cortex.Services.Editor.Presentation;
@@ -37,7 +38,8 @@ namespace Cortex.Services.Inspector.Lifecycle
                 inspector.OverviewExpanded = true;
                 inspector.NavigationExpanded = true;
                 inspector.RelationshipsExpanded = false;
-                inspector.HarmonyExpanded = true;
+                inspector.ExtensionsExpanded = true;
+                inspector.SectionExpansionStates.Clear();
             }
 
             if (!preserveSections)
@@ -151,10 +153,27 @@ namespace Cortex.Services.Inspector.Lifecycle
                         ResetRelationships(inspector, target);
                     }
                     break;
-                case "harmony":
-                    inspector.HarmonyExpanded = !inspector.HarmonyExpanded;
+                case "extensions":
+                    inspector.ExtensionsExpanded = !inspector.ExtensionsExpanded;
+                    break;
+                default:
+                    var current = ResolveSectionExpansion(inspector, sectionId, true);
+                    inspector.SectionExpansionStates[sectionId ?? string.Empty] = !current;
                     break;
             }
+        }
+
+        public static bool ResolveSectionExpansion(CortexMethodInspectorState inspector, string sectionId, bool defaultExpanded)
+        {
+            if (inspector == null || string.IsNullOrEmpty(sectionId))
+            {
+                return defaultExpanded;
+            }
+
+            bool expanded;
+            return inspector.SectionExpansionStates.TryGetValue(sectionId, out expanded)
+                ? expanded
+                : defaultExpanded;
         }
 
         public static string BuildTargetKey(EditorCommandTarget target)

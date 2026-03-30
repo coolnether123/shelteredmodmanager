@@ -1,5 +1,4 @@
 using System;
-using Cortex.Core.Abstractions;
 using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
 using UnityEngine;
@@ -12,23 +11,17 @@ namespace Cortex
         private readonly CortexShellModuleActivationService _activationService;
         private readonly Func<string, bool> _canActivateContainer;
         private readonly Func<string, string> _buildActivationBlockedMessage;
-        private readonly Func<ICommandRegistry> _commandRegistryAccessor;
-        private readonly Func<IContributionRegistry> _contributionRegistryAccessor;
 
         public CortexShellModuleRenderService(
             CortexShellModuleCompositionService compositionService,
             CortexShellModuleActivationService activationService,
             Func<string, bool> canActivateContainer,
-            Func<string, string> buildActivationBlockedMessage,
-            Func<ICommandRegistry> commandRegistryAccessor,
-            Func<IContributionRegistry> contributionRegistryAccessor)
+            Func<string, string> buildActivationBlockedMessage)
         {
             _compositionService = compositionService;
             _activationService = activationService;
             _canActivateContainer = canActivateContainer;
             _buildActivationBlockedMessage = buildActivationBlockedMessage;
-            _commandRegistryAccessor = commandRegistryAccessor;
-            _contributionRegistryAccessor = contributionRegistryAccessor;
         }
 
         /// <summary>
@@ -64,9 +57,8 @@ namespace Cortex
                     new WorkbenchModuleRenderContext(
                         containerId,
                         snapshot,
-                        _commandRegistryAccessor != null ? _commandRegistryAccessor() : null,
-                        _contributionRegistryAccessor != null ? _contributionRegistryAccessor() : null,
-                        CortexUi.DefaultSurface),
+                        CortexUi.DefaultSurface,
+                        _compositionService.GetRuntime(containerId)),
                     detachedWindow);
                 return;
             }

@@ -9,6 +9,7 @@ namespace Cortex.Host.Unity.Runtime
         private readonly string _gameRootPath;
         private readonly string _hostRootPath;
         private readonly string _hostBinPath;
+        private readonly string _bundledPluginSearchRoots;
         private readonly string _managedAssemblyRootPath;
         private readonly string _modsRootPath;
         private readonly string _settingsFilePath;
@@ -22,6 +23,7 @@ namespace Cortex.Host.Unity.Runtime
             _gameRootPath = Directory.GetParent(Application.dataPath).FullName;
             _hostRootPath = Path.Combine(_gameRootPath, "SMM");
             _hostBinPath = Path.Combine(_hostRootPath, "bin");
+            _bundledPluginSearchRoots = Path.Combine(_hostBinPath, "plugins");
             _managedAssemblyRootPath = Path.Combine(Path.Combine(_gameRootPath, "Sheltered_Data"), "Managed");
             _modsRootPath = Path.Combine(_hostRootPath, "mods");
             _settingsFilePath = Path.Combine(_hostBinPath, "cortex_settings.json");
@@ -44,6 +46,11 @@ namespace Cortex.Host.Unity.Runtime
         public string HostBinPath
         {
             get { return _hostBinPath; }
+        }
+
+        public string BundledPluginSearchRoots
+        {
+            get { return _bundledPluginSearchRoots; }
         }
 
         public string ManagedAssemblyRootPath

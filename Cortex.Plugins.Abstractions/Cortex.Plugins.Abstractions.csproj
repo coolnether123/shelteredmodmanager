@@ -35,8 +35,10 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="IWorkbenchPlugin.cs" />
+    <Compile Include="IWorkbenchPluginContributor.cs" />
+    <Compile Include="WorkbenchExtensionAbstractions.cs" />
     <Compile Include="WorkbenchModuleAbstractions.cs" />
+    <Compile Include="WorkbenchRuntimeAbstractions.cs" />
     <Compile Include="WorkbenchUiAbstractions.cs" />
     <Compile Include="WorkbenchPluginContext.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

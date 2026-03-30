@@ -1,10 +1,6 @@
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Rendering.Abstractions;
-using Cortex.Services.Harmony.Generation;
-using Cortex.Services.Harmony.Inspection;
-using Cortex.Services.Harmony.Presentation;
-using Cortex.Services.Harmony.Resolution;
 using Cortex.Services.Navigation;
 using Cortex.Services.Semantics.Context;
 using UnityEngine;
@@ -30,10 +26,7 @@ namespace Cortex.Modules.Editor
             IProjectCatalog projectCatalog,
             ILoadedModCatalog loadedModCatalog,
             ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchInspectionService harmonyInspectionService,
-            HarmonyPatchResolutionService harmonyResolutionService,
-            HarmonyPatchDisplayService harmonyDisplayService,
-            HarmonyPatchGenerationService harmonyGenerationService,
+            IEditorContributionRuntime extensionRuntime,
             IPanelRenderer panelRenderer);
     }
 
@@ -71,10 +64,7 @@ namespace Cortex.Modules.Editor
             IProjectCatalog projectCatalog,
             ILoadedModCatalog loadedModCatalog,
             ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchInspectionService harmonyInspectionService,
-            HarmonyPatchResolutionService harmonyResolutionService,
-            HarmonyPatchDisplayService harmonyDisplayService,
-            HarmonyPatchGenerationService harmonyGenerationService,
+            IEditorContributionRuntime extensionRuntime,
             IPanelRenderer panelRenderer)
         {
             return session != null
@@ -94,10 +84,7 @@ namespace Cortex.Modules.Editor
                     projectCatalog,
                     loadedModCatalog,
                     sourceLookupIndex,
-                    harmonyInspectionService,
-                    harmonyResolutionService,
-                    harmonyDisplayService,
-                    harmonyGenerationService,
+                    extensionRuntime,
                     panelRenderer)
                 : new Rect(0f, 0f, 0f, 0f);
         }

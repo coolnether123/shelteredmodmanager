@@ -7,7 +7,6 @@ namespace Cortex.Services.Inspector.Actions
     internal interface IEditorMethodInspectorNavigationActionFactory
     {
         MethodInspectorActionViewModel[] CreateRelationshipActions(EditorMethodRelationshipItem item);
-        MethodInspectorActionViewModel[] CreateHarmonyNavigationActions(HarmonyPatchNavigationTarget target, string label, string hint);
     }
 
     internal sealed class EditorMethodInspectorNavigationActionFactory : IEditorMethodInspectorNavigationActionFactory
@@ -35,23 +34,6 @@ namespace Cortex.Services.Inspector.Actions
                         item.DefinitionRange),
                     "Open",
                     "Open this dependency or caller.")
-            };
-        }
-
-        public MethodInspectorActionViewModel[] CreateHarmonyNavigationActions(HarmonyPatchNavigationTarget target, string label, string hint)
-        {
-            var actionId = EditorMethodInspectorNavigationActionCodec.CreateHarmony(target);
-            if (string.IsNullOrEmpty(actionId))
-            {
-                return new MethodInspectorActionViewModel[0];
-            }
-
-            return new[]
-            {
-                CreateAction(
-                    actionId,
-                    string.IsNullOrEmpty(label) ? "Open" : label,
-                    string.IsNullOrEmpty(hint) ? "Open the matching Harmony patch method." : hint)
             };
         }
 

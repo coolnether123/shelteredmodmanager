@@ -16,6 +16,21 @@ namespace Cortex.Core.Models
     }
 
     [Serializable]
+    public sealed class PersistedModuleStateEntry
+    {
+        public string ModuleId;
+        public string Key;
+        public string Value;
+
+        public PersistedModuleStateEntry()
+        {
+            ModuleId = string.Empty;
+            Key = string.Empty;
+            Value = string.Empty;
+        }
+    }
+
+    [Serializable]
     public sealed class PersistedWorkbenchState
     {
         public string FocusedContainerId;
@@ -30,6 +45,7 @@ namespace Cortex.Core.Models
         public string[] OpenDocumentPaths;
         public ContainerHostAssignment[] ContainerHostAssignments;
         public string[] HiddenContainerIds;
+        public PersistedModuleStateEntry[] ModulePersistentStateEntries;
         public string ActiveOnboardingProfileId;
         public string ActiveOnboardingLayoutPresetId;
         public string ActiveOnboardingThemeId;
@@ -48,6 +64,7 @@ namespace Cortex.Core.Models
             OpenDocumentPaths = new string[0];
             ContainerHostAssignments = new ContainerHostAssignment[0];
             HiddenContainerIds = new string[0];
+            ModulePersistentStateEntries = new PersistedModuleStateEntry[0];
             ActiveOnboardingProfileId = string.Empty;
             ActiveOnboardingLayoutPresetId = string.Empty;
             ActiveOnboardingThemeId = string.Empty;

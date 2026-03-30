@@ -452,12 +452,17 @@ namespace Cortex.Tests.Shell
 
         private static ShellBootstrapper CreateBootstrapper()
         {
+            var state = new CortexShellState();
             var runtime = new NullLanguageRuntimeService();
+            var extensionRegistry = new WorkbenchExtensionRegistry();
+            var runtimeAccess = new WorkbenchRuntimeAccess(state, delegate { return null; });
             return new ShellBootstrapper(
-                new CortexShellState(),
+                state,
                 new CortexShellModuleContributionRegistry(),
                 null,
                 new CortexShellBuiltInModuleRegistrar(),
+                extensionRegistry,
+                runtimeAccess,
                 runtime,
                 runtime,
                 runtime);
@@ -555,6 +560,7 @@ namespace Cortex.Tests.Shell
             public string GameRootPath => string.Empty;
             public string HostRootPath => string.Empty;
             public string HostBinPath => _hostBinPath;
+            public string BundledPluginSearchRoots => string.Empty;
             public string ManagedAssemblyRootPath => string.Empty;
             public string ModsRootPath => string.Empty;
             public string SettingsFilePath => string.Empty;

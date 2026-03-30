@@ -13,13 +13,20 @@ namespace Cortex.Core.Abstractions
         void ReleaseCapture(string ownerId);
     }
 
+    public interface ICortexPlatformFeatureRegistry
+    {
+        void Add<TService>(TService service) where TService : class;
+
+        bool TryGet<TService>(out TService service) where TService : class;
+
+        TService Get<TService>() where TService : class;
+    }
+
     public interface ICortexPlatformModule
     {
         ICortexLogSink LogSink { get; }
 
         ICortexDiagnosticConfiguration DiagnosticConfiguration { get; }
-
-        IHarmonyRuntimeInspectionService HarmonyRuntimeInspectionService { get; }
 
         ILoadedModCatalog LoadedModCatalog { get; }
 
@@ -32,6 +39,8 @@ namespace Cortex.Core.Abstractions
         IOverlayInputCaptureService OverlayInputCaptureService { get; }
 
         string AdditionalDecompilerCacheRoots { get; }
+
+        void RegisterFeatures(ICortexPlatformFeatureRegistry registry);
 
         IRuntimeSourceNavigationService CreateRuntimeSourceNavigationService(ISourcePathResolver sourcePathResolver);
 

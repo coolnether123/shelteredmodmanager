@@ -3,7 +3,6 @@ using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
-using Cortex.Services.Harmony.Navigation;
 using Cortex.Services.Navigation.Decompiler;
 using Cortex.Services.Navigation.Document;
 using Cortex.Services.Navigation.Metadata;
@@ -73,18 +72,6 @@ namespace Cortex.Services.Navigation.Symbols
                     lineNumber,
                     successStatusMessage,
                     failureStatusMessage) != null;
-            }
-
-            HarmonyPatchNavigationTarget harmonyTarget;
-            if (HarmonyAssociatedSymbolNavigationResolver.TryResolvePreferredPatchTarget(state, request, out harmonyTarget))
-            {
-                MMLog.WriteInfo("[Cortex.Navigation] Redirecting symbol target to associated Harmony patch. Symbol=" + displayName +
-                    ", PatchTarget=" + (harmonyTarget != null ? harmonyTarget.DisplayName ?? harmonyTarget.MethodName ?? string.Empty : string.Empty) + ".");
-                return TryOpenHarmonyPatchTarget(
-                    state,
-                    harmonyTarget,
-                    "Opened Harmony patch method.",
-                    failureStatusMessage);
             }
 
             string assemblyPath;
@@ -187,74 +174,6 @@ namespace Cortex.Services.Navigation.Symbols
             return definitionRange != null && definitionRange.StartLine > 0
                 ? definitionRange.StartLine
                 : 0;
-        }
-
-        private bool TryOpenHarmonyPatchTarget(
-            CortexShellState state,
-            HarmonyPatchNavigationTarget target,
-            string successStatusMessage,
-            string failureStatusMessage)
-        {
-            if (state == null || target == null)
-            {
-                MMLog.WriteInfo("[Cortex.Navigation] Harmony patch target open skipped. Reason='missing-state-or-target'.");
-                return false;
-            }
-
-            if (!string.IsNullOrEmpty(target.DocumentPath) &&
-                File.Exists(target.DocumentPath) &&
-                !CortexModuleUtil.IsDecompilerDocumentPath(state, target.DocumentPath))
-            {
-                return _documentService.OpenDocument(
-                    state,
-                    target.DocumentPath,
-                    target.Line > 0 ? target.Line : 1,
-                    successStatusMessage,
-                    failureStatusMessage) != null;
-            }
-
-            if (!string.IsNullOrEmpty(target.AssemblyPath) && target.MetadataToken > 0)
-            {
-                return _decompilerNavigationService.OpenEntityTarget(
-                    state,
-                    target.AssemblyPath,
-                    target.MetadataToken,
-                    DecompilerEntityKind.Method,
-                    false,
-                    successStatusMessage,
-                    failureStatusMessage);
-            }
-
-            if (!string.IsNullOrEmpty(target.CachePath) && File.Exists(target.CachePath))
-            {
-                return _documentService.OpenDocument(
-                    state,
-                    target.CachePath,
-                    target.Line > 0 ? target.Line : 1,
-                    successStatusMessage,
-                    failureStatusMessage) != null;
-            }
-
-            if (!string.IsNullOrEmpty(target.DocumentPath) && File.Exists(target.DocumentPath))
-            {
-                return _documentService.OpenDocument(
-                    state,
-                    target.DocumentPath,
-                    target.Line > 0 ? target.Line : 1,
-                    successStatusMessage,
-                    failureStatusMessage) != null;
-            }
-
-            if (!string.IsNullOrEmpty(failureStatusMessage))
-            {
-                state.StatusMessage = failureStatusMessage;
-            }
-
-            MMLog.WriteInfo("[Cortex.Navigation] Harmony patch target open failed. AssemblyPath='" +
-                (target.AssemblyPath ?? string.Empty) + "', MetadataToken=0x" + target.MetadataToken.ToString("X8") +
-                ", DocumentPath='" + (target.DocumentPath ?? string.Empty) + "', CachePath='" + (target.CachePath ?? string.Empty) + "'.");
-
-            return false;
         }
 
         private static bool ShouldTrustSourceLineMapping(CortexShellState state, string definitionDocumentPath, string sourceDocumentPath)

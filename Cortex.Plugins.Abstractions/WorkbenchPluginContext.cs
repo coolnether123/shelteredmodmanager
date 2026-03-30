@@ -18,11 +18,15 @@ namespace Cortex.Plugins.Abstractions
         public WorkbenchPluginContext(
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
-            IWorkbenchModuleRegistry moduleRegistry)
+            IWorkbenchModuleRegistry moduleRegistry,
+            IWorkbenchExtensionRegistry extensionRegistry,
+            IWorkbenchRuntimeAccess runtime)
         {
             CommandRegistry = commandRegistry;
             ContributionRegistry = contributionRegistry;
             ModuleRegistry = moduleRegistry;
+            ExtensionRegistry = extensionRegistry;
+            Runtime = runtime;
         }
 
         /// <summary>
@@ -39,6 +43,16 @@ namespace Cortex.Plugins.Abstractions
         /// Gets the optional module registry.
         /// </summary>
         public IWorkbenchModuleRegistry ModuleRegistry { get; private set; }
+
+        /// <summary>
+        /// Gets the runtime-driven extension registry.
+        /// </summary>
+        public IWorkbenchExtensionRegistry ExtensionRegistry { get; private set; }
+
+        /// <summary>
+        /// Gets narrow runtime access for contributed commands and extensions.
+        /// </summary>
+        public IWorkbenchRuntimeAccess Runtime { get; private set; }
 
         /// <summary>
         /// Registers a command definition.
@@ -537,6 +551,58 @@ namespace Cortex.Plugins.Abstractions
             }
 
             ModuleRegistry.Register(contribution);
+        }
+
+        /// <summary>
+        /// Registers a contributed method-inspector section.
+        /// </summary>
+        public void RegisterMethodInspectorSection(WorkbenchMethodInspectorSectionContribution contribution)
+        {
+            if (ExtensionRegistry == null || contribution == null)
+            {
+                return;
+            }
+
+            ExtensionRegistry.RegisterMethodInspectorSection(contribution);
+        }
+
+        /// <summary>
+        /// Registers contributed method-relationship actions for the inspector.
+        /// </summary>
+        public void RegisterMethodRelationshipAction(WorkbenchMethodRelationshipActionContribution contribution)
+        {
+            if (ExtensionRegistry == null || contribution == null)
+            {
+                return;
+            }
+
+            ExtensionRegistry.RegisterMethodRelationshipAction(contribution);
+        }
+
+        /// <summary>
+        /// Registers a host-rendered editor adornment contribution.
+        /// </summary>
+        public void RegisterEditorAdornment(WorkbenchEditorAdornmentContribution contribution)
+        {
+            if (ExtensionRegistry == null || contribution == null)
+            {
+                return;
+            }
+
+            ExtensionRegistry.RegisterEditorAdornment(contribution);
+        }
+
+        /// <summary>
+        /// Registers a contributed editor workflow.
+        /// </summary>
+        public void RegisterEditorWorkflow(WorkbenchEditorWorkflowContribution contribution)
+        {
+            if (ExtensionRegistry == null || contribution == null)
+            {
+                return;
+            }
+
+            ExtensionRegistry.RegisterEditorWorkflow(contribution);
         }
     }
 }

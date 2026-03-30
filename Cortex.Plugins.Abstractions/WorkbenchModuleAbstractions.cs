@@ -1,5 +1,4 @@
 using System;
-using Cortex.Core.Abstractions;
 using Cortex.Presentation.Models;
 
 namespace Cortex.Plugins.Abstractions
@@ -29,8 +28,9 @@ namespace Cortex.Plugins.Abstractions
         /// <summary>
         /// Creates the runtime module instance for this contribution.
         /// </summary>
+        /// <param name="runtime">The module-owned runtime capabilities exposed by Cortex.</param>
         /// <returns>A renderable workbench module instance.</returns>
-        IWorkbenchModule CreateModule();
+        IWorkbenchModule CreateModule(IWorkbenchModuleRuntime runtime);
     }
 
     /// <summary>
@@ -60,13 +60,20 @@ namespace Cortex.Plugins.Abstractions
         /// <summary>
         /// Initializes a new module descriptor.
         /// </summary>
+        /// <param name="moduleId">The stable runtime module identifier.</param>
         /// <param name="containerId">The container identifier that owns the module.</param>
         /// <param name="moduleType">The concrete runtime module type, when known.</param>
-        public WorkbenchModuleDescriptor(string containerId, Type moduleType)
+        public WorkbenchModuleDescriptor(string moduleId, string containerId, Type moduleType)
         {
+            ModuleId = moduleId ?? string.Empty;
             ContainerId = containerId ?? string.Empty;
             ModuleType = moduleType;
         }
+
+        /// <summary>
+        /// Gets the stable runtime module identifier.
+        /// </summary>
+        public string ModuleId { get; private set; }
 
         /// <summary>
         /// Gets the target workbench container identifier.
@@ -89,21 +96,18 @@ namespace Cortex.Plugins.Abstractions
         /// </summary>
         /// <param name="containerId">The container currently being rendered.</param>
         /// <param name="snapshot">The current workbench presentation snapshot.</param>
-        /// <param name="commandRegistry">The workbench command registry.</param>
-        /// <param name="contributionRegistry">The declarative workbench contribution registry.</param>
         /// <param name="ui">The host-owned UI surface for shared workbench controls.</param>
+        /// <param name="runtime">The module-owned runtime capabilities exposed by Cortex.</param>
         public WorkbenchModuleRenderContext(
             string containerId,
             WorkbenchPresentationSnapshot snapshot,
-            ICommandRegistry commandRegistry,
-            IContributionRegistry contributionRegistry,
-            IWorkbenchUiSurface ui)
+            IWorkbenchUiSurface ui,
+            IWorkbenchModuleRuntime runtime)
         {
             ContainerId = containerId ?? string.Empty;
             Snapshot = snapshot ?? new WorkbenchPresentationSnapshot();
-            CommandRegistry = commandRegistry;
-            ContributionRegistry = contributionRegistry;
             Ui = ui;
+            Runtime = runtime;
         }
 
         /// <summary>
@@ -117,18 +121,13 @@ namespace Cortex.Plugins.Abstractions
         public WorkbenchPresentationSnapshot Snapshot { get; private set; }
 
         /// <summary>
-        /// Gets the command registry available to the module.
-        /// </summary>
-        public ICommandRegistry CommandRegistry { get; private set; }
-
-        /// <summary>
-        /// Gets the declarative contribution registry available to the module.
-        /// </summary>
-        public IContributionRegistry ContributionRegistry { get; private set; }
-
-        /// <summary>
         /// Gets the host-owned UI surface for shared workbench controls.
         /// </summary>
         public IWorkbenchUiSurface Ui { get; private set; }
+
+        /// <summary>
+        /// Gets the module-owned runtime capabilities exposed by Cortex.
+        /// </summary>
+        public IWorkbenchModuleRuntime Runtime { get; private set; }
     }
 }
