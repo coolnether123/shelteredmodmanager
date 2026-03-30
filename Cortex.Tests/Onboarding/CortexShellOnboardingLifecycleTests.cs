@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using Cortex.Core.Models;
-using Cortex.Shell;
-using Cortex.Services;
 using Cortex.Tests.Testing;
 using Xunit;
+using Cortex.Services.Onboarding;
+using Cortex.Shell;
 
 namespace Cortex.Tests.Onboarding
 {

@@ -41,7 +41,7 @@ namespace Cortex.Core.Services
 
             if ((flags & SourceRootFlags.ProjectDirectory) == SourceRootFlags.ProjectDirectory)
             {
-                AddRoot(roots, project != null ? Path.GetDirectoryName(project.ProjectFilePath) : string.Empty);
+                AddRoot(roots, GetProjectDirectoryPath(project));
             }
 
             if ((flags & SourceRootFlags.Workspace) == SourceRootFlags.Workspace)
@@ -109,6 +109,23 @@ namespace Cortex.Core.Services
             }
             catch
             {
+            }
+        }
+
+        private static string GetProjectDirectoryPath(CortexProjectDefinition project)
+        {
+            if (project == null || string.IsNullOrEmpty(project.ProjectFilePath))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                return Path.GetDirectoryName(project.ProjectFilePath) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
             }
         }
 

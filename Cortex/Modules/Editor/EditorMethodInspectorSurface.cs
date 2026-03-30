@@ -3,7 +3,16 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
-using Cortex.Services;
+using Cortex.Services.Harmony.Editor;
+using Cortex.Services.Harmony.Generation;
+using Cortex.Services.Harmony.Inspection;
+using Cortex.Services.Harmony.Presentation;
+using Cortex.Services.Harmony.Resolution;
+using Cortex.Services.Inspector;
+using Cortex.Services.Inspector.Actions;
+using Cortex.Services.Inspector.Lifecycle;
+using Cortex.Services.Navigation;
+using Cortex.Services.Semantics.Context;
 using UnityEngine;
 
 namespace Cortex.Modules.Editor
@@ -20,6 +29,7 @@ namespace Cortex.Modules.Editor
 
         private readonly EditorMethodInspectorService _inspectorService;
         private readonly EditorMethodInspectorPresentationService _presentationService;
+        private readonly EditorMethodInspectorNavigationActionHandler _navigationActionHandler = new EditorMethodInspectorNavigationActionHandler();
         private readonly EditorMethodPatchCreationService _patchCreationService = new EditorMethodPatchCreationService();
         private readonly EditorMethodInspectorPanelDocumentAdapter _panelDocumentAdapter = new EditorMethodInspectorPanelDocumentAdapter();
 
@@ -37,7 +47,7 @@ namespace Cortex.Modules.Editor
             string activeDocumentPath,
             Rect anchorRect,
             Vector2 surfaceSize,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             GUIStyle containerStyle,
@@ -133,7 +143,7 @@ namespace Cortex.Modules.Editor
             string activatedId,
             CortexShellState state,
             EditorCommandInvocation invocation,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             IDocumentService documentService,
             IProjectCatalog projectCatalog,
             ISourceLookupIndex sourceLookupIndex,
@@ -159,35 +169,8 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            string symbolKind;
-            string metadataName;
-            string containingTypeName;
-            string containingAssemblyName;
-            string documentationCommentId;
-            if (EditorMethodInspectorNavigationActionCodec.TryParse(
-                activatedId,
-                out symbolKind,
-                out metadataName,
-                out containingTypeName,
-                out containingAssemblyName,
-                out documentationCommentId))
+            if (_navigationActionHandler.TryHandle(state, navigationService, activatedId))
             {
-                if (navigationService != null)
-                {
-                    navigationService.OpenLanguageSymbolTarget(
-                        state,
-                        metadataName,
-                        symbolKind,
-                        metadataName,
-                        containingTypeName,
-                        containingAssemblyName,
-                        documentationCommentId,
-                        string.Empty,
-                        null,
-                        "Opened relationship target.",
-                        "Could not open relationship target.");
-                }
-
                 return;
             }
 

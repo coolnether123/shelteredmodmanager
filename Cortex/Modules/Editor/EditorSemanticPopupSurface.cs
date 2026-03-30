@@ -1,8 +1,10 @@
 using System;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
-using Cortex.Services;
+using Cortex.Services.Semantics.Context;
+using Cortex.Services.Semantics.Requests;
 using UnityEngine;
+using Cortex.Services.Editor.Commands;
 
 namespace Cortex.Modules.Editor
 {
@@ -16,7 +18,8 @@ namespace Cortex.Modules.Editor
         private const float PeekHeight = 150f;
         private readonly EditorContextMenuService _contextMenuService = new EditorContextMenuService();
         private readonly IEditorContextService _contextService;
-        private readonly EditorSemanticOperationService _semanticOperationService = new EditorSemanticOperationService();
+        private readonly IEditorSemanticRequestService _semanticRequestService = new EditorSemanticRequestService();
+        private readonly IEditorQuickActionsService _quickActionsService = new EditorQuickActionsService();
 
         public EditorSemanticPopupSurface(IEditorContextService contextService)
         {
@@ -33,7 +36,7 @@ namespace Cortex.Modules.Editor
             var target = _contextService.ResolveTarget(state, state.Semantic.QuickActions.ContextKey);
             if (target == null)
             {
-                _semanticOperationService.CloseQuickActions(state);
+                _quickActionsService.CloseQuickActions(state);
                 return;
             }
             var popupRect = BuildPopupRect(anchorRect, surfaceSize, QuickActionsWidth, QuickActionsHeight);
@@ -68,7 +71,7 @@ namespace Cortex.Modules.Editor
                 if (GUILayout.Button(label, GUILayout.Height(24f)))
                 {
                     _contextMenuService.Execute(state, commandRegistry, target, action.CommandId);
-                    _semanticOperationService.CloseQuickActions(state);
+                    _quickActionsService.CloseQuickActions(state);
                     GUI.enabled = previousEnabled;
                     GUILayout.EndVertical();
                     GUILayout.EndArea();
@@ -94,7 +97,7 @@ namespace Cortex.Modules.Editor
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Close", GUILayout.Width(72f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape))
             {
-                _semanticOperationService.CloseQuickActions(state);
+                _quickActionsService.CloseQuickActions(state);
                 if (current != null)
                 {
                     current.Use();
@@ -147,7 +150,7 @@ namespace Cortex.Modules.Editor
 
             if (GUILayout.Button("Apply", GUILayout.Width(60f)) || (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Return))
             {
-                _semanticOperationService.QueueRequest(state, target, SemanticRequestKind.RenamePreview, state.Editor.Rename.ActiveText);
+                _semanticRequestService.QueueRequest(state, target, SemanticRequestKind.RenamePreview, state.Editor.Rename.ActiveText);
                 state.Semantic.Workbench.ActiveView = SemanticWorkbenchViewKind.RenamePreview;
                 OpenSearchContainer(state, commandRegistry);
                 state.StatusMessage = "Semantic rename preview requested for " + (target.SymbolText ?? string.Empty) + ".";

@@ -5,7 +5,12 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Editor;
-using Cortex.Services;
+using Cortex.Services.Harmony.Generation;
+using Cortex.Services.Harmony.Inspection;
+using Cortex.Services.Harmony.Presentation;
+using Cortex.Services.Harmony.Resolution;
+using Cortex.Services.Navigation;
+using Cortex.Services.Semantics.Context;
 using GameModding.Shared.Restart;
 using UnityEngine;
 
@@ -126,7 +131,7 @@ namespace Cortex.Tests.Testing
             DocumentSession session,
             Rect anchorRect,
             Vector2 surfaceSize,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             GUIStyle containerStyle,

@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
-using Cortex.Services;
+using Cortex.Services.Editor.Commands;
 
 namespace Cortex.Tests.Testing
 {

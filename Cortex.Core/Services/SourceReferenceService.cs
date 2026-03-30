@@ -12,19 +12,26 @@ namespace Cortex.Core.Services
     public sealed class SourceReferenceService : ISourceReferenceService
     {
         private readonly IDecompilerClient _decompilerClient;
+        private readonly IRuntimeAssemblyMemberService _runtimeAssemblyMemberService;
 
         public SourceReferenceService(IDecompilerClient decompilerClient)
+            : this(decompilerClient, new RuntimeAssemblyMemberService())
+        {
+        }
+
+        public SourceReferenceService(IDecompilerClient decompilerClient, IRuntimeAssemblyMemberService runtimeAssemblyMemberService)
         {
             _decompilerClient = decompilerClient;
+            _runtimeAssemblyMemberService = runtimeAssemblyMemberService ?? new RuntimeAssemblyMemberService();
         }
 
         public DecompilerResponse GetSource(DecompilerRequest request)
         {
             var resolvedType = request != null && request.EntityKind == DecompilerEntityKind.Type
-                ? ResolveType(request.AssemblyPath, request.MetadataToken)
+                ? _runtimeAssemblyMemberService.ResolveType(request.AssemblyPath, request.MetadataToken)
                 : null;
             var resolvedMethod = request != null && request.EntityKind == DecompilerEntityKind.Method
-                ? ResolveMethod(request.AssemblyPath, request.MetadataToken)
+                ? _runtimeAssemblyMemberService.ResolveMethod(request.AssemblyPath, request.MetadataToken)
                 : null;
             var effectiveRequest = BuildEffectiveRequest(request, resolvedType, resolvedMethod);
             var response = _decompilerClient.Decompile(effectiveRequest);
@@ -144,7 +151,7 @@ namespace Cortex.Core.Services
             };
         }
 
-        private static void PopulateXmlDocumentation(DecompilerRequest request, DecompilerResponse response, Type resolvedType, MethodBase resolvedMethod)
+        private void PopulateXmlDocumentation(DecompilerRequest request, DecompilerResponse response, Type resolvedType, MethodBase resolvedMethod)
         {
             if (request == null || response == null || string.IsNullOrEmpty(request.AssemblyPath) || request.MetadataToken <= 0)
             {
@@ -166,7 +173,7 @@ namespace Cortex.Core.Services
 
                 if (request.EntityKind == DecompilerEntityKind.Type)
                 {
-                    var type = resolvedType ?? ResolveType(request.AssemblyPath, request.MetadataToken);
+                    var type = resolvedType ?? _runtimeAssemblyMemberService.ResolveType(request.AssemblyPath, request.MetadataToken);
                     if (type == null)
                     {
                         return;
@@ -178,7 +185,7 @@ namespace Cortex.Core.Services
                     return;
                 }
 
-                var method = resolvedMethod ?? ResolveMethod(request.AssemblyPath, request.MetadataToken);
+                var method = resolvedMethod ?? _runtimeAssemblyMemberService.ResolveMethod(request.AssemblyPath, request.MetadataToken);
                 if (method == null)
                 {
                     return;
@@ -268,65 +275,6 @@ namespace Cortex.Core.Services
             return string.IsNullOrEmpty(typeDirectory)
                 ? fileName
                 : Path.Combine(typeDirectory, fileName);
-        }
-
-        private static Type ResolveType(string assemblyPath, int metadataToken)
-        {
-            var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-            for (var i = 0; i < loadedAssemblies.Length; i++)
-            {
-                try
-                {
-                    if (!string.Equals(Path.GetFullPath(loadedAssemblies[i].Location), Path.GetFullPath(assemblyPath), StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    return loadedAssemblies[i].ManifestModule.ResolveType(metadataToken);
-                }
-                catch
-                {
-                }
-            }
-
-            try
-            {
-                return Assembly.LoadFrom(assemblyPath).ManifestModule.ResolveType(metadataToken);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static MethodBase ResolveMethod(string assemblyPath, int metadataToken)
-        {
-            var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-            for (var i = 0; i < loadedAssemblies.Length; i++)
-            {
-                var assembly = loadedAssemblies[i];
-                try
-                {
-                    if (!string.Equals(Path.GetFullPath(assembly.Location), Path.GetFullPath(assemblyPath), StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    return assembly.ManifestModule.ResolveMethod(metadataToken);
-                }
-                catch
-                {
-                }
-            }
-
-            try
-            {
-                return Assembly.LoadFrom(assemblyPath).ManifestModule.ResolveMethod(metadataToken);
-            }
-            catch
-            {
-                return null;
-            }
         }
 
         private static void AppendMemberDocumentation(XmlDocument document, string memberName, string label, StringBuilder builder)

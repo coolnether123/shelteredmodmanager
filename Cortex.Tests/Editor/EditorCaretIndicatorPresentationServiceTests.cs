@@ -1,6 +1,7 @@
-using Cortex.Services;
+using Cortex.Shell;
 using Cortex.Tests.Testing;
 using Xunit;
+using Cortex.Services.Editor.Presentation;
 
 namespace Cortex.Tests.Editor
 {

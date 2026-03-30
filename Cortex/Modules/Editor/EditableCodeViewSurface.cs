@@ -6,8 +6,25 @@ using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
-using Cortex.Services;
+using Cortex.Services.Harmony.Generation;
+using Cortex.Services.Harmony.Inspection;
+using Cortex.Services.Harmony.Presentation;
+using Cortex.Services.Harmony.Resolution;
+using Cortex.Services.Navigation;
+using Cortex.Services.Semantics.Analysis;
+using Cortex.Services.Semantics.Completion;
+using Cortex.Services.Semantics.Context;
+using Cortex.Services.Semantics.Hover;
+using Cortex.Services.Semantics.Diagnostics;
+using Cortex.Services.Semantics.SignatureHelp;
 using UnityEngine;
+using Cortex.Services.Editor.Commands;
+using Cortex.Services.Editor.Context;
+using Cortex.Services.Editor.Input;
+using Cortex.Services.Editor.Presentation;
+using Cortex.Services.Harmony.Workflow;
+using Cortex.Services.Inspector.Identity;
+using Cortex.Services.Inspector.Lifecycle;
 
 namespace Cortex.Modules.Editor
 {
@@ -25,9 +42,9 @@ namespace Cortex.Modules.Editor
 
         private readonly IEditorService _editorService = new EditorService();
         private readonly IEditorKeybindingService _keybindingService = new EditorKeybindingService();
-        private readonly DocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
-        private readonly EditorCompletionService _editorCompletionService = new EditorCompletionService();
-        private readonly EditorSignatureHelpService _editorSignatureHelpService = new EditorSignatureHelpService();
+        private readonly IDocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
+        private readonly IEditorCompletionService _editorCompletionService = new EditorCompletionService();
+        private readonly IEditorSignatureHelpService _editorSignatureHelpService = new EditorSignatureHelpService();
         private readonly EditorSemanticPopupSurface _semanticPopupSurface;
         private readonly EditorCommandContextFactory _commandContextFactory = new EditorCommandContextFactory();
         private readonly IEditorContextService _contextService;
@@ -38,7 +55,7 @@ namespace Cortex.Modules.Editor
         private readonly IEditorMethodInspectorOverlayController _methodInspectorOverlayController;
         private readonly EditorToolbarService _toolbarService = new EditorToolbarService();
         private readonly SourceEditorCommandRouterService _commandRouterService = new SourceEditorCommandRouterService();
-        private readonly EditorHoverService _hoverService;
+        private readonly IEditorHoverService _hoverService;
         private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
         private readonly EditorFallbackColoringService _fallbackColoringService = new EditorFallbackColoringService();
         private readonly EditorCaretIndicatorPresentationService _caretIndicatorPresentationService = new EditorCaretIndicatorPresentationService();
@@ -92,7 +109,7 @@ namespace Cortex.Modules.Editor
 
         public EditableCodeViewSurface(
             IEditorContextService contextService,
-            EditorHoverService hoverService,
+            IEditorHoverService hoverService,
             IOverlayRendererFactory overlayRendererFactory,
             IEditorMethodInspectorOverlayController methodInspectorOverlayController = null)
         {
@@ -1967,7 +1984,7 @@ namespace Cortex.Modules.Editor
         }
 
         private void DrawHoverTooltip(
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state,
             string surfaceId,
             EditorHoverTarget hoverTarget,

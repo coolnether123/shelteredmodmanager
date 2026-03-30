@@ -6,9 +6,12 @@ using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Editor;
 using Cortex.Presentation.Models;
 using Cortex.Rendering.Models;
-using Cortex.Services;
+using Cortex.Services.Harmony.Editor;
+using Cortex.Services.Harmony.Presentation;
+using Cortex.Services.Inspector.Relationships;
 using Cortex.Tests.Testing;
 using Xunit;
+using Cortex.Services.Inspector;
 
 namespace Cortex.Tests.Editor
 {

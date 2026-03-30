@@ -2,7 +2,10 @@ using System;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
-using Cortex.Services;
+using Cortex.Services.Semantics.Requests;
+using Cortex.Services.Editor.Commands;
+using Cortex.Services.Editor.Context;
+using Cortex.Services.Semantics.Workbench;
 
 namespace Cortex.Modules.Editor
 {
@@ -30,12 +33,14 @@ namespace Cortex.Modules.Editor
             private readonly IClipboardService _clipboardService = new EditorClipboardService();
             private readonly EditorCommandAvailabilityService _availabilityService = new EditorCommandAvailabilityService();
             private readonly EditorCommandExecutionStrategyService _executionStrategyService = new EditorCommandExecutionStrategyService();
-            private readonly EditorSemanticOperationService _semanticOperationService = new EditorSemanticOperationService();
             private readonly EditorContextActionResolverService _actionResolverService = new EditorContextActionResolverService();
             private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
             private readonly EditorLogicalDocumentTargetResolutionService _targetResolutionService = new EditorLogicalDocumentTargetResolutionService();
             private readonly EditorMutationExecutionService _mutationExecutionService = new EditorMutationExecutionService();
             private readonly UsingDirectiveOrganizationService _usingDirectiveOrganizationService = new UsingDirectiveOrganizationService();
+            private readonly IEditorSemanticRequestService _semanticRequestService = new EditorSemanticRequestService();
+            private readonly IEditorQuickActionsService _quickActionsService = new EditorQuickActionsService();
+            private readonly IEditorSemanticWorkbenchService _semanticWorkbenchService = new EditorSemanticWorkbenchService();
 
             public EditorContextCommandRegistrar(
                 ICommandRegistry commandRegistry,
@@ -340,7 +345,7 @@ namespace Cortex.Modules.Editor
                     _contributionRegistry,
                     target,
                     EditorContextActionPlacement.QuickActions);
-                _semanticOperationService.OpenQuickActions(_state, target, ToArray(actions));
+                _quickActionsService.OpenQuickActions(_state, target, ToArray(actions));
                 _state.StatusMessage = actions.Count > 0
                     ? "Quick Actions opened for " + (target.SymbolText ?? string.Empty) + "."
                     : "No quick actions are available for the current location.";
@@ -406,7 +411,7 @@ namespace Cortex.Modules.Editor
             private void CreateUnitTests(CommandExecutionContext context)
             {
                 var target = GetTarget(context);
-                var plan = _semanticOperationService.BuildUnitTestPlan(_state, target);
+                var plan = _semanticWorkbenchService.BuildUnitTestPlan(_state, target);
                 _state.Semantic.Workbench.UnitTestGeneration = plan;
                 _state.Semantic.Workbench.ActiveView = SemanticWorkbenchViewKind.UnitTestGeneration;
                 OpenSearchContainer();
@@ -457,7 +462,7 @@ namespace Cortex.Modules.Editor
                     return;
                 }
 
-                _semanticOperationService.OpenDocumentEditPreview(_state, previewPlan);
+                _semanticWorkbenchService.OpenDocumentEditPreview(_state, previewPlan);
                 OpenSearchContainer();
 
                 if (_availabilityService.HasCapability(_state, "document-transforms"))
@@ -472,7 +477,7 @@ namespace Cortex.Modules.Editor
                         SupportsEditing = resolvedTarget.SupportsEditing,
                         CanGoToDefinition = false
                     };
-                    _semanticOperationService.QueueDocumentTransformRequest(
+                    _semanticRequestService.QueueDocumentTransformRequest(
                         _state,
                         previewTarget,
                         "cortex.editor.removeAndSortUsings",
@@ -554,7 +559,7 @@ namespace Cortex.Modules.Editor
                     return;
                 }
 
-                _semanticOperationService.QueueRequest(_state, target, requestKind);
+                _semanticRequestService.QueueRequest(_state, target, requestKind);
                 _state.Semantic.Workbench.ActiveView = viewKind;
                 OpenSearchContainer();
                 _state.StatusMessage = actionName + " requested for " + (target.SymbolText ?? string.Empty) + ".";

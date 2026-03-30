@@ -1,7 +1,12 @@
 using Cortex;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using Cortex.Services;
+using Cortex.Services.Inspector.Lifecycle;
+using Cortex.Services.Inspector.Relationships;
+using Cortex.Services.Semantics.Analysis;
+using Cortex.Services.Semantics.Completion;
+using Cortex.Services.Semantics.Requests;
+using Cortex.Services.Semantics.SignatureHelp;
 using Cortex.Tests.Testing;
 using Xunit;
 
@@ -99,7 +104,7 @@ namespace Cortex.Tests.Editor
                 state,
                 runtimeState,
                 new DocumentLanguageAnalysisService(),
-                new DocumentLanguageInteractionService(),
+                new EditorLanguageRequestFactory(),
                 new EditorCompletionService(),
                 new EditorSignatureHelpService(),
                 new TestEditorContextService(target),
@@ -168,7 +173,7 @@ namespace Cortex.Tests.Editor
                 state,
                 runtimeState,
                 new DocumentLanguageAnalysisService(),
-                new DocumentLanguageInteractionService(),
+                new EditorLanguageRequestFactory(),
                 new EditorCompletionService(),
                 new EditorSignatureHelpService(),
                 new TestEditorContextService(target),
@@ -248,7 +253,7 @@ namespace Cortex.Tests.Editor
                 state,
                 runtimeState,
                 new DocumentLanguageAnalysisService(),
-                new DocumentLanguageInteractionService(),
+                new EditorLanguageRequestFactory(),
                 new EditorCompletionService(),
                 new EditorSignatureHelpService(),
                 new TestEditorContextService(target),

@@ -1,9 +1,10 @@
 using System;
 using System.IO;
 using Cortex.Core.Models;
-using Cortex.Services;
 using Cortex.Tests.Testing;
 using Xunit;
+using Cortex.Services.Editor.Commands;
+using Cortex.Services.Editor.Context;
 
 namespace Cortex.Tests.Editor
 {

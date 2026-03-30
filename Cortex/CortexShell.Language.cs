@@ -1,6 +1,6 @@
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
-using Cortex.Services;
+using Cortex.Services.Semantics.Completion;
 
 namespace Cortex
 {

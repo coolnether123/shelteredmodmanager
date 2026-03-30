@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using Cortex.Services;
+using Cortex.Services.Inspector.Lifecycle;
+using Cortex.Services.Semantics.Analysis;
+using Cortex.Services.Semantics.Completion;
+using Cortex.Services.Semantics.Diagnostics;
 using GameModding.Shared.Serialization;
 
 namespace Cortex

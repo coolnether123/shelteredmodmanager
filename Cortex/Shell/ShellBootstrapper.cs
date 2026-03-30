@@ -6,8 +6,17 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Presentation.Abstractions;
 using Cortex.Plugins.Abstractions;
-using Cortex.Services;
+using Cortex.Services.Harmony.Generation;
+using Cortex.Services.Harmony.Inspection;
+using Cortex.Services.Harmony.Policy;
+using Cortex.Services.Harmony.Presentation;
+using Cortex.Services.Harmony.Resolution;
+using Cortex.Services.Navigation;
+using Cortex.Services.Navigation.Metadata;
+using Cortex.Services.Editor.Context;
+using Cortex.Services.Semantics.Context;
 using UnityEngine;
+using Cortex.Services.Harmony.Workflow;
 
 namespace Cortex.Shell
 {
@@ -173,6 +182,7 @@ namespace Cortex.Shell
             var buildExecutor = new ProcessBuildExecutor();
             var sourcePathResolver = new SourcePathResolver(sourceLookupIndex);
             var sourceReferenceService = new SourceReferenceService(new DecompilerCliClient(decompilerPath, settings.DecompilerCachePath, 15000));
+            var metadataNavigationService = new AssemblyMetadataNavigationService();
             var navigationService = new CortexNavigationService(documentService, sourceReferenceService, platformModule.CreateRuntimeSourceNavigationService(sourcePathResolver), sourceLookupIndex);
 
             var harmonyPatchOwnershipService = new HarmonyPatchOwnershipService();
@@ -183,10 +193,15 @@ namespace Cortex.Shell
                 harmonyPatchOwnershipService,
                 harmonyPatchOrderService);
 
-            var harmonyPatchResolutionService = new HarmonyPatchResolutionService();
+            var harmonyPatchResolutionService = new HarmonyPatchResolutionService(
+                new HarmonyMetadataTargetResolver(
+                    metadataNavigationService,
+                    new HarmonyMethodIdentityService(),
+                    new HarmonyRuntimeMethodLookupService()));
             var harmonyPatchTemplateService = new HarmonyPatchTemplateService();
             var harmonyPatchInsertionService = new HarmonyPatchInsertionService();
             var harmonyPatchGenerationService = new HarmonyPatchGenerationService(harmonyPatchTemplateService, harmonyPatchInsertionService);
+            var harmonyPatchWorkspaceService = new HarmonyPatchWorkspaceService();
             var generatedTemplateNavigationService = new GeneratedTemplateNavigationService();
             var editorContextService = new EditorContextService(
                 new EditorService(),
@@ -222,6 +237,7 @@ namespace Cortex.Shell
                 HarmonyPatchTemplateService = harmonyPatchTemplateService,
                 HarmonyPatchInsertionService = harmonyPatchInsertionService,
                 HarmonyPatchGenerationService = harmonyPatchGenerationService,
+                HarmonyPatchWorkspaceService = harmonyPatchWorkspaceService,
                 GeneratedTemplateNavigationService = generatedTemplateNavigationService,
                 EditorContextService = editorContextService,
                 LanguageRuntimeControl = languageRuntimeControl,
@@ -340,7 +356,7 @@ namespace Cortex.Shell
         public IRestartCoordinator RestartCoordinator;
         public IOverlayInputCaptureService OverlayInputCaptureService;
         public ITextSearchService TextSearchService;
-        public CortexNavigationService NavigationService;
+        public ICortexNavigationService NavigationService;
         public HarmonyPatchOwnershipService HarmonyPatchOwnershipService;
         public HarmonyPatchDisplayService HarmonyPatchDisplayService;
         public HarmonyPatchOrderService HarmonyPatchOrderService;
@@ -349,6 +365,7 @@ namespace Cortex.Shell
         public HarmonyPatchTemplateService HarmonyPatchTemplateService;
         public HarmonyPatchInsertionService HarmonyPatchInsertionService;
         public HarmonyPatchGenerationService HarmonyPatchGenerationService;
+        public HarmonyPatchWorkspaceService HarmonyPatchWorkspaceService;
         public GeneratedTemplateNavigationService GeneratedTemplateNavigationService;
         public IEditorContextService EditorContextService;
         public ILanguageRuntimeControl LanguageRuntimeControl;

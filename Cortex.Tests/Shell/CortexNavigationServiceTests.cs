@@ -5,7 +5,7 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Modules.Shared;
-using Cortex.Services;
+using Cortex.Services.Navigation;
 using Cortex.Tests.Testing;
 using Xunit;
 

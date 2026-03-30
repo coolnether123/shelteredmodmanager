@@ -3,7 +3,8 @@ using Cortex.CompletionProviders;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using Cortex.Services;
+using Cortex.Services.Semantics.Completion;
+using Cortex.Services.Semantics.Completion.Augmentation;
 
 namespace Cortex
 {

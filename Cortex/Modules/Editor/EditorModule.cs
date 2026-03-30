@@ -6,8 +6,18 @@ using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
-using Cortex.Services;
+using Cortex.Services.Harmony.Generation;
+using Cortex.Services.Harmony.Inspection;
+using Cortex.Services.Harmony.Presentation;
+using Cortex.Services.Harmony.Resolution;
+using Cortex.Services.Navigation;
+using Cortex.Services.Semantics.Context;
+using Cortex.Services.Semantics.Hover;
+using Cortex.Services.Semantics.Diagnostics;
 using UnityEngine;
+using Cortex.Services.Editor.Context;
+using Cortex.Services.Harmony.Workflow;
+using Cortex.Services.Search;
 
 namespace Cortex.Modules.Editor
 {
@@ -73,7 +83,7 @@ namespace Cortex.Modules.Editor
         private Texture2D _statusModeDisabledBackground;
         private readonly CodeViewSurface _codeViewSurface;
         private readonly EditableCodeViewSurface _editableCodeViewSurface;
-        private readonly EditorHoverService _hoverService;
+        private readonly IEditorHoverService _hoverService;
         private readonly IEditorService _editorService = new EditorService();
         private readonly EditorDocumentModeService _documentModeService = new EditorDocumentModeService();
         private readonly IRenderPipeline _renderPipeline;
@@ -89,10 +99,10 @@ namespace Cortex.Modules.Editor
 
         internal void Draw(
             IDocumentService documentService,
-            Services.CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
-            Services.WorkbenchSearchService workbenchSearchService,
+            WorkbenchSearchService workbenchSearchService,
             IProjectCatalog projectCatalog,
             ILoadedModCatalog loadedModCatalog,
             ISourceLookupIndex sourceLookupIndex,
@@ -367,7 +377,7 @@ namespace Cortex.Modules.Editor
             }
         }
 
-        private void DrawFindOverlay(ICommandRegistry commandRegistry, Services.WorkbenchSearchService workbenchSearchService, CortexShellState state)
+        private void DrawFindOverlay(ICommandRegistry commandRegistry, WorkbenchSearchService workbenchSearchService, CortexShellState state)
         {
             var search = state != null ? state.Search : null;
             if (search == null || !search.IsVisible)
@@ -500,7 +510,7 @@ namespace Cortex.Modules.Editor
             }
         }
 
-        private string BuildFindSummary(Services.WorkbenchSearchService workbenchSearchService, CortexShellState state)
+        private string BuildFindSummary(WorkbenchSearchService workbenchSearchService, CortexShellState state)
         {
             if (state == null || state.Search == null)
             {
@@ -557,7 +567,7 @@ namespace Cortex.Modules.Editor
 
         private void DrawCodeArea(
             IDocumentService documentService,
-            Services.CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             IProjectCatalog projectCatalog,
