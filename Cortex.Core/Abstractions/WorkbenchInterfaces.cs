@@ -27,6 +27,7 @@ namespace Cortex.Core.Abstractions
         void RegisterOnboardingLayoutPreset(OnboardingLayoutPresetContribution contribution);
         void RegisterSettingSection(SettingSectionContribution contribution);
         void RegisterSetting(SettingContribution contribution);
+        void RegisterExplorerFilter(ExplorerFilterContribution contribution);
 
         IList<ViewContainerContribution> GetViewContainers();
         IList<ViewContribution> GetViews(string containerId);
@@ -40,6 +41,7 @@ namespace Cortex.Core.Abstractions
         IList<OnboardingLayoutPresetContribution> GetOnboardingLayoutPresets();
         IList<SettingSectionContribution> GetSettingSections();
         IList<SettingContribution> GetSettings();
+        IList<ExplorerFilterContribution> GetExplorerFilters();
     }
 
     public interface ILayoutPersistenceService

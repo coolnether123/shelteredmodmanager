@@ -21,6 +21,7 @@ namespace Cortex.Core.Services
         private readonly Dictionary<string, IconContribution> _icons;
         private readonly Dictionary<string, SettingSectionContribution> _settingSections;
         private readonly Dictionary<string, SettingContribution> _settings;
+        private readonly Dictionary<string, ExplorerFilterContribution> _explorerFilters;
 
         public ContributionRegistry()
         {
@@ -38,6 +39,7 @@ namespace Cortex.Core.Services
             _icons = new Dictionary<string, IconContribution>(StringComparer.OrdinalIgnoreCase);
             _settingSections = new Dictionary<string, SettingSectionContribution>(StringComparer.OrdinalIgnoreCase);
             _settings = new Dictionary<string, SettingContribution>(StringComparer.OrdinalIgnoreCase);
+            _explorerFilters = new Dictionary<string, ExplorerFilterContribution>(StringComparer.OrdinalIgnoreCase);
         }
 
         public void RegisterViewContainer(ViewContainerContribution contribution)
@@ -206,6 +208,16 @@ namespace Cortex.Core.Services
             }
 
             _settingSections[contribution.Scope] = contribution;
+        }
+
+        public void RegisterExplorerFilter(ExplorerFilterContribution contribution)
+        {
+            if (contribution == null || string.IsNullOrEmpty(contribution.FilterId))
+            {
+                return;
+            }
+
+            _explorerFilters[contribution.FilterId] = contribution;
         }
 
         public IList<ViewContainerContribution> GetViewContainers()
@@ -377,6 +389,25 @@ namespace Cortex.Core.Services
                 order = left.SortOrder.CompareTo(right.SortOrder);
                 return order != 0
                     ? order
+                    : string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
+            });
+            return results;
+        }
+
+        public IList<ExplorerFilterContribution> GetExplorerFilters()
+        {
+            var results = new List<ExplorerFilterContribution>(_explorerFilters.Values);
+            results.Sort(delegate(ExplorerFilterContribution left, ExplorerFilterContribution right)
+            {
+                var scopeOrder = left.Scope.CompareTo(right.Scope);
+                if (scopeOrder != 0)
+                {
+                    return scopeOrder;
+                }
+
+                var sortOrder = left.SortOrder.CompareTo(right.SortOrder);
+                return sortOrder != 0
+                    ? sortOrder
                     : string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
             });
             return results;

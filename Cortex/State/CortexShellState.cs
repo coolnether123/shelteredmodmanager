@@ -207,6 +207,28 @@ namespace Cortex
         public TextSearchResultSet Results;
     }
 
+    public enum CortexExplorerScopeMode
+    {
+        CurrentMod = 0,
+        AllRuntime = 1
+    }
+
+    public enum CortexExplorerFocusMode
+    {
+        Everything = 0,
+        HarmonyPatched = 1
+    }
+
+    public sealed class CortexExplorerInteractionState
+    {
+        public bool FiltersVisible;
+        public bool AdvancedFiltersVisible;
+        public string FilterText = string.Empty;
+        public CortexExplorerScopeMode ScopeMode = CortexExplorerScopeMode.CurrentMod;
+        public CortexExplorerFocusMode FocusMode = CortexExplorerFocusMode.Everything;
+        public readonly HashSet<string> ActiveFilterIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    }
+
     public sealed class CortexSemanticInteractionState
     {
         public readonly CortexSemanticRequestState Request = new CortexSemanticRequestState();
@@ -332,6 +354,7 @@ namespace Cortex
         public readonly CortexDocumentWorkspaceState Documents = new CortexDocumentWorkspaceState();
         public readonly CortexEditorContextState EditorContext = new CortexEditorContextState();
         public readonly CortexEditorInteractionState Editor = new CortexEditorInteractionState();
+        public readonly CortexExplorerInteractionState Explorer = new CortexExplorerInteractionState();
         public readonly CortexSearchInteractionState Search = new CortexSearchInteractionState();
         public readonly CortexSemanticInteractionState Semantic = new CortexSemanticInteractionState();
         public readonly CortexHarmonyInteractionState Harmony = new CortexHarmonyInteractionState();

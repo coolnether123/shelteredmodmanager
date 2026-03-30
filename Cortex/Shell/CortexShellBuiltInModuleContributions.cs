@@ -24,6 +24,7 @@ namespace Cortex
                 return;
             }
 
+            HarmonyExplorerFilterContributions.EnsureRegistered(services.ContributionRegistry, services);
             registry.Register(new LogsModuleContribution(services));
             registry.Register(new ProjectsModuleContribution(services));
             registry.Register(new FileExplorerModuleContribution(services));
@@ -197,6 +198,7 @@ namespace Cortex
             public override void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
             {
                 _module.Draw(
+                    _services != null ? _services.ContributionRegistry : null,
                     _services != null ? _services.WorkspaceBrowserService : null,
                     _services != null ? _services.DecompilerExplorerService : null,
                     _services != null ? _services.NavigationService : null,
@@ -206,6 +208,7 @@ namespace Cortex
             protected override void CollectMissingDependencies(List<string> missingDependencies)
             {
                 AddMissing(missingDependencies, "State", _services != null ? _services.State : null);
+                AddMissing(missingDependencies, "ContributionRegistry", _services != null ? _services.ContributionRegistry : null);
                 AddMissing(missingDependencies, "NavigationService", _services != null ? _services.NavigationService : null);
                 AddMissing(missingDependencies, "WorkspaceBrowserService", _services != null ? _services.WorkspaceBrowserService : null);
                 AddMissing(missingDependencies, "DecompilerExplorerService", _services != null ? _services.DecompilerExplorerService : null);

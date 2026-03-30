@@ -11,6 +11,8 @@ namespace Cortex.Services.Inspector.Relationships
         public string ContainingTypeName = string.Empty;
         public string ContainingAssemblyName = string.Empty;
         public string DocumentationCommentId = string.Empty;
+        public string DefinitionDocumentPath = string.Empty;
+        public LanguageServiceRange DefinitionRange;
         public string Relationship = string.Empty;
         public int CallCount = 1;
     }

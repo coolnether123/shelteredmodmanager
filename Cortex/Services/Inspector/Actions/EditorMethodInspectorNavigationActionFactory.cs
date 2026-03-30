@@ -1,3 +1,4 @@
+using Cortex.Core.Models;
 using Cortex.Presentation.Models;
 using Cortex.Services.Inspector.Relationships;
 
@@ -6,6 +7,7 @@ namespace Cortex.Services.Inspector.Actions
     internal interface IEditorMethodInspectorNavigationActionFactory
     {
         MethodInspectorActionViewModel[] CreateRelationshipActions(EditorMethodRelationshipItem item);
+        MethodInspectorActionViewModel[] CreateHarmonyNavigationActions(HarmonyPatchNavigationTarget target, string label, string hint);
     }
 
     internal sealed class EditorMethodInspectorNavigationActionFactory : IEditorMethodInspectorNavigationActionFactory
@@ -22,18 +24,45 @@ namespace Cortex.Services.Inspector.Actions
 
             return new[]
             {
-                new MethodInspectorActionViewModel
-                {
-                    Id = EditorMethodInspectorNavigationActionCodec.Create(
+                CreateAction(
+                    EditorMethodInspectorNavigationActionCodec.Create(
                         item.SymbolKind,
                         item.MetadataName,
                         item.ContainingTypeName,
                         item.ContainingAssemblyName,
-                        item.DocumentationCommentId),
-                    Label = "Open",
-                    Hint = "Open this dependency or caller.",
-                    Enabled = true
-                }
+                        item.DocumentationCommentId,
+                        item.DefinitionDocumentPath,
+                        item.DefinitionRange),
+                    "Open",
+                    "Open this dependency or caller.")
+            };
+        }
+
+        public MethodInspectorActionViewModel[] CreateHarmonyNavigationActions(HarmonyPatchNavigationTarget target, string label, string hint)
+        {
+            var actionId = EditorMethodInspectorNavigationActionCodec.CreateHarmony(target);
+            if (string.IsNullOrEmpty(actionId))
+            {
+                return new MethodInspectorActionViewModel[0];
+            }
+
+            return new[]
+            {
+                CreateAction(
+                    actionId,
+                    string.IsNullOrEmpty(label) ? "Open" : label,
+                    string.IsNullOrEmpty(hint) ? "Open the matching Harmony patch method." : hint)
+            };
+        }
+
+        private static MethodInspectorActionViewModel CreateAction(string id, string label, string hint)
+        {
+            return new MethodInspectorActionViewModel
+            {
+                Id = id,
+                Label = label,
+                Hint = hint,
+                Enabled = true
             };
         }
     }

@@ -222,4 +222,46 @@ namespace Cortex.Core.Models
         public string[] Keywords;
         public int SortOrder;
     }
+
+    public enum ExplorerFilterScope
+    {
+        All = 0,
+        Workspace = 1,
+        Decompiler = 2
+    }
+
+    public delegate bool ExplorerNodeMatcher(WorkspaceTreeNode node);
+
+    public static class ExplorerFilterWellKnownIds
+    {
+        public const string HarmonyPatched = "cortex.explorer.filter.harmony.patched";
+    }
+
+    /// <summary>
+    /// Runtime context passed into explorer filter contributions so modules can
+    /// contribute matchers without reaching into explorer UI state directly.
+    /// </summary>
+    public sealed class ExplorerFilterRuntimeContext
+    {
+        public ExplorerFilterScope Scope;
+        public string ActiveDocumentPath;
+        public string HoveredDefinitionDocumentPath;
+        public CortexProjectDefinition SelectedProject;
+        public CortexSettings Settings;
+        public bool RestrictToSelectedProject;
+    }
+
+    /// <summary>
+    /// A module-owned explorer filter contribution. Explorer modules render and
+    /// evaluate these contributions, while feature modules only provide matcher logic.
+    /// </summary>
+    public sealed class ExplorerFilterContribution
+    {
+        public string FilterId;
+        public string DisplayName;
+        public string Description;
+        public ExplorerFilterScope Scope;
+        public int SortOrder;
+        public System.Func<ExplorerFilterRuntimeContext, ExplorerNodeMatcher> CreateMatcher;
+    }
 }
