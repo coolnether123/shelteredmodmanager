@@ -1,6 +1,6 @@
-using Cortex.Services;
 using UnityEngine;
 using Xunit;
+using Cortex.Services.Editor.Input;
 
 namespace Cortex.Tests.Editor
 {
@@ -33,13 +33,8 @@ namespace Cortex.Tests.Editor
             {
                 PointerOnHoverSurface = true
             };
-            var mouseDown = new Event
-            {
-                type = EventType.MouseDown,
-                button = 0
-            };
 
-            Assert.True(service.ShouldBypassSurfaceInput(mouseDown, pointerState));
+            Assert.True(service.ShouldBypassSurfaceInput(EventType.MouseDown, pointerState));
         }
 
         [Fact]
@@ -52,13 +47,8 @@ namespace Cortex.Tests.Editor
             {
                 PointerOnHoverSurface = true
             };
-            var mouseDown = new Event
-            {
-                type = EventType.MouseDown,
-                button = 0
-            };
 
-            Assert.False(service.ShouldCloseMethodInspectorOnPointerDown(mouseDown, pointerState, state));
+            Assert.False(service.ShouldCloseMethodInspectorOnPointerDown(EventType.MouseDown, pointerState, state));
         }
     }
 }

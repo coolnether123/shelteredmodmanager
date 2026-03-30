@@ -4,7 +4,19 @@ using Cortex.Chrome;
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
-using Cortex.Services;
+using Cortex.Services.Editor.Commands;
+using Cortex.Services.Editor.Context;
+using Cortex.Services.Editor.Input;
+using Cortex.Services.Editor.Presentation;
+using Cortex.Services.Harmony.Workflow;
+using Cortex.Services.Inspector;
+using Cortex.Services.Inspector.Identity;
+using Cortex.Services.Onboarding;
+using Cortex.Services.Search;
+using Cortex.Services.Semantics.Completion.Augmentation;
+using Cortex.Services.Semantics.Diagnostics;
+using Cortex.Services.Semantics.Workbench;
+using Cortex.Shell;
 using UnityEngine;
 
 namespace Cortex.Shell

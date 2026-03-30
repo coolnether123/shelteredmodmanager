@@ -2,7 +2,11 @@ using System;
 using System.IO;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using Cortex.Services;
+using Cortex.Services.Inspector.Lifecycle;
+using Cortex.Services.Semantics.Analysis;
+using Cortex.Services.Semantics.Completion;
+using Cortex.Services.Semantics.Diagnostics;
+
 namespace Cortex
 {
     internal sealed class CortexShellLanguageRequestDispatcher
@@ -120,7 +124,7 @@ namespace Cortex
 
             var project = context.ResolveProjectForDocument(session.FilePath);
             var sourceRoots = context.BuildLanguageSourceRoots(context.State.Settings, project);
-            var request = context.DocumentLanguageInteractionService.BuildHoverRequest(
+            var request = context.LanguageRequestFactory.BuildHoverRequest(
                 session,
                 context.State.Settings,
                 project,
@@ -200,7 +204,7 @@ namespace Cortex
 
             var project = context.ResolveProjectForDocument(session.FilePath);
             var sourceRoots = context.BuildLanguageSourceRoots(context.State.Settings, project);
-            var request = context.DocumentLanguageInteractionService.BuildDefinitionRequest(
+            var request = context.LanguageRequestFactory.BuildDefinitionRequest(
                 session,
                 context.State.Settings,
                 project,
@@ -410,7 +414,7 @@ namespace Cortex
                 case SemanticRequestKind.SymbolContext:
                     requestId = context.LanguageServiceClient != null
                         ? context.LanguageServiceClient.QueueSymbolContext(
-                            context.DocumentLanguageInteractionService.BuildSymbolContextRequest(
+                            context.LanguageRequestFactory.BuildSymbolContextRequest(
                                 session,
                                 context.State.Settings,
                                 project,
@@ -423,7 +427,7 @@ namespace Cortex
                 case SemanticRequestKind.RenamePreview:
                     requestId = context.LanguageServiceClient != null
                         ? context.LanguageServiceClient.QueueRenamePreview(
-                            context.DocumentLanguageInteractionService.BuildRenameRequest(
+                            context.LanguageRequestFactory.BuildRenameRequest(
                                 session,
                                 context.State.Settings,
                                 project,
@@ -437,7 +441,7 @@ namespace Cortex
                 case SemanticRequestKind.References:
                     requestId = context.LanguageServiceClient != null
                         ? context.LanguageServiceClient.QueueReferences(
-                            context.DocumentLanguageInteractionService.BuildReferencesRequest(
+                            context.LanguageRequestFactory.BuildReferencesRequest(
                                 session,
                                 context.State.Settings,
                                 project,
@@ -450,7 +454,7 @@ namespace Cortex
                 case SemanticRequestKind.PeekDefinition:
                     requestId = context.LanguageServiceClient != null
                         ? context.LanguageServiceClient.QueueGoToDefinition(
-                            context.DocumentLanguageInteractionService.BuildDefinitionRequest(
+                            context.LanguageRequestFactory.BuildDefinitionRequest(
                                 session,
                                 context.State.Settings,
                                 project,
@@ -463,7 +467,7 @@ namespace Cortex
                 case SemanticRequestKind.BaseSymbol:
                     requestId = context.LanguageServiceClient != null
                         ? context.LanguageServiceClient.QueueGoToBase(
-                            context.DocumentLanguageInteractionService.BuildBaseSymbolRequest(
+                            context.LanguageRequestFactory.BuildBaseSymbolRequest(
                                 session,
                                 context.State.Settings,
                                 project,
@@ -476,7 +480,7 @@ namespace Cortex
                 case SemanticRequestKind.Implementations:
                     requestId = context.LanguageServiceClient != null
                         ? context.LanguageServiceClient.QueueGoToImplementation(
-                            context.DocumentLanguageInteractionService.BuildImplementationRequest(
+                            context.LanguageRequestFactory.BuildImplementationRequest(
                                 session,
                                 context.State.Settings,
                                 project,
@@ -489,7 +493,7 @@ namespace Cortex
                 case SemanticRequestKind.CallHierarchy:
                     requestId = context.LanguageServiceClient != null
                         ? context.LanguageServiceClient.QueueCallHierarchy(
-                            context.DocumentLanguageInteractionService.BuildCallHierarchyRequest(
+                            context.LanguageRequestFactory.BuildCallHierarchyRequest(
                                 session,
                                 context.State.Settings,
                                 project,
@@ -502,7 +506,7 @@ namespace Cortex
                 case SemanticRequestKind.ValueSource:
                     requestId = context.LanguageServiceClient != null
                         ? context.LanguageServiceClient.QueueValueSource(
-                            context.DocumentLanguageInteractionService.BuildValueSourceRequest(
+                            context.LanguageRequestFactory.BuildValueSourceRequest(
                                 session,
                                 context.State.Settings,
                                 project,
@@ -515,7 +519,7 @@ namespace Cortex
                 case SemanticRequestKind.DocumentTransformPreview:
                     requestId = context.LanguageServiceClient != null && context.HasLanguageCapability("document-transforms")
                         ? context.LanguageServiceClient.QueueDocumentTransformPreview(
-                            context.DocumentLanguageInteractionService.BuildDocumentTransformRequest(
+                            context.LanguageRequestFactory.BuildDocumentTransformRequest(
                                 session,
                                 context.State.Settings,
                                 project,
@@ -592,7 +596,7 @@ namespace Cortex
 
             var project = context.ResolveProjectForDocument(session.FilePath);
             var sourceRoots = context.BuildLanguageSourceRoots(context.State.Settings, project);
-            var request = context.DocumentLanguageInteractionService.BuildCallHierarchyRequest(
+            var request = context.LanguageRequestFactory.BuildCallHierarchyRequest(
                 session,
                 context.State.Settings,
                 project,

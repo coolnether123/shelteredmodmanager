@@ -6,8 +6,21 @@ using Cortex.Modules.Shared;
 using Cortex.LanguageService.Protocol;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
-using Cortex.Services;
+using Cortex.Services.Harmony.Generation;
+using Cortex.Services.Harmony.Inspection;
+using Cortex.Services.Harmony.Presentation;
+using Cortex.Services.Harmony.Resolution;
+using Cortex.Services.Navigation;
+using Cortex.Services.Semantics.Context;
+using Cortex.Services.Semantics.Hover;
+using Cortex.Services.Semantics.Diagnostics;
 using UnityEngine;
+using Cortex.Services.Editor.Commands;
+using Cortex.Services.Editor.Context;
+using Cortex.Services.Editor.Input;
+using Cortex.Services.Editor.Presentation;
+using Cortex.Services.Inspector.Identity;
+using Cortex.Services.Inspector.Lifecycle;
 
 namespace Cortex.Modules.Editor
 {
@@ -32,7 +45,7 @@ namespace Cortex.Modules.Editor
         private readonly EditorMethodInspectorService _methodInspectorService;
         private readonly EditorMethodTargetOutlineService _methodTargetOutlineService = new EditorMethodTargetOutlineService();
         private readonly IEditorMethodInspectorOverlayController _methodInspectorOverlayController;
-        private readonly EditorHoverService _hoverService;
+        private readonly IEditorHoverService _hoverService;
         private readonly IPopupMenuRenderer _popupMenuRenderer;
         private readonly IHoverTooltipRenderer _hoverTooltipRenderer;
         private readonly EditorFallbackColoringService _fallbackColoringService = new EditorFallbackColoringService();
@@ -78,7 +91,7 @@ namespace Cortex.Modules.Editor
 
         public CodeViewSurface(
             IEditorContextService contextService,
-            EditorHoverService hoverService,
+            IEditorHoverService hoverService,
             IOverlayRendererFactory overlayRendererFactory,
             IEditorMethodInspectorOverlayController methodInspectorOverlayController = null)
         {
@@ -96,7 +109,7 @@ namespace Cortex.Modules.Editor
             Vector2 scroll,
             DocumentSession session,
             IDocumentService documentService,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             CortexShellState state,
@@ -1255,7 +1268,7 @@ namespace Cortex.Modules.Editor
         }
 
         private void DrawTooltip(
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state,
             string surfaceId,
             EditorHoverTarget hoverTarget,

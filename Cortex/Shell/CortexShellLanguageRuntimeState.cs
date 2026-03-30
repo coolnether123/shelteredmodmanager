@@ -1,7 +1,8 @@
 using System;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using Cortex.Services;
+using Cortex.Services.Semantics.Analysis;
+using Cortex.Services.Semantics.Completion;
 
 namespace Cortex
 {

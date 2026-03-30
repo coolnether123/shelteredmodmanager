@@ -1,7 +1,12 @@
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Rendering.Abstractions;
-using Cortex.Services;
+using Cortex.Services.Harmony.Generation;
+using Cortex.Services.Harmony.Inspection;
+using Cortex.Services.Harmony.Presentation;
+using Cortex.Services.Harmony.Resolution;
+using Cortex.Services.Navigation;
+using Cortex.Services.Semantics.Context;
 using UnityEngine;
 
 namespace Cortex.Modules.Editor
@@ -15,7 +20,7 @@ namespace Cortex.Modules.Editor
             DocumentSession session,
             Rect anchorRect,
             Vector2 surfaceSize,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             GUIStyle containerStyle,
@@ -56,7 +61,7 @@ namespace Cortex.Modules.Editor
             DocumentSession session,
             Rect anchorRect,
             Vector2 surfaceSize,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             GUIStyle containerStyle,

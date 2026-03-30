@@ -1,7 +1,7 @@
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
-using Cortex.Services;
+using Cortex.Services.Navigation;
 using UnityEngine;
 
 namespace Cortex.Modules.Build
@@ -11,7 +11,7 @@ namespace Cortex.Modules.Build
         private Vector2 _scroll = Vector2.zero;
         private string _configuration = string.Empty;
 
-        public void Draw(IBuildCommandResolver resolver, IBuildExecutor executor, IRestartCoordinator restartCoordinator, ISourcePathResolver sourcePathResolver, CortexNavigationService navigationService, CortexShellState state)
+        public void Draw(IBuildCommandResolver resolver, IBuildExecutor executor, IRestartCoordinator restartCoordinator, ISourcePathResolver sourcePathResolver, ICortexNavigationService navigationService, CortexShellState state)
         {
             if (state.SelectedProject == null)
             {

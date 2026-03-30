@@ -3,8 +3,10 @@ using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using Cortex.Services;
+using Cortex.Services.Navigation;
+using Cortex.Services.Semantics.Workbench;
 using UnityEngine;
+using Cortex.Services.Search;
 
 namespace Cortex.Modules.Search
 {
@@ -26,7 +28,7 @@ namespace Cortex.Modules.Search
 
         public void Draw(
             WorkbenchSearchService searchService,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             IDocumentService documentService,
             IProjectCatalog projectCatalog,
             ISourceLookupIndex sourceLookupIndex,
@@ -72,7 +74,7 @@ namespace Cortex.Modules.Search
             GUILayout.EndVertical();
         }
 
-        private void DrawSemanticContent(CortexNavigationService navigationService, IDocumentService documentService, CortexShellState state)
+        private void DrawSemanticContent(ICortexNavigationService navigationService, IDocumentService documentService, CortexShellState state)
         {
             switch (state.Semantic.Workbench.ActiveView)
             {
@@ -108,7 +110,7 @@ namespace Cortex.Modules.Search
             GUILayout.Label("No semantic results are active.", _emptyStateStyle ?? GUI.skin.label);
         }
 
-        private void DrawRenamePreview(CortexNavigationService navigationService, IDocumentService documentService, CortexShellState state)
+        private void DrawRenamePreview(ICortexNavigationService navigationService, IDocumentService documentService, CortexShellState state)
         {
             var preview = state != null && state.Semantic != null && state.Semantic.Workbench != null ? state.Semantic.Workbench.RenamePreview : null;
             if (preview == null)
@@ -141,7 +143,7 @@ namespace Cortex.Modules.Search
             DrawDocumentChangeList(preview.Documents, navigationService, state);
         }
 
-        private void DrawDocumentEditPreview(CortexNavigationService navigationService, IDocumentService documentService, CortexShellState state)
+        private void DrawDocumentEditPreview(ICortexNavigationService navigationService, IDocumentService documentService, CortexShellState state)
         {
             var preview = state != null && state.Semantic != null && state.Semantic.Workbench != null ? state.Semantic.Workbench.DocumentEditPreview : null;
             if (preview == null)
@@ -181,7 +183,7 @@ namespace Cortex.Modules.Search
             DrawDocumentChangeList(preview.Documents, navigationService, state);
         }
 
-        private void DrawPeekDefinition(LanguageServiceDefinitionResponse peekDefinition, CortexNavigationService navigationService, CortexShellState state)
+        private void DrawPeekDefinition(LanguageServiceDefinitionResponse peekDefinition, ICortexNavigationService navigationService, CortexShellState state)
         {
             if (peekDefinition == null)
             {
@@ -198,7 +200,7 @@ namespace Cortex.Modules.Search
             GUILayout.TextArea(peekDefinition.PreviewText ?? string.Empty, GUILayout.ExpandHeight(true));
         }
 
-        private void DrawCallHierarchy(LanguageServiceCallHierarchyResponse response, CortexNavigationService navigationService, CortexShellState state)
+        private void DrawCallHierarchy(LanguageServiceCallHierarchyResponse response, ICortexNavigationService navigationService, CortexShellState state)
         {
             if (response == null)
             {
@@ -211,7 +213,7 @@ namespace Cortex.Modules.Search
             DrawCallHierarchySection("Outgoing Calls", response.OutgoingCalls, navigationService, state);
         }
 
-        private void DrawCallHierarchySection(string title, LanguageServiceCallHierarchyItem[] items, CortexNavigationService navigationService, CortexShellState state)
+        private void DrawCallHierarchySection(string title, LanguageServiceCallHierarchyItem[] items, ICortexNavigationService navigationService, CortexShellState state)
         {
             GUILayout.Label(title, _documentStyle ?? GUI.skin.label);
             if (items == null || items.Length == 0)
@@ -237,7 +239,7 @@ namespace Cortex.Modules.Search
             }
         }
 
-        private void DrawValueSource(LanguageServiceValueSourceResponse response, CortexNavigationService navigationService, CortexShellState state)
+        private void DrawValueSource(LanguageServiceValueSourceResponse response, ICortexNavigationService navigationService, CortexShellState state)
         {
             if (response == null || response.Items == null || response.Items.Length == 0)
             {
@@ -266,7 +268,7 @@ namespace Cortex.Modules.Search
             }
         }
 
-        private void DrawUnitTestGeneration(UnitTestGenerationPlan plan, CortexNavigationService navigationService, CortexShellState state)
+        private void DrawUnitTestGeneration(UnitTestGenerationPlan plan, ICortexNavigationService navigationService, CortexShellState state)
         {
             if (plan == null)
             {
@@ -302,7 +304,7 @@ namespace Cortex.Modules.Search
             GUILayout.TextArea(plan.GeneratedText ?? string.Empty, GUILayout.ExpandHeight(true));
         }
 
-        private void DrawLocationList(LanguageServiceSymbolLocation[] locations, CortexNavigationService navigationService, CortexShellState state)
+        private void DrawLocationList(LanguageServiceSymbolLocation[] locations, ICortexNavigationService navigationService, CortexShellState state)
         {
             if (locations == null || locations.Length == 0)
             {
@@ -331,7 +333,7 @@ namespace Cortex.Modules.Search
             }
         }
 
-        private void DrawDocumentChangeList(LanguageServiceDocumentChange[] documents, CortexNavigationService navigationService, CortexShellState state)
+        private void DrawDocumentChangeList(LanguageServiceDocumentChange[] documents, ICortexNavigationService navigationService, CortexShellState state)
         {
             for (var i = 0; i < documents.Length; i++)
             {
@@ -374,7 +376,7 @@ namespace Cortex.Modules.Search
             GUILayout.EndVertical();
         }
 
-        private void DrawSearchResults(WorkbenchSearchService searchService, CortexNavigationService navigationService, CortexShellState state)
+        private void DrawSearchResults(WorkbenchSearchService searchService, ICortexNavigationService navigationService, CortexShellState state)
         {
             var searchState = state != null ? state.Search : null;
             var results = searchState != null ? searchState.Results : null;
@@ -568,7 +570,7 @@ namespace Cortex.Modules.Search
                 "  " + (location != null ? location.PreviewText ?? location.LineText ?? string.Empty : string.Empty);
         }
 
-        private static void OpenDocumentAtRange(CortexNavigationService navigationService, CortexShellState state, string documentPath, LanguageServiceRange range)
+        private static void OpenDocumentAtRange(ICortexNavigationService navigationService, CortexShellState state, string documentPath, LanguageServiceRange range)
         {
             if (navigationService == null || string.IsNullOrEmpty(documentPath))
             {
@@ -578,7 +580,7 @@ namespace Cortex.Modules.Search
             navigationService.OpenDocument(state, documentPath, range != null ? range.StartLine : 1, "Opened " + Path.GetFileName(documentPath) + ".", "Could not open " + Path.GetFileName(documentPath) + ".");
         }
 
-        private static void OpenDefinitionTarget(CortexNavigationService navigationService, CortexShellState state, LanguageServiceDefinitionResponse response)
+        private static void OpenDefinitionTarget(ICortexNavigationService navigationService, CortexShellState state, LanguageServiceDefinitionResponse response)
         {
             if (navigationService == null || state == null || response == null)
             {

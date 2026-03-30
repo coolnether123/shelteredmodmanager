@@ -4,7 +4,7 @@ using System.Text;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
-using Cortex.Services;
+using Cortex.Services.Navigation;
 using UnityEngine;
 
 namespace Cortex.Modules.Logs
@@ -65,7 +65,7 @@ namespace Cortex.Modules.Logs
         public void Draw(
             IRuntimeLogFeed logFeed,
             ISourcePathResolver sourcePathResolver,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state,
             bool detachedWindow)
         {
@@ -91,7 +91,7 @@ namespace Cortex.Modules.Logs
         private void DrawLogSurface(
             IList<RuntimeLogEntry> visibleEntries,
             ISourcePathResolver sourcePathResolver,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state)
         {
             if (state.Logs.SelectedEntry == null)
@@ -171,7 +171,7 @@ namespace Cortex.Modules.Logs
         private void DrawLogList(
             IList<RuntimeLogEntry> visibleEntries,
             ISourcePathResolver sourcePathResolver,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state)
         {
             var viewRect = GUILayoutUtility.GetRect(0f, 0f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true), GUILayout.MinHeight(80f));
@@ -205,7 +205,7 @@ namespace Cortex.Modules.Logs
             Rect rowRect,
             RuntimeLogEntry entry,
             ISourcePathResolver sourcePathResolver,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state)
         {
             var isSelected = IsSameEntry(state.Logs.SelectedEntry, entry);
@@ -267,7 +267,7 @@ namespace Cortex.Modules.Logs
 
         private void DrawDetailStrip(
             ISourcePathResolver sourcePathResolver,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state)
         {
             var entry = state.Logs.SelectedEntry;
@@ -342,7 +342,7 @@ namespace Cortex.Modules.Logs
         }
 
         private void DrawStackFrameList(
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state,
             RuntimeLogEntry entry)
         {
@@ -376,7 +376,7 @@ namespace Cortex.Modules.Logs
 
         // ── Navigation ────────────────────────────────────────────────────────────────
 
-        private void NavigateToLocation(CortexNavigationService navigationService, CortexShellState state, string filePath, int line)
+        private void NavigateToLocation(ICortexNavigationService navigationService, CortexShellState state, string filePath, int line)
         {
             var opened = navigationService != null
                 ? navigationService.OpenDocument(state, filePath, line, "Opened " + System.IO.Path.GetFileName(filePath) + " @ line " + line, "Could not open resolved source file.")
@@ -391,7 +391,7 @@ namespace Cortex.Modules.Logs
             }
         }
 
-        private void TryNavigateFirstFrame(CortexNavigationService navigationService, CortexShellState state, RuntimeLogEntry entry)
+        private void TryNavigateFirstFrame(ICortexNavigationService navigationService, CortexShellState state, RuntimeLogEntry entry)
         {
             if (entry == null || entry.StackFrames == null || entry.StackFrames.Count == 0)
             {
@@ -404,7 +404,7 @@ namespace Cortex.Modules.Logs
         private void NavigateToEntry(
             RuntimeLogEntry entry,
             ISourcePathResolver sourcePathResolver,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state)
         {
             if (entry == null)
@@ -438,7 +438,7 @@ namespace Cortex.Modules.Logs
         }
 
         private void OpenOrDecompileFrame(
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state,
             RuntimeLogEntry entry,
             int frameIndex)

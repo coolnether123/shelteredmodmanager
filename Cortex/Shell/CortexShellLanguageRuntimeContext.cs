@@ -2,14 +2,19 @@ using System;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using Cortex.Services;
+using Cortex.Services.Navigation;
+using Cortex.Services.Semantics.Analysis;
+using Cortex.Services.Semantics.Completion;
+using Cortex.Services.Semantics.Context;
+using Cortex.Services.Semantics.Requests;
+using Cortex.Services.Semantics.SignatureHelp;
 
 namespace Cortex
 {
     internal sealed class CortexShellLanguageRuntimeContext
     {
         private readonly Func<ILanguageProviderSession> _languageServiceClientAccessor;
-        private readonly Func<CortexNavigationService> _navigationServiceAccessor;
+        private readonly Func<ICortexNavigationService> _navigationServiceAccessor;
         private readonly Func<bool> _completionAugmentationInFlightAccessor;
         private readonly Action _ensureLanguageServiceStarted;
         private readonly Action _processCompletionAugmentationResponses;
@@ -26,13 +31,13 @@ namespace Cortex
         public CortexShellLanguageRuntimeContext(
             CortexShellState state,
             CortexShellLanguageRuntimeState runtimeState,
-            DocumentLanguageAnalysisService documentLanguageAnalysisService,
-            DocumentLanguageInteractionService documentLanguageInteractionService,
-            EditorCompletionService editorCompletionService,
-            EditorSignatureHelpService editorSignatureHelpService,
+            IDocumentLanguageAnalysisService documentLanguageAnalysisService,
+            IEditorLanguageRequestFactory languageRequestFactory,
+            IEditorCompletionService editorCompletionService,
+            IEditorSignatureHelpService editorSignatureHelpService,
             IEditorContextService editorContextService,
             Func<ILanguageProviderSession> languageServiceClientAccessor,
-            Func<CortexNavigationService> navigationServiceAccessor,
+            Func<ICortexNavigationService> navigationServiceAccessor,
             Func<bool> completionAugmentationInFlightAccessor,
             double languageAnalysisDebounceMs,
             Action ensureLanguageServiceStarted,
@@ -50,7 +55,7 @@ namespace Cortex
             State = state;
             RuntimeState = runtimeState;
             DocumentLanguageAnalysisService = documentLanguageAnalysisService;
-            DocumentLanguageInteractionService = documentLanguageInteractionService;
+            LanguageRequestFactory = languageRequestFactory;
             EditorCompletionService = editorCompletionService;
             EditorSignatureHelpService = editorSignatureHelpService;
             EditorContextService = editorContextService;
@@ -75,13 +80,13 @@ namespace Cortex
 
         public CortexShellLanguageRuntimeState RuntimeState { get; private set; }
 
-        public DocumentLanguageAnalysisService DocumentLanguageAnalysisService { get; private set; }
+        public IDocumentLanguageAnalysisService DocumentLanguageAnalysisService { get; private set; }
 
-        public DocumentLanguageInteractionService DocumentLanguageInteractionService { get; private set; }
+        public IEditorLanguageRequestFactory LanguageRequestFactory { get; private set; }
 
-        public EditorCompletionService EditorCompletionService { get; private set; }
+        public IEditorCompletionService EditorCompletionService { get; private set; }
 
-        public EditorSignatureHelpService EditorSignatureHelpService { get; private set; }
+        public IEditorSignatureHelpService EditorSignatureHelpService { get; private set; }
 
         public IEditorContextService EditorContextService { get; private set; }
 
@@ -90,7 +95,7 @@ namespace Cortex
             get { return _languageServiceClientAccessor != null ? _languageServiceClientAccessor() : null; }
         }
 
-        public CortexNavigationService NavigationService
+        public ICortexNavigationService NavigationService
         {
             get { return _navigationServiceAccessor != null ? _navigationServiceAccessor() : null; }
         }

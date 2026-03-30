@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
-using Cortex.Services;
 using UnityEngine;
+using Cortex.Services.Onboarding;
 
 namespace Cortex.Modules.Onboarding
 {

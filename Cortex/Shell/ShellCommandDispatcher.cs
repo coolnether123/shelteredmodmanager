@@ -2,7 +2,7 @@ using System;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
-using Cortex.Services;
+using Cortex.Services.Editor.Context;
 
 namespace Cortex.Shell
 {

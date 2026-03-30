@@ -1,0 +1,678 @@
+using System;
+using System.Collections.Generic;
+using Cortex.Core.Abstractions;
+using Cortex.Core.Models;
+using Cortex.LanguageService.Protocol;
+using UnityEngine;
+using Cortex.Services.Semantics.Completion.Augmentation;
+
+namespace Cortex.Services.Semantics.Completion
+{
+    internal sealed class EditorCompletionSessionService
+    {
+        private readonly CompletionRankingService _completionRankingService;
+        private readonly IEditorCompletionInteractionPolicy _interactionPolicy;
+
+        public EditorCompletionSessionService(CompletionRankingService completionRankingService, IEditorCompletionInteractionPolicy interactionPolicy)
+        {
+            _completionRankingService = completionRankingService;
+            _interactionPolicy = interactionPolicy;
+        }
+
+        public bool AcceptResponse(CortexCompletionInteractionState editorState, DocumentSession target, DocumentLanguageCompletionRequestState pending, LanguageServiceCompletionResponse response)
+        {
+            if (editorState == null || pending == null)
+            {
+                return false;
+            }
+
+            if (!string.Equals(editorState.RequestedKey ?? string.Empty, pending.RequestKey ?? string.Empty, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            ClearRequest(editorState);
+            if (response == null ||
+                target == null ||
+                (response.DocumentVersion > 0 && target.TextVersion > 0 && response.DocumentVersion != target.TextVersion) ||
+                !_interactionPolicy.HasCompletionItems(response))
+            {
+                LogRejectedResponse(target, response);
+                ClearActive(editorState);
+                ResetSelection(editorState);
+                return false;
+            }
+
+            response = _completionRankingService.Rank(target, editorState, response);
+            editorState.ActiveContextKey = pending.ContextKey ?? string.Empty;
+            editorState.Response = response;
+            ResetSelection(editorState);
+            SyncSelection(editorState);
+            return true;
+        }
+
+        public bool MergeSupplementalResponse(CortexCompletionInteractionState editorState, DocumentSession target, DocumentLanguageCompletionRequestState pending, LanguageServiceCompletionResponse response)
+        {
+            if (editorState == null || pending == null || target == null || response == null)
+            {
+                return false;
+            }
+
+            if ((response.DocumentVersion > 0 && target.TextVersion > 0 && response.DocumentVersion != target.TextVersion) ||
+                !_interactionPolicy.HasCompletionItems(response))
+            {
+                return false;
+            }
+
+            var active = editorState.Response;
+            if (active != null &&
+                string.Equals(active.DocumentPath ?? string.Empty, target.FilePath ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
+                active.DocumentVersion == target.TextVersion &&
+                active.ReplacementRange != null &&
+                pending.AbsolutePosition >= active.ReplacementRange.Start)
+            {
+                var replacementPrefixLength = pending.AbsolutePosition - active.ReplacementRange.Start;
+                var replacementPrefix = replacementPrefixLength > 0 &&
+                    !string.IsNullOrEmpty(target.Text) &&
+                    active.ReplacementRange.Start >= 0 &&
+                    active.ReplacementRange.Start + replacementPrefixLength <= target.Text.Length
+                    ? target.Text.Substring(active.ReplacementRange.Start, replacementPrefixLength)
+                    : string.Empty;
+                NormalizeSupplementalItems(response, replacementPrefix);
+                response.ReplacementRange = CloneRange(active.ReplacementRange);
+            }
+            else if (response.ReplacementRange == null)
+            {
+                response.ReplacementRange = new LanguageServiceRange
+                {
+                    Start = Math.Max(0, pending.AbsolutePosition),
+                    Length = 0
+                };
+            }
+
+            var combined = CloneCompletionResponse(active);
+            if (combined == null)
+            {
+                combined = CloneCompletionResponse(response);
+            }
+            else
+            {
+                combined.Items = MergeItems(combined.Items, response.Items);
+            }
+
+            combined.DocumentPath = target.FilePath ?? response.DocumentPath ?? pending.DocumentPath ?? string.Empty;
+            combined.DocumentVersion = target.TextVersion > 0 ? target.TextVersion : response.DocumentVersion;
+            if (combined.ReplacementRange == null)
+            {
+                combined.ReplacementRange = CloneRange(response.ReplacementRange);
+            }
+
+            combined = _completionRankingService.Rank(target, editorState, combined);
+            editorState.ActiveContextKey = pending.ContextKey ?? string.Empty;
+            editorState.Response = combined;
+            ResetSelection(editorState);
+            SyncSelection(editorState);
+            return true;
+        }
+
+        public bool SetInlineSuggestion(CortexCompletionInteractionState editorState, DocumentSession target, DocumentLanguageCompletionRequestState pending, LanguageServiceCompletionResponse response, string providerId)
+        {
+            if (editorState == null || target == null || pending == null || response == null || !_interactionPolicy.HasCompletionItems(response))
+            {
+                ClearInlineSuggestion(editorState);
+                return false;
+            }
+
+            var firstItem = response.Items[0];
+            var insertText = GetCompletionText(firstItem);
+            if (string.IsNullOrEmpty(insertText))
+            {
+                ClearInlineSuggestion(editorState);
+                return false;
+            }
+
+            var replacementRange = response.ReplacementRange;
+            if (replacementRange == null)
+            {
+                replacementRange = new LanguageServiceRange
+                {
+                    Start = Math.Max(0, pending.AbsolutePosition),
+                    Length = 0
+                };
+                response.ReplacementRange = replacementRange;
+            }
+
+            var suggestionStart = Math.Max(0, replacementRange.Start);
+            var caretIndex = target.EditorState != null ? Math.Max(0, target.EditorState.CaretIndex) : pending.AbsolutePosition;
+            if (caretIndex < suggestionStart)
+            {
+                ClearInlineSuggestion(editorState);
+                return false;
+            }
+
+            var liveText = target.Text ?? string.Empty;
+            if (caretIndex > liveText.Length)
+            {
+                caretIndex = liveText.Length;
+            }
+
+            var typedPrefixLength = caretIndex - suggestionStart;
+            if (typedPrefixLength > insertText.Length)
+            {
+                ClearInlineSuggestion(editorState);
+                return false;
+            }
+
+            var typedPrefix = typedPrefixLength > 0 && suggestionStart + typedPrefixLength <= liveText.Length
+                ? liveText.Substring(suggestionStart, typedPrefixLength)
+                : string.Empty;
+            if (!insertText.StartsWith(typedPrefix, StringComparison.Ordinal))
+            {
+                ClearInlineSuggestion(editorState);
+                return false;
+            }
+
+            editorState.InlineContextKey = pending.ContextKey ?? string.Empty;
+            editorState.InlineResponse = CloneCompletionResponse(response);
+            editorState.InlineProviderId = providerId ?? string.Empty;
+            return true;
+        }
+
+        public bool HasVisibleInlineSuggestion(CortexCompletionInteractionState editorState, DocumentSession session)
+        {
+            string _;
+            return TryGetInlineSuggestionSuffix(editorState, session, out _);
+        }
+
+        public bool TryGetInlineSuggestionSuffix(CortexCompletionInteractionState editorState, DocumentSession session, out string suffixText)
+        {
+            suffixText = string.Empty;
+            if (editorState == null || session == null || session.EditorState == null || session.EditorState.HasMultipleSelections)
+            {
+                return false;
+            }
+
+            var response = editorState.InlineResponse;
+            if (!_interactionPolicy.HasCompletionItems(response) ||
+                !string.Equals(response.DocumentPath ?? string.Empty, session.FilePath ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var firstItem = response.Items[0];
+            var insertText = GetCompletionText(firstItem);
+            if (string.IsNullOrEmpty(insertText))
+            {
+                return false;
+            }
+
+            var replacementRange = response.ReplacementRange;
+            if (replacementRange == null)
+            {
+                return false;
+            }
+
+            var start = Math.Max(0, replacementRange.Start);
+            var caretIndex = Math.Max(0, session.EditorState.CaretIndex);
+            var text = session.Text ?? string.Empty;
+            if (caretIndex < start || caretIndex > text.Length)
+            {
+                return false;
+            }
+
+            var typedPrefixLength = caretIndex - start;
+            if (typedPrefixLength > insertText.Length)
+            {
+                return false;
+            }
+
+            var typedPrefix = typedPrefixLength > 0 && start + typedPrefixLength <= text.Length
+                ? text.Substring(start, typedPrefixLength)
+                : string.Empty;
+            if (!insertText.StartsWith(typedPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            suffixText = insertText.Substring(typedPrefixLength);
+            return !string.IsNullOrEmpty(suffixText);
+        }
+
+        public bool ApplyInlineSuggestion(DocumentSession session, CortexCompletionInteractionState editorState, IEditorService editorService)
+        {
+            if (session == null || editorState == null || editorService == null)
+            {
+                return false;
+            }
+
+            var response = editorState.InlineResponse;
+            if (!_interactionPolicy.HasCompletionItems(response))
+            {
+                return false;
+            }
+
+            var replacementRange = response.ReplacementRange;
+            if (replacementRange == null)
+            {
+                return false;
+            }
+
+            var firstItem = response.Items[0];
+            var insertText = GetCompletionText(firstItem);
+            if (string.IsNullOrEmpty(insertText))
+            {
+                return false;
+            }
+
+            var start = Math.Max(0, replacementRange.Start);
+            var caretIndex = session.EditorState != null ? Math.Max(0, session.EditorState.CaretIndex) : start;
+            var textLength = session.Text != null ? session.Text.Length : 0;
+            if (start > textLength)
+            {
+                start = textLength;
+            }
+
+            if (caretIndex > textLength)
+            {
+                caretIndex = textLength;
+            }
+
+            if (caretIndex < start)
+            {
+                caretIndex = start;
+            }
+
+            editorService.SetSelection(session, start, caretIndex);
+            var applied = editorService.InsertText(session, insertText);
+            if (applied)
+            {
+                RecordAcceptedCompletion(editorState, session, firstItem);
+                if (session.EditorState != null)
+                {
+                    session.EditorState.ScrollToCaretPending = false;
+                }
+            }
+
+            ClearInlineSuggestion(editorState);
+            return applied;
+        }
+
+        public bool IsVisibleForSession(CortexCompletionInteractionState editorState, DocumentSession session)
+        {
+            var response = editorState != null ? editorState.Response : null;
+            return _interactionPolicy.HasCompletionItems(response) &&
+                session != null &&
+                string.Equals(response.DocumentPath ?? string.Empty, session.FilePath ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
+                response.DocumentVersion == session.TextVersion &&
+                session.EditorState != null &&
+                !session.EditorState.HasMultipleSelections;
+        }
+
+        public bool HasVisibleCompletion(CortexCompletionInteractionState editorState)
+        {
+            return editorState != null && _interactionPolicy.HasCompletionItems(editorState.Response);
+        }
+
+        public bool HasCompletionItems(LanguageServiceCompletionResponse response)
+        {
+            return _interactionPolicy.HasCompletionItems(response);
+        }
+
+        public void SyncSelection(CortexCompletionInteractionState editorState)
+        {
+            if (editorState == null)
+            {
+                return;
+            }
+
+            var response = editorState.Response;
+            if (response == null)
+            {
+                ResetSelection(editorState);
+                return;
+            }
+
+            var responseKey = (response.DocumentPath ?? string.Empty) + "|" + response.DocumentVersion + "|" + (response.Items != null ? response.Items.Length : 0);
+            if (!string.Equals(editorState.PopupStateKey, responseKey, StringComparison.Ordinal))
+            {
+                editorState.PopupStateKey = responseKey;
+                editorState.SelectedIndex = 0;
+                if (response.Items != null)
+                {
+                    for (var i = 0; i < response.Items.Length; i++)
+                    {
+                        if (response.Items[i] != null && response.Items[i].IsPreselected)
+                        {
+                            editorState.SelectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            editorState.SelectedIndex = _interactionPolicy.NormalizeSelectedIndex(response, editorState.SelectedIndex);
+        }
+
+        public void MoveSelection(CortexCompletionInteractionState editorState, int delta)
+        {
+            if (editorState == null || delta == 0)
+            {
+                return;
+            }
+
+            SyncSelection(editorState);
+            var response = editorState.Response;
+            if (!_interactionPolicy.HasCompletionItems(response))
+            {
+                return;
+            }
+
+            var next = editorState.SelectedIndex + delta;
+            editorState.SelectedIndex = Mathf.Max(0, Mathf.Min(response.Items.Length - 1, next));
+        }
+
+        public bool ApplySelectedCompletion(DocumentSession session, CortexCompletionInteractionState editorState, IEditorService editorService)
+        {
+            if (editorState == null || editorService == null)
+            {
+                return false;
+            }
+
+            var response = editorState.Response;
+            if (!_interactionPolicy.HasCompletionItems(response))
+            {
+                return false;
+            }
+
+            SyncSelection(editorState);
+            if (editorState.SelectedIndex < 0 || editorState.SelectedIndex >= response.Items.Length)
+            {
+                return false;
+            }
+
+            var applied = _interactionPolicy.ApplyCompletion(session, editorService, response, response.Items[editorState.SelectedIndex]);
+            if (applied)
+            {
+                RecordAcceptedCompletion(editorState, session, response.Items[editorState.SelectedIndex]);
+            }
+
+            ClearPopupCompletion(editorState);
+            ClearInlineSuggestion(editorState);
+            return applied;
+        }
+
+        public void Reset(CortexCompletionInteractionState editorState)
+        {
+            if (editorState == null)
+            {
+                return;
+            }
+
+            ClearRequest(editorState);
+            ClearActive(editorState);
+            ClearInlineSuggestion(editorState);
+            ResetSelection(editorState);
+        }
+
+        public void ClearPopupCompletion(CortexCompletionInteractionState editorState)
+        {
+            ClearRequest(editorState);
+            ClearActive(editorState);
+            ResetSelection(editorState);
+        }
+
+        public void ClearInlineSuggestion(CortexCompletionInteractionState editorState)
+        {
+            if (editorState == null)
+            {
+                return;
+            }
+
+            editorState.InlineContextKey = string.Empty;
+            editorState.InlineResponse = null;
+            editorState.InlineProviderId = string.Empty;
+        }
+
+        private static void ClearRequest(CortexCompletionInteractionState editorState)
+        {
+            if (editorState == null)
+            {
+                return;
+            }
+
+            editorState.RequestedContextKey = string.Empty;
+            editorState.RequestedKey = string.Empty;
+            editorState.RequestedDocumentPath = string.Empty;
+            editorState.RequestedLine = 0;
+            editorState.RequestedColumn = 0;
+            editorState.RequestedAbsolutePosition = -1;
+            editorState.RequestedTriggerCharacter = string.Empty;
+            editorState.RequestedExplicit = false;
+        }
+
+        private static void ClearActive(CortexCompletionInteractionState editorState)
+        {
+            if (editorState == null)
+            {
+                return;
+            }
+
+            editorState.ActiveContextKey = string.Empty;
+            editorState.Response = null;
+        }
+
+        private static void ResetSelection(CortexCompletionInteractionState editorState)
+        {
+            if (editorState == null)
+            {
+                return;
+            }
+
+            editorState.PopupStateKey = string.Empty;
+            editorState.SelectedIndex = -1;
+        }
+
+        private static void RecordAcceptedCompletion(CortexCompletionInteractionState editorState, DocumentSession session, LanguageServiceCompletionItem item)
+        {
+            if (editorState == null || item == null)
+            {
+                return;
+            }
+
+            var completionText = !string.IsNullOrEmpty(item.InsertText)
+                ? item.InsertText
+                : (!string.IsNullOrEmpty(item.DisplayText) ? item.DisplayText : item.FilterText ?? string.Empty);
+            if (string.IsNullOrEmpty(completionText))
+            {
+                return;
+            }
+
+            var documentPath = session != null ? session.FilePath ?? string.Empty : string.Empty;
+            var entries = editorState.RecentAcceptedCompletions;
+            for (var i = entries.Count - 1; i >= 0; i--)
+            {
+                var existing = entries[i];
+                if (existing == null)
+                {
+                    entries.RemoveAt(i);
+                    continue;
+                }
+
+                if (string.Equals(existing.DocumentPath ?? string.Empty, documentPath, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(existing.CompletionText ?? string.Empty, completionText, StringComparison.OrdinalIgnoreCase))
+                {
+                    entries.RemoveAt(i);
+                }
+            }
+
+            entries.Add(new CortexAcceptedCompletionEntry
+            {
+                DocumentPath = documentPath,
+                CompletionText = completionText,
+                Sequence = ++editorState.AcceptanceSequence
+            });
+
+            while (entries.Count > 12)
+            {
+                entries.RemoveAt(0);
+            }
+        }
+
+        private static void NormalizeSupplementalItems(LanguageServiceCompletionResponse response, string replacementPrefix)
+        {
+            if (response == null || response.Items == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < response.Items.Length; i++)
+            {
+                var item = response.Items[i];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                var insertText = item.InsertText ?? string.Empty;
+                if (!string.IsNullOrEmpty(replacementPrefix) && !insertText.StartsWith(replacementPrefix, StringComparison.Ordinal))
+                {
+                    item.InsertText = replacementPrefix + insertText;
+                }
+
+                if (string.IsNullOrEmpty(item.FilterText))
+                {
+                    item.FilterText = item.InsertText ?? item.DisplayText ?? string.Empty;
+                }
+            }
+        }
+
+        private static string GetCompletionText(LanguageServiceCompletionItem item)
+        {
+            return item == null
+                ? string.Empty
+                : (!string.IsNullOrEmpty(item.InsertText) ? item.InsertText : (!string.IsNullOrEmpty(item.DisplayText) ? item.DisplayText : item.FilterText ?? string.Empty));
+        }
+
+        private static LanguageServiceCompletionResponse CloneCompletionResponse(LanguageServiceCompletionResponse response)
+        {
+            if (response == null)
+            {
+                return null;
+            }
+
+            var clone = new LanguageServiceCompletionResponse
+            {
+                Success = response.Success,
+                StatusMessage = response.StatusMessage,
+                DocumentPath = response.DocumentPath,
+                ProjectFilePath = response.ProjectFilePath,
+                DocumentVersion = response.DocumentVersion,
+                ReplacementRange = CloneRange(response.ReplacementRange)
+            };
+
+            if (response.Items == null || response.Items.Length == 0)
+            {
+                clone.Items = new LanguageServiceCompletionItem[0];
+                return clone;
+            }
+
+            clone.Items = new LanguageServiceCompletionItem[response.Items.Length];
+            for (var i = 0; i < response.Items.Length; i++)
+            {
+                clone.Items[i] = CloneItem(response.Items[i]);
+            }
+
+            return clone;
+        }
+
+        private static LanguageServiceRange CloneRange(LanguageServiceRange range)
+        {
+            return range == null
+                ? null
+                : new LanguageServiceRange
+                {
+                    StartLine = range.StartLine,
+                    StartColumn = range.StartColumn,
+                    EndLine = range.EndLine,
+                    EndColumn = range.EndColumn,
+                    Start = range.Start,
+                    Length = range.Length
+                };
+        }
+
+        private static LanguageServiceCompletionItem CloneItem(LanguageServiceCompletionItem item)
+        {
+            return item == null
+                ? null
+                : new LanguageServiceCompletionItem
+                {
+                    DisplayText = item.DisplayText,
+                    InsertText = item.InsertText,
+                    FilterText = item.FilterText,
+                    SortText = item.SortText,
+                    InlineDescription = item.InlineDescription,
+                    Kind = item.Kind,
+                    IsPreselected = item.IsPreselected
+                };
+        }
+
+        private static LanguageServiceCompletionItem[] MergeItems(LanguageServiceCompletionItem[] existing, LanguageServiceCompletionItem[] incoming)
+        {
+            if ((existing == null || existing.Length == 0) && (incoming == null || incoming.Length == 0))
+            {
+                return new LanguageServiceCompletionItem[0];
+            }
+
+            var results = new List<LanguageServiceCompletionItem>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AppendItems(existing, results, seen);
+            AppendItems(incoming, results, seen);
+            return results.ToArray();
+        }
+
+        private static void AppendItems(LanguageServiceCompletionItem[] items, List<LanguageServiceCompletionItem> results, HashSet<string> seen)
+        {
+            if (items == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < items.Length; i++)
+            {
+                var item = CloneItem(items[i]);
+                if (item == null)
+                {
+                    continue;
+                }
+
+                var key = (item.InsertText ?? string.Empty) + "|" + (item.FilterText ?? string.Empty) + "|" + (item.DisplayText ?? string.Empty);
+                if (!seen.Add(key))
+                {
+                    continue;
+                }
+
+                results.Add(item);
+            }
+        }
+
+        private static void LogRejectedResponse(DocumentSession target, LanguageServiceCompletionResponse response)
+        {
+            if (response == null)
+            {
+                return;
+            }
+
+            if (!response.Success)
+            {
+                MMLog.WriteWarning("[Cortex.Completion] Rejected Roslyn response for " + BuildDocumentLabel(target) + ". Status=" + (response.StatusMessage ?? string.Empty) + ", Items=" + (response.Items != null ? response.Items.Length : 0) + ".");
+            }
+        }
+
+        private static string BuildDocumentLabel(DocumentSession session)
+        {
+            return session != null && !string.IsNullOrEmpty(session.FilePath)
+                ? System.IO.Path.GetFileName(session.FilePath)
+                : "<unsaved>";
+        }
+    }
+}

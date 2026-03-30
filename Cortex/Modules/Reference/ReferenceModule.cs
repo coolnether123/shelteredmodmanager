@@ -6,7 +6,7 @@ using Cortex.Core.Models;
 using Cortex.Modules.Shared;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
-using Cortex.Services;
+using Cortex.Services.Navigation;
 using UnityEngine;
 
 namespace Cortex.Modules.Reference
@@ -62,7 +62,7 @@ namespace Cortex.Modules.Reference
             _hoverTooltipRenderer = hoverTooltipRenderer;
         }
 
-        public void Draw(IReferenceCatalogService referenceCatalogService, CortexNavigationService navigationService, CortexShellState state)
+        public void Draw(IReferenceCatalogService referenceCatalogService, ICortexNavigationService navigationService, CortexShellState state)
         {
             EnsureStyles();
             EnsureAssembliesLoaded(referenceCatalogService, state);
@@ -85,7 +85,7 @@ namespace Cortex.Modules.Reference
             }
         }
 
-        private void DrawBrowserPane(IReferenceCatalogService referenceCatalogService, CortexNavigationService navigationService, CortexShellState state)
+        private void DrawBrowserPane(IReferenceCatalogService referenceCatalogService, ICortexNavigationService navigationService, CortexShellState state)
         {
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             DrawSelectionSummary();
@@ -137,7 +137,7 @@ namespace Cortex.Modules.Reference
             GUILayout.EndVertical();
         }
 
-        private void DrawPreviewPane(CortexNavigationService navigationService, CortexShellState state)
+        private void DrawPreviewPane(ICortexNavigationService navigationService, CortexShellState state)
         {
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
 
@@ -576,7 +576,7 @@ namespace Cortex.Modules.Reference
             }
         }
 
-        private void DecompileMember(CortexNavigationService navigationService, CortexShellState state, ReferenceMemberDescriptor member)
+        private void DecompileMember(ICortexNavigationService navigationService, CortexShellState state, ReferenceMemberDescriptor member)
         {
             if (member == null || navigationService == null)
             {
@@ -603,7 +603,7 @@ namespace Cortex.Modules.Reference
             state.StatusMessage = "Decompiled " + member.DeclaringTypeName + "." + member.DisplayName;
         }
 
-        private void DecompileType(CortexNavigationService navigationService, CortexShellState state, ReferenceTypeDescriptor type)
+        private void DecompileType(ICortexNavigationService navigationService, CortexShellState state, ReferenceTypeDescriptor type)
         {
             if (type == null || navigationService == null)
             {

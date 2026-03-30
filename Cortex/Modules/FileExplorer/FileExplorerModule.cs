@@ -4,7 +4,7 @@ using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
-using Cortex.Services;
+using Cortex.Services.Navigation;
 using UnityEngine;
 
 namespace Cortex.Modules.FileExplorer
@@ -45,7 +45,7 @@ namespace Cortex.Modules.FileExplorer
         public void Draw(
             IWorkspaceBrowserService browserService,
             IDecompilerExplorerService decompilerExplorerService,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state)
         {
             EnsureStyles(state);
@@ -120,7 +120,7 @@ namespace Cortex.Modules.FileExplorer
             string title,
             WorkspaceTreeNode root,
             IDecompilerExplorerService decompilerExplorerService,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state)
         {
             GUILayout.Label(title.ToUpperInvariant(), _sectionHeaderStyle ?? GUI.skin.label);
@@ -142,7 +142,7 @@ namespace Cortex.Modules.FileExplorer
         private void DrawTreeNode(
             WorkspaceTreeNode node,
             IDecompilerExplorerService decompilerExplorerService,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state,
             string hoverHighlightPath,
             int depth,
@@ -181,7 +181,7 @@ namespace Cortex.Modules.FileExplorer
         private void DrawExpandableNode(
             WorkspaceTreeNode node,
             IDecompilerExplorerService decompilerExplorerService,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state,
             string hoverHighlightPath,
             int depth)
@@ -239,7 +239,7 @@ namespace Cortex.Modules.FileExplorer
 
         private void DrawLeafNode(
             WorkspaceTreeNode node,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state,
             string hoverHighlightPath,
             int depth)
@@ -264,7 +264,7 @@ namespace Cortex.Modules.FileExplorer
 
         private void HandleExpandableNodeAction(
             WorkspaceTreeNode node,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state,
             ref bool expanded)
         {
@@ -284,7 +284,7 @@ namespace Cortex.Modules.FileExplorer
 
         private void ActivateLeafNode(
             WorkspaceTreeNode node,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state)
         {
             if (node == null)
@@ -306,7 +306,7 @@ namespace Cortex.Modules.FileExplorer
 
         private void OpenDecompilerNode(
             WorkspaceTreeNode node,
-            CortexNavigationService navigationService,
+            ICortexNavigationService navigationService,
             CortexShellState state)
         {
             if (node == null || string.IsNullOrEmpty(node.AssemblyPath) || node.MetadataToken <= 0)

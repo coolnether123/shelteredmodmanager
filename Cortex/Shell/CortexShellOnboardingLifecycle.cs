@@ -1,7 +1,7 @@
 using System;
 using Cortex.Core.Abstractions;
 using Cortex.Presentation.Abstractions;
-using Cortex.Services;
+using Cortex.Services.Onboarding;
 
 namespace Cortex.Shell
 {

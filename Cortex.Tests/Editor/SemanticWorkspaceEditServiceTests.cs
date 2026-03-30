@@ -2,9 +2,9 @@ using System;
 using System.IO;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using Cortex.Services;
 using Cortex.Tests.Testing;
 using Xunit;
+using Cortex.Services.Semantics.Workbench;
 
 namespace Cortex.Tests.Editor
 {

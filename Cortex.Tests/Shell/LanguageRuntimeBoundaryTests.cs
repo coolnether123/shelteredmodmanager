@@ -5,10 +5,11 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Presentation.Abstractions;
-using Cortex.Services;
+using Cortex.Services.Semantics.Completion;
 using Cortex.Shell;
 using Cortex.Tests.Testing;
 using Xunit;
+using Cortex.Services.Editor.Commands;
 
 namespace Cortex.Tests.Shell
 {

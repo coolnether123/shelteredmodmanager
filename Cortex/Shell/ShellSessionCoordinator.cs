@@ -6,7 +6,7 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Presentation.Models;
 using Cortex.Presentation.Abstractions;
-using Cortex.Services;
+using Cortex.Services.Navigation;
 using UnityEngine;
 
 namespace Cortex.Shell
@@ -16,7 +16,7 @@ namespace Cortex.Shell
         private const string DefaultWorkspaceId = "default";
         private readonly CortexShellState _state;
         private readonly CortexShellLifecycleCoordinator _lifecycleCoordinator;
-        private readonly Func<CortexNavigationService> _navigationServiceProvider;
+        private readonly Func<ICortexNavigationService> _navigationServiceProvider;
         private readonly Func<ILoadedModCatalog> _loadedModCatalogProvider;
         private readonly Func<IProjectCatalog> _projectCatalogProvider;
         private readonly Func<IWorkbenchPersistenceService> _workbenchPersistenceServiceProvider;
@@ -27,7 +27,7 @@ namespace Cortex.Shell
         public ShellSessionCoordinator(
             CortexShellState state,
             CortexShellLifecycleCoordinator lifecycleCoordinator,
-            Func<CortexNavigationService> navigationServiceProvider,
+            Func<ICortexNavigationService> navigationServiceProvider,
             Func<ILoadedModCatalog> loadedModCatalogProvider,
             Func<IProjectCatalog> projectCatalogProvider,
             Func<IWorkbenchPersistenceService> workbenchPersistenceServiceProvider,

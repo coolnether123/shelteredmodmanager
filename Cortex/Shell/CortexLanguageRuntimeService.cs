@@ -7,7 +7,10 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
-using Cortex.Services;
+using Cortex.Services.Semantics.Analysis;
+using Cortex.Services.Semantics.Completion;
+using Cortex.Services.Semantics.Requests;
+using Cortex.Services.Semantics.SignatureHelp;
 
 namespace Cortex.Shell
 {
@@ -25,10 +28,10 @@ namespace Cortex.Shell
         private readonly Func<DocumentSession, DocumentLanguageCompletionRequestState, CompletionAugmentationRequest, LanguageServiceCompletionResponse, bool> _tryQueueCompletionAugmentation;
         private readonly Func<IList<ILanguageProviderFactory>> _hostProviderFactoriesAccessor;
         private readonly IList<ILanguageProviderFactory> _builtinProviderFactories = new List<ILanguageProviderFactory>();
-        private readonly DocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
-        private readonly DocumentLanguageInteractionService _documentLanguageInteractionService = new DocumentLanguageInteractionService();
-        private readonly EditorCompletionService _editorCompletionService = new EditorCompletionService();
-        private readonly EditorSignatureHelpService _editorSignatureHelpService = new EditorSignatureHelpService();
+        private readonly IDocumentLanguageAnalysisService _documentLanguageAnalysisService = new DocumentLanguageAnalysisService();
+        private readonly IEditorLanguageRequestFactory _languageRequestFactory = new EditorLanguageRequestFactory();
+        private readonly IEditorCompletionService _editorCompletionService = new EditorCompletionService();
+        private readonly IEditorSignatureHelpService _editorSignatureHelpService = new EditorSignatureHelpService();
         private readonly CortexShellLanguageCoordinator _languageCoordinator = new CortexShellLanguageCoordinator();
         private readonly CortexShellLanguageRequestDispatcher _languageRequestDispatcher = new CortexShellLanguageRequestDispatcher();
         private readonly CortexShellLanguageResponseProcessor _languageResponseProcessor = new CortexShellLanguageResponseProcessor();
@@ -264,7 +267,7 @@ namespace Cortex.Shell
                     _state,
                     GetRuntimeState(),
                     _documentLanguageAnalysisService,
-                    _documentLanguageInteractionService,
+                    _languageRequestFactory,
                     _editorCompletionService,
                     _editorSignatureHelpService,
                     GetServiceMap() != null ? GetServiceMap().EditorContextService : null,

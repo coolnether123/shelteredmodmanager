@@ -8,9 +8,12 @@ using Cortex.Core.Services;
 using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
 using Cortex.Rendering.Abstractions;
-using Cortex.Shell;
-using Cortex.Services;
+using Cortex.Services.Navigation;
 using UnityEngine;
+using Cortex.Services.Editor.Context;
+using Cortex.Services.Onboarding;
+using Cortex.Services.Search;
+using Cortex.Shell;
 
 namespace Cortex
 {
@@ -120,7 +123,7 @@ namespace Cortex
             get { return _services != null ? _services.TextSearchService : null; }
         }
 
-        private CortexNavigationService NavigationService
+        private ICortexNavigationService NavigationService
         {
             get { return _services != null ? _services.NavigationService : null; }
         }

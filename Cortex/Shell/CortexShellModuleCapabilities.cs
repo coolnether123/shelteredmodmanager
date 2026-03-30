@@ -3,8 +3,16 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
 using Cortex.Rendering.Abstractions;
+using Cortex.Services.Harmony.Editor;
+using Cortex.Services.Harmony.Generation;
+using Cortex.Services.Harmony.Inspection;
+using Cortex.Services.Harmony.Presentation;
+using Cortex.Services.Harmony.Resolution;
+using Cortex.Services.Navigation;
+using Cortex.Services.Semantics.Context;
+using Cortex.Services.Harmony.Workflow;
+using Cortex.Services.Search;
 using Cortex.Shell;
-using Cortex.Services;
 
 namespace Cortex
 {
@@ -13,12 +21,13 @@ namespace Cortex
         CortexShellState State { get; }
         ICommandRegistry CommandRegistry { get; }
         IContributionRegistry ContributionRegistry { get; }
-        CortexNavigationService NavigationService { get; }
+        ICortexNavigationService NavigationService { get; }
         IDocumentService DocumentService { get; }
         IProjectCatalog ProjectCatalog { get; }
         ILoadedModCatalog LoadedModCatalog { get; }
         IPathInteractionService PathInteractionService { get; }
         ISourceLookupIndex SourceLookupIndex { get; }
+        HarmonyPatchWorkspaceService HarmonyPatchWorkspaceService { get; }
         HarmonyPatchInspectionService HarmonyPatchInspectionService { get; }
         HarmonyPatchResolutionService HarmonyPatchResolutionService { get; }
         HarmonyPatchDisplayService HarmonyPatchDisplayService { get; }
@@ -29,7 +38,7 @@ namespace Cortex
     internal interface ILogsModuleServices
     {
         CortexShellState State { get; }
-        CortexNavigationService NavigationService { get; }
+        ICortexNavigationService NavigationService { get; }
         ISourcePathResolver SourcePathResolver { get; }
         IRuntimeLogFeed RuntimeLogFeed { get; }
     }
@@ -46,7 +55,7 @@ namespace Cortex
     internal interface IFileExplorerModuleServices
     {
         CortexShellState State { get; }
-        CortexNavigationService NavigationService { get; }
+        ICortexNavigationService NavigationService { get; }
         IWorkspaceBrowserService WorkspaceBrowserService { get; }
         IDecompilerExplorerService DecompilerExplorerService { get; }
     }
@@ -61,7 +70,7 @@ namespace Cortex
     internal interface IBuildModuleServices
     {
         CortexShellState State { get; }
-        CortexNavigationService NavigationService { get; }
+        ICortexNavigationService NavigationService { get; }
         ISourcePathResolver SourcePathResolver { get; }
         IBuildCommandResolver BuildCommandResolver { get; }
         IBuildExecutor BuildExecutor { get; }
@@ -71,7 +80,7 @@ namespace Cortex
     internal interface IReferenceModuleServices
     {
         CortexShellState State { get; }
-        CortexNavigationService NavigationService { get; }
+        ICortexNavigationService NavigationService { get; }
         IReferenceCatalogService ReferenceCatalogService { get; }
         IRenderPipeline RenderPipeline { get; }
     }
@@ -79,7 +88,7 @@ namespace Cortex
     internal interface ISearchModuleServices
     {
         CortexShellState State { get; }
-        CortexNavigationService NavigationService { get; }
+        ICortexNavigationService NavigationService { get; }
         IDocumentService DocumentService { get; }
         IProjectCatalog ProjectCatalog { get; }
         ISourceLookupIndex SourceLookupIndex { get; }
@@ -144,7 +153,7 @@ namespace Cortex
         }
 
         public CortexShellState State => _state;
-        public CortexNavigationService NavigationService => _services.NavigationService;
+        public ICortexNavigationService NavigationService => _services.NavigationService;
         public ISourcePathResolver SourcePathResolver => _services.SourcePathResolver;
         public IRuntimeLogFeed RuntimeLogFeed => _services.RuntimeLogFeed;
         public IProjectCatalog ProjectCatalog => _services.ProjectCatalog;
@@ -163,6 +172,7 @@ namespace Cortex
         public ITextSearchService TextSearchService => _services.TextSearchService;
         public IRuntimeToolBridge RuntimeToolBridge => _services.RuntimeToolBridge;
         public ICortexSettingsStore SettingsStore => _settingsStoreProvider?.Invoke();
+        public HarmonyPatchWorkspaceService HarmonyPatchWorkspaceService => _services.HarmonyPatchWorkspaceService;
         public HarmonyPatchInspectionService HarmonyPatchInspectionService => _services.HarmonyPatchInspectionService;
         public HarmonyPatchResolutionService HarmonyPatchResolutionService => _services.HarmonyPatchResolutionService;
         public HarmonyPatchDisplayService HarmonyPatchDisplayService => _services.HarmonyPatchDisplayService;
