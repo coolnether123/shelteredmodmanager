@@ -58,7 +58,6 @@ namespace Cortex.Modules.FileExplorer
             EnsureStyles(state);
             RefreshIfNeeded(browserService, decompilerExplorerService, state);
             var explorerState = state.Explorer;
-            SynchronizeFriendlyFilters(explorerState);
             var workspaceFilterPlan = _filterPlanBuilder.Build(contributionRegistry, state, ExplorerFilterScope.Workspace);
             var decompilerFilterPlan = _filterPlanBuilder.Build(contributionRegistry, state, ExplorerFilterScope.Decompiler);
 
@@ -382,7 +381,6 @@ namespace Cortex.Modules.FileExplorer
             {
                 explorerState.FilterText = string.Empty;
                 explorerState.ActiveFilterIds.Clear();
-                explorerState.FocusMode = CortexExplorerFocusMode.Everything;
             }
             GUILayout.EndHorizontal();
 
@@ -390,12 +388,6 @@ namespace Cortex.Modules.FileExplorer
             {
                 DrawScopeButton(explorerState, CortexExplorerScopeMode.CurrentMod, "Current Mod");
                 DrawScopeButton(explorerState, CortexExplorerScopeMode.AllRuntime, "All Runtime");
-            });
-
-            DrawModeRow("Focus", delegate
-            {
-                DrawFocusButton(explorerState, CortexExplorerFocusMode.Everything, "Everything");
-                DrawFocusButton(explorerState, CortexExplorerFocusMode.HarmonyPatched, "Harmony Patched");
             });
 
             if (GUILayout.Button(explorerState.AdvancedFiltersVisible ? "Hide Advanced" : "Advanced", GUILayout.Width(108f), GUILayout.Height(20f)))
@@ -595,23 +587,6 @@ namespace Cortex.Modules.FileExplorer
             }
         }
 
-        private void DrawFocusButton(CortexExplorerInteractionState explorerState, CortexExplorerFocusMode focusMode, string label)
-        {
-            if (explorerState == null)
-            {
-                return;
-            }
-
-            var isActive = explorerState.FocusMode == focusMode;
-            var style = isActive
-                ? (_activeFileButtonStyle ?? GUI.skin.button)
-                : (_fileButtonStyle ?? GUI.skin.button);
-            if (GUILayout.Button(label, style, GUILayout.Height(20f)))
-            {
-                explorerState.FocusMode = focusMode;
-            }
-        }
-
         private void DrawContributionGroup(string title, ExplorerFilterPlan filterPlan, CortexExplorerInteractionState explorerState)
         {
             if (filterPlan == null || explorerState == null || filterPlan.Contributions.Count == 0)
@@ -625,8 +600,7 @@ namespace Cortex.Modules.FileExplorer
             {
                 var contribution = filterPlan.Contributions[i];
                 if (contribution == null ||
-                    string.IsNullOrEmpty(contribution.FilterId) ||
-                    !ShouldShowInAdvanced(contribution.FilterId))
+                    string.IsNullOrEmpty(contribution.FilterId))
                 {
                     continue;
                 }
@@ -653,34 +627,9 @@ namespace Cortex.Modules.FileExplorer
             }
         }
 
-        private static void SynchronizeFriendlyFilters(CortexExplorerInteractionState explorerState)
-        {
-            if (explorerState == null)
-            {
-                return;
-            }
-
-            SetContributionActive(
-                explorerState,
-                ExplorerFilterWellKnownIds.HarmonyPatched,
-                explorerState.FocusMode == CortexExplorerFocusMode.HarmonyPatched);
-        }
-
         private static string BuildRefineButtonLabel(CortexExplorerInteractionState explorerState)
         {
-            if (explorerState == null)
-            {
-                return "Refine";
-            }
-
-            if (explorerState.FocusMode == CortexExplorerFocusMode.HarmonyPatched)
-            {
-                return explorerState.ScopeMode == CortexExplorerScopeMode.AllRuntime
-                    ? "All | Harmony"
-                    : "Mod | Harmony";
-            }
-
-            return explorerState.ScopeMode == CortexExplorerScopeMode.AllRuntime
+            return explorerState != null && explorerState.ScopeMode == CortexExplorerScopeMode.AllRuntime
                 ? "All Runtime"
                 : "Current Mod";
         }
@@ -695,18 +644,13 @@ namespace Cortex.Modules.FileExplorer
             for (var i = 0; i < filterPlan.Contributions.Count; i++)
             {
                 var contribution = filterPlan.Contributions[i];
-                if (contribution != null && ShouldShowInAdvanced(contribution.FilterId))
+                if (contribution != null && !string.IsNullOrEmpty(contribution.FilterId))
                 {
                     return true;
                 }
             }
 
             return false;
-        }
-
-        private static bool ShouldShowInAdvanced(string filterId)
-        {
-            return !string.Equals(filterId, ExplorerFilterWellKnownIds.HarmonyPatched, StringComparison.OrdinalIgnoreCase);
         }
 
         private static void SetContributionActive(CortexExplorerInteractionState explorerState, string filterId, bool isActive)

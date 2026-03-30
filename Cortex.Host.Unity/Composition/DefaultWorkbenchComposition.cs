@@ -10,7 +10,7 @@ namespace Cortex.Host.Unity.Composition
             IContributionRegistry contributionRegistry,
             string rendererDisplayName)
         {
-            var context = new WorkbenchPluginContext(commandRegistry, contributionRegistry, null);
+            var context = new WorkbenchPluginContext(commandRegistry, contributionRegistry, null, null, null);
             new DefaultWorkbenchViewContributions().Register(context);
             new DefaultWorkbenchCommandContributions().Register(context);
             new DefaultWorkbenchAppearanceContributions().Register(context, rendererDisplayName);

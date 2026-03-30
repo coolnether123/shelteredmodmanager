@@ -1,10 +1,9 @@
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
+using Cortex.Plugin.Harmony.Services.Editor;
 using Cortex.Services.Inspector.Actions;
-using Cortex.Services.Harmony.Navigation;
 using Cortex.Services.Inspector.Relationships;
 using Cortex.Services.Navigation;
-using Cortex.Services.Navigation.Symbols;
 using Xunit;
 
 namespace Cortex.Tests.Editor
@@ -48,12 +47,12 @@ namespace Cortex.Tests.Editor
         }
 
         [Fact]
-        public void Handle_OpensHarmonyPatchTarget_WithEncodedHarmonyPayload()
+        public void Handle_DoesNotConsumeHarmonyPatchPayload()
         {
-            var factory = new EditorMethodInspectorNavigationActionFactory();
+            var factory = new HarmonyMethodInspectorNavigationActionFactory();
             var handler = new EditorMethodInspectorNavigationActionHandler();
             var navigationService = new RecordingNavigationService();
-            var action = factory.CreateHarmonyNavigationActions(
+            var action = factory.CreatePatchNavigationActions(
                 new HarmonyPatchNavigationTarget
                 {
                     AssemblyPath = "Sample.Patches",
@@ -65,78 +64,35 @@ namespace Cortex.Tests.Editor
 
             var handled = handler.TryHandle(new CortexShellState(), navigationService, action.Id);
 
-            Assert.True(handled);
-            Assert.Equal("Sample.Patches", navigationService.DecompiledAssemblyPath);
-            Assert.Equal(77, navigationService.DecompiledMetadataToken);
+            Assert.False(handled);
+            Assert.Equal(string.Empty, navigationService.DecompiledAssemblyPath);
+            Assert.Equal(0, navigationService.DecompiledMetadataToken);
         }
 
         [Fact]
-        public void ResolvePreferredPatchTarget_MatchesDecompilerRelationship_ToSelectedProjectPatch()
+        public void HarmonyNavigationCodec_RoundTripsPatchTarget()
         {
-            var state = new CortexShellState
-            {
-                SelectedProject = new CortexProjectDefinition
+            var factory = new HarmonyMethodInspectorNavigationActionFactory();
+            var action = factory.CreatePatchNavigationActions(
+                new HarmonyPatchNavigationTarget
                 {
-                    ModId = "coolnether123.sheltereddisplayfixes",
-                    SourceRootPath = @"D:\Projects\Sheltered Modding\Sheltered Display Fixes"
+                    AssemblyPath = "Sample.Patches",
+                    MetadataToken = 77,
+                    MethodName = "Prefix",
+                    DeclaringTypeName = "PatchType",
+                    DisplayName = "PatchType.Prefix"
                 },
-                Settings = new CortexSettings
-                {
-                    DecompilerCachePath = @"C:\Program Files (x86)\GOG Galaxy\Games\Sheltered\SMM\bin\cortex_cache"
-                }
-            };
-            state.Harmony.SnapshotMethods = new[]
-            {
-                new HarmonyMethodPatchSummary
-                {
-                    IsPatched = true,
-                    DeclaringType = "CustomisationPanel",
-                    MethodName = "OnShow",
-                    AssemblyPath = @"C:\Program Files (x86)\GOG Galaxy\Games\Sheltered\Sheltered_Data\Managed\Assembly-CSharp.dll",
-                    Entries = new[]
-                    {
-                        new HarmonyPatchEntry
-                        {
-                            OwnerAssociation = new HarmonyPatchOwnerAssociation
-                            {
-                                ProjectModId = "coolnether123.sheltereddisplayfixes",
-                                ProjectSourceRootPath = @"D:\Projects\Sheltered Modding\Sheltered Display Fixes",
-                                HasMatch = true
-                            },
-                            NavigationTarget = new HarmonyPatchNavigationTarget
-                            {
-                                AssemblyPath = "Sheltered.DisplayFixes",
-                                MetadataToken = 42,
-                                MethodName = "OnShowPatch"
-                            }
-                        }
-                    }
-                }
-            };
-            var request = new LanguageSymbolNavigationRequest
-            {
-                SymbolKind = "Method",
-                MetadataName = "OnShow",
-                ContainingTypeName = "CustomisationPanel",
-                ContainingAssemblyName = "Sheltered Display Fixes",
-                DocumentationCommentId = "M:CustomisationPanel.OnShow",
-                DefinitionDocumentPath = @"C:\Program Files (x86)\GOG Galaxy\Games\Sheltered\SMM\bin\cortex_cache\Assembly-CSharp\CustomisationPanel.cs",
-                DefinitionRange = new LanguageServiceRange
-                {
-                    StartLine = 182,
-                    StartColumn = 14,
-                    EndLine = 182,
-                    EndColumn = 20
-                }
-            };
-            HarmonyPatchNavigationTarget target;
+                "Open",
+                "Open the patch method.")[0];
+            HarmonyPatchNavigationTarget decoded;
 
-            var handled = HarmonyAssociatedSymbolNavigationResolver.TryResolvePreferredPatchTarget(state, request, out target);
+            var handled = HarmonyMethodInspectorNavigationActionCodec.TryParse(action.Id, out decoded);
 
             Assert.True(handled);
-            Assert.NotNull(target);
-            Assert.Equal("Sheltered.DisplayFixes", target.AssemblyPath);
-            Assert.Equal(42, target.MetadataToken);
+            Assert.NotNull(decoded);
+            Assert.Equal("Sample.Patches", decoded.AssemblyPath);
+            Assert.Equal(77, decoded.MetadataToken);
+            Assert.Equal("Prefix", decoded.MethodName);
         }
 
         private sealed class RecordingNavigationService : ICortexNavigationService

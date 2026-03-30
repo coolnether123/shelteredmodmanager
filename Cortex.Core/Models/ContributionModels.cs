@@ -232,11 +232,6 @@ namespace Cortex.Core.Models
 
     public delegate bool ExplorerNodeMatcher(WorkspaceTreeNode node);
 
-    public static class ExplorerFilterWellKnownIds
-    {
-        public const string HarmonyPatched = "cortex.explorer.filter.harmony.patched";
-    }
-
     /// <summary>
     /// Runtime context passed into explorer filter contributions so modules can
     /// contribute matchers without reaching into explorer UI state directly.

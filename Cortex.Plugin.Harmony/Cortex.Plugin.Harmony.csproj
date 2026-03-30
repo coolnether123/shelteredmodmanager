@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{5A6E9E3A-0E10-4F09-A3FD-9B7C0D61A2A7}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Cortex.Plugin.Harmony</RootNamespace>
+    <AssemblyName>Cortex.Plugin.Harmony</AssemblyName>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\Dist\SMM\bin\plugins\Harmony\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>..\Dist\SMM\bin\plugins\Harmony\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>..\packages\Lib.Harmony.2.4.1\lib\net35\0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="UnityEngine">
+      <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Commands\HarmonyCommandRegistrar.cs" />
+    <Compile Include="Composition\HarmonyPluginComposition.cs" />
+    <Compile Include="Editor\HarmonyEditorContributionRegistrar.cs" />
+    <Compile Include="Explorer\HarmonyExplorerFilterRegistrar.cs" />
+    <Compile Include="HarmonyPluginContributor.cs" />
+    <Compile Include="HarmonyPluginIds.cs" />
+    <Compile Include="Inspector\HarmonyInspectorSectionProvider.cs" />
+    <Compile Include="Models\HarmonyModels.cs" />
+    <Compile Include="Module\HarmonyModule.cs" />
+    <Compile Include="Module\HarmonyModuleContribution.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Runtime\HarmonyModuleRuntimeLocator.cs" />
+    <Compile Include="Runtime\HarmonyRuntimeInspectionService.cs" />
+    <Compile Include="Services\HarmonyMethodResolver.cs" />
+    <Compile Include="Services\HarmonyTemplateNavigationService.cs" />
+    <Compile Include="Services\HarmonyWorkflowController.cs" />
+    <Compile Include="Services\Editor\HarmonyMethodInspectorNavigationActionCodec.cs" />
+    <Compile Include="Services\Editor\HarmonyMethodInspectorNavigationActionFactory.cs" />
+    <Compile Include="Services\Generation\HarmonyPatchInsertionService.cs" />
+    <Compile Include="Services\Generation\HarmonyPatchTemplateService.cs" />
+    <Compile Include="Services\Presentation\HarmonyPatchDisplayService.cs" />
+    <Compile Include="Services\Resolution\HarmonyResolvedTargets.cs" />
+    <Compile Include="Services\Resolution\HarmonyRuntimeMethodLookupService.cs" />
+    <Compile Include="Services\Resolution\HarmonySourceSymbolService.cs" />
+    <Compile Include="Services\Resolution\HarmonySymbolNameUtility.cs" />
+    <Compile Include="State\HarmonyModuleStateStore.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="cortex.plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Cortex.Core\Cortex.Core.csproj">
+      <Project>{A5F28666-878B-4C48-A7DA-4A19BFC79F02}</Project>
+      <Name>Cortex.Core</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj">
+      <Project>{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1}</Project>
+      <Name>Cortex.Plugins.Abstractions</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Presentation\Cortex.Presentation.csproj">
+      <Project>{ADAEC1F0-6882-42D6-9016-E79C9EBA1605}</Project>
+      <Name>Cortex.Presentation</Name>
+      <Private>False</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

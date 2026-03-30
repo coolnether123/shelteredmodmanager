@@ -185,7 +185,8 @@ namespace Cortex
         public bool OverviewExpanded = true;
         public bool NavigationExpanded = true;
         public bool RelationshipsExpanded;
-        public bool HarmonyExpanded = true;
+        public bool ExtensionsExpanded = true;
+        public readonly Dictionary<string, bool> SectionExpansionStates = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         public bool RelationshipsRequested;
         public int RelationshipsCycle;
         public string RelationshipsTargetKey = string.Empty;
@@ -213,19 +214,12 @@ namespace Cortex
         AllRuntime = 1
     }
 
-    public enum CortexExplorerFocusMode
-    {
-        Everything = 0,
-        HarmonyPatched = 1
-    }
-
     public sealed class CortexExplorerInteractionState
     {
         public bool FiltersVisible;
         public bool AdvancedFiltersVisible;
         public string FilterText = string.Empty;
         public CortexExplorerScopeMode ScopeMode = CortexExplorerScopeMode.CurrentMod;
-        public CortexExplorerFocusMode FocusMode = CortexExplorerFocusMode.Everything;
         public readonly HashSet<string> ActiveFilterIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 
@@ -293,30 +287,6 @@ namespace Cortex
         public bool ShowDetachedWindow;
     }
 
-    public sealed class CortexHarmonyInteractionState
-    {
-        public bool RefreshRequested = true;
-        public bool RuntimeAvailable;
-        public string SnapshotStatusMessage = string.Empty;
-        public DateTime SnapshotUtc = DateTime.MinValue;
-        public string ActiveSummaryKey = string.Empty;
-        public string ResolutionFailureReason = string.Empty;
-        public string ActiveTypeAssemblyPath = string.Empty;
-        public string ActiveTypeName = string.Empty;
-        public string ActiveTypeDisplayName = string.Empty;
-        public HarmonyPatchInspectionRequest ActiveInspectionRequest;
-        public HarmonyMethodPatchSummary ActiveSummary;
-        public HarmonyMethodPatchSummary[] ActiveTypeSummaries = new HarmonyMethodPatchSummary[0];
-        public HarmonyMethodPatchSummary[] SnapshotMethods = new HarmonyMethodPatchSummary[0];
-        public HarmonyPatchGenerationRequest GenerationRequest;
-        public HarmonyPatchGenerationPreview GenerationPreview;
-        public string GenerationStatusMessage = string.Empty;
-        public bool IsInsertionPickActive;
-        public readonly List<HarmonyPatchInsertionTarget> InsertionTargets = new List<HarmonyPatchInsertionTarget>();
-        public readonly Dictionary<string, HarmonyMethodPatchSummary> SummaryCache = new Dictionary<string, HarmonyMethodPatchSummary>(StringComparer.OrdinalIgnoreCase);
-        public GeneratedTemplateSession ActiveTemplateSession;
-    }
-
     public sealed class CortexInterfaceDiagnosticState
     {
         public readonly List<string> Entries = new List<string>();
@@ -357,7 +327,7 @@ namespace Cortex
         public readonly CortexExplorerInteractionState Explorer = new CortexExplorerInteractionState();
         public readonly CortexSearchInteractionState Search = new CortexSearchInteractionState();
         public readonly CortexSemanticInteractionState Semantic = new CortexSemanticInteractionState();
-        public readonly CortexHarmonyInteractionState Harmony = new CortexHarmonyInteractionState();
+        public readonly CortexModuleRuntimeState Modules = new CortexModuleRuntimeState();
         public readonly CortexLogSelectionState Logs = new CortexLogSelectionState();
         public readonly CortexInterfaceDiagnosticState Diagnostics = new CortexInterfaceDiagnosticState();
         public CortexProjectDefinition SelectedProject;

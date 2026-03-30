@@ -181,6 +181,11 @@ namespace Cortex.Modules.Shared
                 state.Documents.ActiveDocument = state.Documents.OpenDocuments.Count > 0 ? state.Documents.OpenDocuments[0] : null;
                 state.Documents.ActiveDocumentPath = state.Documents.ActiveDocument != null ? state.Documents.ActiveDocument.FilePath : string.Empty;
             }
+
+            if (state.Modules != null)
+            {
+                state.Modules.ClearDocumentScopes(filePath);
+            }
         }
 
         public static string GetDocumentDisplayName(DocumentSession session)

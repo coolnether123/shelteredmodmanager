@@ -11,7 +11,6 @@ namespace Cortex.Shell
 
         private readonly ICortexLogSink _logSink = new NullLogSink();
         private readonly ICortexDiagnosticConfiguration _diagnosticConfiguration = new NullDiagnosticConfiguration();
-        private readonly IHarmonyRuntimeInspectionService _harmonyRuntimeInspectionService = new NullHarmonyRuntimeInspectionService();
         private readonly ILoadedModCatalog _loadedModCatalog = new NullLoadedModCatalog();
         private readonly IRuntimeLogFeed _runtimeLogFeed = new NullRuntimeLogFeed();
         private readonly IRuntimeToolBridge _runtimeToolBridge = new NullRuntimeToolBridge();
@@ -21,11 +20,6 @@ namespace Cortex.Shell
 
         private NullCortexPlatformModule()
         {
-        }
-
-        public IHarmonyRuntimeInspectionService HarmonyRuntimeInspectionService
-        {
-            get { return _harmonyRuntimeInspectionService; }
         }
 
         public ICortexLogSink LogSink
@@ -66,6 +60,10 @@ namespace Cortex.Shell
         public string AdditionalDecompilerCacheRoots
         {
             get { return string.Empty; }
+        }
+
+        public void RegisterFeatures(ICortexPlatformFeatureRegistry registry)
+        {
         }
 
         public IRuntimeSourceNavigationService CreateRuntimeSourceNavigationService(ISourcePathResolver sourcePathResolver)
@@ -116,51 +114,6 @@ namespace Cortex.Shell
             public bool IsEnabled(string channel, CortexLogLevel level)
             {
                 return false;
-            }
-        }
-
-        private sealed class NullHarmonyRuntimeInspectionService : IHarmonyRuntimeInspectionService
-        {
-            public bool IsAvailable
-            {
-                get { return false; }
-            }
-
-            public HarmonyPatchSnapshot CaptureSnapshot()
-            {
-                return new HarmonyPatchSnapshot
-                {
-                    GeneratedUtc = System.DateTime.UtcNow,
-                    Methods = new HarmonyMethodPatchSummary[0],
-                    StatusMessage = "Harmony runtime inspection is not available for this platform."
-                };
-            }
-
-            public HarmonyMethodPatchSummary Inspect(HarmonyPatchInspectionRequest request)
-            {
-                return new HarmonyMethodPatchSummary
-                {
-                    CapturedUtc = System.DateTime.UtcNow,
-                    Counts = new HarmonyPatchCounts(),
-                    Entries = new HarmonyPatchEntry[0],
-                    Owners = new string[0],
-                    Order = new HarmonyPatchOrderExplanation[0],
-                    ConflictHint = "Harmony runtime inspection is not available for this platform.",
-                    Target = new HarmonyPatchNavigationTarget
-                    {
-                        AssemblyPath = request != null ? request.AssemblyPath ?? string.Empty : string.Empty,
-                        MetadataToken = request != null ? request.MetadataToken : 0,
-                        DocumentPath = request != null ? request.DocumentPath ?? string.Empty : string.Empty,
-                        CachePath = request != null ? request.CachePath ?? string.Empty : string.Empty,
-                        DeclaringTypeName = request != null ? request.DeclaringTypeName ?? string.Empty : string.Empty,
-                        MethodName = request != null ? request.MethodName ?? string.Empty : string.Empty,
-                        Signature = request != null ? request.Signature ?? string.Empty : string.Empty,
-                        DisplayName = request != null ? request.DisplayName ?? string.Empty : string.Empty,
-                        Line = 1,
-                        Column = 1,
-                        IsDecompilerTarget = request != null && !string.IsNullOrEmpty(request.CachePath)
-                    }
-                };
             }
         }
 

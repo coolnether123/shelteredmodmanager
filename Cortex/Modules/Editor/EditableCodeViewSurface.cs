@@ -4,12 +4,9 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
+using Cortex.Plugins.Abstractions;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
-using Cortex.Services.Harmony.Generation;
-using Cortex.Services.Harmony.Inspection;
-using Cortex.Services.Harmony.Presentation;
-using Cortex.Services.Harmony.Resolution;
 using Cortex.Services.Navigation;
 using Cortex.Services.Semantics.Analysis;
 using Cortex.Services.Semantics.Completion;
@@ -22,7 +19,6 @@ using Cortex.Services.Editor.Commands;
 using Cortex.Services.Editor.Context;
 using Cortex.Services.Editor.Input;
 using Cortex.Services.Editor.Presentation;
-using Cortex.Services.Harmony.Workflow;
 using Cortex.Services.Inspector.Identity;
 using Cortex.Services.Inspector.Lifecycle;
 
@@ -177,14 +173,10 @@ namespace Cortex.Modules.Editor
                 var gutterWidth = renderContext != null ? renderContext.GutterWidth : 52f;
                 var popupMenuTheme = renderContext != null ? renderContext.PopupMenuTheme : null;
                 var hoverTooltipTheme = renderContext != null ? renderContext.HoverTooltipTheme : null;
-                var harmonyPatchGenerationService = services != null ? services.HarmonyPatchGenerationService : null;
-                var generatedTemplateNavigationService = services != null ? services.GeneratedTemplateNavigationService : null;
+                var extensionRuntime = services != null && services.ExtensionRuntime != null ? services.ExtensionRuntime : NullEditorContributionRuntime.Instance;
                 var projectCatalog = services != null ? services.ProjectCatalog : null;
                 var loadedModCatalog = services != null ? services.LoadedModCatalog : null;
                 var sourceLookupIndex = services != null ? services.SourceLookupIndex : null;
-                var harmonyPatchInspectionService = services != null ? services.HarmonyPatchInspectionService : null;
-                var harmonyPatchResolutionService = services != null ? services.HarmonyPatchResolutionService : null;
-                var harmonyPatchDisplayService = services != null ? services.HarmonyPatchDisplayService : null;
 
                 var hadExplicitCaretPlacement = session.EditorState != null && session.EditorState.HasExplicitCaretPlacement;
                 var highlightedLineBeforeEnsure = session.HighlightedLine;
@@ -202,10 +194,7 @@ namespace Cortex.Modules.Editor
                         session.EditorState.HasExplicitCaretPlacement);
                 }
                 _editorService.SetUndoLimit(session, state != null && state.Settings != null ? state.Settings.EditorUndoHistoryLimit : 128);
-                if (generatedTemplateNavigationService != null)
-                {
-                    generatedTemplateNavigationService.SyncSession(state, session);
-                }
+                extensionRuntime.Synchronize(state, session, GetSurfaceId(session, state), editingEnabled);
                 EnsureStyles(themeKey, codeStyle, gutterStyle);
                 EnsureLayout(session, themeKey, gutterWidth);
                 if (_layout == null || _codeStyle == null || _gutterStyle == null || _surfaceFill == null)
@@ -228,7 +217,7 @@ namespace Cortex.Modules.Editor
                     _lastContextMenuRect = ToUnityRect(_popupMenuRenderer.PredictMenuRect(ToRenderPoint(_contextMenuPosition), ToRenderSize(rect.size), _popupMenuItems));
                 }
                 PreHandleContextMenuInput(current, localMouse);
-                HandleKeyboardInput(session, state, editingEnabled, documentService, commandRegistry, current, generatedTemplateNavigationService, projectCatalog, harmonyPatchResolutionService, harmonyPatchGenerationService);
+                HandleKeyboardInput(session, state, editingEnabled, documentService, commandRegistry, current, extensionRuntime, projectCatalog);
                 if (session.TextVersion != inputTextVersion)
                 {
                     _documentLanguageAnalysisService.ApplyProvisionalClassificationProjection(session);
@@ -277,7 +266,7 @@ namespace Cortex.Modules.Editor
                     ? TryResolveHoverTarget(session, state, editingEnabled, pointerContext.ContentMouse, scroll, gutterWidth)
                     : null;
                 var displayHoveredMethodTarget = ResolveDisplayedHoveredMethodTarget(session, state, hoverTarget, pointerOnHoverSurface);
-                HandlePointerInput(session, state, editingEnabled, current, pointerContext, hoveredMethodTarget, gutterWidth, commandRegistry, contributionRegistry, harmonyPatchGenerationService, overlayPointerState);
+                HandlePointerInput(session, state, editingEnabled, current, pointerContext, hoveredMethodTarget, gutterWidth, commandRegistry, contributionRegistry, extensionRuntime, overlayPointerState);
                 RefreshActiveContext(session, state, editingEnabled);
                 if (shouldUpdateHover)
                 {
@@ -340,10 +329,7 @@ namespace Cortex.Modules.Editor
                         projectCatalog,
                         loadedModCatalog,
                         sourceLookupIndex,
-                        harmonyPatchInspectionService,
-                        harmonyPatchResolutionService,
-                        harmonyPatchDisplayService,
-                        harmonyPatchGenerationService,
+                        extensionRuntime,
                         panelRenderer);
                     if (editingEnabled)
                     {
@@ -1536,7 +1522,7 @@ namespace Cortex.Modules.Editor
             float gutterWidth,
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
-            HarmonyPatchGenerationService harmonyPatchGenerationService,
+            IEditorContributionRuntime extensionRuntime,
             EditorOverlayPointerState overlayPointerState)
         {
             if (current == null)
@@ -1615,9 +1601,14 @@ namespace Cortex.Modules.Editor
                 LogPointerSelection(session, selectionAction, pointerContext, gutterWidth, hitTest);
                 session.EditorState.ScrollToCaretPending = false;
                 _isDraggingSelection = true;
-                if (HandleHarmonyInsertionPick(session, state, hitTest, harmonyPatchGenerationService))
+                var pointerWorkflowResult = HandleExtensionInsertionPick(session, state, hitTest, extensionRuntime);
+                if (pointerWorkflowResult != null && pointerWorkflowResult.Handled)
                 {
-                    current.Use();
+                    if (pointerWorkflowResult.ConsumeInput)
+                    {
+                        current.Use();
+                    }
+
                     return;
                 }
 
@@ -1811,36 +1802,24 @@ namespace Cortex.Modules.Editor
             GUI.DrawTexture(glowRect, _methodTargetGlowFill);
         }
 
-        private bool HandleHarmonyInsertionPick(
+        private WorkbenchEditorWorkflowResult HandleExtensionInsertionPick(
             DocumentSession session,
             CortexShellState state,
             PointerHitTestResult hitTest,
-            HarmonyPatchGenerationService harmonyPatchGenerationService)
+            IEditorContributionRuntime extensionRuntime)
         {
-            if (state == null ||
-                state.Harmony == null ||
-                !state.Harmony.IsInsertionPickActive ||
-                harmonyPatchGenerationService == null)
+            if (extensionRuntime == null)
             {
-                return false;
+                return new WorkbenchEditorWorkflowResult();
             }
 
-            string statusMessage;
-            if (harmonyPatchGenerationService.TryApplyEditorInsertionSelection(state, session, hitTest.LineNumber, hitTest.CharacterIndex, out statusMessage))
-            {
-                MMLog.WriteInfo("[Cortex.Harmony] Editor insertion point selected from writable editor. Document='" +
-                    (session != null ? session.FilePath ?? string.Empty : string.Empty) +
-                    "', Line=" + hitTest.LineNumber + ".");
-            }
-            else
-            {
-                MMLog.WriteWarning("[Cortex.Harmony] Editor insertion point selection failed. Document='" +
-                    (session != null ? session.FilePath ?? string.Empty : string.Empty) +
-                    "', Line=" + hitTest.LineNumber +
-                    ", Reason='" + (statusMessage ?? string.Empty) + "'.");
-            }
-
-            return true;
+            return extensionRuntime.HandlePointer(
+                state,
+                session,
+                GetSurfaceId(session, state),
+                true,
+                hitTest.LineNumber,
+                hitTest.CharacterIndex);
         }
 
         private string ApplyPointerSelection(DocumentSession session, Event current, int clickedIndex)
@@ -2324,10 +2303,8 @@ namespace Cortex.Modules.Editor
             IDocumentService documentService,
             ICommandRegistry commandRegistry,
             Event current,
-            GeneratedTemplateNavigationService generatedTemplateNavigationService,
-            IProjectCatalog projectCatalog,
-            HarmonyPatchResolutionService harmonyPatchResolutionService,
-            HarmonyPatchGenerationService harmonyPatchGenerationService)
+            IEditorContributionRuntime extensionRuntime,
+            IProjectCatalog projectCatalog)
         {
             if (current == null || current.type != EventType.KeyDown)
             {
@@ -2344,27 +2321,22 @@ namespace Cortex.Modules.Editor
 
             var selectionCountBefore = session != null && session.EditorState != null ? session.EditorState.Selections.Count : 0;
             var caretIndexBefore = session != null && session.EditorState != null ? session.EditorState.CaretIndex : 0;
-            if (editingEnabled &&
-                TryHandleHarmonyInsertionKeyboard(
+            var keyboardWorkflowResult = editingEnabled
+                ? TryHandleExtensionInsertionKeyboard(
                     session,
                     state,
                     current,
                     documentService,
                     projectCatalog,
-                    harmonyPatchResolutionService,
-                    harmonyPatchGenerationService,
-                    generatedTemplateNavigationService))
+                    extensionRuntime)
+                : null;
+            if (keyboardWorkflowResult != null && keyboardWorkflowResult.Handled)
             {
-                current.Use();
-                return;
-            }
+                if (keyboardWorkflowResult.ConsumeInput)
+                {
+                    current.Use();
+                }
 
-            if (editingEnabled &&
-                generatedTemplateNavigationService != null &&
-                current.keyCode == KeyCode.Tab &&
-                generatedTemplateNavigationService.TryHandleNavigation(state, session, current.shift))
-            {
-                current.Use();
                 return;
             }
 
@@ -2469,86 +2441,44 @@ namespace Cortex.Modules.Editor
             }
         }
 
-        private bool TryHandleHarmonyInsertionKeyboard(
+        private WorkbenchEditorWorkflowResult TryHandleExtensionInsertionKeyboard(
             DocumentSession session,
             CortexShellState state,
             Event current,
             IDocumentService documentService,
             IProjectCatalog projectCatalog,
-            HarmonyPatchResolutionService harmonyPatchResolutionService,
-            HarmonyPatchGenerationService harmonyPatchGenerationService,
-            GeneratedTemplateNavigationService generatedTemplateNavigationService)
+            IEditorContributionRuntime extensionRuntime)
         {
-            if (session == null ||
-                state == null ||
-                state.Harmony == null ||
-                current == null ||
-                current.keyCode != KeyCode.Tab ||
-                current.shift ||
-                current.control ||
-                current.alt ||
-                !state.Harmony.IsInsertionPickActive ||
-                state.Harmony.GenerationRequest == null ||
-                harmonyPatchGenerationService == null ||
-                harmonyPatchResolutionService == null ||
-                documentService == null)
+            if (extensionRuntime == null || current == null)
             {
-                return false;
+                return new WorkbenchEditorWorkflowResult();
             }
 
-            var caretIndex = session.EditorState != null ? session.EditorState.CaretIndex : 0;
-            var caret = _editorService.GetCaretPosition(session, caretIndex);
-            string statusMessage;
-            if (!harmonyPatchGenerationService.TryApplyEditorInsertionSelection(state, session, caret.Line + 1, caretIndex, out statusMessage))
-            {
-                state.StatusMessage = statusMessage;
-                return true;
-            }
+            return extensionRuntime.HandleKeyboard(
+                state,
+                session,
+                GetSurfaceId(session, state),
+                true,
+                MapInteractionKey(current.keyCode),
+                current.shift,
+                current.control,
+                current.alt);
+        }
 
-            HarmonyResolvedMethodTarget resolvedTarget;
-            string reason;
-            if (!harmonyPatchResolutionService.TryResolveFromInspectionRequest(projectCatalog, state.Harmony.ActiveInspectionRequest, out resolvedTarget, out reason) ||
-                resolvedTarget == null ||
-                !harmonyPatchGenerationService.TryValidateGenerationTarget(state, resolvedTarget, out reason))
+        private static WorkbenchEditorInteractionKey MapInteractionKey(KeyCode keyCode)
+        {
+            switch (keyCode)
             {
-                state.StatusMessage = reason;
-                return true;
+                case KeyCode.Tab:
+                    return WorkbenchEditorInteractionKey.Tab;
+                case KeyCode.Escape:
+                    return WorkbenchEditorInteractionKey.Escape;
+                case KeyCode.Return:
+                case KeyCode.KeypadEnter:
+                    return WorkbenchEditorInteractionKey.Enter;
+                default:
+                    return WorkbenchEditorInteractionKey.None;
             }
-
-            var preview = harmonyPatchGenerationService.BuildPreview(state, resolvedTarget, state.Harmony.GenerationRequest);
-            if (preview == null || !preview.CanApply)
-            {
-                state.Harmony.GenerationPreview = preview;
-                state.StatusMessage = preview != null ? preview.StatusMessage ?? string.Empty : "Harmony patch preview is not ready to apply.";
-                return true;
-            }
-
-            DocumentSession appliedSession;
-            if (!harmonyPatchGenerationService.Apply(state, documentService, state.Harmony.GenerationRequest, preview, out appliedSession, out statusMessage))
-            {
-                state.StatusMessage = statusMessage;
-                return true;
-            }
-
-            state.Harmony.GenerationPreview = preview;
-            if (appliedSession != null && appliedSession.EditorState != null)
-            {
-                appliedSession.EditorState.EditModeEnabled = true;
-            }
-
-            if (generatedTemplateNavigationService != null && appliedSession != null)
-            {
-                generatedTemplateNavigationService.StartSession(
-                    state,
-                    appliedSession,
-                    preview.Placeholders,
-                    preview.InsertionOffset,
-                    preview.InsertionOffset + ((preview.SnippetText ?? string.Empty).Length));
-            }
-
-            harmonyPatchGenerationService.ClearEditorInsertionPick(state);
-            state.StatusMessage = statusMessage;
-            return true;
         }
 
         private void LogKeyboardSelectionState(DocumentSession session, string commandId, char character, int selectionCountBefore, int caretIndexBefore)

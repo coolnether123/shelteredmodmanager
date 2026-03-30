@@ -6,11 +6,15 @@ namespace Cortex
     internal sealed class CortexShellModuleCompositionService
     {
         private readonly CortexShellModuleContributionRegistry _contributionRegistry;
-        private readonly Dictionary<string, IWorkbenchModule> _instances = new Dictionary<string, IWorkbenchModule>(System.StringComparer.OrdinalIgnoreCase);
+        private readonly Shell.WorkbenchModuleRuntimeFactory _runtimeFactory;
+        private readonly Dictionary<string, ModuleRegistration> _instances = new Dictionary<string, ModuleRegistration>(System.StringComparer.OrdinalIgnoreCase);
 
-        public CortexShellModuleCompositionService(CortexShellModuleContributionRegistry contributionRegistry)
+        public CortexShellModuleCompositionService(
+            CortexShellModuleContributionRegistry contributionRegistry,
+            Shell.WorkbenchModuleRuntimeFactory runtimeFactory)
         {
             _contributionRegistry = contributionRegistry;
+            _runtimeFactory = runtimeFactory;
         }
 
         /// <summary>
@@ -20,25 +24,64 @@ namespace Cortex
         /// <returns>The cached or newly created module instance, or <c>null</c> when no contribution is registered.</returns>
         public IWorkbenchModule GetOrCreate(string containerId)
         {
-            if (string.IsNullOrEmpty(containerId))
+            ModuleRegistration registration;
+            return TryGetOrCreate(containerId, out registration) ? registration.Module : null;
+        }
+
+        public IWorkbenchModuleRuntime GetRuntime(string containerId)
+        {
+            ModuleRegistration registration;
+            return TryGetOrCreate(containerId, out registration) ? registration.Runtime : null;
+        }
+
+        public IWorkbenchModuleRuntime GetRuntimeByModuleId(string moduleId)
+        {
+            if (string.IsNullOrEmpty(moduleId) || _contributionRegistry == null)
             {
                 return null;
             }
 
-            IWorkbenchModule existing;
-            if (_instances.TryGetValue(containerId, out existing))
+            var contribution = _contributionRegistry.FindContributionByModuleId(moduleId);
+            var descriptor = contribution != null ? contribution.Descriptor : null;
+            return descriptor != null ? GetRuntime(descriptor.ContainerId) : null;
+        }
+
+        private bool TryGetOrCreate(string containerId, out ModuleRegistration registration)
+        {
+            registration = null;
+            if (string.IsNullOrEmpty(containerId))
             {
-                return existing;
+                return false;
+            }
+
+            if (_instances.TryGetValue(containerId, out registration))
+            {
+                return registration != null && registration.Module != null;
             }
 
             var contribution = _contributionRegistry != null ? _contributionRegistry.FindContribution(containerId) : null;
-            var created = contribution != null ? contribution.CreateModule() : null;
+            var runtime = contribution != null && _runtimeFactory != null
+                ? _runtimeFactory.Create(contribution.Descriptor)
+                : null;
+            var created = contribution != null ? contribution.CreateModule(runtime) : null;
             if (created != null)
             {
-                _instances[containerId] = created;
+                registration = new ModuleRegistration
+                {
+                    Module = created,
+                    Runtime = runtime
+                };
+                _instances[containerId] = registration;
+                return true;
             }
 
-            return created;
+            return false;
+        }
+
+        private sealed class ModuleRegistration
+        {
+            public IWorkbenchModule Module;
+            public IWorkbenchModuleRuntime Runtime;
         }
     }
 }

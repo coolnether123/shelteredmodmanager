@@ -140,7 +140,6 @@ namespace Cortex
             RegisterWindowCommand(commandContext, "cortex.window.projects", CortexWorkbenchIds.ProjectsContainer, "Projects window shown.");
             RegisterWindowCommand(commandContext, "cortex.window.references", CortexWorkbenchIds.ReferenceContainer, "References window shown.");
             RegisterWindowCommand(commandContext, "cortex.window.search", CortexWorkbenchIds.SearchContainer, "Search window shown.");
-            RegisterWindowCommand(commandContext, "cortex.window.harmony", CortexWorkbenchIds.HarmonyContainer, "Harmony window shown.");
             RegisterWindowCommand(commandContext, "cortex.window.logs", CortexWorkbenchIds.LogsContainer, "Logs window shown.");
             RegisterWindowCommand(commandContext, "cortex.window.build", CortexWorkbenchIds.BuildContainer, "Build window shown.");
             RegisterWindowCommand(commandContext, "cortex.window.runtime", CortexWorkbenchIds.RuntimeContainer, "Runtime window shown.");

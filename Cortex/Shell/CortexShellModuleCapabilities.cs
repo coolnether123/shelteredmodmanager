@@ -3,38 +3,13 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
 using Cortex.Rendering.Abstractions;
-using Cortex.Services.Harmony.Editor;
-using Cortex.Services.Harmony.Generation;
-using Cortex.Services.Harmony.Inspection;
-using Cortex.Services.Harmony.Presentation;
-using Cortex.Services.Harmony.Resolution;
 using Cortex.Services.Navigation;
 using Cortex.Services.Semantics.Context;
-using Cortex.Services.Harmony.Workflow;
 using Cortex.Services.Search;
 using Cortex.Shell;
 
 namespace Cortex
 {
-    internal interface IHarmonyFeatureServices
-    {
-        CortexShellState State { get; }
-        ICommandRegistry CommandRegistry { get; }
-        IContributionRegistry ContributionRegistry { get; }
-        ICortexNavigationService NavigationService { get; }
-        IDocumentService DocumentService { get; }
-        IProjectCatalog ProjectCatalog { get; }
-        ILoadedModCatalog LoadedModCatalog { get; }
-        IPathInteractionService PathInteractionService { get; }
-        ISourceLookupIndex SourceLookupIndex { get; }
-        HarmonyPatchWorkspaceService HarmonyPatchWorkspaceService { get; }
-        HarmonyPatchInspectionService HarmonyPatchInspectionService { get; }
-        HarmonyPatchResolutionService HarmonyPatchResolutionService { get; }
-        HarmonyPatchDisplayService HarmonyPatchDisplayService { get; }
-        HarmonyPatchGenerationService HarmonyPatchGenerationService { get; }
-        GeneratedTemplateNavigationService GeneratedTemplateNavigationService { get; }
-    }
-
     internal interface ILogsModuleServices
     {
         CortexShellState State { get; }
@@ -61,11 +36,21 @@ namespace Cortex
         IDecompilerExplorerService DecompilerExplorerService { get; }
     }
 
-    internal interface IEditorModuleServices : IHarmonyFeatureServices
+    internal interface IEditorModuleServices
     {
+        CortexShellState State { get; }
+        ICommandRegistry CommandRegistry { get; }
+        IContributionRegistry ContributionRegistry { get; }
+        ICortexNavigationService NavigationService { get; }
+        IDocumentService DocumentService { get; }
+        IProjectCatalog ProjectCatalog { get; }
+        ILoadedModCatalog LoadedModCatalog { get; }
+        IPathInteractionService PathInteractionService { get; }
+        ISourceLookupIndex SourceLookupIndex { get; }
         WorkbenchSearchService WorkbenchSearchService { get; }
         IEditorContextService EditorContextService { get; }
         IRenderPipeline RenderPipeline { get; }
+        ICortexPlatformFeatureRegistry FeatureRegistry { get; }
     }
 
     internal interface IBuildModuleServices
@@ -114,10 +99,6 @@ namespace Cortex
         ThemeState ThemeState { get; }
     }
 
-    internal interface IHarmonyModuleServices : IHarmonyFeatureServices
-    {
-    }
-
     internal sealed class CortexShellModuleServices :
         ILogsModuleServices,
         IProjectsModuleServices,
@@ -127,8 +108,7 @@ namespace Cortex
         IReferenceModuleServices,
         ISearchModuleServices,
         IRuntimeToolsModuleServices,
-        ISettingsModuleServices,
-        IHarmonyModuleServices
+        ISettingsModuleServices
     {
         private readonly CortexShellState _state;
         private readonly ShellServiceMap _services;
@@ -173,14 +153,9 @@ namespace Cortex
         public ITextSearchService TextSearchService => _services.TextSearchService;
         public IRuntimeToolBridge RuntimeToolBridge => _services.RuntimeToolBridge;
         public ICortexSettingsStore SettingsStore => _settingsStoreProvider?.Invoke();
-        public HarmonyPatchWorkspaceService HarmonyPatchWorkspaceService => _services.HarmonyPatchWorkspaceService;
-        public HarmonyPatchInspectionService HarmonyPatchInspectionService => _services.HarmonyPatchInspectionService;
-        public HarmonyPatchResolutionService HarmonyPatchResolutionService => _services.HarmonyPatchResolutionService;
-        public HarmonyPatchDisplayService HarmonyPatchDisplayService => _services.HarmonyPatchDisplayService;
-        public HarmonyPatchGenerationService HarmonyPatchGenerationService => _services.HarmonyPatchGenerationService;
-        public GeneratedTemplateNavigationService GeneratedTemplateNavigationService => _services.GeneratedTemplateNavigationService;
         public IEditorContextService EditorContextService => _services.EditorContextService;
         public IRenderPipeline RenderPipeline => _renderPipelineProvider != null ? _renderPipelineProvider() : null;
+        public ICortexPlatformFeatureRegistry FeatureRegistry => _services.FeatureRegistry;
 
         public ICommandRegistry CommandRegistry
         {

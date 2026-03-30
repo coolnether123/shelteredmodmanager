@@ -6,17 +6,11 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Presentation.Abstractions;
 using Cortex.Plugins.Abstractions;
-using Cortex.Services.Harmony.Generation;
-using Cortex.Services.Harmony.Inspection;
-using Cortex.Services.Harmony.Policy;
-using Cortex.Services.Harmony.Presentation;
-using Cortex.Services.Harmony.Resolution;
 using Cortex.Services.Navigation;
 using Cortex.Services.Navigation.Metadata;
 using Cortex.Services.Editor.Context;
 using Cortex.Services.Semantics.Context;
 using UnityEngine;
-using Cortex.Services.Harmony.Workflow;
 
 namespace Cortex.Shell
 {
@@ -26,6 +20,8 @@ namespace Cortex.Shell
         private readonly CortexShellModuleContributionRegistry _moduleContributionRegistry;
         private readonly CortexShellModuleServices _moduleServices;
         private readonly CortexShellBuiltInModuleRegistrar _moduleRegistrar;
+        private readonly IWorkbenchExtensionRegistry _extensionRegistry;
+        private readonly IWorkbenchRuntimeAccess _runtimeAccess;
         private readonly ILanguageRuntimeControl _languageRuntimeControl;
         private readonly ILanguageRuntimeQuery _languageRuntimeQuery;
         private readonly ILanguageEditorOperations _languageEditorOperations;
@@ -38,13 +34,15 @@ namespace Cortex.Shell
         private ICortexShellHostUi _shellHostUi;
         private IPathInteractionService _pathInteractionService;
         private string _preferredLanguageProviderId;
-        private ExternalWorkbenchPluginLoader _externalPluginLoader;
+        private WorkbenchPluginLoader _pluginLoader;
 
         public ShellBootstrapper(
             CortexShellState state,
             CortexShellModuleContributionRegistry moduleContributionRegistry,
             CortexShellModuleServices moduleServices,
             CortexShellBuiltInModuleRegistrar moduleRegistrar,
+            IWorkbenchExtensionRegistry extensionRegistry,
+            IWorkbenchRuntimeAccess runtimeAccess,
             ILanguageRuntimeControl languageRuntimeControl,
             ILanguageRuntimeQuery languageRuntimeQuery,
             ILanguageEditorOperations languageEditorOperations)
@@ -53,6 +51,8 @@ namespace Cortex.Shell
             _moduleContributionRegistry = moduleContributionRegistry;
             _moduleServices = moduleServices;
             _moduleRegistrar = moduleRegistrar;
+            _extensionRegistry = extensionRegistry;
+            _runtimeAccess = runtimeAccess;
             _languageRuntimeControl = languageRuntimeControl;
             _languageRuntimeQuery = languageRuntimeQuery;
             _languageEditorOperations = languageEditorOperations;
@@ -65,7 +65,7 @@ namespace Cortex.Shell
         public ICortexHostEnvironment HostEnvironment => _hostEnvironment;
         public ICortexShellHostUi ShellHostUi => _shellHostUi;
         public IPathInteractionService PathInteractionService => _pathInteractionService;
-        public ExternalWorkbenchPluginLoader ExternalPluginLoader => _externalPluginLoader;
+        public WorkbenchPluginLoader PluginLoader => _pluginLoader;
 
         public void ConfigureHostServices(ICortexHostServices hostServices)
         {
@@ -110,12 +110,12 @@ namespace Cortex.Shell
                 return null;
             }
 
-            if (_externalPluginLoader == null)
+            if (_pluginLoader == null)
             {
-                _externalPluginLoader = new ExternalWorkbenchPluginLoader();
+                _pluginLoader = new WorkbenchPluginLoader();
             }
 
-            RegisterExternalWorkbenchPlugins(runtime);
+            RegisterWorkbenchPlugins(runtime);
 
             runtime.LayoutState.PrimarySideWidth = _state.Settings != null ? _state.Settings.ProjectsPaneWidth : 360f;
             runtime.LayoutState.SecondarySideWidth = _state.Settings != null ? _state.Settings.EditorFilePaneWidth : 320f;
@@ -127,13 +127,16 @@ namespace Cortex.Shell
             return runtime;
         }
 
-        private void RegisterExternalWorkbenchPlugins(IWorkbenchRuntime runtime)
+        private void RegisterWorkbenchPlugins(IWorkbenchRuntime runtime)
         {
-            var results = _externalPluginLoader.LoadPlugins(
+            var results = _pluginLoader.LoadPlugins(
                 _state.Settings,
+                _hostEnvironment,
                 runtime.CommandRegistry,
                 runtime.ContributionRegistry,
-                _moduleContributionRegistry);
+                _moduleContributionRegistry,
+                _extensionRegistry,
+                _runtimeAccess);
 
             for (var i = 0; i < results.Count; i++)
             {
@@ -184,25 +187,8 @@ namespace Cortex.Shell
             var sourceReferenceService = new SourceReferenceService(new DecompilerCliClient(decompilerPath, settings.DecompilerCachePath, 15000));
             var metadataNavigationService = new AssemblyMetadataNavigationService();
             var navigationService = new CortexNavigationService(documentService, sourceReferenceService, platformModule.CreateRuntimeSourceNavigationService(sourcePathResolver), sourceLookupIndex);
-
-            var harmonyPatchOwnershipService = new HarmonyPatchOwnershipService();
-            var harmonyPatchDisplayService = new HarmonyPatchDisplayService();
-            var harmonyPatchOrderService = new HarmonyPatchOrderService();
-            var harmonyPatchInspectionService = new HarmonyPatchInspectionService(
-                platformModule.HarmonyRuntimeInspectionService,
-                harmonyPatchOwnershipService,
-                harmonyPatchOrderService);
-
-            var harmonyPatchResolutionService = new HarmonyPatchResolutionService(
-                new HarmonyMetadataTargetResolver(
-                    metadataNavigationService,
-                    new HarmonyMethodIdentityService(),
-                    new HarmonyRuntimeMethodLookupService()));
-            var harmonyPatchTemplateService = new HarmonyPatchTemplateService();
-            var harmonyPatchInsertionService = new HarmonyPatchInsertionService();
-            var harmonyPatchGenerationService = new HarmonyPatchGenerationService(harmonyPatchTemplateService, harmonyPatchInsertionService);
-            var harmonyPatchWorkspaceService = new HarmonyPatchWorkspaceService();
-            var generatedTemplateNavigationService = new GeneratedTemplateNavigationService();
+            var featureRegistry = new ShellFeatureRegistry();
+            platformModule.RegisterFeatures(featureRegistry);
             var editorContextService = new EditorContextService(
                 new EditorService(),
                 new EditorCommandContextFactory(),
@@ -229,16 +215,7 @@ namespace Cortex.Shell
                 OverlayInputCaptureService = platformModule.OverlayInputCaptureService,
                 TextSearchService = new TextSearchService(),
                 NavigationService = navigationService,
-                HarmonyPatchOwnershipService = harmonyPatchOwnershipService,
-                HarmonyPatchDisplayService = harmonyPatchDisplayService,
-                HarmonyPatchOrderService = harmonyPatchOrderService,
-                HarmonyPatchInspectionService = harmonyPatchInspectionService,
-                HarmonyPatchResolutionService = harmonyPatchResolutionService,
-                HarmonyPatchTemplateService = harmonyPatchTemplateService,
-                HarmonyPatchInsertionService = harmonyPatchInsertionService,
-                HarmonyPatchGenerationService = harmonyPatchGenerationService,
-                HarmonyPatchWorkspaceService = harmonyPatchWorkspaceService,
-                GeneratedTemplateNavigationService = generatedTemplateNavigationService,
+                FeatureRegistry = featureRegistry,
                 EditorContextService = editorContextService,
                 LanguageRuntimeControl = languageRuntimeControl,
                 LanguageRuntimeQuery = languageRuntimeQuery,
@@ -357,16 +334,7 @@ namespace Cortex.Shell
         public IOverlayInputCaptureService OverlayInputCaptureService;
         public ITextSearchService TextSearchService;
         public ICortexNavigationService NavigationService;
-        public HarmonyPatchOwnershipService HarmonyPatchOwnershipService;
-        public HarmonyPatchDisplayService HarmonyPatchDisplayService;
-        public HarmonyPatchOrderService HarmonyPatchOrderService;
-        public HarmonyPatchInspectionService HarmonyPatchInspectionService;
-        public HarmonyPatchResolutionService HarmonyPatchResolutionService;
-        public HarmonyPatchTemplateService HarmonyPatchTemplateService;
-        public HarmonyPatchInsertionService HarmonyPatchInsertionService;
-        public HarmonyPatchGenerationService HarmonyPatchGenerationService;
-        public HarmonyPatchWorkspaceService HarmonyPatchWorkspaceService;
-        public GeneratedTemplateNavigationService GeneratedTemplateNavigationService;
+        public ICortexPlatformFeatureRegistry FeatureRegistry;
         public IEditorContextService EditorContextService;
         public ILanguageRuntimeControl LanguageRuntimeControl;
         public ILanguageRuntimeQuery LanguageRuntimeQuery;

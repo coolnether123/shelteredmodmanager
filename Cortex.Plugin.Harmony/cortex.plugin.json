@@ -1,0 +1,7 @@
+{
+  "PluginId": "cortex.harmony",
+  "DisplayName": "Harmony",
+  "AssemblyPath": "Cortex.Plugin.Harmony.dll",
+  "EntryTypeName": "Cortex.Plugin.Harmony.HarmonyPluginContributor",
+  "Enabled": true
+}

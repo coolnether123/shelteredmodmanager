@@ -1,267 +1,256 @@
 # Cortex Module Authoring Guide
 
-This guide describes the current public workbench authoring surface for Cortex.
+This guide describes how to build a Cortex workbench plugin against the permanent public module model.
 
-The goal is to make contributions look more like a workbench platform and less like "reach into `CortexShell` and hope for the best."
+It is for Cortex plugins, not general ModAPI gameplay plugins.
 
-## Current model
+## 1. Public entry point
 
-Today Cortex supports three public layers:
+Implement:
 
-1. Commands
-2. Declarative workbench contributions
-3. Optional renderable workbench modules
+- `IWorkbenchPluginContributor`
 
-The preferred plugin entry point is `IWorkbenchPluginContributor` from `Cortex.Plugins.Abstractions`.
+Register everything through:
 
-`IWorkbenchPlugin` still works, but it is the legacy low-level form that exposes raw registries directly.
+- `WorkbenchPluginContext`
 
-## Plugin entry point
+There is no alternate legacy contributor path in the permanent architecture.
 
-Implement `IWorkbenchPluginContributor` when creating a Cortex workbench plugin:
+## 2. What a plugin can contribute
+
+A Cortex plugin may register:
+
+- commands
+- view containers
+- views
+- icons
+- workbench modules
+- editor context actions
+- explorer filters
+- method inspector sections
+- editor adornments
+- editor workflows
+
+The Harmony plugin is the reference example for a full-featured module that uses all of these seams without depending on private Cortex internals.
+
+## 3. Minimal plugin example
 
 ```csharp
-using Cortex.Core.Models;
 using Cortex.Plugins.Abstractions;
+using Cortex.Core.Models;
 
 namespace Example.CortexPlugin
 {
-    public sealed class ExamplePlugin : IWorkbenchPluginContributor
+    public sealed class ReviewPluginContributor : IWorkbenchPluginContributor
     {
         public string PluginId
         {
-            get { return "example.plugin"; }
+            get { return "example.review"; }
         }
 
         public string DisplayName
         {
-            get { return "Example Plugin"; }
+            get { return "Review"; }
         }
 
         public void Register(WorkbenchPluginContext context)
         {
-            context.RegisterCommand(
-                "example.hello",
-                "Say Hello",
-                "Example",
-                "Write a test command to the workbench.",
-                string.Empty,
-                0,
+            context.RegisterViewContainer(
+                "example.review.container",
+                "Review",
+                WorkbenchHostLocation.SecondarySideHost,
+                50,
                 true,
-                false);
+                ModuleActivationKind.OnCommand,
+                "example.review.open",
+                "example.review.container");
 
-            context.RegisterMenu(
-                "example.hello",
-                MenuProjectionLocation.MainMenu,
-                "Example",
+            context.RegisterView(
+                "example.review.view",
+                "example.review.container",
+                "Review",
+                "example.review.view",
                 0,
-                string.Empty);
+                true);
+
+            context.RegisterCommand(
+                "example.review.open",
+                "Open Review",
+                "Review",
+                "Open the Review module.",
+                string.Empty,
+                100,
+                true,
+                true);
         }
     }
 }
 ```
 
-## Registering commands
+## 4. Runtime interaction rules
 
-Use `WorkbenchPluginContext.RegisterCommand(...)` for command metadata and `RegisterCommandHandler(...)` when the runtime should execute logic.
+At registration time, use `WorkbenchPluginContext`.
+
+At execution/render time, use the typed runtime contracts:
+
+- `IWorkbenchRuntimeAccess`
+- `IWorkbenchModuleRuntime`
+
+Do not treat runtime access as a god object.
+
+### `IWorkbenchRuntimeAccess`
+
+Use this from contributed editor/inspector flows when you only need:
+
+- `Modules`
+- `Feedback`
+
+### `IWorkbenchModuleRuntime`
+
+Use this from a module when you need:
+
+- `Lifecycle`
+- `Commands`
+- `Navigation`
+- `Documents`
+- `Projects`
+- `Editor`
+- `State`
+
+If a feature needs more host power, add a coherent typed capability interface in Cortex. Do not add unrelated members to an existing runtime shell.
+
+## 5. Module-owned state
+
+Every plugin owns its own state through `runtime.State`.
+
+Keep these lifetimes separate.
+
+### Persistent
+
+Use `runtime.State.Persistent` for values that can survive persistence boundaries.
+
+Examples:
+
+- preferred generation mode
+- last-used view setting
+- last-inspected symbol identifier
+
+### Workflow
+
+Use `runtime.State.Workflow` for in-session transient flows.
+
+Examples:
+
+- pending multi-step workflow state
+- previews
+- active summary models
+- temporary selections
+
+### Document/editor scope
+
+Use `runtime.State.Contexts` with:
+
+- `runtime.Editor.CreateDocumentScope(...)`
+- `runtime.Editor.CreateEditorScope(...)`
+
+Examples:
+
+- document-specific notes
+- editor-session placeholder navigation state
+- per-surface insertion selections
+
+Do not replace these with one plugin-owned bag.
+
+## 6. Workbench modules
+
+Register `IWorkbenchModuleContribution` when you need a renderable tool window.
+
+The module should:
+
+- render its own surface
+- use runtime capabilities instead of shell internals
+- report blocked state through `GetUnavailableMessage()`
+
+Use `GetUnavailableMessage()` when the module depends on a runtime prerequisite. The Harmony plugin uses this to disable itself when `0Harmony` is not available in the active runtime.
+
+## 7. Commands and actions
+
+Prefer commands for behavior entry points.
 
 Commands should be:
 
 - stable by id
-- declarative by default
-- reusable from menus, palette, and module UI
+- reusable from module UI, menus, and editor surfaces
+- gated by explicit enablement checks
 
-Avoid hardwiring UI buttons directly to shell internals when a command id can express the action instead.
+Editor actions should remain declarative. The command handler should own the behavior.
 
-## Registering containers and views
+## 8. Editor extension seams
 
-Workbench containers and views are registered declaratively.
+Current reusable editor seams are:
 
-Typical pattern:
+- method inspector sections and actions
+- editor adornments
+- editor workflows
+- editor context actions
+- explorer filters
 
-```csharp
-context.RegisterViewContainer(
-    "example.container",
-    "Example",
-    WorkbenchHostLocation.PanelHost,
-    0,
-    true,
-    ModuleActivationKind.OnContainerOpen,
-    "example.container",
-    "example.container");
+These seams must stay generic enough for future non-Harmony modules. If you add a new seam, validate it against a plausible non-Harmony scenario.
 
-context.RegisterView(
-    "example.container.main",
-    "example.container",
-    "Example",
-    "example.container.main",
-    0,
-    true);
-```
+Examples:
 
-Container registration decides:
+- a review module can contribute an inspector notes section
+- a diagnostics module can contribute a decompiler filter
+- a templating module can contribute a multi-step editor workflow
 
-- identity
-- default host
-- default pinned state
-- activation policy
-- icon projection
+## 9. How Harmony interacts with Cortex APIs
 
-View registration decides:
+The extracted Harmony plugin is a concrete example of correct Cortex plugin usage.
 
-- view identity
-- title
-- persistence id
-- ordering
-- default visibility
+It uses:
 
-## Registering a module
+- `IWorkbenchPluginContributor` for entry
+- `WorkbenchPluginContext` for registration
+- `IWorkbenchModuleRuntime` for lifecycle, navigation, editor, document, project, and state access
+- `IWorkbenchRuntimeAccess` for editor/inspector contribution callbacks
+- `State.Persistent`, `State.Workflow`, and `State.Contexts` for distinct state lifetimes
+- generic editor seams for inspector sections, adornments, and workflows
 
-If your contribution needs custom rendering, register an `IWorkbenchModuleContribution`.
+It does not use:
 
-```csharp
-using System;
-using Cortex.Plugins.Abstractions;
-using UnityEngine;
+- private shell state
+- private editor internals
+- host-only Harmony fields
+- renamed service-locator shells
 
-namespace Example.CortexPlugin
-{
-    public sealed class ExampleModuleContribution : IWorkbenchModuleContribution
-    {
-        public WorkbenchModuleDescriptor Descriptor
-        {
-            get { return new WorkbenchModuleDescriptor("example.container", typeof(ExampleModule)); }
-        }
+## 10. Bundled vs third-party plugins
 
-        public IWorkbenchModule CreateModule()
-        {
-            return new ExampleModule();
-        }
-    }
+Bundled first-party plugins and third-party plugins follow the same model:
 
-    public sealed class ExampleModule : IWorkbenchModule
-    {
-        public string GetUnavailableMessage()
-        {
-            return string.Empty;
-        }
+1. manifest discovery
+2. plugin loader activation
+3. contributor registration
+4. runtime/module composition
 
-        public void Render(WorkbenchModuleRenderContext context, bool detachedWindow)
-        {
-            if (context != null && context.Ui != null)
-            {
-                context.Ui.DrawSectionPanel("Example", delegate
-                {
-                    GUILayout.Label("Hello from Cortex.");
-                });
-            }
-            else
-            {
-                GUILayout.Label("Hello from Cortex.");
-            }
+Do not build first-party plugins around private shortcuts that third-party plugins cannot use.
 
-            if (GUILayout.Button("Run Command") &&
-                context.CommandRegistry != null)
-            {
-                context.CommandRegistry.Execute(
-                    "example.hello",
-                    new Cortex.Core.Models.CommandExecutionContext());
-            }
-        }
-    }
-}
-```
+## 11. Design rules
 
-Then register it from your plugin:
+Follow these rules when authoring Cortex modules:
 
-```csharp
-context.RegisterModule(new ExampleModuleContribution());
-```
+- keep the plugin entry class thin
+- keep behavior split by responsibility
+- prefer commands over cross-module reach-in
+- prefer typed runtime capabilities over widening shared runtime shells
+- keep persistent, workflow, and scoped state separate
+- keep feature logic in the plugin, not the host
+- design editor seams so a non-Harmony module could plausibly use them too
 
-## Render context contract
+## 12. Packaging
 
-`WorkbenchModuleRenderContext` is intentionally narrow.
+A plugin must ship with:
 
-Modules currently receive:
+- its assembly
+- `cortex.plugin.json`
 
-- `ContainerId`
-- `Snapshot`
-- `CommandRegistry`
-- `ContributionRegistry`
-- `Ui`
-
-This is deliberate. The public module API is meant to be workbench-facing, not shell-facing.
-
-`Ui` is the host-owned workbench surface for shared Cortex chrome such as search bars, section headers, property rows, and property-page navigation widgets.
-Prefer it for reusable shell patterns instead of copy/pasting raw IMGUI blocks.
-
-## Current limits
-
-This is a foundation layer, not a full VS Code extension host.
-
-Current public module contributions should assume:
-
-- the current backend implementation is Unity IMGUI-based
-- module UI should be self-contained
-- command execution is the preferred integration path
-- internal shell services are not public plugin contracts yet
-
-That IMGUI note is about today's host implementation, not a license to couple module code to IMGUI-specific Cortex internals.
-Public module code should still prefer:
-- `WorkbenchModuleRenderContext`
-- `context.Ui`
-- commands and contribution metadata
-
-Do not build external modules against internal editor/rendering types from `Cortex.Renderers.Imgui` or private shell orchestration code.
-
-For shared module chrome, prefer `context.Ui` over directly reproducing the same `GUILayout` patterns in multiple modules.
-
-That means built-in Cortex modules still have richer internal dependencies than external modules. This is intentional for now. The public API is being kept narrow until those service contracts are ready to be made stable.
-
-## Recommended design rules
-
-When authoring modules and contributions:
-
-- Prefer commands over direct cross-module calls.
-- Keep container/view registration declarative.
-- Keep module rendering focused on UI and user interaction.
-- Use `context.Ui` for shared workbench patterns and raw IMGUI only for custom widgets.
-- Avoid storing global mutable state inside modules when a command or persisted setting can represent it.
-- Treat `WorkbenchPluginContext` as the composition boundary, not as a place to hide runtime logic.
-
-## Diagnostics
-
-For opt-in tracing and investigation paths, use the Cortex diagnostics channel system instead of adding direct loader-specific logging in module code.
-
-The rule is:
-
-- use `Cortex.Core.Diagnostics`
-- define a stable channel name
-- let the active platform module decide how channels are enabled and where messages are routed
-
-Current guidance and examples live in [Cortex_Diagnostics_Guide.md](/D:/Projects/_Archived/Sheltered%20Modding/shelteredmodmanager/documentation/Cortex_Diagnostics_Guide.md).
-
-Full UI-surface guidance and examples live in [Cortex_UI_Surface_Guide.md](/D:/Projects/_Archived/Sheltered%20Modding/shelteredmodmanager/documentation/Cortex_UI_Surface_Guide.md).
-
-## Registering settings
-
-Modules can also contribute settings metadata through `WorkbenchPluginContext`.
-
-Recommended pattern:
-
-1. Register one section with `RegisterSettingSection(...)`
-2. Register one or more settings under the same `Scope`
-3. Use callback-backed settings when your module owns persistence or validation
-4. Let Cortex build the property-page grouping, left-nav anchors, search indexing, validation chrome, and per-setting gear actions
-
-Full guidance and examples live in [Cortex_Settings_Authoring_Guide.md](/D:/Projects/_Archived/Sheltered%20Modding/shelteredmodmanager/documentation/Cortex_Settings_Authoring_Guide.md).
-
-## Legacy plugin interface
-
-`IWorkbenchPlugin` is still supported for compatibility:
-
-```csharp
-void Register(ICommandRegistry commandRegistry, IContributionRegistry contributionRegistry)
-```
-
-Prefer `IWorkbenchPluginContributor` for new work because it also supports module registration and keeps authoring code aligned with the newer platform shape.
+The manifest points Cortex at the assembly and `IWorkbenchPluginContributor` entry type. Bundled first-party plugins and third-party plugins use the same manifest/discovery/registration model.

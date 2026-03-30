@@ -5,10 +5,6 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Editor;
-using Cortex.Services.Harmony.Generation;
-using Cortex.Services.Harmony.Inspection;
-using Cortex.Services.Harmony.Presentation;
-using Cortex.Services.Harmony.Resolution;
 using Cortex.Services.Navigation;
 using Cortex.Services.Semantics.Context;
 using GameModding.Shared.Restart;
@@ -141,10 +137,7 @@ namespace Cortex.Tests.Testing
             IProjectCatalog projectCatalog,
             ILoadedModCatalog loadedModCatalog,
             ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchInspectionService harmonyInspectionService,
-            HarmonyPatchResolutionService harmonyResolutionService,
-            HarmonyPatchDisplayService harmonyDisplayService,
-            HarmonyPatchGenerationService harmonyGenerationService,
+            IEditorContributionRuntime extensionRuntime,
             Cortex.Rendering.Abstractions.IPanelRenderer panelRenderer)
         {
             DrawCallCount++;

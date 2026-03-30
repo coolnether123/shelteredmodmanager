@@ -12,6 +12,8 @@ namespace Cortex.Presentation.Abstractions
 
         string HostBinPath { get; }
 
+        string BundledPluginSearchRoots { get; }
+
         string ManagedAssemblyRootPath { get; }
 
         string ModsRootPath { get; }

@@ -38,6 +38,26 @@ namespace Cortex
             return _contributions.TryGetValue(containerId, out contribution) ? contribution : null;
         }
 
+        public IWorkbenchModuleContribution FindContributionByModuleId(string moduleId)
+        {
+            if (string.IsNullOrEmpty(moduleId))
+            {
+                return null;
+            }
+
+            foreach (var pair in _contributions)
+            {
+                var descriptor = pair.Value != null ? pair.Value.Descriptor : null;
+                if (descriptor != null &&
+                    string.Equals(descriptor.ModuleId, moduleId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return pair.Value;
+                }
+            }
+
+            return null;
+        }
+
         /// <summary>
         /// Resolves the descriptor registered for a workbench container.
         /// </summary>

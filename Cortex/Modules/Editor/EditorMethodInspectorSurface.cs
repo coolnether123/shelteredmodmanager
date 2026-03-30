@@ -3,11 +3,6 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
-using Cortex.Services.Harmony.Editor;
-using Cortex.Services.Harmony.Generation;
-using Cortex.Services.Harmony.Inspection;
-using Cortex.Services.Harmony.Presentation;
-using Cortex.Services.Harmony.Resolution;
 using Cortex.Services.Inspector;
 using Cortex.Services.Inspector.Actions;
 using Cortex.Services.Inspector.Lifecycle;
@@ -28,9 +23,7 @@ namespace Cortex.Modules.Editor
         private const float ScrollWheelStep = 28f;
 
         private readonly EditorMethodInspectorService _inspectorService;
-        private readonly EditorMethodInspectorPresentationService _presentationService;
         private readonly EditorMethodInspectorNavigationActionHandler _navigationActionHandler = new EditorMethodInspectorNavigationActionHandler();
-        private readonly EditorMethodPatchCreationService _patchCreationService = new EditorMethodPatchCreationService();
         private readonly EditorMethodInspectorPanelDocumentAdapter _panelDocumentAdapter = new EditorMethodInspectorPanelDocumentAdapter();
 
         private Vector2 _scroll = Vector2.zero;
@@ -38,7 +31,6 @@ namespace Cortex.Modules.Editor
         public EditorMethodInspectorSurface(IEditorContextService contextService)
         {
             _inspectorService = new EditorMethodInspectorService(contextService);
-            _presentationService = new EditorMethodInspectorPresentationService(contextService);
         }
 
         public Rect Draw(
@@ -57,10 +49,7 @@ namespace Cortex.Modules.Editor
             IProjectCatalog projectCatalog,
             ILoadedModCatalog loadedModCatalog,
             ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchInspectionService harmonyInspectionService,
-            HarmonyPatchResolutionService harmonyResolutionService,
-            HarmonyPatchDisplayService harmonyDisplayService,
-            HarmonyPatchGenerationService harmonyGenerationService,
+            IEditorContributionRuntime extensionRuntime,
             IPanelRenderer panelRenderer)
         {
             if (!_inspectorService.IsVisibleForDocument(state, activeDocumentPath))
@@ -68,16 +57,11 @@ namespace Cortex.Modules.Editor
                 return new Rect(0f, 0f, 0f, 0f);
             }
 
-            var preparedView = _presentationService.Prepare(
-                state,
-                session,
-                projectCatalog,
-                loadedModCatalog,
-                sourceLookupIndex,
-                harmonyInspectionService,
-                harmonyResolutionService,
-                harmonyDisplayService,
-                harmonyGenerationService);
+            var preparedView = extensionRuntime != null
+                ? extensionRuntime.PrepareInspector(
+                    state,
+                    session)
+                : null;
             if (preparedView == null || preparedView.ViewModel == null)
             {
                 return new Rect(0f, 0f, 0f, 0f);
@@ -96,13 +80,9 @@ namespace Cortex.Modules.Editor
             HandleActivation(
                 renderResult != null ? renderResult.ActivatedId : string.Empty,
                 state,
-                preparedView.Invocation,
+                preparedView,
                 navigationService,
-                documentService,
-                projectCatalog,
-                sourceLookupIndex,
-                harmonyResolutionService,
-                harmonyGenerationService);
+                extensionRuntime);
             return popupRect;
         }
 
@@ -142,13 +122,9 @@ namespace Cortex.Modules.Editor
         private void HandleActivation(
             string activatedId,
             CortexShellState state,
-            EditorCommandInvocation invocation,
+            EditorMethodInspectorPreparedView preparedView,
             ICortexNavigationService navigationService,
-            IDocumentService documentService,
-            IProjectCatalog projectCatalog,
-            ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchResolutionService harmonyResolutionService,
-            HarmonyPatchGenerationService harmonyGenerationService)
+            IEditorContributionRuntime extensionRuntime)
         {
             if (string.IsNullOrEmpty(activatedId))
             {
@@ -176,84 +152,23 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            if (invocation == null || invocation.Target == null)
+            if (preparedView == null || preparedView.Invocation == null || preparedView.Invocation.Target == null)
             {
                 return;
             }
 
-            if (string.Equals(activatedId, "patch:create:prefix", StringComparison.Ordinal))
+            if (extensionRuntime != null)
             {
-                PreparePatch(state, invocation.Target, projectCatalog, sourceLookupIndex, harmonyResolutionService, harmonyGenerationService, HarmonyPatchGenerationKind.Prefix);
-                return;
-            }
-
-            if (string.Equals(activatedId, "patch:create:postfix", StringComparison.Ordinal))
-            {
-                PreparePatch(state, invocation.Target, projectCatalog, sourceLookupIndex, harmonyResolutionService, harmonyGenerationService, HarmonyPatchGenerationKind.Postfix);
-                return;
-            }
-
-            if (activatedId.StartsWith("patch:open:", StringComparison.Ordinal))
-            {
-                var indexText = activatedId.Substring("patch:open:".Length);
-                int index;
-                if (int.TryParse(indexText, out index))
+                var result = extensionRuntime.HandleInspectorAction(activatedId, preparedView);
+                if (result != null && result.Handled)
                 {
-                    OpenInsertionTarget(state, documentService, harmonyGenerationService, index);
+                    if (result.CloseInspector)
+                    {
+                        _inspectorService.Close(state);
+                    }
+
+                    return;
                 }
-            }
-        }
-
-        private void PreparePatch(
-            CortexShellState state,
-            EditorCommandTarget target,
-            IProjectCatalog projectCatalog,
-            ISourceLookupIndex sourceLookupIndex,
-            HarmonyPatchResolutionService harmonyResolutionService,
-            HarmonyPatchGenerationService harmonyGenerationService,
-            HarmonyPatchGenerationKind kind)
-        {
-            string statusMessage;
-            if (_patchCreationService.PreparePatch(
-                state,
-                target,
-                projectCatalog,
-                sourceLookupIndex,
-                harmonyResolutionService,
-                harmonyGenerationService,
-                kind,
-                out statusMessage))
-            {
-                state.StatusMessage = statusMessage;
-            }
-            else if (!string.IsNullOrEmpty(statusMessage))
-            {
-                state.StatusMessage = statusMessage;
-            }
-        }
-
-        private void OpenInsertionTarget(CortexShellState state, IDocumentService documentService, HarmonyPatchGenerationService harmonyGenerationService, int index)
-        {
-            if (state == null || state.Harmony == null || state.Harmony.InsertionTargets == null || index < 0 || index >= state.Harmony.InsertionTargets.Count)
-            {
-                return;
-            }
-
-            var insertionTarget = state.Harmony.InsertionTargets[index];
-            if (insertionTarget == null)
-            {
-                return;
-            }
-
-            string statusMessage;
-            if (_patchCreationService.OpenInsertionTarget(state, documentService, harmonyGenerationService, insertionTarget, out statusMessage))
-            {
-                _inspectorService.Close(state);
-            }
-
-            if (!string.IsNullOrEmpty(statusMessage))
-            {
-                state.StatusMessage = statusMessage;
             }
         }
 

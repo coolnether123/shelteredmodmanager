@@ -14,17 +14,11 @@ namespace Cortex.Platform.ModAPI.Runtime
         private const KeyCode ToggleKey = KeyCode.F8;
         private readonly ICortexLogSink _logSink = new MmLogCortexLogSink();
         private readonly ICortexDiagnosticConfiguration _diagnosticConfiguration = new ModApiCortexDiagnosticConfiguration();
-        private readonly IHarmonyRuntimeInspectionService _harmonyRuntimeInspectionService = new HarmonyRuntimeInspectionService();
         private readonly ILoadedModCatalog _loadedModCatalog = new ModApiLoadedModCatalog();
         private readonly MmLogRuntimeLogFeed _runtimeLogFeed = new MmLogRuntimeLogFeed();
         private readonly IRuntimeToolBridge _runtimeToolBridge = new ModApiRuntimeToolBridge();
         private readonly IRestartCoordinator _restartCoordinator = new ModApiRestartCoordinator(new RestartRequestWriter());
         private CortexOverlayInputCaptureService _overlayInputCaptureService;
-
-        public IHarmonyRuntimeInspectionService HarmonyRuntimeInspectionService
-        {
-            get { return _harmonyRuntimeInspectionService; }
-        }
 
         public ICortexLogSink LogSink
         {
@@ -72,6 +66,10 @@ namespace Cortex.Platform.ModAPI.Runtime
         public string AdditionalDecompilerCacheRoots
         {
             get { return BuildLegacyDecompilerCacheRoots(); }
+        }
+
+        public void RegisterFeatures(ICortexPlatformFeatureRegistry registry)
+        {
         }
 
         public IRuntimeSourceNavigationService CreateRuntimeSourceNavigationService(ISourcePathResolver sourcePathResolver)

@@ -100,7 +100,7 @@ namespace Cortex
                 return;
             }
 
-            _moduleRegistrar.RegisterBuiltIns(_moduleContributionRegistry, GetModuleServices());
+            _moduleRegistrar.RegisterBuiltIns(_moduleContributionRegistry, _extensionRegistry, _runtimeAccess, GetModuleServices());
             _moduleContributionsRegistered = true;
         }
 
@@ -109,7 +109,9 @@ namespace Cortex
             EnsureModuleContributionsRegistered();
             if (_moduleCompositionService == null)
             {
-                _moduleCompositionService = new CortexShellModuleCompositionService(_moduleContributionRegistry);
+                _moduleCompositionService = new CortexShellModuleCompositionService(
+                    _moduleContributionRegistry,
+                    new Shell.WorkbenchModuleRuntimeFactory(_state, _services, () => _workbenchRuntime));
             }
 
             return _moduleCompositionService;
@@ -135,9 +137,7 @@ namespace Cortex
                     GetModuleCompositionService(),
                     GetModuleActivationService(),
                     delegate(string containerId) { return CanActivateContainer(containerId); },
-                    delegate(string containerId) { return BuildActivationBlockedMessage(containerId); },
-                    delegate { return _workbenchRuntime != null ? _workbenchRuntime.CommandRegistry : null; },
-                    delegate { return _workbenchRuntime != null ? _workbenchRuntime.ContributionRegistry : null; });
+                    delegate(string containerId) { return BuildActivationBlockedMessage(containerId); });
             }
 
             return _moduleRenderService;

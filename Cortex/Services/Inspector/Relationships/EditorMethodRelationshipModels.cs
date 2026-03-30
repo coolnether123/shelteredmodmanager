@@ -1,4 +1,5 @@
 using Cortex.LanguageService.Protocol;
+using Cortex.Presentation.Models;
 
 namespace Cortex.Services.Inspector.Relationships
 {
@@ -15,6 +16,7 @@ namespace Cortex.Services.Inspector.Relationships
         public LanguageServiceRange DefinitionRange;
         public string Relationship = string.Empty;
         public int CallCount = 1;
+        public MethodInspectorActionViewModel[] Actions = new MethodInspectorActionViewModel[0];
     }
 
     internal sealed class EditorMethodRelationshipsContext
