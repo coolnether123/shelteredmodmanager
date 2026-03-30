@@ -158,7 +158,7 @@ namespace Cortex.Plugin.Harmony.Services
                 return false;
             }
 
-            var text = _sourceSymbolService.GetDocumentText(target.DocumentPath);
+            var text = _sourceSymbolService.GetDocumentText(runtime, target.DocumentPath);
             if (string.IsNullOrEmpty(text))
             {
                 reason = "Source text was not available for Harmony source context.";
@@ -173,7 +173,7 @@ namespace Cortex.Plugin.Harmony.Services
             }
 
             HarmonyMethodLookupHint hint;
-            if (!_sourceSymbolService.TryBuildLookupHint(target.DocumentPath, target.AbsolutePosition, target.SymbolText, out hint) || hint == null)
+            if (!_sourceSymbolService.TryBuildLookupHint(runtime, target.DocumentPath, target.AbsolutePosition, target.SymbolText, out hint) || hint == null)
             {
                 reason = "The selected source location does not map to a method declaration.";
                 return false;
@@ -213,7 +213,7 @@ namespace Cortex.Plugin.Harmony.Services
                 return false;
             }
 
-            var text = _sourceSymbolService.GetDocumentText(target.DocumentPath);
+            var text = _sourceSymbolService.GetDocumentText(runtime, target.DocumentPath);
             if (string.IsNullOrEmpty(text))
             {
                 return false;
@@ -353,7 +353,7 @@ namespace Cortex.Plugin.Harmony.Services
             }
 
             HarmonyMethodLookupHint hint;
-            _sourceSymbolService.TryBuildLookupHint(target.DocumentPath, target.AbsolutePosition, target.SymbolText, out hint);
+            _sourceSymbolService.TryBuildLookupHint(runtime, target.DocumentPath, target.AbsolutePosition, target.SymbolText, out hint);
             var method = _runtimeMethodLookupService.ResolveMethod(declaringType, target.SymbolText, hint, out reason);
             if (method == null)
             {

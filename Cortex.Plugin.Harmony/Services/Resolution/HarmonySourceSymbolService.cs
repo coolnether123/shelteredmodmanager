@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using Cortex.Core.Models;
+using Cortex.Plugins.Abstractions;
 
 namespace Cortex.Plugin.Harmony.Services.Resolution
 {
@@ -198,8 +199,13 @@ namespace Cortex.Plugin.Harmony.Services.Resolution
 
         public bool TryBuildLookupHint(string documentPath, int absolutePosition, string symbolText, out HarmonyMethodLookupHint hint)
         {
+            return TryBuildLookupHint(null, documentPath, absolutePosition, symbolText, out hint);
+        }
+
+        public bool TryBuildLookupHint(IWorkbenchModuleRuntime runtime, string documentPath, int absolutePosition, string symbolText, out HarmonyMethodLookupHint hint)
+        {
             hint = null;
-            var text = GetDocumentText(documentPath);
+            var text = GetDocumentText(runtime, documentPath);
             if (string.IsNullOrEmpty(text))
             {
                 return false;
@@ -242,6 +248,18 @@ namespace Cortex.Plugin.Harmony.Services.Resolution
 
         public string GetDocumentText(string documentPath)
         {
+            return GetDocumentText(null, documentPath);
+        }
+
+        public string GetDocumentText(IWorkbenchModuleRuntime runtime, string documentPath)
+        {
+            var documents = runtime != null ? runtime.Documents : null;
+            var session = documents != null ? documents.Get(documentPath) : null;
+            if (session != null)
+            {
+                return session.Text ?? string.Empty;
+            }
+
             try
             {
                 return !string.IsNullOrEmpty(documentPath) && File.Exists(documentPath)

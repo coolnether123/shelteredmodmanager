@@ -105,7 +105,7 @@ namespace Cortex.Plugin.Harmony
             }
 
             AppendIndirectRelationships(runtime, context, elements);
-            AppendGenerationActions(runtime, elements);
+            AppendGenerationActions(runtime, context.Target, elements);
 
             return new MethodInspectorSectionViewModel
             {
@@ -289,7 +289,7 @@ namespace Cortex.Plugin.Harmony
             }
         }
 
-        private void AppendGenerationActions(IWorkbenchModuleRuntime runtime, List<MethodInspectorElementViewModel> elements)
+        private void AppendGenerationActions(IWorkbenchModuleRuntime runtime, EditorCommandTarget target, List<MethodInspectorElementViewModel> elements)
         {
             var workflow = _stateStore.GetWorkflow(runtime);
             if (workflow == null)
@@ -297,10 +297,16 @@ namespace Cortex.Plugin.Harmony
                 return;
             }
 
+            var commands = runtime != null ? runtime.Commands : null;
+            var canViewPatches = commands != null && commands.CanExecute(HarmonyPluginIds.ViewPatchesCommandId, target);
+            var canGeneratePrefix = commands != null && commands.CanExecute(HarmonyPluginIds.GeneratePrefixCommandId, target);
+            var canGeneratePostfix = commands != null && commands.CanExecute(HarmonyPluginIds.GeneratePostfixCommandId, target);
+            var canCopySummary = commands != null && commands.CanExecute(HarmonyPluginIds.CopySummaryCommandId, target);
+
             elements.Add(new MethodInspectorSpacerViewModel { Height = 4f });
             elements.Add(new MethodInspectorActionElementViewModel
             {
-                Action = new MethodInspectorActionViewModel { Id = HarmonyPluginIds.ViewPatchesCommandId, Label = "View Harmony Patches", Enabled = true },
+                Action = new MethodInspectorActionViewModel { Id = HarmonyPluginIds.ViewPatchesCommandId, Label = "View Harmony Patches", Enabled = canViewPatches },
                 Hint = "Open the Harmony tool window for this target."
             });
             elements.Add(new MethodInspectorActionElementViewModel
@@ -310,17 +316,17 @@ namespace Cortex.Plugin.Harmony
             });
             elements.Add(new MethodInspectorActionElementViewModel
             {
-                Action = new MethodInspectorActionViewModel { Id = HarmonyPluginIds.GeneratePrefixCommandId, Label = "Generate Prefix", Enabled = true },
+                Action = new MethodInspectorActionViewModel { Id = HarmonyPluginIds.GeneratePrefixCommandId, Label = "Generate Prefix", Enabled = canGeneratePrefix },
                 Hint = "Prepare a Prefix patch workflow."
             });
             elements.Add(new MethodInspectorActionElementViewModel
             {
-                Action = new MethodInspectorActionViewModel { Id = HarmonyPluginIds.GeneratePostfixCommandId, Label = "Generate Postfix", Enabled = true },
+                Action = new MethodInspectorActionViewModel { Id = HarmonyPluginIds.GeneratePostfixCommandId, Label = "Generate Postfix", Enabled = canGeneratePostfix },
                 Hint = "Prepare a Postfix patch workflow."
             });
             elements.Add(new MethodInspectorActionElementViewModel
             {
-                Action = new MethodInspectorActionViewModel { Id = HarmonyPluginIds.CopySummaryCommandId, Label = "Copy Summary", Enabled = true },
+                Action = new MethodInspectorActionViewModel { Id = HarmonyPluginIds.CopySummaryCommandId, Label = "Copy Summary", Enabled = canCopySummary },
                 Hint = "Copy the current Harmony summary."
             });
 

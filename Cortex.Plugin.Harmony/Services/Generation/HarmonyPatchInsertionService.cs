@@ -143,16 +143,21 @@ namespace Cortex.Plugin.Harmony.Services.Generation
             var currentText = ReadCurrentText(runtime, destinationPath);
             var insertionSelection = ResolveInsertionSelection(currentText, request);
             var insertionOffset = insertionSelection.Offset;
-            var snippetText = PrepareSnippetText(currentText, insertionOffset, snippetPreview != null ? snippetPreview.SnippetText : string.Empty, out insertionOffset);
+            var placeholderOffset = insertionOffset;
+            var snippetText = PrepareSnippetText(
+                currentText,
+                insertionOffset,
+                snippetPreview != null ? snippetPreview.SnippetText : string.Empty,
+                out placeholderOffset);
             var updatedText = (currentText ?? string.Empty).Insert(insertionOffset, snippetText);
-            var insertionLine = CalculateLineNumber(updatedText, insertionOffset + CountLeadingNewLineCharacters(snippetText));
+            var insertionLine = CalculateLineNumber(updatedText, placeholderOffset);
 
             preview.SnippetText = snippetText;
             preview.PreviewText = updatedText;
             preview.InsertionOffset = insertionOffset;
             preview.InsertionLine = insertionLine;
             preview.InsertionContextLabel = insertionSelection.ContextLabel ?? string.Empty;
-            preview.Placeholders = OffsetPlaceholders(snippetPreview != null ? snippetPreview.Placeholders : null, insertionOffset);
+            preview.Placeholders = OffsetPlaceholders(snippetPreview != null ? snippetPreview.Placeholders : null, placeholderOffset);
             preview.StatusMessage = "Preview ready for " + Path.GetFileName(destinationPath) +
                 (!string.IsNullOrEmpty(preview.InsertionContextLabel) ? " at " + preview.InsertionContextLabel + "." : ".");
             preview.CanApply = true;
@@ -554,27 +559,31 @@ namespace Cortex.Plugin.Harmony.Services.Generation
             };
         }
 
-        private static string PrepareSnippetText(string currentText, int insertionOffset, string snippetText, out int adjustedOffset)
+        private static string PrepareSnippetText(string currentText, int insertionOffset, string snippetText, out int placeholderOffset)
         {
-            adjustedOffset = insertionOffset;
+            placeholderOffset = insertionOffset;
             var snippet = snippetText ?? string.Empty;
             var safeText = currentText ?? string.Empty;
-            if (safeText.Length > 0 && adjustedOffset > 0)
+            if (safeText.Length > 0 && insertionOffset > 0)
             {
-                var previous = safeText[adjustedOffset - 1];
+                var previous = safeText[insertionOffset - 1];
                 if (previous != '\n' && previous != '\r')
                 {
-                    snippet = Environment.NewLine + Environment.NewLine + snippet;
+                    var prefix = Environment.NewLine + Environment.NewLine;
+                    snippet = prefix + snippet;
+                    placeholderOffset += prefix.Length;
                 }
                 else if (!snippet.StartsWith(Environment.NewLine, StringComparison.Ordinal) && !snippet.StartsWith("\n", StringComparison.Ordinal))
                 {
-                    snippet = Environment.NewLine + snippet;
+                    var prefix = Environment.NewLine;
+                    snippet = prefix + snippet;
+                    placeholderOffset += prefix.Length;
                 }
             }
 
-            if (safeText.Length > adjustedOffset)
+            if (safeText.Length > insertionOffset)
             {
-                var next = safeText[adjustedOffset];
+                var next = safeText[insertionOffset];
                 if (next != '\n' && next != '\r' && !snippet.EndsWith(Environment.NewLine, StringComparison.Ordinal))
                 {
                     snippet += Environment.NewLine + Environment.NewLine;
@@ -601,22 +610,6 @@ namespace Cortex.Plugin.Harmony.Services.Generation
             }
 
             return line;
-        }
-
-        private static int CountLeadingNewLineCharacters(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-            {
-                return 0;
-            }
-
-            var index = 0;
-            while (index < text.Length && (text[index] == '\r' || text[index] == '\n'))
-            {
-                index++;
-            }
-
-            return index;
         }
 
         private static GeneratedTemplatePlaceholder[] OffsetPlaceholders(GeneratedTemplatePlaceholder[] placeholders, int insertionOffset)
