@@ -90,9 +90,7 @@ namespace Cortex.Services.Inspector.Identity
             target.QualifiedSymbolDisplay = stored.QualifiedSymbolDisplay ?? target.QualifiedSymbolDisplay ?? string.Empty;
             target.SymbolKind = stored.SymbolKind ?? target.SymbolKind ?? string.Empty;
             target.MetadataName = stored.MetadataName ?? target.MetadataName ?? string.Empty;
-            target.ContainingTypeName = !string.IsNullOrEmpty(stored.ContainingTypeName)
-                ? GetSimpleTypeName(stored.ContainingTypeName)
-                : target.ContainingTypeName ?? string.Empty;
+            target.ContainingTypeName = stored.ContainingTypeName ?? target.ContainingTypeName ?? string.Empty;
             target.ContainingAssemblyName = stored.ContainingAssemblyName ?? target.ContainingAssemblyName ?? string.Empty;
             target.DocumentationCommentId = stored.DocumentationCommentId ?? target.DocumentationCommentId ?? string.Empty;
             target.DefinitionDocumentPath = stored.DefinitionDocumentPath ?? target.DefinitionDocumentPath ?? string.Empty;
@@ -566,19 +564,6 @@ namespace Cortex.Services.Inspector.Identity
             return string.IsNullOrEmpty(text)
                 ? string.Empty
                 : Regex.Replace(text, @"\s+", " ").Trim();
-        }
-
-        private static string GetSimpleTypeName(string typeName)
-        {
-            if (string.IsNullOrEmpty(typeName))
-            {
-                return string.Empty;
-            }
-
-            var lastDot = typeName.LastIndexOf('.');
-            return lastDot >= 0 && lastDot + 1 < typeName.Length
-                ? typeName.Substring(lastDot + 1)
-                : typeName;
         }
 
         private sealed class LineInfo

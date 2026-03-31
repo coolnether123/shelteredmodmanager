@@ -59,8 +59,108 @@ namespace Cortex.Tests.Harmony
                 Assert.Contains(contributionRegistry.GetEditorContextActions(), contribution => string.Equals(contribution.CommandId, HarmonyPluginIds.GeneratePrefixCommandId, StringComparison.Ordinal));
                 Assert.Contains(contributionRegistry.GetExplorerFilters(), contribution => string.Equals(contribution.FilterId, HarmonyPluginIds.ExplorerFilterId, StringComparison.Ordinal));
                 Assert.Contains(extensionRegistry.GetMethodInspectorSections(), contribution => string.Equals(contribution.ContributionId, HarmonyPluginIds.InspectorSectionId, StringComparison.Ordinal));
+                Assert.Contains(extensionRegistry.GetMethodRelationshipAugmentations(), contribution => string.Equals(contribution.ContributionId, "cortex.harmony.relationship-augmentations", StringComparison.Ordinal));
                 Assert.Contains(extensionRegistry.GetEditorAdornments(), contribution => string.Equals(contribution.ContributionId, HarmonyPluginIds.EditorAdornmentId, StringComparison.Ordinal));
                 Assert.Contains(extensionRegistry.GetEditorWorkflows(), contribution => string.Equals(contribution.ContributionId, HarmonyPluginIds.EditorWorkflowId, StringComparison.Ordinal));
+            });
+        }
+
+        [Fact]
+        public void RelationshipAugmentation_ProducesUsedByEntriesForHarmonyPatchTargets()
+        {
+            UnityManagedAssemblyResolver.Run(delegate
+            {
+                EnsureHarmonyAssemblyLoaded();
+                var state = new CortexShellState();
+                var runtimeAccess = new TestWorkbenchRuntimeAccess();
+                var moduleRuntime = CreateModuleRuntime(state, new TestEditorContextService(null));
+                runtimeAccess.Register(moduleRuntime);
+
+                var sourcePath = Path.Combine(Path.GetTempPath(), "cortex-harmony-relationships-" + Guid.NewGuid().ToString("N") + ".cs");
+                try
+                {
+                    File.WriteAllText(sourcePath, BuildHarmonySourcePatchDocument());
+                    var target = CreateSourcePatchTarget(sourcePath, "ctx.relationships", "surface.relationships");
+                    var inspectedMethod = typeof(DateTime).GetMethod("ToBinary", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null);
+                    var summary = new HarmonyMethodPatchSummary
+                    {
+                        AssemblyPath = inspectedMethod.DeclaringType.Assembly.Location,
+                        DeclaringType = inspectedMethod.DeclaringType.FullName,
+                        MethodName = inspectedMethod.Name,
+                        Signature = "Int64 ToBinary()",
+                        IsPatched = true,
+                        Counts = new HarmonyPatchCounts
+                        {
+                            PrefixCount = 1,
+                            TotalCount = 1
+                        },
+                        Entries = new[]
+                        {
+                            new HarmonyPatchEntry
+                            {
+                                PatchKind = HarmonyPatchKind.Prefix,
+                                OwnerId = "coolnether123.sheltereddisplayfixes",
+                                OwnerDisplayName = "Sheltered Display Fixes",
+                                PatchMethodDeclaringType = "Demo.PatchHost",
+                                PatchMethodName = "Prefix",
+                                NavigationTarget = new HarmonyPatchNavigationTarget
+                                {
+                                    AssemblyPath = @"D:\Mods\ShelteredDisplayFixes.dll",
+                                    MetadataToken = 77,
+                                    DeclaringTypeName = "Demo.PatchHost",
+                                    MethodName = "Prefix",
+                                    DisplayName = "Demo.PatchHost.Prefix()"
+                                }
+                            }
+                        }
+                    };
+
+                    var stateStore = new HarmonyModuleStateStore();
+                    var workflow = stateStore.GetWorkflow(moduleRuntime);
+                    workflow.SnapshotUtc = DateTime.UtcNow;
+                    workflow.RefreshRequested = false;
+                    workflow.SummaryCache[summary.AssemblyPath + "|0x" + inspectedMethod.MetadataToken.ToString("X8")] = summary;
+
+                    var controller = new HarmonyWorkflowController(stateStore);
+                    var inspectorContext = new WorkbenchMethodInspectorContext(
+                        null,
+                        null,
+                        new EditorCommandInvocation { Target = target },
+                        new WorkbenchMethodRelationshipsSnapshot(),
+                        runtimeAccess);
+
+                    var relationships = controller.BuildIncomingRelationshipAugmentations(inspectorContext);
+
+                    var relationship = Assert.Single(relationships);
+                    Assert.Equal("Demo.PatchHost.Prefix", relationship.Title);
+                    Assert.Equal("Sheltered Display Fixes", relationship.Detail);
+                    Assert.Equal("Harmony Prefix", relationship.Relationship);
+                    Assert.Equal("Sheltered Display Fixes", relationship.ContainingAssemblyName);
+
+                    var actions = controller.BuildRelationshipActions(new WorkbenchMethodRelationshipActionContext(
+                        relationship,
+                        null,
+                        null,
+                        new EditorCommandInvocation { Target = target },
+                        new WorkbenchMethodRelationshipsSnapshot(),
+                        runtimeAccess));
+
+                    var action = Assert.Single(actions);
+                    Assert.True(action.Enabled);
+                    Assert.Equal("Open", action.Label);
+
+                    HarmonyPatchNavigationTarget decoded;
+                    Assert.True(HarmonyMethodInspectorNavigationActionCodec.TryParse(action.Id, out decoded));
+                    Assert.Equal(77, decoded.MetadataToken);
+                    Assert.Equal("Prefix", decoded.MethodName);
+                }
+                finally
+                {
+                    if (File.Exists(sourcePath))
+                    {
+                        File.Delete(sourcePath);
+                    }
+                }
             });
         }
 

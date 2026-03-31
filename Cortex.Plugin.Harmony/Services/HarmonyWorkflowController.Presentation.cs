@@ -10,6 +10,8 @@ namespace Cortex.Plugin.Harmony
 {
     internal sealed partial class HarmonyWorkflowController
     {
+        private const string HarmonyRelationshipNavigationPrefix = "harmony.relationship:";
+
         public WorkbenchEditorAdornment[] BuildAdornments(WorkbenchEditorAdornmentContext context)
         {
             if (!IsRuntimeAvailable)
@@ -61,6 +63,58 @@ namespace Cortex.Plugin.Harmony
                     SortOrder = 100
                 }
             };
+        }
+
+        public WorkbenchMethodRelationship[] BuildIncomingRelationshipAugmentations(WorkbenchMethodInspectorContext context)
+        {
+            if (!IsRuntimeAvailable)
+            {
+                return new WorkbenchMethodRelationship[0];
+            }
+
+            var runtime = context != null ? HarmonyModuleRuntimeLocator.Get(context.Runtime) : null;
+            if (runtime == null || context == null || context.Target == null)
+            {
+                return new WorkbenchMethodRelationship[0];
+            }
+
+            string statusMessage;
+            var summary = TryResolveSummary(runtime, context.Target, false, out statusMessage);
+            if (summary == null || !summary.IsPatched || summary.Entries == null || summary.Entries.Length == 0)
+            {
+                return new WorkbenchMethodRelationship[0];
+            }
+
+            var relationships = new List<WorkbenchMethodRelationship>();
+            for (var i = 0; i < summary.Entries.Length; i++)
+            {
+                var entry = summary.Entries[i];
+                if (entry == null || entry.NavigationTarget == null)
+                {
+                    continue;
+                }
+
+                relationships.Add(new WorkbenchMethodRelationship
+                {
+                    Title = BuildPatchRelationshipTitle(entry),
+                    Detail = !string.IsNullOrEmpty(entry.OwnerDisplayName) ? entry.OwnerDisplayName : entry.OwnerId ?? string.Empty,
+                    SymbolKind = "Method",
+                    MetadataName = entry.PatchMethodName ?? string.Empty,
+                    ContainingTypeName = entry.PatchMethodDeclaringType ?? string.Empty,
+                    ContainingAssemblyName = !string.IsNullOrEmpty(entry.OwnerDisplayName) ? entry.OwnerDisplayName : entry.OwnerId ?? string.Empty,
+                    DocumentationCommentId = CreateRelationshipNavigationToken(entry.NavigationTarget),
+                    DefinitionDocumentPath = entry.NavigationTarget.DocumentPath ?? string.Empty,
+                    Relationship = "Harmony " + _displayService.GetPatchKindLabel(entry.PatchKind),
+                    CallCount = 1
+                });
+            }
+
+            return relationships.ToArray();
+        }
+
+        public WorkbenchMethodRelationship[] BuildOutgoingRelationshipAugmentations(WorkbenchMethodInspectorContext context)
+        {
+            return new WorkbenchMethodRelationship[0];
         }
 
         public MethodInspectorSectionViewModel BuildInspectorSection(WorkbenchMethodInspectorContext context)
@@ -128,6 +182,15 @@ namespace Cortex.Plugin.Harmony
             if (runtime == null || relationship == null)
             {
                 return new MethodInspectorActionViewModel[0];
+            }
+
+            HarmonyPatchNavigationTarget patchTarget;
+            if (TryParseRelationshipNavigationTarget(relationship, out patchTarget))
+            {
+                return _navigationActionFactory.CreatePatchNavigationActions(
+                    patchTarget,
+                    "Open",
+                    "Open this Harmony patch method.");
             }
 
             var target = ToCommandTarget(relationship);
@@ -372,6 +435,45 @@ namespace Cortex.Plugin.Harmony
                 Value = value ?? string.Empty,
                 Monospace = monospace
             };
+        }
+
+        private static string BuildPatchRelationshipTitle(HarmonyPatchEntry entry)
+        {
+            if (entry == null)
+            {
+                return string.Empty;
+            }
+
+            var typeName = entry.PatchMethodDeclaringType ?? string.Empty;
+            var methodName = entry.PatchMethodName ?? string.Empty;
+            if (string.IsNullOrEmpty(typeName))
+            {
+                return methodName;
+            }
+
+            return typeName + "." + methodName;
+        }
+
+        private static string CreateRelationshipNavigationToken(HarmonyPatchNavigationTarget target)
+        {
+            var encoded = HarmonyMethodInspectorNavigationActionCodec.Create(target);
+            return string.IsNullOrEmpty(encoded)
+                ? string.Empty
+                : HarmonyRelationshipNavigationPrefix + encoded;
+        }
+
+        private static bool TryParseRelationshipNavigationTarget(WorkbenchMethodRelationship relationship, out HarmonyPatchNavigationTarget target)
+        {
+            target = null;
+            var token = relationship != null ? relationship.DocumentationCommentId ?? string.Empty : string.Empty;
+            if (string.IsNullOrEmpty(token) || !token.StartsWith(HarmonyRelationshipNavigationPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            return HarmonyMethodInspectorNavigationActionCodec.TryParse(
+                token.Substring(HarmonyRelationshipNavigationPrefix.Length),
+                out target);
         }
 
         private static EditorCommandTarget ToCommandTarget(WorkbenchMethodRelationship relationship)

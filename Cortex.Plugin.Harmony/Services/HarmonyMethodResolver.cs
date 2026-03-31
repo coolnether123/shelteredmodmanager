@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using Cortex.Core.Diagnostics;
 using Cortex.Core.Models;
 using Cortex.Plugins.Abstractions;
 using Cortex.Plugin.Harmony.Services.Resolution;
@@ -10,6 +11,7 @@ namespace Cortex.Plugin.Harmony.Services
 {
     internal sealed class HarmonyMethodResolver
     {
+        private static readonly CortexLogger Log = CortexLog.ForSource("Cortex.Harmony");
         private readonly HarmonySourceSymbolService _sourceSymbolService;
         private readonly IHarmonyRuntimeMethodLookupService _runtimeMethodLookupService;
 
@@ -118,13 +120,6 @@ namespace Cortex.Plugin.Harmony.Services
                 return false;
             }
 
-            var assembly = ResolveAssembly(runtime, target.ContainingAssemblyName, target.DocumentPath);
-            if (assembly == null)
-            {
-                reason = "The containing assembly could not be located for the selected symbol.";
-                return false;
-            }
-
             string typeName;
             if (!TryResolveTypeName(target, out typeName))
             {
@@ -132,21 +127,42 @@ namespace Cortex.Plugin.Harmony.Services
                 return false;
             }
 
-            Type declaringType;
-            if (!TryResolveDeclaringType(assembly, typeName, out declaringType) || declaringType == null)
+            var candidates = ResolveAssemblyCandidates(runtime, target);
+            if (candidates.Count == 0)
             {
-                reason = "The declaring type could not be resolved from the target assembly.";
+                reason = "The containing assembly could not be located for the selected symbol.";
+                WriteResolutionTrace("Type resolution failed: no assembly candidates. " + BuildTargetDiagnosticText(target, typeName, string.Empty));
                 return false;
             }
 
-            resolvedTarget = new HarmonyResolvedTypeTarget
+            for (var i = 0; i < candidates.Count; i++)
             {
-                AssemblyPath = SafeGetLocation(assembly),
-                DeclaringType = declaringType,
-                Project = FindProject(runtime, target.DocumentPath, SafeGetLocation(assembly)),
-                DisplayName = declaringType.FullName ?? declaringType.Name ?? string.Empty
-            };
-            return true;
+                var candidate = candidates[i];
+                Type declaringType;
+                if (!TryResolveDeclaringType(candidate.Assembly, typeName, out declaringType) || declaringType == null)
+                {
+                    WriteResolutionTrace("Type resolution candidate miss. CandidateAssembly='" + (candidate.SimpleName ?? string.Empty) +
+                        "', CandidateSource='" + (candidate.Source ?? string.Empty) +
+                        "', TypeHint='" + typeName + "'.");
+                    continue;
+                }
+
+                resolvedTarget = new HarmonyResolvedTypeTarget
+                {
+                    AssemblyPath = candidate.AssemblyPath ?? string.Empty,
+                    DeclaringType = declaringType,
+                    Project = FindProject(runtime, target.DocumentPath, candidate.AssemblyPath),
+                    DisplayName = declaringType.FullName ?? declaringType.Name ?? string.Empty
+                };
+                WriteResolutionTrace("Type resolution matched. CandidateAssembly='" + (candidate.SimpleName ?? string.Empty) +
+                    "', CandidateSource='" + (candidate.Source ?? string.Empty) +
+                    "', ResolvedType='" + resolvedTarget.DisplayName + "'.");
+                return true;
+            }
+
+            reason = "The declaring type could not be resolved from the target assembly.";
+            WriteResolutionTrace("Type resolution failed. " + BuildTargetDiagnosticText(target, typeName, string.Empty));
+            return false;
         }
 
         public bool TryResolveSourcePatchContext(IWorkbenchModuleRuntime runtime, EditorCommandTarget target, out HarmonySourcePatchContext context, out string reason)
@@ -262,15 +278,8 @@ namespace Cortex.Plugin.Harmony.Services
         {
             resolvedTarget = null;
             reason = string.Empty;
-            if (target == null || string.IsNullOrEmpty(target.ContainingAssemblyName))
+            if (target == null)
             {
-                return false;
-            }
-
-            var assembly = ResolveAssembly(runtime, target.ContainingAssemblyName, target.DocumentPath);
-            if (assembly == null)
-            {
-                reason = "The containing assembly could not be located for the selected symbol.";
                 return false;
             }
 
@@ -281,10 +290,11 @@ namespace Cortex.Plugin.Harmony.Services
                 return false;
             }
 
-            Type declaringType;
-            if (!TryResolveDeclaringType(assembly, typeName, out declaringType) || declaringType == null)
+            var candidates = ResolveAssemblyCandidates(runtime, target);
+            if (candidates.Count == 0)
             {
-                reason = "The declaring type could not be resolved from the target assembly.";
+                reason = "The containing assembly could not be located for the selected symbol.";
+                WriteResolutionTrace("Metadata resolution failed: no assembly candidates. " + BuildTargetDiagnosticText(target, typeName, string.Empty));
                 return false;
             }
 
@@ -295,25 +305,50 @@ namespace Cortex.Plugin.Harmony.Services
             var methodName = !string.IsNullOrEmpty(hint.Name)
                 ? hint.Name
                 : (!string.IsNullOrEmpty(target.SymbolText) ? target.SymbolText : target.MetadataName);
-            var method = _runtimeMethodLookupService.ResolveMethod(declaringType, methodName, hint, out reason);
-            if (method == null)
+
+            for (var i = 0; i < candidates.Count; i++)
             {
-                if (string.IsNullOrEmpty(reason))
+                var candidate = candidates[i];
+                Type declaringType;
+                if (!TryResolveDeclaringType(candidate.Assembly, typeName, out declaringType) || declaringType == null)
                 {
-                    reason = "Metadata navigation could not resolve the selected method.";
+                    WriteResolutionTrace("Metadata resolution type miss. CandidateAssembly='" + (candidate.SimpleName ?? string.Empty) +
+                        "', CandidateSource='" + (candidate.Source ?? string.Empty) +
+                        "', TypeHint='" + typeName + "'.");
+                    continue;
                 }
 
-                return false;
+                var method = _runtimeMethodLookupService.ResolveMethod(declaringType, methodName, hint, out reason);
+                if (method == null)
+                {
+                    WriteResolutionTrace("Metadata resolution method miss. CandidateAssembly='" + (candidate.SimpleName ?? string.Empty) +
+                        "', CandidateSource='" + (candidate.Source ?? string.Empty) +
+                        "', TypeHint='" + typeName +
+                        "', MethodHint='" + methodName +
+                        "', Reason='" + (reason ?? string.Empty) + "'.");
+                    continue;
+                }
+
+                var request = CreateInspectionRequest(
+                    method,
+                    candidate.AssemblyPath ?? string.Empty,
+                    target.DefinitionDocumentPath ?? target.DocumentPath ?? string.Empty,
+                    string.Empty,
+                    target.DocumentationCommentId);
+                resolvedTarget = CreateResolvedTarget(runtime, request, method);
+                WriteResolutionTrace("Metadata resolution matched. CandidateAssembly='" + (candidate.SimpleName ?? string.Empty) +
+                    "', CandidateSource='" + (candidate.Source ?? string.Empty) +
+                    "', Resolved='" + (request.DisplayName ?? string.Empty) + "'.");
+                return true;
             }
 
-            var request = CreateInspectionRequest(
-                method,
-                SafeGetLocation(assembly),
-                target.DefinitionDocumentPath ?? target.DocumentPath ?? string.Empty,
-                string.Empty,
-                target.DocumentationCommentId);
-            resolvedTarget = CreateResolvedTarget(runtime, request, method);
-            return true;
+            if (string.IsNullOrEmpty(reason))
+            {
+                reason = "Metadata navigation could not resolve the selected method.";
+            }
+
+            WriteResolutionTrace("Metadata resolution failed. " + BuildTargetDiagnosticText(target, typeName, methodName));
+            return false;
         }
 
         private bool TryResolveFromProjectOutput(IWorkbenchModuleRuntime runtime, EditorCommandTarget target, out HarmonyResolvedMethodTarget resolvedTarget, out string reason)
@@ -445,6 +480,115 @@ namespace Cortex.Plugin.Harmony.Services
             }
 
             return LoadAssembly(string.Empty, assemblyName, runtime);
+        }
+
+        private List<AssemblyResolutionCandidate> ResolveAssemblyCandidates(IWorkbenchModuleRuntime runtime, EditorCommandTarget target)
+        {
+            var results = new List<AssemblyResolutionCandidate>();
+            if (target == null)
+            {
+                return results;
+            }
+
+            var project = FindProject(runtime, target.DocumentPath, string.Empty);
+            if (project != null && !string.IsNullOrEmpty(project.OutputAssemblyPath))
+            {
+                var projectAssembly = LoadAssembly(project.OutputAssemblyPath, string.Empty, runtime);
+                AddAssemblyCandidate(results, projectAssembly, "project-output");
+            }
+
+            AddAssemblyCandidate(results, LoadAssembly(string.Empty, target.ContainingAssemblyName, runtime), "target-assembly");
+
+            var inferredAssemblyName = InferDecompilerAssemblyName(target.DefinitionDocumentPath);
+            if (string.IsNullOrEmpty(inferredAssemblyName))
+            {
+                inferredAssemblyName = InferDecompilerAssemblyName(target.DocumentPath);
+            }
+
+            if (!string.IsNullOrEmpty(inferredAssemblyName) &&
+                !string.Equals(inferredAssemblyName, target.ContainingAssemblyName ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+            {
+                AddAssemblyCandidate(results, LoadAssembly(string.Empty, inferredAssemblyName, runtime), "decompiler-cache");
+            }
+
+            return results;
+        }
+
+        private static void AddAssemblyCandidate(List<AssemblyResolutionCandidate> candidates, Assembly assembly, string source)
+        {
+            if (candidates == null || assembly == null)
+            {
+                return;
+            }
+
+            var assemblyPath = SafeGetLocation(assembly);
+            var simpleName = string.Empty;
+            try
+            {
+                var name = assembly.GetName();
+                simpleName = name != null ? name.Name ?? string.Empty : string.Empty;
+            }
+            catch
+            {
+            }
+
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                if (PathsEqual(candidates[i].AssemblyPath, assemblyPath) ||
+                    (!string.IsNullOrEmpty(simpleName) &&
+                     string.Equals(candidates[i].SimpleName ?? string.Empty, simpleName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return;
+                }
+            }
+
+            candidates.Add(new AssemblyResolutionCandidate
+            {
+                Assembly = assembly,
+                AssemblyPath = assemblyPath,
+                SimpleName = simpleName,
+                Source = source ?? string.Empty
+            });
+        }
+
+        private static string InferDecompilerAssemblyName(string documentPath)
+        {
+            if (string.IsNullOrEmpty(documentPath))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                var fullPath = Path.GetFullPath(documentPath);
+                var cacheSegment = Path.DirectorySeparatorChar + "cortex_cache" + Path.DirectorySeparatorChar;
+                var index = fullPath.IndexOf(cacheSegment, StringComparison.OrdinalIgnoreCase);
+                if (index < 0)
+                {
+                    cacheSegment = Path.AltDirectorySeparatorChar + "cortex_cache" + Path.AltDirectorySeparatorChar;
+                    index = fullPath.IndexOf(cacheSegment, StringComparison.OrdinalIgnoreCase);
+                }
+
+                if (index < 0)
+                {
+                    return string.Empty;
+                }
+
+                var remainder = fullPath.Substring(index + cacheSegment.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.IsNullOrEmpty(remainder))
+                {
+                    return string.Empty;
+                }
+
+                var separatorIndex = remainder.IndexOfAny(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar });
+                return separatorIndex > 0
+                    ? remainder.Substring(0, separatorIndex)
+                    : string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private static Assembly LoadAssembly(string assemblyPath, string assemblyName, IWorkbenchModuleRuntime runtime)
@@ -793,12 +937,48 @@ namespace Cortex.Plugin.Harmony.Services
             }
         }
 
+        private static void WriteResolutionTrace(string message)
+        {
+            if (!string.IsNullOrEmpty(message))
+            {
+                Log.WriteInfo(message);
+            }
+        }
+
+        private static string BuildTargetDiagnosticText(EditorCommandTarget target, string typeName, string methodName)
+        {
+            var inferredAssembly = InferDecompilerAssemblyName(target != null ? target.DefinitionDocumentPath : string.Empty);
+            if (string.IsNullOrEmpty(inferredAssembly))
+            {
+                inferredAssembly = InferDecompilerAssemblyName(target != null ? target.DocumentPath : string.Empty);
+            }
+
+            return "Document='" + (target != null ? target.DocumentPath ?? string.Empty : string.Empty) +
+                "', DefinitionDocument='" + (target != null ? target.DefinitionDocumentPath ?? string.Empty : string.Empty) +
+                "', AssemblyHint='" + (target != null ? target.ContainingAssemblyName ?? string.Empty : string.Empty) +
+                "', DecompiledAssemblyHint='" + inferredAssembly +
+                "', TypeHint='" + (typeName ?? string.Empty) +
+                "', MethodHint='" + (methodName ?? string.Empty) +
+                "', SymbolText='" + (target != null ? target.SymbolText ?? string.Empty : string.Empty) +
+                "', MetadataName='" + (target != null ? target.MetadataName ?? string.Empty : string.Empty) +
+                "', DocumentationId='" + (target != null ? target.DocumentationCommentId ?? string.Empty : string.Empty) +
+                "', QualifiedDisplay='" + (target != null ? target.QualifiedSymbolDisplay ?? string.Empty : string.Empty) + "'.";
+        }
+
         private sealed class ParsedDocumentationCommentId
         {
             public string MethodName = string.Empty;
             public string[] ParameterTypeNames = new string[0];
             public bool IsConstructor;
             public bool IsStaticConstructor;
+        }
+
+        private sealed class AssemblyResolutionCandidate
+        {
+            public Assembly Assembly;
+            public string AssemblyPath = string.Empty;
+            public string SimpleName = string.Empty;
+            public string Source = string.Empty;
         }
     }
 }
