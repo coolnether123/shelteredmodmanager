@@ -74,6 +74,14 @@ namespace Cortex.Services.Inspector
             }
 
             var relationshipsContext = _relationshipsContextService.BuildContext(inspector, target);
+            var augmentationContext = new WorkbenchMethodInspectorContext(
+                session,
+                editorContext,
+                invocation,
+                BuildRelationshipsSnapshot(relationshipsContext),
+                runtimeAccess);
+            ApplyRelationshipAugmentations(relationshipsContext, augmentationContext, extensionRegistry);
+
             var relationshipsSnapshot = BuildRelationshipsSnapshot(relationshipsContext);
             var contributionContext = new WorkbenchMethodInspectorContext(
                 session,
@@ -108,6 +116,53 @@ namespace Cortex.Services.Inspector
                 Target = target,
                 ViewModel = viewModel
             };
+        }
+
+        private static void ApplyRelationshipAugmentations(
+            EditorMethodRelationshipsContext relationshipsContext,
+            WorkbenchMethodInspectorContext contributionContext,
+            IWorkbenchExtensionRegistry extensionRegistry)
+        {
+            if (relationshipsContext == null)
+            {
+                return;
+            }
+
+            var contributions = extensionRegistry != null
+                ? extensionRegistry.GetMethodRelationshipAugmentations()
+                : new List<WorkbenchMethodRelationshipAugmentationContribution>();
+            if (contributions == null || contributions.Count == 0)
+            {
+                return;
+            }
+
+            var incoming = new List<EditorMethodRelationshipItem>(relationshipsContext.IncomingCalls ?? new EditorMethodRelationshipItem[0]);
+            var outgoing = new List<EditorMethodRelationshipItem>(relationshipsContext.OutgoingCalls ?? new EditorMethodRelationshipItem[0]);
+
+            for (var i = 0; i < contributions.Count; i++)
+            {
+                var contribution = contributions[i];
+                if (contribution == null)
+                {
+                    continue;
+                }
+
+                AppendRelationshipAugmentations(
+                    incoming,
+                    contribution.BuildIncomingRelationships != null
+                        ? contribution.BuildIncomingRelationships(contributionContext)
+                        : null);
+                AppendRelationshipAugmentations(
+                    outgoing,
+                    contribution.BuildOutgoingRelationships != null
+                        ? contribution.BuildOutgoingRelationships(contributionContext)
+                        : null);
+            }
+
+            relationshipsContext.IncomingCalls = incoming.ToArray();
+            relationshipsContext.OutgoingCalls = outgoing.ToArray();
+            relationshipsContext.IncomingCallCount = relationshipsContext.IncomingCalls.Length;
+            relationshipsContext.OutgoingCallCount = relationshipsContext.OutgoingCalls.Length;
         }
 
         private static void ApplyRelationshipActions(
@@ -201,6 +256,40 @@ namespace Cortex.Services.Inspector
             }
 
             return new MethodInspectorActionViewModel[0];
+        }
+
+        private static void AppendRelationshipAugmentations(
+            List<EditorMethodRelationshipItem> items,
+            WorkbenchMethodRelationship[] augmentations)
+        {
+            if (items == null || augmentations == null || augmentations.Length == 0)
+            {
+                return;
+            }
+
+            for (var i = 0; i < augmentations.Length; i++)
+            {
+                var augmentation = augmentations[i];
+                if (augmentation == null)
+                {
+                    continue;
+                }
+
+                EditorMethodRelationshipSet.AddDistinct(items, new EditorMethodRelationshipItem
+                {
+                    Title = augmentation.Title ?? string.Empty,
+                    Detail = augmentation.Detail ?? string.Empty,
+                    SymbolKind = augmentation.SymbolKind ?? string.Empty,
+                    MetadataName = augmentation.MetadataName ?? string.Empty,
+                    ContainingTypeName = augmentation.ContainingTypeName ?? string.Empty,
+                    ContainingAssemblyName = augmentation.ContainingAssemblyName ?? string.Empty,
+                    DocumentationCommentId = augmentation.DocumentationCommentId ?? string.Empty,
+                    DefinitionDocumentPath = augmentation.DefinitionDocumentPath ?? string.Empty,
+                    DefinitionRange = augmentation.DefinitionRange,
+                    Relationship = augmentation.Relationship ?? string.Empty,
+                    CallCount = augmentation.CallCount > 0 ? augmentation.CallCount : 1
+                });
+            }
         }
 
         private static List<OrderedSectionEntry> BuildContributedSections(

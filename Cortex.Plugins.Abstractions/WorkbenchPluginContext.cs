@@ -567,6 +567,19 @@ namespace Cortex.Plugins.Abstractions
         }
 
         /// <summary>
+        /// Registers contributed method-relationship augmentations for the inspector.
+        /// </summary>
+        public void RegisterMethodRelationshipAugmentation(WorkbenchMethodRelationshipAugmentationContribution contribution)
+        {
+            if (ExtensionRegistry == null || contribution == null)
+            {
+                return;
+            }
+
+            ExtensionRegistry.RegisterMethodRelationshipAugmentation(contribution);
+        }
+
+        /// <summary>
         /// Registers contributed method-relationship actions for the inspector.
         /// </summary>
         public void RegisterMethodRelationshipAction(WorkbenchMethodRelationshipActionContribution contribution)

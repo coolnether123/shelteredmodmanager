@@ -43,6 +43,8 @@ namespace Cortex.Plugins.Abstractions
     {
         void RegisterMethodInspectorSection(WorkbenchMethodInspectorSectionContribution contribution);
 
+        void RegisterMethodRelationshipAugmentation(WorkbenchMethodRelationshipAugmentationContribution contribution);
+
         void RegisterMethodRelationshipAction(WorkbenchMethodRelationshipActionContribution contribution);
 
         void RegisterEditorAdornment(WorkbenchEditorAdornmentContribution contribution);
@@ -50,6 +52,8 @@ namespace Cortex.Plugins.Abstractions
         void RegisterEditorWorkflow(WorkbenchEditorWorkflowContribution contribution);
 
         IList<WorkbenchMethodInspectorSectionContribution> GetMethodInspectorSections();
+
+        IList<WorkbenchMethodRelationshipAugmentationContribution> GetMethodRelationshipAugmentations();
 
         IList<WorkbenchMethodRelationshipActionContribution> GetMethodRelationshipActions();
 
@@ -237,6 +241,17 @@ namespace Cortex.Plugins.Abstractions
         public string ContributionId;
         public int SortOrder;
         public Func<WorkbenchMethodRelationshipActionContext, MethodInspectorActionViewModel[]> BuildActions;
+    }
+
+    /// <summary>
+    /// Contributes additional relationship entries for the method inspector.
+    /// </summary>
+    public sealed class WorkbenchMethodRelationshipAugmentationContribution
+    {
+        public string ContributionId;
+        public int SortOrder;
+        public Func<WorkbenchMethodInspectorContext, WorkbenchMethodRelationship[]> BuildIncomingRelationships;
+        public Func<WorkbenchMethodInspectorContext, WorkbenchMethodRelationship[]> BuildOutgoingRelationships;
     }
 
     /// <summary>

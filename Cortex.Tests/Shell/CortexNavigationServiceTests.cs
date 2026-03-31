@@ -335,6 +335,59 @@ namespace Cortex.Tests.Shell
         }
 
         [Fact]
+        public void OpenLanguageSymbolTarget_UsesDecompilerDefinitionPath_WhenAssemblyLookupCannotResolve()
+        {
+            UnityManagedAssemblyResolver.Run(delegate
+            {
+                var tempRoot = Path.Combine(Path.GetTempPath(), "CortexNavigationTests", Guid.NewGuid().ToString("N"));
+                var cacheRoot = Path.Combine(tempRoot, "cortex_cache", "UnknownAssembly");
+                Directory.CreateDirectory(cacheRoot);
+                var decompiledFilePath = Path.Combine(cacheRoot, "RelationshipTarget.cs");
+                File.WriteAllText(decompiledFilePath, BuildDeclaringTypeSource());
+
+                try
+                {
+                    var state = new CortexShellState
+                    {
+                        Settings = new CortexSettings()
+                    };
+                    var documentService = new FileDocumentService();
+                    var sourceReferenceService = new RecordingSourceReferenceService(cacheRoot, BuildDeclaringTypeSource());
+                    var navigationService = new CortexNavigationService(
+                        documentService,
+                        sourceReferenceService,
+                        new TestRuntimeSourceNavigationService());
+
+                    var opened = navigationService.OpenLanguageSymbolTarget(
+                        state,
+                        "NavigationTargetExample",
+                        "Method",
+                        "NavigationTargetExample",
+                        typeof(CortexNavigationServiceTests).FullName,
+                        "Missing.Assembly",
+                        string.Empty,
+                        decompiledFilePath,
+                        new Cortex.LanguageService.Protocol.LanguageServiceRange
+                        {
+                            StartLine = 9
+                        },
+                        "Opened definition.",
+                        "Open failed.");
+
+                    Assert.True(opened);
+                    Assert.Null(sourceReferenceService.LastRequest);
+                    Assert.NotNull(state.Documents.ActiveDocument);
+                    Assert.Equal(decompiledFilePath, state.Documents.ActiveDocument.FilePath);
+                    Assert.Equal(9, state.Documents.ActiveDocument.HighlightedLine);
+                }
+                finally
+                {
+                    Directory.Delete(tempRoot, true);
+                }
+            });
+        }
+
+        [Fact]
         public void DecompileAndOpen_ForTypeEntity_PrefersHookedSourceDocument_OverDecompiler()
         {
             UnityManagedAssemblyResolver.Run(delegate

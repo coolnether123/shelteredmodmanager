@@ -8,6 +8,8 @@ namespace Cortex.Shell
     {
         private readonly Dictionary<string, WorkbenchMethodInspectorSectionContribution> _inspectorSections =
             new Dictionary<string, WorkbenchMethodInspectorSectionContribution>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, WorkbenchMethodRelationshipAugmentationContribution> _relationshipAugmentations =
+            new Dictionary<string, WorkbenchMethodRelationshipAugmentationContribution>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, WorkbenchMethodRelationshipActionContribution> _relationshipActions =
             new Dictionary<string, WorkbenchMethodRelationshipActionContribution>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, WorkbenchEditorAdornmentContribution> _editorAdornments =
@@ -23,6 +25,16 @@ namespace Cortex.Shell
             }
 
             _inspectorSections[contribution.ContributionId] = contribution;
+        }
+
+        public void RegisterMethodRelationshipAugmentation(WorkbenchMethodRelationshipAugmentationContribution contribution)
+        {
+            if (contribution == null || string.IsNullOrEmpty(contribution.ContributionId))
+            {
+                return;
+            }
+
+            _relationshipAugmentations[contribution.ContributionId] = contribution;
         }
 
         public void RegisterMethodRelationshipAction(WorkbenchMethodRelationshipActionContribution contribution)
@@ -59,6 +71,19 @@ namespace Cortex.Shell
         {
             var results = new List<WorkbenchMethodInspectorSectionContribution>(_inspectorSections.Values);
             results.Sort(delegate(WorkbenchMethodInspectorSectionContribution left, WorkbenchMethodInspectorSectionContribution right)
+            {
+                var order = left.SortOrder.CompareTo(right.SortOrder);
+                return order != 0
+                    ? order
+                    : string.Compare(left.ContributionId, right.ContributionId, StringComparison.OrdinalIgnoreCase);
+            });
+            return results;
+        }
+
+        public IList<WorkbenchMethodRelationshipAugmentationContribution> GetMethodRelationshipAugmentations()
+        {
+            var results = new List<WorkbenchMethodRelationshipAugmentationContribution>(_relationshipAugmentations.Values);
+            results.Sort(delegate(WorkbenchMethodRelationshipAugmentationContribution left, WorkbenchMethodRelationshipAugmentationContribution right)
             {
                 var order = left.SortOrder.CompareTo(right.SortOrder);
                 return order != 0

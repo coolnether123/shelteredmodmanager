@@ -108,6 +108,31 @@ namespace Cortex.Services.Navigation.Symbols
                     failureStatusMessage) != null;
             }
 
+            if (!string.IsNullOrEmpty(request.DefinitionDocumentPath) &&
+                File.Exists(request.DefinitionDocumentPath) &&
+                CortexModuleUtil.IsDecompilerDocumentPath(state, request.DefinitionDocumentPath))
+            {
+                if (lineNumber <= 0)
+                {
+                    lineNumber = _lineResolver.ResolveLine(
+                        SourceNavigationLineResolver.ReadAllTextSafe(request.DefinitionDocumentPath),
+                        request.SymbolKind,
+                        request.MetadataName,
+                        request.ContainingTypeName);
+                }
+
+                MMLog.WriteInfo("[Cortex.Navigation] Opening direct decompiler symbol target. Symbol=" + displayName +
+                    ", File=" + request.DefinitionDocumentPath +
+                    ", Line=" + lineNumber +
+                    ", HasRange=" + (request.DefinitionRange != null) + ".");
+                return _documentService.OpenDocument(
+                    state,
+                    request.DefinitionDocumentPath,
+                    lineNumber,
+                    successStatusMessage,
+                    failureStatusMessage) != null;
+            }
+
             MetadataNavigationTarget metadataTarget;
             if (!_metadataNavigationService.TryResolveMetadataTarget(
                 assemblyPath,

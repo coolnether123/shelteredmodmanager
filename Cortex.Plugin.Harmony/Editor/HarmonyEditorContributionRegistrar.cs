@@ -66,6 +66,13 @@ namespace Cortex.Plugin.Harmony
                     return _inspectorProvider.HandleAction(contributionContext);
                 }
             });
+            context.RegisterMethodRelationshipAugmentation(new WorkbenchMethodRelationshipAugmentationContribution
+            {
+                ContributionId = "cortex.harmony.relationship-augmentations",
+                SortOrder = 90,
+                BuildIncomingRelationships = _workflowController.BuildIncomingRelationshipAugmentations,
+                BuildOutgoingRelationships = _workflowController.BuildOutgoingRelationshipAugmentations
+            });
             context.RegisterMethodRelationshipAction(new WorkbenchMethodRelationshipActionContribution
             {
                 ContributionId = "cortex.harmony.relationship-actions",
