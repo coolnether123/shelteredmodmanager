@@ -70,6 +70,7 @@
     <Compile Include="Debugging\DebugValueTakeover.cs" />
     <Compile Include="Harmony\ModManagerKeybindsPatches.cs" />
     <Compile Include="Harmony\PlatformInputKeybindPatches.cs" />
+    <Compile Include="Harmony\SettingsInputModePromptPatches.cs" />
     <Compile Include="Harmony\SettingsKeybindsButtonPatches.cs" />
     <Compile Include="Interactions\ObjectButtonInjector.cs" />
     <Compile Include="Input\ShelteredTouchpadInputRouter.cs" />
@@ -87,6 +88,7 @@
     <Compile Include="Input\UnityTouchDragTracker.cs" />
     <Compile Include="UI\UITakeover.cs" />
     <Compile Include="UI\UIPanelTakeover.cs" />
+    <Compile Include="UI\ShelteredControllerModePromptDialog.cs" />
     <Compile Include="UI\ShelteredKeybindConflictDialog.cs" />
     <Compile Include="Input\ShelteredKeybindsProvider.cs" />
     <Compile Include="UI\ShelteredKeybindsUI.cs" />
