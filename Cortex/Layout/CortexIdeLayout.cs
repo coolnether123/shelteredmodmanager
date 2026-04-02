@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Cortex
 {
-    internal static class CortexIdeLayout
+    public static class CortexIdeLayout
     {
         private static GUIStyle _groupStyle;
         private static GUIStyle _headerStyle;

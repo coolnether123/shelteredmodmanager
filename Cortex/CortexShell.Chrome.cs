@@ -5,7 +5,9 @@ using Cortex.Core.Models;
 using Cortex.Modules.Shared;
 using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
-using Cortex.Rendering.RuntimeUi;
+using Cortex.Rendering;
+using Cortex.Rendering.Models;
+using Cortex.Rendering.RuntimeUi.Shell;
 using UnityEngine;
 
 namespace Cortex
@@ -128,11 +130,8 @@ namespace Cortex
                 return;
             }
 
-            var popupWidth = 220f;
-            var popupHeight = 8f + (items.Count * 26f) + 8f;
-            var popupX = Mathf.Clamp(headerRect.x + anchorRect.x, 0f, Mathf.Max(0f, _windowRect.width - popupWidth - 8f));
-            var popupY = headerRect.y + anchorRect.yMax + 2f;
-            var popupRect = new Rect(popupX, popupY, popupWidth, popupHeight);
+            var popupRectModel = ShellMenuPopupController.BuildPopupRect(ToRenderRect(headerRect), ToRenderRect(anchorRect), _windowRect.width, items.Count);
+            var popupRect = ToRect(popupRectModel);
 
             GUILayout.BeginArea(popupRect, _sectionStyle);
             for (var i = 0; i < items.Count; i++)
@@ -146,33 +145,14 @@ namespace Cortex
             }
             GUILayout.EndArea();
 
-            if (!HasCurrentInputEvent())
-            {
-                return;
-            }
-
-            if (IsCurrentInputEvent(WorkbenchInputEventKind.MouseDown))
-            {
-                var mousePosition = GetCurrentMousePosition();
-                var overGroup = false;
-                foreach (var rect in _menuGroupRects.Values)
-                {
-                    if (new Rect(headerRect.x + rect.x, headerRect.y + rect.y, rect.width, rect.height).Contains(mousePosition))
-                    {
-                        overGroup = true;
-                        break;
-                    }
-                }
-
-                if (!popupRect.Contains(mousePosition) && !overGroup)
-                {
-                    _openMenuGroup = string.Empty;
-                }
-            }
-            else if (IsCurrentInputEvent(WorkbenchInputEventKind.KeyDown) && IsCurrentKey(WorkbenchInputKey.Escape))
+            var dismissResult = ShellMenuPopupController.EvaluateDismissal(GetCurrentFrameInputSnapshot(), ToRenderRect(headerRect), popupRectModel, BuildMenuGroupRects());
+            if (dismissResult.ShouldClose)
             {
                 _openMenuGroup = string.Empty;
-                ConsumeCurrentInputEvent();
+                if (dismissResult.ShouldConsumeInput)
+                {
+                    ConsumeCurrentInputEvent();
+                }
             }
         }
 
@@ -399,6 +379,17 @@ namespace Cortex
             return RuntimeLogVisuals.GetAccentColor(string.IsNullOrEmpty(severity) ? "Info" : severity);
         }
 
+        private List<RenderRect> BuildMenuGroupRects()
+        {
+            var rects = new List<RenderRect>(_menuGroupRects.Count);
+            foreach (var rect in _menuGroupRects.Values)
+            {
+                rects.Add(ToRenderRect(rect));
+            }
+
+            return rects;
+        }
+
         private static string GetContainerTitle(WorkbenchPresentationSnapshot snapshot, string containerId)
         {
             if (snapshot != null)
@@ -426,6 +417,16 @@ namespace Cortex
                 " | Projects: " + ProjectCatalog.GetProjects().Count +
                 " | Logs window: " + (_state.Logs.ShowDetachedWindow ? "Open" : "Docked") +
                 (string.IsNullOrEmpty(renderer) ? string.Empty : " | " + renderer);
+        }
+
+        private static RenderRect ToRenderRect(Rect rect)
+        {
+            return new RenderRect(rect.x, rect.y, rect.width, rect.height);
+        }
+
+        private static Rect ToRect(RenderRect rect)
+        {
+            return new Rect(rect.X, rect.Y, rect.Width, rect.Height);
         }
     }
 }

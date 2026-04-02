@@ -1,10 +1,11 @@
 using System;
-using Cortex.Chrome;
+using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
-using Cortex.Presentation.Models;
-using Cortex.Rendering.RuntimeUi;
+using Cortex.Rendering;
+using Cortex.Rendering.Models;
+using Cortex.Rendering.RuntimeUi.Shell;
 using UnityEngine;
 using Cortex.Services.Onboarding;
 
@@ -14,9 +15,6 @@ namespace Cortex.Shell
     {
         private const string OverlayInputCaptureOwnerId = "Cortex.Shell";
         private const int OnboardingWindowId = 0xC080;
-        private const float OnboardingModalMaxWidth = 940f;
-        private const float OnboardingModalMinWidth = 760f;
-        private const float OnboardingModalHeight = 548f;
 
         private readonly CortexShellState _state;
         private readonly CortexOnboardingCoordinator _onboardingCoordinator;
@@ -47,16 +45,12 @@ namespace Cortex.Shell
         public void UpdateOverlayInputCapture(bool visible, Rect windowRect, Rect logWindowRect)
         {
             var input = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
-            var captureMouse = false;
-            var captureKeyboard = input.HotControl != 0 || input.KeyboardControl != 0;
-
-            if (_state.Onboarding.IsActive) { ApplyOverlayInputCapture(true, true); return; }
-            if (visible)
-            {
-                var guiMouse = ToVector2(input.PointerPosition);
-                captureMouse = input.HotControl != 0 || IsPointWithinVisibleChrome(guiMouse, windowRect, logWindowRect);
-            }
-            ApplyOverlayInputCapture(captureMouse, captureKeyboard);
+            var capture = ShellOverlayInteractionController.ResolveInputCapture(
+                visible,
+                _state.Onboarding.IsActive,
+                input,
+                BuildChromeHitRegions(windowRect, logWindowRect));
+            ApplyOverlayInputCapture(capture.CaptureMouse, capture.CaptureKeyboard);
         }
 
         public void ReleaseOverlayInputCapture() => ApplyOverlayInputCapture(false, false);
@@ -73,33 +67,20 @@ namespace Cortex.Shell
             _lastOverlayMouseCapture = captureMouse; _lastOverlayKeyboardCapture = captureKeyboard;
         }
 
-        private bool IsPointWithinVisibleChrome(Vector2 guiPoint, Rect windowRect, Rect logWindowRect)
-        {
-            if (_state.Chrome.Main.IsCollapsed) { if (_state.Chrome.Main.CollapsedRect.Contains(guiPoint)) return true; }
-            else if (windowRect.Contains(guiPoint)) return true;
-
-            if (_state.Logs.ShowDetachedWindow)
-            {
-                if (_state.Chrome.Logs.IsCollapsed) { if (_state.Chrome.Logs.CollapsedRect.Contains(guiPoint)) return true; }
-                else if (logWindowRect.Contains(guiPoint)) return true;
-            }
-            return false;
-        }
-
-        public void DrawOnboardingOverlay(ICortexHostEnvironment hostEnvironment, ILoadedModCatalog loadedModCatalog, IProjectCatalog projectCatalog, IProjectWorkspaceService projectWorkspaceService, IWorkbenchRuntime workbenchRuntime, IPathInteractionService pathInteractionService, Action<string> activateContainerAction, Action persistSessionAction, Action persistWindowSettingsAction)
+        public void DrawOnboardingOverlay(IProjectCatalog projectCatalog, IProjectWorkspaceService projectWorkspaceService, IWorkbenchRuntime workbenchRuntime, IPathInteractionService pathInteractionService, Action<string> activateContainerAction, Action persistSessionAction, Action persistWindowSettingsAction)
         {
             var input = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
             var screenWidth = input.ViewportSize.Width;
             var screenHeight = input.ViewportSize.Height;
             var fullscreenRect = new Rect(0f, 0f, screenWidth, screenHeight);
             GUI.ModalWindow(OnboardingWindowId, fullscreenRect, (id) => {
-                var modalRect = BuildOnboardingModalRect(fullscreenRect);
-                var promptRect = BuildOnboardingPromptRect(modalRect);
+                var modalRect = ToRect(ShellOverlayInteractionController.BuildOnboardingModalRect(ToRenderRect(fullscreenRect)));
+                var promptRect = ToRect(ShellOverlayInteractionController.BuildOnboardingPromptRect(ToRenderRect(modalRect), ToRenderPoint(_state.Onboarding.FinishPrompt.Anchor), _state.Onboarding.FinishPrompt.Anchor != Vector2.zero));
                 var currentInput = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
                 var mousePos = currentInput.HasCurrentEvent ? ToVector2(currentInput.CurrentMousePosition) : Vector2.zero;
                 var previewBg = !_state.Onboarding.KeepFocused && fullscreenRect.Contains(mousePos) && !modalRect.Contains(mousePos) && !promptRect.Contains(mousePos);
 
-                HandleOnboardingOverlayInput(fullscreenRect, modalRect, promptRect, () => CompleteOnboarding(projectCatalog, projectWorkspaceService, persistSessionAction, persistWindowSettingsAction, workbenchRuntime, activateContainerAction));
+                HandleOnboardingOverlayInput(fullscreenRect, modalRect, promptRect);
                 DrawOnboardingBlock(fullscreenRect, new Color(0f, 0f, 0f, previewBg ? 0.14f : 0.24f));
                 DrawOnboardingBlock(new Rect(modalRect.x - 8f, modalRect.y + 10f, modalRect.width + 16f, modalRect.height + 16f), new Color(0f, 0f, 0f, previewBg ? 0.12f : 0.20f));
                 DrawOnboardingPanelChrome(modalRect, previewBg ? 0.95f : 1f);
@@ -113,20 +94,22 @@ namespace Cortex.Shell
             }, string.Empty, GUIStyle.none);
         }
 
-        private void HandleOnboardingOverlayInput(Rect fullscreenRect, Rect modalRect, Rect promptRect, Action onComplete)
+        private void HandleOnboardingOverlayInput(Rect fullscreenRect, Rect modalRect, Rect promptRect)
         {
             var input = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
-            if (!input.HasCurrentEvent) return;
-
-            var mousePos = ToVector2(input.CurrentMousePosition);
-            if (input.CurrentEventKind == WorkbenchInputEventKind.MouseDown)
+            var result = ShellOverlayInteractionController.EvaluateOnboardingInput(input, ToRenderRect(fullscreenRect), ToRenderRect(modalRect), ToRenderRect(promptRect));
+            if (result.ActionKind == ShellOnboardingOverlayActionKind.HidePrompt)
             {
-                if (modalRect.Contains(mousePos)) _state.Onboarding.FinishPrompt.IsVisible = false;
-                else if (fullscreenRect.Contains(mousePos) && !promptRect.Contains(mousePos)) { ShowOnboardingFinishPrompt(mousePos); _consumeEventAction(); }
+                _state.Onboarding.FinishPrompt.IsVisible = false;
             }
-            else if (input.CurrentEventKind == WorkbenchInputEventKind.KeyDown && input.CurrentKey == WorkbenchInputKey.Escape)
+            else if (result.ActionKind == ShellOnboardingOverlayActionKind.ShowPrompt)
             {
-                ShowOnboardingFinishPrompt(new Vector2(modalRect.xMax - 120f, modalRect.yMax - 54f)); _consumeEventAction();
+                ShowOnboardingFinishPrompt(result.PromptAnchor);
+            }
+
+            if (result.ShouldConsumeInput)
+            {
+                _consumeEventAction();
             }
         }
 
@@ -148,25 +131,35 @@ namespace Cortex.Shell
             });
         }
 
-        private void ShowOnboardingFinishPrompt(Vector2 anchor) { _state.Onboarding.FinishPrompt.IsVisible = true; _state.Onboarding.FinishPrompt.Anchor = anchor; }
-
-        private static Rect BuildOnboardingModalRect(Rect fs)
-        {
-            var w = Mathf.Clamp(fs.width - 80f, OnboardingModalMinWidth, OnboardingModalMaxWidth);
-            var h = Mathf.Min(OnboardingModalHeight, fs.height - 48f);
-            return new Rect(fs.x + (fs.width - w) * 0.5f, fs.y + (fs.height - h) * 0.5f, w, h);
-        }
-
-        private Rect BuildOnboardingPromptRect(Rect modalRect)
-        {
-            var anchor = _state.Onboarding.FinishPrompt.Anchor != Vector2.zero ? _state.Onboarding.FinishPrompt.Anchor : new Vector2(modalRect.xMax - 120f, modalRect.yMax - 54f);
-            return new Rect(Mathf.Clamp(anchor.x - 110f, modalRect.x + 12f, modalRect.xMax - 232f), Mathf.Clamp(anchor.y - 26f, modalRect.y + 12f, modalRect.yMax - 88f), 220f, 72f);
-        }
+        private void ShowOnboardingFinishPrompt(RenderPoint anchor) { _state.Onboarding.FinishPrompt.IsVisible = true; _state.Onboarding.FinishPrompt.Anchor = ToVector2(anchor); }
 
         private static void DrawOnboardingPanelChrome(Rect rect, float alpha) { var surface = CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), alpha); DrawOnboardingBlock(rect, surface); DrawOnboardingBorder(rect, CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), alpha * 0.9f), 2f); }
         private static void DrawOnboardingBorder(Rect rect, Color c, float t) { DrawOnboardingBlock(new Rect(rect.x, rect.y, rect.width, t), c); DrawOnboardingBlock(new Rect(rect.x, rect.yMax - t, rect.width, t), c); DrawOnboardingBlock(new Rect(rect.x, rect.y, t, rect.height), c); DrawOnboardingBlock(new Rect(rect.xMax - t, rect.y, t, rect.height), c); }
         private static void DrawOnboardingBlock(Rect rect, Color c) { if (Event.current?.type != EventType.Repaint) return; var prev = GUI.color; GUI.color = c; GUI.DrawTexture(rect, Texture2D.whiteTexture); GUI.color = prev; }
         private static GUIStyle CreateOnboardingPromptTitleStyle() { var s = new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold }; s.normal.textColor = CortexIdeLayout.GetTextColor(); return s; }
         private static Vector2 ToVector2(Cortex.Rendering.Models.RenderPoint point) { return new Vector2(point.X, point.Y); }
+        private static RenderPoint ToRenderPoint(Vector2 point) { return new RenderPoint(point.x, point.y); }
+        private static RenderRect ToRenderRect(Rect rect) { return new RenderRect(rect.x, rect.y, rect.width, rect.height); }
+        private static Rect ToRect(RenderRect rect) { return new Rect(rect.X, rect.Y, rect.Width, rect.Height); }
+
+        private List<ShellChromeHitRegion> BuildChromeHitRegions(Rect windowRect, Rect logWindowRect)
+        {
+            var regions = new List<ShellChromeHitRegion>();
+            regions.Add(new ShellChromeHitRegion
+            {
+                Visible = true,
+                IsCollapsed = _state.Chrome.Main.IsCollapsed,
+                ExpandedRect = ToRenderRect(windowRect),
+                CollapsedRect = ToRenderRect(_state.Chrome.Main.CollapsedRect)
+            });
+            regions.Add(new ShellChromeHitRegion
+            {
+                Visible = _state.Logs.ShowDetachedWindow,
+                IsCollapsed = _state.Chrome.Logs.IsCollapsed,
+                ExpandedRect = ToRenderRect(logWindowRect),
+                CollapsedRect = ToRenderRect(_state.Chrome.Logs.CollapsedRect)
+            });
+            return regions;
+        }
     }
 }

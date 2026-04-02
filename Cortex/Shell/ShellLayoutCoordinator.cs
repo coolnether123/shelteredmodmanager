@@ -4,7 +4,9 @@ using Cortex.Chrome;
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
-using Cortex.Rendering.RuntimeUi;
+using Cortex.Rendering;
+using Cortex.Rendering.Models;
+using Cortex.Rendering.RuntimeUi.Shell;
 using UnityEngine;
 
 namespace Cortex.Shell
@@ -18,7 +20,6 @@ namespace Cortex.Shell
         private readonly Func<WorkbenchFrameInputSnapshot> _frameInputProvider;
 
         private string _draggingContainerId = string.Empty;
-        private WorkbenchHostLocation _draggingContainerSourceHost = WorkbenchHostLocation.PrimarySideHost;
         private CortexShellLayoutContext _layoutContext;
 
         public ShellLayoutCoordinator(
@@ -100,31 +101,35 @@ namespace Cortex.Shell
             }
 
             var splitRatio = ResolveSplitRatio(node, allocatedArea);
+            var allocatedRenderRect = ToRenderRect(allocatedArea);
             if (node.Split == CortexLayoutSplitDirection.Horizontal)
             {
-                var maxHorizontalSplit = Mathf.Max(181f, allocatedArea.width - 180f - splitterThickness);
-                var splitPoint = Mathf.Clamp(allocatedArea.width * splitRatio, 180f, maxHorizontalSplit);
-                var rectA = new Rect(allocatedArea.x, allocatedArea.y, splitPoint, allocatedArea.height);
-                var splitterRect = new Rect(rectA.xMax, allocatedArea.y, splitterThickness, allocatedArea.height);
-                var rectB = new Rect(splitterRect.xMax, allocatedArea.y, Mathf.Max(0f, allocatedArea.width - splitPoint - splitterThickness), allocatedArea.height);
-                var updatedSplitPoint = CortexWindowChromeController.DrawVerticalSplitter(node.NodeId.GetHashCode(), splitterRect, splitPoint, 180f, Mathf.Max(181f, allocatedArea.width - 180f), false);
+                var splitLayout = ShellSplitLayoutPlanner.BuildHorizontal(allocatedRenderRect, splitRatio, splitterThickness, 180f, 180f);
+                var updatedSplitPoint = CortexWindowChromeController.DrawVerticalSplitter(
+                    node.NodeId.GetHashCode(),
+                    ToRect(splitLayout.SplitterRect),
+                    splitLayout.SplitPoint,
+                    180f,
+                    ShellSplitLayoutPlanner.ResolveHorizontalDragMaxSplitPoint(allocatedRenderRect, 180f, 180f),
+                    false);
                 StoreSplitRatio(node, updatedSplitPoint / Mathf.Max(1f, allocatedArea.width), allocatedArea);
-                rectA.width = updatedSplitPoint; splitterRect.x = rectA.xMax; rectB.x = splitterRect.xMax; rectB.width = Mathf.Max(0f, allocatedArea.width - rectA.width - splitterThickness);
-                DrawLayoutTree(node.ChildA, rectA, snapshot, tabStyle, activeTabStyle, tabCloseButtonStyle, captionStyle);
-                DrawLayoutTree(node.ChildB, rectB, snapshot, tabStyle, activeTabStyle, tabCloseButtonStyle, captionStyle);
+                splitLayout = ShellSplitLayoutPlanner.BuildHorizontalFromSplitPoint(allocatedRenderRect, updatedSplitPoint, splitterThickness);
+                DrawLayoutTree(node.ChildA, ToRect(splitLayout.FirstRect), snapshot, tabStyle, activeTabStyle, tabCloseButtonStyle, captionStyle);
+                DrawLayoutTree(node.ChildB, ToRect(splitLayout.SecondRect), snapshot, tabStyle, activeTabStyle, tabCloseButtonStyle, captionStyle);
             }
             else
             {
-                var maxVerticalSplit = Mathf.Max(141f, allocatedArea.height - 120f - splitterThickness);
-                var verticalSplitPoint = Mathf.Clamp(allocatedArea.height * splitRatio, 140f, maxVerticalSplit);
-                var topRect = new Rect(allocatedArea.x, allocatedArea.y, allocatedArea.width, verticalSplitPoint);
-                var horizontalSplitterRect = new Rect(allocatedArea.x, topRect.yMax, allocatedArea.width, splitterThickness);
-                var bottomRect = new Rect(allocatedArea.x, horizontalSplitterRect.yMax, allocatedArea.width, Mathf.Max(0f, allocatedArea.height - verticalSplitPoint - splitterThickness));
-                var updatedVerticalSplit = CortexWindowChromeController.DrawHorizontalSplitter(node.NodeId.GetHashCode(), horizontalSplitterRect, verticalSplitPoint, 140f, Mathf.Max(141f, allocatedArea.height - 120f));
+                var splitLayout = ShellSplitLayoutPlanner.BuildVertical(allocatedRenderRect, splitRatio, splitterThickness, 140f, 120f);
+                var updatedVerticalSplit = CortexWindowChromeController.DrawHorizontalSplitter(
+                    node.NodeId.GetHashCode(),
+                    ToRect(splitLayout.SplitterRect),
+                    splitLayout.SplitPoint,
+                    140f,
+                    ShellSplitLayoutPlanner.ResolveVerticalDragMaxSplitPoint(allocatedRenderRect, 140f, 120f));
                 StoreSplitRatio(node, updatedVerticalSplit / Mathf.Max(1f, allocatedArea.height), allocatedArea);
-                topRect.height = updatedVerticalSplit; horizontalSplitterRect.y = topRect.yMax; bottomRect.y = horizontalSplitterRect.yMax; bottomRect.height = Mathf.Max(0f, allocatedArea.height - topRect.height - splitterThickness);
-                DrawLayoutTree(node.ChildA, topRect, snapshot, tabStyle, activeTabStyle, tabCloseButtonStyle, captionStyle);
-                DrawLayoutTree(node.ChildB, bottomRect, snapshot, tabStyle, activeTabStyle, tabCloseButtonStyle, captionStyle);
+                splitLayout = ShellSplitLayoutPlanner.BuildVerticalFromSplitPoint(allocatedRenderRect, updatedVerticalSplit, splitterThickness);
+                DrawLayoutTree(node.ChildA, ToRect(splitLayout.FirstRect), snapshot, tabStyle, activeTabStyle, tabCloseButtonStyle, captionStyle);
+                DrawLayoutTree(node.ChildB, ToRect(splitLayout.SecondRect), snapshot, tabStyle, activeTabStyle, tabCloseButtonStyle, captionStyle);
             }
         }
 
@@ -261,7 +266,7 @@ namespace Cortex.Shell
 
             if (input.CurrentEventKind == WorkbenchInputEventKind.MouseDrag && rect.Contains(ToVector2(input.PointerPosition)))
             {
-                _draggingContainerId = containerId; _draggingContainerSourceHost = hostLocation;
+                _draggingContainerId = containerId;
             }
             else if (!string.IsNullOrEmpty(_draggingContainerId) && input.CurrentEventKind == WorkbenchInputEventKind.MouseUp && string.Equals(_draggingContainerId, containerId, StringComparison.OrdinalIgnoreCase))
             {
@@ -318,6 +323,16 @@ namespace Cortex.Shell
         private static Vector2 ToVector2(Cortex.Rendering.Models.RenderPoint point)
         {
             return new Vector2(point.X, point.Y);
+        }
+
+        private static RenderRect ToRenderRect(Rect rect)
+        {
+            return new RenderRect(rect.x, rect.y, rect.width, rect.height);
+        }
+
+        private static Rect ToRect(RenderRect rect)
+        {
+            return new Rect(rect.X, rect.Y, rect.Width, rect.Height);
         }
     }
 }
