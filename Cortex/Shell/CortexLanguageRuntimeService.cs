@@ -483,7 +483,7 @@ namespace Cortex.Shell
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
             for (var i = 0; i < assemblies.Length; i++) TryAddAssemblyPath(assemblyPaths, seen, SafeAssemblyLocation(assemblies[i]));
-            CollectAssemblyPathsFromDirectory(_state.Settings != null ? _state.Settings.ManagedAssemblyRootPath : string.Empty, assemblyPaths, seen);
+            CollectAssemblyPathsFromDirectory(_state.Settings != null ? _state.Settings.ReferenceAssemblyRootPath : string.Empty, assemblyPaths, seen);
             return assemblyPaths.ToArray();
         }
 

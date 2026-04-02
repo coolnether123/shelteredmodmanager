@@ -90,26 +90,15 @@ namespace Cortex.Shell
             var hostBinPath = configuration != null ? configuration.HostBinPath ?? string.Empty : string.Empty;
             if (!string.IsNullOrEmpty(hostBinPath))
             {
-                candidates.Add(Path.Combine(Path.Combine(hostBinPath, "roslyn"), "Cortex.Roslyn.Worker.exe"));
-                candidates.Add(Path.Combine(Path.Combine(hostBinPath, "roslyn"), "Cortex.Roslyn.Worker.dll"));
+                candidates.Add(BundledToolPathResolver.ResolveFromHostBin(
+                    hostBinPath,
+                    "roslyn",
+                    "roslyn",
+                    "Cortex.Roslyn.Worker.exe",
+                    "Cortex.Roslyn.Worker.dll"));
             }
 
-            for (var i = 0; i < candidates.Count; i++)
-            {
-                try
-                {
-                    var candidate = Path.GetFullPath(candidates[i]);
-                    if (File.Exists(candidate))
-                    {
-                        return candidate;
-                    }
-                }
-                catch
-                {
-                }
-            }
-
-            return string.Empty;
+            return BundledToolPathResolver.ResolveCandidate(candidates);
         }
 
         private static RoslynProviderSettings ResolveProviderSettings(LanguageRuntimeConfiguration configuration)

@@ -8,9 +8,6 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>Cortex.PathPicker.Host</RootNamespace>
     <AssemblyName>Cortex.PathPicker.Host</AssemblyName>
-    <OutputPath>..\Dist\SMM\bin\decompiler\</OutputPath>
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
 
   <ItemGroup>

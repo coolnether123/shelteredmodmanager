@@ -52,7 +52,7 @@ namespace Cortex.Shell
 
         private sealed class NullCortexHostEnvironment : ICortexHostEnvironment
         {
-            public string GameRootPath
+            public string ApplicationRootPath
             {
                 get { return string.Empty; }
             }
@@ -72,12 +72,17 @@ namespace Cortex.Shell
                 get { return string.Empty; }
             }
 
-            public string ManagedAssemblyRootPath
+            public string ConfiguredPluginSearchRoots
             {
                 get { return string.Empty; }
             }
 
-            public string ModsRootPath
+            public string ReferenceAssemblyRootPath
+            {
+                get { return string.Empty; }
+            }
+
+            public string RuntimeContentRootPath
             {
                 get { return string.Empty; }
             }

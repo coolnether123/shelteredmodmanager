@@ -1,0 +1,45 @@
+<Project>
+  <Target Name="CortexValidateBundleProfile"
+          BeforeTargets="Build"
+          Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleProfile)' != '' and '$(CortexBundleProfile)' != 'Sheltered' and '$(CortexBundleProfile)' != 'FutureHostReady'">
+    <Error Text="Unsupported CortexBundleProfile '$(CortexBundleProfile)'. Supported profiles: Sheltered and FutureHostReady." />
+  </Target>
+
+  <Target Name="CortexValidateUnityEngineReference"
+          BeforeTargets="ResolveReferences"
+          Condition="'$(CortexUsesUnityEngine)' == 'true' and !Exists('$(CortexUnityEngineReferencePath)')">
+    <Error Text="Could not resolve UnityEngine.dll for $(MSBuildProjectName). Supply /p:CortexUnityManagedDir=&lt;Unity Managed folder&gt;, /p:CortexUnityEngineReferencePath=&lt;full path to UnityEngine.dll&gt;, or set CORTEX_UNITY_MANAGED_DIR / CORTEX_UNITY_ENGINE_PATH." />
+  </Target>
+
+  <Target Name="CortexRemoveLegacyBundleOutputs"
+          AfterTargets="Build"
+          BeforeTargets="CortexCopyBundleOutputs"
+          Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleEnabledForProfile)' == 'true' and '$(CortexBundleRoot)' != '' and '$(TargetDir)' != '' and ('$(CortexBundleContentKind)' == 'BundledPlugin' or '$(CortexBundleContentKind)' == 'ExternalTool')">
+    <ItemGroup>
+      <CortexBundleFiles Include="$(TargetDir)**\*"
+                         Exclude="$(TargetDir)**\*.cache;$(TargetDir)**\*.runtimeconfig.dev.json" />
+      <CortexLegacyPortableBundleFiles Include="@(CortexBundleFiles->'$(CortexBundleRoot)$(CortexBundlePortableRuntimeRootRelativePath)%(RecursiveDir)%(Filename)%(Extension)')"
+                                       Condition="'$(CortexBundlePortableRuntimeRootRelativePath)' != ''" />
+      <CortexLegacyHostBundleFiles Include="@(CortexBundleFiles->'$(CortexBundleRoot)$(CortexBundleHostRuntimeRootRelativePath)%(RecursiveDir)%(Filename)%(Extension)')"
+                                   Condition="'$(CortexBundleHostRuntimeRootRelativePath)' != '' and '$(CortexBundleHostRuntimeRootRelativePath)' != '$(CortexBundlePortableRuntimeRootRelativePath)'" />
+    </ItemGroup>
+
+    <Delete Files="@(CortexLegacyPortableBundleFiles);@(CortexLegacyHostBundleFiles)"
+            TreatErrorsAsWarnings="true" />
+  </Target>
+
+  <Target Name="CortexCopyBundleOutputs"
+          AfterTargets="Build"
+          Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleEnabledForProfile)' == 'true' and '$(CortexBundleRoot)' != '' and '$(CortexBundleDestinationRelativePath)' != '' and '$(TargetDir)' != ''">
+    <ItemGroup>
+      <CortexBundleFiles Include="$(TargetDir)**\*"
+                         Exclude="$(TargetDir)**\*.cache;$(TargetDir)**\*.runtimeconfig.dev.json" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(CortexBundleRoot)$(CortexBundleDestinationRelativePath)" />
+
+    <Copy SourceFiles="@(CortexBundleFiles)"
+          DestinationFiles="@(CortexBundleFiles->'$(CortexBundleRoot)$(CortexBundleDestinationRelativePath)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

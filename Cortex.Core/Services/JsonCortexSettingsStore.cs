@@ -25,7 +25,10 @@ namespace Cortex.Core.Services
             try
             {
                 var json = File.ReadAllText(_path);
-                return ManualJson.Deserialize<CortexSettings>(json) ?? new CortexSettings();
+                var settings = ManualJson.Deserialize<CortexSettings>(json) ?? new CortexSettings();
+                var legacySettings = ManualJson.Deserialize<LegacyCortexSettings>(json) ?? new LegacyCortexSettings();
+                MigrateLegacyPathFields(settings, legacySettings);
+                return settings;
             }
             catch
             {
@@ -44,6 +47,30 @@ namespace Cortex.Core.Services
 
             var json = ManualJson.Serialize(effective);
             File.WriteAllText(_path, json);
+        }
+
+        private static void MigrateLegacyPathFields(CortexSettings settings, LegacyCortexSettings legacySettings)
+        {
+            if (settings == null || legacySettings == null)
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(settings.RuntimeContentRootPath))
+            {
+                settings.RuntimeContentRootPath = legacySettings.ModsRootPath ?? string.Empty;
+            }
+
+            if (string.IsNullOrEmpty(settings.ReferenceAssemblyRootPath))
+            {
+                settings.ReferenceAssemblyRootPath = legacySettings.ManagedAssemblyRootPath ?? string.Empty;
+            }
+        }
+
+        private sealed class LegacyCortexSettings
+        {
+            public string ModsRootPath = string.Empty;
+            public string ManagedAssemblyRootPath = string.Empty;
         }
     }
 }

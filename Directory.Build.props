@@ -1,0 +1,191 @@
+<Project>
+  <PropertyGroup>
+    <CortexRepositoryRoot>$(MSBuildThisFileDirectory)</CortexRepositoryRoot>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="
+    '$(MSBuildProjectName)' == 'Cortex' or
+    '$(MSBuildProjectName)' == 'Cortex.CompletionProviders' or
+    '$(MSBuildProjectName)' == 'Cortex.Core' or
+    '$(MSBuildProjectName)' == 'Cortex.Host.Sheltered' or
+    '$(MSBuildProjectName)' == 'Cortex.Host.Unity' or
+    '$(MSBuildProjectName)' == 'Cortex.Ollama' or
+    '$(MSBuildProjectName)' == 'Cortex.OpenRouter' or
+    '$(MSBuildProjectName)' == 'Cortex.PathPicker.Host' or
+    '$(MSBuildProjectName)' == 'Cortex.Platform.ModAPI' or
+    '$(MSBuildProjectName)' == 'Cortex.Plugin.Harmony' or
+    '$(MSBuildProjectName)' == 'Cortex.Plugins.Abstractions' or
+    '$(MSBuildProjectName)' == 'Cortex.Presentation' or
+    '$(MSBuildProjectName)' == 'Cortex.Renderers.Imgui' or
+    '$(MSBuildProjectName)' == 'Cortex.Rendering' or
+    '$(MSBuildProjectName)' == 'Cortex.Roslyn.Worker' or
+    '$(MSBuildProjectName)' == 'Cortex.Roslyn.Worker.Tests' or
+    '$(MSBuildProjectName)' == 'Cortex.Tabby' or
+    '$(MSBuildProjectName)' == 'Cortex.Tabby.Server' or
+    '$(MSBuildProjectName)' == 'Cortex.Tests'">
+    <IsCortexProject>true</IsCortexProject>
+    <BaseOutputPath Condition="'$(BaseOutputPath)' == ''">$(CortexRepositoryRoot)artifacts\bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <BaseIntermediateOutputPath Condition="'$(BaseIntermediateOutputPath)' == ''">$(CortexRepositoryRoot)artifacts\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(CortexRepositoryRoot)artifacts\**;$(MSBuildProjectDirectory)\obj\**;$(MSBuildProjectDirectory)\bin\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <Choose>
+    <When Condition="'$(MSBuildProjectName)' == 'Cortex.Plugin.Harmony'">
+      <PropertyGroup>
+        <CortexProjectRole>Plugin</CortexProjectRole>
+      </PropertyGroup>
+    </When>
+    <When Condition="
+      '$(MSBuildProjectName)' == 'Cortex.Core' or
+      '$(MSBuildProjectName)' == 'Cortex.Presentation' or
+      '$(MSBuildProjectName)' == 'Cortex.Rendering' or
+      '$(MSBuildProjectName)' == 'Cortex.Plugins.Abstractions' or
+      '$(MSBuildProjectName)' == 'Cortex.CompletionProviders' or
+      '$(MSBuildProjectName)' == 'Cortex.Tabby' or
+      '$(MSBuildProjectName)' == 'Cortex.Ollama' or
+      '$(MSBuildProjectName)' == 'Cortex.OpenRouter'">
+      <PropertyGroup>
+        <CortexProjectRole>Portable</CortexProjectRole>
+      </PropertyGroup>
+    </When>
+    <When Condition="
+      '$(MSBuildProjectName)' == 'Cortex.Roslyn.Worker' or
+      '$(MSBuildProjectName)' == 'Cortex.Tabby.Server' or
+      '$(MSBuildProjectName)' == 'Cortex.PathPicker.Host'">
+      <PropertyGroup>
+        <CortexProjectRole>Tooling</CortexProjectRole>
+      </PropertyGroup>
+    </When>
+    <When Condition="
+      '$(MSBuildProjectName)' == 'Cortex.Tests' or
+      '$(MSBuildProjectName)' == 'Cortex.Roslyn.Worker.Tests'">
+      <PropertyGroup>
+        <CortexProjectRole>Tests</CortexProjectRole>
+      </PropertyGroup>
+    </When>
+    <When Condition="'$(IsCortexProject)' == 'true'">
+      <PropertyGroup>
+        <CortexProjectRole>HostSpecific</CortexProjectRole>
+      </PropertyGroup>
+    </When>
+  </Choose>
+
+  <PropertyGroup Condition="
+    '$(MSBuildProjectName)' == 'Cortex' or
+    '$(MSBuildProjectName)' == 'Cortex.Host.Sheltered' or
+    '$(MSBuildProjectName)' == 'Cortex.Host.Unity' or
+    '$(MSBuildProjectName)' == 'Cortex.Platform.ModAPI' or
+    '$(MSBuildProjectName)' == 'Cortex.Plugin.Harmony' or
+    '$(MSBuildProjectName)' == 'Cortex.Renderers.Imgui' or
+    '$(MSBuildProjectName)' == 'Cortex.Tests'">
+    <CortexUsesUnityEngine>true</CortexUsesUnityEngine>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(CortexUsesUnityEngine)' == 'true'">
+    <CortexUnityEngineReferencePrivate Condition="'$(CortexUnityEngineReferencePrivate)' == ''">False</CortexUnityEngineReferencePrivate>
+    <CortexUnityManagedDir Condition="'$(CortexUnityManagedDir)' == '' and '$(CORTEX_UNITY_MANAGED_DIR)' != ''">$(CORTEX_UNITY_MANAGED_DIR)</CortexUnityManagedDir>
+    <CortexUnityEngineReferencePath Condition="'$(CortexUnityEngineReferencePath)' == '' and '$(CORTEX_UNITY_ENGINE_PATH)' != ''">$(CORTEX_UNITY_ENGINE_PATH)</CortexUnityEngineReferencePath>
+    <CortexUnityEngineReferencePath Condition="'$(CortexUnityEngineReferencePath)' == '' and '$(CortexUnityManagedDir)' != ''">$([System.IO.Path]::Combine('$(CortexUnityManagedDir)', 'UnityEngine.dll'))</CortexUnityEngineReferencePath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Cortex.Tests'">
+    <CortexUnityEngineReferencePrivate>true</CortexUnityEngineReferencePrivate>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(CortexUsesUnityEngine)' == 'true' and '$(CortexUnityEngineReferencePath)' != ''">
+    <Reference Include="UnityEngine">
+      <HintPath>$(CortexUnityEngineReferencePath)</HintPath>
+      <Private>$(CortexUnityEngineReferencePrivate)</Private>
+    </Reference>
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(IsCortexProject)' == 'true'">
+    <CortexBundleEnabledForProfile>false</CortexBundleEnabledForProfile>
+    <CortexBundleContentKind>None</CortexBundleContentKind>
+    <CortexBundleComponentId></CortexBundleComponentId>
+    <CortexBundleDestinationRelativePath></CortexBundleDestinationRelativePath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="
+    '$(MSBuildProjectName)' == 'Cortex.Core' or
+    '$(MSBuildProjectName)' == 'Cortex.Presentation' or
+    '$(MSBuildProjectName)' == 'Cortex.Rendering' or
+    '$(MSBuildProjectName)' == 'Cortex.Plugins.Abstractions' or
+    '$(MSBuildProjectName)' == 'Cortex.CompletionProviders' or
+    '$(MSBuildProjectName)' == 'Cortex.Tabby' or
+    '$(MSBuildProjectName)' == 'Cortex.Ollama' or
+    '$(MSBuildProjectName)' == 'Cortex.OpenRouter'">
+    <CortexBundleContentKind>PortableRuntimeAssembly</CortexBundleContentKind>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="
+    '$(MSBuildProjectName)' == 'Cortex' or
+    '$(MSBuildProjectName)' == 'Cortex.Renderers.Imgui' or
+    '$(MSBuildProjectName)' == 'Cortex.Host.Sheltered' or
+    '$(MSBuildProjectName)' == 'Cortex.Host.Unity' or
+    '$(MSBuildProjectName)' == 'Cortex.Platform.ModAPI'">
+    <CortexBundleContentKind>HostRuntimeAssembly</CortexBundleContentKind>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Cortex.Plugin.Harmony'">
+    <CortexBundleContentKind>BundledPlugin</CortexBundleContentKind>
+    <CortexBundleComponentId>Harmony</CortexBundleComponentId>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Cortex.Roslyn.Worker'">
+    <CortexBundleContentKind>ExternalTool</CortexBundleContentKind>
+    <CortexBundleComponentId>roslyn</CortexBundleComponentId>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Cortex.Tabby.Server'">
+    <CortexBundleContentKind>ExternalTool</CortexBundleContentKind>
+    <CortexBundleComponentId>tabby</CortexBundleComponentId>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Cortex.PathPicker.Host'">
+    <CortexBundleContentKind>ExternalTool</CortexBundleContentKind>
+    <CortexBundleComponentId>windows-path-picker</CortexBundleComponentId>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleProfile)' == 'Sheltered'">
+    <CortexBundleRoot>$(CortexRepositoryRoot)Dist\SMM\</CortexBundleRoot>
+    <CortexBundlePortableRuntimeRootRelativePath>bin\decompiler\</CortexBundlePortableRuntimeRootRelativePath>
+    <CortexBundleHostRuntimeRootRelativePath>bin\decompiler\</CortexBundleHostRuntimeRootRelativePath>
+    <CortexBundlePluginRootRelativePath>bin\plugins\</CortexBundlePluginRootRelativePath>
+    <CortexBundleToolRootRelativePath>bin\tools\</CortexBundleToolRootRelativePath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleProfile)' == 'FutureHostReady'">
+    <CortexBundleRoot>$(CortexRepositoryRoot)artifacts\bundles\FutureHostReady\</CortexBundleRoot>
+    <CortexBundlePortableRuntimeRootRelativePath>portable\lib\</CortexBundlePortableRuntimeRootRelativePath>
+    <CortexBundleHostRuntimeRootRelativePath>host\lib\</CortexBundleHostRuntimeRootRelativePath>
+    <CortexBundlePluginRootRelativePath>plugins\</CortexBundlePluginRootRelativePath>
+    <CortexBundleToolRootRelativePath>tooling\</CortexBundleToolRootRelativePath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(CortexBundleProfile)' == 'Sheltered' and '$(CortexBundleContentKind)' != 'None'">
+    <CortexBundleEnabledForProfile>true</CortexBundleEnabledForProfile>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(CortexBundleProfile)' == 'FutureHostReady' and (
+    '$(CortexBundleContentKind)' == 'PortableRuntimeAssembly' or
+    '$(CortexBundleContentKind)' == 'ExternalTool')">
+    <CortexBundleEnabledForProfile>true</CortexBundleEnabledForProfile>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(CortexBundleEnabledForProfile)' == 'true' and '$(CortexBundleContentKind)' == 'PortableRuntimeAssembly'">
+    <CortexBundleDestinationRelativePath>$(CortexBundlePortableRuntimeRootRelativePath)</CortexBundleDestinationRelativePath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(CortexBundleEnabledForProfile)' == 'true' and '$(CortexBundleContentKind)' == 'HostRuntimeAssembly'">
+    <CortexBundleDestinationRelativePath>$(CortexBundleHostRuntimeRootRelativePath)</CortexBundleDestinationRelativePath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(CortexBundleEnabledForProfile)' == 'true' and '$(CortexBundleContentKind)' == 'BundledPlugin' and '$(CortexBundleComponentId)' != ''">
+    <CortexBundleDestinationRelativePath>$(CortexBundlePluginRootRelativePath)$(CortexBundleComponentId)\</CortexBundleDestinationRelativePath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(CortexBundleEnabledForProfile)' == 'true' and '$(CortexBundleContentKind)' == 'ExternalTool' and '$(CortexBundleComponentId)' != ''">
+    <CortexBundleDestinationRelativePath>$(CortexBundleToolRootRelativePath)$(CortexBundleComponentId)\</CortexBundleDestinationRelativePath>
+  </PropertyGroup>
+</Project>

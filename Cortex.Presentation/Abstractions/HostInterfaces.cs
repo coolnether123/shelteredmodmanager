@@ -6,7 +6,7 @@ namespace Cortex.Presentation.Abstractions
 {
     public interface ICortexHostEnvironment
     {
-        string GameRootPath { get; }
+        string ApplicationRootPath { get; }
 
         string HostRootPath { get; }
 
@@ -14,9 +14,11 @@ namespace Cortex.Presentation.Abstractions
 
         string BundledPluginSearchRoots { get; }
 
-        string ManagedAssemblyRootPath { get; }
+        string ConfiguredPluginSearchRoots { get; }
 
-        string ModsRootPath { get; }
+        string ReferenceAssemblyRootPath { get; }
+
+        string RuntimeContentRootPath { get; }
 
         string SettingsFilePath { get; }
 

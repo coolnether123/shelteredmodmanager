@@ -20,7 +20,7 @@ namespace Cortex.CompletionProviders
             new OpenRouterCompletionProviderFactory()
         };
 
-        public static ICompletionAugmentationClient Create(CortexSettings settings, Action<string> log)
+        public static ICompletionAugmentationClient Create(CortexSettings settings, CompletionAugmentationProviderContext context, Action<string> log)
         {
             if (settings == null || !settings.EnableCompletionAugmentation)
             {
@@ -66,7 +66,7 @@ namespace Cortex.CompletionProviders
                     return null;
                 }
 
-                var client = factory.Create(settings, log);
+                var client = factory.Create(settings, context, log);
                 if (log != null)
                 {
                     log("[Cortex.Completion.Augmentation] Provider factory returned " +

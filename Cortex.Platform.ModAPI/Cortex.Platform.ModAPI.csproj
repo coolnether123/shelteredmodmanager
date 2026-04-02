@@ -17,7 +17,6 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\Dist\SMM\bin\decompiler\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -25,7 +24,6 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\Dist\SMM\bin\decompiler\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -33,10 +31,6 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
-    <Reference Include="UnityEngine">
-      <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Runtime\MmLogCortexLogSink.cs" />
@@ -55,6 +49,11 @@
     <ProjectReference Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj">
       <Project>{7A570620-E51D-499E-A28E-13A1D8156417}</Project>
       <Name>Cortex.Host.Unity</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Host.Sheltered\Cortex.Host.Sheltered.csproj">
+      <Project>{748B7F6E-D557-48FA-B393-6374A7582255}</Project>
+      <Name>Cortex.Host.Sheltered</Name>
       <Private>False</Private>
     </ProjectReference>
     <ProjectReference Include="..\GameModding.Shared\GameModding.Shared.csproj">

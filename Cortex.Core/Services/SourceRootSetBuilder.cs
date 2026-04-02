@@ -12,9 +12,9 @@ namespace Cortex.Core.Services
         ProjectSource = 1,
         ProjectDirectory = 2,
         Workspace = 4,
-        Mods = 8,
+        RuntimeContent = 8,
         Additional = 16,
-        ManagedAssemblies = 32
+        ReferenceAssemblies = 32
     }
 
     public static class SourceRootSetBuilder
@@ -23,12 +23,12 @@ namespace Cortex.Core.Services
             SourceRootFlags.ProjectSource |
             SourceRootFlags.ProjectDirectory |
             SourceRootFlags.Workspace |
-            SourceRootFlags.Mods |
+            SourceRootFlags.RuntimeContent |
             SourceRootFlags.Additional;
 
         public const SourceRootFlags LanguageServiceRoots =
             DefaultNavigationRoots |
-            SourceRootFlags.ManagedAssemblies;
+            SourceRootFlags.ReferenceAssemblies;
 
         public static List<string> Build(CortexProjectDefinition project, CortexSettings settings, SourceRootFlags flags)
         {
@@ -49,14 +49,14 @@ namespace Cortex.Core.Services
                 AddRoot(roots, settings != null ? settings.WorkspaceRootPath : string.Empty);
             }
 
-            if ((flags & SourceRootFlags.Mods) == SourceRootFlags.Mods)
+            if ((flags & SourceRootFlags.RuntimeContent) == SourceRootFlags.RuntimeContent)
             {
-                AddRoot(roots, settings != null ? settings.ModsRootPath : string.Empty);
+                AddRoot(roots, settings != null ? settings.RuntimeContentRootPath : string.Empty);
             }
 
-            if ((flags & SourceRootFlags.ManagedAssemblies) == SourceRootFlags.ManagedAssemblies)
+            if ((flags & SourceRootFlags.ReferenceAssemblies) == SourceRootFlags.ReferenceAssemblies)
             {
-                AddRoot(roots, settings != null ? settings.ManagedAssemblyRootPath : string.Empty);
+                AddRoot(roots, settings != null ? settings.ReferenceAssemblyRootPath : string.Empty);
             }
 
             if ((flags & SourceRootFlags.Additional) == SourceRootFlags.Additional)
@@ -73,8 +73,8 @@ namespace Cortex.Core.Services
                 (project != null ? project.SourceRootPath ?? string.Empty : string.Empty) + "|" +
                 (project != null ? project.ProjectFilePath ?? string.Empty : string.Empty) + "|" +
                 (settings != null ? settings.WorkspaceRootPath ?? string.Empty : string.Empty) + "|" +
-                (settings != null ? settings.ModsRootPath ?? string.Empty : string.Empty) + "|" +
-                (settings != null ? settings.ManagedAssemblyRootPath ?? string.Empty : string.Empty) + "|" +
+                (settings != null ? settings.RuntimeContentRootPath ?? string.Empty : string.Empty) + "|" +
+                (settings != null ? settings.ReferenceAssemblyRootPath ?? string.Empty : string.Empty) + "|" +
                 (settings != null ? settings.AdditionalSourceRoots ?? string.Empty : string.Empty);
         }
 

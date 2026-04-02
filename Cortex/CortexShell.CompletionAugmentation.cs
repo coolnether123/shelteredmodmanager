@@ -28,10 +28,18 @@ namespace Cortex
                 ", EnableTabby=" + (settings != null && settings.EnableTabbyCompletion) +
                 ", TabbyServerUrl=" + (settings != null ? settings.TabbyServerUrl ?? string.Empty : string.Empty) +
                 ", OllamaModel=" + (settings != null ? settings.OllamaModel ?? string.Empty : string.Empty) + ".");
-            _completionAugmentationClient = CompletionAugmentationBootstrapper.Create(settings, delegate(string message)
-            {
-                MMLog.WriteDebug(message);
-            });
+            _completionAugmentationClient = CompletionAugmentationBootstrapper.Create(
+                settings,
+                new CompletionAugmentationProviderContext
+                {
+                    HostBinPath = _bootstrapper.HostEnvironment != null
+                        ? _bootstrapper.HostEnvironment.HostBinPath ?? string.Empty
+                        : string.Empty
+                },
+                delegate(string message)
+                {
+                    MMLog.WriteDebug(message);
+                });
             SetCompletionAugmentationStatus(
                 _completionAugmentationClient != null && _completionAugmentationClient.IsEnabled ? "ready" : "offline",
                 _completionAugmentationClient != null ? _completionAugmentationClient.ProviderId ?? string.Empty : settings != null ? settings.CompletionAugmentationProviderId ?? string.Empty : string.Empty,

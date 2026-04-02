@@ -1,7 +1,6 @@
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
-using Cortex.Host.Unity.Composition;
 using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
 using Cortex.Presentation.Services;
@@ -22,9 +21,16 @@ namespace Cortex.Host.Unity.Runtime
         public readonly StatusState StatusState;
         public readonly ThemeState ThemeState;
         public readonly FocusState FocusState;
+        private readonly IUnityWorkbenchContributionRegistrar _contributionRegistrar;
 
         public UnityWorkbenchRuntime()
+            : this(null)
         {
+        }
+
+        public UnityWorkbenchRuntime(IUnityWorkbenchContributionRegistrar contributionRegistrar)
+        {
+            _contributionRegistrar = contributionRegistrar ?? new NullUnityWorkbenchContributionRegistrar();
             CommandRegistry = new CommandRegistry();
             ContributionRegistry = new ContributionRegistry();
             Presenter = new WorkbenchPresenter();
@@ -35,7 +41,7 @@ namespace Cortex.Host.Unity.Runtime
             StatusState = new StatusState();
             ThemeState = new ThemeState();
             FocusState = new FocusState();
-            DefaultWorkbenchComposition.RegisterBuiltIns(CommandRegistry, ContributionRegistry, Renderer.DisplayName);
+            _contributionRegistrar.RegisterBuiltIns(CommandRegistry, ContributionRegistry, Renderer.DisplayName);
         }
 
         public WorkbenchPresentationSnapshot CreateSnapshot()

@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using Cortex.Core.Models;
+using Cortex.Core.Services;
 
 namespace Cortex.Tabby
 {
@@ -25,7 +26,7 @@ namespace Cortex.Tabby
 
         public string LastError { get; private set; }
 
-        public bool TryResolveCompletionEndpoint(CortexSettings settings, out string endpoint)
+        public bool TryResolveCompletionEndpoint(CortexSettings settings, CompletionAugmentationProviderContext context, out string endpoint)
         {
             var effectiveTimeoutMs = TabbyRuntimeSettings.GetEffectiveTimeoutMs(settings);
             endpoint = NormalizeCompletionEndpoint(settings != null ? settings.TabbyServerUrl : string.Empty);
@@ -48,7 +49,7 @@ namespace Cortex.Tabby
                 return true;
             }
 
-            var serverPath = ResolveServerPath();
+            var serverPath = ResolveServerPath(context);
             if (string.IsNullOrEmpty(serverPath))
             {
                 LastError = "Could not locate Cortex.Tabby.Server under the bundled tabby runtime folder.";
@@ -169,24 +170,19 @@ namespace Cortex.Tabby
                 " --request-timeout-ms \"" + effectiveTimeoutMs + "\"";
         }
 
-        private static string ResolveServerPath()
+        internal static string ResolveServerPath(CompletionAugmentationProviderContext context)
         {
             try
             {
-                var assemblyPath = typeof(BundledTabbyServerController).Assembly.Location;
-                var assemblyDir = Path.GetDirectoryName(assemblyPath) ?? string.Empty;
-                var candidates = new[]
+                var serverPath = BundledToolPathResolver.ResolveFromHostBin(
+                    context != null ? context.HostBinPath ?? string.Empty : string.Empty,
+                    "tabby",
+                    "tabby",
+                    "Cortex.Tabby.Server.exe",
+                    "Cortex.Tabby.Server.dll");
+                if (!string.IsNullOrEmpty(serverPath))
                 {
-                    Path.GetFullPath(Path.Combine(Path.Combine(assemblyDir, @"..\tabby"), "Cortex.Tabby.Server.exe")),
-                    Path.GetFullPath(Path.Combine(Path.Combine(assemblyDir, @"..\tabby"), "Cortex.Tabby.Server.dll"))
-                };
-
-                for (var i = 0; i < candidates.Length; i++)
-                {
-                    if (File.Exists(candidates[i]))
-                    {
-                        return candidates[i];
-                    }
+                    return serverPath;
                 }
             }
             catch

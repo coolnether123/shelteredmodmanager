@@ -17,7 +17,6 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\Dist\SMM\bin\decompiler\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -25,7 +24,6 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\Dist\SMM\bin\decompiler\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -33,24 +31,14 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
-    <Reference Include="UnityEngine">
-      <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Composition\DefaultWorkbenchAppearanceContributions.cs" />
-    <Compile Include="Composition\DefaultWorkbenchCommandContributions.cs" />
-    <Compile Include="Composition\DefaultWorkbenchComposition.cs" />
-    <Compile Include="Composition\DefaultWorkbenchOnboardingContributions.cs" />
-    <Compile Include="Composition\DefaultWorkbenchSettingContributions.cs" />
-    <Compile Include="Composition\DefaultWorkbenchViewContributions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Runtime\IUnityWorkbenchContributionRegistrar.cs" />
     <Compile Include="Runtime\UnityCortexShellBehaviour.cs" />
     <Compile Include="Runtime\UnityCortexShellBootstrapper.cs" />
     <Compile Include="Runtime\UnityCortexShellHostUi.cs" />
     <Compile Include="Runtime\UnityCortexHostCompositionRoot.cs" />
-    <Compile Include="Runtime\UnityCortexHostEnvironment.cs" />
     <Compile Include="Runtime\UnityCortexHostServices.cs" />
     <Compile Include="Runtime\UnityWorkbenchRuntime.cs" />
     <Compile Include="Runtime\UnityWorkbenchRuntimeFactory.cs" />
@@ -88,8 +76,5 @@
       <Private>False</Private>
     </ProjectReference>
   </ItemGroup>
-  <Target Name="BuildPathPickerHost" BeforeTargets="Build" Condition="Exists('..\Cortex.PathPicker.Host\Cortex.PathPicker.Host.csproj') and '$(DesignTimeBuild)' != 'true' and '$(BuildingSolutionFile)' != 'true'">
-    <MSBuild Projects="..\Cortex.PathPicker.Host\Cortex.PathPicker.Host.csproj" Targets="Build" Properties="Configuration=$(Configuration)" BuildInParallel="false" />
-  </Target>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

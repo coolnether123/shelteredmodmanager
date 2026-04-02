@@ -77,12 +77,6 @@ namespace Cortex.Services.Navigation.Metadata
 
             var searchRoots = new List<string>();
             AddSearchRoot(searchRoots, AppDomain.CurrentDomain.BaseDirectory);
-            var baseDirectory = AppDomain.CurrentDomain.BaseDirectory ?? string.Empty;
-            var smmRoot = Path.Combine(baseDirectory, "SMM");
-            var smmBinRoot = Path.Combine(smmRoot, "bin");
-            AddSearchRoot(searchRoots, smmRoot);
-            AddSearchRoot(searchRoots, smmBinRoot);
-            AddSearchRoot(searchRoots, Path.Combine(smmBinRoot, "decompiler"));
             if (state != null && state.Settings != null)
             {
                 var configuredRoots = SourceRootSetBuilder.Build(state.SelectedProject, state.Settings, SourceRootSetBuilder.LanguageServiceRoots);

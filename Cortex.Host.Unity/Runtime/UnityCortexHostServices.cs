@@ -12,16 +12,6 @@ namespace Cortex.Host.Unity.Runtime
         private readonly ICortexPlatformModule _platformModule;
         private readonly ICortexShellHostUi _shellHostUi;
 
-        public UnityCortexHostServices()
-            : this(
-                new UnityCortexHostEnvironment(),
-                new WindowsPathInteractionService(),
-                new UnityWorkbenchRuntimeFactory(),
-                null,
-                new UnityCortexShellHostUi())
-        {
-        }
-
         public UnityCortexHostServices(
             ICortexHostEnvironment environment,
             IPathInteractionService pathInteractionService,
