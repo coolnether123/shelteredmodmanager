@@ -20,6 +20,7 @@ namespace Cortex.Tests.Architecture
             "Cortex.Plugins.Abstractions",
             "Cortex.Presentation",
             "Cortex.Rendering",
+            "Cortex.Rendering.RuntimeUi",
             "Cortex.Tabby"
         };
 
@@ -83,6 +84,50 @@ namespace Cortex.Tests.Architecture
                     violations.Length == 0,
                     projectName + " references host-specific Cortex projects: " + string.Join(", ", violations));
             }
+        }
+
+        [Fact]
+        public void RenderingContracts_StayBelowPresentationAndRuntimeUiLayers()
+        {
+            var renderingReferences = LoadProjectReferenceNames("Cortex.Rendering");
+            var presentationReferences = LoadProjectReferenceNames("Cortex.Presentation");
+            var runtimeUiReferences = LoadProjectReferenceNames("Cortex.Rendering.RuntimeUi");
+
+            Assert.DoesNotContain("Cortex.Presentation", renderingReferences);
+            Assert.Contains("Cortex.Rendering", presentationReferences);
+            Assert.DoesNotContain("Cortex.Rendering.RuntimeUi", presentationReferences);
+            Assert.Contains("Cortex.Rendering", runtimeUiReferences);
+        }
+
+        [Fact]
+        public void GenericShellAndUnityHost_DoNotReferenceImguiBackendDirectly()
+        {
+            var cortexReferences = LoadProjectReferenceNames("Cortex");
+            var unityHostReferences = LoadProjectReferenceNames("Cortex.Host.Unity");
+
+            Assert.DoesNotContain("Cortex.Renderers.Imgui", cortexReferences);
+            Assert.DoesNotContain("Cortex.Renderers.Imgui", unityHostReferences);
+
+            var cortexShellRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "CortexShell.Runtime.cs"));
+            var cortexShellText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "CortexShell.cs"));
+            var shellBootstrapperText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "Shell", "ShellBootstrapper.cs"));
+            var hostInterfacesText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Presentation", "Abstractions", "HostInterfaces.cs"));
+            var unityRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Unity", "Runtime", "UnityWorkbenchRuntime.cs"));
+            var unityFactoryText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Unity", "Runtime", "UnityWorkbenchRuntimeFactory.cs"));
+            var shelteredCompositionText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Sheltered", "Runtime", "ShelteredUnityHostComposition.cs"));
+
+            Assert.DoesNotContain("ImguiRenderPipeline", cortexShellRuntimeText);
+            Assert.DoesNotContain("using Cortex.Renderers.Imgui;", cortexShellRuntimeText);
+            Assert.DoesNotContain("ICortexShellHostUi", cortexShellText);
+            Assert.DoesNotContain("ICortexShellHostUi", shellBootstrapperText);
+            Assert.DoesNotContain("ICortexShellHostUi", hostInterfacesText);
+            Assert.Contains("IWorkbenchFrameContext FrameContext", hostInterfacesText);
+            Assert.DoesNotContain("ImguiRenderPipeline", unityRuntimeText);
+            Assert.DoesNotContain("using Cortex.Renderers.Imgui;", unityRuntimeText);
+            Assert.DoesNotContain("using Cortex.Renderers.Imgui;", unityFactoryText);
+            Assert.Contains("ImguiWorkbenchRuntimeUiFactory", shelteredCompositionText);
+            Assert.Contains("UnityWorkbenchFrameContext", shelteredCompositionText);
+            Assert.Contains("frameContext", shelteredCompositionText);
         }
 
         [Fact]
@@ -154,6 +199,7 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("CortexUnityEngineReferencePath", propsText);
             Assert.Contains("CORTEX_UNITY_MANAGED_DIR", propsText);
             Assert.Contains("CORTEX_UNITY_ENGINE_PATH", propsText);
+            Assert.Contains(@"libs\UnityEngine.dll", propsText);
             Assert.Contains("CortexValidateUnityEngineReference", targetsText);
             Assert.Contains("CORTEX_UNITY_MANAGED_DIR", resolverText);
             Assert.Contains("CORTEX_UNITY_ENGINE_PATH", resolverText);
@@ -342,6 +388,7 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("Future Host Completion Steps", reportText);
             Assert.Contains("FutureHostReady", reportText);
             Assert.Contains("Cortex.Host.Sheltered", reportText);
+            Assert.Contains("Cortex.Rendering.RuntimeUi", reportText);
             Assert.Contains("BundledPluginSearchRoots", reportText);
             Assert.Contains("CortexPluginSearchRoots", reportText);
             Assert.Contains("ConfiguredPluginSearchRoots", reportText);

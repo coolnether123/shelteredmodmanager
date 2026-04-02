@@ -115,10 +115,14 @@ That is an implementation detail, not the module contract.
 Modules should code against `IWorkbenchUiSurface`, not against `CortexUi` or `CortexShell`.
 
 Internally, Cortex is also moving toward renderer-agnostic shell/editor infrastructure:
-- the shell owns the active render pipeline
-- renderer-neutral geometry/color models live in `Cortex.Rendering`
-- IMGUI implementations live in `Cortex.Renderers.Imgui`
+- the active runtime UI is supplied by the host runtime
+- shell frame size, pointer state, and input event snapshots are supplied through portable rendering contracts rather than shell-specific host adapters
+- renderer-neutral geometry/color models and frame/input contracts live in `Cortex.Rendering`
+- shared popup/panel/tooltip interaction and layout behavior live in `Cortex.Rendering.RuntimeUi`
+- IMGUI implementations live in `Cortex.Renderers.Imgui` as concrete drawing and measurement adapters over the portable runtime-UI output
 
 That does not change the module authoring rule:
 - public workbench modules should target `IWorkbenchUiSurface`
 - they should not depend on IMGUI-only editor internals or renderer-specific classes
+
+If you are adding a renderer or host rather than a module, use `documentation/Cortex_Renderer_Host_Extensibility_Guide.md`.

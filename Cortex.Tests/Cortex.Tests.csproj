@@ -22,5 +22,8 @@
     <ProjectReference Include="..\Cortex.Host.Sheltered\Cortex.Host.Sheltered.csproj" />
     <ProjectReference Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj" />
     <ProjectReference Include="..\Cortex.Platform.ModAPI\Cortex.Platform.ModAPI.csproj" />
+    <ProjectReference Include="..\Cortex.Renderers.Imgui\Cortex.Renderers.Imgui.csproj" />
+    <ProjectReference Include="..\Cortex.Rendering\Cortex.Rendering.csproj" />
+    <ProjectReference Include="..\Cortex.Rendering.RuntimeUi\Cortex.Rendering.RuntimeUi.csproj" />
   </ItemGroup>
 </Project>

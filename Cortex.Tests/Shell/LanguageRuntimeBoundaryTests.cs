@@ -5,6 +5,8 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Presentation.Abstractions;
+using Cortex.Rendering.Models;
+using Cortex.Rendering.RuntimeUi;
 using Cortex.Services.Semantics.Completion;
 using Cortex.Shell;
 using Cortex.Tests.Testing;
@@ -610,9 +612,9 @@ namespace Cortex.Tests.Shell
                 get { return null; }
             }
 
-            public ICortexShellHostUi ShellHostUi
+            public IWorkbenchFrameContext FrameContext
             {
-                get { return new TestShellHostUi(); }
+                get { return new TestWorkbenchFrameContext(); }
             }
 
             public string PreferredLanguageProviderId
@@ -662,21 +664,26 @@ namespace Cortex.Tests.Shell
             public string DecompilerCachePath => string.Empty;
         }
 
-        private sealed class TestShellHostUi : ICortexShellHostUi
+        private sealed class TestWorkbenchFrameContext : IWorkbenchFrameContext
         {
-            public int ScreenWidth => 1920;
-            public int ScreenHeight => 1080;
-            public int HotControl => 0;
-            public int KeyboardControl => 0;
-            public bool HasCurrentEvent => false;
-            public CortexShellInputEventKind CurrentEventKind => CortexShellInputEventKind.None;
-            public CortexShellInputEventKind CurrentEventRawKind => CortexShellInputEventKind.None;
-            public CortexShellInputKey CurrentKey => CortexShellInputKey.None;
-            public int CurrentMouseButton => -1;
-            public CortexShellPointerPosition CurrentMousePosition => new CortexShellPointerPosition(0f, 0f);
-            public CortexShellPointerPosition PointerPosition => new CortexShellPointerPosition(0f, 0f);
+            public WorkbenchFrameInputSnapshot Snapshot
+            {
+                get
+                {
+                    return new WorkbenchFrameInputSnapshot
+                    {
+                        ViewportSize = new RenderSize(1920f, 1080f),
+                        CurrentEventKind = WorkbenchInputEventKind.None,
+                        CurrentRawEventKind = WorkbenchInputEventKind.None,
+                        CurrentKey = WorkbenchInputKey.None,
+                        CurrentMouseButton = -1,
+                        CurrentMousePosition = RenderPoint.Zero,
+                        PointerPosition = RenderPoint.Zero
+                    };
+                }
+            }
 
-            public void ConsumeCurrentEvent()
+            public void ConsumeCurrentInput()
             {
             }
         }
