@@ -11,6 +11,7 @@ For the decision-complete portability model and future-host checklist, see `docu
 - `Cortex.Core`
 - `Cortex.Presentation`
 - `Cortex.Rendering`
+- `Cortex.Rendering.RuntimeUi`
 - `Cortex.Plugins.Abstractions`
 - `Cortex.CompletionProviders`
 - `Cortex.Tabby`
@@ -18,6 +19,13 @@ For the decision-complete portability model and future-host checklist, see `docu
 - `Cortex.OpenRouter`
 
 These projects may depend only on other portable Cortex projects plus approved non-Cortex shared dependencies.
+
+Within that portable layer, ownership is split deliberately:
+
+- `Cortex.Rendering` owns low-level render and frame/input contracts such as `IWorkbenchFrameContext` and `WorkbenchFrameInputSnapshot`
+- `Cortex.Rendering.RuntimeUi` owns popup/panel/tooltip interaction and layout behavior over those contracts plus the extracted shell split-layout, menu popup, and overlay interaction planners that are already backend-neutral
+
+`Cortex.Rendering.RuntimeUi` may depend on stable portable semantic models from `Cortex.Core` when an interaction planner needs them, such as the hover-tooltip planners consuming `EditorHoverContentPart` and `EditorHoverSection`.
 
 ### Host/platform modules and adapters
 
@@ -30,6 +38,12 @@ These projects may depend only on other portable Cortex projects plus approved n
 These projects are allowed to depend on portable Cortex libraries. Portable projects are not allowed to depend on these projects.
 
 `Cortex.Host.Unity` now owns only the reusable Unity host runtime seam. Sheltered filesystem/configuration assumptions and host-owned workbench composition live in `Cortex.Host.Sheltered`, centralized through `Cortex.Host.Sheltered.Runtime.ShelteredHostPathLayout`.
+
+Host/platform ownership also includes:
+
+- selecting the active `IWorkbenchRuntimeUiFactory`
+- supplying the active `IWorkbenchUiSurface`
+- sharing the host-owned `IWorkbenchFrameContext` with the runtime UI/backend
 
 ### Plugin-specific modules
 
@@ -58,6 +72,8 @@ Default project outputs are neutral:
 - intermediates: `artifacts\obj\<ProjectName>\...`
 
 No Cortex project file should declare a product-shaped output path directly.
+
+`Manager\ManagerGUI.csproj` is the legacy app-side entry point that triggers the Sheltered Cortex packaging pass. Its `BuildCortexRuntime` target rebuilds the full in-process Sheltered Cortex runtime set with `CortexBundleProfile=Sheltered`, so `Dist\SMM\` is refreshed coherently even when portable Cortex assemblies would otherwise stay up to date in `artifacts\bin\...`.
 
 ## 3. Bundle profiles
 
@@ -132,3 +148,11 @@ The shared build contract is:
 
 This keeps `Cortex.Host.Unity` Unity-generic and keeps the concrete Sheltered install path out of committed project files.
 `Cortex.Tests.Testing.UnityManagedAssemblyResolver` follows the same environment-variable contract at runtime and also falls back to the copied local `UnityEngine.dll` in the test output.
+
+## 7. Remaining debt
+
+After this pass, the main rendering debt is no longer ownership ambiguity. It is limited to:
+
+- IMGUI still being the only concrete renderer
+- shell/editor call sites in `Cortex` still executing IMGUI draw and event code directly
+- a small amount of shell chrome execution logic still living in IMGUI-specific helpers rather than portable runtime-ui planners

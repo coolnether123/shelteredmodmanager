@@ -10,7 +10,7 @@ For the final portability boundary map, bundle profile intent, and future-host c
 
 The Cortex solution is intentionally split into three roles:
 
-- portable core/libraries: `Cortex.Core`, `Cortex.Presentation`, `Cortex.Rendering`, `Cortex.Plugins.Abstractions`, `Cortex.CompletionProviders`, `Cortex.Tabby`, `Cortex.Ollama`, `Cortex.OpenRouter`
+- portable core/libraries: `Cortex.Core`, `Cortex.Presentation`, `Cortex.Rendering`, `Cortex.Rendering.RuntimeUi`, `Cortex.Plugins.Abstractions`, `Cortex.CompletionProviders`, `Cortex.Tabby`, `Cortex.Ollama`, `Cortex.OpenRouter`
 - host/platform modules and concrete adapters: `Cortex`, `Cortex.Renderers.Imgui`, `Cortex.Host.Unity`, `Cortex.Host.Sheltered`, `Cortex.Platform.ModAPI`
 - plugin-specific feature modules: `Cortex.Plugin.Harmony`
 - external tooling: `Cortex.Roslyn.Worker`, `Cortex.Tabby.Server`, `Cortex.PathPicker.Host`
@@ -36,8 +36,13 @@ Portable Cortex assemblies own:
 - module-owned state storage
 - editor extension runtime and presentation hosts
 - plugin discovery and registration
+- low-level render, geometry, and frame/input contracts in `Cortex.Rendering`
+- popup/panel/tooltip runtime interaction and layout behavior in `Cortex.Rendering.RuntimeUi`
+- shell split-layout math, menu popup placement-dismissal policy, and overlay capture/onboarding prompt policy in `Cortex.Rendering.RuntimeUi`
 
 Portable Cortex assemblies do not own Harmony behavior, Harmony state, Harmony-specific contracts, or Sheltered-specific filesystem/package layouts.
+
+Shell IMGUI callers in `Cortex` still execute draw calls and Unity event consumption locally, but the backend-neutral shell geometry and interaction rules that are shared across current shell surfaces should live in `Cortex.Rendering.RuntimeUi` rather than stay buried inline in IMGUI branches.
 
 ### Sheltered host layer
 

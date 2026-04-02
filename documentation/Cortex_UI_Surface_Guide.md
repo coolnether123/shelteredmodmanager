@@ -108,7 +108,9 @@ public sealed class ExampleModule : IWorkbenchModule
 
 ## Current backend
 
-Today the default implementation is IMGUI-backed inside Cortex.
+Today the active implementation is host-supplied.
+
+In the current Sheltered composition, `Cortex.Host.Sheltered` provides `ShelteredWorkbenchUiSurface`, which is IMGUI-backed and then passed into the selected runtime UI/backend.
 
 That is an implementation detail, not the module contract.
 
@@ -119,6 +121,7 @@ Internally, Cortex is also moving toward renderer-agnostic shell/editor infrastr
 - shell frame size, pointer state, and input event snapshots are supplied through portable rendering contracts rather than shell-specific host adapters
 - renderer-neutral geometry/color models and frame/input contracts live in `Cortex.Rendering`
 - shared popup/panel/tooltip interaction and layout behavior live in `Cortex.Rendering.RuntimeUi`
+- extracted backend-neutral shell split-layout and popup/overlay policy also now live in `Cortex.Rendering.RuntimeUi`
 - IMGUI implementations live in `Cortex.Renderers.Imgui` as concrete drawing and measurement adapters over the portable runtime-UI output
 
 That does not change the module authoring rule:

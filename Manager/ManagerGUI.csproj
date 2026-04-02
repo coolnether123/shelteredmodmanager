@@ -203,8 +203,24 @@
     </BootstrapperPackage>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Target Name="BuildCortexRuntime" BeforeTargets="Build" Condition="'$(DesignTimeBuild)' != 'true' and '$(BuildingSolutionFile)' != 'true'">
-    <MSBuild Projects="..\Cortex\Cortex.csproj;..\Cortex.Platform.ModAPI\Cortex.Platform.ModAPI.csproj;..\Cortex.Host.Unity\Cortex.Host.Unity.csproj" Targets="Build" Properties="Configuration=$(Configuration);Platform=AnyCPU" BuildInParallel="false" />
+  <Target Name="BuildCortexRuntime" BeforeTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <CortexRuntimeProjects Include="..\Cortex.Core\Cortex.Core.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.Presentation\Cortex.Presentation.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.Rendering\Cortex.Rendering.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.Rendering.RuntimeUi\Cortex.Rendering.RuntimeUi.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.CompletionProviders\Cortex.CompletionProviders.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.Tabby\Cortex.Tabby.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.Ollama\Cortex.Ollama.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.OpenRouter\Cortex.OpenRouter.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex\Cortex.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.Renderers.Imgui\Cortex.Renderers.Imgui.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.Host.Sheltered\Cortex.Host.Sheltered.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.Platform.ModAPI\Cortex.Platform.ModAPI.csproj" />
+    </ItemGroup>
+    <MSBuild Projects="@(CortexRuntimeProjects)" Targets="Rebuild" Properties="Configuration=$(Configuration);Platform=AnyCPU;CortexBundleProfile=Sheltered" BuildInParallel="false" />
   </Target>
   <PropertyGroup>
     <PostBuildEvent>SET BASE=$(MSBuildProjectDirectory)\..\

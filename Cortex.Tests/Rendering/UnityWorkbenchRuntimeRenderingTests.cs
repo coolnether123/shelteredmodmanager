@@ -1,5 +1,6 @@
 using Cortex.Host.Unity.Runtime;
 using Cortex.Plugins.Abstractions;
+using Cortex.Rendering;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.RuntimeUi;
 using Cortex.Tests.Testing;

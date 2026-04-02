@@ -5,6 +5,7 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Presentation.Abstractions;
+using Cortex.Rendering;
 using Cortex.Rendering.Models;
 using Cortex.Rendering.RuntimeUi;
 using Cortex.Services.Semantics.Completion;

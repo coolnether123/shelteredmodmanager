@@ -135,10 +135,11 @@ Current tooling project reference inventory:
 Runtime UI boundary notes:
 
 - `Cortex.Rendering` remains the low-level render contract package.
-- `Cortex.Rendering` now also owns the portable frame/input contract used by hosts and runtime UI backends.
-- `Cortex.Rendering.RuntimeUi` owns reusable popup/panel/tooltip interaction and layout behavior over those contracts.
+- `Cortex.Rendering` owns the portable frame/input contract used by hosts and runtime UI backends, including `IWorkbenchFrameContext` and `WorkbenchFrameInputSnapshot`.
+- `Cortex.Rendering.RuntimeUi` owns reusable popup/panel/tooltip interaction and layout behavior over those contracts, plus the extracted shell split-layout, shell menu popup, and shell overlay interaction policy that is already backend-neutral.
 - concrete runtime UI/backend selection remains host-owned; Sheltered currently selects the IMGUI runtime UI in `Cortex.Host.Sheltered`.
-- host-owned frame context and input snapshot adaptation now live in `Cortex.Host.Unity`, while shell-generic Cortex consumes the portable `IWorkbenchFrameContext` contract from `Cortex.Rendering`.
+- host-owned frame context adaptation now lives in `Cortex.Host.Unity`, while shell-generic Cortex and runtime UI backends consume the portable `Cortex.Rendering` contracts.
+- the active module `IWorkbenchUiSurface` is host-supplied. The current concrete implementation is `Cortex.Host.Sheltered.Runtime.ShelteredWorkbenchUiSurface`.
 - `Cortex.Renderers.Imgui` should now be treated as a concrete executor/measurement adapter over those portable plans, not the owner of popup/panel/tooltip runtime policy.
 
 ## 6. Packaging Model
@@ -215,6 +216,8 @@ Do not complete these steps by widening `Cortex.Core`, `Cortex.Presentation`, or
 Remaining portability debt is intentionally short:
 
 - `Cortex` is still a Unity-hosted shell assembly rather than a host-neutral shell runtime assembly.
+- Shell/editor IMGUI call sites still execute raw drawing and event consumption locally even though their shared policy is increasingly portable.
+- `CortexWindowChromeController` still owns IMGUI-time splitter drag and resize execution.
 - End-to-end non-Cortex product packaging outside Cortex still assumes `Dist/SMM`.
 - `FutureHostReady` has package lanes but no second host adapter yet.
 
