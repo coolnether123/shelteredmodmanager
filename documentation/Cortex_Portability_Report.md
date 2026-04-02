@@ -7,6 +7,7 @@ Use it when:
 - auditing whether a change belongs in portable Cortex or a host adapter
 - packaging host bundle A or host bundle B
 - adding a future host without copying Sheltered assumptions into reusable assemblies
+- wiring a new renderer or host composition without reverse-engineering IMGUI (`documentation/Cortex_Renderer_Host_Extensibility_Guide.md`)
 
 ## 1. Portable Cortex
 
@@ -15,6 +16,7 @@ Portable Cortex projects:
 - `Cortex.Core`
 - `Cortex.Presentation`
 - `Cortex.Rendering`
+- `Cortex.Rendering.RuntimeUi`
 - `Cortex.Plugins.Abstractions`
 - `Cortex.CompletionProviders`
 - `Cortex.Tabby`
@@ -26,6 +28,8 @@ Portable Cortex owns:
 - generic shell/runtime contracts
 - settings models and persistence
 - source/reference/navigation abstractions
+- low-level rendering and frame/input contracts
+- reusable popup/panel/tooltip runtime-UI interaction and layout policy
 - generic plugin loading contracts
 - reusable AI/completion providers
 - reusable build/layout/output policy
@@ -117,8 +121,9 @@ Current portable Cortex project reference inventory:
 - `Cortex.Ollama -> Cortex.Core`
 - `Cortex.OpenRouter -> Cortex.Core`
 - `Cortex.Plugins.Abstractions -> Cortex.Core, Cortex.Presentation`
-- `Cortex.Presentation -> Cortex.Core`
-- `Cortex.Rendering -> Cortex.Core, Cortex.Presentation`
+- `Cortex.Presentation -> Cortex.Core, Cortex.Rendering`
+- `Cortex.Rendering -> Cortex.Core`
+- `Cortex.Rendering.RuntimeUi -> Cortex.Plugins.Abstractions, Cortex.Rendering`
 - `Cortex.Tabby -> Cortex.Core`
 
 Current tooling project reference inventory:
@@ -126,6 +131,15 @@ Current tooling project reference inventory:
 - `Cortex.PathPicker.Host -> none`
 - `Cortex.Roslyn.Worker -> none`
 - `Cortex.Tabby.Server -> none`
+
+Runtime UI boundary notes:
+
+- `Cortex.Rendering` remains the low-level render contract package.
+- `Cortex.Rendering` now also owns the portable frame/input contract used by hosts and runtime UI backends.
+- `Cortex.Rendering.RuntimeUi` owns reusable popup/panel/tooltip interaction and layout behavior over those contracts.
+- concrete runtime UI/backend selection remains host-owned; Sheltered currently selects the IMGUI runtime UI in `Cortex.Host.Sheltered`.
+- host-owned frame context and input snapshot adaptation now live in `Cortex.Host.Unity`, while shell-generic Cortex consumes the portable `IWorkbenchFrameContext` contract from `Cortex.Rendering`.
+- `Cortex.Renderers.Imgui` should now be treated as a concrete executor/measurement adapter over those portable plans, not the owner of popup/panel/tooltip runtime policy.
 
 ## 6. Packaging Model
 
@@ -159,6 +173,7 @@ Shared build input now comes from:
 
 - `/p:CortexUnityManagedDir=<Unity Managed folder>`
 - `/p:CortexUnityEngineReferencePath=<full path to UnityEngine.dll>`
+- repo-local fallback at `libs/UnityEngine.dll`
 - environment variables `CORTEX_UNITY_MANAGED_DIR` / `CORTEX_UNITY_ENGINE_PATH`
 
 That contract is applied centrally in `Directory.Build.props` and validated in `Directory.Build.targets`.
