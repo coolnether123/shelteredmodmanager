@@ -54,6 +54,11 @@
       <Name>Cortex.Core</Name>
       <Private>False</Private>
     </ProjectReference>
+    <ProjectReference Include="..\Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj">
+      <Project>{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1}</Project>
+      <Name>Cortex.Plugins.Abstractions</Name>
+      <Private>False</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Cortex.Rendering\Cortex.Rendering.csproj">
       <Project>{5B4B178C-9BB0-4297-A07A-5C69FA861A26}</Project>
       <Name>Cortex.Rendering</Name>

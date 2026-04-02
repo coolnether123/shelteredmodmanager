@@ -1,4 +1,5 @@
 using Cortex.Plugins.Abstractions;
+using Cortex.Rendering;
 using Cortex.Rendering.Abstractions;
 
 namespace Cortex.Rendering.RuntimeUi

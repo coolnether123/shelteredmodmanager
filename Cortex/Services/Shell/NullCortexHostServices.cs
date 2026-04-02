@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Presentation.Abstractions;
-using Cortex.Rendering.RuntimeUi;
+using Cortex.Rendering;
 
 namespace Cortex.Shell
 {

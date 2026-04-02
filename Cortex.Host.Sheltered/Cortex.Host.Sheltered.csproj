@@ -42,6 +42,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Runtime\ShelteredCortexHostEnvironment.cs" />
     <Compile Include="Runtime\ShelteredHostPathLayout.cs" />
+    <Compile Include="Runtime\ShelteredWorkbenchUiSurface.cs" />
     <Compile Include="Runtime\ShelteredUnityHostComposition.cs" />
     <Compile Include="Runtime\ShelteredUnityWorkbenchContributionRegistrar.cs" />
   </ItemGroup>
@@ -59,6 +60,16 @@
     <ProjectReference Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj">
       <Project>{7A570620-E51D-499E-A28E-13A1D8156417}</Project>
       <Name>Cortex.Host.Unity</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Rendering\Cortex.Rendering.csproj">
+      <Project>{5B4B178C-9BB0-4297-A07A-5C69FA861A26}</Project>
+      <Name>Cortex.Rendering</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Rendering.RuntimeUi\Cortex.Rendering.RuntimeUi.csproj">
+      <Project>{8F6A2F38-54DF-4B49-8FC4-7F909D1AF6D3}</Project>
+      <Name>Cortex.Rendering.RuntimeUi</Name>
       <Private>False</Private>
     </ProjectReference>
     <ProjectReference Include="..\Cortex.Renderers.Imgui\Cortex.Renderers.Imgui.csproj">

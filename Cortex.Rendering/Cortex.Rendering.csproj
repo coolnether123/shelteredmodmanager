@@ -39,7 +39,7 @@
     <Compile Include="Models\RenderSurfaceModels.cs" />
     <Compile Include="Models\RendererModels.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Runtime\WorkbenchFrameContext.cs" />
+    <Compile Include="Frame\WorkbenchFrameContracts.cs" />
     <Compile Include="Text\TextInputInterfaces.cs" />
     <Compile Include="Text\TextInputModels.cs" />
     <Compile Include="Virtualization\VirtualizationInterfaces.cs" />
