@@ -1,32 +1,23 @@
 using System;
-using System.Collections.Generic;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
+using Cortex.Rendering.RuntimeUi.Panels;
 using UnityEngine;
 
 namespace Cortex.Renderers.Imgui
 {
     public sealed class ImguiPanelRenderer : IPanelRenderer, IDisposable
     {
-        private const float HeaderHeight = 54f;
-        private const float ActionStripHeight = 30f;
-        private const float Padding = 10f;
-        private const float SectionSpacing = 6f;
-        private const float ExpandedSectionTopSpacing = 4f;
         private const float CardPadding = 8f;
         private const float DividerHeight = 1f;
         private const float LabelWidth = 96f;
-        private const float SectionHeaderHeight = 26f;
-        private const float HeaderActionButtonHeight = 24f;
-        private const float HeaderActionButtonSpacing = 6f;
         private const float CardActionButtonHeight = 24f;
         private const float CardActionButtonSpacing = 4f;
-        private const float MinContentWidth = 120f;
-        private const float MinContentHeight = 40f;
 
         private readonly ImguiModuleResources _moduleResources;
         private readonly bool _ownsModuleResources;
         private readonly PanelThemeResources _themeResources = new PanelThemeResources();
+        private readonly IPanelLayoutMeasurer _layoutMeasurer;
 
         public ImguiPanelRenderer()
             : this(new ImguiModuleResources(), true)
@@ -42,6 +33,7 @@ namespace Cortex.Renderers.Imgui
         {
             _moduleResources = moduleResources ?? new ImguiModuleResources();
             _ownsModuleResources = ownsModuleResources;
+            _layoutMeasurer = new ImguiPanelLayoutMeasurer(this);
         }
 
         public void Dispose()
@@ -63,20 +55,20 @@ namespace Cortex.Renderers.Imgui
             }
 
             var unityRect = new Rect(rect.X, rect.Y, rect.Width, rect.Height);
-            var rootLayout = BuildRootLayout(unityRect, document.HeaderActions);
-            var contentWidth = Mathf.Max(MinContentWidth, rootLayout.ContentViewport.width - 16f);
-            var contentLayout = BuildContentLayout(document, contentWidth);
+            var rootLayout = PanelLayoutPlanner.BuildRootLayout(new RenderRect(0f, 0f, unityRect.width, unityRect.height), document.HeaderActions);
+            var contentWidth = Mathf.Max(PanelLayoutPlanner.MinContentWidth, rootLayout.ContentViewport.Width - 16f);
+            var contentLayout = PanelLayoutPlanner.BuildContentLayout(document, contentWidth, _layoutMeasurer);
             var contentRect = new Rect(0f, 0f, contentWidth, contentLayout.TotalHeight);
 
             GUI.BeginGroup(unityRect);
             try
             {
                 DrawChrome(rootLayout, document.HeaderActions != null && document.HeaderActions.Length > 0);
-                DrawHeader(document, rootLayout.HeaderRect, ref result);
-                DrawHeaderActions(document.HeaderActions, rootLayout.HeaderActionsRect, ref result);
+                DrawHeader(document, rootLayout, ref result);
+                DrawHeaderActions(document.HeaderActions, rootLayout, ref result);
 
                 var scrollPosition = GUI.BeginScrollView(
-                    rootLayout.ContentViewport,
+                    ToRect(rootLayout.ContentViewport),
                     new Vector2(result.Scroll.X, result.Scroll.Y),
                     contentRect,
                     false,
@@ -207,151 +199,56 @@ namespace Cortex.Renderers.Imgui
             return style;
         }
 
-        private static RootLayout BuildRootLayout(Rect panelRect, PanelAction[] headerActions)
+        private void DrawChrome(PanelRootLayout rootLayout, bool hasHeaderActions)
         {
-            var hasHeaderActions = headerActions != null && headerActions.Length > 0;
-            var headerRect = new Rect(0f, 0f, panelRect.width, HeaderHeight);
-            var actionsRect = hasHeaderActions
-                ? new Rect(Padding, HeaderHeight + 6f, panelRect.width - (Padding * 2f), ActionStripHeight)
-                : new Rect(Padding, HeaderHeight + 6f, panelRect.width - (Padding * 2f), 0f);
-            var contentTop = hasHeaderActions ? actionsRect.yMax + 8f : headerRect.yMax + 10f;
-            var layout = new RootLayout();
-            layout.PanelRect = new Rect(0f, 0f, panelRect.width, panelRect.height);
-            layout.HeaderRect = headerRect;
-            layout.HeaderActionsRect = actionsRect;
-            layout.ContentViewport = new Rect(
-                Padding,
-                contentTop,
-                panelRect.width - (Padding * 2f),
-                Mathf.Max(24f, panelRect.height - contentTop - Padding));
-            return layout;
-        }
-
-        private void DrawChrome(RootLayout rootLayout, bool hasHeaderActions)
-        {
-            GUI.DrawTexture(rootLayout.PanelRect, _themeResources.BackgroundFill);
-            GUI.DrawTexture(rootLayout.HeaderRect, _themeResources.HeaderFill);
-            GUI.DrawTexture(new Rect(0f, rootLayout.HeaderRect.yMax, rootLayout.PanelRect.width, DividerHeight), _themeResources.DividerFill);
+            GUI.DrawTexture(ToRect(rootLayout.PanelRect), _themeResources.BackgroundFill);
+            GUI.DrawTexture(ToRect(rootLayout.HeaderRect), _themeResources.HeaderFill);
+            GUI.DrawTexture(new Rect(0f, rootLayout.HeaderRect.Y + rootLayout.HeaderRect.Height, rootLayout.PanelRect.Width, DividerHeight), _themeResources.DividerFill);
             if (hasHeaderActions)
             {
-                GUI.DrawTexture(new Rect(Padding, rootLayout.HeaderActionsRect.yMax + 8f, rootLayout.PanelRect.width - (Padding * 2f), DividerHeight), _themeResources.DividerFill);
+                GUI.DrawTexture(
+                    new Rect(
+                        PanelLayoutPlanner.Padding,
+                        rootLayout.HeaderActionsRect.Y + rootLayout.HeaderActionsRect.Height + 8f,
+                        rootLayout.PanelRect.Width - (PanelLayoutPlanner.Padding * 2f),
+                        DividerHeight),
+                    _themeResources.DividerFill);
             }
 
-            ImguiStyleUtil.DrawBorder(rootLayout.PanelRect, _themeResources.BorderFill, 1f);
+            ImguiStyleUtil.DrawBorder(ToRect(rootLayout.PanelRect), _themeResources.BorderFill, 1f);
         }
 
-        private void DrawHeader(PanelDocument document, Rect headerRect, ref PanelRenderResult result)
+        private void DrawHeader(PanelDocument document, PanelRootLayout rootLayout, ref PanelRenderResult result)
         {
-            var titleRect = new Rect(Padding, 8f, headerRect.width - 62f, 24f);
-            var subtitleRect = new Rect(Padding, 31f, headerRect.width - 62f, 18f);
-            GUI.Label(titleRect, document.Title ?? string.Empty, _themeResources.TitleStyle);
-            GUI.Label(subtitleRect, document.Subtitle ?? string.Empty, _themeResources.SubtitleStyle);
+            GUI.Label(ToRect(rootLayout.TitleRect), document.Title ?? string.Empty, _themeResources.TitleStyle);
+            GUI.Label(ToRect(rootLayout.SubtitleRect), document.Subtitle ?? string.Empty, _themeResources.SubtitleStyle);
             if (!document.ShowCloseButton)
             {
                 return;
             }
 
-            var closeRect = new Rect(headerRect.width - 42f, 12f, 28f, 26f);
-            if (GUI.Button(closeRect, "X", _themeResources.CloseButtonStyle))
+            if (GUI.Button(ToRect(rootLayout.CloseButtonRect), "X", _themeResources.CloseButtonStyle))
             {
                 result.ActivatedId = PanelCommandIds.Close;
             }
         }
 
-        private void DrawHeaderActions(PanelAction[] actions, Rect rect, ref PanelRenderResult result)
+        private void DrawHeaderActions(PanelAction[] actions, PanelRootLayout rootLayout, ref PanelRenderResult result)
         {
-            if (actions == null || actions.Length == 0 || rect.height <= 0f)
+            if (actions == null || actions.Length == 0 || rootLayout == null || rootLayout.HeaderActionsRect.Height <= 0f)
             {
                 return;
             }
 
-            var buttonWidth = Mathf.Max(92f, Mathf.Min(132f, (rect.width - 18f) / Math.Max(1, actions.Length)));
-            var x = rect.x;
             for (var i = 0; i < actions.Length; i++)
             {
                 var action = actions[i];
-                if (action == null)
+                if (action == null || i >= rootLayout.HeaderActionButtonRects.Count)
                 {
                     continue;
                 }
 
-                var buttonRect = new Rect(x, rect.y, buttonWidth, HeaderActionButtonHeight);
-                DrawActionButton(buttonRect, action, ref result);
-                x += buttonWidth + HeaderActionButtonSpacing;
-            }
-        }
-
-        private PanelContentLayout BuildContentLayout(PanelDocument document, float width)
-        {
-            var layout = new PanelContentLayout();
-            var y = 0f;
-            var sections = document.Sections ?? new PanelSection[0];
-            for (var i = 0; i < sections.Length; i++)
-            {
-                var section = sections[i];
-                if (section == null)
-                {
-                    continue;
-                }
-
-                var sectionLayout = new PanelSectionLayout();
-                sectionLayout.Section = section;
-                sectionLayout.HeaderRect = new Rect(0f, y, width, SectionHeaderHeight);
-                layout.Sections.Add(sectionLayout);
-
-                y += SectionHeaderHeight;
-                if (!section.Expanded)
-                {
-                    y += SectionSpacing;
-                    continue;
-                }
-
-                y += ExpandedSectionTopSpacing;
-                var elements = section.Elements ?? new PanelElement[0];
-                for (var elementIndex = 0; elementIndex < elements.Length; elementIndex++)
-                {
-                    var element = elements[elementIndex];
-                    if (element == null)
-                    {
-                        continue;
-                    }
-
-                    var elementLayout = BuildElementLayout(width, y, element);
-                    y = elementLayout.NextY;
-                    sectionLayout.ElementLayouts.Add(elementLayout);
-                }
-
-                y += SectionSpacing;
-            }
-
-            layout.TotalHeight = Mathf.Max(MinContentHeight, y);
-            return layout;
-        }
-
-        private PanelElementLayout BuildElementLayout(float width, float startY, PanelElement element)
-        {
-            var rect = new Rect(0f, startY, width, 0f);
-            switch (element.Kind)
-            {
-                case PanelElementKind.Metadata:
-                    var metadata = element as PanelMetadataElement;
-                    rect.height = MeasureMetadataHeight(width, metadata);
-                    return new PanelElementLayout(element, rect, startY + rect.height + 3f + (metadata != null && metadata.DrawDivider ? DividerHeight + 2f : 0f));
-                case PanelElementKind.Text:
-                    rect.height = MeasureTextElementHeight(width, element as PanelTextElement);
-                    return new PanelElementLayout(element, rect, startY + rect.height);
-                case PanelElementKind.Action:
-                    rect.height = MeasureActionElementHeight(width, element as PanelActionElement);
-                    return new PanelElementLayout(element, rect, startY + rect.height + 4f);
-                case PanelElementKind.Card:
-                    rect.height = MeasureCardHeight(width, element as PanelCardElement);
-                    return new PanelElementLayout(element, rect, startY + rect.height + 4f);
-                case PanelElementKind.Spacer:
-                    var spacer = element as PanelSpacerElement;
-                    rect.height = spacer != null ? Mathf.Max(0f, spacer.Height) : 0f;
-                    return new PanelElementLayout(element, rect, startY + rect.height);
-                default:
-                    return new PanelElementLayout(element, rect, startY);
+                DrawActionButton(ToRect(rootLayout.HeaderActionButtonRects[i]), action, ref result);
             }
         }
 
@@ -387,7 +284,7 @@ namespace Cortex.Renderers.Imgui
         {
             var section = layout.Section;
             var title = (section.Expanded ? "[-] " : "[+] ") + (section.Title ?? string.Empty);
-            if (GUI.Button(layout.HeaderRect, title, _themeResources.SectionButtonStyle))
+            if (GUI.Button(ToRect(layout.HeaderRect), title, _themeResources.SectionButtonStyle))
             {
                 result.ActivatedId = PanelCommandIds.CreateSectionToggle(section.Id);
             }
@@ -403,155 +300,93 @@ namespace Cortex.Renderers.Imgui
             switch (layout.Element.Kind)
             {
                 case PanelElementKind.Metadata:
-                    DrawMetadataElement(layout.Bounds, layout.Element as PanelMetadataElement);
+                    DrawMetadataElement(layout.MetadataLayout, layout.Element as PanelMetadataElement);
                     break;
                 case PanelElementKind.Text:
-                    DrawTextElement(layout.Bounds, layout.Element as PanelTextElement);
+                    DrawTextElement(layout.TextLayout, layout.Element as PanelTextElement);
                     break;
                 case PanelElementKind.Action:
-                    DrawActionElement(layout.Bounds, layout.Element as PanelActionElement, ref result);
+                    DrawActionElement(ToRect(layout.Bounds), layout.ActionLayout, layout.Element as PanelActionElement, ref result);
                     break;
                 case PanelElementKind.Card:
-                    DrawCardElement(layout.Bounds, layout.Element as PanelCardElement, ref result);
+                    DrawCardElement(ToRect(layout.Bounds), layout.CardLayout, layout.Element as PanelCardElement, ref result);
                     break;
             }
         }
 
-        private void DrawMetadataElement(Rect rect, PanelMetadataElement element)
+        private void DrawMetadataElement(PanelMetadataContentLayout layout, PanelMetadataElement element)
         {
-            if (element == null)
+            if (element == null || layout == null)
             {
                 return;
             }
 
-            var rowHeight = MeasureMetadataHeight(rect.width, element);
-            var keyRect = new Rect(rect.x, rect.y, LabelWidth, rowHeight);
-            var valueRect = new Rect(rect.x + LabelWidth, rect.y, Mathf.Max(40f, rect.width - LabelWidth), rowHeight);
-            GUI.Label(keyRect, (element.Label ?? string.Empty) + ":", _themeResources.KeyStyle);
-            GUI.Label(valueRect, !string.IsNullOrEmpty(element.Value) ? element.Value : "Unknown", _themeResources.ValueStyle);
+            GUI.Label(ToRect(layout.KeyRect), (element.Label ?? string.Empty) + ":", _themeResources.KeyStyle);
+            GUI.Label(ToRect(layout.ValueRect), !string.IsNullOrEmpty(element.Value) ? element.Value : "Unknown", _themeResources.ValueStyle);
             if (element.DrawDivider)
             {
-                GUI.DrawTexture(new Rect(rect.x, rect.y + rowHeight + 3f, rect.width, DividerHeight), _themeResources.DividerFill);
+                GUI.DrawTexture(ToRect(layout.DividerRect), _themeResources.DividerFill);
             }
         }
 
-        private void DrawTextElement(Rect rect, PanelTextElement element)
+        private void DrawTextElement(PanelTextContentLayout layout, PanelTextElement element)
         {
-            if (element == null)
+            if (element == null || layout == null)
             {
                 return;
             }
 
-            var y = rect.y;
-            if (!string.IsNullOrEmpty(element.Label))
+            if (layout.HasLabel)
             {
-                GUI.Label(new Rect(rect.x, y, rect.width, 18f), element.Label, _themeResources.SectionLabelStyle);
-                y += 20f;
+                GUI.Label(ToRect(layout.LabelRect), element.Label, _themeResources.SectionLabelStyle);
             }
 
             var style = element.Monospace ? _themeResources.MonoStyle : _themeResources.DetailStyle;
-            var textHeight = Mathf.Max(18f, style.CalcHeight(new GUIContent(element.Value ?? string.Empty), rect.width));
-            GUI.Label(new Rect(rect.x, y, rect.width, textHeight), element.Value ?? string.Empty, style);
+            GUI.Label(ToRect(layout.ValueRect), element.Value ?? string.Empty, style);
         }
 
-        private void DrawActionElement(Rect rect, PanelActionElement element, ref PanelRenderResult result)
+        private void DrawActionElement(Rect rect, PanelActionElementContentLayout layout, PanelActionElement element, ref PanelRenderResult result)
         {
-            if (element == null || element.Action == null)
+            if (element == null || element.Action == null || layout == null)
             {
                 return;
             }
 
             GUI.Box(rect, GUIContent.none, _themeResources.CardStyle);
-            var buttonRect = new Rect(rect.x + CardPadding, rect.y + CardPadding, rect.width - (CardPadding * 2f), CardActionButtonHeight);
-            DrawActionButton(buttonRect, element.Action, ref result);
-            if (!string.IsNullOrEmpty(element.Hint))
+            DrawActionButton(ToRect(layout.ButtonRect), element.Action, ref result);
+            if (layout.HasHint)
             {
-                var hintRect = new Rect(buttonRect.x, buttonRect.yMax + CardActionButtonSpacing, buttonRect.width, Mathf.Max(18f, _themeResources.DetailStyle.CalcHeight(new GUIContent(element.Hint), buttonRect.width)));
-                GUI.Label(hintRect, element.Hint, _themeResources.DetailStyle);
+                GUI.Label(ToRect(layout.HintRect), element.Hint, _themeResources.DetailStyle);
             }
         }
 
-        private void DrawCardElement(Rect rect, PanelCardElement element, ref PanelRenderResult result)
+        private void DrawCardElement(Rect rect, PanelCardContentLayout content, PanelCardElement element, ref PanelRenderResult result)
         {
-            if (element == null)
+            if (element == null || content == null)
             {
                 return;
             }
 
             GUI.Box(rect, GUIContent.none, _themeResources.CardStyle);
-            var content = BuildCardContentLayout(rect, element);
             if (!string.IsNullOrEmpty(element.Title))
             {
-                GUI.Label(content.TitleRect, element.Title, _themeResources.SectionLabelStyle);
+                GUI.Label(ToRect(content.TitleRect), element.Title, _themeResources.SectionLabelStyle);
             }
 
-            for (var i = 0; i < content.RowRects.Count; i++)
+            for (var i = 0; i < content.RowLayouts.Count; i++)
             {
-                DrawMetadataElement(content.RowRects[i], content.Rows[i]);
+                DrawMetadataElement(content.RowLayouts[i], content.Rows[i]);
             }
 
             if (content.HasBody)
             {
-                GUI.Label(content.BodyRect, element.Body ?? string.Empty, _themeResources.DetailStyle);
+                GUI.Label(ToRect(content.BodyRect), element.Body ?? string.Empty, _themeResources.DetailStyle);
             }
 
             for (var i = 0; i < content.ActionRects.Count; i++)
             {
-                DrawActionButton(content.ActionRects[i], content.Actions[i], ref result);
+                DrawActionButton(ToRect(content.ActionRects[i]), content.Actions[i], ref result);
             }
-        }
-
-        private CardContentLayout BuildCardContentLayout(Rect cardRect, PanelCardElement element)
-        {
-            var layout = new CardContentLayout();
-            var innerWidth = Mathf.Max(40f, cardRect.width - (CardPadding * 2f));
-            var x = cardRect.x + CardPadding;
-            var y = cardRect.y + CardPadding;
-
-            if (!string.IsNullOrEmpty(element.Title))
-            {
-                layout.TitleRect = new Rect(x, y, innerWidth, 18f);
-                y += 20f;
-            }
-
-            var rows = element.Rows ?? new PanelMetadataElement[0];
-            for (var i = 0; i < rows.Length; i++)
-            {
-                var row = rows[i];
-                if (row == null)
-                {
-                    continue;
-                }
-
-                var rowHeight = MeasureMetadataHeight(innerWidth, row);
-                layout.Rows.Add(row);
-                layout.RowRects.Add(new Rect(x, y, innerWidth, rowHeight));
-                y += rowHeight + 3f + (row.DrawDivider ? DividerHeight + 2f : 0f);
-            }
-
-            if (!string.IsNullOrEmpty(element.Body))
-            {
-                var bodyHeight = Mathf.Max(18f, _themeResources.DetailStyle.CalcHeight(new GUIContent(element.Body), innerWidth));
-                layout.HasBody = true;
-                layout.BodyRect = new Rect(x, y, innerWidth, bodyHeight);
-                y += bodyHeight + CardActionButtonSpacing;
-            }
-
-            var actions = element.Actions ?? new PanelAction[0];
-            for (var i = 0; i < actions.Length; i++)
-            {
-                var action = actions[i];
-                if (action == null)
-                {
-                    continue;
-                }
-
-                layout.Actions.Add(action);
-                layout.ActionRects.Add(new Rect(x, y, Mathf.Min(180f, innerWidth), CardActionButtonHeight));
-                y += CardActionButtonHeight + CardActionButtonSpacing;
-            }
-
-            return layout;
         }
 
         private void DrawActionButton(Rect rect, PanelAction action, ref PanelRenderResult result)
@@ -687,50 +522,39 @@ namespace Cortex.Renderers.Imgui
             public GUIStyle CardStyle;
         }
 
-        private sealed class RootLayout
+        private static Rect ToRect(RenderRect rect)
         {
-            public Rect PanelRect;
-            public Rect HeaderRect;
-            public Rect HeaderActionsRect;
-            public Rect ContentViewport;
+            return new Rect(rect.X, rect.Y, rect.Width, rect.Height);
         }
 
-        private sealed class PanelContentLayout
+        private sealed class ImguiPanelLayoutMeasurer : IPanelLayoutMeasurer
         {
-            public List<PanelSectionLayout> Sections = new List<PanelSectionLayout>();
-            public float TotalHeight;
-        }
+            private readonly ImguiPanelRenderer _owner;
 
-        private sealed class PanelSectionLayout
-        {
-            public PanelSection Section;
-            public Rect HeaderRect;
-            public List<PanelElementLayout> ElementLayouts = new List<PanelElementLayout>();
-        }
-
-        private sealed class PanelElementLayout
-        {
-            public readonly PanelElement Element;
-            public readonly Rect Bounds;
-            public readonly float NextY;
-
-            public PanelElementLayout(PanelElement element, Rect bounds, float nextY)
+            public ImguiPanelLayoutMeasurer(ImguiPanelRenderer owner)
             {
-                Element = element;
-                Bounds = bounds;
-                NextY = nextY;
+                _owner = owner;
             }
-        }
 
-        private sealed class CardContentLayout
-        {
-            public Rect TitleRect;
-            public bool HasBody;
-            public Rect BodyRect;
-            public List<PanelMetadataElement> Rows = new List<PanelMetadataElement>();
-            public List<Rect> RowRects = new List<Rect>();
-            public List<PanelAction> Actions = new List<PanelAction>();
-            public List<Rect> ActionRects = new List<Rect>();
+            public float MeasureMetadataHeight(float width, PanelMetadataElement element)
+            {
+                return _owner.MeasureMetadataHeight(width, element);
+            }
+
+            public float MeasureTextHeight(float width, PanelTextElement element)
+            {
+                return _owner.MeasureTextElementHeight(width, element);
+            }
+
+            public float MeasureActionHeight(float width, PanelActionElement element)
+            {
+                return _owner.MeasureActionElementHeight(width, element);
+            }
+
+            public float MeasureCardHeight(float width, PanelCardElement element)
+            {
+                return _owner.MeasureCardHeight(width, element);
+            }
         }
     }
 }

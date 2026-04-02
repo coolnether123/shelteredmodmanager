@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Presentation.Abstractions;
+using Cortex.Rendering.RuntimeUi;
 
 namespace Cortex.Shell
 {
@@ -9,7 +10,7 @@ namespace Cortex.Shell
         public static readonly NullCortexHostServices Instance = new NullCortexHostServices();
 
         private readonly ICortexHostEnvironment _environment = new NullCortexHostEnvironment();
-        private readonly ICortexShellHostUi _shellHostUi = new NullCortexShellHostUi();
+        private readonly IWorkbenchFrameContext _frameContext = NullWorkbenchFrameContext.Instance;
 
         private NullCortexHostServices()
         {
@@ -35,9 +36,9 @@ namespace Cortex.Shell
             get { return NullCortexPlatformModule.Instance; }
         }
 
-        public ICortexShellHostUi ShellHostUi
+        public IWorkbenchFrameContext FrameContext
         {
-            get { return _shellHostUi; }
+            get { return _frameContext; }
         }
 
         public string PreferredLanguageProviderId
@@ -113,66 +114,5 @@ namespace Cortex.Shell
             }
         }
 
-        private sealed class NullCortexShellHostUi : ICortexShellHostUi
-        {
-            public int ScreenWidth
-            {
-                get { return 1920; }
-            }
-
-            public int ScreenHeight
-            {
-                get { return 1080; }
-            }
-
-            public int HotControl
-            {
-                get { return 0; }
-            }
-
-            public int KeyboardControl
-            {
-                get { return 0; }
-            }
-
-            public bool HasCurrentEvent
-            {
-                get { return false; }
-            }
-
-            public CortexShellInputEventKind CurrentEventKind
-            {
-                get { return CortexShellInputEventKind.None; }
-            }
-
-            public CortexShellInputEventKind CurrentEventRawKind
-            {
-                get { return CortexShellInputEventKind.None; }
-            }
-
-            public CortexShellInputKey CurrentKey
-            {
-                get { return CortexShellInputKey.None; }
-            }
-
-            public int CurrentMouseButton
-            {
-                get { return -1; }
-            }
-
-            public CortexShellPointerPosition CurrentMousePosition
-            {
-                get { return new CortexShellPointerPosition(0f, 0f); }
-            }
-
-            public CortexShellPointerPosition PointerPosition
-            {
-                get { return new CortexShellPointerPosition(0f, 0f); }
-            }
-
-            public void ConsumeCurrentEvent()
-            {
-            }
-        }
     }
 }

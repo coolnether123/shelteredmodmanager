@@ -46,6 +46,11 @@
       <Name>Cortex.Core</Name>
       <Private>False</Private>
     </ProjectReference>
+    <ProjectReference Include="..\Cortex.Rendering\Cortex.Rendering.csproj">
+      <Project>{5B4B178C-9BB0-4297-A07A-5C69FA861A26}</Project>
+      <Name>Cortex.Rendering</Name>
+      <Private>False</Private>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

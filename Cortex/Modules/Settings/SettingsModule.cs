@@ -9,6 +9,7 @@ using Cortex.Core.Services;
 using Cortex.Modules.Shared;
 using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
+using Cortex.Rendering.RuntimeUi;
 using UnityEngine;
 using Cortex.Services.Editor.Input;
 using Cortex.Services.Onboarding;
@@ -66,7 +67,7 @@ namespace Cortex.Modules.Settings
 
         private IWorkbenchUiSurface UiSurface
         {
-            get { return _uiSurface ?? CortexUi.DefaultSurface; }
+            get { return _uiSurface ?? NullWorkbenchUiSurface.Instance; }
         }
 
         public void Draw(
@@ -86,7 +87,7 @@ namespace Cortex.Modules.Settings
             _pathInteractionService = pathInteractionService;
             _snapshot = snapshot;
             _shellState = state;
-            _uiSurface = uiSurface ?? CortexUi.DefaultSurface;
+            _uiSurface = uiSurface ?? NullWorkbenchUiSurface.Instance;
             EnsureLoaded(snapshot, themeState, state);
 
             var document = BuildDocument(snapshot);

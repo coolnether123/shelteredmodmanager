@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Presentation.Abstractions;
+using Cortex.Rendering.RuntimeUi;
 
 namespace Cortex.Host.Unity.Runtime
 {
@@ -10,20 +11,20 @@ namespace Cortex.Host.Unity.Runtime
         private readonly IPathInteractionService _pathInteractionService;
         private readonly IWorkbenchRuntimeFactory _workbenchRuntimeFactory;
         private readonly ICortexPlatformModule _platformModule;
-        private readonly ICortexShellHostUi _shellHostUi;
+        private readonly IWorkbenchFrameContext _frameContext;
 
         public UnityCortexHostServices(
             ICortexHostEnvironment environment,
             IPathInteractionService pathInteractionService,
             IWorkbenchRuntimeFactory workbenchRuntimeFactory,
             ICortexPlatformModule platformModule,
-            ICortexShellHostUi shellHostUi)
+            IWorkbenchFrameContext frameContext)
         {
             _environment = environment;
             _pathInteractionService = pathInteractionService;
             _workbenchRuntimeFactory = workbenchRuntimeFactory;
             _platformModule = platformModule;
-            _shellHostUi = shellHostUi;
+            _frameContext = frameContext ?? NullWorkbenchFrameContext.Instance;
         }
 
         public ICortexHostEnvironment Environment
@@ -46,9 +47,9 @@ namespace Cortex.Host.Unity.Runtime
             get { return _platformModule; }
         }
 
-        public ICortexShellHostUi ShellHostUi
+        public IWorkbenchFrameContext FrameContext
         {
-            get { return _shellHostUi; }
+            get { return _frameContext; }
         }
 
         public string PreferredLanguageProviderId

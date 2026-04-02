@@ -1,6 +1,7 @@
 using System;
 using Cortex.Core.Abstractions;
 using Cortex.Host.Unity.Runtime;
+using Cortex.Renderers.Imgui;
 
 namespace Cortex.Host.Sheltered.Runtime
 {
@@ -14,12 +15,15 @@ namespace Cortex.Host.Sheltered.Runtime
             }
 
             var environment = new ShelteredCortexHostEnvironment();
+            var frameContext = new UnityWorkbenchFrameContext();
             var hostServices = new UnityCortexHostServices(
                 environment,
                 new WindowsPathInteractionService(environment),
-                new UnityWorkbenchRuntimeFactory(new ShelteredUnityWorkbenchContributionRegistrar()),
+                new UnityWorkbenchRuntimeFactory(
+                    new ShelteredUnityWorkbenchContributionRegistrar(),
+                    new ImguiWorkbenchRuntimeUiFactory(new CortexWorkbenchUiSurface(), frameContext)),
                 platformModule,
-                new UnityCortexShellHostUi());
+                frameContext);
 
             return new UnityCortexHostCompositionRoot(hostServices);
         }

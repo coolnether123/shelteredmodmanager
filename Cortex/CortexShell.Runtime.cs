@@ -4,8 +4,9 @@ using System.IO;
 using Cortex.Core.Models;
 using Cortex.Modules.Editor;
 using Cortex.Modules.Shared;
-using Cortex.Renderers.Imgui;
+using Cortex.Plugins.Abstractions;
 using Cortex.Rendering.Abstractions;
+using Cortex.Rendering.RuntimeUi;
 using UnityEngine;
 
 namespace Cortex
@@ -64,7 +65,6 @@ namespace Cortex
 
         private void ResetModuleRuntime()
         {
-            DisposeRenderPipeline();
             _moduleServices = null;
             _moduleCompositionService = null;
             _moduleActivationService = null;
@@ -74,23 +74,39 @@ namespace Cortex
 
         private IRenderPipeline GetRenderPipeline()
         {
-            if (_renderPipeline == null)
-            {
-                _renderPipeline = new ImguiRenderPipeline();
-            }
-
-            return _renderPipeline;
+            var runtimeUiProvider = _workbenchRuntime as IWorkbenchRuntimeUiProvider;
+            var runtimeUi = runtimeUiProvider != null ? runtimeUiProvider.RuntimeUi : null;
+            return runtimeUi != null ? runtimeUi.RenderPipeline : NullWorkbenchRuntimeUi.Instance.RenderPipeline;
         }
 
-        private void DisposeRenderPipeline()
+        private IWorkbenchUiSurface GetWorkbenchUiSurface()
         {
-            var disposable = _renderPipeline as IDisposable;
+            var runtimeUiProvider = _workbenchRuntime as IWorkbenchRuntimeUiProvider;
+            var runtimeUi = runtimeUiProvider != null ? runtimeUiProvider.RuntimeUi : null;
+            return runtimeUi != null ? runtimeUi.WorkbenchUiSurface : NullWorkbenchUiSurface.Instance;
+        }
+
+        private IWorkbenchFrameContext GetWorkbenchFrameContext()
+        {
+            var runtimeUiProvider = _workbenchRuntime as IWorkbenchRuntimeUiProvider;
+            var runtimeUi = runtimeUiProvider != null ? runtimeUiProvider.RuntimeUi : null;
+            if (runtimeUi != null && runtimeUi.FrameContext != null)
+            {
+                return runtimeUi.FrameContext;
+            }
+
+            return _hostFrameContext ?? NullWorkbenchFrameContext.Instance;
+        }
+
+        private void DisposeWorkbenchRuntime()
+        {
+            var disposable = _workbenchRuntime as IDisposable;
             if (disposable != null)
             {
                 disposable.Dispose();
             }
 
-            _renderPipeline = null;
+            _workbenchRuntime = null;
         }
 
         private void EnsureModuleContributionsRegistered()
@@ -136,6 +152,7 @@ namespace Cortex
                 _moduleRenderService = new CortexShellModuleRenderService(
                     GetModuleCompositionService(),
                     GetModuleActivationService(),
+                    GetWorkbenchUiSurface,
                     delegate(string containerId) { return CanActivateContainer(containerId); },
                     delegate(string containerId) { return BuildActivationBlockedMessage(containerId); });
             }

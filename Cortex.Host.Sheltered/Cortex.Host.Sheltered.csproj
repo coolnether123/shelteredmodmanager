@@ -61,6 +61,11 @@
       <Name>Cortex.Host.Unity</Name>
       <Private>False</Private>
     </ProjectReference>
+    <ProjectReference Include="..\Cortex.Renderers.Imgui\Cortex.Renderers.Imgui.csproj">
+      <Project>{4D1B939A-3C10-4A7B-B6C4-259D50848A5A}</Project>
+      <Name>Cortex.Renderers.Imgui</Name>
+      <Private>False</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj">
       <Project>{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1}</Project>
       <Name>Cortex.Plugins.Abstractions</Name>

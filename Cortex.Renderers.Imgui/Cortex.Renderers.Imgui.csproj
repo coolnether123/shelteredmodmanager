@@ -33,6 +33,8 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ImguiWorkbenchRuntimeUi.cs" />
+    <Compile Include="ImguiWorkbenchRuntimeUiFactory.cs" />
     <Compile Include="ImguiModuleResources.cs" />
     <Compile Include="ImguiHoverTooltipRenderer.cs" />
     <Compile Include="ImguiOverlayRendererFactory.cs" />
@@ -55,6 +57,11 @@
     <ProjectReference Include="..\Cortex.Rendering\Cortex.Rendering.csproj">
       <Project>{5B4B178C-9BB0-4297-A07A-5C69FA861A26}</Project>
       <Name>Cortex.Rendering</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Rendering.RuntimeUi\Cortex.Rendering.RuntimeUi.csproj">
+      <Project>{8F6A2F38-54DF-4B49-8FC4-7F909D1AF6D3}</Project>
+      <Name>Cortex.Rendering.RuntimeUi</Name>
       <Private>False</Private>
     </ProjectReference>
   </ItemGroup>

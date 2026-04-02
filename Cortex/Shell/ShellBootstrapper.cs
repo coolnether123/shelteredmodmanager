@@ -6,6 +6,7 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Presentation.Abstractions;
 using Cortex.Plugins.Abstractions;
+using Cortex.Rendering.RuntimeUi;
 using Cortex.Services.Navigation;
 using Cortex.Services.Navigation.Metadata;
 using Cortex.Services.Editor.Context;
@@ -31,7 +32,7 @@ namespace Cortex.Shell
         private IWorkbenchRuntimeFactory _workbenchRuntimeFactory;
         private ICortexPlatformModule _platformModule;
         private ICortexHostEnvironment _hostEnvironment;
-        private ICortexShellHostUi _shellHostUi;
+        private IWorkbenchFrameContext _frameContext;
         private IPathInteractionService _pathInteractionService;
         private string _preferredLanguageProviderId;
         private WorkbenchPluginLoader _pluginLoader;
@@ -63,7 +64,7 @@ namespace Cortex.Shell
         public IWorkbenchRuntimeFactory RuntimeFactory => _workbenchRuntimeFactory;
         public ICortexPlatformModule PlatformModule => _platformModule;
         public ICortexHostEnvironment HostEnvironment => _hostEnvironment;
-        public ICortexShellHostUi ShellHostUi => _shellHostUi;
+        public IWorkbenchFrameContext FrameContext => _frameContext;
         public IPathInteractionService PathInteractionService => _pathInteractionService;
         public WorkbenchPluginLoader PluginLoader => _pluginLoader;
 
@@ -73,7 +74,7 @@ namespace Cortex.Shell
             _workbenchRuntimeFactory = resolvedHostServices.WorkbenchRuntimeFactory;
             _platformModule = resolvedHostServices.PlatformModule ?? NullCortexPlatformModule.Instance;
             _hostEnvironment = resolvedHostServices.Environment ?? NullCortexHostServices.Instance.Environment;
-            _shellHostUi = resolvedHostServices.ShellHostUi ?? NullCortexHostServices.Instance.ShellHostUi;
+            _frameContext = resolvedHostServices.FrameContext ?? NullWorkbenchFrameContext.Instance;
             _pathInteractionService = resolvedHostServices.PathInteractionService;
             _preferredLanguageProviderId = resolvedHostServices.PreferredLanguageProviderId ?? string.Empty;
         }
@@ -273,8 +274,9 @@ namespace Cortex.Shell
 
             if (effective.WindowWidth < 980f || effective.WindowHeight < 620f)
             {
-                effective.WindowWidth = Math.Max(980f, _shellHostUi.ScreenWidth * 0.82f);
-                effective.WindowHeight = Math.Max(620f, _shellHostUi.ScreenHeight * 0.82f);
+                var frameSnapshot = (_frameContext ?? NullWorkbenchFrameContext.Instance).Snapshot;
+                effective.WindowWidth = Math.Max(980f, frameSnapshot.ViewportSize.Width * 0.82f);
+                effective.WindowHeight = Math.Max(620f, frameSnapshot.ViewportSize.Height * 0.82f);
             }
 
             if (effective.WindowX < 0f) effective.WindowX = 40f;
