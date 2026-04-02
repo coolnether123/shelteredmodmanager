@@ -4,6 +4,7 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
+using Cortex.Rendering.RuntimeUi;
 using UnityEngine;
 using Cortex.Services.Onboarding;
 
@@ -20,14 +21,8 @@ namespace Cortex.Shell
         private readonly CortexShellState _state;
         private readonly CortexOnboardingCoordinator _onboardingCoordinator;
         private readonly CortexShellOnboardingLifecycle _onboardingLifecycle;
-        private readonly Func<ICortexShellHostUi> _shellHostUiProvider;
         private readonly Func<IOverlayInputCaptureService> _overlayInputCaptureServiceProvider;
-        private readonly Func<Vector2> _mousePositionProvider;
-        private readonly Func<Vector2> _pointerPositionProvider;
-        private readonly Func<bool> _hasInputEventProvider;
-        private readonly Func<CortexShellInputEventKind, bool> _inputEventKindProvider;
-        private readonly Func<CortexShellInputKey, bool> _keyEventProvider;
-        private readonly Func<int> _mouseButtonProvider;
+        private readonly Func<WorkbenchFrameInputSnapshot> _frameInputProvider;
         private readonly Action _consumeEventAction;
 
         private bool _lastOverlayMouseCapture;
@@ -37,41 +32,29 @@ namespace Cortex.Shell
             CortexShellState state,
             CortexOnboardingCoordinator onboardingCoordinator,
             CortexShellOnboardingLifecycle onboardingLifecycle,
-            Func<ICortexShellHostUi> shellHostUiProvider,
             Func<IOverlayInputCaptureService> overlayInputCaptureServiceProvider,
-            Func<Vector2> mousePositionProvider,
-            Func<Vector2> pointerPositionProvider,
-            Func<bool> hasInputEventProvider,
-            Func<CortexShellInputEventKind, bool> inputEventKindProvider,
-            Func<CortexShellInputKey, bool> keyEventProvider,
-            Func<int> mouseButtonProvider,
+            Func<WorkbenchFrameInputSnapshot> frameInputProvider,
             Action consumeEventAction)
         {
             _state = state;
             _onboardingCoordinator = onboardingCoordinator;
             _onboardingLifecycle = onboardingLifecycle;
-            _shellHostUiProvider = shellHostUiProvider;
             _overlayInputCaptureServiceProvider = overlayInputCaptureServiceProvider;
-            _mousePositionProvider = mousePositionProvider;
-            _pointerPositionProvider = pointerPositionProvider;
-            _hasInputEventProvider = hasInputEventProvider;
-            _inputEventKindProvider = inputEventKindProvider;
-            _keyEventProvider = keyEventProvider;
-            _mouseButtonProvider = mouseButtonProvider;
+            _frameInputProvider = frameInputProvider;
             _consumeEventAction = consumeEventAction;
         }
 
         public void UpdateOverlayInputCapture(bool visible, Rect windowRect, Rect logWindowRect)
         {
-            var shellHostUi = _shellHostUiProvider();
+            var input = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
             var captureMouse = false;
-            var captureKeyboard = shellHostUi.HotControl != 0 || shellHostUi.KeyboardControl != 0;
+            var captureKeyboard = input.HotControl != 0 || input.KeyboardControl != 0;
 
             if (_state.Onboarding.IsActive) { ApplyOverlayInputCapture(true, true); return; }
             if (visible)
             {
-                var guiMouse = _pointerPositionProvider();
-                captureMouse = shellHostUi.HotControl != 0 || IsPointWithinVisibleChrome(guiMouse, windowRect, logWindowRect);
+                var guiMouse = ToVector2(input.PointerPosition);
+                captureMouse = input.HotControl != 0 || IsPointWithinVisibleChrome(guiMouse, windowRect, logWindowRect);
             }
             ApplyOverlayInputCapture(captureMouse, captureKeyboard);
         }
@@ -105,13 +88,15 @@ namespace Cortex.Shell
 
         public void DrawOnboardingOverlay(ICortexHostEnvironment hostEnvironment, ILoadedModCatalog loadedModCatalog, IProjectCatalog projectCatalog, IProjectWorkspaceService projectWorkspaceService, IWorkbenchRuntime workbenchRuntime, IPathInteractionService pathInteractionService, Action<string> activateContainerAction, Action persistSessionAction, Action persistWindowSettingsAction)
         {
-            var screenWidth = _shellHostUiProvider().ScreenWidth;
-            var screenHeight = _shellHostUiProvider().ScreenHeight;
+            var input = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
+            var screenWidth = input.ViewportSize.Width;
+            var screenHeight = input.ViewportSize.Height;
             var fullscreenRect = new Rect(0f, 0f, screenWidth, screenHeight);
             GUI.ModalWindow(OnboardingWindowId, fullscreenRect, (id) => {
                 var modalRect = BuildOnboardingModalRect(fullscreenRect);
                 var promptRect = BuildOnboardingPromptRect(modalRect);
-                var mousePos = _hasInputEventProvider() ? _mousePositionProvider() : Vector2.zero;
+                var currentInput = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
+                var mousePos = currentInput.HasCurrentEvent ? ToVector2(currentInput.CurrentMousePosition) : Vector2.zero;
                 var previewBg = !_state.Onboarding.KeepFocused && fullscreenRect.Contains(mousePos) && !modalRect.Contains(mousePos) && !promptRect.Contains(mousePos);
 
                 HandleOnboardingOverlayInput(fullscreenRect, modalRect, promptRect, () => CompleteOnboarding(projectCatalog, projectWorkspaceService, persistSessionAction, persistWindowSettingsAction, workbenchRuntime, activateContainerAction));
@@ -130,14 +115,16 @@ namespace Cortex.Shell
 
         private void HandleOnboardingOverlayInput(Rect fullscreenRect, Rect modalRect, Rect promptRect, Action onComplete)
         {
-            if (!_hasInputEventProvider()) return;
-            var mousePos = _mousePositionProvider();
-            if (_inputEventKindProvider(CortexShellInputEventKind.MouseDown))
+            var input = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
+            if (!input.HasCurrentEvent) return;
+
+            var mousePos = ToVector2(input.CurrentMousePosition);
+            if (input.CurrentEventKind == WorkbenchInputEventKind.MouseDown)
             {
                 if (modalRect.Contains(mousePos)) _state.Onboarding.FinishPrompt.IsVisible = false;
                 else if (fullscreenRect.Contains(mousePos) && !promptRect.Contains(mousePos)) { ShowOnboardingFinishPrompt(mousePos); _consumeEventAction(); }
             }
-            else if (_inputEventKindProvider(CortexShellInputEventKind.KeyDown) && _keyEventProvider(CortexShellInputKey.Escape))
+            else if (input.CurrentEventKind == WorkbenchInputEventKind.KeyDown && input.CurrentKey == WorkbenchInputKey.Escape)
             {
                 ShowOnboardingFinishPrompt(new Vector2(modalRect.xMax - 120f, modalRect.yMax - 54f)); _consumeEventAction();
             }
@@ -180,5 +167,6 @@ namespace Cortex.Shell
         private static void DrawOnboardingBorder(Rect rect, Color c, float t) { DrawOnboardingBlock(new Rect(rect.x, rect.y, rect.width, t), c); DrawOnboardingBlock(new Rect(rect.x, rect.yMax - t, rect.width, t), c); DrawOnboardingBlock(new Rect(rect.x, rect.y, t, rect.height), c); DrawOnboardingBlock(new Rect(rect.xMax - t, rect.y, t, rect.height), c); }
         private static void DrawOnboardingBlock(Rect rect, Color c) { if (Event.current?.type != EventType.Repaint) return; var prev = GUI.color; GUI.color = c; GUI.DrawTexture(rect, Texture2D.whiteTexture); GUI.color = prev; }
         private static GUIStyle CreateOnboardingPromptTitleStyle() { var s = new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold }; s.normal.textColor = CortexIdeLayout.GetTextColor(); return s; }
+        private static Vector2 ToVector2(Cortex.Rendering.Models.RenderPoint point) { return new Vector2(point.X, point.Y); }
     }
 }

@@ -5,6 +5,7 @@ using Cortex.Core.Models;
 using Cortex.Modules.Shared;
 using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
+using Cortex.Rendering.RuntimeUi;
 using UnityEngine;
 
 namespace Cortex
@@ -150,7 +151,7 @@ namespace Cortex
                 return;
             }
 
-            if (IsCurrentInputEvent(CortexShellInputEventKind.MouseDown))
+            if (IsCurrentInputEvent(WorkbenchInputEventKind.MouseDown))
             {
                 var mousePosition = GetCurrentMousePosition();
                 var overGroup = false;
@@ -168,7 +169,7 @@ namespace Cortex
                     _openMenuGroup = string.Empty;
                 }
             }
-            else if (IsCurrentInputEvent(CortexShellInputEventKind.KeyDown) && IsCurrentKey(CortexShellInputKey.Escape))
+            else if (IsCurrentInputEvent(WorkbenchInputEventKind.KeyDown) && IsCurrentKey(WorkbenchInputKey.Escape))
             {
                 _openMenuGroup = string.Empty;
                 ConsumeCurrentInputEvent();

@@ -1,5 +1,6 @@
 using System;
 using Cortex.Rendering.Abstractions;
+using Cortex.Rendering.RuntimeUi;
 
 namespace Cortex.Renderers.Imgui
 {
@@ -11,11 +12,16 @@ namespace Cortex.Renderers.Imgui
         private readonly IOverlayRendererFactory _overlayRendererFactory;
 
         public ImguiRenderPipeline()
+            : this(null)
+        {
+        }
+
+        public ImguiRenderPipeline(IWorkbenchFrameContext frameContext)
         {
             _moduleResources = new ImguiModuleResources();
             _workbenchRenderer = new ImguiWorkbenchRenderer();
             _panelRenderer = new ImguiPanelRenderer(_moduleResources);
-            _overlayRendererFactory = new ImguiOverlayRendererFactory(_moduleResources);
+            _overlayRendererFactory = new ImguiOverlayRendererFactory(_moduleResources, frameContext);
         }
 
         public IWorkbenchRenderer WorkbenchRenderer

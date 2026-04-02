@@ -1,56 +1,38 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
+using Cortex.Rendering.RuntimeUi;
+using Cortex.Rendering.RuntimeUi.PopupMenus;
 using UnityEngine;
 
 namespace Cortex.Renderers.Imgui
 {
     internal sealed class ImguiPopupMenuRenderer : IPopupMenuRenderer, IDisposable
     {
-        private const float HeaderHeight = 28f;
-        private const float ItemHeight = 24f;
-        private const float SeparatorHeight = 8f;
-        private const float ScrollWheelStep = 18f;
-        private const float RawAxisScrollScale = 10f;
-        private const float ScrollButtonHeight = 18f;
-        private const float ScrollChromeWidth = 18f;
-        private const float HorizontalPadding = 8f;
-        private const float VerticalPadding = 6f;
         private const float HoverAccentWidth = 3f;
 
         private readonly ImguiModuleResources _moduleResources;
         private readonly bool _ownsModuleResources;
+        private readonly IWorkbenchFrameContext _frameContext;
         private readonly PopupThemeResources _themeResources = new PopupThemeResources();
-
-        private Vector2 _scrollPosition = new Vector2(0f, 0f);
-        private string _scrollKey = string.Empty;
-        private float _pendingScrollDelta;
-        private string _pressedCommandId = string.Empty;
-        private int _lastRawScrollFrame = -1;
-        private bool _queuedMouseDown;
-        private bool _queuedMouseUp;
-        private bool _queuedOutsideClickClose;
-        private int _queuedMouseDownButton = -1;
-        private int _queuedMouseUpButton = -1;
-        private Vector2 _queuedMouseDownPosition = Vector2.zero;
-        private Vector2 _queuedMouseUpPosition = Vector2.zero;
+        private readonly PopupMenuRuntimeState _runtimeState = new PopupMenuRuntimeState();
 
         public ImguiPopupMenuRenderer()
-            : this(new ImguiModuleResources(), true)
+            : this(new ImguiModuleResources(), null, true)
         {
         }
 
-        internal ImguiPopupMenuRenderer(ImguiModuleResources moduleResources)
-            : this(moduleResources, false)
+        internal ImguiPopupMenuRenderer(ImguiModuleResources moduleResources, IWorkbenchFrameContext frameContext)
+            : this(moduleResources, frameContext, false)
         {
         }
 
-        private ImguiPopupMenuRenderer(ImguiModuleResources moduleResources, bool ownsModuleResources)
+        private ImguiPopupMenuRenderer(ImguiModuleResources moduleResources, IWorkbenchFrameContext frameContext, bool ownsModuleResources)
         {
             _moduleResources = moduleResources ?? new ImguiModuleResources();
             _ownsModuleResources = ownsModuleResources;
+            _frameContext = frameContext ?? NullWorkbenchFrameContext.Instance;
         }
 
         public void Dispose()
@@ -63,83 +45,24 @@ namespace Cortex.Renderers.Imgui
 
         public void Reset()
         {
-            _scrollPosition = new Vector2(0f, 0f);
-            _scrollKey = string.Empty;
-            _pendingScrollDelta = 0f;
-            _pressedCommandId = string.Empty;
-            _lastRawScrollFrame = -1;
-            ClearQueuedPointerState();
+            PopupMenuInteractionController.Reset(_runtimeState);
         }
 
         public void QueueScrollDelta(float delta)
         {
-            _pendingScrollDelta += delta * ScrollWheelStep;
+            PopupMenuInteractionController.QueueScrollDelta(_runtimeState, delta);
         }
 
         public bool TryCapturePointerInput(RenderRect menuRect, RenderPoint localMouse)
         {
-            var current = Event.current;
-            if (current == null)
+            var input = RuntimeUiPointerInputAdapter.FromWorkbenchFrameInput(_frameContext.Snapshot, localMouse);
+            var capture = PopupMenuInteractionController.TryCapturePointerInput(_runtimeState, menuRect, input);
+            if (capture.ShouldConsumeInput)
             {
-                return false;
+                _frameContext.ConsumeCurrentInput();
             }
 
-            var unityMenuRect = ToRect(menuRect);
-            var unityMouse = new Vector2(localMouse.X, localMouse.Y);
-            var isInsideMenu = unityMenuRect.Contains(unityMouse);
-            if (current.type == EventType.MouseDown)
-            {
-                if (isInsideMenu)
-                {
-                    QueuePointerDown(current.button, unityMouse);
-                    current.Use();
-                    return true;
-                }
-
-                _queuedOutsideClickClose = true;
-                current.Use();
-                return true;
-            }
-
-            if (current.type == EventType.MouseUp)
-            {
-                if (isInsideMenu)
-                {
-                    QueuePointerUp(current.button, unityMouse);
-                    current.Use();
-                    return true;
-                }
-
-                current.Use();
-                return true;
-            }
-
-            if (!isInsideMenu)
-            {
-                return false;
-            }
-
-            if (current.type == EventType.ScrollWheel)
-            {
-                QueueScrollDelta(current.delta.y);
-                current.Use();
-                return true;
-            }
-
-            if (Time.frameCount == _lastRawScrollFrame)
-            {
-                return false;
-            }
-
-            var rawAxis = ReadRawScrollAxis();
-            if (Mathf.Abs(rawAxis) <= 0.0001f)
-            {
-                return false;
-            }
-
-            _lastRawScrollFrame = Time.frameCount;
-            QueueScrollDelta(-rawAxis * RawAxisScrollScale);
-            return true;
+            return capture.Captured;
         }
 
         public PopupMenuRenderResult Draw(
@@ -153,49 +76,40 @@ namespace Cortex.Renderers.Imgui
             EnsureTheme(theme);
             var result = new PopupMenuRenderResult();
             var safeItems = items ?? new PopupMenuItemModel[0];
-            ResetScrollStateForMenu(headerText, safeItems);
+            PopupMenuInteractionController.ResetForMenu(_runtimeState, headerText, safeItems);
 
-            float contentHeight;
-            var menuRect = BuildMenuRect(position, viewportSize, safeItems, out contentHeight);
+            var layout = PopupMenuLayoutPlanner.BuildLayout(position, viewportSize, safeItems);
+            var menuRect = layout.MenuRect;
+            var drawLayout = PopupMenuLayoutPlanner.BuildDrawLayout(position, viewportSize, safeItems, _runtimeState.ScrollOffset, headerText);
             var unityMenuRect = ToRect(menuRect);
             var unityMouse = new Vector2(localMouse.X, localMouse.Y);
             result.MenuRect = menuRect;
 
             GUI.Box(unityMenuRect, GUIContent.none, _themeResources.MenuStyle);
-            GUI.Label(
-                new Rect(unityMenuRect.x + HorizontalPadding, unityMenuRect.y + VerticalPadding, unityMenuRect.width - (HorizontalPadding * 2f), 18f),
-                headerText ?? string.Empty,
-                _themeResources.HeaderStyle);
+            GUI.Label(ToRect(drawLayout.HeaderTextRect), headerText ?? string.Empty, _themeResources.HeaderStyle);
 
-            var viewportRect = new Rect(
-                unityMenuRect.x + 4f,
-                unityMenuRect.y + HeaderHeight,
-                Mathf.Max(0f, unityMenuRect.width - 8f),
-                Mathf.Max(0f, unityMenuRect.height - HeaderHeight - VerticalPadding));
-            var maxScroll = Mathf.Max(0f, contentHeight - viewportRect.height);
-            var hasScroll = maxScroll > 0f;
-            QueueDrawPhaseScroll(unityMenuRect, unityMouse, maxScroll);
-            _scrollPosition.y = ClampScrollOffset(_scrollPosition.y + _pendingScrollDelta, maxScroll);
-            _pendingScrollDelta = 0f;
+            var viewportRect = ToRect(drawLayout.ViewportRect);
+            var input = RuntimeUiPointerInputAdapter.FromWorkbenchFrameInput(_frameContext.Snapshot, localMouse);
+            var preparedFrame = PopupMenuInteractionController.PrepareFrame(
+                _runtimeState,
+                input,
+                layout.MaxScroll,
+                RuntimeUiHitTest.Contains(menuRect, input.PointerPosition));
+            var maxScroll = preparedFrame.MaxScroll;
+            var hasScroll = preparedFrame.HasScroll;
+            drawLayout = PopupMenuLayoutPlanner.BuildDrawLayout(position, viewportSize, safeItems, preparedFrame.ScrollOffset, headerText);
 
-            var current = Event.current;
-            if (ShouldHandleScrollWheel(current, viewportRect, unityMouse, maxScroll))
-            {
-                _scrollPosition.y = ClampScrollOffset(_scrollPosition.y + (current.delta.y * ScrollWheelStep), maxScroll);
-                current.Use();
-            }
-
-            var contentWidth = Mathf.Max(0f, viewportRect.width - (hasScroll ? ScrollChromeWidth : 0f));
+            var contentWidth = drawLayout.ContentWidth;
             var viewportMouse = new Vector2(unityMouse.x - viewportRect.x, unityMouse.y - viewportRect.y);
-            var queuedDownViewportMouse = new Vector2(_queuedMouseDownPosition.x - viewportRect.x, _queuedMouseDownPosition.y - viewportRect.y);
-            var queuedUpViewportMouse = new Vector2(_queuedMouseUpPosition.x - viewportRect.x, _queuedMouseUpPosition.y - viewportRect.y);
+            var queuedDownViewportMouse = new Vector2(preparedFrame.QueuedPointerDownPosition.X - viewportRect.x, preparedFrame.QueuedPointerDownPosition.Y - viewportRect.y);
+            var queuedUpViewportMouse = new Vector2(preparedFrame.QueuedPointerUpPosition.X - viewportRect.x, preparedFrame.QueuedPointerUpPosition.Y - viewportRect.y);
             GUI.BeginGroup(viewportRect);
             try
             {
                 GUI.BeginGroup(new Rect(0f, 0f, contentWidth, viewportRect.height));
                 try
                 {
-                    DrawItems(safeItems, contentWidth, viewportMouse, queuedDownViewportMouse, queuedUpViewportMouse, current, ref result);
+                    DrawItems(drawLayout.Items, viewportMouse, queuedDownViewportMouse, queuedUpViewportMouse, input, preparedFrame, ref result);
                 }
                 finally
                 {
@@ -204,7 +118,7 @@ namespace Cortex.Renderers.Imgui
 
                 if (hasScroll)
                 {
-                    DrawScrollChrome(current, viewportRect, viewportMouse, contentWidth, maxScroll, queuedUpViewportMouse);
+                    DrawScrollChrome(input, drawLayout.ScrollChrome, maxScroll, drawLayout.ViewportRect.Height, queuedUpViewportMouse);
                 }
             }
             finally
@@ -212,24 +126,17 @@ namespace Cortex.Renderers.Imgui
                 GUI.EndGroup();
             }
 
-            if (_queuedOutsideClickClose)
+            var frameResult = PopupMenuInteractionController.CompleteFrame(_runtimeState, input, RuntimeUiHitTest.Contains(menuRect, input.PointerPosition));
+            if (frameResult.ShouldClose)
             {
                 result.ShouldClose = true;
             }
-
-            if (current != null && current.type == EventType.MouseDown && !unityMenuRect.Contains(unityMouse))
-            {
-                result.ShouldClose = true;
-            }
-
-            ClearQueuedPointerState();
             return result;
         }
 
         public RenderRect PredictMenuRect(RenderPoint position, RenderSize viewportSize, IList<PopupMenuItemModel> items)
         {
-            float contentHeight;
-            return BuildMenuRect(position, viewportSize, items ?? new PopupMenuItemModel[0], out contentHeight);
+            return PopupMenuLayoutPlanner.BuildLayout(position, viewportSize, items).MenuRect;
         }
 
         private void EnsureTheme(PopupMenuThemePalette theme)
@@ -285,18 +192,18 @@ namespace Cortex.Renderers.Imgui
         }
 
         private void DrawItems(
-            IList<PopupMenuItemModel> items,
-            float contentWidth,
+            IList<PopupMenuItemLayout> itemLayouts,
             Vector2 viewportMouse,
             Vector2 queuedDownViewportMouse,
             Vector2 queuedUpViewportMouse,
-            Event current,
+            RuntimeUiPointerFrameInput input,
+            PopupMenuPreparedFrame preparedFrame,
             ref PopupMenuRenderResult result)
         {
-            var y = -_scrollPosition.y;
-            for (var i = 0; i < items.Count; i++)
+            for (var i = 0; i < itemLayouts.Count; i++)
             {
-                var item = items[i];
+                var itemLayout = itemLayouts[i];
+                var item = itemLayout != null ? itemLayout.Item : null;
                 if (item == null)
                 {
                     continue;
@@ -304,144 +211,75 @@ namespace Cortex.Renderers.Imgui
 
                 if (item.IsSeparator)
                 {
-                    GUI.DrawTexture(new Rect(HorizontalPadding, y + 3f, contentWidth - (HorizontalPadding * 2f), 1f), _themeResources.BorderFill);
-                    y += SeparatorHeight;
+                    GUI.DrawTexture(ToRect(itemLayout.SeparatorRect), _themeResources.BorderFill);
                     continue;
                 }
 
                 if (item.IsSectionHeader)
                 {
-                    GUI.Label(new Rect(10f, y + 3f, contentWidth - 20f, 18f), item.Label ?? string.Empty, _themeResources.HeaderStyle);
-                    y += ItemHeight;
+                    GUI.Label(ToRect(itemLayout.LabelRect), item.Label ?? string.Empty, _themeResources.HeaderStyle);
                     continue;
                 }
 
-                var itemRect = new Rect(6f, y, contentWidth - 12f, ItemHeight);
+                var itemRect = ToRect(itemLayout.Bounds);
                 var isPointerOverItem = itemRect.Contains(viewportMouse);
-                var isQueuedMouseDownOnItem = _queuedMouseDown && _queuedMouseDownButton == 0 && itemRect.Contains(queuedDownViewportMouse);
-                var isQueuedMouseUpOnItem = _queuedMouseUp && _queuedMouseUpButton == 0 && itemRect.Contains(queuedUpViewportMouse);
+                var isQueuedMouseDownOnItem = preparedFrame.HasQueuedPointerDown && preparedFrame.QueuedPointerDownButton == 0 && itemRect.Contains(queuedDownViewportMouse);
+                var isQueuedMouseUpOnItem = preparedFrame.HasQueuedPointerUp && preparedFrame.QueuedPointerUpButton == 0 && itemRect.Contains(queuedUpViewportMouse);
                 var commandId = item.CommandId ?? string.Empty;
-                var isPressedVisual = item.Enabled &&
-                    (!string.IsNullOrEmpty(_pressedCommandId) && string.Equals(_pressedCommandId, commandId, StringComparison.Ordinal));
+                var interaction = PopupMenuInteractionController.EvaluateItemInteraction(
+                    _runtimeState,
+                    input,
+                    commandId,
+                    item.Enabled,
+                    isPointerOverItem,
+                    isQueuedMouseDownOnItem,
+                    isQueuedMouseUpOnItem);
 
                 var previousEnabled = GUI.enabled;
                 GUI.enabled = item.Enabled;
-                DrawItemBackground(itemRect, item.Enabled, isPointerOverItem, isPressedVisual);
-
-                if (item.Enabled && ((current != null && current.type == EventType.MouseDown && current.button == 0 && isPointerOverItem) || isQueuedMouseDownOnItem))
+                DrawItemBackground(itemRect, item.Enabled, isPointerOverItem, interaction.IsPressedVisual);
+                if (interaction.ShouldClose)
                 {
-                    _pressedCommandId = commandId;
-                    if (current != null && current.type == EventType.MouseDown && current.button == 0 && isPointerOverItem)
-                    {
-                        current.Use();
-                    }
-                }
-
-                var canActivateFromRelease = string.IsNullOrEmpty(_pressedCommandId) ||
-                    string.Equals(_pressedCommandId, commandId, StringComparison.Ordinal);
-                if (item.Enabled &&
-                    (((current != null && current.type == EventType.MouseUp && current.button == 0 && isPointerOverItem) || isQueuedMouseUpOnItem) && canActivateFromRelease))
-                {
-                    result.ActivatedCommandId = commandId;
+                    result.ActivatedCommandId = interaction.ActivatedCommandId ?? commandId;
                     result.ShouldClose = true;
-                    _pressedCommandId = string.Empty;
-                    if (current != null && current.type == EventType.MouseUp && current.button == 0 && isPointerOverItem)
-                    {
-                        current.Use();
-                    }
-                }
-
-                if ((current != null && current.type == EventType.MouseUp && current.button == 0) || (_queuedMouseUp && _queuedMouseUpButton == 0))
-                {
-                    _pressedCommandId = string.Empty;
                 }
 
                 GUI.enabled = previousEnabled;
-                GUI.Label(new Rect(itemRect.x + 8f, itemRect.y + 3f, itemRect.width - 70f, 18f), item.Label ?? string.Empty);
+                GUI.Label(ToRect(itemLayout.LabelRect), item.Label ?? string.Empty);
                 if (!string.IsNullOrEmpty(item.ShortcutText))
                 {
-                    var shortcutRect = new Rect(itemRect.xMax - 78f, itemRect.y + 3f, 70f, 18f);
-                    GUI.Label(shortcutRect, item.ShortcutText, _themeResources.HeaderStyle);
-                }
-
-                y += ItemHeight + 2f;
-            }
-        }
-
-        private void DrawScrollChrome(Event current, Rect viewportRect, Vector2 viewportMouse, float contentWidth, float maxScroll, Vector2 queuedUpViewportMouse)
-        {
-            var chromeRect = new Rect(contentWidth, 0f, ScrollChromeWidth, viewportRect.height);
-            var upRect = new Rect(chromeRect.x, chromeRect.y, chromeRect.width, ScrollButtonHeight);
-            var downRect = new Rect(chromeRect.x, chromeRect.yMax - ScrollButtonHeight, chromeRect.width, ScrollButtonHeight);
-            var trackRect = new Rect(chromeRect.x, upRect.yMax, chromeRect.width, Mathf.Max(0f, chromeRect.height - (ScrollButtonHeight * 2f)));
-            var thumbHeight = Mathf.Max(24f, trackRect.height * Mathf.Clamp01(viewportRect.height / Mathf.Max(viewportRect.height, viewportRect.height + maxScroll)));
-            var thumbTravel = Mathf.Max(0f, trackRect.height - thumbHeight);
-            var thumbY = thumbTravel <= 0f
-                ? trackRect.y
-                : trackRect.y + ((_scrollPosition.y / Mathf.Max(1f, maxScroll)) * thumbTravel);
-            var thumbRect = new Rect(trackRect.x + 2f, thumbY, Mathf.Max(0f, trackRect.width - 4f), thumbHeight);
-
-            GUI.Box(chromeRect, GUIContent.none);
-            GUI.Box(upRect, "^");
-            GUI.Box(downRect, "v");
-            GUI.Box(thumbRect, GUIContent.none);
-
-            var hasCurrentMouseUp = current != null && current.type == EventType.MouseUp && current.button == 0;
-            var hasQueuedMouseUp = _queuedMouseUp && _queuedMouseUpButton == 0;
-            if (!hasCurrentMouseUp && !hasQueuedMouseUp)
-            {
-                return;
-            }
-
-            var effectiveMouse = hasQueuedMouseUp ? queuedUpViewportMouse : viewportMouse;
-            if (upRect.Contains(effectiveMouse))
-            {
-                ApplyScrollStep(-ScrollWheelStep * 4f, maxScroll);
-                if (hasCurrentMouseUp)
-                {
-                    current.Use();
-                }
-                return;
-            }
-
-            if (downRect.Contains(effectiveMouse))
-            {
-                ApplyScrollStep(ScrollWheelStep * 4f, maxScroll);
-                if (hasCurrentMouseUp)
-                {
-                    current.Use();
-                }
-                return;
-            }
-
-            if (!trackRect.Contains(effectiveMouse))
-            {
-                return;
-            }
-
-            if (effectiveMouse.y < thumbRect.y)
-            {
-                ApplyScrollStep(-viewportRect.height * 0.75f, maxScroll);
-                if (hasCurrentMouseUp)
-                {
-                    current.Use();
-                }
-                return;
-            }
-
-            if (effectiveMouse.y > thumbRect.yMax)
-            {
-                ApplyScrollStep(viewportRect.height * 0.75f, maxScroll);
-                if (hasCurrentMouseUp)
-                {
-                    current.Use();
+                    GUI.Label(ToRect(itemLayout.ShortcutRect), item.ShortcutText, _themeResources.HeaderStyle);
                 }
             }
         }
 
-        private void ApplyScrollStep(float delta, float maxScroll)
+        private void DrawScrollChrome(RuntimeUiPointerFrameInput input, PopupMenuScrollChromeLayout chromeLayout, float maxScroll, float viewportHeight, Vector2 queuedUpViewportMouse)
         {
-            _scrollPosition.y = ClampScrollOffset(_scrollPosition.y + delta, maxScroll);
+            if (chromeLayout == null)
+            {
+                return;
+            }
+
+            GUI.Box(ToRect(chromeLayout.ChromeRect), GUIContent.none);
+            GUI.Box(ToRect(chromeLayout.UpButtonRect), "^");
+            GUI.Box(ToRect(chromeLayout.DownButtonRect), "v");
+            GUI.Box(ToRect(chromeLayout.ThumbRect), GUIContent.none);
+
+            if (PopupMenuInteractionController.HandleScrollChromeInteraction(
+                _runtimeState,
+                input,
+                maxScroll,
+                chromeLayout.UpButtonRect,
+                chromeLayout.DownButtonRect,
+                chromeLayout.TrackRect,
+                chromeLayout.ThumbRect,
+                viewportHeight,
+                new RenderPoint(queuedUpViewportMouse.x, queuedUpViewportMouse.y)) &&
+                input.EventKind == RuntimeUiPointerEventKind.Up &&
+                input.PointerButton == 0)
+            {
+                _frameContext.ConsumeCurrentInput();
+            }
         }
 
         private void DrawItemBackground(Rect itemRect, bool enabled, bool hovered, bool pressed)
@@ -454,147 +292,6 @@ namespace Cortex.Renderers.Imgui
 
             GUI.DrawTexture(itemRect, pressed ? _themeResources.PressedFill : _themeResources.HoverFill);
             GUI.DrawTexture(new Rect(itemRect.x, itemRect.y, HoverAccentWidth, itemRect.height), _themeResources.HoverAccentFill);
-        }
-
-        private static bool ShouldHandleScrollWheel(Event current, Rect viewportRect, Vector2 localMouse, float maxScroll)
-        {
-            return current != null &&
-                current.type == EventType.ScrollWheel &&
-                viewportRect.Contains(localMouse) &&
-                maxScroll > 0f;
-        }
-
-        private void QueueDrawPhaseScroll(Rect menuRect, Vector2 localMouse, float maxScroll)
-        {
-            if (maxScroll <= 0f || !menuRect.Contains(localMouse) || Time.frameCount == _lastRawScrollFrame)
-            {
-                return;
-            }
-
-            var rawAxis = ReadRawScrollAxis();
-            if (Mathf.Abs(rawAxis) <= 0.0001f)
-            {
-                return;
-            }
-
-            _lastRawScrollFrame = Time.frameCount;
-            QueueScrollDelta(-rawAxis * RawAxisScrollScale);
-
-            var current = Event.current;
-            if (current != null && current.type == EventType.ScrollWheel)
-            {
-                current.Use();
-            }
-        }
-
-        private static float ReadRawScrollAxis()
-        {
-            var smoothedAxis = Input.GetAxis("Mouse ScrollWheel");
-            var instantAxis = Input.GetAxisRaw("Mouse ScrollWheel");
-            return Mathf.Abs(instantAxis) > Mathf.Abs(smoothedAxis) ? instantAxis : smoothedAxis;
-        }
-
-        private void ResetScrollStateForMenu(string headerText, IList<PopupMenuItemModel> items)
-        {
-            var menuKey = BuildMenuKey(headerText, items);
-            if (string.Equals(_scrollKey, menuKey, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            _scrollKey = menuKey;
-            _scrollPosition = new Vector2(0f, 0f);
-            _pendingScrollDelta = 0f;
-            _pressedCommandId = string.Empty;
-        }
-
-        private void QueuePointerDown(int button, Vector2 position)
-        {
-            _queuedMouseDown = true;
-            _queuedMouseDownButton = button;
-            _queuedMouseDownPosition = position;
-        }
-
-        private void QueuePointerUp(int button, Vector2 position)
-        {
-            _queuedMouseUp = true;
-            _queuedMouseUpButton = button;
-            _queuedMouseUpPosition = position;
-        }
-
-        private void ClearQueuedPointerState()
-        {
-            _queuedMouseDown = false;
-            _queuedMouseUp = false;
-            _queuedOutsideClickClose = false;
-            _queuedMouseDownButton = -1;
-            _queuedMouseUpButton = -1;
-            _queuedMouseDownPosition = Vector2.zero;
-            _queuedMouseUpPosition = Vector2.zero;
-        }
-
-        private static float ClampScrollOffset(float scrollOffset, float maxScroll)
-        {
-            return Mathf.Clamp(scrollOffset, 0f, Mathf.Max(0f, maxScroll));
-        }
-
-        private static string BuildMenuKey(string headerText, IList<PopupMenuItemModel> items)
-        {
-            var builder = new StringBuilder(headerText ?? string.Empty);
-            if (items == null)
-            {
-                return builder.ToString();
-            }
-
-            for (var i = 0; i < items.Count; i++)
-            {
-                var item = items[i];
-                if (item == null)
-                {
-                    continue;
-                }
-
-                builder
-                    .Append('|')
-                    .Append(item.CommandId ?? string.Empty)
-                    .Append(':')
-                    .Append(item.Label ?? string.Empty)
-                    .Append(':')
-                    .Append(item.IsSeparator ? '1' : '0')
-                    .Append(':')
-                    .Append(item.IsSectionHeader ? '1' : '0');
-            }
-
-            return builder.ToString();
-        }
-
-        private static RenderRect BuildMenuRect(RenderPoint position, RenderSize viewportSize, IList<PopupMenuItemModel> items, out float contentHeight)
-        {
-            var itemCount = 0;
-            var separatorCount = 0;
-            for (var i = 0; i < items.Count; i++)
-            {
-                if (items[i] == null)
-                {
-                    continue;
-                }
-
-                if (items[i].IsSeparator)
-                {
-                    separatorCount++;
-                }
-                else
-                {
-                    itemCount++;
-                }
-            }
-
-            contentHeight = (itemCount * (ItemHeight + 2f)) + (separatorCount * SeparatorHeight) + VerticalPadding;
-            var maxHeight = Mathf.Max(HeaderHeight + ItemHeight + VerticalPadding, viewportSize.Height - 12f);
-            var height = Mathf.Min(maxHeight, HeaderHeight + contentHeight);
-            var x = Mathf.Min(position.X, Mathf.Max(6f, viewportSize.Width - 280f - 6f));
-            var y = Mathf.Min(position.Y, Mathf.Max(6f, viewportSize.Height - height - 6f));
-            return new RenderRect(x, y, 280f, height);
         }
 
         private static Rect ToRect(RenderRect rect)

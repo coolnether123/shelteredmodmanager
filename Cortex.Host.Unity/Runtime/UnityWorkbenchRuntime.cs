@@ -4,12 +4,12 @@ using Cortex.Core.Services;
 using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
 using Cortex.Presentation.Services;
-using Cortex.Renderers.Imgui;
 using Cortex.Rendering.Abstractions;
+using Cortex.Rendering.RuntimeUi;
 
 namespace Cortex.Host.Unity.Runtime
 {
-    public sealed class UnityWorkbenchRuntime : IWorkbenchRuntime
+    public sealed class UnityWorkbenchRuntime : IWorkbenchRuntime, IWorkbenchRuntimeUiProvider, System.IDisposable
     {
         public readonly ICommandRegistry CommandRegistry;
         public readonly IContributionRegistry ContributionRegistry;
@@ -22,19 +22,26 @@ namespace Cortex.Host.Unity.Runtime
         public readonly ThemeState ThemeState;
         public readonly FocusState FocusState;
         private readonly IUnityWorkbenchContributionRegistrar _contributionRegistrar;
+        private readonly IWorkbenchRuntimeUi _runtimeUi;
 
         public UnityWorkbenchRuntime()
-            : this(null)
+            : this(null, null)
         {
         }
 
         public UnityWorkbenchRuntime(IUnityWorkbenchContributionRegistrar contributionRegistrar)
+            : this(contributionRegistrar, null)
+        {
+        }
+
+        public UnityWorkbenchRuntime(IUnityWorkbenchContributionRegistrar contributionRegistrar, IWorkbenchRuntimeUi runtimeUi)
         {
             _contributionRegistrar = contributionRegistrar ?? new NullUnityWorkbenchContributionRegistrar();
+            _runtimeUi = runtimeUi ?? NullWorkbenchRuntimeUi.Instance;
             CommandRegistry = new CommandRegistry();
             ContributionRegistry = new ContributionRegistry();
             Presenter = new WorkbenchPresenter();
-            RenderPipeline = new ImguiRenderPipeline();
+            RenderPipeline = _runtimeUi.RenderPipeline;
             Renderer = RenderPipeline.WorkbenchRenderer;
             WorkbenchState = new WorkbenchState();
             LayoutState = new LayoutState();
@@ -49,6 +56,20 @@ namespace Cortex.Host.Unity.Runtime
             var snapshot = Presenter.BuildSnapshot(WorkbenchState, LayoutState, StatusState, ThemeState, FocusState, CommandRegistry, ContributionRegistry);
             snapshot.RendererSummary = Renderer.DisplayName + " | Capabilities v" + Renderer.Capabilities.CapabilityVersion;
             return snapshot;
+        }
+
+        public IWorkbenchRuntimeUi RuntimeUi
+        {
+            get { return _runtimeUi; }
+        }
+
+        public void Dispose()
+        {
+            var disposable = _runtimeUi as System.IDisposable;
+            if (disposable != null)
+            {
+                disposable.Dispose();
+            }
         }
 
         ICommandRegistry IWorkbenchRuntime.CommandRegistry { get { return CommandRegistry; } }

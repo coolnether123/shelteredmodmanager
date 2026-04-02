@@ -18,6 +18,7 @@
     '$(MSBuildProjectName)' == 'Cortex.Presentation' or
     '$(MSBuildProjectName)' == 'Cortex.Renderers.Imgui' or
     '$(MSBuildProjectName)' == 'Cortex.Rendering' or
+    '$(MSBuildProjectName)' == 'Cortex.Rendering.RuntimeUi' or
     '$(MSBuildProjectName)' == 'Cortex.Roslyn.Worker' or
     '$(MSBuildProjectName)' == 'Cortex.Roslyn.Worker.Tests' or
     '$(MSBuildProjectName)' == 'Cortex.Tabby' or
@@ -39,6 +40,7 @@
       '$(MSBuildProjectName)' == 'Cortex.Core' or
       '$(MSBuildProjectName)' == 'Cortex.Presentation' or
       '$(MSBuildProjectName)' == 'Cortex.Rendering' or
+      '$(MSBuildProjectName)' == 'Cortex.Rendering.RuntimeUi' or
       '$(MSBuildProjectName)' == 'Cortex.Plugins.Abstractions' or
       '$(MSBuildProjectName)' == 'Cortex.CompletionProviders' or
       '$(MSBuildProjectName)' == 'Cortex.Tabby' or
@@ -86,6 +88,7 @@
     <CortexUnityManagedDir Condition="'$(CortexUnityManagedDir)' == '' and '$(CORTEX_UNITY_MANAGED_DIR)' != ''">$(CORTEX_UNITY_MANAGED_DIR)</CortexUnityManagedDir>
     <CortexUnityEngineReferencePath Condition="'$(CortexUnityEngineReferencePath)' == '' and '$(CORTEX_UNITY_ENGINE_PATH)' != ''">$(CORTEX_UNITY_ENGINE_PATH)</CortexUnityEngineReferencePath>
     <CortexUnityEngineReferencePath Condition="'$(CortexUnityEngineReferencePath)' == '' and '$(CortexUnityManagedDir)' != ''">$([System.IO.Path]::Combine('$(CortexUnityManagedDir)', 'UnityEngine.dll'))</CortexUnityEngineReferencePath>
+    <CortexUnityEngineReferencePath Condition="'$(CortexUnityEngineReferencePath)' == '' and Exists('$(CortexRepositoryRoot)libs\UnityEngine.dll')">$(CortexRepositoryRoot)libs\UnityEngine.dll</CortexUnityEngineReferencePath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Cortex.Tests'">
@@ -110,6 +113,7 @@
     '$(MSBuildProjectName)' == 'Cortex.Core' or
     '$(MSBuildProjectName)' == 'Cortex.Presentation' or
     '$(MSBuildProjectName)' == 'Cortex.Rendering' or
+    '$(MSBuildProjectName)' == 'Cortex.Rendering.RuntimeUi' or
     '$(MSBuildProjectName)' == 'Cortex.Plugins.Abstractions' or
     '$(MSBuildProjectName)' == 'Cortex.CompletionProviders' or
     '$(MSBuildProjectName)' == 'Cortex.Tabby' or

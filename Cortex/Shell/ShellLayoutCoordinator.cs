@@ -4,6 +4,7 @@ using Cortex.Chrome;
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
+using Cortex.Rendering.RuntimeUi;
 using UnityEngine;
 
 namespace Cortex.Shell
@@ -14,10 +15,7 @@ namespace Cortex.Shell
         private readonly CortexShellLayoutHostRouter _layoutHostRouter;
         private readonly Func<IWorkbenchRuntime> _runtimeProvider;
         private readonly Func<CortexShellModuleRenderService> _renderServiceProvider;
-        private readonly Func<Vector2> _mousePositionProvider;
-        private readonly Func<bool> _hasInputEventProvider;
-        private readonly Func<CortexShellInputEventKind, bool> _inputEventKindProvider;
-        private readonly Func<int> _mouseButtonProvider;
+        private readonly Func<WorkbenchFrameInputSnapshot> _frameInputProvider;
 
         private string _draggingContainerId = string.Empty;
         private WorkbenchHostLocation _draggingContainerSourceHost = WorkbenchHostLocation.PrimarySideHost;
@@ -28,19 +26,13 @@ namespace Cortex.Shell
             CortexShellLayoutHostRouter layoutHostRouter,
             Func<IWorkbenchRuntime> runtimeProvider,
             Func<CortexShellModuleRenderService> renderServiceProvider,
-            Func<Vector2> mousePositionProvider,
-            Func<bool> hasInputEventProvider,
-            Func<CortexShellInputEventKind, bool> inputEventKindProvider,
-            Func<int> mouseButtonProvider)
+            Func<WorkbenchFrameInputSnapshot> frameInputProvider)
         {
             _state = state;
             _layoutHostRouter = layoutHostRouter;
             _runtimeProvider = runtimeProvider;
             _renderServiceProvider = renderServiceProvider;
-            _mousePositionProvider = mousePositionProvider;
-            _hasInputEventProvider = hasInputEventProvider;
-            _inputEventKindProvider = inputEventKindProvider;
-            _mouseButtonProvider = mouseButtonProvider;
+            _frameInputProvider = frameInputProvider;
         }
 
         public string DraggingContainerId => _draggingContainerId;
@@ -245,11 +237,12 @@ namespace Cortex.Shell
             GUI.backgroundColor = CortexIdeLayout.GetInteractiveFillColor(isSelected, hostLocation);
             GUI.contentColor = CortexIdeLayout.GetInteractiveTextColor(isSelected);
             var rect = GUILayoutUtility.GetRect(116f, 116f, 24f, 24f);
-            var mousePos = _mousePositionProvider();
-            var isHovered = _hasInputEventProvider() && rect.Contains(mousePos);
+            var input = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
+            var mousePos = ToVector2(input.PointerPosition);
+            var isHovered = input.HasCurrentEvent && rect.Contains(mousePos);
             var closeRect = new Rect(rect.xMax - 18f, rect.y + 4f, 14f, Mathf.Max(12f, rect.height - 8f));
 
-            if ((isHovered || isSelected) && _inputEventKindProvider(CortexShellInputEventKind.MouseDown) && _mouseButtonProvider() == 0 && closeRect.Contains(mousePos))
+            if ((isHovered || isSelected) && input.CurrentEventKind == WorkbenchInputEventKind.MouseDown && input.CurrentMouseButton == 0 && closeRect.Contains(mousePos))
             {
                 HideContainer(item.ContainerId); _state.StatusMessage = item.Title + " hidden.";
                 GUI.backgroundColor = prevBg; GUI.contentColor = prevContent; return;
@@ -263,12 +256,14 @@ namespace Cortex.Shell
 
         private void HandleTabDrag(string containerId, WorkbenchHostLocation hostLocation, Rect rect)
         {
-            if (!_hasInputEventProvider() || string.IsNullOrEmpty(containerId)) return;
-            if (_inputEventKindProvider(CortexShellInputEventKind.MouseDrag) && rect.Contains(_mousePositionProvider()))
+            var input = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
+            if (!input.HasCurrentEvent || string.IsNullOrEmpty(containerId)) return;
+
+            if (input.CurrentEventKind == WorkbenchInputEventKind.MouseDrag && rect.Contains(ToVector2(input.PointerPosition)))
             {
                 _draggingContainerId = containerId; _draggingContainerSourceHost = hostLocation;
             }
-            else if (!string.IsNullOrEmpty(_draggingContainerId) && (_inputEventKindProvider(CortexShellInputEventKind.MouseUp)) && string.Equals(_draggingContainerId, containerId, StringComparison.OrdinalIgnoreCase))
+            else if (!string.IsNullOrEmpty(_draggingContainerId) && input.CurrentEventKind == WorkbenchInputEventKind.MouseUp && string.Equals(_draggingContainerId, containerId, StringComparison.OrdinalIgnoreCase))
             {
                 _draggingContainerId = string.Empty;
             }
@@ -284,12 +279,14 @@ namespace Cortex.Shell
 
         private void HandleDockDropTarget(WorkbenchHostLocation hostLocation, Rect rect)
         {
-            if (!_hasInputEventProvider() || string.IsNullOrEmpty(_draggingContainerId)) return;
-            if (_inputEventKindProvider(CortexShellInputEventKind.MouseUp) && rect.Contains(_mousePositionProvider()))
+            var input = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
+            if (!input.HasCurrentEvent || string.IsNullOrEmpty(_draggingContainerId)) return;
+
+            if (input.CurrentEventKind == WorkbenchInputEventKind.MouseUp && rect.Contains(ToVector2(input.PointerPosition)))
             {
                 DockContainer(_draggingContainerId, hostLocation); _draggingContainerId = string.Empty;
             }
-            else if (_inputEventKindProvider(CortexShellInputEventKind.MouseUp)) _draggingContainerId = string.Empty;
+            else if (input.CurrentEventKind == WorkbenchInputEventKind.MouseUp) _draggingContainerId = string.Empty;
         }
 
         public void ActivateContainer(string containerId) => _layoutHostRouter.ActivateContainer(GetLayoutContext(), containerId);
@@ -316,6 +313,11 @@ namespace Cortex.Shell
                 case WorkbenchHostLocation.PanelHost: return "Bottom panel for logs, build output, and transient tool panes.";
                 default: return "Central editor workspace with persistent documents.";
             }
+        }
+
+        private static Vector2 ToVector2(Cortex.Rendering.Models.RenderPoint point)
+        {
+            return new Vector2(point.X, point.Y);
         }
     }
 }

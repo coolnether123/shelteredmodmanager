@@ -14,6 +14,7 @@ using Cortex.Services.Editor.Context;
 using Cortex.Services.Onboarding;
 using Cortex.Services.Search;
 using Cortex.Shell;
+using Cortex.Rendering.RuntimeUi;
 
 namespace Cortex
 {
@@ -49,14 +50,13 @@ namespace Cortex
         private readonly CortexShellOnboardingLifecycle _onboardingLifecycle = new CortexShellOnboardingLifecycle();
 
         private IWorkbenchRuntime _workbenchRuntime;
-        private IRenderPipeline _renderPipeline;
         private ICortexSettingsStore _settingsStore;
         private IWorkbenchPersistenceService _workbenchPersistenceService;
         private IPathInteractionService _pathInteractionService;
         private IRuntimeSourceNavigationService _runtimeSourceNavigationService;
         private ICortexPlatformModule _platformModule;
         private ICortexHostEnvironment _hostEnvironment;
-        private ICortexShellHostUi _shellHostUi;
+        private IWorkbenchFrameContext _hostFrameContext;
         private CortexShellLayoutContext _layoutContext;
         private CortexShellCommandContext _commandContext;
         private CortexShellModuleServices _moduleServices;
@@ -182,22 +182,13 @@ namespace Cortex
                 _layoutHostRouter,
                 () => _workbenchRuntime,
                 () => GetModuleRenderService(),
-                () => GetPointerPosition(),
-                () => HasCurrentInputEvent(),
-                kind => IsCurrentInputEvent(kind),
-                () => GetCurrentMouseButton());
+                () => GetCurrentFrameInputSnapshot());
             _overlayCoordinator = new ShellOverlayCoordinator(
                 _state,
                 _onboardingCoordinator,
                 _onboardingLifecycle,
-                () => ResolveShellHostUi(),
                 () => OverlayInputCaptureService,
-                () => GetCurrentMousePosition(),
-                () => GetPointerPosition(),
-                () => HasCurrentInputEvent(),
-                kind => IsCurrentInputEvent(kind),
-                key => IsCurrentKey(key),
-                () => GetCurrentMouseButton(),
+                () => GetCurrentFrameInputSnapshot(),
                 ConsumeCurrentInputEvent);
             _commandDispatcher = new ShellCommandDispatcher(
                 _state,
@@ -229,7 +220,7 @@ namespace Cortex
         public void ShutdownShell()
         {
             _lifecycleCoordinator.Destroy(this);
-            DisposeRenderPipeline();
+            DisposeWorkbenchRuntime();
         }
 
         public void UpdateShell()
@@ -401,7 +392,7 @@ namespace Cortex
             _pathInteractionService = resolvedHostServices.PathInteractionService;
             _platformModule = resolvedHostServices.PlatformModule ?? NullCortexPlatformModule.Instance;
             _hostEnvironment = resolvedHostServices.Environment ?? NullCortexHostServices.Instance.Environment;
-            _shellHostUi = resolvedHostServices.ShellHostUi ?? NullCortexHostServices.Instance.ShellHostUi;
+            _hostFrameContext = resolvedHostServices.FrameContext ?? NullWorkbenchFrameContext.Instance;
             _hostLanguageProviderFactories = resolvedHostServices.LanguageProviderFactories ?? new List<ILanguageProviderFactory>();
             _bootstrapper.ConfigureHostServices(resolvedHostServices);
         }
@@ -449,61 +440,56 @@ namespace Cortex
             return OverlayInputCaptureService;
         }
 
-        private ICortexShellHostUi ResolveShellHostUi()
-        {
-            return _shellHostUi ?? NullCortexHostServices.Instance.ShellHostUi;
-        }
-
         private int GetScreenWidth()
         {
-            return ResolveShellHostUi().ScreenWidth;
+            return (int)GetCurrentFrameInputSnapshot().ViewportSize.Width;
         }
 
         private int GetScreenHeight()
         {
-            return ResolveShellHostUi().ScreenHeight;
+            return (int)GetCurrentFrameInputSnapshot().ViewportSize.Height;
         }
 
         private Vector2 GetCurrentMousePosition()
         {
-            var position = ResolveShellHostUi().CurrentMousePosition;
+            var position = GetCurrentFrameInputSnapshot().CurrentMousePosition;
             return new Vector2(position.X, position.Y);
         }
 
         private Vector2 GetPointerPosition()
         {
-            var position = ResolveShellHostUi().PointerPosition;
+            var position = GetCurrentFrameInputSnapshot().PointerPosition;
             return new Vector2(position.X, position.Y);
         }
 
         private bool HasCurrentInputEvent()
         {
-            return ResolveShellHostUi().HasCurrentEvent;
+            return GetCurrentFrameInputSnapshot().HasCurrentEvent;
         }
 
-        private bool IsCurrentInputEvent(CortexShellInputEventKind kind)
+        private bool IsCurrentInputEvent(WorkbenchInputEventKind kind)
         {
-            return ResolveShellHostUi().CurrentEventKind == kind;
-        }
-
-        private bool IsCurrentRawInputEvent(CortexShellInputEventKind kind)
-        {
-            return ResolveShellHostUi().CurrentEventRawKind == kind;
+            return GetCurrentFrameInputSnapshot().CurrentEventKind == kind;
         }
 
         private int GetCurrentMouseButton()
         {
-            return ResolveShellHostUi().CurrentMouseButton;
+            return GetCurrentFrameInputSnapshot().CurrentMouseButton;
         }
 
-        private bool IsCurrentKey(CortexShellInputKey key)
+        private bool IsCurrentKey(WorkbenchInputKey key)
         {
-            return ResolveShellHostUi().CurrentKey == key;
+            return GetCurrentFrameInputSnapshot().CurrentKey == key;
         }
 
         private void ConsumeCurrentInputEvent()
         {
-            ResolveShellHostUi().ConsumeCurrentEvent();
+            GetWorkbenchFrameContext().ConsumeCurrentInput();
+        }
+
+        private WorkbenchFrameInputSnapshot GetCurrentFrameInputSnapshot()
+        {
+            return GetWorkbenchFrameContext().Snapshot;
         }
 
         private bool IsPointWithinVisibleChrome(Vector2 guiPoint)
