@@ -96,7 +96,46 @@ namespace Cortex.Tests.Architecture
             Assert.DoesNotContain("Cortex.Presentation", renderingReferences);
             Assert.Contains("Cortex.Rendering", presentationReferences);
             Assert.DoesNotContain("Cortex.Rendering.RuntimeUi", presentationReferences);
+            Assert.Contains("Cortex.Core", runtimeUiReferences);
             Assert.Contains("Cortex.Rendering", runtimeUiReferences);
+        }
+
+        [Fact]
+        public void RenderingAndRuntimeUiProjects_DoNotContainStaleCompileIncludes()
+        {
+            var projectNames = new[]
+            {
+                "Cortex",
+                "Cortex.Host.Sheltered",
+                "Cortex.Rendering",
+                "Cortex.Rendering.RuntimeUi",
+                "Cortex.Presentation",
+                "Cortex.Host.Unity",
+                "Cortex.Renderers.Imgui"
+            };
+
+            foreach (var projectName in projectNames)
+            {
+                var compileIncludes = LoadCompileIncludes(projectName);
+                Assert.All(
+                    compileIncludes,
+                    path => Assert.True(File.Exists(path), projectName + " includes missing source file " + path + "."));
+            }
+
+            var renderingCompileIncludes = LoadCompileIncludeValues("Cortex.Rendering");
+            var runtimeUiCompileIncludes = LoadCompileIncludeValues("Cortex.Rendering.RuntimeUi");
+            var shelteredHostCompileIncludes = LoadCompileIncludeValues("Cortex.Host.Sheltered");
+
+            Assert.Contains(@"Frame\WorkbenchFrameContracts.cs", renderingCompileIncludes);
+            Assert.DoesNotContain(@"Runtime\WorkbenchFrameContext.cs", renderingCompileIncludes);
+            Assert.Contains(@"Shell\ShellMenuPopupController.cs", runtimeUiCompileIncludes);
+            Assert.Contains(@"Shell\ShellOverlayInteractionController.cs", runtimeUiCompileIncludes);
+            Assert.Contains(@"Shell\ShellSplitLayoutPlanner.cs", runtimeUiCompileIncludes);
+            Assert.DoesNotContain(
+                runtimeUiCompileIncludes,
+                include => include.IndexOf("WorkbenchFrameContext", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                           include.IndexOf("WorkbenchFrameContracts", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Contains(@"Runtime\ShelteredWorkbenchUiSurface.cs", shelteredHostCompileIncludes);
         }
 
         [Fact]
@@ -104,9 +143,15 @@ namespace Cortex.Tests.Architecture
         {
             var cortexReferences = LoadProjectReferenceNames("Cortex");
             var unityHostReferences = LoadProjectReferenceNames("Cortex.Host.Unity");
+            var imguiReferences = LoadProjectReferenceNames("Cortex.Renderers.Imgui");
+            var shelteredHostReferences = LoadProjectReferenceNames("Cortex.Host.Sheltered");
 
             Assert.DoesNotContain("Cortex.Renderers.Imgui", cortexReferences);
             Assert.DoesNotContain("Cortex.Renderers.Imgui", unityHostReferences);
+            Assert.Contains("Cortex.Plugins.Abstractions", imguiReferences);
+            Assert.Contains("Cortex.Rendering.RuntimeUi", imguiReferences);
+            Assert.Contains("Cortex.Rendering", shelteredHostReferences);
+            Assert.Contains("Cortex.Rendering.RuntimeUi", shelteredHostReferences);
 
             var cortexShellRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "CortexShell.Runtime.cs"));
             var cortexShellText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "CortexShell.cs"));
@@ -126,8 +171,11 @@ namespace Cortex.Tests.Architecture
             Assert.DoesNotContain("using Cortex.Renderers.Imgui;", unityRuntimeText);
             Assert.DoesNotContain("using Cortex.Renderers.Imgui;", unityFactoryText);
             Assert.Contains("ImguiWorkbenchRuntimeUiFactory", shelteredCompositionText);
+            Assert.Contains("ShelteredWorkbenchUiSurface", shelteredCompositionText);
             Assert.Contains("UnityWorkbenchFrameContext", shelteredCompositionText);
             Assert.Contains("frameContext", shelteredCompositionText);
+            Assert.DoesNotContain("new ImguiWorkbenchRuntimeUiFactory", cortexShellText);
+            Assert.DoesNotContain("new ImguiWorkbenchRuntimeUiFactory", shellBootstrapperText);
         }
 
         [Fact]
@@ -364,6 +412,47 @@ namespace Cortex.Tests.Architecture
         }
 
         [Fact]
+        public void ManagerBuild_UsesShelteredBundleProfile_ForCortexRuntimeGraph()
+        {
+            var managerProjectText = File.ReadAllText(Path.Combine(RepoRoot, "Manager", "ManagerGUI.csproj"));
+
+            Assert.Contains("Target Name=\"BuildCortexRuntime\"", managerProjectText);
+            Assert.Contains(@"..\Cortex.Core\Cortex.Core.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex.Presentation\Cortex.Presentation.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex.Rendering\Cortex.Rendering.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex.Rendering.RuntimeUi\Cortex.Rendering.RuntimeUi.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex.CompletionProviders\Cortex.CompletionProviders.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex.Tabby\Cortex.Tabby.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex.Ollama\Cortex.Ollama.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex.OpenRouter\Cortex.OpenRouter.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex\Cortex.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex.Renderers.Imgui\Cortex.Renderers.Imgui.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex.Host.Unity\Cortex.Host.Unity.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex.Host.Sheltered\Cortex.Host.Sheltered.csproj", managerProjectText);
+            Assert.Contains(@"..\Cortex.Platform.ModAPI\Cortex.Platform.ModAPI.csproj", managerProjectText);
+            Assert.Contains("Targets=\"Rebuild\"", managerProjectText);
+            Assert.Contains("CortexBundleProfile=Sheltered", managerProjectText);
+        }
+
+        [Fact]
+        public void ShelteredManagerSolution_IncludesCurrentCortexRuntimeProjects()
+        {
+            var solutionText = File.ReadAllText(Path.Combine(RepoRoot, "ShelteredModManager.sln"));
+
+            Assert.Contains(@"""Cortex.Rendering.RuntimeUi"", ""Cortex.Rendering.RuntimeUi\Cortex.Rendering.RuntimeUi.csproj"", ""{8F6A2F38-54DF-4B49-8FC4-7F909D1AF6D3}""", solutionText);
+            Assert.Contains(@"""Cortex.Host.Sheltered"", ""Cortex.Host.Sheltered\Cortex.Host.Sheltered.csproj"", ""{748B7F6E-D557-48FA-B393-6374A7582255}""", solutionText);
+            Assert.Contains(@"{D982DFB0-FEA1-4DC8-A001-35F5181F212A} = {D982DFB0-FEA1-4DC8-A001-35F5181F212A}", solutionText);
+            Assert.Contains(@"{7A570620-E51D-499E-A28E-13A1D8156417} = {7A570620-E51D-499E-A28E-13A1D8156417}", solutionText);
+            Assert.Contains(@"{748B7F6E-D557-48FA-B393-6374A7582255} = {748B7F6E-D557-48FA-B393-6374A7582255}", solutionText);
+            Assert.Contains(@"{2343835F-8DA6-4CAB-B5A9-D86C83A9A40D} = {2343835F-8DA6-4CAB-B5A9-D86C83A9A40D}", solutionText);
+            Assert.Contains(@"{8F6A2F38-54DF-4B49-8FC4-7F909D1AF6D3}.Debug|Any CPU.Build.0 = Debug|Any CPU", solutionText);
+            Assert.Contains(@"{748B7F6E-D557-48FA-B393-6374A7582255}.Debug|Any CPU.Build.0 = Debug|Any CPU", solutionText);
+            Assert.Contains(@"{8F6A2F38-54DF-4B49-8FC4-7F909D1AF6D3} = {ECA9F4AD-77F7-253B-20D4-45A77E590D54}", solutionText);
+            Assert.Contains(@"{748B7F6E-D557-48FA-B393-6374A7582255} = {B9F3EFD9-8792-DBB5-53D5-5D013E0311F9}", solutionText);
+        }
+
+        [Fact]
         public void HostToolLookup_UsesDedicatedToolFolders()
         {
             var roslynFactoryText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "Shell", "RoslynLanguageProviderFactory.cs"));
@@ -438,7 +527,7 @@ namespace Cortex.Tests.Architecture
 
         private static IList<string> LoadProjectReferenceNames(string projectName)
         {
-            var document = XDocument.Load(GetProjectPath(projectName));
+            var document = LoadProjectDocument(projectName);
             XNamespace xmlNamespace = "http://schemas.microsoft.com/developer/msbuild/2003";
 
             var references = document
@@ -453,6 +542,37 @@ namespace Cortex.Tests.Architecture
                 .ToArray();
 
             return references;
+        }
+
+        private static IList<string> LoadCompileIncludes(string projectName)
+        {
+            var projectDirectory = Path.GetDirectoryName(GetProjectPath(projectName));
+            Assert.True(!string.IsNullOrEmpty(projectDirectory), "Could not resolve project directory for " + projectName + ".");
+
+            return LoadCompileIncludeValues(projectName)
+                .Select(include => Path.GetFullPath(Path.Combine(projectDirectory, include)))
+                .ToArray();
+        }
+
+        private static IList<string> LoadCompileIncludeValues(string projectName)
+        {
+            var document = LoadProjectDocument(projectName);
+            XNamespace xmlNamespace = "http://schemas.microsoft.com/developer/msbuild/2003";
+
+            return document
+                .Descendants()
+                .Where(element => element.Name == xmlNamespace + "Compile" || element.Name.LocalName == "Compile")
+                .Select(element => element.Attribute("Include"))
+                .Where(attribute => attribute != null && !string.IsNullOrEmpty(attribute.Value))
+                .Select(attribute => attribute.Value)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static XDocument LoadProjectDocument(string projectName)
+        {
+            return XDocument.Load(GetProjectPath(projectName));
         }
 
         private static string ResolveRepoRoot()

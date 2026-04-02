@@ -18,6 +18,7 @@ The first boundary refactor is now in place:
 - `Cortex.Host.Unity` now owns frame-context and Unity-input snapshot adaptation, and shell-generic Cortex consumes the portable runtime-UI frame contract instead of a shell-specific host UI adapter.
 - portable runtime-UI controllers no longer depend on Unity IMGUI event types or `Event.current`.
 - IMGUI now consumes portable popup draw layouts, panel element layouts, and tooltip layout plans instead of re-owning those geometry decisions locally.
+- shell IMGUI callers now also consume portable split-layout planners, menu popup placement-dismissal policy, and onboarding overlay capture/prompt policy instead of re-owning that shell behavior inline.
 
 The remaining sections explain the rationale and longer-term direction for deeper behavior extraction.
 
@@ -51,17 +52,13 @@ That boundary is now enforced:
 
 That keeps backend selection and host event semantics out of portable and shell-generic Cortex code.
 
-### 2.2 IMGUI backend owns behavior, not just drawing
+### 2.2 Remaining IMGUI ownership must keep shrinking toward execution-only concerns
 
-`Cortex.Renderers.Imgui` currently owns:
+After this pass, `Cortex.Renderers.Imgui` should primarily own:
 
-- layout policy
 - theme materialization
 - text measurement assumptions
-- pointer capture rules
-- scroll behavior
-- tooltip placement behavior
-- popup interaction state
+- draw execution
 - texture cache lifetime
 
 Examples:
@@ -69,8 +66,7 @@ Examples:
 - `Cortex.Renderers.Imgui/ImguiPanelRenderer.cs`
 - `Cortex.Renderers.Imgui/ImguiPopupMenuRenderer.cs`
 - `Cortex.Renderers.Imgui/ImguiHoverTooltipRenderer.cs`
-
-That makes the backend an execution engine plus renderer. A new backend would need to re-implement interaction policy, not just drawing.
+The portability gap is now smaller and more explicit: a new backend should not need to re-implement popup, tooltip, panel, or extracted shell policy, but it would still need to supply measurement and draw execution.
 
 ### 2.3 Portable consumers still depend on Unity-shaped rendering concepts
 
@@ -84,11 +80,12 @@ Examples:
 
 This means the current renderer abstraction is partial. It abstracts popup/panel drawing, but not the frame model.
 
-### 2.4 Module UI surface implementation is still shell-local and IMGUI-backed
+### 2.4 Module UI surface implementation still needs a durable host/runtime ownership rule
 
-`Cortex/Layout/CortexUi.cs` creates a static IMGUI-backed `IWorkbenchUiSurface`.
+The shell-local implementation has now been removed.
+The active `IWorkbenchUiSurface` is supplied by host composition, and the current Sheltered host provides an IMGUI-backed implementation.
 
-That is acceptable as a transitional implementation, but it means the public module UI surface is not actually host-selected yet.
+That is a better ownership boundary because public modules still target the stable contract while the host decides which concrete surface is active.
 
 ### 2.5 Tooltip behavior exists in more than one place
 
@@ -293,6 +290,7 @@ Move these concerns into `Cortex.Rendering.RuntimeUi`:
 - scroll viewport behavior
 - pointer capture and close-on-outside-click policy
 - focus and keyboard routing state
+- shell dock split-layout math and shell popup-overlay dismissal policy when the rules are already backend-neutral and reused across shell surfaces
 
 Keep these in `Cortex.Renderers.Imgui`:
 
@@ -328,10 +326,10 @@ Introduce `Cortex.Rendering.RuntimeUi`:
 
 ### Phase 4
 
-Replace static shell-local UI surface construction:
+Keep host-owned UI surface construction:
 
 - host provides `IWorkbenchUiSurface`
-- default Unity host may still return an IMGUI-backed implementation
+- the current Sheltered host may still return an IMGUI-backed implementation
 - public modules stay unchanged
 
 ### Phase 5
@@ -373,3 +371,12 @@ Do this instead:
 5. Keep public workbench modules targeting `IWorkbenchUiSurface`.
 
 That gives Cortex a rendering stack that can work in any game or application because the portable layer owns UI behavior and the backend only owns drawing.
+
+## 11. Remaining debt after this pass
+
+The remaining rendering debt is concrete:
+
+- `Cortex` shell/editor call sites are still Unity IMGUI execution sites.
+- `CortexWindowChromeController` still owns IMGUI-time splitter drag and resize behavior.
+- Dock-tab drag/close interaction is still partly inline shell IMGUI logic.
+- The architecture has a recording proof backend, but not a second real renderer yet.

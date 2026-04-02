@@ -12,15 +12,16 @@ Follow these rules:
 ## Current boundary map
 
 - `Cortex.Rendering`
-  - low-level render contracts, geometry, placement, shared models, and frame/input contracts
+  - low-level render contracts, geometry, placement, shared models, `IWorkbenchFrameContext`, and `WorkbenchFrameInputSnapshot`
 - `Cortex.Rendering.RuntimeUi`
   - portable popup/panel/tooltip interaction and layout planners
+  - portable shell split-layout math, menu popup placement-dismissal policy, and overlay capture/onboarding prompt policy
 - `Cortex.Host.Unity`
-  - Unity lifecycle, `IWorkbenchFrameContext`, viewport/input snapshot adaptation
+  - Unity lifecycle and adaptation of host events into the `Cortex.Rendering` frame/input contract
 - `Cortex.Renderers.Imgui`
   - concrete drawing, measurement, and execution over portable runtime-UI output
 - `Cortex.Host.Sheltered`
-  - host composition that selects the IMGUI runtime UI today
+  - host composition that selects the IMGUI runtime UI today and supplies the active `IWorkbenchUiSurface`
 
 ## Add a renderer
 
@@ -52,10 +53,11 @@ Required steps:
 1. Add a new `Cortex.Host.<Name>` project.
 2. Implement `ICortexHostEnvironment`.
 3. Implement `ICortexHostServices`.
-4. Implement an `IWorkbenchFrameContext` that adapts host screen, pointer, keyboard, wheel, and frame timing into `WorkbenchFrameInputSnapshot`.
+4. Implement an `IWorkbenchFrameContext` from `Cortex.Rendering` that adapts host screen, pointer, keyboard, wheel, and frame timing into `WorkbenchFrameInputSnapshot`.
 5. Construct the chosen `IWorkbenchRuntimeUiFactory` inside host composition.
-6. Pass the same host-owned `IWorkbenchFrameContext` into the runtime UI/backend so overlay input adaptation stays host-owned.
-7. Keep the generic shell consuming only `IWorkbenchRuntimeUi`, `IRenderPipeline`, `IWorkbenchUiSurface`, and `IWorkbenchFrameContext`.
+6. Supply the active `IWorkbenchUiSurface` from host composition instead of constructing a concrete module UI surface inside generic shell code.
+7. Pass the same host-owned `IWorkbenchFrameContext` into the runtime UI/backend so overlay input adaptation stays host-owned.
+8. Keep the generic shell consuming only `IWorkbenchRuntimeUi`, `IRenderPipeline`, `IWorkbenchUiSurface`, and `IWorkbenchFrameContext`.
 
 Do not:
 
@@ -65,7 +67,7 @@ Do not:
 
 ## Input and frame ownership
 
-`IWorkbenchFrameContext` is the portable host-to-runtime boundary for frame state.
+`IWorkbenchFrameContext` and `WorkbenchFrameInputSnapshot` live in `Cortex.Rendering` as the portable host-to-runtime frame boundary.
 
 It should provide:
 
@@ -96,6 +98,7 @@ Keep these portable:
 - popup item layout and close/scroll/activation policy
 - tooltip visible-model, sticky-hover, placement, and content layout policy
 - panel section/header/card/content layout policy
+- shell split-layout and shell popup/overlay dismissal/capture policy when those rules are backend-neutral
 
 ## Proof strategy
 
@@ -115,12 +118,22 @@ See the recording backend test coverage in `Cortex.Tests/Rendering/RecordingRunt
 Today the composition flow is:
 
 1. `Cortex.Host.Sheltered` creates `UnityWorkbenchFrameContext`.
-2. `Cortex.Host.Sheltered` selects `ImguiWorkbenchRuntimeUiFactory`.
-3. `Cortex.Renderers.Imgui` builds `ImguiRenderPipeline`.
-4. IMGUI renderers consume portable planners/controllers plus the host-owned frame context.
+2. `Cortex.Host.Sheltered` creates the active `ShelteredWorkbenchUiSurface`.
+3. `Cortex.Host.Sheltered` selects `ImguiWorkbenchRuntimeUiFactory`.
+4. `Cortex.Renderers.Imgui` builds `ImguiRenderPipeline`.
+5. IMGUI renderers consume portable planners/controllers plus the host-owned frame context and host-supplied module UI surface.
 
 If you add another renderer or host, preserve that direction:
 
 - host chooses
 - portable runtime UI owns behavior
 - backend executes
+
+## Remaining Debt
+
+The remaining rendering debt after this pass is intentionally short:
+
+- `Cortex` shell and editor surfaces are still Unity IMGUI-hosted call sites; only the reusable layout and interaction policy has been extracted so far.
+- `CortexWindowChromeController` still owns IMGUI-time splitter drag and resize execution; only the neutral split geometry is portable.
+- Dock-tab drag/close interaction in the shell is still partly inline IMGUI handling and should move only if another backend or shell surface proves the shared rule.
+- There is still no second real renderer. The recording backend proves the boundary, but a second concrete renderer would be the next architectural proof step.
