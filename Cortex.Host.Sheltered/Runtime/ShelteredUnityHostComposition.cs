@@ -21,7 +21,7 @@ namespace Cortex.Host.Sheltered.Runtime
                 new WindowsPathInteractionService(environment),
                 new UnityWorkbenchRuntimeFactory(
                     new ShelteredUnityWorkbenchContributionRegistrar(),
-                    new ImguiWorkbenchRuntimeUiFactory(new CortexWorkbenchUiSurface(), frameContext)),
+                    new ImguiWorkbenchRuntimeUiFactory(new ShelteredWorkbenchUiSurface(), frameContext)),
                 platformModule,
                 frameContext);
 

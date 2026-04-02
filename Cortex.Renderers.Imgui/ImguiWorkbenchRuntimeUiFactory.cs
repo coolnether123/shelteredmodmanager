@@ -1,4 +1,5 @@
 using Cortex.Plugins.Abstractions;
+using Cortex.Rendering;
 using Cortex.Rendering.RuntimeUi;
 
 namespace Cortex.Renderers.Imgui

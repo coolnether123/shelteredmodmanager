@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Diagnostics;
-using Cortex.Rendering.RuntimeUi;
+using Cortex.Rendering;
 
 namespace Cortex.Presentation.Abstractions
 {

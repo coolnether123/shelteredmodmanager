@@ -5,6 +5,7 @@ using Cortex.Core.Models;
 using Cortex.Modules.Editor;
 using Cortex.Modules.Shared;
 using Cortex.Plugins.Abstractions;
+using Cortex.Rendering;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.RuntimeUi;
 using UnityEngine;
@@ -13,8 +14,6 @@ namespace Cortex
 {
     public sealed partial class CortexShellController
     {
-        private const string DefaultWorkspaceId = "default";
-
         private void EnsureModuleActivated(string containerId)
         {
             GetModuleActivationService().EnsureActivated(containerId);

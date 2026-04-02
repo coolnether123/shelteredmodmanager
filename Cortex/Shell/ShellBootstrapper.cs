@@ -6,6 +6,7 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Presentation.Abstractions;
 using Cortex.Plugins.Abstractions;
+using Cortex.Rendering;
 using Cortex.Rendering.RuntimeUi;
 using Cortex.Services.Navigation;
 using Cortex.Services.Navigation.Metadata;

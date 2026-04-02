@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Cortex.Plugins.Abstractions;
+using Cortex.Rendering;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
 

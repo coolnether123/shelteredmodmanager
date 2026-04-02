@@ -1,10 +1,7 @@
 using Cortex.Rendering.Models;
 
-namespace Cortex.Rendering.RuntimeUi
+namespace Cortex.Rendering
 {
-    // The frame/input contract now lives in Cortex.Rendering to keep the dependency
-    // direction low-level and break the portable project cycle. The namespace stays
-    // stable so existing shell/host code does not need a broad rename pass.
     public enum WorkbenchInputEventKind
     {
         None = 0,
