@@ -165,7 +165,7 @@ namespace Cortex.Shell
 
             MMLog.WriteInfo("[Cortex] Initializing runtime. WorkspaceRoot=" +
                 (settings != null ? settings.WorkspaceRootPath ?? string.Empty : string.Empty) +
-                ", ManagedRoot=" + (settings != null ? settings.ManagedAssemblyRootPath ?? string.Empty : string.Empty) +
+                ", ReferenceAssemblies=" + (settings != null ? settings.ReferenceAssemblyRootPath ?? string.Empty : string.Empty) +
                 ", LanguageProvider=" + resolvedLanguageProviderId + ".");
 
             var projectCatalogPath = string.IsNullOrEmpty(settings.ProjectCatalogPath)
@@ -227,13 +227,13 @@ namespace Cortex.Shell
         {
             var effective = settings ?? new CortexSettings();
 
-            if (string.IsNullOrEmpty(effective.ModsRootPath)) effective.ModsRootPath = hostEnvironment.ModsRootPath;
-            if (string.IsNullOrEmpty(effective.WorkspaceRootPath)) effective.WorkspaceRootPath = effective.ModsRootPath;
-            if (string.IsNullOrEmpty(effective.ManagedAssemblyRootPath)) effective.ManagedAssemblyRootPath = hostEnvironment.ManagedAssemblyRootPath;
+            if (string.IsNullOrEmpty(effective.RuntimeContentRootPath)) effective.RuntimeContentRootPath = hostEnvironment.RuntimeContentRootPath;
+            if (string.IsNullOrEmpty(effective.WorkspaceRootPath)) effective.WorkspaceRootPath = CortexHostPathSettings.GetEffectiveWorkspaceRoot(effective);
+            if (string.IsNullOrEmpty(effective.ReferenceAssemblyRootPath)) effective.ReferenceAssemblyRootPath = hostEnvironment.ReferenceAssemblyRootPath;
             if (string.IsNullOrEmpty(effective.AdditionalSourceRoots)) effective.AdditionalSourceRoots = effective.WorkspaceRootPath;
-            if (string.IsNullOrEmpty(effective.CortexPluginSearchRoots)) effective.CortexPluginSearchRoots = effective.ModsRootPath;
             if (string.IsNullOrEmpty(effective.LogFilePath)) effective.LogFilePath = hostEnvironment.LogFilePath;
             if (string.IsNullOrEmpty(effective.ProjectCatalogPath)) effective.ProjectCatalogPath = hostEnvironment.ProjectCatalogPath;
+            if (string.IsNullOrEmpty(effective.CortexPluginSearchRoots)) effective.CortexPluginSearchRoots = hostEnvironment.ConfiguredPluginSearchRoots;
             if (string.IsNullOrEmpty(effective.DecompilerCachePath)) effective.DecompilerCachePath = hostEnvironment.DecompilerCachePath;
             if (string.IsNullOrEmpty(effective.AdditionalDecompilerCacheRoots)) effective.AdditionalDecompilerCacheRoots = (_platformModule ?? NullCortexPlatformModule.Instance).AdditionalDecompilerCacheRoots;
             if (effective.LanguageProviderConfigurations == null) effective.LanguageProviderConfigurations = new LanguageProviderConfiguration[0];

@@ -5,6 +5,8 @@ using System.IO;
 using System.Threading;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Core.Services;
+using Cortex.Presentation.Abstractions;
 using UnityDebug = UnityEngine.Debug;
 
 namespace Cortex.Host.Unity.Runtime
@@ -24,6 +26,17 @@ namespace Cortex.Host.Unity.Runtime
 
         private readonly object _sync = new object();
         private readonly Dictionary<string, PendingSelection> _pendingSelections = new Dictionary<string, PendingSelection>(StringComparer.OrdinalIgnoreCase);
+        private readonly ICortexHostEnvironment _hostEnvironment;
+
+        public WindowsPathInteractionService()
+            : this(null)
+        {
+        }
+
+        public WindowsPathInteractionService(ICortexHostEnvironment hostEnvironment)
+        {
+            _hostEnvironment = hostEnvironment;
+        }
 
         public bool TryBeginSelectPath(PathSelectionRequest request, out string requestId)
         {
@@ -47,7 +60,7 @@ namespace Cortex.Host.Unity.Runtime
             var thread = new Thread(delegate()
             {
                 UnityDebug.Log(LogPrefix + "Worker thread started. RequestId=" + selectionId + ".");
-                CompleteSelection(selectionId, ExecuteSelection(effectiveRequest));
+                CompleteSelection(selectionId, ExecuteSelection(effectiveRequest, _hostEnvironment));
             });
             thread.IsBackground = true;
 
@@ -185,9 +198,14 @@ namespace Cortex.Host.Unity.Runtime
             }
         }
 
-        private static PathSelectionResult ExecuteSelection(PathSelectionRequest request)
+        private PathSelectionResult ExecuteSelection(PathSelectionRequest request)
         {
-            var executablePath = ResolvePickerExecutablePath();
+            return ExecuteSelection(request, _hostEnvironment);
+        }
+
+        private PathSelectionResult ExecuteSelection(PathSelectionRequest request, ICortexHostEnvironment hostEnvironment)
+        {
+            var executablePath = ResolvePickerExecutablePath(hostEnvironment ?? _hostEnvironment);
             if (string.IsNullOrEmpty(executablePath))
             {
                 UnityDebug.LogWarning(LogPrefix + "Picker host executable could not be resolved.");
@@ -269,42 +287,108 @@ namespace Cortex.Host.Unity.Runtime
             }
         }
 
-        private static string ResolvePickerExecutablePath()
+        private static string ResolvePickerExecutablePath(ICortexHostEnvironment hostEnvironment)
         {
             var candidates = new List<string>();
+            AddBundledToolCandidates(candidates, hostEnvironment != null ? hostEnvironment.HostBinPath : string.Empty);
+
             var assemblyLocation = typeof(WindowsPathInteractionService).Assembly.Location;
             if (!string.IsNullOrEmpty(assemblyLocation))
             {
                 var assemblyDirectory = Path.GetDirectoryName(assemblyLocation);
                 if (!string.IsNullOrEmpty(assemblyDirectory))
                 {
-                    candidates.Add(Path.Combine(assemblyDirectory, PickerExecutableName));
+                    AddBundledToolCandidates(candidates, assemblyDirectory);
                 }
             }
 
             var appBaseDirectory = AppDomain.CurrentDomain.BaseDirectory;
             if (!string.IsNullOrEmpty(appBaseDirectory))
             {
-                candidates.Add(Path.Combine(appBaseDirectory, PickerExecutableName));
-                candidates.Add(Path.Combine(Path.Combine(appBaseDirectory, "decompiler"), PickerExecutableName));
+                AddBundledToolCandidates(candidates, appBaseDirectory);
+            }
+
+            return BundledToolPathResolver.ResolveCandidate(candidates);
+        }
+
+        private static void AddBundledToolCandidates(IList<string> candidates, string baseDirectory)
+        {
+            var hostBinCandidates = EnumerateHostBinCandidates(baseDirectory);
+            for (var i = 0; i < hostBinCandidates.Count; i++)
+            {
+                var hostBinPath = hostBinCandidates[i];
+                if (string.IsNullOrEmpty(hostBinPath))
+                {
+                    continue;
+                }
+
+                candidates.Add(Path.Combine(hostBinPath, PickerExecutableName));
+                candidates.Add(Path.Combine(Path.Combine(Path.Combine(hostBinPath, "tools"), "windows-path-picker"), PickerExecutableName));
+                candidates.Add(Path.Combine(Path.Combine(hostBinPath, "decompiler"), PickerExecutableName));
+            }
+        }
+
+        private static IList<string> EnumerateHostBinCandidates(string baseDirectory)
+        {
+            var candidates = new List<string>();
+            var normalizedBaseDirectory = NormalizePath(baseDirectory);
+            AddCandidate(candidates, normalizedBaseDirectory);
+
+            if (string.IsNullOrEmpty(normalizedBaseDirectory))
+            {
+                return candidates;
+            }
+
+            var normalizedLeaf = GetLeafName(normalizedBaseDirectory);
+            var parent = Directory.GetParent(normalizedBaseDirectory);
+
+            if (string.Equals(normalizedLeaf, "decompiler", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalizedLeaf, "plugins", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalizedLeaf, "tools", StringComparison.OrdinalIgnoreCase))
+            {
+                AddCandidate(candidates, parent != null ? parent.FullName : string.Empty);
+            }
+            else if (parent != null && string.Equals(GetLeafName(parent.FullName), "tools", StringComparison.OrdinalIgnoreCase))
+            {
+                var grandParent = Directory.GetParent(parent.FullName);
+                AddCandidate(candidates, grandParent != null ? grandParent.FullName : string.Empty);
+            }
+
+            if (!string.Equals(normalizedLeaf, "bin", StringComparison.OrdinalIgnoreCase))
+            {
+                AddCandidate(candidates, Path.Combine(normalizedBaseDirectory, "bin"));
+            }
+
+            return candidates;
+        }
+
+        private static void AddCandidate(IList<string> candidates, string path)
+        {
+            var normalized = NormalizePath(path);
+            if (string.IsNullOrEmpty(normalized))
+            {
+                return;
             }
 
             for (var i = 0; i < candidates.Count; i++)
             {
-                try
+                if (string.Equals(candidates[i], normalized, StringComparison.OrdinalIgnoreCase))
                 {
-                    var candidate = Path.GetFullPath(candidates[i]);
-                    if (File.Exists(candidate))
-                    {
-                        return candidate;
-                    }
-                }
-                catch
-                {
+                    return;
                 }
             }
 
-            return string.Empty;
+            candidates.Add(normalized);
+        }
+
+        private static string GetLeafName(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return string.Empty;
+            }
+
+            return Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) ?? string.Empty;
         }
 
         private static string BuildPickerArguments(PathSelectionRequest request)

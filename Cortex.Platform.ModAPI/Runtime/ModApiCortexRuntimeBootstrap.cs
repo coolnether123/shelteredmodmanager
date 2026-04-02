@@ -1,3 +1,4 @@
+using Cortex.Host.Sheltered.Runtime;
 using Cortex.Host.Unity.Runtime;
 using ModAPI.Core;
 
@@ -11,7 +12,7 @@ namespace Cortex.Platform.ModAPI.Runtime
     {
         public void Initialize()
         {
-            UnityCortexShellBootstrapper.EnsureShell(new ModApiCortexPlatformModule());
+            UnityCortexShellBootstrapper.EnsureShell(ShelteredUnityHostComposition.Create(new ModApiCortexPlatformModule()));
         }
     }
 }

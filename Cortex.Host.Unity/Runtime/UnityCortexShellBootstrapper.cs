@@ -1,31 +1,29 @@
 using System;
-using Cortex.Core.Abstractions;
 using Cortex.Core.Diagnostics;
 using UnityEngine;
 
 namespace Cortex.Host.Unity.Runtime
 {
     /// <summary>
-    /// Applies the Unity host with a single platform-module attachment point.
-    /// Loader-specific assemblies provide their <see cref="ICortexPlatformModule"/> here and the
-    /// host performs the default host-only composition internally.
+    /// Applies the Unity host with an explicit host-composition root.
+    /// Loader-specific assemblies build the concrete host composition outside this project.
     /// </summary>
     public static class UnityCortexShellBootstrapper
     {
         private static readonly CortexLogger Log = CortexLog.ForSource("Cortex.Host.Unity");
 
-        public static void EnsureShell(ICortexPlatformModule platformModule)
+        public static void EnsureShell(UnityCortexHostCompositionRoot compositionRoot)
         {
-            if (platformModule == null)
+            if (compositionRoot == null)
             {
-                throw new ArgumentNullException("platformModule");
+                throw new ArgumentNullException("compositionRoot");
             }
 
-            EnsureShell(UnityCortexHostCompositionRoot.CreateDefault(platformModule));
-        }
+            if (compositionRoot.HostServices == null)
+            {
+                throw new ArgumentException("HostServices must be provided.", "compositionRoot");
+            }
 
-        private static void EnsureShell(UnityCortexHostCompositionRoot compositionRoot)
-        {
             try
             {
                 CortexLog.Configure(compositionRoot.LogSink);

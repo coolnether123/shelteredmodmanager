@@ -23,7 +23,7 @@ namespace Cortex.Ollama
                 !string.IsNullOrEmpty(settings.OllamaModel);
         }
 
-        public ICompletionAugmentationClient Create(CortexSettings settings, Action<string> log)
+        public ICompletionAugmentationClient Create(CortexSettings settings, CompletionAugmentationProviderContext context, Action<string> log)
         {
             if (!CanCreate(settings))
             {

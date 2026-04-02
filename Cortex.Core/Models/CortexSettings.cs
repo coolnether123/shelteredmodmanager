@@ -13,8 +13,8 @@ namespace Cortex.Core.Models
     public sealed class CortexSettings
     {
         public string WorkspaceRootPath;
-        public string ModsRootPath;
-        public string ManagedAssemblyRootPath;
+        public string RuntimeContentRootPath;
+        public string ReferenceAssemblyRootPath;
         public string AdditionalSourceRoots;
         public string CortexPluginSearchRoots;
         public string LogFilePath;
@@ -80,8 +80,8 @@ namespace Cortex.Core.Models
         public CortexSettings()
         {
             WorkspaceRootPath = string.Empty;
-            ModsRootPath = string.Empty;
-            ManagedAssemblyRootPath = string.Empty;
+            RuntimeContentRootPath = string.Empty;
+            ReferenceAssemblyRootPath = string.Empty;
             AdditionalSourceRoots = string.Empty;
             CortexPluginSearchRoots = string.Empty;
             LogFilePath = string.Empty;

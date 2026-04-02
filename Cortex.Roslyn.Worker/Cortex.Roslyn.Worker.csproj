@@ -7,9 +7,6 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>Cortex.Roslyn.Worker</RootNamespace>
     <AssemblyName>Cortex.Roslyn.Worker</AssemblyName>
-    <OutputPath>..\Dist\SMM\bin\roslyn\</OutputPath>
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
 
   <ItemGroup>

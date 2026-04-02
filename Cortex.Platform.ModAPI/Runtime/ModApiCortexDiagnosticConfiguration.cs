@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Cortex.Core.Diagnostics;
+using Cortex.Host.Sheltered.Runtime;
 
 namespace Cortex.Platform.ModAPI.Runtime
 {
@@ -75,8 +76,7 @@ namespace Cortex.Platform.ModAPI.Runtime
             var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                var iniPath = Path.Combine(Path.Combine(Directory.GetCurrentDirectory(), "SMM"), "bin");
-                iniPath = Path.Combine(iniPath, "mod_manager.ini");
+                var iniPath = ShelteredHostPathLayout.FromCurrentDirectory().ModManagerIniPath;
                 if (!File.Exists(iniPath))
                 {
                     return settings;

@@ -2,13 +2,32 @@
 
 This document describes the permanent Cortex architecture in the current codebase.
 
-Cortex is the host. Feature modules are plugins. Generic Cortex code provides typed extension seams, runtime capabilities, state ownership, and workbench/editor composition. Feature-specific behavior belongs in plugins such as the extracted Harmony module.
+Portable Cortex code provides typed extension seams, runtime capabilities, state ownership, and workbench/editor composition. Host-bound behavior is isolated in Sheltered-specific host projects. Feature-specific behavior belongs in plugins such as the extracted Harmony module.
+
+For the final portability boundary map, bundle profile intent, and future-host completion checklist, see `documentation/Cortex_Portability_Report.md`.
+
+## 0. Solution topology
+
+The Cortex solution is intentionally split into three roles:
+
+- portable core/libraries: `Cortex.Core`, `Cortex.Presentation`, `Cortex.Rendering`, `Cortex.Plugins.Abstractions`, `Cortex.CompletionProviders`, `Cortex.Tabby`, `Cortex.Ollama`, `Cortex.OpenRouter`
+- host/platform modules and concrete adapters: `Cortex`, `Cortex.Renderers.Imgui`, `Cortex.Host.Unity`, `Cortex.Host.Sheltered`, `Cortex.Platform.ModAPI`
+- plugin-specific feature modules: `Cortex.Plugin.Harmony`
+- external tooling: `Cortex.Roslyn.Worker`, `Cortex.Tabby.Server`, `Cortex.PathPicker.Host`
+
+Portable projects must not reference host-specific Cortex projects.
+
+Product-shaped bundle layouts are no longer declared inside reusable project files. Neutral project outputs now come from shared Cortex build props/targets, and bundle layouts are selected through centralized build profiles.
+
+Unity-hosted Cortex project files also no longer commit a machine-local Sheltered `UnityEngine.dll` path. That reference is supplied through the shared build contract in `Directory.Build.props` and `Directory.Build.targets`.
+
+Reusable settings and environment contracts are host-neutral. Portable Cortex code works with `WorkspaceRootPath`, `RuntimeContentRootPath`, and `ReferenceAssemblyRootPath`; only host adapters provide concrete host-specific values for those paths.
 
 ## 1. Core roles
 
-### Cortex host
+### Portable Cortex libraries
 
-Generic Cortex assemblies own:
+Portable Cortex assemblies own:
 
 - workbench shell and layout orchestration
 - document/session management
@@ -18,7 +37,23 @@ Generic Cortex assemblies own:
 - editor extension runtime and presentation hosts
 - plugin discovery and registration
 
-Generic Cortex assemblies do not own Harmony behavior, Harmony state, or Harmony-specific contracts.
+Portable Cortex assemblies do not own Harmony behavior, Harmony state, Harmony-specific contracts, or Sheltered-specific filesystem/package layouts.
+
+### Sheltered host layer
+
+Sheltered-specific Cortex assemblies own:
+
+- Unity-hosted shell composition
+- concrete Sheltered host composition
+- Sheltered/ModAPI runtime adapters
+- Unity-specific rendering integration
+- centralized Sheltered path/layout modeling via `Cortex.Host.Sheltered.Runtime.ShelteredHostPathLayout`
+
+Sheltered-specific projects may depend on portable Cortex libraries, but not the other way around.
+
+`Cortex.Host.Unity` is the reusable Unity-host runtime layer. `Cortex.Host.Sheltered` is the concrete Sheltered adapter that supplies environment paths, bundled workbench contributions, and concrete host composition.
+
+`Cortex.Host.Unity` may depend on Unity build references, but it must not own any committed Sheltered install path. The active Unity managed reference path is supplied externally through the centralized Cortex build properties.
 
 ### Cortex plugins
 
@@ -33,7 +68,7 @@ Plugins own feature behavior. A plugin may contribute:
 - editor adornments
 - editor workflows
 
-The Harmony feature now follows this model through `Cortex.Plugin.Harmony`.
+The Harmony feature now follows this model through `Cortex.Plugin.Harmony`. It is a feature plugin that a host bundle may choose to ship, not a Sheltered host adapter.
 
 ## 2. One plugin model
 
@@ -212,7 +247,8 @@ When adding a new plugin or extension seam:
 
 Permanent Cortex architecture means:
 
-- Cortex is the host
+- portable Cortex libraries stay host-neutral
+- Sheltered host projects are explicitly isolated
 - plugins are the feature owners
 - first-party and third-party plugins follow the same discovery and registration model
 - runtime access is typed and narrow

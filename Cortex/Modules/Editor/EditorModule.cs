@@ -40,7 +40,7 @@ namespace Cortex.Modules.Editor
 
         private Vector2 _tabScroll = Vector2.zero;
         private Vector2 _editorScroll = Vector2.zero;
-        // Sheltered's Unity runtime does not expose Rect.zero, so keep an explicit
+        // This Unity runtime target does not expose Rect.zero, so keep an explicit
         // zero rect here instead of relying on the convenience property.
         private Rect _lastCodeAreaRect = new Rect(0f, 0f, 0f, 0f);
         private string _lastFindOverlayLogKey = string.Empty;
@@ -567,7 +567,7 @@ namespace Cortex.Modules.Editor
             var active = state.Documents.ActiveDocument;
             if (active == null)
             {
-                // Sheltered's Unity runtime does not expose Rect.zero.
+                // This Unity runtime target does not expose Rect.zero.
                 _lastCodeAreaRect = new Rect(0f, 0f, 0f, 0f);
                 return;
             }

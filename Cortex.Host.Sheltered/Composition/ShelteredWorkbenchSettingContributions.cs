@@ -1,11 +1,12 @@
 using Cortex.Core.Models;
 using Cortex.Core.Services;
+using Cortex.Host.Sheltered.Runtime;
 using Cortex.Plugins.Abstractions;
 using Cortex.Shell;
 
-namespace Cortex.Host.Unity.Composition
+namespace Cortex.Host.Sheltered.Composition
 {
-    internal sealed class DefaultWorkbenchSettingContributions
+    internal sealed class ShelteredWorkbenchSettingContributions
     {
         private const string LanguageProviderSettingId = "LanguageProviderId";
         private const string RoslynWorkerPathSettingId = "language.roslyn.workerPathOverride";
@@ -17,6 +18,8 @@ namespace Cortex.Host.Unity.Composition
             {
                 return;
             }
+
+            var exampleLayout = ShelteredHostPathLayout.CreateIllustrativeLayout();
 
             context.RegisterSettingSection("Workspace", "workspace", "Workspace", "workspace.general", "General", "Workspace roots, project discovery, and source resolution.", new[] { "workspace", "paths", "roots", "mods" }, 0);
             context.RegisterSettingSection("Logs", "tooling", "Tooling", "logs.general", "Logs", "Live log feed retention, scrolling, and tail settings.", new[] { "logs", "tail", "history" }, 10);
@@ -32,9 +35,9 @@ namespace Cortex.Host.Unity.Composition
             context.RegisterSettingSection("Layout", "shell", "Shell", "layout.general", "Layout", "Workbench pane widths and layout defaults.", new[] { "layout", "pane", "width" }, 110);
             context.RegisterSettingSection("Window", "shell", "Shell", "window.general", "Window", "Shell position and size persistence.", new[] { "window", "position", "size" }, 120);
 
-            context.RegisterSetting(nameof(CortexSettings.WorkspaceRootPath), "Workspace Scan Root", "Tell Cortex where to scan for editable workspace sources.", "Workspace", string.Empty, SettingValueKind.String, 0, SettingEditorKind.Path, "D:\\Projects\\MyWorkspace", string.Empty, new[] { "workspace", "root", "projects" }, new SettingChoiceOption[0], false, true);
-            context.RegisterSetting(nameof(CortexSettings.ModsRootPath), "Loaded Mods Root", "Points to the live mod folder used for source mapping and discovery.", "Workspace", string.Empty, SettingValueKind.String, 10, SettingEditorKind.Path, "D:\\Games\\Sheltered\\SMM\\mods", string.Empty, new[] { "mods", "loaded mods", "live mods" }, new SettingChoiceOption[0], false, true);
-            context.RegisterSetting(nameof(CortexSettings.ManagedAssemblyRootPath), "Game Managed DLLs", "Used to locate assemblies for reference browsing and decompilation.", "Workspace", string.Empty, SettingValueKind.String, 20, SettingEditorKind.Path, "D:\\Games\\Sheltered\\Sheltered_Data\\Managed", string.Empty, new[] { "managed", "assemblies", "dlls" }, new SettingChoiceOption[0], false, true);
+            context.RegisterSetting(nameof(CortexSettings.WorkspaceRootPath), CortexHostPathSettings.WorkspaceRootDisplayName, "Tell Cortex where to scan for editable workspace sources.", "Workspace", string.Empty, SettingValueKind.String, 0, SettingEditorKind.Path, ShelteredHostPathLayout.ExampleWorkspaceRootPath, string.Empty, new[] { "workspace", "root", "projects" }, new SettingChoiceOption[0], false, true);
+            context.RegisterSetting(nameof(CortexSettings.RuntimeContentRootPath), "Loaded Mods Root", "Points to the live mod folder used for source mapping and discovery.", "Workspace", string.Empty, SettingValueKind.String, 10, SettingEditorKind.Path, exampleLayout.RuntimeContentRootPath, string.Empty, new[] { "mods", "loaded mods", "live mods" }, new SettingChoiceOption[0], false, true);
+            context.RegisterSetting(nameof(CortexSettings.ReferenceAssemblyRootPath), "Game Managed DLLs", "Used to locate assemblies for reference browsing and decompilation.", "Workspace", string.Empty, SettingValueKind.String, 20, SettingEditorKind.Path, exampleLayout.ReferenceAssemblyRootPath, string.Empty, new[] { "managed", "assemblies", "dlls" }, new SettingChoiceOption[0], false, true);
             context.RegisterSetting(nameof(CortexSettings.AdditionalSourceRoots), "Extra Source Roots", "Semicolon-separated fallback roots for source resolution.", "Workspace", string.Empty, SettingValueKind.String, 30);
             context.RegisterSetting(nameof(CortexSettings.ProjectCatalogPath), "Project Catalog", "Path to the persisted Cortex project catalog file.", "Workspace", string.Empty, SettingValueKind.String, 40);
             context.RegisterSetting(nameof(CortexSettings.CortexPluginSearchRoots), "Cortex Plugin Roots", "Semicolon-separated additional roots scanned for Cortex workbench plugins alongside bundled and loaded-mod plugin roots.", "Workspace", string.Empty, SettingValueKind.String, 50);

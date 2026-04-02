@@ -176,7 +176,7 @@ When a search query matches a section, Cortex reveals that section inside the co
 
 ## Built-in example
 
-The Roslyn language-service settings already use this pattern in [DefaultWorkbenchSettingContributions.cs](/D:/Projects/_Archived/Sheltered%20Modding/shelteredmodmanager/Cortex.Host.Unity/Composition/DefaultWorkbenchSettingContributions.cs).
+The Roslyn language-service settings already use this pattern in [ShelteredWorkbenchSettingContributions.cs](/D:/Projects/_Archived/Sheltered%20Modding/shelteredmodmanager/Cortex.Host.Sheltered/Composition/ShelteredWorkbenchSettingContributions.cs).
 
 That registration gives Cortex enough information to:
 

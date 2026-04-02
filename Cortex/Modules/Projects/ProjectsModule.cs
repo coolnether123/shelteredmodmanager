@@ -86,9 +86,9 @@ namespace Cortex.Modules.Projects
             DrawSourceMappingGuide(workspaceService, state);
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("Project Setup");
-            GUILayout.Label("Enter the root folder for your mod project. Cortex will infer the project id and .csproj automatically.");
+            GUILayout.Label("Enter the root folder for the source tree you want Cortex to map. Cortex will infer the project id and .csproj automatically.");
             DrawPathField(
-                "Mod Source Folder",
+                "Source Folder",
                 ref _sourceRoot,
                 pathInteractionService,
                 new CortexPathFieldOptions
@@ -100,7 +100,7 @@ namespace Cortex.Modules.Projects
                     BrowseRequest = new PathSelectionRequest
                     {
                         SelectionKind = PathSelectionKind.Folder,
-                        Title = "Select mod source folder",
+                        Title = "Select source folder",
                         InitialPath = !string.IsNullOrEmpty(_sourceRoot)
                             ? _sourceRoot
                             : (state != null && state.Settings != null ? state.Settings.WorkspaceRootPath : string.Empty)
@@ -123,14 +123,14 @@ namespace Cortex.Modules.Projects
             GUILayout.EndHorizontal();
 
             GUILayout.Space(4f);
-            GUILayout.Label("Detected Mod ID: " + (string.IsNullOrEmpty(_modId) ? "Not detected yet" : _modId));
+            GUILayout.Label("Detected Project ID: " + (string.IsNullOrEmpty(_modId) ? "Not detected yet" : _modId));
             GUILayout.Label("Detected Project File: " + (string.IsNullOrEmpty(_projectFile) ? "Not found yet" : _projectFile));
             GUILayout.Label("Selected source folder is used by the editor file tree once the project is saved and selected.");
 
             _showAdvanced = GUILayout.Toggle(_showAdvanced, "Show Advanced Build Fields");
             if (_showAdvanced)
             {
-                DrawField("Mod ID", ref _modId);
+                DrawField("Project ID", ref _modId);
                 DrawPathField(
                     "Project File",
                     ref _projectFile,
@@ -185,10 +185,10 @@ namespace Cortex.Modules.Projects
         {
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("Source Mapping Guide");
-            GUILayout.Label("Put your mod's project-tree root in 'Mod Source Folder'. Example: D:\\Projects\\Sheltered Modding\\Faction-Overhaul\\Faction Overhaul");
-            GUILayout.Label("This should be the folder that contains the mod's .cs files and usually the .csproj. Cortex will infer the rest.");
+            GUILayout.Label("Put the project-tree root in 'Source Folder'. Example: D:\\Projects\\Extensions\\FactionOverhaul");
+            GUILayout.Label("This should be the folder that contains the source files and usually the .csproj. Cortex will infer the rest.");
             GUILayout.Label("Workspace root: " + ((state.Settings != null && !string.IsNullOrEmpty(state.Settings.WorkspaceRootPath)) ? state.Settings.WorkspaceRootPath : "Not configured"));
-            GUILayout.Label("Loaded mods root: " + ((state.Settings != null && !string.IsNullOrEmpty(state.Settings.ModsRootPath)) ? state.Settings.ModsRootPath : "Not configured"));
+            GUILayout.Label("Runtime content root: " + ((state.Settings != null && !string.IsNullOrEmpty(state.Settings.RuntimeContentRootPath)) ? state.Settings.RuntimeContentRootPath : "Not configured"));
 
             GUILayout.BeginHorizontal();
             if (state.SelectedProject != null && !string.IsNullOrEmpty(state.SelectedProject.SourceRootPath) && GUILayout.Button("Use Selected Source", GUILayout.Width(140f)))
@@ -236,8 +236,8 @@ namespace Cortex.Modules.Projects
             }
 
             GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.Label("Loaded Mod Source Assistant");
-            GUILayout.Label("Use this when a mod is loaded in-game but Cortex does not yet know where its editable source lives.");
+            GUILayout.Label("Active Content Source Assistant");
+            GUILayout.Label("Use this when content is active under the host but Cortex does not yet know where its editable source lives.");
 
             var shown = 0;
             for (var i = 0; i < loadedMods.Count; i++)
@@ -260,8 +260,8 @@ namespace Cortex.Modules.Projects
                 GUILayout.BeginVertical(GUI.skin.box);
                 GUILayout.Label(mod.ModId + "  |  " + mod.RootPath);
                 GUILayout.Label(string.IsNullOrEmpty(inferredSourceRoot)
-                    ? "No obvious source root found. Start from the mod root or set a custom workspace path."
-                    : "Suggested mod source folder: " + inferredSourceRoot);
+                    ? "No obvious source root found. Start from the runtime content root or set a custom workspace path."
+                    : "Suggested source folder: " + inferredSourceRoot);
 
                 GUILayout.BeginHorizontal();
                 if (analysis != null && analysis.Definition != null && GUILayout.Button("Insert Mapping", GUILayout.Width(120f)))
@@ -293,7 +293,7 @@ namespace Cortex.Modules.Projects
 
             if (shown == 0)
             {
-                GUILayout.Label("All loaded mods already have a valid source mapping.");
+                GUILayout.Label("All active content items already have a valid source mapping.");
             }
 
             GUILayout.EndVertical();

@@ -1,9 +1,9 @@
 using Cortex.Core.Models;
 using Cortex.Plugins.Abstractions;
 
-namespace Cortex.Host.Unity.Composition
+namespace Cortex.Host.Sheltered.Composition
 {
-    internal sealed class DefaultWorkbenchCommandContributions
+    internal sealed class ShelteredWorkbenchCommandContributions
     {
         public void Register(WorkbenchPluginContext context)
         {

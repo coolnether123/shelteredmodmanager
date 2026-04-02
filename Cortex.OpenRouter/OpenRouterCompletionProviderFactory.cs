@@ -24,7 +24,7 @@ namespace Cortex.OpenRouter
                 !string.IsNullOrEmpty(settings.OpenRouterModel);
         }
 
-        public ICompletionAugmentationClient Create(CortexSettings settings, Action<string> log)
+        public ICompletionAugmentationClient Create(CortexSettings settings, CompletionAugmentationProviderContext context, Action<string> log)
         {
             if (!CanCreate(settings))
             {

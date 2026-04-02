@@ -507,7 +507,7 @@ namespace Cortex.Modules.Reference
             _selectedMember = null;
 
             var assemblies = referenceCatalogService != null
-                ? referenceCatalogService.GetAssemblies(state.Settings != null ? state.Settings.ManagedAssemblyRootPath : string.Empty)
+                ? referenceCatalogService.GetAssemblies(state.Settings != null ? state.Settings.ReferenceAssemblyRootPath : string.Empty)
                 : new List<ReferenceAssemblyDescriptor>();
             for (var i = 0; i < assemblies.Count; i++)
             {
@@ -786,7 +786,7 @@ namespace Cortex.Modules.Reference
         {
             if (_selectedAssembly == null)
             {
-                return "Browse loaded managed assemblies, then narrow down to a type and member before decompiling.";
+                return "Browse reference assemblies, then narrow down to a type and member before decompiling.";
             }
 
             if (_selectedType == null)

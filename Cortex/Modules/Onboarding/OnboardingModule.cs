@@ -116,8 +116,8 @@ namespace Cortex.Modules.Onboarding
                 {
                     StepId = "projects",
                     Label = "Projects",
-                    Title = "Link your live mods to source roots",
-                    Description = "Mark which loaded mods you maintain, then point Cortex at the source roots it should treat as editable worktrees.",
+                    Title = "Link active content to source roots",
+                    Description = "Mark which active content items you maintain, then point Cortex at the source roots it should treat as editable worktrees.",
                     IsScrollable = true,
                     GetScrollPosition = delegate(CortexOnboardingState state) { return state != null ? state.ModProjectScroll : Vector2.zero; },
                     SetScrollPosition = delegate(CortexOnboardingState state, Vector2 value)
@@ -181,7 +181,7 @@ namespace Cortex.Modules.Onboarding
                 previewBackground
                     ? "Preview the shell behind this overlay. Cortex stays blocked until you finish."
                     : (steps.Count > 3
-                        ? "Set your starting profile, link your live mods, then choose a layout and theme. Defaults are already selected."
+                        ? "Set your starting profile, link your active content, then choose a layout and theme. Defaults are already selected."
                         : "Set your starting profile, layout, and theme. Defaults are already selected."),
                 bodyStyle,
                 GUILayout.Height(34f));
@@ -523,7 +523,7 @@ namespace Cortex.Modules.Onboarding
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("Workspace Root", CreateSectionTitleStyle(), GUILayout.Height(22f));
             GUILayout.Label(
-                "Set the broad workspace root Cortex should scan for project discovery. Leave it empty if you only want to map specific mods here.",
+                "Set the broad workspace root Cortex should scan for project discovery. Leave it empty if you only want to map specific source trees here.",
                 CreateBodyStyle());
             GUILayout.Space(6f);
             onboardingState.SelectedWorkspaceRootPath = DrawPathEditor(
@@ -543,9 +543,9 @@ namespace Cortex.Modules.Onboarding
         private static void DrawEmptyModProjectCard()
         {
             GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.Label("No loaded mods are active right now.", CreateSectionTitleStyle(), GUILayout.Height(22f));
+            GUILayout.Label("No active content is available right now.", CreateSectionTitleStyle(), GUILayout.Height(22f));
             GUILayout.Label(
-                "Finish onboarding now and link projects later from the Projects or Settings surfaces when active mods are available.",
+                "Finish onboarding now and link projects later from the Projects or Settings surfaces when active content is available.",
                 CreateBodyStyle());
             GUILayout.EndVertical();
         }
@@ -562,7 +562,7 @@ namespace Cortex.Modules.Onboarding
             }
 
             GUILayout.BeginHorizontal();
-            DrawStatPill("Loaded Mods", onboardingState.ModProjectDrafts.Count.ToString());
+            DrawStatPill("Active Items", onboardingState.ModProjectDrafts.Count.ToString());
             GUILayout.Space(8f);
             DrawStatPill("Owned By You", ownedCount.ToString());
             GUILayout.EndHorizontal();
@@ -597,7 +597,7 @@ namespace Cortex.Modules.Onboarding
             GUILayout.EndHorizontal();
 
             GUILayout.Space(4f);
-            DrawMetadataRow("Live Mod Root", string.IsNullOrEmpty(draft.RootPath) ? "Unknown" : draft.RootPath);
+            DrawMetadataRow("Runtime Content Root", string.IsNullOrEmpty(draft.RootPath) ? "Unknown" : draft.RootPath);
             if (!draft.IsOwnedByUser)
             {
                 GUILayout.Space(6f);

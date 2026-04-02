@@ -82,6 +82,11 @@ namespace Cortex.Core.Models
         public CompletionAugmentationSnippet[] RelatedSnippets;
     }
 
+    public sealed class CompletionAugmentationProviderContext
+    {
+        public string HostBinPath;
+    }
+
     /// <summary>
     /// Normalized completion result returned by an augmentation provider.
     /// Provider-specific wire formats are translated into the common

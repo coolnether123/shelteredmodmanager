@@ -26,7 +26,7 @@ namespace Cortex.Tabby
                 (!string.IsNullOrEmpty(settings.TabbyServerUrl) || !string.IsNullOrEmpty(settings.OllamaModel));
         }
 
-        public ICompletionAugmentationClient Create(CortexSettings settings, Action<string> log)
+        public ICompletionAugmentationClient Create(CortexSettings settings, CompletionAugmentationProviderContext context, Action<string> log)
         {
             if (!CanCreate(settings))
             {
@@ -35,7 +35,7 @@ namespace Cortex.Tabby
 
             var managedServer = new BundledTabbyServerController(log);
             string endpoint;
-            if (!managedServer.TryResolveCompletionEndpoint(settings, out endpoint))
+            if (!managedServer.TryResolveCompletionEndpoint(settings, context, out endpoint))
             {
                 if (log != null && !string.IsNullOrEmpty(managedServer.LastError))
                 {

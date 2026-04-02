@@ -51,26 +51,6 @@ namespace Cortex
                 DiscoverInRoot(explicitRoots[i], descriptors, seenAssemblyPaths);
             }
 
-            var modsRoot = settings != null ? settings.ModsRootPath : string.Empty;
-            if (!string.IsNullOrEmpty(modsRoot) && Directory.Exists(modsRoot))
-            {
-                string[] modDirectories;
-                try
-                {
-                    modDirectories = Directory.GetDirectories(modsRoot);
-                }
-                catch
-                {
-                    modDirectories = new string[0];
-                }
-
-                for (var i = 0; i < modDirectories.Length; i++)
-                {
-                    var cortexRoot = Path.Combine(modDirectories[i], "Cortex");
-                    DiscoverInRoot(cortexRoot, descriptors, seenAssemblyPaths);
-                }
-            }
-
             return descriptors;
         }
 
@@ -132,13 +112,6 @@ namespace Cortex
                 var rootManifest = Path.Combine(normalizedRoot, ManifestFileName);
                 TryAddManifestDescriptor(rootManifest, descriptors, seenAssemblyPaths);
                 DiscoverInChildDirectories(normalizedRoot, descriptors, seenAssemblyPaths);
-
-                var pluginsDirectory = Path.Combine(normalizedRoot, "Plugins");
-                if (Directory.Exists(pluginsDirectory))
-                {
-                    var pluginManifest = Path.Combine(pluginsDirectory, ManifestFileName);
-                    TryAddManifestDescriptor(pluginManifest, descriptors, seenAssemblyPaths);
-                }
             }
             catch
             {

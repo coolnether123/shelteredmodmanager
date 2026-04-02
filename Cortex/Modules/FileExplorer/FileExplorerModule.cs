@@ -19,7 +19,7 @@ namespace Cortex.Modules.FileExplorer
     {
         private Vector2 _scroll = Vector2.zero;
         private string _cachedSourceRoot = string.Empty;
-        private string _cachedManagedAssemblyRoot = string.Empty;
+        private string _cachedReferenceAssemblyRoot = string.Empty;
         private readonly Dictionary<string, bool> _expandedNodes = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly ExplorerFilterPlanBuilder _filterPlanBuilder = new ExplorerFilterPlanBuilder();
 
@@ -77,18 +77,18 @@ namespace Cortex.Modules.FileExplorer
             var sourceRoot = state.SelectedProject != null
                 ? state.SelectedProject.SourceRootPath ?? string.Empty
                 : string.Empty;
-            var managedAssemblyRoot = state.Settings != null
-                ? state.Settings.ManagedAssemblyRootPath ?? string.Empty
+            var referenceAssemblyRoot = state.Settings != null
+                ? state.Settings.ReferenceAssemblyRootPath ?? string.Empty
                 : string.Empty;
 
             if (string.Equals(_cachedSourceRoot, sourceRoot, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(_cachedManagedAssemblyRoot, managedAssemblyRoot, StringComparison.OrdinalIgnoreCase))
+                string.Equals(_cachedReferenceAssemblyRoot, referenceAssemblyRoot, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
             _cachedSourceRoot = sourceRoot;
-            _cachedManagedAssemblyRoot = managedAssemblyRoot;
+            _cachedReferenceAssemblyRoot = referenceAssemblyRoot;
             RefreshTrees(browserService, decompilerExplorerService);
         }
 
@@ -136,8 +136,8 @@ namespace Cortex.Modules.FileExplorer
                 _sourceTree = null;
             }
 
-            _decompilerTree = decompilerExplorerService != null && !string.IsNullOrEmpty(_cachedManagedAssemblyRoot)
-                ? decompilerExplorerService.BuildTree(_cachedManagedAssemblyRoot)
+            _decompilerTree = decompilerExplorerService != null && !string.IsNullOrEmpty(_cachedReferenceAssemblyRoot)
+                ? decompilerExplorerService.BuildTree(_cachedReferenceAssemblyRoot)
                 : null;
         }
 
@@ -154,7 +154,7 @@ namespace Cortex.Modules.FileExplorer
             {
                 var message = title == "Workspace"
                     ? (state.SelectedProject == null ? "No project selected." : "Source root not mapped.")
-                    : "No managed assemblies were discovered for decompilation.";
+                    : "No reference assemblies were discovered for decompilation.";
                 GUILayout.Label(message, GUI.skin.label);
                 return;
             }

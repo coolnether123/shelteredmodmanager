@@ -6,9 +6,6 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Cortex.Tabby.Server</RootNamespace>
     <AssemblyName>Cortex.Tabby.Server</AssemblyName>
-    <OutputPath>..\Dist\SMM\bin\tabby\</OutputPath>
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
 
   <ItemGroup>

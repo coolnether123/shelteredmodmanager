@@ -17,7 +17,6 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\Dist\SMM\bin\decompiler\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -25,7 +24,6 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\Dist\SMM\bin\decompiler\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -81,6 +79,8 @@
     <Compile Include="Services\CsprojBuildCommandResolver.cs" />
     <Compile Include="Services\DecompilerExplorerService.cs" />
     <Compile Include="Services\DecompilerCliClient.cs" />
+    <Compile Include="Services\BundledToolPathResolver.cs" />
+    <Compile Include="Services\CortexHostPathSettings.cs" />
     <Compile Include="Services\EditorService.cs" />
     <Compile Include="Services\FileDocumentService.cs" />
     <Compile Include="Services\LanguageProviderConfigurationHelper.cs" />

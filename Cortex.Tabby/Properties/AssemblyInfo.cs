@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("Cortex.Tabby")]
@@ -13,3 +14,4 @@ using System.Runtime.InteropServices;
 [assembly: Guid("7995A9FA-667A-4DA7-8E31-37D4B149A503")]
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: InternalsVisibleTo("Cortex.Tests")]

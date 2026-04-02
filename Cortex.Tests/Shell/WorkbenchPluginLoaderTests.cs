@@ -45,8 +45,7 @@ namespace Cortex.Tests.Shell
                     var hostEnvironment = new TestHostEnvironment(Path.Combine(tempRoot, "bin"), bundledRoot);
                     var settings = new CortexSettings
                     {
-                        CortexPluginSearchRoots = externalRoot,
-                        ModsRootPath = Path.Combine(tempRoot, "mods")
+                        CortexPluginSearchRoots = externalRoot
                     };
 
                     var results = loader.LoadPlugins(
@@ -124,7 +123,51 @@ namespace Cortex.Tests.Shell
                     var hostEnvironment = new TestHostEnvironment(Path.Combine(tempRoot, "bin"), bundledRoot);
 
                     var results = loader.LoadPlugins(
-                        new CortexSettings { ModsRootPath = Path.Combine(tempRoot, "mods") },
+                        new CortexSettings(),
+                        hostEnvironment,
+                        runtime.CommandRegistry,
+                        runtime.ContributionRegistry,
+                        moduleRegistry,
+                        extensionRegistry,
+                        runtimeAccess);
+
+                    Assert.Empty(results);
+                    Assert.DoesNotContain(runtime.ContributionRegistry.GetViewContainers(), container => string.Equals(container.ContainerId, ReviewNotesWorkbenchPlugin.ContainerId, StringComparison.Ordinal));
+                    Assert.Null(moduleRegistry.FindContribution(ReviewNotesWorkbenchPlugin.ContainerId));
+                }
+                finally
+                {
+                    TryDeleteDirectory(tempRoot);
+                }
+            });
+        }
+
+        [Fact]
+        public void LoadPlugins_DoesNotScanRuntimeContentRootImplicitly()
+        {
+            UnityManagedAssemblyResolver.Run(delegate
+            {
+                var tempRoot = Path.Combine(Path.GetTempPath(), "cortex-plugin-loader-mods-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(tempRoot);
+
+                try
+                {
+                    var modsRoot = Path.Combine(tempRoot, "mods");
+                    var modPluginManifestPath = Path.Combine(modsRoot, "ExampleMod", "Cortex", "Review", "cortex.plugin.json");
+                    WriteManifest(modPluginManifestPath, typeof(ReviewNotesWorkbenchPlugin));
+
+                    var runtime = new TestWorkbenchRuntime(new CommandRegistry(), new ContributionRegistry());
+                    var loader = new WorkbenchPluginLoader();
+                    var moduleRegistry = new CortexShellModuleContributionRegistry();
+                    var extensionRegistry = new WorkbenchExtensionRegistry();
+                    var runtimeAccess = new WorkbenchRuntimeAccess(new CortexShellState(), delegate { return null; });
+                    var hostEnvironment = new TestHostEnvironment(Path.Combine(tempRoot, "bin"), string.Empty);
+
+                    var results = loader.LoadPlugins(
+                        new CortexSettings
+                        {
+                            RuntimeContentRootPath = modsRoot
+                        },
                         hostEnvironment,
                         runtime.CommandRegistry,
                         runtime.ContributionRegistry,
@@ -234,12 +277,13 @@ namespace Cortex.Tests.Shell
                 _bundledPluginSearchRoots = bundledPluginSearchRoots ?? string.Empty;
             }
 
-            public string GameRootPath => string.Empty;
+            public string ApplicationRootPath => string.Empty;
             public string HostRootPath => string.Empty;
             public string HostBinPath => _hostBinPath;
             public string BundledPluginSearchRoots => _bundledPluginSearchRoots;
-            public string ManagedAssemblyRootPath => string.Empty;
-            public string ModsRootPath => string.Empty;
+            public string ConfiguredPluginSearchRoots => string.Empty;
+            public string ReferenceAssemblyRootPath => string.Empty;
+            public string RuntimeContentRootPath => string.Empty;
             public string SettingsFilePath => string.Empty;
             public string WorkbenchPersistenceFilePath => string.Empty;
             public string LogFilePath => string.Empty;

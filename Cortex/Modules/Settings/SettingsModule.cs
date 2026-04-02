@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Core.Services;
 using Cortex.Modules.Shared;
 using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
@@ -23,10 +24,10 @@ namespace Cortex.Modules.Settings
         private const string KeybindingsSectionId = "settings.keybindings";
         private const string EditorsSectionId = "settings.editors";
         private const string ActionsSectionId = "settings.actions";
-        private const string WorkspaceRootSettingId = "WorkspaceRootPath";
-        private const string ModsRootSettingId = "ModsRootPath";
-        private const string ManagedAssemblyRootSettingId = "ManagedAssemblyRootPath";
-        private const string AdditionalSourceRootsSettingId = "AdditionalSourceRoots";
+        private const string WorkspaceRootSettingId = CortexHostPathSettings.WorkspaceRootSettingId;
+        private const string RuntimeContentRootSettingId = CortexHostPathSettings.RuntimeContentRootSettingId;
+        private const string ReferenceAssemblyRootSettingId = CortexHostPathSettings.ReferenceAssemblyRootSettingId;
+        private const string AdditionalSourceRootsSettingId = CortexHostPathSettings.AdditionalSourceRootsSettingId;
         private const float NavigationWidth = 268f;
         private const float CompactEditorWidth = 380f;
         private const string SettingGearGlyph = "\u2699";
@@ -578,7 +579,7 @@ namespace Cortex.Modules.Settings
                 "Workspace",
                 "Paths",
                 "Configure the main folders Cortex uses for source resolution, mod discovery, and reference browsing.",
-                "workspace paths folders source roots mods root managed assemblies additional roots",
+                "workspace paths folders source roots runtime content reference assemblies additional roots",
                 10,
                 delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
                 {
@@ -610,9 +611,9 @@ namespace Cortex.Modules.Settings
                 "workspace",
                 "Workspace",
                 "Workspace",
-                "Loaded Mods",
-                "Bind running mods to editable source roots so navigation and project discovery can resolve correctly.",
-                "workspace loaded mods links source links running mods mod mapping",
+                "Loaded Content",
+                "Bind active content items to editable source roots so navigation and project discovery can resolve correctly.",
+                "workspace loaded content links source links active content source mapping",
                 30,
                 delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
                 {
@@ -754,9 +755,9 @@ namespace Cortex.Modules.Settings
         {
             DrawSectionPanel("Overview", delegate
             {
-                GUILayout.Label("Use this section to configure the source roots Cortex should search and to link loaded in-game mods back to editable source folders.");
-                GUILayout.Label("Workspace Scan Root should point at the folder that contains your local mod projects.");
-                GUILayout.Label("Loaded Mods Root should point at the live mod installs currently being used by the game.");
+                GUILayout.Label("Use this section to configure the source roots Cortex should search and to link active runtime content back to editable source folders.");
+                GUILayout.Label("Workspace Scan Root should point at the folder that contains your editable local source trees.");
+                GUILayout.Label("Runtime Content Root should point at the deployed content currently active under the host.");
                 GUILayout.Label("Modules can contribute additional settings scopes below, and they will be merged into this same document automatically.");
             });
         }
@@ -765,10 +766,10 @@ namespace Cortex.Modules.Settings
         {
             DrawSectionPanel("Workspace Paths", delegate
             {
-                DrawSettingPathEditor(snapshot, WorkspaceRootSettingId, "Workspace Scan Root", "Folder containing your editable local mod projects.");
-                DrawSettingPathEditor(snapshot, ModsRootSettingId, "Loaded Mods Root", "Folder containing the live installed mods used in-game.");
-                DrawSettingPathEditor(snapshot, ManagedAssemblyRootSettingId, "Managed DLL Root", "Folder containing the game's managed assemblies for reference browsing.");
-                DrawSettingPathEditor(snapshot, AdditionalSourceRootsSettingId, "Additional Source Roots", "Semicolon-separated fallback roots used during source resolution.");
+                DrawSettingPathEditor(snapshot, WorkspaceRootSettingId, CortexHostPathSettings.WorkspaceRootDisplayName, "Folder containing your editable local source trees.");
+                DrawSettingPathEditor(snapshot, RuntimeContentRootSettingId, CortexHostPathSettings.RuntimeContentRootDisplayName, "Folder containing deployed runtime content used for source mapping and discovery.");
+                DrawSettingPathEditor(snapshot, ReferenceAssemblyRootSettingId, CortexHostPathSettings.ReferenceAssemblyRootDisplayName, "Folder containing host-provided assemblies used for reference browsing.");
+                DrawSettingPathEditor(snapshot, AdditionalSourceRootsSettingId, CortexHostPathSettings.AdditionalSourceRootsDisplayName, "Semicolon-separated fallback roots used during source resolution.");
             });
         }
 
@@ -791,12 +792,12 @@ namespace Cortex.Modules.Settings
 
         private void DrawLoadedModMappings(CortexShellState state)
         {
-            DrawSectionPanel("Loaded Mod Source Links", delegate
+            DrawSectionPanel("Active Content Source Links", delegate
             {
                 var loadedMods = _loadedModCatalog != null ? _loadedModCatalog.GetLoadedMods() : null;
                 if (loadedMods == null || loadedMods.Count == 0)
                 {
-                    GUILayout.Label("No running mods were discovered.");
+                    GUILayout.Label("No active content items were discovered.");
                     return;
                 }
 
@@ -816,7 +817,7 @@ namespace Cortex.Modules.Settings
 
                 if (shown == 0)
                 {
-                    GUILayout.Label("No running mods were discovered.");
+                    GUILayout.Label("No active content items were discovered.");
                 }
             });
         }
@@ -826,8 +827,8 @@ namespace Cortex.Modules.Settings
             DrawSectionPanel("Current Paths", delegate
             {
                 DrawReadOnlyField("Workspace root", state != null && state.Settings != null ? state.Settings.WorkspaceRootPath : string.Empty);
-                DrawReadOnlyField("Loaded mods root", state != null && state.Settings != null ? state.Settings.ModsRootPath : string.Empty);
-                DrawReadOnlyField("Managed assemblies", state != null && state.Settings != null ? state.Settings.ManagedAssemblyRootPath : string.Empty);
+                DrawReadOnlyField("Runtime content root", state != null && state.Settings != null ? state.Settings.RuntimeContentRootPath : string.Empty);
+                DrawReadOnlyField("Reference assemblies", state != null && state.Settings != null ? state.Settings.ReferenceAssemblyRootPath : string.Empty);
                 DrawReadOnlyField("Project catalog", state != null && state.Settings != null ? state.Settings.ProjectCatalogPath : string.Empty);
             });
         }
@@ -916,8 +917,8 @@ namespace Cortex.Modules.Settings
             }
 
             return string.Equals(contribution.SettingId, WorkspaceRootSettingId, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(contribution.SettingId, ModsRootSettingId, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(contribution.SettingId, ManagedAssemblyRootSettingId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(contribution.SettingId, RuntimeContentRootSettingId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(contribution.SettingId, ReferenceAssemblyRootSettingId, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(contribution.SettingId, AdditionalSourceRootsSettingId, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -949,7 +950,7 @@ namespace Cortex.Modules.Settings
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label(mod.DisplayName ?? mod.ModId, GUILayout.Height(20f));
             GUILayout.Label("Mod ID: " + (mod.ModId ?? string.Empty));
-            GUILayout.Label("Live Mod Root: " + (mod.RootPath ?? string.Empty));
+                GUILayout.Label("Runtime Content Root: " + (mod.RootPath ?? string.Empty));
             if (!string.IsNullOrEmpty(existingSourceRoot))
             {
                 GUILayout.Label("Current Source Link: " + existingSourceRoot);
@@ -2549,7 +2550,7 @@ namespace Cortex.Modules.Settings
 
             if (string.Equals(section.SectionId, SourceSetupSectionId + ".paths", StringComparison.OrdinalIgnoreCase))
             {
-                return CountVisibleSettingsForIds(WorkspaceRootSettingId, ModsRootSettingId, ManagedAssemblyRootSettingId, AdditionalSourceRootsSettingId);
+                return CountVisibleSettingsForIds(WorkspaceRootSettingId, RuntimeContentRootSettingId, ReferenceAssemblyRootSettingId, AdditionalSourceRootsSettingId);
             }
 
             if (!string.IsNullOrEmpty(section.Scope) &&

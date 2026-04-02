@@ -133,7 +133,7 @@ namespace Cortex.Core.Abstractions
         string ProviderId { get; }
         string DisplayName { get; }
         bool CanCreate(CortexSettings settings);
-        ICompletionAugmentationClient Create(CortexSettings settings, System.Action<string> log);
+        ICompletionAugmentationClient Create(CortexSettings settings, CompletionAugmentationProviderContext context, System.Action<string> log);
     }
 
     public interface ISourcePathResolver

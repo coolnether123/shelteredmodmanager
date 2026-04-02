@@ -137,6 +137,64 @@ namespace Cortex.Tests.Shell
         }
 
         [Fact]
+        public void Bootstrapper_BuildEffectiveSettings_DoesNotInventPluginRootsFromRuntimeContentRoot()
+        {
+            UnityManagedAssemblyResolver.Run(delegate
+            {
+                var bootstrapper = CreateBootstrapper();
+                bootstrapper.ConfigureHostServices(new TestHostServices(RoslynLanguageProviderFactory.ProviderId));
+
+                var settings = bootstrapper.BuildEffectiveSettings(
+                    new CortexSettings
+                    {
+                        CortexPluginSearchRoots = string.Empty,
+                        RuntimeContentRootPath = @"D:\RuntimeContent"
+                    },
+                    new TestHostEnvironment());
+
+                Assert.Equal(string.Empty, settings.CortexPluginSearchRoots);
+            });
+        }
+
+        [Fact]
+        public void Bootstrapper_BuildEffectiveSettings_UsesHostConfiguredPluginRoots_WhenUnset()
+        {
+            UnityManagedAssemblyResolver.Run(delegate
+            {
+                var bootstrapper = CreateBootstrapper();
+                bootstrapper.ConfigureHostServices(new TestHostServices(RoslynLanguageProviderFactory.ProviderId));
+
+                var settings = bootstrapper.BuildEffectiveSettings(
+                    new CortexSettings
+                    {
+                        CortexPluginSearchRoots = string.Empty
+                    },
+                    new TestHostEnvironment(string.Empty, @"D:\RuntimeContent;D:\RuntimeContent\Plugins"));
+
+                Assert.Equal(@"D:\RuntimeContent;D:\RuntimeContent\Plugins", settings.CortexPluginSearchRoots);
+            });
+        }
+
+        [Fact]
+        public void Bootstrapper_BuildEffectiveSettings_DoesNotOverrideExplicitPluginRoots_WithHostConfiguredRoots()
+        {
+            UnityManagedAssemblyResolver.Run(delegate
+            {
+                var bootstrapper = CreateBootstrapper();
+                bootstrapper.ConfigureHostServices(new TestHostServices(RoslynLanguageProviderFactory.ProviderId));
+
+                var settings = bootstrapper.BuildEffectiveSettings(
+                    new CortexSettings
+                    {
+                        CortexPluginSearchRoots = @"D:\ExplicitPlugins"
+                    },
+                    new TestHostEnvironment(string.Empty, @"D:\RuntimeContent;D:\RuntimeContent\Plugins"));
+
+                Assert.Equal(@"D:\ExplicitPlugins", settings.CortexPluginSearchRoots);
+            });
+        }
+
+        [Fact]
         public void Bootstrapper_ResolveLanguageProviderId_UsesHostPreferredProvider_WhenProviderUnset()
         {
             UnityManagedAssemblyResolver.Run(delegate
@@ -434,6 +492,31 @@ namespace Cortex.Tests.Shell
             }
         }
 
+        [Fact]
+        public void JsonSettingsStore_Load_MigratesLegacyHostPathFields()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "cortex-settings-" + System.Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                File.WriteAllText(
+                    path,
+                    "{\"ModsRootPath\":\"D:\\\\RuntimeContent\",\"ManagedAssemblyRootPath\":\"D:\\\\ReferenceAssemblies\"}");
+
+                var store = new JsonCortexSettingsStore(path);
+                var settings = store.Load();
+
+                Assert.Equal(@"D:\RuntimeContent", settings.RuntimeContentRootPath);
+                Assert.Equal(@"D:\ReferenceAssemblies", settings.ReferenceAssemblyRootPath);
+            }
+            finally
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+
         private static CortexLanguageRuntimeService CreateRuntimeService(
             CortexShellState state,
             IList<ILanguageProviderFactory> builtinFactories)
@@ -548,21 +631,30 @@ namespace Cortex.Tests.Shell
             private readonly string _hostBinPath;
 
             public TestHostEnvironment()
-                : this(string.Empty)
+                : this(string.Empty, string.Empty)
             {
             }
 
             public TestHostEnvironment(string hostBinPath)
+                : this(hostBinPath, string.Empty)
             {
-                _hostBinPath = hostBinPath ?? string.Empty;
             }
 
-            public string GameRootPath => string.Empty;
+            public TestHostEnvironment(string hostBinPath, string configuredPluginSearchRoots)
+            {
+                _hostBinPath = hostBinPath ?? string.Empty;
+                _configuredPluginSearchRoots = configuredPluginSearchRoots ?? string.Empty;
+            }
+
+            private readonly string _configuredPluginSearchRoots;
+
+            public string ApplicationRootPath => string.Empty;
             public string HostRootPath => string.Empty;
             public string HostBinPath => _hostBinPath;
             public string BundledPluginSearchRoots => string.Empty;
-            public string ManagedAssemblyRootPath => string.Empty;
-            public string ModsRootPath => string.Empty;
+            public string ConfiguredPluginSearchRoots => _configuredPluginSearchRoots;
+            public string ReferenceAssemblyRootPath => string.Empty;
+            public string RuntimeContentRootPath => string.Empty;
             public string SettingsFilePath => string.Empty;
             public string WorkbenchPersistenceFilePath => string.Empty;
             public string LogFilePath => string.Empty;
