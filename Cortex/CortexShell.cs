@@ -8,6 +8,7 @@ using Cortex.Core.Services;
 using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
 using Cortex.Rendering.Abstractions;
+using Cortex.Rendering;
 using Cortex.Services.Navigation;
 using UnityEngine;
 using Cortex.Services.Editor.Context;
@@ -21,14 +22,11 @@ namespace Cortex
     public sealed partial class CortexShellController
     {
         private const string ToggleActionId = "cortex.toggle";
-        private const string OverlayInputCaptureOwnerId = "Cortex.Shell";
         private const int MainWindowId = 0xC07E;
         private const int LogsWindowId = 0xC07F;
 
         private Rect _windowRect = new Rect(70f, 70f, 1180f, 760f);
         private Rect _logWindowRect = new Rect(100f, 100f, 980f, 620f);
-        private Vector2 _windowScroll = Vector2.zero;
-
         private readonly CortexShellState _state = new CortexShellState();
         private readonly ShellBootstrapper _bootstrapper;
         private readonly ShellSessionCoordinator _sessionCoordinator;
@@ -86,8 +84,6 @@ namespace Cortex
         private readonly Dictionary<string, Rect> _menuGroupRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
 
         private ShellServiceMap _services;
-        private bool _lastOverlayMouseCapture;
-        private bool _lastOverlayKeyboardCapture;
         private IList<ILanguageProviderFactory> _hostLanguageProviderFactories = new List<ILanguageProviderFactory>();
 
         private IProjectCatalog ProjectCatalog
@@ -407,39 +403,6 @@ namespace Cortex
         private void UpdateOverlayInputCapture() => _overlayCoordinator.UpdateOverlayInputCapture(_sessionCoordinator.Visible, _windowRect, _logWindowRect);
         private void ReleaseOverlayInputCapture() => _overlayCoordinator.ReleaseOverlayInputCapture();
 
-        private void ApplyOverlayInputCapture(bool captureMouse, bool captureKeyboard)
-        {
-            var hasChanged = _lastOverlayMouseCapture != captureMouse || _lastOverlayKeyboardCapture != captureKeyboard;
-            var captureService = ResolveOverlayInputCaptureService();
-            if (captureService == null)
-            {
-                return;
-            }
-
-            if (!hasChanged)
-            {
-                return;
-            }
-
-            if (captureMouse || captureKeyboard)
-            {
-                captureService.ReportCapture(OverlayInputCaptureOwnerId, captureMouse, captureKeyboard);
-            }
-            else
-            {
-                captureService.ReleaseCapture(OverlayInputCaptureOwnerId);
-            }
-
-            _lastOverlayMouseCapture = captureMouse;
-            _lastOverlayKeyboardCapture = captureKeyboard;
-            MMLog.WriteDebug("[Cortex.InputCapture] Reported overlay capture. Mouse=" + captureMouse + ", Keyboard=" + captureKeyboard + ".");
-        }
-
-        private IOverlayInputCaptureService ResolveOverlayInputCaptureService()
-        {
-            return OverlayInputCaptureService;
-        }
-
         private int GetScreenWidth()
         {
             return (int)GetCurrentFrameInputSnapshot().ViewportSize.Width;
@@ -450,38 +413,6 @@ namespace Cortex
             return (int)GetCurrentFrameInputSnapshot().ViewportSize.Height;
         }
 
-        private Vector2 GetCurrentMousePosition()
-        {
-            var position = GetCurrentFrameInputSnapshot().CurrentMousePosition;
-            return new Vector2(position.X, position.Y);
-        }
-
-        private Vector2 GetPointerPosition()
-        {
-            var position = GetCurrentFrameInputSnapshot().PointerPosition;
-            return new Vector2(position.X, position.Y);
-        }
-
-        private bool HasCurrentInputEvent()
-        {
-            return GetCurrentFrameInputSnapshot().HasCurrentEvent;
-        }
-
-        private bool IsCurrentInputEvent(WorkbenchInputEventKind kind)
-        {
-            return GetCurrentFrameInputSnapshot().CurrentEventKind == kind;
-        }
-
-        private int GetCurrentMouseButton()
-        {
-            return GetCurrentFrameInputSnapshot().CurrentMouseButton;
-        }
-
-        private bool IsCurrentKey(WorkbenchInputKey key)
-        {
-            return GetCurrentFrameInputSnapshot().CurrentKey == key;
-        }
-
         private void ConsumeCurrentInputEvent()
         {
             GetWorkbenchFrameContext().ConsumeCurrentInput();
@@ -490,38 +421,6 @@ namespace Cortex
         private WorkbenchFrameInputSnapshot GetCurrentFrameInputSnapshot()
         {
             return GetWorkbenchFrameContext().Snapshot;
-        }
-
-        private bool IsPointWithinVisibleChrome(Vector2 guiPoint)
-        {
-            if (_state.Chrome.Main.IsCollapsed)
-            {
-                if (_state.Chrome.Main.CollapsedRect.Contains(guiPoint))
-                {
-                    return true;
-                }
-            }
-            else if (_windowRect.Contains(guiPoint))
-            {
-                return true;
-            }
-
-            if (_state.Logs.ShowDetachedWindow)
-            {
-                if (_state.Chrome.Logs.IsCollapsed)
-                {
-                    if (_state.Chrome.Logs.CollapsedRect.Contains(guiPoint))
-                    {
-                        return true;
-                    }
-                }
-                else if (_logWindowRect.Contains(guiPoint))
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private void ApplySettingsChanges()
@@ -673,16 +572,9 @@ namespace Cortex
             ResetModuleRuntime();
         }
 
-        private CortexSettings BuildEffectiveSettings(CortexSettings settings, ICortexHostEnvironment hostEnvironment)
-        {
-            return _bootstrapper.BuildEffectiveSettings(settings, hostEnvironment);
-        }
-
         private void DrawOnboardingOverlay()
         {
             _overlayCoordinator.DrawOnboardingOverlay(
-                _hostEnvironment ?? NullCortexHostServices.Instance.Environment,
-                LoadedModCatalog,
                 ProjectCatalog,
                 ProjectWorkspaceService,
                 _workbenchRuntime,
