@@ -104,10 +104,10 @@ namespace Cortex.Shell
                 return;
             }
 
-            InitializeWindowState(
+            ApplyWindowSettings(
                 _viewState.MainWindow,
                 new RenderRect(settings.WindowX, settings.WindowY, settings.WindowWidth, settings.WindowHeight));
-            InitializeWindowState(
+            ApplyWindowSettings(
                 _viewState.LogsWindow,
                 new RenderRect(
                     settings.WindowX + 30f,
@@ -144,6 +144,22 @@ namespace Cortex.Shell
             viewState.ExpandedRect = expandedRect;
             viewState.CollapsedRect = CortexShellWindowViewState.BuildCollapsedRect(expandedRect, viewState.CollapsedWidth, viewState.CollapsedHeight);
             viewState.IsCollapsed = false;
+        }
+
+        private static void ApplyWindowSettings(CortexShellWindowViewState viewState, RenderRect expandedRect)
+        {
+            if (viewState == null)
+            {
+                return;
+            }
+
+            var isCollapsed = viewState.IsCollapsed;
+            viewState.ExpandedRect = expandedRect;
+            viewState.CollapsedRect = CortexShellWindowViewState.BuildCollapsedRect(expandedRect, viewState.CollapsedWidth, viewState.CollapsedHeight);
+            viewState.CurrentRect = isCollapsed
+                ? viewState.CollapsedRect
+                : expandedRect;
+            viewState.IsCollapsed = isCollapsed;
         }
     }
 
