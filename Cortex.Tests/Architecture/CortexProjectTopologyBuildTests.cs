@@ -188,14 +188,16 @@ namespace Cortex.Tests.Architecture
                 include => include.IndexOf("WorkbenchFrameContext", StringComparison.OrdinalIgnoreCase) >= 0 ||
                            include.IndexOf("WorkbenchFrameContracts", StringComparison.OrdinalIgnoreCase) >= 0);
             Assert.DoesNotContain(@"Runtime\ShelteredWorkbenchUiSurface.cs", shelteredHostCompileIncludes);
+            Assert.False(File.Exists(Path.Combine(RepoRoot, "Cortex.Host.Sheltered", "Runtime", "ShelteredWorkbenchUiSurface.cs")));
             Assert.DoesNotContain(@"ImguiStyleUtil.cs", imguiShellCompileIncludes);
+            Assert.Contains(@"Composition\ImguiWorkbenchRuntimeUiComposition.cs", imguiShellCompileIncludes);
             Assert.Contains(@"Styling\ImguiStyleUtil.cs", imguiShellCompileIncludes);
             Assert.Contains(@"Layout\ImguiWorkbenchLayout.cs", imguiShellCompileIncludes);
             Assert.Contains(@"Ui\ImguiWorkbenchUiSurface.cs", imguiShellCompileIncludes);
         }
 
         [Fact]
-        public void GenericShellAndUnityHost_DoNotReferenceImguiBackendDirectly()
+        public void ImguiShellComposition_OwnsBackendSelection_WhileGenericCortexAndUnityHostStayBackendNeutral()
         {
             var cortexReferences = LoadProjectReferenceNames("Cortex");
             var shellReferences = LoadProjectReferenceNames("Cortex.Shell.Unity.Imgui");
@@ -204,13 +206,15 @@ namespace Cortex.Tests.Architecture
             var shelteredHostReferences = LoadProjectReferenceNames("Cortex.Host.Sheltered");
 
             Assert.DoesNotContain("Cortex.Renderers.Imgui", cortexReferences);
-            Assert.DoesNotContain("Cortex.Renderers.Imgui", shellReferences);
+            Assert.Contains("Cortex.Renderers.Imgui", shellReferences);
             Assert.DoesNotContain("Cortex.Renderers.Imgui", unityHostReferences);
+            Assert.DoesNotContain("Cortex.Renderers.Imgui", shelteredHostReferences);
             Assert.Contains("Cortex.Plugins.Abstractions", imguiReferences);
             Assert.Contains("Cortex.Rendering.RuntimeUi", imguiReferences);
             Assert.Contains("Cortex.Rendering", shelteredHostReferences);
             Assert.Contains("Cortex.Rendering.RuntimeUi", shelteredHostReferences);
 
+            var imguiShellCompositionText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "Composition", "ImguiWorkbenchRuntimeUiComposition.cs"));
             var cortexShellRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "CortexShell.Runtime.cs"));
             var cortexShellText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "CortexShell.cs"));
             var shellBootstrapperText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "Shell", "ShellBootstrapper.cs"));
@@ -228,10 +232,14 @@ namespace Cortex.Tests.Architecture
             Assert.DoesNotContain("ImguiRenderPipeline", unityRuntimeText);
             Assert.DoesNotContain("using Cortex.Renderers.Imgui;", unityRuntimeText);
             Assert.DoesNotContain("using Cortex.Renderers.Imgui;", unityFactoryText);
-            Assert.Contains("ImguiWorkbenchRuntimeUiFactory", shelteredCompositionText);
-            Assert.Contains("ImguiWorkbenchUiSurface", shelteredCompositionText);
+            Assert.Contains("using Cortex.Renderers.Imgui;", imguiShellCompositionText);
+            Assert.Contains("ImguiWorkbenchRuntimeUiFactory", imguiShellCompositionText);
+            Assert.Contains("ImguiWorkbenchUiSurface", imguiShellCompositionText);
+            Assert.Contains("ImguiWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext)", shelteredCompositionText);
             Assert.Contains("UnityWorkbenchFrameContext", shelteredCompositionText);
             Assert.Contains("frameContext", shelteredCompositionText);
+            Assert.DoesNotContain("ImguiWorkbenchRuntimeUiFactory", shelteredCompositionText);
+            Assert.DoesNotContain("ImguiWorkbenchUiSurface", shelteredCompositionText);
             Assert.DoesNotContain("new ImguiWorkbenchRuntimeUiFactory", cortexShellText);
             Assert.DoesNotContain("new ImguiWorkbenchRuntimeUiFactory", shellBootstrapperText);
         }

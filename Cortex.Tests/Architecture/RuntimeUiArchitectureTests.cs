@@ -171,12 +171,11 @@ namespace Cortex.Tests.Architecture
         }
 
         [Fact]
-        public void GenericShellAndUnityHost_DoNotMentionImguiRuntimeTypes()
+        public void GenericCortexAndUnityHost_DoNotMentionImguiRuntimeTypes()
         {
             var genericDirectories = new[]
             {
                 Path.Combine(RepoRoot, "Cortex"),
-                Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui"),
                 Path.Combine(RepoRoot, "Cortex.Host.Unity")
             };
 
@@ -192,9 +191,10 @@ namespace Cortex.Tests.Architecture
         }
 
         [Fact]
-        public void WorkbenchUiSurfaceImplementation_IsShellOwned_WhileHostComposition_SelectsIt()
+        public void WorkbenchUiSurfaceImplementation_IsShellOwned_WhileImguiShellComposition_OwnsBackendSelection()
         {
             var shellRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "CortexShell.Runtime.cs"));
+            var shellCompositionText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "Composition", "ImguiWorkbenchRuntimeUiComposition.cs"));
             var imguiModuleRendererText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "Shell", "ImguiShellModuleRenderer.cs"));
             var shelteredCompositionText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Sheltered", "Runtime", "ShelteredUnityHostComposition.cs"));
             var imguiUiSurfaceText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "Ui", "ImguiWorkbenchUiSurface.cs"));
@@ -206,8 +206,12 @@ namespace Cortex.Tests.Architecture
             Assert.DoesNotContain("new ImguiWorkbenchUiSurface()", shellRuntimeText);
             Assert.DoesNotContain(": IWorkbenchUiSurface", imguiModuleRendererText);
             Assert.Contains("class ImguiShellModuleRenderer", imguiModuleRendererText);
-            Assert.Contains("new ImguiWorkbenchUiSurface()", shelteredCompositionText);
-            Assert.Contains("ImguiWorkbenchRuntimeUiFactory", shelteredCompositionText);
+            Assert.Contains("CreateWorkbenchUiSurface()", shellCompositionText);
+            Assert.Contains("new ImguiWorkbenchUiSurface()", shellCompositionText);
+            Assert.Contains("ImguiWorkbenchRuntimeUiFactory", shellCompositionText);
+            Assert.Contains("ImguiWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext)", shelteredCompositionText);
+            Assert.DoesNotContain("new ImguiWorkbenchUiSurface()", shelteredCompositionText);
+            Assert.DoesNotContain("ImguiWorkbenchRuntimeUiFactory", shelteredCompositionText);
             Assert.Contains("class ImguiWorkbenchUiSurface : IWorkbenchUiSurface", imguiUiSurfaceText);
             Assert.Contains("IWorkbenchUiSurface workbenchUiSurface", runtimeUiFactoryText);
             Assert.Contains("IWorkbenchFrameContext frameContext", runtimeUiFactoryText);
@@ -222,6 +226,7 @@ namespace Cortex.Tests.Architecture
         {
             var unityFrameContextText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Unity", "Runtime", "UnityWorkbenchFrameContext.cs"));
             var shelteredCompositionText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Sheltered", "Runtime", "ShelteredUnityHostComposition.cs"));
+            var shellCompositionText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "Composition", "ImguiWorkbenchRuntimeUiComposition.cs"));
             var imguiRuntimeUiText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Renderers.Imgui", "ImguiWorkbenchRuntimeUi.cs"));
 
             Assert.Contains("using Cortex.Rendering;", unityFrameContextText);
@@ -230,9 +235,10 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("Input.mousePosition", unityFrameContextText);
 
             Assert.Contains("new UnityWorkbenchFrameContext()", shelteredCompositionText);
-            Assert.Contains("ImguiWorkbenchRuntimeUiFactory", shelteredCompositionText);
-            Assert.Contains("ImguiWorkbenchUiSurface", shelteredCompositionText);
             Assert.Contains("frameContext", shelteredCompositionText);
+            Assert.Contains("ImguiWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext)", shelteredCompositionText);
+            Assert.Contains("ImguiWorkbenchRuntimeUiFactory", shellCompositionText);
+            Assert.Contains("ImguiWorkbenchUiSurface", shellCompositionText);
 
             Assert.Contains("using Cortex.Rendering;", imguiRuntimeUiText);
             Assert.Contains("IWorkbenchFrameContext", imguiRuntimeUiText);

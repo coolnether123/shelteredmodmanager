@@ -34,6 +34,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Chrome\CortexWindowChromeController.cs" />
+    <Compile Include="Composition\ImguiWorkbenchRuntimeUiComposition.cs" />
     <Compile Include="CortexShell.Chrome.cs" />
     <Compile Include="CortexShell.CompletionAugmentation.cs" />
     <Compile Include="CortexShell.Language.cs" />
@@ -119,6 +120,11 @@
     <ProjectReference Include="..\Cortex.Rendering.RuntimeUi\Cortex.Rendering.RuntimeUi.csproj">
       <Project>{8F6A2F38-54DF-4B49-8FC4-7F909D1AF6D3}</Project>
       <Name>Cortex.Rendering.RuntimeUi</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Renderers.Imgui\Cortex.Renderers.Imgui.csproj">
+      <Project>{4D1B939A-3C10-4A7B-B6C4-259D50848A5A}</Project>
+      <Name>Cortex.Renderers.Imgui</Name>
       <Private>False</Private>
     </ProjectReference>
   </ItemGroup>

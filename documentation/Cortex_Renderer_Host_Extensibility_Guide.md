@@ -20,8 +20,10 @@ Follow these rules:
   - Unity lifecycle and adaptation of host events into the `Cortex.Rendering` frame/input contract
 - `Cortex.Renderers.Imgui`
   - concrete drawing, measurement, and execution over portable runtime-UI output
+- `Cortex.Shell.Unity.Imgui`
+  - legacy IMGUI shell execution plus IMGUI runtime-UI composition for the current host path
 - `Cortex.Host.Sheltered`
-  - host composition that selects the IMGUI runtime UI today and supplies the active shell-owned `IWorkbenchUiSurface`
+  - host composition that supplies the host frame context and selects the legacy IMGUI shell composition today
 
 ## Add a renderer
 
@@ -54,8 +56,8 @@ Required steps:
 2. Implement `ICortexHostEnvironment`.
 3. Implement `ICortexHostServices`.
 4. Implement an `IWorkbenchFrameContext` from `Cortex.Rendering` that adapts host screen, pointer, keyboard, wheel, and frame timing into `WorkbenchFrameInputSnapshot`.
-5. Construct the chosen `IWorkbenchRuntimeUiFactory` inside host composition.
-6. Supply the active `IWorkbenchUiSurface` from host composition instead of constructing a concrete module UI surface inside generic shell code.
+5. Construct or select the chosen `IWorkbenchRuntimeUiFactory` inside host-specific or shell-specific composition, never in generic Cortex.
+6. Supply the active `IWorkbenchUiSurface` from that host/shell composition instead of constructing a concrete module UI surface inside generic shell code.
 7. Pass the same host-owned `IWorkbenchFrameContext` into the runtime UI/backend so overlay input adaptation stays host-owned.
 8. Keep the generic shell consuming only `IWorkbenchRuntimeUi`, `IRenderPipeline`, `IWorkbenchUiSurface`, and `IWorkbenchFrameContext`.
 
@@ -118,14 +120,15 @@ See the recording backend test coverage in `Cortex.Tests/Rendering/RecordingRunt
 Today the composition flow is:
 
 1. `Cortex.Host.Sheltered` creates `UnityWorkbenchFrameContext`.
-2. `Cortex.Host.Sheltered` selects the active `ImguiWorkbenchUiSurface` from `Cortex.Shell.Unity.Imgui`.
-3. `Cortex.Host.Sheltered` selects `ImguiWorkbenchRuntimeUiFactory`.
+2. `Cortex.Host.Sheltered` selects `ImguiWorkbenchRuntimeUiComposition` from `Cortex.Shell.Unity.Imgui`.
+3. `Cortex.Shell.Unity.Imgui` creates `ImguiWorkbenchUiSurface` and `ImguiWorkbenchRuntimeUiFactory`.
 4. `Cortex.Renderers.Imgui` builds `ImguiRenderPipeline`.
-5. IMGUI renderers consume portable planners/controllers plus the host-owned frame context and host-supplied module UI surface.
+5. IMGUI renderers consume portable planners/controllers plus the host-owned frame context and shell-owned module UI surface.
 
 If you add another renderer or host, preserve that direction:
 
 - host chooses
+- shell-specific composition may assemble shell-local backend pieces
 - portable runtime UI owns behavior
 - backend executes
 
