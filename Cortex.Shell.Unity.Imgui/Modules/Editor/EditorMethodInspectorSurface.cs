@@ -9,6 +9,7 @@ using Cortex.Services.Inspector.Lifecycle;
 using Cortex.Services.Navigation;
 using Cortex.Services.Semantics.Context;
 using UnityEngine;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Modules.Editor
 {
@@ -219,21 +220,21 @@ namespace Cortex.Modules.Editor
 
         private static PanelThemePalette BuildThemePalette()
         {
-            var borderColor = CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetBorderColor(), 0.38f);
+            var borderColor = ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetAccentColor(), ImguiWorkbenchLayout.GetBorderColor(), 0.38f);
             return new PanelThemePalette
             {
                 ThemeKey = "method-inspector",
-                BackgroundColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetBackgroundColor(), 0.22f)),
-                HeaderColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetHeaderColor(), CortexIdeLayout.GetSurfaceColor(), 0.18f)),
+                BackgroundColor = ToRenderColor(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetSurfaceColor(), ImguiWorkbenchLayout.GetBackgroundColor(), 0.22f)),
+                HeaderColor = ToRenderColor(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetHeaderColor(), ImguiWorkbenchLayout.GetSurfaceColor(), 0.18f)),
                 BorderColor = ToRenderColor(borderColor),
-                DividerColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(borderColor, CortexIdeLayout.GetTextColor(), 0.1f), 0.46f)),
-                ActionFillColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.72f)),
-                ActionActiveFillColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetHeaderColor(), 0.34f)),
-                CardFillColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.52f)),
-                TextColor = ToRenderColor(CortexIdeLayout.GetTextColor()),
-                MutedTextColor = ToRenderColor(CortexIdeLayout.GetMutedTextColor()),
-                AccentColor = ToRenderColor(CortexIdeLayout.GetAccentColor()),
-                WarningColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetWarningColor(), CortexIdeLayout.GetTextColor(), 0.42f))
+                DividerColor = ToRenderColor(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.Blend(borderColor, ImguiWorkbenchLayout.GetTextColor(), 0.1f), 0.46f)),
+                ActionFillColor = ToRenderColor(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetSurfaceColor(), ImguiWorkbenchLayout.GetHeaderColor(), 0.72f)),
+                ActionActiveFillColor = ToRenderColor(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetAccentColor(), ImguiWorkbenchLayout.GetHeaderColor(), 0.34f)),
+                CardFillColor = ToRenderColor(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetSurfaceColor(), ImguiWorkbenchLayout.GetHeaderColor(), 0.52f)),
+                TextColor = ToRenderColor(ImguiWorkbenchLayout.GetTextColor()),
+                MutedTextColor = ToRenderColor(ImguiWorkbenchLayout.GetMutedTextColor()),
+                AccentColor = ToRenderColor(ImguiWorkbenchLayout.GetAccentColor()),
+                WarningColor = ToRenderColor(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetWarningColor(), ImguiWorkbenchLayout.GetTextColor(), 0.42f))
             };
         }
 

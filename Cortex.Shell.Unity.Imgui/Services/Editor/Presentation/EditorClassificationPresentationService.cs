@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Services.Editor.Presentation
 {
@@ -24,7 +25,7 @@ namespace Cortex.Services.Editor.Presentation
 
         public Color GetColor(string classification, string semanticTokenType)
         {
-            return CortexIdeLayout.ParseColor(GetHexColor(classification, semanticTokenType), CortexIdeLayout.GetTextColor());
+            return ImguiWorkbenchLayout.ParseColor(GetHexColor(classification, semanticTokenType), ImguiWorkbenchLayout.GetTextColor());
         }
 
         public bool IsHoverCandidate(string classification, string rawText)

@@ -96,7 +96,7 @@ namespace Cortex.Plugins.Abstractions
         /// </summary>
         /// <param name="containerId">The container currently being rendered.</param>
         /// <param name="snapshot">The current workbench presentation snapshot.</param>
-        /// <param name="ui">The host-owned UI surface for shared workbench controls.</param>
+        /// <param name="ui">The shared workbench UI surface selected by host composition.</param>
         /// <param name="runtime">The module-owned runtime capabilities exposed by Cortex.</param>
         public WorkbenchModuleRenderContext(
             string containerId,
@@ -121,7 +121,7 @@ namespace Cortex.Plugins.Abstractions
         public WorkbenchPresentationSnapshot Snapshot { get; private set; }
 
         /// <summary>
-        /// Gets the host-owned UI surface for shared workbench controls.
+        /// Gets the shared workbench UI surface selected by host composition.
         /// </summary>
         public IWorkbenchUiSurface Ui { get; private set; }
 

@@ -5,6 +5,7 @@ using Cortex.Modules.Shared;
 using Cortex.Rendering.Models;
 using UnityEngine;
 using Cortex.Services.Onboarding;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Modules.Onboarding
 {
@@ -425,7 +426,7 @@ namespace Cortex.Modules.Onboarding
 
         private static void DrawProfilePreview(Rect rect, OnboardingProfileContribution profile)
         {
-            DrawMiniPanel(rect, CortexIdeLayout.GetSurfaceColor());
+            DrawMiniPanel(rect, ImguiWorkbenchLayout.GetSurfaceColor());
             var labels = GetProfilePreviewTags(profile);
             for (var i = 0; i < labels.Length; i++)
             {
@@ -436,7 +437,7 @@ namespace Cortex.Modules.Onboarding
 
         private static void DrawLayoutPreview(Rect rect, OnboardingLayoutPresetContribution layoutPreset)
         {
-            DrawMiniPanel(rect, CortexIdeLayout.GetBackgroundColor());
+            DrawMiniPanel(rect, ImguiWorkbenchLayout.GetBackgroundColor());
             var inner = new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.height - 16f);
             var hasLeft = !string.IsNullOrEmpty(layoutPreset.DefaultPrimarySideContainerId);
             var hasRight = !string.IsNullOrEmpty(layoutPreset.DefaultSecondarySideContainerId);
@@ -445,7 +446,7 @@ namespace Cortex.Modules.Onboarding
             var rightWidth = hasRight ? inner.width * 0.18f : 0f;
             var bottomHeight = hasBottom ? inner.height * 0.22f : 0f;
 
-            DrawBlock(new Rect(inner.x, inner.y, inner.width, 10f), CortexIdeLayout.Blend(CortexIdeLayout.GetHeaderColor(), Color.black, 0.18f));
+            DrawBlock(new Rect(inner.x, inner.y, inner.width, 10f), ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetHeaderColor(), Color.black, 0.18f));
 
             var centerRect = new Rect(
                 inner.x + leftWidth + 4f,
@@ -455,22 +456,22 @@ namespace Cortex.Modules.Onboarding
 
             if (hasLeft)
             {
-                DrawBlock(new Rect(inner.x + 4f, inner.y + 4f, leftWidth - 6f, inner.height - bottomHeight - 8f), CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetSurfaceColor(), 0.58f));
+                DrawBlock(new Rect(inner.x + 4f, inner.y + 4f, leftWidth - 6f, inner.height - bottomHeight - 8f), ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetAccentColor(), ImguiWorkbenchLayout.GetSurfaceColor(), 0.58f));
                 DrawPreviewLabel(new Rect(inner.x + 8f, inner.y + 16f, leftWidth - 14f, 16f), layoutPreset.PreviewPrimaryLabel);
             }
 
-            DrawBlock(centerRect, CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), Color.white, 0.04f));
+            DrawBlock(centerRect, ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetSurfaceColor(), Color.white, 0.04f));
             DrawPreviewLabel(new Rect(centerRect.x + 8f, centerRect.y + 8f, centerRect.width - 16f, 16f), GetPreviewLabel(layoutPreset.PreviewCenterLabel, "Editor"));
 
             if (hasRight)
             {
-                DrawBlock(new Rect(centerRect.xMax + 4f, inner.y + 4f, rightWidth - 6f, inner.height - bottomHeight - 8f), CortexIdeLayout.Blend(CortexIdeLayout.GetHeaderColor(), CortexIdeLayout.GetSurfaceColor(), 0.48f));
+                DrawBlock(new Rect(centerRect.xMax + 4f, inner.y + 4f, rightWidth - 6f, inner.height - bottomHeight - 8f), ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetHeaderColor(), ImguiWorkbenchLayout.GetSurfaceColor(), 0.48f));
                 DrawPreviewLabel(new Rect(centerRect.xMax + 8f, inner.y + 16f, rightWidth - 14f, 16f), layoutPreset.PreviewSecondaryLabel);
             }
 
             if (hasBottom)
             {
-                DrawBlock(new Rect(inner.x + 4f, centerRect.yMax + 4f, inner.width - 8f, bottomHeight - 6f), CortexIdeLayout.Blend(CortexIdeLayout.GetWarningColor(), CortexIdeLayout.GetHeaderColor(), 0.74f));
+                DrawBlock(new Rect(inner.x + 4f, centerRect.yMax + 4f, inner.width - 8f, bottomHeight - 6f), ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetWarningColor(), ImguiWorkbenchLayout.GetHeaderColor(), 0.74f));
                 DrawPreviewLabel(new Rect(inner.x + 10f, centerRect.yMax + 8f, inner.width - 20f, 16f), layoutPreset.PreviewPanelLabel);
             }
         }
@@ -574,7 +575,7 @@ namespace Cortex.Modules.Onboarding
             GUILayout.EndVertical();
             if (draft.HasExistingMapping)
             {
-                DrawInlineBadge("Mapped", CortexIdeLayout.GetAccentColor(), 74f);
+                DrawInlineBadge("Mapped", ImguiWorkbenchLayout.GetAccentColor(), 74f);
                 GUILayout.Space(6f);
             }
 
@@ -597,7 +598,7 @@ namespace Cortex.Modules.Onboarding
             }
 
             GUILayout.Space(10f);
-            DrawHorizontalRule(CortexIdeLayout.Blend(CortexIdeLayout.GetBorderColor(), CortexIdeLayout.GetAccentColor(), 0.22f), 1f);
+            DrawHorizontalRule(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetBorderColor(), ImguiWorkbenchLayout.GetAccentColor(), 0.22f), 1f);
             GUILayout.Space(8f);
             GUILayout.Label("Source Setup", CreateSubsectionTitleStyle(), GUILayout.Height(20f));
             GUILayout.Label(
@@ -651,11 +652,11 @@ namespace Cortex.Modules.Onboarding
         private static void DrawCardChrome(Rect rect, bool isSelected, bool isHovered)
         {
             var fill = isSelected
-                ? CortexIdeLayout.Blend(CortexIdeLayout.GetHeaderColor(), CortexIdeLayout.GetAccentColor(), 0.18f)
+                ? ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetHeaderColor(), ImguiWorkbenchLayout.GetAccentColor(), 0.18f)
                 : (isHovered
-                    ? CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.4f)
-                    : CortexIdeLayout.GetSurfaceColor());
-            var border = isSelected ? CortexIdeLayout.GetAccentColor() : CortexIdeLayout.GetBorderColor();
+                    ? ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetSurfaceColor(), ImguiWorkbenchLayout.GetHeaderColor(), 0.4f)
+                    : ImguiWorkbenchLayout.GetSurfaceColor());
+            var border = isSelected ? ImguiWorkbenchLayout.GetAccentColor() : ImguiWorkbenchLayout.GetBorderColor();
             DrawBlock(rect, fill);
             DrawBorder(rect, border, isSelected ? 2f : 1f);
         }
@@ -663,13 +664,13 @@ namespace Cortex.Modules.Onboarding
         private static void DrawMiniPanel(Rect rect, Color backgroundColor)
         {
             DrawBlock(rect, backgroundColor);
-            DrawBorder(rect, CortexIdeLayout.Blend(CortexIdeLayout.GetBorderColor(), Color.white, 0.06f), 1f);
+            DrawBorder(rect, ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetBorderColor(), Color.white, 0.06f), 1f);
         }
 
         private static void DrawBadge(Rect rect, string text)
         {
-            DrawBlock(rect, CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetHeaderColor(), 0.3f));
-            DrawBorder(rect, CortexIdeLayout.GetAccentColor(), 1f);
+            DrawBlock(rect, ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetAccentColor(), ImguiWorkbenchLayout.GetHeaderColor(), 0.3f));
+            DrawBorder(rect, ImguiWorkbenchLayout.GetAccentColor(), 1f);
             GUI.Label(rect, text, CreateBadgeStyle());
         }
 
@@ -709,7 +710,7 @@ namespace Cortex.Modules.Onboarding
             var style = new GUIStyle(GUI.skin.label);
             style.fontStyle = FontStyle.Bold;
             style.fontSize = 26;
-            style.normal.textColor = CortexIdeLayout.GetTextColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetTextColor();
             return style;
         }
 
@@ -718,7 +719,7 @@ namespace Cortex.Modules.Onboarding
             var style = new GUIStyle(GUI.skin.label);
             style.fontStyle = FontStyle.Bold;
             style.fontSize = 18;
-            style.normal.textColor = CortexIdeLayout.GetTextColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetTextColor();
             return style;
         }
 
@@ -726,7 +727,7 @@ namespace Cortex.Modules.Onboarding
         {
             var style = new GUIStyle(GUI.skin.label);
             style.wordWrap = true;
-            style.normal.textColor = CortexIdeLayout.GetMutedTextColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetMutedTextColor();
             return style;
         }
 
@@ -735,7 +736,7 @@ namespace Cortex.Modules.Onboarding
             var style = new GUIStyle(GUI.skin.label);
             style.fontStyle = FontStyle.Bold;
             style.fontSize = 16;
-            style.normal.textColor = isSelected ? Color.white : CortexIdeLayout.GetTextColor();
+            style.normal.textColor = isSelected ? Color.white : ImguiWorkbenchLayout.GetTextColor();
             return style;
         }
 
@@ -743,7 +744,7 @@ namespace Cortex.Modules.Onboarding
         {
             var style = new GUIStyle(GUI.skin.label);
             style.wordWrap = true;
-            style.normal.textColor = CortexIdeLayout.GetMutedTextColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetMutedTextColor();
             return style;
         }
 
@@ -761,7 +762,7 @@ namespace Cortex.Modules.Onboarding
             var style = new GUIStyle(GUI.skin.label);
             style.alignment = TextAnchor.MiddleCenter;
             style.fontStyle = FontStyle.Bold;
-            style.normal.textColor = CortexIdeLayout.GetTextColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetTextColor();
             return style;
         }
 
@@ -777,7 +778,7 @@ namespace Cortex.Modules.Onboarding
         private static GUIStyle CreateToggleStyle()
         {
             var style = new GUIStyle(GUI.skin.toggle);
-            style.normal.textColor = CortexIdeLayout.GetTextColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetTextColor();
             style.onNormal.textColor = Color.white;
             return style;
         }
@@ -787,7 +788,7 @@ namespace Cortex.Modules.Onboarding
             var style = new GUIStyle(GUI.skin.label);
             style.fontStyle = FontStyle.Bold;
             style.fontSize = 14;
-            style.normal.textColor = CortexIdeLayout.GetTextColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetTextColor();
             return style;
         }
 
@@ -795,7 +796,7 @@ namespace Cortex.Modules.Onboarding
         {
             var style = new GUIStyle(GUI.skin.label);
             style.fontSize = 11;
-            style.normal.textColor = CortexIdeLayout.GetMutedTextColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetMutedTextColor();
             return style;
         }
 
@@ -804,7 +805,7 @@ namespace Cortex.Modules.Onboarding
             var style = new GUIStyle(GUI.skin.label);
             style.fontSize = 11;
             style.fontStyle = FontStyle.Bold;
-            style.normal.textColor = CortexIdeLayout.Blend(CortexIdeLayout.GetMutedTextColor(), CortexIdeLayout.GetTextColor(), 0.18f);
+            style.normal.textColor = ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetMutedTextColor(), ImguiWorkbenchLayout.GetTextColor(), 0.18f);
             return style;
         }
 
@@ -813,7 +814,7 @@ namespace Cortex.Modules.Onboarding
             var style = new GUIStyle(GUI.skin.label);
             style.wordWrap = true;
             style.clipping = TextClipping.Clip;
-            style.normal.textColor = CortexIdeLayout.GetTextColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetTextColor();
             return style;
         }
 
@@ -822,7 +823,7 @@ namespace Cortex.Modules.Onboarding
             var style = new GUIStyle(GUI.skin.label);
             style.wordWrap = true;
             style.fontSize = 11;
-            style.normal.textColor = CortexIdeLayout.GetMutedTextColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetMutedTextColor();
             return style;
         }
 
@@ -831,7 +832,7 @@ namespace Cortex.Modules.Onboarding
             var style = new GUIStyle(GUI.skin.label);
             style.wordWrap = true;
             style.fontSize = 11;
-            style.normal.textColor = CortexIdeLayout.GetWarningColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetWarningColor();
             return style;
         }
 
@@ -840,7 +841,7 @@ namespace Cortex.Modules.Onboarding
             var style = new GUIStyle(GUI.skin.label);
             style.fontStyle = FontStyle.Bold;
             style.fontSize = 20;
-            style.normal.textColor = CortexIdeLayout.GetTextColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetTextColor();
             return style;
         }
 
@@ -867,15 +868,15 @@ namespace Cortex.Modules.Onboarding
                 Muted = muted,
                 Warning = warning,
                 Error = error,
-                Selection = CortexIdeLayout.Blend(accent, text, 0.28f),
-                Gutter = CortexIdeLayout.Blend(background, surface, 0.52f),
-                Editor = CortexIdeLayout.Blend(surface, text, 0.04f)
+                Selection = ImguiWorkbenchLayout.Blend(accent, text, 0.28f),
+                Gutter = ImguiWorkbenchLayout.Blend(background, surface, 0.52f),
+                Editor = ImguiWorkbenchLayout.Blend(surface, text, 0.04f)
             };
         }
 
         private static Color ParseThemeColor(string colorValue, Color fallback)
         {
-            return CortexIdeLayout.ParseColor(colorValue, fallback);
+            return ImguiWorkbenchLayout.ParseColor(colorValue, fallback);
         }
 
         private static string[] GetProfilePreviewTags(OnboardingProfileContribution profile)
@@ -898,9 +899,9 @@ namespace Cortex.Modules.Onboarding
             var previousBackground = GUI.backgroundColor;
             var previousContent = GUI.contentColor;
             GUI.backgroundColor = isOwnedByUser
-                ? CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetHeaderColor(), 0.28f)
-                : CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.78f);
-            GUI.contentColor = isOwnedByUser ? Color.white : CortexIdeLayout.GetTextColor();
+                ? ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetAccentColor(), ImguiWorkbenchLayout.GetHeaderColor(), 0.28f)
+                : ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetSurfaceColor(), ImguiWorkbenchLayout.GetHeaderColor(), 0.78f);
+            GUI.contentColor = isOwnedByUser ? Color.white : ImguiWorkbenchLayout.GetTextColor();
             var clicked = GUILayout.Button(
                 isOwnedByUser ? "Maintained By Me" : "Mark As Mine",
                 GUILayout.Width(138f),
@@ -914,7 +915,7 @@ namespace Cortex.Modules.Onboarding
         {
             var previousBackground = GUI.backgroundColor;
             var previousContent = GUI.contentColor;
-            GUI.backgroundColor = CortexIdeLayout.Blend(accentColor, CortexIdeLayout.GetHeaderColor(), 0.25f);
+            GUI.backgroundColor = ImguiWorkbenchLayout.Blend(accentColor, ImguiWorkbenchLayout.GetHeaderColor(), 0.25f);
             GUI.contentColor = Color.white;
             GUILayout.Label(text, GUI.skin.box, GUILayout.Width(width), GUILayout.Height(22f));
             GUI.backgroundColor = previousBackground;

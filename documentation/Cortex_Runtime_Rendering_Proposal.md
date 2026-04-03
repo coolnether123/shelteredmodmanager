@@ -83,7 +83,7 @@ This means the current renderer abstraction is partial. It abstracts popup/panel
 ### 2.4 Module UI surface implementation still needs a durable host/runtime ownership rule
 
 The shell-local implementation has now been removed.
-The active `IWorkbenchUiSurface` is supplied by host composition, and the current Sheltered host provides an IMGUI-backed implementation.
+The active `IWorkbenchUiSurface` is supplied by host composition, and the current Sheltered path selects an IMGUI-backed implementation from `Cortex.Shell.Unity.Imgui`.
 
 That is a better ownership boundary because public modules still target the stable contract while the host decides which concrete surface is active.
 
@@ -326,7 +326,7 @@ Introduce `Cortex.Rendering.RuntimeUi`:
 
 ### Phase 4
 
-Keep host-owned UI surface construction:
+Keep host-selected UI surface construction:
 
 - host provides `IWorkbenchUiSurface`
 - the current Sheltered host may still return an IMGUI-backed implementation

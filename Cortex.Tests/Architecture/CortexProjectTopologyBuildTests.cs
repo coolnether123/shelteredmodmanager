@@ -176,6 +176,7 @@ namespace Cortex.Tests.Architecture
             var renderingCompileIncludes = LoadCompileIncludeValues("Cortex.Rendering");
             var runtimeUiCompileIncludes = LoadCompileIncludeValues("Cortex.Rendering.RuntimeUi");
             var shelteredHostCompileIncludes = LoadCompileIncludeValues("Cortex.Host.Sheltered");
+            var imguiShellCompileIncludes = LoadCompileIncludeValues("Cortex.Shell.Unity.Imgui");
 
             Assert.Contains(@"Frame\WorkbenchFrameContracts.cs", renderingCompileIncludes);
             Assert.DoesNotContain(@"Runtime\WorkbenchFrameContext.cs", renderingCompileIncludes);
@@ -186,7 +187,11 @@ namespace Cortex.Tests.Architecture
                 runtimeUiCompileIncludes,
                 include => include.IndexOf("WorkbenchFrameContext", StringComparison.OrdinalIgnoreCase) >= 0 ||
                            include.IndexOf("WorkbenchFrameContracts", StringComparison.OrdinalIgnoreCase) >= 0);
-            Assert.Contains(@"Runtime\ShelteredWorkbenchUiSurface.cs", shelteredHostCompileIncludes);
+            Assert.DoesNotContain(@"Runtime\ShelteredWorkbenchUiSurface.cs", shelteredHostCompileIncludes);
+            Assert.DoesNotContain(@"ImguiStyleUtil.cs", imguiShellCompileIncludes);
+            Assert.Contains(@"Styling\ImguiStyleUtil.cs", imguiShellCompileIncludes);
+            Assert.Contains(@"Layout\ImguiWorkbenchLayout.cs", imguiShellCompileIncludes);
+            Assert.Contains(@"Ui\ImguiWorkbenchUiSurface.cs", imguiShellCompileIncludes);
         }
 
         [Fact]
@@ -224,7 +229,7 @@ namespace Cortex.Tests.Architecture
             Assert.DoesNotContain("using Cortex.Renderers.Imgui;", unityRuntimeText);
             Assert.DoesNotContain("using Cortex.Renderers.Imgui;", unityFactoryText);
             Assert.Contains("ImguiWorkbenchRuntimeUiFactory", shelteredCompositionText);
-            Assert.Contains("ShelteredWorkbenchUiSurface", shelteredCompositionText);
+            Assert.Contains("ImguiWorkbenchUiSurface", shelteredCompositionText);
             Assert.Contains("UnityWorkbenchFrameContext", shelteredCompositionText);
             Assert.Contains("frameContext", shelteredCompositionText);
             Assert.DoesNotContain("new ImguiWorkbenchRuntimeUiFactory", cortexShellText);

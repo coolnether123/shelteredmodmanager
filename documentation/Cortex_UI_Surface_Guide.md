@@ -1,6 +1,6 @@
 # Cortex UI Surface Guide
 
-`WorkbenchModuleRenderContext.Ui` is the host-owned UI surface for Cortex workbench modules.
+`WorkbenchModuleRenderContext.Ui` is the shared workbench UI surface for Cortex workbench modules.
 
 Its job is simple:
 
@@ -108,9 +108,9 @@ public sealed class ExampleModule : IWorkbenchModule
 
 ## Current backend
 
-Today the active implementation is host-supplied.
+Today the active implementation is selected by host composition.
 
-In the current Sheltered composition, `Cortex.Host.Sheltered` provides `ShelteredWorkbenchUiSurface`, which is IMGUI-backed and then passed into the selected runtime UI/backend.
+In the current Sheltered composition, the host selects `Cortex.Shell.Unity.Imgui.Ui.ImguiWorkbenchUiSurface`, which is IMGUI-backed and then passed into the selected runtime UI/backend.
 
 That is an implementation detail, not the module contract.
 

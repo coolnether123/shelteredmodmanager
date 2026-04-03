@@ -3,7 +3,7 @@ using System;
 namespace Cortex.Plugins.Abstractions
 {
     /// <summary>
-    /// Provides a host-owned UI surface for shared workbench chrome and property-page controls.
+    /// Provides a shared workbench UI surface for common chrome and property-page controls.
     /// Modules should prefer this surface for common layouts so Cortex can evolve the backend without
     /// forcing every module to rewrite the same IMGUI patterns.
     /// </summary>

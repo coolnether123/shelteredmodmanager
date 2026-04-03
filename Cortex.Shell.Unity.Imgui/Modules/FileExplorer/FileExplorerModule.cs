@@ -7,6 +7,7 @@ using Cortex.Modules.Shared;
 using Cortex.Services.Explorer;
 using Cortex.Services.Navigation;
 using UnityEngine;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Modules.FileExplorer
 {
@@ -695,16 +696,16 @@ namespace Cortex.Modules.FileExplorer
 
             _appliedTheme = themeId;
 
-            var textColor = CortexIdeLayout.GetTextColor();
-            var mutedColor = CortexIdeLayout.GetMutedTextColor();
-            var accentColor = CortexIdeLayout.GetAccentColor();
-            var surfaceColor = CortexIdeLayout.GetSurfaceColor();
-            var headerColor = CortexIdeLayout.GetHeaderColor();
-            var borderColor = CortexIdeLayout.GetBorderColor();
-            var bgColor = CortexIdeLayout.GetBackgroundColor();
-            var hoverHighlightColor = CortexIdeLayout.Blend(
+            var textColor = ImguiWorkbenchLayout.GetTextColor();
+            var mutedColor = ImguiWorkbenchLayout.GetMutedTextColor();
+            var accentColor = ImguiWorkbenchLayout.GetAccentColor();
+            var surfaceColor = ImguiWorkbenchLayout.GetSurfaceColor();
+            var headerColor = ImguiWorkbenchLayout.GetHeaderColor();
+            var borderColor = ImguiWorkbenchLayout.GetBorderColor();
+            var bgColor = ImguiWorkbenchLayout.GetBackgroundColor();
+            var hoverHighlightColor = ImguiWorkbenchLayout.Blend(
                 surfaceColor,
-                CortexIdeLayout.ParseColor("#DCDCAA", textColor),
+                ImguiWorkbenchLayout.ParseColor("#DCDCAA", textColor),
                 0.28f);
 
             _folderLabelStyle = new GUIStyle(GUI.skin.button);
@@ -712,49 +713,49 @@ namespace Cortex.Modules.FileExplorer
             _folderLabelStyle.fontSize = 11;
             _folderLabelStyle.padding = new RectOffset(4, 6, 1, 1);
             _folderLabelStyle.margin = new RectOffset(0, 0, 0, 0);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_folderLabelStyle, MakeTex(surfaceColor));
-            GuiStyleUtil.ApplyTextColorToAllStates(_folderLabelStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_folderLabelStyle, MakeTex(surfaceColor));
+            ImguiStyleUtil.ApplyTextColorToAllStates(_folderLabelStyle, textColor);
 
             _hoverFolderLabelStyle = new GUIStyle(_folderLabelStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_hoverFolderLabelStyle, MakeTex(hoverHighlightColor));
-            GuiStyleUtil.ApplyTextColorToAllStates(
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_hoverFolderLabelStyle, MakeTex(hoverHighlightColor));
+            ImguiStyleUtil.ApplyTextColorToAllStates(
                 _hoverFolderLabelStyle,
-                CortexIdeLayout.ParseColor("#FFF4B0", textColor));
+                ImguiWorkbenchLayout.ParseColor("#FFF4B0", textColor));
 
             _fileButtonStyle = new GUIStyle(GUI.skin.button);
             _fileButtonStyle.alignment = TextAnchor.MiddleLeft;
             _fileButtonStyle.fontSize = 11;
             _fileButtonStyle.padding = new RectOffset(6, 6, 1, 1);
             _fileButtonStyle.margin = new RectOffset(0, 0, 0, 0);
-            _selectedFileBg = MakeTex(CortexIdeLayout.Blend(accentColor, surfaceColor, 0.72f));
-            _fileHoverBg = MakeTex(CortexIdeLayout.Blend(bgColor, surfaceColor, 0.32f));
-            GuiStyleUtil.ApplyBackgroundToAllStates(_fileButtonStyle, MakeTex(surfaceColor));
-            GuiStyleUtil.ApplyTextColorToAllStates(_fileButtonStyle, mutedColor);
+            _selectedFileBg = MakeTex(ImguiWorkbenchLayout.Blend(accentColor, surfaceColor, 0.72f));
+            _fileHoverBg = MakeTex(ImguiWorkbenchLayout.Blend(bgColor, surfaceColor, 0.32f));
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_fileButtonStyle, MakeTex(surfaceColor));
+            ImguiStyleUtil.ApplyTextColorToAllStates(_fileButtonStyle, mutedColor);
             _fileButtonStyle.hover.background = _fileHoverBg;
             _fileButtonStyle.hover.textColor = textColor;
 
             _hoverFileButtonStyle = new GUIStyle(_fileButtonStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_hoverFileButtonStyle, MakeTex(hoverHighlightColor));
-            GuiStyleUtil.ApplyTextColorToAllStates(
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_hoverFileButtonStyle, MakeTex(hoverHighlightColor));
+            ImguiStyleUtil.ApplyTextColorToAllStates(
                 _hoverFileButtonStyle,
-                CortexIdeLayout.ParseColor("#FFF4B0", textColor));
+                ImguiWorkbenchLayout.ParseColor("#FFF4B0", textColor));
 
             _activeFileButtonStyle = new GUIStyle(_fileButtonStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_activeFileButtonStyle, _selectedFileBg);
-            GuiStyleUtil.ApplyTextColorToAllStates(_activeFileButtonStyle, Color.white);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_activeFileButtonStyle, _selectedFileBg);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_activeFileButtonStyle, Color.white);
             _activeFileButtonStyle.fontStyle = FontStyle.Bold;
 
-            _filterBg = MakeTex(CortexIdeLayout.Blend(surfaceColor, bgColor, 0.5f));
+            _filterBg = MakeTex(ImguiWorkbenchLayout.Blend(surfaceColor, bgColor, 0.5f));
             _filterBoxStyle = new GUIStyle(GUI.skin.textField);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_filterBoxStyle, _filterBg);
-            GuiStyleUtil.ApplyTextColorToAllStates(_filterBoxStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_filterBoxStyle, _filterBg);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_filterBoxStyle, textColor);
             _filterBoxStyle.margin = new RectOffset(0, 0, 0, 0);
             _filterBoxStyle.padding = new RectOffset(6, 6, 4, 4);
 
             _sectionHeaderBg = MakeTex(headerColor);
             _sectionHeaderStyle = new GUIStyle(GUI.skin.label);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_sectionHeaderStyle, _sectionHeaderBg);
-            GuiStyleUtil.ApplyTextColorToAllStates(_sectionHeaderStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_sectionHeaderStyle, _sectionHeaderBg);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_sectionHeaderStyle, textColor);
             _sectionHeaderStyle.fontSize = 10;
             _sectionHeaderStyle.fontStyle = FontStyle.Bold;
             _sectionHeaderStyle.padding = new RectOffset(6, 6, 4, 4);
@@ -764,8 +765,8 @@ namespace Cortex.Modules.FileExplorer
             _treeHeaderStyle.alignment = TextAnchor.MiddleCenter;
             _treeHeaderStyle.padding = new RectOffset(0, 0, 0, 0);
             _treeHeaderStyle.margin = new RectOffset(0, 0, 0, 0);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_treeHeaderStyle, MakeTex(CortexIdeLayout.Blend(headerColor, bgColor, 0.35f)));
-            GuiStyleUtil.ApplyTextColorToAllStates(_treeHeaderStyle, borderColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_treeHeaderStyle, MakeTex(ImguiWorkbenchLayout.Blend(headerColor, bgColor, 0.35f)));
+            ImguiStyleUtil.ApplyTextColorToAllStates(_treeHeaderStyle, borderColor);
         }
 
         private static Texture2D MakeTex(Color color)

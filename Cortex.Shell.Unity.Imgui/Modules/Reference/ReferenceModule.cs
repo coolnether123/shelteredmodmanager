@@ -8,6 +8,7 @@ using Cortex.Rendering.Models;
 using Cortex.Services.Navigation;
 using Cortex.Services.Reference;
 using UnityEngine;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Modules.Reference
 {
@@ -63,7 +64,7 @@ namespace Cortex.Modules.Reference
             }
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
-            CortexIdeLayout.DrawTwoPane(
+            ImguiWorkbenchLayout.DrawTwoPane(
                 432f,
                 360f,
                 delegate { DrawBrowserPane(referenceCatalogService, navigationService, state); },
@@ -81,7 +82,7 @@ namespace Cortex.Modules.Reference
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             DrawSelectionSummary();
 
-            CortexIdeLayout.DrawGroup("Assemblies", delegate
+            ImguiWorkbenchLayout.DrawGroup("Assemblies", delegate
             {
                 DrawAssemblyToolbar(referenceCatalogService, state);
                 _assemblyScroll = GUILayout.BeginScrollView(_assemblyScroll, GUI.skin.box, GUILayout.MinHeight(170f), GUILayout.Height(210f));
@@ -90,7 +91,7 @@ namespace Cortex.Modules.Reference
             }, GUILayout.ExpandWidth(true));
 
             GUILayout.Space(6f);
-            CortexIdeLayout.DrawGroup("Types", delegate
+            ImguiWorkbenchLayout.DrawGroup("Types", delegate
             {
                 DrawTypeToolbar();
                 _typeScroll = GUILayout.BeginScrollView(_typeScroll, GUI.skin.box, GUILayout.MinHeight(150f), GUILayout.Height(190f));
@@ -99,7 +100,7 @@ namespace Cortex.Modules.Reference
             }, GUILayout.ExpandWidth(true));
 
             GUILayout.Space(6f);
-            CortexIdeLayout.DrawGroup("Members", delegate
+            ImguiWorkbenchLayout.DrawGroup("Members", delegate
             {
                 DrawMemberToolbar();
                 GUILayout.BeginHorizontal();
@@ -135,7 +136,7 @@ namespace Cortex.Modules.Reference
 
             if (state.Documents.ActiveDocument != null)
             {
-                CortexIdeLayout.DrawGroup("Active Source", delegate
+                ImguiWorkbenchLayout.DrawGroup("Active Source", delegate
                 {
                     GUILayout.Label(CortexModuleUtil.GetDocumentDisplayName(state.Documents.ActiveDocument), _detailLabelStyle ?? GUI.skin.label);
                     GUILayout.Label(state.Documents.ActiveDocument.FilePath ?? string.Empty, _detailValueStyle ?? GUI.skin.label);
@@ -143,7 +144,7 @@ namespace Cortex.Modules.Reference
                 GUILayout.Space(6f);
             }
 
-            CortexIdeLayout.DrawGroup("Reference Details", delegate
+            ImguiWorkbenchLayout.DrawGroup("Reference Details", delegate
             {
                 DrawMetadataRow("Assembly", selection.AssemblyLabel);
                 DrawMetadataRow("Path", selection.AssemblyPath);
@@ -191,7 +192,7 @@ namespace Cortex.Modules.Reference
             });
 
             GUILayout.Space(6f);
-            CortexIdeLayout.DrawGroup("Decompiler Result", delegate
+            ImguiWorkbenchLayout.DrawGroup("Decompiler Result", delegate
             {
                 if (state.LastReferenceResult == null)
                 {
@@ -211,7 +212,7 @@ namespace Cortex.Modules.Reference
             });
 
             GUILayout.Space(6f);
-            CortexIdeLayout.DrawGroup("Source Preview", delegate
+            ImguiWorkbenchLayout.DrawGroup("Source Preview", delegate
             {
                 if (state.LastReferenceResult == null || string.IsNullOrEmpty(state.LastReferenceResult.SourceText))
                 {
@@ -441,87 +442,87 @@ namespace Cortex.Modules.Reference
             }
 
             _appliedTheme = themeId;
-            var textColor = CortexIdeLayout.GetTextColor();
-            var mutedColor = CortexIdeLayout.GetMutedTextColor();
-            var accentColor = CortexIdeLayout.GetAccentColor();
-            var surfaceColor = CortexIdeLayout.GetSurfaceColor();
-            var headerColor = CortexIdeLayout.GetHeaderColor();
-            var backgroundColor = CortexIdeLayout.GetBackgroundColor();
+            var textColor = ImguiWorkbenchLayout.GetTextColor();
+            var mutedColor = ImguiWorkbenchLayout.GetMutedTextColor();
+            var accentColor = ImguiWorkbenchLayout.GetAccentColor();
+            var surfaceColor = ImguiWorkbenchLayout.GetSurfaceColor();
+            var headerColor = ImguiWorkbenchLayout.GetHeaderColor();
+            var backgroundColor = ImguiWorkbenchLayout.GetBackgroundColor();
 
-            _summaryBackground = MakeTex(CortexIdeLayout.Blend(headerColor, backgroundColor, 0.3f));
-            _filterBackground = MakeTex(CortexIdeLayout.Blend(surfaceColor, backgroundColor, 0.45f));
-            _rowBackground = MakeTex(CortexIdeLayout.Blend(backgroundColor, surfaceColor, 0.4f));
-            _hoverRowBackground = MakeTex(CortexIdeLayout.Blend(surfaceColor, headerColor, 0.46f));
-            _selectedRowBackground = MakeTex(CortexIdeLayout.Blend(headerColor, accentColor, 0.28f));
-            _previewBackground = MakeTex(CortexIdeLayout.Blend(surfaceColor, headerColor, 0.35f));
-            _rowBorder = MakeTex(CortexIdeLayout.Blend(CortexIdeLayout.GetBorderColor(), Color.white, 0.08f));
+            _summaryBackground = MakeTex(ImguiWorkbenchLayout.Blend(headerColor, backgroundColor, 0.3f));
+            _filterBackground = MakeTex(ImguiWorkbenchLayout.Blend(surfaceColor, backgroundColor, 0.45f));
+            _rowBackground = MakeTex(ImguiWorkbenchLayout.Blend(backgroundColor, surfaceColor, 0.4f));
+            _hoverRowBackground = MakeTex(ImguiWorkbenchLayout.Blend(surfaceColor, headerColor, 0.46f));
+            _selectedRowBackground = MakeTex(ImguiWorkbenchLayout.Blend(headerColor, accentColor, 0.28f));
+            _previewBackground = MakeTex(ImguiWorkbenchLayout.Blend(surfaceColor, headerColor, 0.35f));
+            _rowBorder = MakeTex(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetBorderColor(), Color.white, 0.08f));
             _selectedRowBorder = MakeTex(accentColor);
-            _tooltipBackground = MakeTex(CortexIdeLayout.Blend(backgroundColor, surfaceColor, 0.26f));
+            _tooltipBackground = MakeTex(ImguiWorkbenchLayout.Blend(backgroundColor, surfaceColor, 0.26f));
 
             _summaryStyle = new GUIStyle(GUI.skin.box);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_summaryStyle, _summaryBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_summaryStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_summaryStyle, _summaryBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_summaryStyle, textColor);
             _summaryStyle.padding = new RectOffset(10, 10, 8, 8);
 
             _summaryCaptionStyle = new GUIStyle(GUI.skin.label);
-            GuiStyleUtil.ApplyTextColorToAllStates(_summaryCaptionStyle, mutedColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_summaryCaptionStyle, mutedColor);
             _summaryCaptionStyle.wordWrap = true;
 
             _filterBoxStyle = new GUIStyle(GUI.skin.textField);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_filterBoxStyle, _filterBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_filterBoxStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_filterBoxStyle, _filterBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_filterBoxStyle, textColor);
             _filterBoxStyle.alignment = TextAnchor.MiddleLeft;
 
             _rowStyle = new GUIStyle(GUI.skin.button);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_rowStyle, _rowBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_rowStyle, mutedColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_rowStyle, _rowBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_rowStyle, mutedColor);
             _rowStyle.alignment = TextAnchor.UpperLeft;
             _rowStyle.padding = new RectOffset(0, 0, 0, 0);
             _rowStyle.margin = new RectOffset(0, 0, 0, 4);
 
             _selectedRowStyle = new GUIStyle(_rowStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_selectedRowStyle, _selectedRowBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_selectedRowStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_selectedRowStyle, _selectedRowBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_selectedRowStyle, textColor);
 
             _rowTitleStyle = new GUIStyle(GUI.skin.label);
-            GuiStyleUtil.ApplyTextColorToAllStates(_rowTitleStyle, textColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_rowTitleStyle, textColor);
             _rowTitleStyle.fontStyle = FontStyle.Bold;
             _rowTitleStyle.clipping = TextClipping.Clip;
 
             _rowSubtitleStyle = new GUIStyle(GUI.skin.label);
-            GuiStyleUtil.ApplyTextColorToAllStates(_rowSubtitleStyle, mutedColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_rowSubtitleStyle, mutedColor);
             _rowSubtitleStyle.clipping = TextClipping.Clip;
 
             _rowMetaStyle = new GUIStyle(GUI.skin.label);
-            GuiStyleUtil.ApplyTextColorToAllStates(_rowMetaStyle, accentColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_rowMetaStyle, accentColor);
             _rowMetaStyle.alignment = TextAnchor.UpperRight;
             _rowMetaStyle.clipping = TextClipping.Clip;
 
             _detailLabelStyle = new GUIStyle(GUI.skin.label);
-            GuiStyleUtil.ApplyTextColorToAllStates(_detailLabelStyle, textColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_detailLabelStyle, textColor);
             _detailLabelStyle.fontStyle = FontStyle.Bold;
             _detailLabelStyle.wordWrap = true;
 
             _detailValueStyle = new GUIStyle(GUI.skin.label);
-            GuiStyleUtil.ApplyTextColorToAllStates(_detailValueStyle, mutedColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_detailValueStyle, mutedColor);
             _detailValueStyle.wordWrap = true;
 
             _emptyStateStyle = new GUIStyle(GUI.skin.label);
-            GuiStyleUtil.ApplyTextColorToAllStates(_emptyStateStyle, mutedColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_emptyStateStyle, mutedColor);
             _emptyStateStyle.wordWrap = true;
 
             _previewStyle = new GUIStyle(GUI.skin.textArea);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_previewStyle, _previewBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_previewStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_previewStyle, _previewBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_previewStyle, textColor);
             _previewStyle.wordWrap = false;
 
             _actionButtonStyle = new GUIStyle(GUI.skin.button);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_actionButtonStyle, MakeTex(CortexIdeLayout.Blend(surfaceColor, headerColor, 0.5f)));
-            GuiStyleUtil.ApplyTextColorToAllStates(_actionButtonStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_actionButtonStyle, MakeTex(ImguiWorkbenchLayout.Blend(surfaceColor, headerColor, 0.5f)));
+            ImguiStyleUtil.ApplyTextColorToAllStates(_actionButtonStyle, textColor);
 
             _tooltipStyle = new GUIStyle(GUI.skin.box);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_tooltipStyle, _tooltipBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_tooltipStyle, _tooltipBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_tooltipStyle, textColor);
             _tooltipStyle.wordWrap = true;
             _tooltipStyle.alignment = TextAnchor.UpperLeft;
             _tooltipStyle.padding = new RectOffset(10, 10, 8, 8);
@@ -540,12 +541,12 @@ namespace Cortex.Modules.Reference
         {
             return new HoverTooltipThemePalette
             {
-                BackgroundColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetHeaderColor(), CortexIdeLayout.GetBackgroundColor(), 0.18f)),
-                BorderColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.36f)),
-                TextColor = ToRenderColor(CortexIdeLayout.GetTextColor()),
-                MutedTextColor = ToRenderColor(CortexIdeLayout.GetMutedTextColor()),
-                AccentColor = ToRenderColor(CortexIdeLayout.GetAccentColor()),
-                HoverFillColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.18f))
+                BackgroundColor = ToRenderColor(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetHeaderColor(), ImguiWorkbenchLayout.GetBackgroundColor(), 0.18f)),
+                BorderColor = ToRenderColor(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.36f)),
+                TextColor = ToRenderColor(ImguiWorkbenchLayout.GetTextColor()),
+                MutedTextColor = ToRenderColor(ImguiWorkbenchLayout.GetMutedTextColor()),
+                AccentColor = ToRenderColor(ImguiWorkbenchLayout.GetAccentColor()),
+                HoverFillColor = ToRenderColor(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.18f))
             };
         }
 

@@ -7,6 +7,7 @@ using Cortex.Services.Navigation;
 using Cortex.Services.Semantics.Workbench;
 using UnityEngine;
 using Cortex.Services.Search;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Modules.Search
 {
@@ -415,7 +416,7 @@ namespace Cortex.Modules.Search
 
         private void EnsureStyles()
         {
-            var themeKey = CortexIdeLayout.GetBackgroundColor().ToString() + "|" + CortexIdeLayout.GetAccentColor().ToString();
+            var themeKey = ImguiWorkbenchLayout.GetBackgroundColor().ToString() + "|" + ImguiWorkbenchLayout.GetAccentColor().ToString();
             if (string.Equals(_appliedTheme, themeKey) &&
                 _summaryStyle != null &&
                 _documentStyle != null &&
@@ -427,39 +428,39 @@ namespace Cortex.Modules.Search
             }
 
             _appliedTheme = themeKey;
-            _summaryBackground = MakeFill(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.45f));
-            _activeBackground = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.20f));
+            _summaryBackground = MakeFill(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetSurfaceColor(), ImguiWorkbenchLayout.GetHeaderColor(), 0.45f));
+            _activeBackground = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.20f));
 
             _summaryStyle = new GUIStyle(GUI.skin.box);
             _summaryStyle.padding = new RectOffset(10, 10, 8, 8);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_summaryStyle, _summaryBackground);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_summaryStyle, _summaryBackground);
 
             _summaryCaptionStyle = new GUIStyle(GUI.skin.label);
-            GuiStyleUtil.ApplyTextColorToAllStates(_summaryCaptionStyle, CortexIdeLayout.GetTextColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_summaryCaptionStyle, ImguiWorkbenchLayout.GetTextColor());
             _summaryCaptionStyle.wordWrap = true;
 
             _documentStyle = new GUIStyle(GUI.skin.label);
             _documentStyle.fontStyle = FontStyle.Bold;
-            GuiStyleUtil.ApplyTextColorToAllStates(_documentStyle, CortexIdeLayout.GetTextColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_documentStyle, ImguiWorkbenchLayout.GetTextColor());
 
             _documentMetaStyle = new GUIStyle(GUI.skin.label);
             _documentMetaStyle.wordWrap = true;
-            GuiStyleUtil.ApplyTextColorToAllStates(_documentMetaStyle, CortexIdeLayout.GetMutedTextColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_documentMetaStyle, ImguiWorkbenchLayout.GetMutedTextColor());
 
             _resultButtonStyle = new GUIStyle(GUI.skin.button);
             _resultButtonStyle.alignment = TextAnchor.MiddleLeft;
             _resultButtonStyle.wordWrap = false;
 
             _resultButtonActiveStyle = new GUIStyle(_resultButtonStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_resultButtonActiveStyle, _activeBackground);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_resultButtonActiveStyle, _activeBackground);
 
             _emptyStateStyle = new GUIStyle(GUI.skin.label);
             _emptyStateStyle.wordWrap = true;
-            GuiStyleUtil.ApplyTextColorToAllStates(_emptyStateStyle, CortexIdeLayout.GetMutedTextColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_emptyStateStyle, ImguiWorkbenchLayout.GetMutedTextColor());
 
             _actionButtonStyle = new GUIStyle(GUI.skin.button);
             _actionButtonStyle.alignment = TextAnchor.MiddleCenter;
-            GuiStyleUtil.ApplyTextColorToAllStates(_actionButtonStyle, CortexIdeLayout.GetTextColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_actionButtonStyle, ImguiWorkbenchLayout.GetTextColor());
         }
 
         private static Texture2D MakeFill(Color color)

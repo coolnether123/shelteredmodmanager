@@ -21,6 +21,7 @@ using Cortex.Services.Editor.Input;
 using Cortex.Services.Editor.Presentation;
 using Cortex.Services.Inspector.Identity;
 using Cortex.Services.Inspector.Lifecycle;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Modules.Editor
 {
@@ -405,8 +406,8 @@ namespace Cortex.Modules.Editor
             var caretIndex = session.EditorState != null ? session.EditorState.CaretIndex : 0;
             if (!TryBuildCommandTarget(session, state, editingEnabled, caretIndex, out barInvocation))
             {
-                // No identifier under the caret – use a minimal document-level
-                // target so generic actions (Copy, Paste, Undo, …) remain visible.
+                // No identifier under the caret Ã¢â‚¬â€œ use a minimal document-level
+                // target so generic actions (Copy, Paste, Undo, Ã¢â‚¬Â¦) remain visible.
                 barInvocation = BuildDocumentInvocation(session, state, editingEnabled, caretIndex);
             }
 
@@ -428,7 +429,7 @@ namespace Cortex.Modules.Editor
 
                 if (item.IsSeparator)
                 {
-                    // Visual gap between command groups – mirrors the context menu separator.
+                    // Visual gap between command groups Ã¢â‚¬â€œ mirrors the context menu separator.
                     GUILayout.Space(6f);
                     continue;
                 }
@@ -504,57 +505,57 @@ namespace Cortex.Modules.Editor
             _codeStyle.clipping = TextClipping.Overflow;
             _codeStyle.stretchWidth = false;
             _codeStyle.stretchHeight = false;
-            GuiStyleUtil.ApplyBackgroundToAllStates(_codeStyle, null);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_codeStyle, null);
 
             _gutterStyle = new GUIStyle(gutterStyle ?? GUI.skin.label);
             _gutterStyle.wordWrap = false;
             _gutterStyle.clipping = TextClipping.Clip;
             _classificationStyles.Clear();
             _lineHeight = _codeStyle.lineHeight > 0f ? Mathf.Max(DefaultLineHeight, _codeStyle.lineHeight + 2f) : DefaultLineHeight;
-            _selectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.30f));
-            _caretFill = MakeFill(CortexIdeLayout.GetAccentColor());
-            _caretReadyFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.38f));
-            _caretIndicatorFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), Color.white, 0.18f), 0.96f));
-            _currentLineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), 0.16f));
-            _currentLineEdgeFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f));
-            _relatedSelectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.14f));
-            _declarationOccurrenceFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), new Color(0.60f, 0.82f, 0.42f, 1f), 0.72f), 0.26f));
-            _selectedOccurrenceFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f));
-            _selectionOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.92f));
-            _completionPopupFill = MakeFill(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.55f));
-            _completionSelectedFill = MakeFill(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), CortexIdeLayout.GetSurfaceColor(), 0.22f));
-            _completionBorderFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.38f));
-            _methodTargetFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.10f));
-            _methodTargetOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.94f));
-            _methodTargetGlowFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), Color.white, 0.18f), 0.16f));
-            _surfaceFill = MakeFill(CortexIdeLayout.GetBackgroundColor());
+            _selectionFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.30f));
+            _caretFill = MakeFill(ImguiWorkbenchLayout.GetAccentColor());
+            _caretReadyFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.38f));
+            _caretIndicatorFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetAccentColor(), Color.white, 0.18f), 0.96f));
+            _currentLineFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetSurfaceColor(), 0.16f));
+            _currentLineEdgeFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.28f));
+            _relatedSelectionFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.14f));
+            _declarationOccurrenceFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetAccentColor(), new Color(0.60f, 0.82f, 0.42f, 1f), 0.72f), 0.26f));
+            _selectedOccurrenceFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.28f));
+            _selectionOutlineFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.92f));
+            _completionPopupFill = MakeFill(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetSurfaceColor(), ImguiWorkbenchLayout.GetHeaderColor(), 0.55f));
+            _completionSelectedFill = MakeFill(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetAccentColor(), ImguiWorkbenchLayout.GetSurfaceColor(), 0.22f));
+            _completionBorderFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.38f));
+            _methodTargetFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.10f));
+            _methodTargetOutlineFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.94f));
+            _methodTargetGlowFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetAccentColor(), Color.white, 0.18f), 0.16f));
+            _surfaceFill = MakeFill(ImguiWorkbenchLayout.GetBackgroundColor());
             _completionPopupStyle = new GUIStyle(GUI.skin.box);
             _completionPopupStyle.padding = new RectOffset(4, 4, 4, 4);
             _completionPopupStyle.margin = new RectOffset(0, 0, 0, 0);
             _completionPopupStyle.border = new RectOffset(1, 1, 1, 1);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_completionPopupStyle, _completionPopupFill);
-            GuiStyleUtil.ApplyTextColorToAllStates(_completionPopupStyle, CortexIdeLayout.GetTextColor());
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_completionPopupStyle, _completionPopupFill);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_completionPopupStyle, ImguiWorkbenchLayout.GetTextColor());
 
             _completionItemStyle = new GUIStyle(_codeStyle);
             _completionItemStyle.padding = new RectOffset(8, 8, 2, 2);
             _completionItemStyle.margin = new RectOffset(0, 0, 0, 0);
             _completionItemStyle.alignment = TextAnchor.MiddleLeft;
-            GuiStyleUtil.ApplyBackgroundToAllStates(_completionItemStyle, null);
-            GuiStyleUtil.ApplyTextColorToAllStates(_completionItemStyle, CortexIdeLayout.GetTextColor());
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_completionItemStyle, null);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_completionItemStyle, ImguiWorkbenchLayout.GetTextColor());
 
             _completionItemSelectedStyle = new GUIStyle(_completionItemStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_completionItemSelectedStyle, _completionSelectedFill);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_completionItemSelectedStyle, _completionSelectedFill);
 
             _completionDetailStyle = new GUIStyle(_completionItemStyle);
             _completionDetailStyle.alignment = TextAnchor.MiddleRight;
-            GuiStyleUtil.ApplyTextColorToAllStates(_completionDetailStyle, CortexIdeLayout.GetMutedTextColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_completionDetailStyle, ImguiWorkbenchLayout.GetMutedTextColor());
             _documentationStyle = new GUIStyle(_codeStyle);
             _documentationStyle.wordWrap = true;
             _documentationStyle.clipping = TextClipping.Clip;
-            GuiStyleUtil.ApplyTextColorToAllStates(_documentationStyle, CortexIdeLayout.GetTextColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_documentationStyle, ImguiWorkbenchLayout.GetTextColor());
             _inlineSuggestionStyle = new GUIStyle(_codeStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_inlineSuggestionStyle, null);
-            GuiStyleUtil.ApplyTextColorToAllStates(_inlineSuggestionStyle, CortexIdeLayout.WithAlpha(CortexIdeLayout.GetMutedTextColor(), 0.72f));
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_inlineSuggestionStyle, null);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_inlineSuggestionStyle, ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetMutedTextColor(), 0.72f));
             Invalidate();
         }
 
@@ -1623,8 +1624,8 @@ namespace Cortex.Modules.Editor
                     }
                 }
 
-                // Ctrl+Double-click → Go to Definition (Visual Studio convention).
-                // Plain double-click → word selection only; no navigation.
+                // Ctrl+Double-click Ã¢â€ â€™ Go to Definition (Visual Studio convention).
+                // Plain double-click Ã¢â€ â€™ word selection only; no navigation.
                 current.Use();
                 return;
             }
@@ -2950,7 +2951,7 @@ namespace Cortex.Modules.Editor
             style.richText = false;
             style.alignment = TextAnchor.UpperLeft;
             style.clipping = TextClipping.Overflow;
-            GuiStyleUtil.ApplyBackgroundToAllStates(style, null);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(style, null);
             _classificationStyles[key] = style;
             return style;
         }

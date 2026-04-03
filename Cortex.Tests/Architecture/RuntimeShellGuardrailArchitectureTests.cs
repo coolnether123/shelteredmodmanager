@@ -75,6 +75,7 @@ namespace Cortex.Tests.Architecture
                 "ImguiRenderPipeline",
                 "ImguiWorkbenchRuntimeUi",
                 "ShelteredWorkbenchUiSurface",
+                "ImguiWorkbenchUiSurface",
                 "ShelteredUnityHostComposition",
                 "ModApiCortexRuntimeBootstrap",
                 "using Cortex.Renderers.Imgui;",
@@ -231,10 +232,12 @@ namespace Cortex.Tests.Architecture
             var cortexProjectText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Cortex.csproj");
             var imguiShellProjectText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Shell.Unity.Imgui", "Cortex.Shell.Unity.Imgui.csproj");
             var clipboardServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Editor", "Commands", "EditorClipboardService.cs");
+            var layoutHelperText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Shell.Unity.Imgui", "Layout", "ImguiWorkbenchLayout.cs");
+            var styleHelperText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Shell.Unity.Imgui", "Styling", "ImguiStyleUtil.cs");
 
             Assert.DoesNotContain("Shell\\CortexShellBuiltInModuleContributions.cs", cortexProjectText);
             Assert.DoesNotContain("Shell\\CortexShellModuleCapabilities.cs", cortexProjectText);
-            Assert.DoesNotContain("Layout\\CortexIdeLayout.cs", cortexProjectText);
+            Assert.DoesNotContain("Layout\\ImguiWorkbenchLayout.cs", cortexProjectText);
             Assert.DoesNotContain("Modules\\Editor\\EditorModule.cs", cortexProjectText);
             Assert.DoesNotContain("Modules\\Editor\\EditorSurfaceRenderContext.cs", cortexProjectText);
             Assert.DoesNotContain("Modules\\Projects\\ProjectsModule.cs", cortexProjectText);
@@ -244,7 +247,8 @@ namespace Cortex.Tests.Architecture
 
             Assert.Contains("Shell\\CortexShellBuiltInModuleContributions.cs", imguiShellProjectText);
             Assert.Contains("Shell\\CortexShellModuleCapabilities.cs", imguiShellProjectText);
-            Assert.Contains("Layout\\CortexIdeLayout.cs", imguiShellProjectText);
+            Assert.Contains("Layout\\ImguiWorkbenchLayout.cs", imguiShellProjectText);
+            Assert.Contains("Styling\\ImguiStyleUtil.cs", imguiShellProjectText);
             Assert.Contains("Modules\\Editor\\EditorModule.cs", imguiShellProjectText);
             Assert.Contains("Modules\\Editor\\EditorSurfaceRenderContext.cs", imguiShellProjectText);
             Assert.Contains("Modules\\Projects\\ProjectsModule.cs", imguiShellProjectText);
@@ -254,11 +258,17 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("Services\\Editor\\Commands\\ImguiClipboardService.cs", imguiShellProjectText);
             Assert.DoesNotContain("using UnityEngine;", clipboardServiceText);
             Assert.Contains("MemoryClipboardService", clipboardServiceText);
+            Assert.Contains("namespace Cortex.Shell.Unity.Imgui", layoutHelperText);
+            Assert.Contains("namespace Cortex.Shell.Unity.Imgui", styleHelperText);
+            Assert.DoesNotContain("namespace Cortex\r\n{\r\n    public static class ImguiWorkbenchLayout", layoutHelperText);
+            Assert.DoesNotContain("namespace Cortex\r\n{\r\n    internal static class ImguiStyleUtil", styleHelperText);
 
-            Assert.False(File.Exists(ArchitectureTestEnvironment.GetRepoPath("Cortex", "GuiStyleUtil.cs")));
-            Assert.False(File.Exists(ArchitectureTestEnvironment.GetRepoPath("Cortex", "Layout", "CortexIdeLayout.cs")));
+            Assert.False(File.Exists(ArchitectureTestEnvironment.GetRepoPath("Cortex", "ImguiStyleUtil.cs")));
+            Assert.False(File.Exists(ArchitectureTestEnvironment.GetRepoPath("Cortex", "Styling", "ImguiStyleUtil.cs")));
+            Assert.False(File.Exists(ArchitectureTestEnvironment.GetRepoPath("Cortex", "Layout", "ImguiWorkbenchLayout.cs")));
             Assert.False(File.Exists(ArchitectureTestEnvironment.GetRepoPath("Cortex", "Modules", "Editor", "EditorSurfaceRenderContext.cs")));
-            Assert.True(File.Exists(ArchitectureTestEnvironment.GetRepoPath("Cortex.Shell.Unity.Imgui", "Layout", "CortexIdeLayout.cs")));
+            Assert.True(File.Exists(ArchitectureTestEnvironment.GetRepoPath("Cortex.Shell.Unity.Imgui", "Styling", "ImguiStyleUtil.cs")));
+            Assert.True(File.Exists(ArchitectureTestEnvironment.GetRepoPath("Cortex.Shell.Unity.Imgui", "Layout", "ImguiWorkbenchLayout.cs")));
             Assert.True(File.Exists(ArchitectureTestEnvironment.GetRepoPath("Cortex.Shell.Unity.Imgui", "Modules", "Editor", "EditorSurfaceRenderContext.cs")));
         }
 

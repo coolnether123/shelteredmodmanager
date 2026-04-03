@@ -262,10 +262,10 @@ namespace Cortex
 
             _frameSnapshot = BuildPresentationSnapshot();
             _layoutCoordinator.SynchronizeRuntimeLayoutState();
-            CortexIdeLayout.ApplyTheme(_frameSnapshot.ThemeTokens, _frameSnapshot.ActiveThemeId);
+            ImguiWorkbenchLayout.ApplyTheme(_frameSnapshot.ThemeTokens, _frameSnapshot.ActiveThemeId);
             EnsureStyles(_frameSnapshot.ThemeTokens, _frameSnapshot.ActiveThemeId);
             var previousSkin = GUI.skin;
-            GUI.skin = CortexIdeLayout.GetWorkbenchSkin(previousSkin);
+            GUI.skin = ImguiWorkbenchLayout.GetWorkbenchSkin(previousSkin);
             ClampWindowsToScreen();
             UpdateOverlayInputCapture();
             if (_viewState.MainWindow.IsCollapsed)
@@ -525,23 +525,23 @@ namespace Cortex
                 _appliedThemeId = effectiveThemeId;
             }
 
-            var textColor = CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.TextColor : string.Empty, new Color(0.96f, 0.96f, 0.96f, 1f));
-            var mutedTextColor = CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.MutedTextColor : string.Empty, new Color(0.72f, 0.76f, 0.82f, 1f));
-            var surfaceColor = CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.SurfaceColor : string.Empty, new Color(0.1f, 0.1f, 0.12f, 0.96f));
-            var backgroundColor = CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.BackgroundColor : string.Empty, new Color(0.05f, 0.05f, 0.07f, 0.97f));
-            var headerColor = CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.HeaderColor : string.Empty, new Color(0.16f, 0.17f, 0.2f, 1f));
-            var accentColor = CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.AccentColor : string.Empty, new Color(0.22f, 0.3f, 0.4f, 1f));
+            var textColor = ImguiWorkbenchLayout.ParseColor(themeTokens != null ? themeTokens.TextColor : string.Empty, new Color(0.96f, 0.96f, 0.96f, 1f));
+            var mutedTextColor = ImguiWorkbenchLayout.ParseColor(themeTokens != null ? themeTokens.MutedTextColor : string.Empty, new Color(0.72f, 0.76f, 0.82f, 1f));
+            var surfaceColor = ImguiWorkbenchLayout.ParseColor(themeTokens != null ? themeTokens.SurfaceColor : string.Empty, new Color(0.1f, 0.1f, 0.12f, 0.96f));
+            var backgroundColor = ImguiWorkbenchLayout.ParseColor(themeTokens != null ? themeTokens.BackgroundColor : string.Empty, new Color(0.05f, 0.05f, 0.07f, 0.97f));
+            var headerColor = ImguiWorkbenchLayout.ParseColor(themeTokens != null ? themeTokens.HeaderColor : string.Empty, new Color(0.16f, 0.17f, 0.2f, 1f));
+            var accentColor = ImguiWorkbenchLayout.ParseColor(themeTokens != null ? themeTokens.AccentColor : string.Empty, new Color(0.22f, 0.3f, 0.4f, 1f));
 
-            if (_titleStyle == null) { _titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Bold }; GuiStyleUtil.ApplyTextColorToAllStates(_titleStyle, textColor); }
-            if (_menuStyle == null) { _menuStyle = new GUIStyle(GUI.skin.label) { fontSize = 12, fontStyle = FontStyle.Normal, padding = new RectOffset(6, 6, 3, 3) }; GuiStyleUtil.ApplyTextColorToAllStates(_menuStyle, textColor); }
-            if (_statusStyle == null) { _statusStyle = new GUIStyle(GUI.skin.label) { wordWrap = true }; GuiStyleUtil.ApplyTextColorToAllStates(_statusStyle, CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.TextColor : string.Empty, new Color(0.88f, 0.88f, 0.9f, 1f))); }
-            if (_captionStyle == null) { _captionStyle = new GUIStyle(GUI.skin.label) { wordWrap = true }; GuiStyleUtil.ApplyTextColorToAllStates(_captionStyle, mutedTextColor); }
-            if (_sectionStyle == null) { _sectionStyle = new GUIStyle(GUI.skin.box); _sectionBackground = MakeTex(surfaceColor); GuiStyleUtil.ApplyBackgroundToAllStates(_sectionStyle, _sectionBackground); _sectionStyle.padding = new RectOffset(8, 8, 6, 6); _sectionStyle.margin = new RectOffset(0, 0, 0, 0); }
-            if (_windowStyle == null) { _windowBackground = MakeTex(surfaceColor); _windowStyle = new GUIStyle(GUI.skin.window); GuiStyleUtil.ApplyBackgroundToAllStates(_windowStyle, _windowBackground); GuiStyleUtil.ApplyTextColorToAllStates(_windowStyle, textColor); _windowStyle.padding = new RectOffset(6, 6, 24, 6); _windowStyle.margin = new RectOffset(0, 0, 0, 0); }
-            if (_tabStyle == null) { _tabBackground = MakeTex(headerColor); _tabStyle = new GUIStyle(GUI.skin.button); GuiStyleUtil.ApplyBackgroundToAllStates(_tabStyle, _tabBackground); GuiStyleUtil.ApplyTextColorToAllStates(_tabStyle, mutedTextColor); _tabStyle.alignment = TextAnchor.MiddleCenter; _tabStyle.padding = new RectOffset(10, 10, 5, 5); _tabStyle.margin = new RectOffset(0, 2, 0, 0); }
-            if (_activeTabStyle == null) { _tabActiveBackground = MakeTex(accentColor); _activeTabStyle = new GUIStyle(_tabStyle); GuiStyleUtil.ApplyBackgroundToAllStates(_activeTabStyle, _tabActiveBackground); GuiStyleUtil.ApplyTextColorToAllStates(_activeTabStyle, Color.white); _activeTabStyle.fontStyle = FontStyle.Bold; }
-            if (_tabCloseButtonStyle == null) { _tabCloseButtonStyle = new GUIStyle(GUI.skin.button) { alignment = TextAnchor.MiddleCenter, fontSize = 10, padding = new RectOffset(0, 0, 0, 0), margin = new RectOffset(0, 0, 0, 0) }; GuiStyleUtil.ApplyBackgroundToAllStates(_tabCloseButtonStyle, MakeTex(CortexIdeLayout.Blend(headerColor, backgroundColor, 0.45f))); GuiStyleUtil.ApplyTextColorToAllStates(_tabCloseButtonStyle, textColor); }
-            if (_collapsedWindowStyle == null) { _collapsedWindowBackground = MakeTex(CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.HeaderColor : string.Empty, new Color(0.09f, 0.11f, 0.15f, 0.98f))); _collapsedWindowStyle = new GUIStyle(GUI.skin.button) { alignment = TextAnchor.MiddleLeft, padding = new RectOffset(10, 10, 4, 4), fontStyle = FontStyle.Bold }; GuiStyleUtil.ApplyBackgroundToAllStates(_collapsedWindowStyle, _collapsedWindowBackground); GuiStyleUtil.ApplyTextColorToAllStates(_collapsedWindowStyle, textColor); }
+            if (_titleStyle == null) { _titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Bold }; ImguiStyleUtil.ApplyTextColorToAllStates(_titleStyle, textColor); }
+            if (_menuStyle == null) { _menuStyle = new GUIStyle(GUI.skin.label) { fontSize = 12, fontStyle = FontStyle.Normal, padding = new RectOffset(6, 6, 3, 3) }; ImguiStyleUtil.ApplyTextColorToAllStates(_menuStyle, textColor); }
+            if (_statusStyle == null) { _statusStyle = new GUIStyle(GUI.skin.label) { wordWrap = true }; ImguiStyleUtil.ApplyTextColorToAllStates(_statusStyle, ImguiWorkbenchLayout.ParseColor(themeTokens != null ? themeTokens.TextColor : string.Empty, new Color(0.88f, 0.88f, 0.9f, 1f))); }
+            if (_captionStyle == null) { _captionStyle = new GUIStyle(GUI.skin.label) { wordWrap = true }; ImguiStyleUtil.ApplyTextColorToAllStates(_captionStyle, mutedTextColor); }
+            if (_sectionStyle == null) { _sectionStyle = new GUIStyle(GUI.skin.box); _sectionBackground = MakeTex(surfaceColor); ImguiStyleUtil.ApplyBackgroundToAllStates(_sectionStyle, _sectionBackground); _sectionStyle.padding = new RectOffset(8, 8, 6, 6); _sectionStyle.margin = new RectOffset(0, 0, 0, 0); }
+            if (_windowStyle == null) { _windowBackground = MakeTex(surfaceColor); _windowStyle = new GUIStyle(GUI.skin.window); ImguiStyleUtil.ApplyBackgroundToAllStates(_windowStyle, _windowBackground); ImguiStyleUtil.ApplyTextColorToAllStates(_windowStyle, textColor); _windowStyle.padding = new RectOffset(6, 6, 24, 6); _windowStyle.margin = new RectOffset(0, 0, 0, 0); }
+            if (_tabStyle == null) { _tabBackground = MakeTex(headerColor); _tabStyle = new GUIStyle(GUI.skin.button); ImguiStyleUtil.ApplyBackgroundToAllStates(_tabStyle, _tabBackground); ImguiStyleUtil.ApplyTextColorToAllStates(_tabStyle, mutedTextColor); _tabStyle.alignment = TextAnchor.MiddleCenter; _tabStyle.padding = new RectOffset(10, 10, 5, 5); _tabStyle.margin = new RectOffset(0, 2, 0, 0); }
+            if (_activeTabStyle == null) { _tabActiveBackground = MakeTex(accentColor); _activeTabStyle = new GUIStyle(_tabStyle); ImguiStyleUtil.ApplyBackgroundToAllStates(_activeTabStyle, _tabActiveBackground); ImguiStyleUtil.ApplyTextColorToAllStates(_activeTabStyle, Color.white); _activeTabStyle.fontStyle = FontStyle.Bold; }
+            if (_tabCloseButtonStyle == null) { _tabCloseButtonStyle = new GUIStyle(GUI.skin.button) { alignment = TextAnchor.MiddleCenter, fontSize = 10, padding = new RectOffset(0, 0, 0, 0), margin = new RectOffset(0, 0, 0, 0) }; ImguiStyleUtil.ApplyBackgroundToAllStates(_tabCloseButtonStyle, MakeTex(ImguiWorkbenchLayout.Blend(headerColor, backgroundColor, 0.45f))); ImguiStyleUtil.ApplyTextColorToAllStates(_tabCloseButtonStyle, textColor); }
+            if (_collapsedWindowStyle == null) { _collapsedWindowBackground = MakeTex(ImguiWorkbenchLayout.ParseColor(themeTokens != null ? themeTokens.HeaderColor : string.Empty, new Color(0.09f, 0.11f, 0.15f, 0.98f))); _collapsedWindowStyle = new GUIStyle(GUI.skin.button) { alignment = TextAnchor.MiddleLeft, padding = new RectOffset(10, 10, 4, 4), fontStyle = FontStyle.Bold }; ImguiStyleUtil.ApplyBackgroundToAllStates(_collapsedWindowStyle, _collapsedWindowBackground); ImguiStyleUtil.ApplyTextColorToAllStates(_collapsedWindowStyle, textColor); }
         }
 
         private void DrawCollapsedWindowButton(CortexShellWindowViewState chromeState, string glyph, string title)
