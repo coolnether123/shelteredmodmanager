@@ -12,13 +12,14 @@ using Cortex.Services.Navigation;
 using Cortex.Services.Navigation.Metadata;
 using Cortex.Services.Editor.Context;
 using Cortex.Services.Semantics.Context;
-using UnityEngine;
+using Cortex.Rendering.Models;
 
 namespace Cortex.Shell
 {
     internal sealed class ShellBootstrapper
     {
         private readonly CortexShellState _state;
+        private readonly CortexShellViewState _viewState;
         private readonly CortexShellModuleContributionRegistry _moduleContributionRegistry;
         private readonly CortexShellModuleServices _moduleServices;
         private readonly CortexShellBuiltInModuleRegistrar _moduleRegistrar;
@@ -40,6 +41,7 @@ namespace Cortex.Shell
 
         public ShellBootstrapper(
             CortexShellState state,
+            CortexShellViewState viewState,
             CortexShellModuleContributionRegistry moduleContributionRegistry,
             CortexShellModuleServices moduleServices,
             CortexShellBuiltInModuleRegistrar moduleRegistrar,
@@ -50,6 +52,7 @@ namespace Cortex.Shell
             ILanguageEditorOperations languageEditorOperations)
         {
             _state = state;
+            _viewState = viewState ?? new CortexShellViewState();
             _moduleContributionRegistry = moduleContributionRegistry;
             _moduleServices = moduleServices;
             _moduleRegistrar = moduleRegistrar;
@@ -80,7 +83,7 @@ namespace Cortex.Shell
             _preferredLanguageProviderId = resolvedHostServices.PreferredLanguageProviderId ?? string.Empty;
         }
 
-        public void InitializeSettings(out Rect windowRect, out Rect logWindowRect)
+        public void InitializeSettings()
         {
             var hostEnvironment = _hostEnvironment ?? NullCortexHostServices.Instance.Environment;
             if (!string.IsNullOrEmpty(hostEnvironment.HostBinPath) && !Directory.Exists(hostEnvironment.HostBinPath))
@@ -92,9 +95,16 @@ namespace Cortex.Shell
             _workbenchPersistenceService = new JsonWorkbenchPersistenceService(hostEnvironment.WorkbenchPersistenceFilePath);
             var settings = BuildEffectiveSettings(_settingsStore.Load(), hostEnvironment);
             _state.Settings = settings;
-
-            windowRect = new Rect(settings.WindowX, settings.WindowY, settings.WindowWidth, settings.WindowHeight);
-            logWindowRect = new Rect(settings.WindowX + 30f, settings.WindowY + 30f, Math.Max(760f, settings.WindowWidth - 120f), Math.Max(460f, settings.WindowHeight - 140f));
+            InitializeWindowState(
+                _viewState.MainWindow,
+                new RenderRect(settings.WindowX, settings.WindowY, settings.WindowWidth, settings.WindowHeight));
+            InitializeWindowState(
+                _viewState.LogsWindow,
+                new RenderRect(
+                    settings.WindowX + 30f,
+                    settings.WindowY + 30f,
+                    Math.Max(760f, settings.WindowWidth - 120f),
+                    Math.Max(460f, settings.WindowHeight - 140f)));
         }
 
         public IWorkbenchRuntime InitializeRuntime()
@@ -196,33 +206,31 @@ namespace Cortex.Shell
                 new EditorCommandContextFactory(),
                 new EditorSymbolInteractionService());
 
-            return new ShellServiceMap
-            {
-                ProjectCatalog = projectCatalog,
-                LoadedModCatalog = platformModule.LoadedModCatalog,
-                SourceLookupIndex = sourceLookupIndex,
-                ProjectWorkspaceService = projectWorkspaceService,
-                WorkspaceBrowserService = workspaceBrowserService,
-                ReferenceCatalogService = referenceCatalogService,
-                DecompilerExplorerService = decompilerExplorerService,
-                DocumentService = documentService,
-                BuildCommandResolver = buildCommandResolver,
-                BuildExecutor = buildExecutor,
-                SourcePathResolver = sourcePathResolver,
-                SourceReferenceService = sourceReferenceService,
-                RuntimeLogFeed = platformModule.RuntimeLogFeed,
-                PathInteractionService = _pathInteractionService,
-                RuntimeToolBridge = platformModule.RuntimeToolBridge,
-                RestartCoordinator = platformModule.RestartCoordinator,
-                OverlayInputCaptureService = platformModule.OverlayInputCaptureService,
-                TextSearchService = new TextSearchService(),
-                NavigationService = navigationService,
-                FeatureRegistry = featureRegistry,
-                EditorContextService = editorContextService,
-                LanguageRuntimeControl = languageRuntimeControl,
-                LanguageRuntimeQuery = languageRuntimeQuery,
-                LanguageEditorOperations = languageEditorOperations
-            };
+            return new ShellServiceMap(
+                projectCatalog,
+                platformModule.LoadedModCatalog,
+                sourceLookupIndex,
+                projectWorkspaceService,
+                workspaceBrowserService,
+                referenceCatalogService,
+                decompilerExplorerService,
+                documentService,
+                buildCommandResolver,
+                buildExecutor,
+                sourcePathResolver,
+                sourceReferenceService,
+                platformModule.RuntimeLogFeed,
+                _pathInteractionService,
+                platformModule.RuntimeToolBridge,
+                platformModule.RestartCoordinator,
+                platformModule.OverlayInputCaptureService,
+                new TextSearchService(),
+                navigationService,
+                featureRegistry,
+                editorContextService,
+                languageRuntimeControl,
+                languageRuntimeQuery,
+                languageEditorOperations);
         }
 
         public CortexSettings BuildEffectiveSettings(CortexSettings settings, ICortexHostEnvironment hostEnvironment)
@@ -314,33 +322,100 @@ namespace Cortex.Shell
                 ? _preferredLanguageProviderId
                 : LanguageRuntimeConstants.NoneProviderId;
         }
+
+        private static void InitializeWindowState(CortexShellWindowViewState viewState, RenderRect expandedRect)
+        {
+            if (viewState == null)
+            {
+                return;
+            }
+
+            viewState.CurrentRect = expandedRect;
+            viewState.ExpandedRect = expandedRect;
+            viewState.CollapsedRect = CortexShellWindowViewState.BuildCollapsedRect(expandedRect, viewState.CollapsedWidth, viewState.CollapsedHeight);
+            viewState.IsCollapsed = false;
+        }
     }
 
     internal sealed class ShellServiceMap
     {
-        public IProjectCatalog ProjectCatalog;
-        public ILoadedModCatalog LoadedModCatalog;
-        public ISourceLookupIndex SourceLookupIndex;
-        public IProjectWorkspaceService ProjectWorkspaceService;
-        public IWorkspaceBrowserService WorkspaceBrowserService;
-        public IReferenceCatalogService ReferenceCatalogService;
-        public IDecompilerExplorerService DecompilerExplorerService;
-        public IDocumentService DocumentService;
-        public IBuildCommandResolver BuildCommandResolver;
-        public IBuildExecutor BuildExecutor;
-        public ISourcePathResolver SourcePathResolver;
-        public ISourceReferenceService SourceReferenceService;
-        public IRuntimeLogFeed RuntimeLogFeed;
-        public IPathInteractionService PathInteractionService;
-        public IRuntimeToolBridge RuntimeToolBridge;
-        public IRestartCoordinator RestartCoordinator;
-        public IOverlayInputCaptureService OverlayInputCaptureService;
-        public ITextSearchService TextSearchService;
-        public ICortexNavigationService NavigationService;
-        public ICortexPlatformFeatureRegistry FeatureRegistry;
-        public IEditorContextService EditorContextService;
-        public ILanguageRuntimeControl LanguageRuntimeControl;
-        public ILanguageRuntimeQuery LanguageRuntimeQuery;
-        public ILanguageEditorOperations LanguageEditorOperations;
+        public static readonly ShellServiceMap Empty = new ShellServiceMap();
+
+        public ShellServiceMap(
+            IProjectCatalog projectCatalog = null,
+            ILoadedModCatalog loadedModCatalog = null,
+            ISourceLookupIndex sourceLookupIndex = null,
+            IProjectWorkspaceService projectWorkspaceService = null,
+            IWorkspaceBrowserService workspaceBrowserService = null,
+            IReferenceCatalogService referenceCatalogService = null,
+            IDecompilerExplorerService decompilerExplorerService = null,
+            IDocumentService documentService = null,
+            IBuildCommandResolver buildCommandResolver = null,
+            IBuildExecutor buildExecutor = null,
+            ISourcePathResolver sourcePathResolver = null,
+            ISourceReferenceService sourceReferenceService = null,
+            IRuntimeLogFeed runtimeLogFeed = null,
+            IPathInteractionService pathInteractionService = null,
+            IRuntimeToolBridge runtimeToolBridge = null,
+            IRestartCoordinator restartCoordinator = null,
+            IOverlayInputCaptureService overlayInputCaptureService = null,
+            ITextSearchService textSearchService = null,
+            ICortexNavigationService navigationService = null,
+            ICortexPlatformFeatureRegistry featureRegistry = null,
+            IEditorContextService editorContextService = null,
+            ILanguageRuntimeControl languageRuntimeControl = null,
+            ILanguageRuntimeQuery languageRuntimeQuery = null,
+            ILanguageEditorOperations languageEditorOperations = null)
+        {
+            ProjectCatalog = projectCatalog;
+            LoadedModCatalog = loadedModCatalog;
+            SourceLookupIndex = sourceLookupIndex;
+            ProjectWorkspaceService = projectWorkspaceService;
+            WorkspaceBrowserService = workspaceBrowserService;
+            ReferenceCatalogService = referenceCatalogService;
+            DecompilerExplorerService = decompilerExplorerService;
+            DocumentService = documentService;
+            BuildCommandResolver = buildCommandResolver;
+            BuildExecutor = buildExecutor;
+            SourcePathResolver = sourcePathResolver;
+            SourceReferenceService = sourceReferenceService;
+            RuntimeLogFeed = runtimeLogFeed;
+            PathInteractionService = pathInteractionService;
+            RuntimeToolBridge = runtimeToolBridge;
+            RestartCoordinator = restartCoordinator;
+            OverlayInputCaptureService = overlayInputCaptureService;
+            TextSearchService = textSearchService;
+            NavigationService = navigationService;
+            FeatureRegistry = featureRegistry;
+            EditorContextService = editorContextService;
+            LanguageRuntimeControl = languageRuntimeControl;
+            LanguageRuntimeQuery = languageRuntimeQuery;
+            LanguageEditorOperations = languageEditorOperations;
+        }
+
+        public IProjectCatalog ProjectCatalog { get; }
+        public ILoadedModCatalog LoadedModCatalog { get; }
+        public ISourceLookupIndex SourceLookupIndex { get; }
+        public IProjectWorkspaceService ProjectWorkspaceService { get; }
+        public IWorkspaceBrowserService WorkspaceBrowserService { get; }
+        public IReferenceCatalogService ReferenceCatalogService { get; }
+        public IDecompilerExplorerService DecompilerExplorerService { get; }
+        public IDocumentService DocumentService { get; }
+        public IBuildCommandResolver BuildCommandResolver { get; }
+        public IBuildExecutor BuildExecutor { get; }
+        public ISourcePathResolver SourcePathResolver { get; }
+        public ISourceReferenceService SourceReferenceService { get; }
+        public IRuntimeLogFeed RuntimeLogFeed { get; }
+        public IPathInteractionService PathInteractionService { get; }
+        public IRuntimeToolBridge RuntimeToolBridge { get; }
+        public IRestartCoordinator RestartCoordinator { get; }
+        public IOverlayInputCaptureService OverlayInputCaptureService { get; }
+        public ITextSearchService TextSearchService { get; }
+        public ICortexNavigationService NavigationService { get; }
+        public ICortexPlatformFeatureRegistry FeatureRegistry { get; }
+        public IEditorContextService EditorContextService { get; }
+        public ILanguageRuntimeControl LanguageRuntimeControl { get; }
+        public ILanguageRuntimeQuery LanguageRuntimeQuery { get; }
+        public ILanguageEditorOperations LanguageEditorOperations { get; }
     }
 }

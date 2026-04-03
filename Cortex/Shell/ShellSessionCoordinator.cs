@@ -7,7 +7,7 @@ using Cortex.Core.Services;
 using Cortex.Presentation.Models;
 using Cortex.Presentation.Abstractions;
 using Cortex.Services.Navigation;
-using UnityEngine;
+using Cortex.Rendering.Models;
 
 namespace Cortex.Shell
 {
@@ -15,7 +15,7 @@ namespace Cortex.Shell
     {
         private const string DefaultWorkspaceId = "default";
         private readonly CortexShellState _state;
-        private readonly CortexShellLifecycleCoordinator _lifecycleCoordinator;
+        private readonly CortexShellViewState _viewState;
         private readonly Func<ICortexNavigationService> _navigationServiceProvider;
         private readonly Func<ILoadedModCatalog> _loadedModCatalogProvider;
         private readonly Func<IProjectCatalog> _projectCatalogProvider;
@@ -26,7 +26,7 @@ namespace Cortex.Shell
 
         public ShellSessionCoordinator(
             CortexShellState state,
-            CortexShellLifecycleCoordinator lifecycleCoordinator,
+            CortexShellViewState viewState,
             Func<ICortexNavigationService> navigationServiceProvider,
             Func<ILoadedModCatalog> loadedModCatalogProvider,
             Func<IProjectCatalog> projectCatalogProvider,
@@ -34,7 +34,7 @@ namespace Cortex.Shell
             Func<ICortexSettingsStore> settingsStoreProvider)
         {
             _state = state;
-            _lifecycleCoordinator = lifecycleCoordinator;
+            _viewState = viewState ?? new CortexShellViewState();
             _navigationServiceProvider = navigationServiceProvider;
             _loadedModCatalogProvider = loadedModCatalogProvider;
             _projectCatalogProvider = projectCatalogProvider;
@@ -46,26 +46,6 @@ namespace Cortex.Shell
         {
             get { return _visible; }
             set { _visible = value; }
-        }
-
-        public void Start(CortexShellController controller)
-        {
-            _lifecycleCoordinator.Start(controller);
-        }
-
-        public void Shutdown(CortexShellController controller)
-        {
-            _lifecycleCoordinator.Destroy(controller);
-        }
-
-        public void Update(CortexShellController controller)
-        {
-            _lifecycleCoordinator.Update(controller);
-        }
-
-        public void OnGui(CortexShellController controller)
-        {
-            _lifecycleCoordinator.OnGui(controller);
         }
 
         public void RestoreSession()
@@ -83,7 +63,7 @@ namespace Cortex.Shell
             _state.Workbench.SecondarySideContainerId = NormalizeWorkspaceContainer(persisted.SecondarySideContainerId, CortexWorkbenchIds.FileExplorerContainer);
             _state.Workbench.EditorContainerId = NormalizeContainerId(persisted.EditorContainerId, CortexWorkbenchIds.EditorContainer);
             _state.Workbench.PanelContainerId = NormalizeContainerId(persisted.PanelContainerId, CortexWorkbenchIds.LogsContainer);
-            _state.Logs.ShowDetachedWindow = persisted.ShowDetachedLogWindow;
+            _viewState.ShowDetachedLogsWindow = persisted.ShowDetachedLogWindow;
 
             var assignments = persisted.ContainerHostAssignments ?? new ContainerHostAssignment[0];
             foreach (var assignment in assignments)
@@ -151,7 +131,7 @@ namespace Cortex.Shell
                 SecondarySideContainerId = _state.Workbench.SecondarySideContainerId,
                 EditorContainerId = _state.Workbench.EditorContainerId,
                 PanelContainerId = _state.Workbench.PanelContainerId,
-                ShowDetachedLogWindow = _state.Logs.ShowDetachedWindow,
+                ShowDetachedLogWindow = _viewState.ShowDetachedLogsWindow,
                 SelectedProjectModId = _state.SelectedProject?.ModId ?? string.Empty,
                 SelectedProjectSourceRoot = _state.SelectedProject?.SourceRootPath ?? string.Empty,
                 ActiveDocumentPath = _state.Documents.ActiveDocumentPath ?? string.Empty,
@@ -166,16 +146,21 @@ namespace Cortex.Shell
             workbenchPersistenceService.Save(DefaultWorkspaceId, persistedState);
         }
 
-        public void PersistWindowSettings(Rect windowRect, bool isCollapsed, Rect expandedRect)
+        public void PersistWindowSettings()
         {
             var settingsStore = _settingsStoreProvider != null ? _settingsStoreProvider() : null;
-            if (_state.Settings == null || settingsStore == null) return;
+            if (_state.Settings == null || settingsStore == null || _viewState == null) return;
 
-            var persistedRect = isCollapsed ? expandedRect : windowRect;
-            _state.Settings.WindowX = persistedRect.x;
-            _state.Settings.WindowY = persistedRect.y;
-            _state.Settings.WindowWidth = persistedRect.width;
-            _state.Settings.WindowHeight = persistedRect.height;
+            var mainWindow = _viewState.MainWindow;
+            var persistedRect = mainWindow != null && mainWindow.IsCollapsed
+                ? mainWindow.ExpandedRect
+                : mainWindow != null
+                    ? mainWindow.CurrentRect
+                    : new RenderRect(_state.Settings.WindowX, _state.Settings.WindowY, _state.Settings.WindowWidth, _state.Settings.WindowHeight);
+            _state.Settings.WindowX = persistedRect.X;
+            _state.Settings.WindowY = persistedRect.Y;
+            _state.Settings.WindowWidth = persistedRect.Width;
+            _state.Settings.WindowHeight = persistedRect.Height;
             settingsStore.Save(_state.Settings);
         }
 

@@ -34,8 +34,8 @@ namespace Cortex
                 "cortex.logs.toggleWindow",
                 delegate(CommandExecutionContext context)
                 {
-                    commandContext.State.Logs.ShowDetachedWindow = !commandContext.State.Logs.ShowDetachedWindow;
-                    commandContext.State.StatusMessage = commandContext.State.Logs.ShowDetachedWindow ? "Detached logs opened." : "Detached logs hidden.";
+                    commandContext.ViewState.ShowDetachedLogsWindow = !commandContext.ViewState.ShowDetachedLogsWindow;
+                    commandContext.State.StatusMessage = commandContext.ViewState.ShowDetachedLogsWindow ? "Detached logs opened." : "Detached logs hidden.";
                 },
                 delegate(CommandExecutionContext context) { return true; });
 

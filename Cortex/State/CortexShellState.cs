@@ -2,23 +2,9 @@ using System;
 using System.Collections.Generic;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using UnityEngine;
 
 namespace Cortex
 {
-    public sealed class CortexWindowChromeState
-    {
-        public Rect ExpandedRect;
-        public Rect CollapsedRect;
-        public bool IsCollapsed;
-    }
-
-    public sealed class CortexWindowChromeWorkspaceState
-    {
-        public readonly CortexWindowChromeState Main = new CortexWindowChromeState();
-        public readonly CortexWindowChromeState Logs = new CortexWindowChromeState();
-    }
-
     public sealed class CortexWorkbenchSelectionState
     {
         public string FocusedContainerId = CortexWorkbenchIds.EditorContainer;
@@ -28,7 +14,6 @@ namespace Cortex
         public string PanelContainerId = CortexWorkbenchIds.LogsContainer;
         public string RequestedContainerId = string.Empty;
         public int RequestedTabIndex = -1;
-        public CortexLayoutNode LayoutRoot;
         public readonly Dictionary<string, WorkbenchHostLocation> HostOverrides = new Dictionary<string, WorkbenchHostLocation>(StringComparer.OrdinalIgnoreCase);
         public readonly HashSet<string> HiddenContainerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -284,7 +269,6 @@ namespace Cortex
     {
         public RuntimeLogEntry SelectedEntry;
         public int SelectedFrameIndex = -1;
-        public bool ShowDetachedWindow;
     }
 
     public sealed class CortexInterfaceDiagnosticState
@@ -318,7 +302,6 @@ namespace Cortex
 
     public sealed class CortexShellState
     {
-        public readonly CortexWindowChromeWorkspaceState Chrome = new CortexWindowChromeWorkspaceState();
         public readonly CortexWorkbenchSelectionState Workbench = new CortexWorkbenchSelectionState();
         public readonly CortexOnboardingState Onboarding = new CortexOnboardingState();
         public readonly CortexDocumentWorkspaceState Documents = new CortexDocumentWorkspaceState();
