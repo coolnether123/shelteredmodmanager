@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
+using Cortex.Shell;
 
 namespace Cortex.Services.Onboarding
 {
@@ -70,8 +71,6 @@ namespace Cortex.Services.Onboarding
             shellState.Workbench.FocusedContainerId = string.IsNullOrEmpty(focusedContainerId)
                 ? shellState.Workbench.EditorContainerId
                 : focusedContainerId;
-
-            shellState.Logs.ShowDetachedWindow = false;
 
             workbenchRuntime.LayoutState.HostDimensions.Clear();
             workbenchRuntime.LayoutState.PrimarySideWidth = layoutPreset.PrimarySideWidth > 0f ? layoutPreset.PrimarySideWidth : 360f;

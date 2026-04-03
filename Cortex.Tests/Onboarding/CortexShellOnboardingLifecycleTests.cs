@@ -30,6 +30,7 @@ namespace Cortex.Tests.Onboarding
                 var result = lifecycle.Preview(
                     context.Coordinator,
                     context.ShellState,
+                    context.ViewState,
                     context.Runtime,
                     context.Registry,
                     delegate(CortexOnboardingWorkspaceApplicationResult applicationResult)
@@ -70,6 +71,7 @@ namespace Cortex.Tests.Onboarding
                 var result = lifecycle.Complete(
                     context.Coordinator,
                     context.ShellState,
+                    context.ViewState,
                     context.Runtime,
                     context.Registry,
                     context.ProjectCatalog,
