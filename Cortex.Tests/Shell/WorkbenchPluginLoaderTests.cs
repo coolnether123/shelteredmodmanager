@@ -190,16 +190,15 @@ namespace Cortex.Tests.Shell
         {
             return new CortexShellModuleServices(
                 state,
-                new ShellServiceMap
-                {
-                    FeatureRegistry = new ShellFeatureRegistry(),
-                    ProjectCatalog = new EmptyProjectCatalog(),
-                    LoadedModCatalog = new InMemoryLoadedModCatalog(new List<LoadedModInfo>()),
-                    EditorContextService = new Cortex.Services.Semantics.Context.EditorContextService(
+                new CortexShellViewState(),
+                new ShellServiceMap(
+                    projectCatalog: new EmptyProjectCatalog(),
+                    loadedModCatalog: new InMemoryLoadedModCatalog(new List<LoadedModInfo>()),
+                    featureRegistry: new ShellFeatureRegistry(),
+                    editorContextService: new Cortex.Services.Semantics.Context.EditorContextService(
                         new EditorService(),
                         new Cortex.Services.Editor.Context.EditorCommandContextFactory(),
-                        new Cortex.Services.Editor.Context.EditorSymbolInteractionService())
-                },
+                        new Cortex.Services.Editor.Context.EditorSymbolInteractionService())),
                 delegate { return null; },
                 delegate { return runtime; },
                 delegate { return null; },
@@ -317,11 +316,6 @@ namespace Cortex.Tests.Shell
             public ThemeState ThemeState { get; private set; }
 
             public FocusState FocusState { get; private set; }
-
-            public Cortex.Presentation.Models.WorkbenchPresentationSnapshot CreateSnapshot()
-            {
-                return new Cortex.Presentation.Models.WorkbenchPresentationSnapshot();
-            }
         }
     }
 

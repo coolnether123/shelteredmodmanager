@@ -526,7 +526,7 @@ namespace Cortex.Tests.Shell
         {
             return new CortexLanguageRuntimeService(
                 state,
-                delegate { return new ShellServiceMap(); },
+                delegate { return ShellServiceMap.Empty; },
                 delegate { return false; },
                 delegate { },
                 delegate { },
@@ -544,6 +544,7 @@ namespace Cortex.Tests.Shell
             var runtimeAccess = new WorkbenchRuntimeAccess(state, delegate { return null; });
             return new ShellBootstrapper(
                 state,
+                new CortexShellViewState(),
                 new CortexShellModuleContributionRegistry(),
                 null,
                 new CortexShellBuiltInModuleRegistrar(),

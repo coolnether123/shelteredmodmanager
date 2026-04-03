@@ -333,9 +333,8 @@ namespace Cortex.Tests.Shell
 
         private static WorkbenchModuleRuntimeFactory CreateRuntimeFactory(CortexShellState state, TestWorkbenchRuntime workbenchRuntime)
         {
-            var services = new ShellServiceMap
-            {
-                ProjectCatalog = new InMemoryProjectCatalog(
+            var services = new ShellServiceMap(
+                projectCatalog: new InMemoryProjectCatalog(
                     new[]
                     {
                         new CortexProjectDefinition
@@ -345,7 +344,7 @@ namespace Cortex.Tests.Shell
                             ProjectFilePath = @"D:\Mods\Alpha\Alpha.csproj"
                         }
                     }),
-                LoadedModCatalog = new InMemoryLoadedModCatalog(
+                loadedModCatalog: new InMemoryLoadedModCatalog(
                     new List<LoadedModInfo>
                     {
                         new LoadedModInfo
@@ -355,12 +354,11 @@ namespace Cortex.Tests.Shell
                             RootPath = @"D:\Mods\Alpha"
                         }
                     }),
-                NavigationService = new FakeNavigationService(),
-                EditorContextService = new EditorContextService(
+                navigationService: new FakeNavigationService(),
+                editorContextService: new EditorContextService(
                     new EditorService(),
                     new EditorCommandContextFactory(),
-                    new EditorSymbolInteractionService())
-            };
+                    new EditorSymbolInteractionService()));
 
             return new WorkbenchModuleRuntimeFactory(state, services, delegate { return workbenchRuntime; });
         }
@@ -369,7 +367,7 @@ namespace Cortex.Tests.Shell
         {
             return new ShellSessionCoordinator(
                 state,
-                null,
+                new CortexShellViewState(),
                 delegate { return null; },
                 delegate { return null; },
                 delegate { return null; },
@@ -887,11 +885,6 @@ namespace Cortex.Tests.Shell
             public ThemeState ThemeState { get; private set; }
 
             public FocusState FocusState { get; private set; }
-
-            public WorkbenchPresentationSnapshot CreateSnapshot()
-            {
-                return new WorkbenchPresentationSnapshot();
-            }
         }
     }
 }

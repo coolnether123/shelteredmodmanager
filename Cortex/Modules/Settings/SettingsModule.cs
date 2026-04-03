@@ -10,9 +10,11 @@ using Cortex.Modules.Shared;
 using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
 using Cortex.Rendering.RuntimeUi;
+using Cortex.Shell;
 using UnityEngine;
 using Cortex.Services.Editor.Input;
 using Cortex.Services.Onboarding;
+using Cortex.Services.Settings;
 
 namespace Cortex.Modules.Settings
 {
@@ -36,18 +38,18 @@ namespace Cortex.Modules.Settings
         private bool _loaded;
         private Vector2 _navigationScroll = Vector2.zero;
         private Vector2 _contentScroll = Vector2.zero;
-        private readonly Dictionary<string, string> _textValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, bool> _toggleValues = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, string> _loadedSerializedValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, SettingValidationResult> _validationResults = new Dictionary<string, SettingValidationResult>(StringComparer.OrdinalIgnoreCase);
+        private readonly SettingsDocumentBuilder _documentBuilder = new SettingsDocumentBuilder();
+        private readonly SettingsSearchService _searchService = new SettingsSearchService();
+        private readonly SettingsDraftService _draftService = new SettingsDraftService();
+        private readonly SettingsContributionCollectionService _contributionCollectionService = new SettingsContributionCollectionService();
+        private readonly SettingsLoadedModLinkService _loadedModLinkService = new SettingsLoadedModLinkService();
+        private readonly SettingsDraftState _draftState = new SettingsDraftState();
         private readonly Dictionary<string, Vector2> _multilineEditorScrolls = new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
         private bool _preserveContentScrollForNestedEditor;
-        private readonly Dictionary<string, string> _loadedModPathDrafts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, float> _sectionAnchors = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, float> _navigationAnchors = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, bool> _navigationGroupExpanded = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _collapsedNavigationGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private string _selectedThemeId = string.Empty;
         private string _activeSectionId = WorkspaceOverviewSectionId;
         private string _pendingSectionJumpId = string.Empty;
         private string _settingsSearchQuery = string.Empty;
@@ -61,16 +63,22 @@ namespace Cortex.Modules.Settings
         private IPathInteractionService _pathInteractionService;
         private WorkbenchPresentationSnapshot _snapshot;
         private CortexShellState _shellState;
+        private CortexShellViewState _viewState;
         private IWorkbenchUiSurface _uiSurface;
         private readonly IEditorKeybindingService _editorKeybindingService = new EditorKeybindingService();
-        private readonly CortexLoadedModSourceLinkService _loadedModSourceLinkService = new CortexLoadedModSourceLinkService();
+        private IDictionary<string, string> _textValues { get { return _draftState.TextValues; } }
+        private IDictionary<string, bool> _toggleValues { get { return _draftState.ToggleValues; } }
+        private IDictionary<string, string> _loadedSerializedValues { get { return _draftState.LoadedSerializedValues; } }
+        private IDictionary<string, SettingValidationResult> _validationResults { get { return _draftState.ValidationResults; } }
+        private IDictionary<string, string> _loadedModPathDrafts { get { return _draftState.LoadedModPathDrafts; } }
+        private string _selectedThemeId { get { return _draftState.SelectedThemeId; } set { _draftState.SelectedThemeId = value ?? string.Empty; } }
 
         private IWorkbenchUiSurface UiSurface
         {
             get { return _uiSurface ?? NullWorkbenchUiSurface.Instance; }
         }
 
-        public void Draw(
+        internal void Draw(
             ICortexSettingsStore settingsStore,
             IProjectCatalog projectCatalog,
             IProjectWorkspaceService workspaceService,
@@ -79,6 +87,7 @@ namespace Cortex.Modules.Settings
             WorkbenchPresentationSnapshot snapshot,
             ThemeState themeState,
             CortexShellState state,
+            CortexShellViewState viewState,
             IWorkbenchUiSurface uiSurface)
         {
             _projectCatalog = projectCatalog;
@@ -87,10 +96,11 @@ namespace Cortex.Modules.Settings
             _pathInteractionService = pathInteractionService;
             _snapshot = snapshot;
             _shellState = state;
+            _viewState = viewState;
             _uiSurface = uiSurface ?? NullWorkbenchUiSurface.Instance;
             EnsureLoaded(snapshot, themeState, state);
 
-            var document = BuildDocument(snapshot);
+            var document = _documentBuilder.BuildDocument(snapshot);
             var renderActiveSectionId = ResolveRenderActiveSectionId(document);
             var navigationInteraction = new NavigationInteraction();
 
@@ -163,7 +173,7 @@ namespace Cortex.Modules.Settings
             }, GUILayout.Height(56f), GUILayout.ExpandWidth(true));
         }
 
-        private void DrawSearchBar(SettingsDocument document)
+        private void DrawSearchBar(SettingsDocumentModel document)
         {
             _settingsSearchQuery = UiSurface
                 .DrawSearchToolbar("Search properties", _settingsSearchQuery, 42f, true);
@@ -178,7 +188,7 @@ namespace Cortex.Modules.Settings
             }, GUILayout.Height(34f), GUILayout.ExpandWidth(true));
         }
 
-        private void DrawNavigation(SettingsDocument document, string renderActiveSectionId, NavigationInteraction interaction)
+        private void DrawNavigation(SettingsDocumentModel document, string renderActiveSectionId, NavigationInteraction interaction)
         {
             CortexIdeLayout.DrawGroup(null, delegate
             {
@@ -207,7 +217,7 @@ namespace Cortex.Modules.Settings
             }, GUILayout.Width(NavigationWidth + 16f), GUILayout.ExpandHeight(true));
         }
 
-        private void DrawNavigationGroup(SettingsNavigationGroup group, string renderActiveSectionId, NavigationInteraction interaction)
+        private void DrawNavigationGroup(SettingsNavigationGroupModel group, string renderActiveSectionId, NavigationInteraction interaction)
         {
             if (group == null || group.Sections.Count == 0)
             {
@@ -267,7 +277,7 @@ namespace Cortex.Modules.Settings
             GUILayout.Space(8f);
         }
 
-        private void DrawNavigationButton(SettingsSection section, float indent, string renderActiveSectionId, NavigationInteraction interaction)
+        private void DrawNavigationButton(SettingsSectionModel section, float indent, string renderActiveSectionId, NavigationInteraction interaction)
         {
             if (section == null)
             {
@@ -283,7 +293,7 @@ namespace Cortex.Modules.Settings
             GUILayout.Space(2f);
         }
 
-        private void DrawCollapsedActiveSection(SettingsSection activeSection)
+        private void DrawCollapsedActiveSection(SettingsSectionModel activeSection)
         {
             if (activeSection == null)
             {
@@ -298,7 +308,7 @@ namespace Cortex.Modules.Settings
             WorkbenchPresentationSnapshot snapshot,
             ThemeState themeState,
             CortexShellState state,
-            SettingsDocument document,
+            SettingsDocumentModel document,
             string renderActiveSectionId)
         {
             CortexIdeLayout.DrawGroup(null, delegate
@@ -336,7 +346,7 @@ namespace Cortex.Modules.Settings
         }
 
         private void DrawDocumentSection(
-            SettingsSection section,
+            SettingsSectionModel section,
             ICortexSettingsStore settingsStore,
             WorkbenchPresentationSnapshot snapshot,
             ThemeState themeState,
@@ -344,10 +354,7 @@ namespace Cortex.Modules.Settings
         {
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
             UiSurface.DrawSectionHeader(section.Title, section.Description);
-            if (section.DrawBody != null)
-            {
-                section.DrawBody(settingsStore, snapshot, themeState, state);
-            }
+            DrawDocumentSectionBody(section, settingsStore, snapshot, themeState, state);
             GUILayout.EndVertical();
 
             var rect = GUILayoutUtility.GetLastRect();
@@ -355,401 +362,59 @@ namespace Cortex.Modules.Settings
             GUILayout.Space(18f);
         }
 
-        private SettingsDocument BuildDocument(WorkbenchPresentationSnapshot snapshot)
+        private void DrawDocumentSectionBody(
+            SettingsSectionModel section,
+            ICortexSettingsStore settingsStore,
+            WorkbenchPresentationSnapshot snapshot,
+            ThemeState themeState,
+            CortexShellState state)
         {
-            var document = new SettingsDocument();
-            document.Sections.Add(CreateWorkspaceOverviewSection());
-            document.Sections.Add(CreateWorkspacePathsSection());
-            if (HasVisibleContributionsForScope(snapshot, "Workspace"))
-            {
-                document.Sections.Add(CreateWorkspaceSettingsSection(snapshot));
-            }
-            document.Sections.Add(CreateWorkspaceModLinksSection());
-            document.Sections.Add(CreateWorkspaceCurrentPathsSection());
-            var contributedSections = new List<SettingsSection>();
-
-            var seenScopes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (snapshot != null)
-            {
-                for (var i = 0; i < snapshot.Settings.Count; i++)
-                {
-                    var contribution = snapshot.Settings[i];
-                    if (contribution == null || string.IsNullOrEmpty(contribution.SettingId) || IsThemeSetting(contribution))
-                    {
-                        continue;
-                    }
-
-                    var scope = GetContributionScope(contribution);
-                    if (!seenScopes.Add(scope) || !HasVisibleContributionsForScope(snapshot, scope))
-                    {
-                        continue;
-                    }
-
-                    contributedSections.Add(CreateContributionSection(snapshot, scope));
-                }
-            }
-
-            contributedSections.Sort(delegate(SettingsSection left, SettingsSection right)
-            {
-                var order = GetGroupSortOrder(left != null ? left.GroupId : string.Empty)
-                    .CompareTo(GetGroupSortOrder(right != null ? right.GroupId : string.Empty));
-                if (order != 0)
-                {
-                    return order;
-                }
-
-                order = (left != null ? left.SortOrder : int.MaxValue)
-                    .CompareTo(right != null ? right.SortOrder : int.MaxValue);
-                if (order != 0)
-                {
-                    return order;
-                }
-
-                return string.Compare(
-                    left != null ? left.Title : string.Empty,
-                    right != null ? right.Title : string.Empty,
-                    StringComparison.OrdinalIgnoreCase);
-            });
-
-            for (var i = 0; i < contributedSections.Count; i++)
-            {
-                document.Sections.Add(contributedSections[i]);
-            }
-
-            document.Sections.Add(CreateOnboardingSection());
-            document.Sections.Add(CreateThemesSection());
-            document.Sections.Add(CreateKeybindingsSection());
-            document.Sections.Add(CreateEditorsSection());
-            document.Sections.Add(CreateActionsSection());
-            BuildNavigationGroups(document);
-            SynchronizeDocumentSectionOrder(document);
-            return document;
-        }
-
-        private void BuildNavigationGroups(SettingsDocument document)
-        {
-            var groupsById = new Dictionary<string, SettingsNavigationGroup>(StringComparer.OrdinalIgnoreCase);
-            for (var i = 0; i < document.Sections.Count; i++)
-            {
-                var section = document.Sections[i];
-                var groupId = string.IsNullOrEmpty(section.GroupId) ? "general" : section.GroupId;
-                SettingsNavigationGroup group;
-                if (!groupsById.TryGetValue(groupId, out group))
-                {
-                    group = new SettingsNavigationGroup(groupId, section.GroupTitle, GetGroupSortOrder(groupId));
-                    groupsById[groupId] = group;
-                    document.Groups.Add(group);
-                }
-
-                group.Sections.Add(section);
-            }
-
-            for (var i = 0; i < document.Groups.Count; i++)
-            {
-                document.Groups[i].Sections.Sort(delegate(SettingsSection left, SettingsSection right)
-                {
-                    var order = (left != null ? left.SortOrder : int.MaxValue)
-                        .CompareTo(right != null ? right.SortOrder : int.MaxValue);
-                    return order != 0
-                        ? order
-                        : string.Compare(left != null ? left.Title : string.Empty, right != null ? right.Title : string.Empty, StringComparison.OrdinalIgnoreCase);
-                });
-            }
-
-            document.Groups.Sort(delegate(SettingsNavigationGroup left, SettingsNavigationGroup right)
-            {
-                var order = left.SortOrder.CompareTo(right.SortOrder);
-                return order != 0
-                    ? order
-                    : string.Compare(left.Title, right.Title, StringComparison.OrdinalIgnoreCase);
-            });
-        }
-
-        private static void SynchronizeDocumentSectionOrder(SettingsDocument document)
-        {
-            if (document == null || document.Groups.Count == 0)
+            if (section == null)
             {
                 return;
             }
 
-            var orderedSections = new List<SettingsSection>();
-            for (var i = 0; i < document.Groups.Count; i++)
+            switch (section.SectionKind)
             {
-                var group = document.Groups[i];
-                if (group == null || group.Sections == null)
-                {
-                    continue;
-                }
-
-                for (var j = 0; j < group.Sections.Count; j++)
-                {
-                    if (group.Sections[j] != null)
-                    {
-                        orderedSections.Add(group.Sections[j]);
-                    }
-                }
-            }
-
-            document.Sections.Clear();
-            for (var i = 0; i < orderedSections.Count; i++)
-            {
-                document.Sections.Add(orderedSections[i]);
-            }
-        }
-
-        private static List<SettingsSection> GetOrderedSections(SettingsDocument document)
-        {
-            var orderedSections = new List<SettingsSection>();
-            if (document == null)
-            {
-                return orderedSections;
-            }
-
-            var seenSectionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (document.Groups != null && document.Groups.Count > 0)
-            {
-                for (var i = 0; i < document.Groups.Count; i++)
-                {
-                    var group = document.Groups[i];
-                    if (group == null || group.Sections == null)
-                    {
-                        continue;
-                    }
-
-                    for (var j = 0; j < group.Sections.Count; j++)
-                    {
-                        var section = group.Sections[j];
-                        if (section == null)
-                        {
-                            continue;
-                        }
-
-                        var sectionId = section.SectionId ?? string.Empty;
-                        if (seenSectionIds.Add(sectionId))
-                        {
-                            orderedSections.Add(section);
-                        }
-                    }
-                }
-            }
-
-            if (orderedSections.Count > 0)
-            {
-                return orderedSections;
-            }
-
-            if (document.Sections == null)
-            {
-                return orderedSections;
-            }
-
-            for (var i = 0; i < document.Sections.Count; i++)
-            {
-                if (document.Sections[i] != null)
-                {
-                    orderedSections.Add(document.Sections[i]);
-                }
-            }
-
-            return orderedSections;
-        }
-
-        private SettingsSection CreateWorkspaceOverviewSection()
-        {
-            return new SettingsSection(
-                WorkspaceOverviewSectionId,
-                "workspace",
-                "Workspace",
-                "Workspace",
-                "General",
-                "Configure where Cortex finds editable sources and how the settings document is organized.",
-                "workspace general source setup overview project roots",
-                0,
-                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
-                {
+                case SettingsSectionKind.WorkspaceOverview:
                     DrawSourceSetupGuide();
-                });
-        }
-
-        private SettingsSection CreateWorkspacePathsSection()
-        {
-            return new SettingsSection(
-                SourceSetupSectionId + ".paths",
-                "workspace",
-                "Workspace",
-                "Workspace",
-                "Paths",
-                "Configure the main folders Cortex uses for source resolution, mod discovery, and reference browsing.",
-                "workspace paths folders source roots runtime content reference assemblies additional roots",
-                10,
-                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
-                {
+                    return;
+                case SettingsSectionKind.WorkspacePaths:
                     DrawWorkspacePathEditors(snapshot, state);
-                });
-        }
-
-        private SettingsSection CreateWorkspaceSettingsSection(WorkbenchPresentationSnapshot snapshot)
-        {
-            return new SettingsSection(
-                SourceSetupSectionId + ".settings",
-                "workspace",
-                "Workspace",
-                "Workspace",
-                "Advanced",
-                "Additional workspace settings contributed by Cortex modules and extensions.",
-                BuildScopeSearchText(snapshot, "Workspace"),
-                20,
-                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot innerSnapshot, ThemeState themeState, CortexShellState state)
-                {
-                    DrawWorkspaceContributionEditors(innerSnapshot, state);
-                });
-        }
-
-        private SettingsSection CreateWorkspaceModLinksSection()
-        {
-            return new SettingsSection(
-                SourceSetupSectionId + ".mods",
-                "workspace",
-                "Workspace",
-                "Workspace",
-                "Loaded Content",
-                "Bind active content items to editable source roots so navigation and project discovery can resolve correctly.",
-                "workspace loaded content links source links active content source mapping",
-                30,
-                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
-                {
+                    return;
+                case SettingsSectionKind.WorkspaceSettingsContributions:
+                    DrawWorkspaceContributionEditors(snapshot, state);
+                    return;
+                case SettingsSectionKind.WorkspaceModLinks:
                     DrawLoadedModMappings(state);
-                });
-        }
-
-        private SettingsSection CreateWorkspaceCurrentPathsSection()
-        {
-            return new SettingsSection(
-                SourceSetupSectionId + ".facts",
-                "workspace",
-                "Workspace",
-                "Workspace",
-                "Current Values",
-                "Review the effective workspace-related paths currently loaded into the shell.",
-                "workspace current paths values effective paths facts",
-                40,
-                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
-                {
+                    return;
+                case SettingsSectionKind.WorkspaceCurrentPaths:
                     DrawQuickFacts(state);
-                });
-        }
-
-        private SettingsSection CreateContributionSection(WorkbenchPresentationSnapshot snapshot, string scope)
-        {
-            var sectionContribution = FindSettingSectionContribution(snapshot, scope);
-            return new SettingsSection(
-                sectionContribution != null && !string.IsNullOrEmpty(sectionContribution.SectionId)
-                    ? sectionContribution.SectionId
-                    : "scope." + scope.ToLowerInvariant(),
-                sectionContribution != null && !string.IsNullOrEmpty(sectionContribution.GroupId)
-                    ? sectionContribution.GroupId
-                    : ClassifySectionGroupId(scope),
-                sectionContribution != null && !string.IsNullOrEmpty(sectionContribution.GroupTitle)
-                    ? sectionContribution.GroupTitle
-                    : ClassifySectionGroupTitle(scope),
-                scope,
-                sectionContribution != null && !string.IsNullOrEmpty(sectionContribution.SectionTitle)
-                    ? sectionContribution.SectionTitle
-                    : scope,
-                sectionContribution != null && !string.IsNullOrEmpty(sectionContribution.Description)
-                    ? sectionContribution.Description
-                    : BuildScopeDescription(scope),
-                BuildScopeSearchText(snapshot, scope) + " " + BuildKeywordsText(sectionContribution != null ? sectionContribution.Keywords : null),
-                sectionContribution != null ? sectionContribution.SortOrder : 0,
-                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot innerSnapshot, ThemeState themeState, CortexShellState state)
-                {
-                    DrawContributionScope(innerSnapshot, scope, state);
-                });
-        }
-
-        private SettingsSection CreateThemesSection()
-        {
-            return new SettingsSection(
-                ThemesSectionId,
-                "appearance",
-                "Appearance",
-                "Appearance",
-                "Themes",
-                "Manage the registered workbench themes and choose the active shell theme.",
-                "appearance themes colors theme catalog shell theme",
-                0,
-                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
-                {
-                    DrawThemeRegistry(snapshot, themeState, state);
-                });
-        }
-
-        private SettingsSection CreateOnboardingSection()
-        {
-            return new SettingsSection(
-                OnboardingSectionId,
-                "shell",
-                "Shell",
-                "Shell",
-                "Onboarding",
-                "Reopen the Cortex onboarding flow and review the current startup selections.",
-                "onboarding setup welcome wizard profile layout theme reopen rerun defaults",
-                -10,
-                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
-                {
+                    return;
+                case SettingsSectionKind.ContributionScope:
+                    DrawContributionScope(snapshot, section.ContributionScope, state);
+                    return;
+                case SettingsSectionKind.Onboarding:
                     DrawOnboardingSettings(state);
-                });
-        }
-
-        private SettingsSection CreateKeybindingsSection()
-        {
-            return new SettingsSection(
-                KeybindingsSectionId,
-                "editor",
-                "Editor",
-                "Editor",
-                "Keybindings",
-                "Configure editor shortcuts, multi-caret commands, and undo history.",
-                "editor keybindings shortcuts undo history input commands",
-                10,
-                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
-                {
+                    return;
+                case SettingsSectionKind.Themes:
+                    DrawThemeRegistry(snapshot, themeState, state);
+                    return;
+                case SettingsSectionKind.Keybindings:
                     DrawEditorKeybindings(state);
-                });
-        }
-
-        private SettingsSection CreateEditorsSection()
-        {
-            return new SettingsSection(
-                EditorsSectionId,
-                "editor",
-                "Editor",
-                "Editor",
-                "Registered Editors",
-                "Review the editors and content handlers currently available in Cortex.",
-                "editor registered editors content handlers extensions content types",
-                20,
-                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
-                {
+                    return;
+                case SettingsSectionKind.Editors:
                     DrawEditorRegistry(snapshot);
-                });
+                    return;
+                case SettingsSectionKind.Actions:
+                    DrawActionsPanel(state);
+                    return;
+            }
         }
 
-        private SettingsSection CreateActionsSection()
+        private List<SettingsSectionModel> GetOrderedSections(SettingsDocumentModel document)
         {
-            return new SettingsSection(
-                ActionsSectionId,
-                "shell",
-                "Shell",
-                "Shell",
-                "Actions",
-                "Convenience actions related to windows, logs, and the shell.",
-                "shell actions logs return to editor window actions",
-                0,
-                delegate(ICortexSettingsStore store, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
-                {
-                    DrawActionsPanel(state);
-                });
+            return _searchService.GetOrderedSections(document);
         }
 
         private void DrawSourceSetupGuide()
@@ -851,76 +516,17 @@ namespace Cortex.Modules.Settings
 
         private List<SettingContribution> CollectContributionsForScope(WorkbenchPresentationSnapshot snapshot, string scope)
         {
-            var results = new List<SettingContribution>();
-            if (snapshot == null || snapshot.Settings.Count == 0)
-            {
-                return results;
-            }
-
-            for (var i = 0; i < snapshot.Settings.Count; i++)
-            {
-                var contribution = snapshot.Settings[i];
-                if (!ShouldRenderContribution(scope, contribution) || !IsContributionVisible(contribution))
-                {
-                    continue;
-                }
-
-                results.Add(contribution);
-            }
-
-            return results;
+            return _contributionCollectionService.CollectVisibleContributionsForScope(snapshot, scope, IsContributionVisible);
         }
 
         private bool HasVisibleContributionsForScope(WorkbenchPresentationSnapshot snapshot, string scope)
         {
-            if (snapshot == null || snapshot.Settings.Count == 0)
-            {
-                return false;
-            }
-
-            for (var i = 0; i < snapshot.Settings.Count; i++)
-            {
-                if (ShouldRenderContribution(scope, snapshot.Settings[i]) && IsContributionVisible(snapshot.Settings[i]))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return _contributionCollectionService.HasVisibleContributionsForScope(snapshot, scope, IsContributionVisible);
         }
 
-        private static bool ShouldRenderContribution(string scope, SettingContribution contribution)
+        private bool ShouldRenderContribution(string scope, SettingContribution contribution)
         {
-            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId) || IsThemeSetting(contribution))
-            {
-                return false;
-            }
-
-            if (!string.Equals(GetContributionScope(contribution), scope, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            if (string.Equals(scope, "Workspace", StringComparison.OrdinalIgnoreCase) &&
-                IsWorkspacePathContribution(contribution))
-            {
-                return false;
-            }
-
-            return true;
-        }
-
-        private static bool IsWorkspacePathContribution(SettingContribution contribution)
-        {
-            if (contribution == null)
-            {
-                return false;
-            }
-
-            return string.Equals(contribution.SettingId, WorkspaceRootSettingId, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(contribution.SettingId, RuntimeContentRootSettingId, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(contribution.SettingId, ReferenceAssemblyRootSettingId, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(contribution.SettingId, AdditionalSourceRootsSettingId, StringComparison.OrdinalIgnoreCase);
+            return _contributionCollectionService.ShouldRenderContribution(scope, contribution);
         }
 
         private void DrawSettingPathEditor(WorkbenchPresentationSnapshot snapshot, string settingId, string label, string description)
@@ -1022,31 +628,13 @@ namespace Cortex.Modules.Settings
                 return;
             }
 
-            _textValues.Clear();
-            _toggleValues.Clear();
-            _loadedSerializedValues.Clear();
-            _validationResults.Clear();
-            _loadedModPathDrafts.Clear();
+            _draftService.Initialize(_draftState, snapshot, themeState, state != null ? state.Settings : null);
             _navigationGroupExpanded.Clear();
             _collapsedNavigationGroups.Clear();
             _openSettingActionMenuId = string.Empty;
             _lastNormalizedSearchQuery = string.Empty;
 
             var settings = state.Settings ?? new CortexSettings();
-            if (snapshot != null)
-            {
-                for (var i = 0; i < snapshot.Settings.Count; i++)
-                {
-                    LoadContributionValue(snapshot.Settings[i], settings);
-                }
-            }
-
-            _textValues["editor.undo.limit"] = settings.EditorUndoHistoryLimit.ToString();
-            _selectedThemeId = !string.IsNullOrEmpty(settings.ThemeId)
-                ? settings.ThemeId
-                : themeState != null && !string.IsNullOrEmpty(themeState.ThemeId)
-                    ? themeState.ThemeId
-                    : "cortex.vs-dark";
             LoadNavigationGroupState(settings);
             _settingsSearchQuery = settings.SettingsSearchQuery ?? string.Empty;
             _appliedSettingsSearchQuery = settings.SettingsSearchQuery ?? string.Empty;
@@ -1267,7 +855,10 @@ namespace Cortex.Modules.Settings
                 }
                 if (GUILayout.Button("Show Logs Window", GUILayout.Width(180f), GUILayout.Height(24f)))
                 {
-                    state.Logs.ShowDetachedWindow = true;
+                    if (_viewState != null)
+                    {
+                        _viewState.ShowDetachedLogsWindow = true;
+                    }
                 }
                 GUILayout.EndHorizontal();
             });
@@ -1760,19 +1351,7 @@ namespace Cortex.Modules.Settings
 
         private void SetDraftSerializedValue(SettingContribution contribution, string serializedValue)
         {
-            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
-            {
-                return;
-            }
-
-            serializedValue = NormalizeSerializedValue(contribution, serializedValue);
-            if (contribution.ValueKind == SettingValueKind.Boolean)
-            {
-                _toggleValues[contribution.SettingId] = string.Equals(serializedValue, "true", StringComparison.OrdinalIgnoreCase);
-                return;
-            }
-
-            _textValues[contribution.SettingId] = serializedValue;
+            _draftService.SetDraftSerializedValue(_draftState, contribution, serializedValue);
         }
 
         private bool IsSearchActive()
@@ -1782,157 +1361,12 @@ namespace Cortex.Modules.Settings
 
         private bool IsSettingModified(SettingContribution contribution)
         {
-            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
-            {
-                return false;
-            }
-
-            string loadedValue;
-            if (!_loadedSerializedValues.TryGetValue(contribution.SettingId, out loadedValue))
-            {
-                loadedValue = ReadPersistedContributionValue(contribution, _shellState != null ? _shellState.Settings : null);
-                _loadedSerializedValues[contribution.SettingId] = loadedValue;
-            }
-
-            return !string.Equals(
-                NormalizeSerializedValue(contribution, loadedValue),
-                GetSerializedDraftValue(contribution),
-                StringComparison.Ordinal);
+            return _draftService.IsSettingModified(_draftState, contribution, _shellState != null ? _shellState.Settings : null);
         }
 
         private SettingValidationResult GetValidationResult(SettingContribution contribution)
         {
-            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
-            {
-                return null;
-            }
-
-            var serializedValue = GetSerializedDraftValue(contribution);
-            var result = contribution.ValidateValue != null
-                ? contribution.ValidateValue(serializedValue)
-                : BuildDefaultValidationResult(contribution, serializedValue);
-
-            _validationResults[contribution.SettingId] = result ?? new SettingValidationResult
-            {
-                Severity = SettingValidationSeverity.None,
-                Message = string.Empty
-            };
-
-            return result;
-        }
-
-        private SettingValidationResult BuildDefaultValidationResult(SettingContribution contribution, string serializedValue)
-        {
-            if (contribution == null)
-            {
-                return null;
-            }
-
-            if (contribution.IsRequired && IsNullOrWhiteSpaceCompat(serializedValue))
-            {
-                return CreateValidation(SettingValidationSeverity.Error, "A value is required.");
-            }
-
-            if (IsNullOrWhiteSpaceCompat(serializedValue))
-            {
-                return null;
-            }
-
-            switch (contribution.ValueKind)
-            {
-                case SettingValueKind.Integer:
-                    int integerValue;
-                    if (!int.TryParse(serializedValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out integerValue))
-                    {
-                        return CreateValidation(SettingValidationSeverity.Error, "Enter a valid integer value.");
-                    }
-                    break;
-                case SettingValueKind.Float:
-                    float floatValue;
-                    if (!float.TryParse(serializedValue, NumberStyles.Float, CultureInfo.InvariantCulture, out floatValue))
-                    {
-                        return CreateValidation(SettingValidationSeverity.Error, "Enter a valid numeric value.");
-                    }
-                    break;
-            }
-
-            var options = contribution.Options ?? new SettingChoiceOption[0];
-            if (options.Length > 0 && FindChoiceIndex(options, serializedValue) < 0)
-            {
-                return CreateValidation(SettingValidationSeverity.Error, "Select one of the registered values.");
-            }
-
-            if (GetSettingEditorKind(contribution) == SettingEditorKind.Path &&
-                !Directory.Exists(serializedValue) &&
-                !File.Exists(serializedValue))
-            {
-                return CreateValidation(SettingValidationSeverity.Warning, "The path does not exist on disk.");
-            }
-
-            if (LooksLikeUrlSetting(contribution))
-            {
-                Uri uri;
-                if (!Uri.TryCreate(serializedValue, UriKind.Absolute, out uri))
-                {
-                    return CreateValidation(SettingValidationSeverity.Warning, "Enter a valid absolute URL.");
-                }
-            }
-
-            return null;
-        }
-
-        private static bool LooksLikeUrlSetting(SettingContribution contribution)
-        {
-            if (contribution == null)
-            {
-                return false;
-            }
-
-            return EndsWithOrdinalIgnoreCase(contribution.SettingId, "Url") ||
-                EndsWithOrdinalIgnoreCase(contribution.SettingId, "Uri") ||
-                StartsWithOrdinalIgnoreCase(contribution.PlaceholderText, "http://") ||
-                StartsWithOrdinalIgnoreCase(contribution.PlaceholderText, "https://");
-        }
-
-        private static bool EndsWithOrdinalIgnoreCase(string value, string suffix)
-        {
-            return !string.IsNullOrEmpty(value) &&
-                !string.IsNullOrEmpty(suffix) &&
-                value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool StartsWithOrdinalIgnoreCase(string value, string prefix)
-        {
-            return !string.IsNullOrEmpty(value) &&
-                !string.IsNullOrEmpty(prefix) &&
-                value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static SettingValidationResult CreateValidation(SettingValidationSeverity severity, string message)
-        {
-            return new SettingValidationResult
-            {
-                Severity = severity,
-                Message = message ?? string.Empty
-            };
-        }
-
-        private static bool IsNullOrWhiteSpaceCompat(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return true;
-            }
-
-            for (var i = 0; i < value.Length; i++)
-            {
-                if (!char.IsWhiteSpace(value[i]))
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return _draftService.GetValidationResult(_draftState, contribution);
         }
 
         private void DrawValidationMessage(SettingValidationResult validation)
@@ -2206,21 +1640,7 @@ namespace Cortex.Modules.Settings
                 state.Settings = new CortexSettings();
             }
 
-            if (snapshot != null)
-            {
-                for (var i = 0; i < snapshot.Settings.Count; i++)
-                {
-                    var contribution = snapshot.Settings[i];
-                    if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
-                    {
-                        continue;
-                    }
-
-                    ApplyContributionValue(contribution, state.Settings);
-                }
-            }
-
-            state.Settings.ThemeId = string.IsNullOrEmpty(_selectedThemeId) ? "cortex.vs-dark" : _selectedThemeId;
+            _draftService.ApplyDraft(_draftState, snapshot, state.Settings);
             state.Settings.SettingsActiveSectionId = _activeSectionId ?? string.Empty;
             state.Settings.SettingsNavigationScrollY = _navigationScroll.y;
             state.Settings.SettingsContentScrollY = _contentScroll.y;
@@ -2232,350 +1652,66 @@ namespace Cortex.Modules.Settings
             }
         }
 
-        private void LoadContributionValue(SettingContribution contribution, CortexSettings settings)
-        {
-            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
-            {
-                return;
-            }
-
-            var serializedValue = ReadPersistedContributionValue(contribution, settings);
-            _loadedSerializedValues[contribution.SettingId] = serializedValue;
-            if (contribution.ValueKind == SettingValueKind.Boolean)
-            {
-                _toggleValues[contribution.SettingId] = string.Equals(serializedValue, "true", StringComparison.OrdinalIgnoreCase);
-                return;
-            }
-
-            _textValues[contribution.SettingId] = serializedValue;
-        }
-
-        private void ApplyContributionValue(SettingContribution contribution, CortexSettings settings)
-        {
-            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
-            {
-                return;
-            }
-
-            WritePersistedContributionValue(contribution, settings, GetSerializedDraftValue(contribution));
-        }
-
-        private static FieldInfo GetSettingField(SettingContribution contribution)
-        {
-            if (contribution == null || string.IsNullOrEmpty(contribution.SettingId))
-            {
-                return null;
-            }
-
-            return typeof(CortexSettings).GetField(contribution.SettingId, BindingFlags.Public | BindingFlags.Instance);
-        }
-
         private string GetDefaultSerializedValue(SettingContribution contribution)
         {
-            if (contribution == null)
-            {
-                return string.Empty;
-            }
-
-            if (contribution.ReadDefaultValue != null)
-            {
-                return NormalizeSerializedValue(contribution, contribution.ReadDefaultValue());
-            }
-
-            return NormalizeSerializedValue(contribution, contribution.DefaultValue);
-        }
-
-        private string ReadPersistedContributionValue(SettingContribution contribution, CortexSettings settings)
-        {
-            if (contribution == null)
-            {
-                return string.Empty;
-            }
-
-            if (contribution.ReadSettingsValue != null)
-            {
-                return NormalizeSerializedValue(contribution, contribution.ReadSettingsValue(settings));
-            }
-
-            if (contribution.ReadValue != null)
-            {
-                return NormalizeSerializedValue(contribution, contribution.ReadValue());
-            }
-
-            var field = GetSettingField(contribution);
-            if (field == null)
-            {
-                return ReadModuleSettingValue(settings, contribution.SettingId, GetDefaultSerializedValue(contribution));
-            }
-
-            if (settings == null)
-            {
-                return GetDefaultSerializedValue(contribution);
-            }
-
-            var value = field.GetValue(settings);
-            if (value == null)
-            {
-                return GetDefaultSerializedValue(contribution);
-            }
-
-            switch (contribution.ValueKind)
-            {
-                case SettingValueKind.Boolean:
-                    return NormalizeSerializedValue(contribution, ((bool)value) ? "true" : "false");
-                case SettingValueKind.Integer:
-                    return NormalizeSerializedValue(contribution, ((int)value).ToString(CultureInfo.InvariantCulture));
-                case SettingValueKind.Float:
-                    return NormalizeSerializedValue(contribution, ((float)value).ToString(CultureInfo.InvariantCulture));
-                case SettingValueKind.String:
-                default:
-                    return NormalizeSerializedValue(contribution, value.ToString());
-            }
-        }
-
-        private void WritePersistedContributionValue(SettingContribution contribution, CortexSettings settings, string serializedValue)
-        {
-            if (contribution == null)
-            {
-                return;
-            }
-
-            serializedValue = NormalizeSerializedValue(contribution, serializedValue);
-            if (contribution.WriteSettingsValue != null)
-            {
-                contribution.WriteSettingsValue(settings, serializedValue);
-                return;
-            }
-
-            if (contribution.WriteValue != null)
-            {
-                contribution.WriteValue(serializedValue);
-                return;
-            }
-
-            var field = GetSettingField(contribution);
-            if (field == null)
-            {
-                WriteModuleSettingValue(settings, contribution.SettingId, serializedValue);
-                return;
-            }
-
-            if (settings == null)
-            {
-                return;
-            }
-
-            switch (contribution.ValueKind)
-            {
-                case SettingValueKind.Boolean:
-                    field.SetValue(settings, string.Equals(serializedValue, "true", StringComparison.OrdinalIgnoreCase));
-                    break;
-                case SettingValueKind.Integer:
-                    field.SetValue(settings, ParseInt(serializedValue, ParseInt(GetDefaultSerializedValue(contribution), (int)field.GetValue(settings))));
-                    break;
-                case SettingValueKind.Float:
-                    field.SetValue(settings, ParseFloat(serializedValue, ParseFloat(GetDefaultSerializedValue(contribution), (float)field.GetValue(settings))));
-                    break;
-                case SettingValueKind.String:
-                default:
-                    field.SetValue(settings, serializedValue);
-                    break;
-            }
-        }
-
-        private static string ReadModuleSettingValue(CortexSettings settings, string settingId, string fallback)
-        {
-            if (settings == null || string.IsNullOrEmpty(settingId) || settings.ModuleSettings == null)
-            {
-                return fallback ?? string.Empty;
-            }
-
-            for (var i = 0; i < settings.ModuleSettings.Length; i++)
-            {
-                var entry = settings.ModuleSettings[i];
-                if (entry != null && string.Equals(entry.SettingId, settingId, StringComparison.OrdinalIgnoreCase))
-                {
-                    return entry.Value ?? string.Empty;
-                }
-            }
-
-            return fallback ?? string.Empty;
-        }
-
-        private static void WriteModuleSettingValue(CortexSettings settings, string settingId, string serializedValue)
-        {
-            if (settings == null || string.IsNullOrEmpty(settingId))
-            {
-                return;
-            }
-
-            var entries = new List<ModuleSettingValue>();
-            if (settings.ModuleSettings != null)
-            {
-                for (var i = 0; i < settings.ModuleSettings.Length; i++)
-                {
-                    if (settings.ModuleSettings[i] != null)
-                    {
-                        entries.Add(settings.ModuleSettings[i]);
-                    }
-                }
-            }
-
-            for (var i = 0; i < entries.Count; i++)
-            {
-                if (string.Equals(entries[i].SettingId, settingId, StringComparison.OrdinalIgnoreCase))
-                {
-                    entries[i].Value = serializedValue ?? string.Empty;
-                    settings.ModuleSettings = entries.ToArray();
-                    return;
-                }
-            }
-
-            entries.Add(new ModuleSettingValue
-            {
-                SettingId = settingId,
-                Value = serializedValue ?? string.Empty
-            });
-            settings.ModuleSettings = entries.ToArray();
+            return _draftService.GetDefaultSerializedValue(contribution);
         }
 
         private string GetSerializedDraftValue(SettingContribution contribution)
         {
-            if (contribution == null)
-            {
-                return string.Empty;
-            }
-
-            if (contribution.ValueKind == SettingValueKind.Boolean)
-            {
-                return GetToggleValue(contribution) ? "true" : "false";
-            }
-
-            return NormalizeSerializedValue(contribution, GetTextValue(contribution.SettingId, GetDefaultSerializedValue(contribution)));
+            return _draftService.GetSerializedDraftValue(_draftState, contribution);
         }
 
-        private static string NormalizeSerializedValue(SettingContribution contribution, string rawValue)
+        private string NormalizeSerializedValue(SettingContribution contribution, string rawValue)
         {
-            var value = rawValue ?? string.Empty;
-            if (contribution == null)
-            {
-                return value;
-            }
-
-            switch (contribution.ValueKind)
-            {
-                case SettingValueKind.Boolean:
-                    return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ? "true" : "false";
-                case SettingValueKind.Integer:
-                    int integerValue;
-                    return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out integerValue)
-                        ? integerValue.ToString(CultureInfo.InvariantCulture)
-                        : value.Trim();
-                case SettingValueKind.Float:
-                    float floatValue;
-                    return float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out floatValue)
-                        ? floatValue.ToString(CultureInfo.InvariantCulture)
-                        : value.Trim();
-                case SettingValueKind.String:
-                default:
-                    return value;
-            }
+            return _draftService.NormalizeSerializedValue(contribution, rawValue);
         }
 
         private string GetTextValue(SettingContribution contribution)
         {
-            return contribution != null
-                ? GetTextValue(contribution.SettingId, GetDefaultSerializedValue(contribution))
-                : string.Empty;
+            return _draftService.GetTextValue(_draftState, contribution);
         }
 
         private string GetTextValue(string settingId, string defaultValue)
         {
-            string value;
-            return !string.IsNullOrEmpty(settingId) && _textValues.TryGetValue(settingId, out value)
-                ? value ?? string.Empty
-                : defaultValue ?? string.Empty;
+            return _draftService.GetTextValue(_draftState, settingId, defaultValue);
         }
 
         private bool GetToggleValue(SettingContribution contribution)
         {
-            bool value;
-            if (contribution != null && _toggleValues.TryGetValue(contribution.SettingId, out value))
-            {
-                return value;
-            }
-
-            return contribution != null && string.Equals(GetDefaultSerializedValue(contribution), "true", StringComparison.OrdinalIgnoreCase);
+            return _draftService.GetToggleValue(_draftState, contribution);
         }
 
-        private List<SettingsSection> GetVisibleSections(SettingsNavigationGroup group)
+        private List<SettingsSectionModel> GetVisibleSections(SettingsNavigationGroupModel group)
         {
-            var visibleSections = new List<SettingsSection>();
-            if (group == null)
-            {
-                return visibleSections;
-            }
-
-            for (var i = 0; i < group.Sections.Count; i++)
-            {
-                if (IsSectionVisible(group.Sections[i]))
-                {
-                    visibleSections.Add(group.Sections[i]);
-                }
-            }
-
-            return visibleSections;
+            return _searchService.GetVisibleSections(group, GetNormalizedSearchQuery(), _showModifiedOnly, GetSectionVisibleItemCount);
         }
 
-        private bool IsSectionVisible(SettingsSection section)
+        private bool IsSectionVisible(SettingsSectionModel section)
         {
-            if (section == null)
-            {
-                return false;
-            }
-
-            if (_showModifiedOnly)
-            {
-                return GetSectionVisibleItemCount(section) > 0;
-            }
-
-            return MatchesSearch(section.SearchText) || GetSectionVisibleItemCount(section) > 0;
+            return _searchService.IsSectionVisible(section, GetNormalizedSearchQuery(), _showModifiedOnly, GetSectionVisibleItemCount);
         }
 
-        private int GetSectionVisibleItemCount(SettingsSection section)
+        private int GetSectionVisibleItemCount(SettingsSectionModel section)
         {
             if (section == null)
             {
                 return 0;
             }
 
-            if (string.Equals(section.SectionId, SourceSetupSectionId + ".paths", StringComparison.OrdinalIgnoreCase))
+            switch (section.SectionKind)
             {
-                return CountVisibleSettingsForIds(WorkspaceRootSettingId, RuntimeContentRootSettingId, ReferenceAssemblyRootSettingId, AdditionalSourceRootsSettingId);
-            }
-
-            if (!string.IsNullOrEmpty(section.Scope) &&
-                (string.Equals(section.SectionId, SourceSetupSectionId + ".settings", StringComparison.OrdinalIgnoreCase) ||
-                 section.SectionId.StartsWith("scope.", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(section.Scope, "Workspace", StringComparison.OrdinalIgnoreCase) ||
-                 (_snapshot != null && FindSettingSectionContribution(_snapshot, section.Scope) != null)))
-            {
-                return CountVisibleContributionsForScope(_snapshot, section.Scope);
-            }
-
-            if (string.Equals(section.SectionId, ThemesSectionId, StringComparison.OrdinalIgnoreCase))
-            {
-                return CountVisibleThemes();
-            }
-
-            if (string.Equals(section.SectionId, KeybindingsSectionId, StringComparison.OrdinalIgnoreCase))
-            {
-                return _showModifiedOnly ? CountModifiedKeybindingRows() : CountVisibleKeybindings();
-            }
-
-            if (string.Equals(section.SectionId, EditorsSectionId, StringComparison.OrdinalIgnoreCase))
-            {
-                return _showModifiedOnly ? 0 : CountVisibleEditors();
+                case SettingsSectionKind.WorkspacePaths:
+                    return CountVisibleSettingsForIds(WorkspaceRootSettingId, RuntimeContentRootSettingId, ReferenceAssemblyRootSettingId, AdditionalSourceRootsSettingId);
+                case SettingsSectionKind.WorkspaceSettingsContributions:
+                case SettingsSectionKind.ContributionScope:
+                    return CountVisibleContributionsForScope(_snapshot, section.ContributionScope);
+                case SettingsSectionKind.Themes:
+                    return CountVisibleThemes();
+                case SettingsSectionKind.Keybindings:
+                    return _showModifiedOnly ? CountModifiedKeybindingRows() : CountVisibleKeybindings();
+                case SettingsSectionKind.Editors:
+                    return _showModifiedOnly ? 0 : CountVisibleEditors();
             }
 
             if (_showModifiedOnly)
@@ -2588,61 +1724,17 @@ namespace Cortex.Modules.Settings
 
         private int CountVisibleSettingsForIds(params string[] settingIds)
         {
-            if (settingIds == null || settingIds.Length == 0 || _snapshot == null)
-            {
-                return 0;
-            }
-
-            var count = 0;
-            for (var i = 0; i < settingIds.Length; i++)
-            {
-                var contribution = FindSettingContribution(_snapshot, settingIds[i]);
-                if (contribution != null && IsContributionVisible(contribution))
-                {
-                    count++;
-                }
-            }
-
-            return count;
+            return _contributionCollectionService.CountVisibleSettingsForIds(_snapshot, IsContributionVisible, settingIds);
         }
 
         private int CountVisibleContributionsForScope(WorkbenchPresentationSnapshot snapshot, string scope)
         {
-            if (snapshot == null || string.IsNullOrEmpty(scope))
-            {
-                return 0;
-            }
-
-            var count = 0;
-            for (var i = 0; i < snapshot.Settings.Count; i++)
-            {
-                var contribution = snapshot.Settings[i];
-                if (ShouldRenderContribution(scope, contribution) && IsContributionVisible(contribution))
-                {
-                    count++;
-                }
-            }
-
-            return count;
+            return _contributionCollectionService.CountVisibleContributionsForScope(snapshot, scope, IsContributionVisible);
         }
 
-        private int CountVisibleSections(SettingsNavigationGroup group)
+        private int CountVisibleSections(SettingsNavigationGroupModel group)
         {
-            if (group == null)
-            {
-                return 0;
-            }
-
-            var count = 0;
-            for (var i = 0; i < group.Sections.Count; i++)
-            {
-                if (IsSectionVisible(group.Sections[i]))
-                {
-                    count++;
-                }
-            }
-
-            return count;
+            return _searchService.CountVisibleSections(group, GetNormalizedSearchQuery(), _showModifiedOnly, GetSectionVisibleItemCount);
         }
 
         private int CountVisibleThemes()
@@ -2774,42 +1866,12 @@ namespace Cortex.Modules.Settings
                 binding.Alt != definition.DefaultBinding.Alt;
         }
 
-        private string BuildSearchSummary(SettingsDocument document)
+        private string BuildSearchSummary(SettingsDocumentModel document)
         {
-            var visibleSections = 0;
-            var visibleItems = 0;
-            if (document != null)
-            {
-                var orderedSections = GetOrderedSections(document);
-                for (var i = 0; i < orderedSections.Count; i++)
-                {
-                    var section = orderedSections[i];
-                    if (!IsSectionVisible(section))
-                    {
-                        continue;
-                    }
-
-                    visibleSections++;
-                    visibleItems += Mathf.Max(1, GetSectionVisibleItemCount(section));
-                }
-            }
-
-            if (_showModifiedOnly)
-            {
-                return visibleItems.ToString(CultureInfo.InvariantCulture) + " modified item(s) across " +
-                    visibleSections.ToString(CultureInfo.InvariantCulture) + " section(s).";
-            }
-
-            if (IsSearchActive())
-            {
-                return visibleItems.ToString(CultureInfo.InvariantCulture) + " match(es) across " +
-                    visibleSections.ToString(CultureInfo.InvariantCulture) + " section(s).";
-            }
-
-            return visibleSections.ToString(CultureInfo.InvariantCulture) + " section(s) available.";
+            return _searchService.BuildSearchSummary(document, GetNormalizedSearchQuery(), _showModifiedOnly, GetSectionVisibleItemCount);
         }
 
-        private void DrawActiveSectionBanner(SettingsDocument document, string renderActiveSectionId)
+        private void DrawActiveSectionBanner(SettingsDocumentModel document, string renderActiveSectionId)
         {
             var section = FindSection(document, renderActiveSectionId);
             if (section == null)
@@ -2831,7 +1893,7 @@ namespace Cortex.Modules.Settings
             }, GUILayout.Height(48f), GUILayout.ExpandWidth(true));
         }
 
-        private static SettingsSection FindSection(SettingsDocument document, string sectionId)
+        private SettingsSectionModel FindSection(SettingsDocumentModel document, string sectionId)
         {
             if (document == null || string.IsNullOrEmpty(sectionId))
             {
@@ -2851,7 +1913,7 @@ namespace Cortex.Modules.Settings
             return null;
         }
 
-        private string BuildSectionNavigationLabel(SettingsSection section)
+        private string BuildSectionNavigationLabel(SettingsSectionModel section)
         {
             if (section == null)
             {
@@ -2934,31 +1996,15 @@ namespace Cortex.Modules.Settings
 
         private bool MatchesSearch(string text)
         {
-            var query = GetNormalizedSearchQuery();
-            if (string.IsNullOrEmpty(query))
-            {
-                return true;
-            }
-
-            var haystack = (text ?? string.Empty).ToLowerInvariant();
-            var terms = query.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            for (var i = 0; i < terms.Length; i++)
-            {
-                if (haystack.IndexOf(terms[i], StringComparison.Ordinal) < 0)
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return _searchService.MatchesSearch(GetNormalizedSearchQuery(), text);
         }
 
         private string GetNormalizedSearchQuery()
         {
-            return (_appliedSettingsSearchQuery ?? string.Empty).Trim().ToLowerInvariant();
+            return _searchService.NormalizeQuery(_appliedSettingsSearchQuery);
         }
 
-        private void HandleSearchQueryChanged(SettingsDocument document)
+        private void HandleSearchQueryChanged(SettingsDocumentModel document)
         {
             var query = GetNormalizedSearchQuery();
             if (string.Equals(query, _lastNormalizedSearchQuery, StringComparison.Ordinal))
@@ -2972,15 +2018,11 @@ namespace Cortex.Modules.Settings
                 return;
             }
 
-            var orderedSections = GetOrderedSections(document);
-            for (var i = 0; i < orderedSections.Count; i++)
+            var sectionId = _searchService.FindFirstVisibleSectionId(document, query, _showModifiedOnly, GetSectionVisibleItemCount);
+            if (!string.IsNullOrEmpty(sectionId))
             {
-                if (IsSectionVisible(orderedSections[i]))
-                {
-                    _activeSectionId = orderedSections[i].SectionId;
-                    _pendingSectionJumpId = orderedSections[i].SectionId;
-                    break;
-                }
+                _activeSectionId = sectionId;
+                _pendingSectionJumpId = sectionId;
             }
         }
 
@@ -3002,7 +2044,7 @@ namespace Cortex.Modules.Settings
             return true;
         }
 
-        private bool IsNavigationGroupExpandedForDisplay(SettingsNavigationGroup group, bool storedExpanded, string activeSectionId)
+        private bool IsNavigationGroupExpandedForDisplay(SettingsNavigationGroupModel group, bool storedExpanded, string activeSectionId)
         {
             if (!string.IsNullOrEmpty(GetNormalizedSearchQuery()))
             {
@@ -3012,7 +2054,7 @@ namespace Cortex.Modules.Settings
             return storedExpanded || GetActiveSection(group, activeSectionId) != null;
         }
 
-        private SettingsSection GetActiveSection(SettingsNavigationGroup group, string activeSectionId)
+        private SettingsSectionModel GetActiveSection(SettingsNavigationGroupModel group, string activeSectionId)
         {
             if (group == null || string.IsNullOrEmpty(activeSectionId))
             {
@@ -3031,7 +2073,7 @@ namespace Cortex.Modules.Settings
             return null;
         }
 
-        private void RevealActiveNavigationTarget(SettingsDocument document)
+        private void RevealActiveNavigationTarget(SettingsDocumentModel document)
         {
             var targetId = GetNavigationTargetId(document);
             if (string.IsNullOrEmpty(targetId))
@@ -3053,7 +2095,7 @@ namespace Cortex.Modules.Settings
             }
         }
 
-        private string GetNavigationTargetId(SettingsDocument document)
+        private string GetNavigationTargetId(SettingsDocumentModel document)
         {
             if (document == null || string.IsNullOrEmpty(_activeSectionId))
             {
@@ -3119,7 +2161,7 @@ namespace Cortex.Modules.Settings
             _shellState.Settings.SettingsCollapsedGroupIds = string.Join(";", collapsed.ToArray());
         }
 
-        private void UpdateActiveSection(SettingsDocument document)
+        private void UpdateActiveSection(SettingsDocumentModel document)
         {
             var orderedSections = GetOrderedSections(document);
             if (orderedSections.Count == 0 || _sectionAnchors.Count == 0)
@@ -3157,37 +2199,9 @@ namespace Cortex.Modules.Settings
             }
         }
 
-        private string ResolveRenderActiveSectionId(SettingsDocument document)
+        private string ResolveRenderActiveSectionId(SettingsDocumentModel document)
         {
-            var orderedSections = GetOrderedSections(document);
-            if (orderedSections.Count == 0)
-            {
-                return string.Empty;
-            }
-
-            for (var i = 0; i < orderedSections.Count; i++)
-            {
-                var section = orderedSections[i];
-                if (!IsSectionVisible(section))
-                {
-                    continue;
-                }
-
-                if (string.Equals(section.SectionId, _activeSectionId, StringComparison.OrdinalIgnoreCase))
-                {
-                    return _activeSectionId;
-                }
-            }
-
-            for (var i = 0; i < orderedSections.Count; i++)
-            {
-                if (IsSectionVisible(orderedSections[i]))
-                {
-                    return orderedSections[i].SectionId;
-                }
-            }
-
-            return string.Empty;
+            return _searchService.ResolveRenderActiveSectionId(document, _activeSectionId, GetNormalizedSearchQuery(), _showModifiedOnly, GetSectionVisibleItemCount);
         }
 
         private void CommitNavigationInteraction(NavigationInteraction interaction)
@@ -3216,7 +2230,7 @@ namespace Cortex.Modules.Settings
             }
         }
 
-        private void FinalizeNavigationState(SettingsDocument document)
+        private void FinalizeNavigationState(SettingsDocumentModel document)
         {
             if (Event.current == null || Event.current.type != EventType.Repaint)
             {
@@ -3557,122 +2571,17 @@ namespace Cortex.Modules.Settings
 
         private string GetLoadedModDraftValue(LoadedModInfo mod)
         {
-            if (mod == null || string.IsNullOrEmpty(mod.ModId))
-            {
-                return string.Empty;
-            }
-
-            string value;
-            if (_loadedModPathDrafts.TryGetValue(mod.ModId, out value))
-            {
-                return value ?? string.Empty;
-            }
-
-            var existing = _projectCatalog != null ? _projectCatalog.GetProject(mod.ModId) : null;
-            value = existing != null ? existing.SourceRootPath ?? string.Empty : string.Empty;
-            _loadedModPathDrafts[mod.ModId] = value;
-            return value;
+            return _loadedModLinkService.GetDraftValue(_draftState, mod, _projectCatalog);
         }
 
         private void LinkLoadedModToSource(LoadedModInfo mod, CortexShellState state)
         {
-            if (mod == null || string.IsNullOrEmpty(mod.ModId))
-            {
-                return;
-            }
-
-            var sourceRoot = GetLoadedModDraftValue(mod);
-            var linkResult = _loadedModSourceLinkService.LinkLoadedModToSource(mod, sourceRoot, _projectCatalog, _workspaceService);
-            for (var i = 0; i < linkResult.Diagnostics.Length; i++)
-            {
-                state.Diagnostics.Add(linkResult.Diagnostics[i]);
-            }
-
-            if (!linkResult.Success || linkResult.Definition == null)
-            {
-                state.StatusMessage = linkResult.StatusMessage;
-                return;
-            }
-
-            state.SelectedProject = _projectCatalog.GetProject(mod.ModId) ?? linkResult.Definition;
-            _loadedModPathDrafts[mod.ModId] = linkResult.Definition.SourceRootPath ?? sourceRoot;
-            state.StatusMessage = "Linked loaded mod " + mod.ModId + " to " + (linkResult.Definition.SourceRootPath ?? string.Empty) + ".";
+            _loadedModLinkService.LinkLoadedModToSource(_draftState, mod, _projectCatalog, _workspaceService, state);
         }
 
         private void ApplyLoadedModMappings(CortexShellState state)
         {
-            if (_projectCatalog == null || _workspaceService == null || _loadedModCatalog == null)
-            {
-                return;
-            }
-
-            var loadedMods = _loadedModCatalog.GetLoadedMods();
-            if (loadedMods == null || loadedMods.Count == 0)
-            {
-                return;
-            }
-
-            for (var i = 0; i < loadedMods.Count; i++)
-            {
-                var mod = loadedMods[i];
-                if (mod == null || string.IsNullOrEmpty(mod.ModId))
-                {
-                    continue;
-                }
-
-                string draftValue;
-                if (!_loadedModPathDrafts.TryGetValue(mod.ModId, out draftValue) || string.IsNullOrEmpty(draftValue))
-                {
-                    continue;
-                }
-
-                var existing = _projectCatalog.GetProject(mod.ModId);
-                if (existing != null &&
-                    string.Equals(existing.SourceRootPath ?? string.Empty, draftValue, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var linkResult = _loadedModSourceLinkService.LinkLoadedModToSource(mod, draftValue, _projectCatalog, _workspaceService);
-                if (!linkResult.Success || linkResult.Definition == null)
-                {
-                    for (var diagnosticIndex = 0; diagnosticIndex < linkResult.Diagnostics.Length; diagnosticIndex++)
-                    {
-                        state.Diagnostics.Add(linkResult.Diagnostics[diagnosticIndex]);
-                    }
-
-                    continue;
-                }
-
-                _loadedModPathDrafts[mod.ModId] = linkResult.Definition.SourceRootPath ?? draftValue;
-                for (var diagnosticIndex = 0; diagnosticIndex < linkResult.Diagnostics.Length; diagnosticIndex++)
-                {
-                    state.Diagnostics.Add(linkResult.Diagnostics[diagnosticIndex]);
-                }
-
-                if (state.SelectedProject == null || string.Equals(state.SelectedProject.ModId, mod.ModId, StringComparison.OrdinalIgnoreCase))
-                {
-                    state.SelectedProject = _projectCatalog.GetProject(mod.ModId) ?? linkResult.Definition;
-                }
-            }
-        }
-
-        private static int ParseInt(string raw, int fallback)
-        {
-            int value;
-            return int.TryParse(raw, out value) ? value : fallback;
-        }
-
-        private static float ParseFloat(string raw, float fallback)
-        {
-            float value;
-            return float.TryParse(raw, out value) ? value : fallback;
-        }
-
-        private sealed class SettingsDocument
-        {
-            public readonly List<SettingsSection> Sections = new List<SettingsSection>();
-            public readonly List<SettingsNavigationGroup> Groups = new List<SettingsNavigationGroup>();
+            _loadedModLinkService.ApplyLoadedModMappings(_draftState, _projectCatalog, _workspaceService, _loadedModCatalog, state);
         }
 
         private sealed class NavigationInteraction
@@ -3691,54 +2600,5 @@ namespace Cortex.Modules.Settings
             }
         }
 
-        private sealed class SettingsNavigationGroup
-        {
-            public readonly string GroupId;
-            public readonly string Title;
-            public readonly int SortOrder;
-            public readonly List<SettingsSection> Sections = new List<SettingsSection>();
-
-            public SettingsNavigationGroup(string groupId, string title, int sortOrder)
-            {
-                GroupId = groupId ?? string.Empty;
-                Title = string.IsNullOrEmpty(title) ? "General" : title;
-                SortOrder = sortOrder;
-            }
-        }
-
-        private sealed class SettingsSection
-        {
-            public readonly string SectionId;
-            public readonly string GroupId;
-            public readonly string GroupTitle;
-            public readonly string Scope;
-            public readonly string Title;
-            public readonly string Description;
-            public readonly string SearchText;
-            public readonly int SortOrder;
-            public readonly Action<ICortexSettingsStore, WorkbenchPresentationSnapshot, ThemeState, CortexShellState> DrawBody;
-
-            public SettingsSection(
-                string sectionId,
-                string groupId,
-                string groupTitle,
-                string scope,
-                string title,
-                string description,
-                string searchText,
-                int sortOrder,
-                Action<ICortexSettingsStore, WorkbenchPresentationSnapshot, ThemeState, CortexShellState> drawBody)
-            {
-                SectionId = sectionId;
-                GroupId = groupId;
-                GroupTitle = groupTitle;
-                Scope = scope;
-                Title = title;
-                Description = description;
-                SearchText = searchText;
-                SortOrder = sortOrder;
-                DrawBody = drawBody;
-            }
-        }
     }
 }

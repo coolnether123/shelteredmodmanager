@@ -4,6 +4,7 @@ using System.Text;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
+using Cortex.Shell;
 using Cortex.Services.Navigation;
 using UnityEngine;
 
@@ -55,6 +56,7 @@ namespace Cortex.Modules.Logs
         private Texture2D _entryWarningBg;
         private Texture2D _frameBg;
         private Texture2D _frameSelectedBg;
+        private CortexShellViewState _viewState;
 
         // ── constants ─────────────────────────────────────────────────────────────────
         private const float EntryHeight = 34f;
@@ -62,13 +64,15 @@ namespace Cortex.Modules.Logs
         private const float SeverityButtonWidth = 72f;
         private const float DetailPanelMinHeight = 180f;
 
-        public void Draw(
+        internal void Draw(
             IRuntimeLogFeed logFeed,
             ISourcePathResolver sourcePathResolver,
             ICortexNavigationService navigationService,
             CortexShellState state,
+            CortexShellViewState viewState,
             bool detachedWindow)
         {
+            _viewState = viewState;
             EnsureStyles(state);
 
             var settings = state.Settings ?? new CortexSettings();
@@ -145,9 +149,13 @@ namespace Cortex.Modules.Logs
 
             if (!detachedWindow)
             {
-                if (GUILayout.Button(state.Logs.ShowDetachedWindow ? "Dock" : "Pop Out", GUILayout.Width(66f)))
+                var showDetachedLogsWindow = _viewState != null && _viewState.ShowDetachedLogsWindow;
+                if (GUILayout.Button(showDetachedLogsWindow ? "Dock" : "Pop Out", GUILayout.Width(66f)))
                 {
-                    state.Logs.ShowDetachedWindow = !state.Logs.ShowDetachedWindow;
+                    if (_viewState != null)
+                    {
+                        _viewState.ShowDetachedLogsWindow = !_viewState.ShowDetachedLogsWindow;
+                    }
                 }
             }
 
