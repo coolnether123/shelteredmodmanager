@@ -27,6 +27,7 @@ namespace Cortex.Tests.Architecture
         private static readonly string[] HostSpecificProjectNames =
         {
             "Cortex",
+            "Cortex.Shell.Unity.Imgui",
             "Cortex.Host.Sheltered",
             "Cortex.Host.Unity",
             "Cortex.Platform.ModAPI",
@@ -111,6 +112,7 @@ namespace Cortex.Tests.Architecture
                 "Cortex.Rendering.RuntimeUi",
                 "Cortex.Presentation",
                 "Cortex.Host.Unity",
+                "Cortex.Shell.Unity.Imgui",
                 "Cortex.Renderers.Imgui"
             };
 
@@ -142,19 +144,21 @@ namespace Cortex.Tests.Architecture
         public void GenericShellAndUnityHost_DoNotReferenceImguiBackendDirectly()
         {
             var cortexReferences = LoadProjectReferenceNames("Cortex");
+            var shellReferences = LoadProjectReferenceNames("Cortex.Shell.Unity.Imgui");
             var unityHostReferences = LoadProjectReferenceNames("Cortex.Host.Unity");
             var imguiReferences = LoadProjectReferenceNames("Cortex.Renderers.Imgui");
             var shelteredHostReferences = LoadProjectReferenceNames("Cortex.Host.Sheltered");
 
             Assert.DoesNotContain("Cortex.Renderers.Imgui", cortexReferences);
+            Assert.DoesNotContain("Cortex.Renderers.Imgui", shellReferences);
             Assert.DoesNotContain("Cortex.Renderers.Imgui", unityHostReferences);
             Assert.Contains("Cortex.Plugins.Abstractions", imguiReferences);
             Assert.Contains("Cortex.Rendering.RuntimeUi", imguiReferences);
             Assert.Contains("Cortex.Rendering", shelteredHostReferences);
             Assert.Contains("Cortex.Rendering.RuntimeUi", shelteredHostReferences);
 
-            var cortexShellRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "CortexShell.Runtime.cs"));
-            var cortexShellText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "CortexShell.cs"));
+            var cortexShellRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "CortexShell.Runtime.cs"));
+            var cortexShellText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "CortexShell.cs"));
             var shellBootstrapperText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "Shell", "ShellBootstrapper.cs"));
             var hostInterfacesText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Presentation", "Abstractions", "HostInterfaces.cs"));
             var unityRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Unity", "Runtime", "UnityWorkbenchRuntime.cs"));
@@ -339,7 +343,7 @@ namespace Cortex.Tests.Architecture
         [Fact]
         public void ShelteredSpecificPaths_AreIsolatedToDedicatedHostModules()
         {
-            foreach (var sourcePath in GetProjectSourceFiles(new[] { "Cortex", "Cortex.Renderers.Imgui", "Cortex.Host.Unity", "Cortex.Plugin.Harmony" }))
+            foreach (var sourcePath in GetProjectSourceFiles(new[] { "Cortex", "Cortex.Shell.Unity.Imgui", "Cortex.Renderers.Imgui", "Cortex.Host.Unity", "Cortex.Plugin.Harmony" }))
             {
                 var sourceText = File.ReadAllText(sourcePath);
 
@@ -406,6 +410,9 @@ namespace Cortex.Tests.Architecture
         {
             var solutionText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.sln"));
 
+            Assert.Contains(@"""Cortex.Shell.Unity.Imgui"", ""Cortex.Shell.Unity.Imgui\Cortex.Shell.Unity.Imgui.csproj"", ""{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3}""", solutionText);
+            Assert.Contains(@"{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3}.Debug|Any CPU.Build.0 = Debug|Any CPU", solutionText);
+            Assert.Contains(@"{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3} = {86FA87A4-554D-7FD3-E7FA-07CF08F2607B}", solutionText);
             Assert.Contains(@"{748B7F6E-D557-48FA-B393-6374A7582255} = {B9F3EFD9-8792-DBB5-53D5-5D013E0311F9}", solutionText);
             Assert.Contains(@"{5A6E9E3A-0E10-4F09-A3FD-9B7C0D61A2A7} = {401E6CF6-6FDB-819D-B348-2A4162B7B24D}", solutionText);
             Assert.DoesNotContain(@"{5A6E9E3A-0E10-4F09-A3FD-9B7C0D61A2A7} = {B9F3EFD9-8792-DBB5-53D5-5D013E0311F9}", solutionText);
@@ -415,6 +422,7 @@ namespace Cortex.Tests.Architecture
         public void ManagerBuild_UsesShelteredBundleProfile_ForCortexRuntimeGraph()
         {
             var managerProjectText = File.ReadAllText(Path.Combine(RepoRoot, "Manager", "ManagerGUI.csproj"));
+            var hostUnityReferences = LoadProjectReferenceNames("Cortex.Host.Unity");
 
             Assert.Contains("Target Name=\"BuildCortexRuntime\"", managerProjectText);
             Assert.Contains(@"..\Cortex.Core\Cortex.Core.csproj", managerProjectText);
@@ -433,6 +441,7 @@ namespace Cortex.Tests.Architecture
             Assert.Contains(@"..\Cortex.Platform.ModAPI\Cortex.Platform.ModAPI.csproj", managerProjectText);
             Assert.Contains("Targets=\"Rebuild\"", managerProjectText);
             Assert.Contains("CortexBundleProfile=Sheltered", managerProjectText);
+            Assert.Contains("Cortex.Shell.Unity.Imgui", hostUnityReferences);
         }
 
         [Fact]
@@ -441,14 +450,17 @@ namespace Cortex.Tests.Architecture
             var solutionText = File.ReadAllText(Path.Combine(RepoRoot, "ShelteredModManager.sln"));
 
             Assert.Contains(@"""Cortex.Rendering.RuntimeUi"", ""Cortex.Rendering.RuntimeUi\Cortex.Rendering.RuntimeUi.csproj"", ""{8F6A2F38-54DF-4B49-8FC4-7F909D1AF6D3}""", solutionText);
+            Assert.Contains(@"""Cortex.Shell.Unity.Imgui"", ""Cortex.Shell.Unity.Imgui\Cortex.Shell.Unity.Imgui.csproj"", ""{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3}""", solutionText);
             Assert.Contains(@"""Cortex.Host.Sheltered"", ""Cortex.Host.Sheltered\Cortex.Host.Sheltered.csproj"", ""{748B7F6E-D557-48FA-B393-6374A7582255}""", solutionText);
             Assert.Contains(@"{D982DFB0-FEA1-4DC8-A001-35F5181F212A} = {D982DFB0-FEA1-4DC8-A001-35F5181F212A}", solutionText);
             Assert.Contains(@"{7A570620-E51D-499E-A28E-13A1D8156417} = {7A570620-E51D-499E-A28E-13A1D8156417}", solutionText);
             Assert.Contains(@"{748B7F6E-D557-48FA-B393-6374A7582255} = {748B7F6E-D557-48FA-B393-6374A7582255}", solutionText);
             Assert.Contains(@"{2343835F-8DA6-4CAB-B5A9-D86C83A9A40D} = {2343835F-8DA6-4CAB-B5A9-D86C83A9A40D}", solutionText);
             Assert.Contains(@"{8F6A2F38-54DF-4B49-8FC4-7F909D1AF6D3}.Debug|Any CPU.Build.0 = Debug|Any CPU", solutionText);
+            Assert.Contains(@"{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3}.Debug|Any CPU.Build.0 = Debug|Any CPU", solutionText);
             Assert.Contains(@"{748B7F6E-D557-48FA-B393-6374A7582255}.Debug|Any CPU.Build.0 = Debug|Any CPU", solutionText);
             Assert.Contains(@"{8F6A2F38-54DF-4B49-8FC4-7F909D1AF6D3} = {ECA9F4AD-77F7-253B-20D4-45A77E590D54}", solutionText);
+            Assert.Contains(@"{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3} = {86FA87A4-554D-7FD3-E7FA-07CF08F2607B}", solutionText);
             Assert.Contains(@"{748B7F6E-D557-48FA-B393-6374A7582255} = {B9F3EFD9-8792-DBB5-53D5-5D013E0311F9}", solutionText);
         }
 

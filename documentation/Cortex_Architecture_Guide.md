@@ -2,6 +2,8 @@
 
 This document describes the permanent Cortex architecture in the current codebase.
 
+For the current refactor-phase guardrails around runtime, shell, bridge/host, and IMGUI backend ownership, see `documentation/Cortex_Runtime_Shell_Separation_Guardrails.md`.
+
 Portable Cortex code provides typed extension seams, runtime capabilities, state ownership, and workbench/editor composition. Host-bound behavior is isolated in Sheltered-specific host projects. Feature-specific behavior belongs in plugins such as the extracted Harmony module.
 
 For the final portability boundary map, bundle profile intent, and future-host completion checklist, see `documentation/Cortex_Portability_Report.md`.
@@ -35,6 +37,7 @@ Portable Cortex assemblies own:
 - typed runtime capability interfaces
 - module-owned state storage
 - editor extension runtime and presentation hosts
+- shell-facing snapshot construction and projection shaping in `Cortex.Presentation`
 - plugin discovery and registration
 - low-level render, geometry, and frame/input contracts in `Cortex.Rendering`
 - popup/panel/tooltip runtime interaction and layout behavior in `Cortex.Rendering.RuntimeUi`
@@ -196,6 +199,7 @@ The shell may:
 
 - create runtime services
 - coordinate workbench composition
+- assemble presentation snapshots from runtime state through `Cortex.Presentation`
 - route plugin discovery
 - host generic editor/workbench runtime seams
 - render blocked/unavailable module messages

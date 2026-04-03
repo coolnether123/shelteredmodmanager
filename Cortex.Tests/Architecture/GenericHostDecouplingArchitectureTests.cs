@@ -146,7 +146,7 @@ namespace Cortex.Tests.Architecture
         }
 
         [Fact]
-        public void ExternalHarmonyPlugin_DoesNotReferenceHostShellAssembly()
+        public void ExternalHarmonyPlugin_DoesNotReferenceHostShellAssemblies()
         {
             var references = typeof(HarmonyPluginContributor).Assembly
                 .GetReferencedAssemblies()
@@ -154,6 +154,7 @@ namespace Cortex.Tests.Architecture
                 .ToArray();
 
             Assert.DoesNotContain("Cortex", references);
+            Assert.DoesNotContain("Cortex.Shell.Unity.Imgui", references);
             Assert.Contains("Cortex.Core", references);
             Assert.Contains("Cortex.Plugins.Abstractions", references);
             Assert.Contains("Cortex.Presentation", references);
