@@ -33,12 +33,8 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Chrome\CortexWindowChromeController.cs" />
     <Compile Include="MMLog.cs" />
-    <Compile Include="CortexShell.Chrome.cs" />
-    <Compile Include="CortexShell.CompletionAugmentation.cs" />
-    <Compile Include="CortexShell.Onboarding.cs" />
-    <Compile Include="Shell\CortexShell.HostAdapters.cs" />
+    <Compile Include="Shell\ICortexShellControllerLifecycleHost.cs" />
     <Compile Include="Shell\CortexShellCommandContext.cs" />
     <Compile Include="Shell\CortexShellCommandRouter.cs" />
     <Compile Include="Shell\CortexShellLanguageCoordinator.cs" />
@@ -48,6 +44,7 @@
     <Compile Include="Shell\CortexShellLanguageRuntimeContext.cs" />
     <Compile Include="Shell\CortexShellLanguageRuntimeState.cs" />
     <Compile Include="Shell\CortexLanguageRuntimeService.cs" />
+    <Compile Include="Shell\CortexShellViewState.cs" />
     <Compile Include="Shell\CortexShellLayoutContext.cs" />
     <Compile Include="Shell\CortexShellLayoutHostRouter.cs" />
     <Compile Include="Shell\CortexShellLifecycleCoordinator.cs" />
@@ -66,13 +63,8 @@
     <Compile Include="Shell\CortexShellModuleRenderService.cs" />
     <Compile Include="Shell\ShellBootstrapper.cs" />
     <Compile Include="Shell\ShellCommandDispatcher.cs" />
-    <Compile Include="Shell\ShellLayoutCoordinator.cs" />
-    <Compile Include="Shell\ShellOverlayCoordinator.cs" />
     <Compile Include="Shell\ShellSessionCoordinator.cs" />
     <Compile Include="Shell\ShellStatusPresenter.cs" />
-    <Compile Include="CortexShell.Language.cs" />
-    <Compile Include="CortexShell.Runtime.cs" />
-    <Compile Include="CortexShell.cs" />
     <Compile Include="WorkbenchPluginLoader.cs" />
     <Compile Include="GuiStyleUtil.cs" />
     <Compile Include="Layout\CortexIdeLayout.cs" />
@@ -130,6 +122,8 @@
     <Compile Include="Services\Editor\Input\IEditorKeybindingService.cs" />
     <Compile Include="Services\Editor\Input\EditorKeybindingService.cs" />
     <Compile Include="Services\Editor\Commands\SourceEditorCommandRouterService.cs" />
+    <Compile Include="Services\Editor\Presentation\EditorPresentationModels.cs" />
+    <Compile Include="Services\Editor\Presentation\EditorPresentationService.cs" />
     <Compile Include="Services\Semantics\Workbench\SemanticWorkspaceEditService.cs" />
     <Compile Include="Services\Editor\Commands\UsingDirectiveOrganizationService.cs" />
     <Compile Include="Services\Explorer\ExplorerFilterPlanBuilder.cs" />
@@ -199,12 +193,17 @@
     <Compile Include="Services\Onboarding\CortexOnboardingProjectSetupService.cs" />
     <Compile Include="Services\Onboarding\CortexOnboardingService.cs" />
     <Compile Include="Services\Onboarding\CortexOnboardingWorkspaceApplier.cs" />
+    <Compile Include="Services\Settings\SettingsContributionCollectionService.cs" />
+    <Compile Include="Services\Settings\SettingsDocumentBuilder.cs" />
+    <Compile Include="Services\Settings\SettingsDraftService.cs" />
+    <Compile Include="Services\Settings\SettingsLoadedModLinkService.cs" />
+    <Compile Include="Services\Settings\SettingsModels.cs" />
+    <Compile Include="Services\Settings\SettingsSearchService.cs" />
     <Compile Include="Services\Shell\NullCortexHostServices.cs" />
     <Compile Include="Services\Shell\NullCortexPlatformModule.cs" />
     <Compile Include="State\CortexModuleRuntimeState.cs" />
     <Compile Include="State\CortexOnboardingState.cs" />
     <Compile Include="State\CortexShellState.cs" />
-    <Compile Include="CortexShell.Search.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Cortex.Core\Cortex.Core.csproj">

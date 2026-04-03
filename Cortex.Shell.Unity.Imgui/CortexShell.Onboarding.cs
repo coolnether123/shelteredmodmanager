@@ -1,6 +1,5 @@
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
-using UnityEngine;
 using Cortex.Services.Onboarding;
 
 namespace Cortex
@@ -32,6 +31,7 @@ namespace Cortex
             _onboardingLifecycle.Preview(
                 _onboardingCoordinator,
                 _state,
+                _viewState,
                 _workbenchRuntime,
                 _workbenchRuntime?.ContributionRegistry,
                 ActivateOnboardingContainers);
@@ -42,6 +42,7 @@ namespace Cortex
             _onboardingLifecycle.Complete(
                 _onboardingCoordinator,
                 _state,
+                _viewState,
                 _workbenchRuntime,
                 _workbenchRuntime?.ContributionRegistry,
                 ProjectCatalog,
@@ -55,15 +56,6 @@ namespace Cortex
         {
             if (result?.ContainersToActivate == null) return;
             foreach (var containerId in result.ContainersToActivate) ActivateContainer(containerId);
-        }
-
-        private static void DrawOnboardingBlock(Rect rect, Color color)
-        {
-            if (Event.current?.type != EventType.Repaint) return;
-            var prev = GUI.color;
-            GUI.color = color;
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
-            GUI.color = prev;
         }
     }
 }
