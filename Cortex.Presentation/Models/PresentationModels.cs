@@ -69,6 +69,16 @@ namespace Cortex.Presentation.Models
         public int SortOrder;
     }
 
+    public sealed class WorkbenchPresentationMetadata
+    {
+        public string RendererSummary;
+
+        public WorkbenchPresentationMetadata()
+        {
+            RendererSummary = string.Empty;
+        }
+    }
+
     public sealed class WorkbenchPresentationSnapshot
     {
         public readonly List<ToolRailItem> ToolRailItems;
