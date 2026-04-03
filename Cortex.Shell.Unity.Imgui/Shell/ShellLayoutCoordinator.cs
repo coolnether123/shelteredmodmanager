@@ -202,7 +202,7 @@ namespace Cortex.Shell
         private void DrawDockHost(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation, float width, GUIStyle tabStyle, GUIStyle activeTabStyle, GUIStyle tabCloseButtonStyle, GUIStyle captionStyle)
         {
             var activeContainerId = GetActiveContainerForHost(snapshot, hostLocation);
-            CortexIdeLayout.DrawGroup(null, delegate
+            ImguiWorkbenchLayout.DrawGroup(null, delegate
             {
                 DrawHostDropTarget(hostLocation);
                 GUILayout.BeginHorizontal();
@@ -219,7 +219,7 @@ namespace Cortex.Shell
 
         private void DrawEditorHost(WorkbenchPresentationSnapshot snapshot)
         {
-            CortexIdeLayout.DrawGroup(null, delegate
+            ImguiWorkbenchLayout.DrawGroup(null, delegate
             {
                 DrawHostDropTarget(WorkbenchHostLocation.DocumentHost);
                 _renderServiceProvider().DrawActiveModule(snapshot, _state.Workbench.EditorContainerId, false);
@@ -229,7 +229,7 @@ namespace Cortex.Shell
         private void DrawPanelHost(WorkbenchPresentationSnapshot snapshot, float panelHeight, GUIStyle tabStyle, GUIStyle activeTabStyle, GUIStyle tabCloseButtonStyle, GUIStyle captionStyle)
         {
             var activeContainerId = GetActiveContainerForHost(snapshot, WorkbenchHostLocation.PanelHost);
-            CortexIdeLayout.DrawGroup(null, delegate
+            ImguiWorkbenchLayout.DrawGroup(null, delegate
             {
                 DrawHostDropTarget(WorkbenchHostLocation.PanelHost);
                 GUILayout.BeginHorizontal();
@@ -248,8 +248,8 @@ namespace Cortex.Shell
             var activeContainerId = GetActiveContainerForHost(null, hostLocation);
             var isSelected = string.Equals(activeContainerId, item.ContainerId, StringComparison.OrdinalIgnoreCase);
             var prevBg = GUI.backgroundColor; var prevContent = GUI.contentColor;
-            GUI.backgroundColor = CortexIdeLayout.GetInteractiveFillColor(isSelected, hostLocation);
-            GUI.contentColor = CortexIdeLayout.GetInteractiveTextColor(isSelected);
+            GUI.backgroundColor = ImguiWorkbenchLayout.GetInteractiveFillColor(isSelected, hostLocation);
+            GUI.contentColor = ImguiWorkbenchLayout.GetInteractiveTextColor(isSelected);
             var rect = GUILayoutUtility.GetRect(116f, 116f, 24f, 24f);
             var input = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
             var mousePos = ToVector2(input.PointerPosition);
@@ -286,7 +286,7 @@ namespace Cortex.Shell
         private void DrawHostDropTarget(WorkbenchHostLocation hostLocation)
         {
             if (string.IsNullOrEmpty(_draggingContainerId)) { GUILayout.Space(2f); return; }
-            var label = hostLocation == WorkbenchHostLocation.DocumentHost ? "Editor workspace" : "Release here to dock into " + CortexIdeLayout.GetHostDisplayName(hostLocation).ToLowerInvariant() + ".";
+            var label = hostLocation == WorkbenchHostLocation.DocumentHost ? "Editor workspace" : "Release here to dock into " + ImguiWorkbenchLayout.GetHostDisplayName(hostLocation).ToLowerInvariant() + ".";
             GUILayout.Box(label, GUILayout.ExpandWidth(true), GUILayout.Height(18f));
             HandleDockDropTarget(hostLocation, GUILayoutUtility.GetLastRect());
         }

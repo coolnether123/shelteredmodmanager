@@ -4,6 +4,7 @@ using Cortex.Core.Models;
 using Cortex.Modules.Shared;
 using Cortex.Services.Projects;
 using UnityEngine;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Modules.Projects
 {
@@ -29,7 +30,7 @@ namespace Cortex.Modules.Projects
             CortexShellState state)
         {
             var settings = state.Settings ?? new CortexSettings();
-            CortexIdeLayout.DrawTwoPane(
+            ImguiWorkbenchLayout.DrawTwoPane(
                 settings.ProjectsPaneWidth,
                 300f,
                 delegate { DrawProjectList(catalog, state); },

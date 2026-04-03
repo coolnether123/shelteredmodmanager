@@ -42,7 +42,6 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Runtime\ShelteredCortexHostEnvironment.cs" />
     <Compile Include="Runtime\ShelteredHostPathLayout.cs" />
-    <Compile Include="Runtime\ShelteredWorkbenchUiSurface.cs" />
     <Compile Include="Runtime\ShelteredUnityHostComposition.cs" />
     <Compile Include="Runtime\ShelteredUnityWorkbenchContributionRegistrar.cs" />
   </ItemGroup>

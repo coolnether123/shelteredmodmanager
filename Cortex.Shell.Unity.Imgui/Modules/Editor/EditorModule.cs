@@ -14,6 +14,7 @@ using Cortex.Services.Editor.Commands;
 using Cortex.Services.Editor.Presentation;
 using Cortex.Services.Search;
 using Cortex.Shell.Unity.Imgui.Services.Editor.Commands;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Modules.Editor
 {
@@ -735,13 +736,13 @@ namespace Cortex.Modules.Editor
         {
             return new PopupMenuThemePalette
             {
-                BackgroundColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.55f)),
-                BorderColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.38f)),
-                TextColor = ToRenderColor(CortexIdeLayout.GetTextColor()),
-                MutedTextColor = ToRenderColor(CortexIdeLayout.GetMutedTextColor()),
-                AccentColor = ToRenderColor(CortexIdeLayout.GetAccentColor()),
-                HoverFillColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.18f)),
-                PressedFillColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f))
+                BackgroundColor = ToRenderColor(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetSurfaceColor(), ImguiWorkbenchLayout.GetHeaderColor(), 0.55f)),
+                BorderColor = ToRenderColor(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.38f)),
+                TextColor = ToRenderColor(ImguiWorkbenchLayout.GetTextColor()),
+                MutedTextColor = ToRenderColor(ImguiWorkbenchLayout.GetMutedTextColor()),
+                AccentColor = ToRenderColor(ImguiWorkbenchLayout.GetAccentColor()),
+                HoverFillColor = ToRenderColor(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.18f)),
+                PressedFillColor = ToRenderColor(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.28f))
             };
         }
 
@@ -749,12 +750,12 @@ namespace Cortex.Modules.Editor
         {
             return new HoverTooltipThemePalette
             {
-                BackgroundColor = ToRenderColor(CortexIdeLayout.Blend(CortexIdeLayout.GetHeaderColor(), CortexIdeLayout.GetBackgroundColor(), 0.22f)),
-                BorderColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.38f)),
-                TextColor = ToRenderColor(CortexIdeLayout.GetTextColor()),
-                MutedTextColor = ToRenderColor(CortexIdeLayout.GetMutedTextColor()),
-                AccentColor = ToRenderColor(CortexIdeLayout.GetAccentColor()),
-                HoverFillColor = ToRenderColor(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.18f))
+                BackgroundColor = ToRenderColor(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetHeaderColor(), ImguiWorkbenchLayout.GetBackgroundColor(), 0.22f)),
+                BorderColor = ToRenderColor(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.38f)),
+                TextColor = ToRenderColor(ImguiWorkbenchLayout.GetTextColor()),
+                MutedTextColor = ToRenderColor(ImguiWorkbenchLayout.GetMutedTextColor()),
+                AccentColor = ToRenderColor(ImguiWorkbenchLayout.GetAccentColor()),
+                HoverFillColor = ToRenderColor(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.18f))
             };
         }
 
@@ -776,17 +777,17 @@ namespace Cortex.Modules.Editor
 
             _appliedTheme = themeId;
 
-            var textColor = CortexIdeLayout.GetTextColor();
-            var mutedColor = CortexIdeLayout.GetMutedTextColor();
-            var accentColor = CortexIdeLayout.GetAccentColor();
-            var surfaceColor = CortexIdeLayout.GetSurfaceColor();
-            var headerColor = CortexIdeLayout.GetHeaderColor();
-            var bgColor = CortexIdeLayout.GetBackgroundColor();
-            var warningColor = CortexIdeLayout.GetWarningColor();
+            var textColor = ImguiWorkbenchLayout.GetTextColor();
+            var mutedColor = ImguiWorkbenchLayout.GetMutedTextColor();
+            var accentColor = ImguiWorkbenchLayout.GetAccentColor();
+            var surfaceColor = ImguiWorkbenchLayout.GetSurfaceColor();
+            var headerColor = ImguiWorkbenchLayout.GetHeaderColor();
+            var bgColor = ImguiWorkbenchLayout.GetBackgroundColor();
+            var warningColor = ImguiWorkbenchLayout.GetWarningColor();
 
-            _tabBackground = MakeTexture(CortexIdeLayout.Blend(bgColor, surfaceColor, 0.5f));
+            _tabBackground = MakeTexture(ImguiWorkbenchLayout.Blend(bgColor, surfaceColor, 0.5f));
             _activeTabBackground = MakeTexture(surfaceColor);
-            _dirtyTabBackground = MakeTexture(CortexIdeLayout.Blend(surfaceColor, warningColor, 0.12f));
+            _dirtyTabBackground = MakeTexture(ImguiWorkbenchLayout.Blend(surfaceColor, warningColor, 0.12f));
 
             _tabStyle = new GUIStyle(GUI.skin.button);
             _tabStyle.alignment = TextAnchor.MiddleLeft;
@@ -794,21 +795,21 @@ namespace Cortex.Modules.Editor
             _tabStyle.padding = new RectOffset(8, 24, 2, 2);
             _tabStyle.margin = new RectOffset(0, 1, 0, 0);
             _tabStyle.border = new RectOffset(1, 1, 1, 0);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_tabStyle, _tabBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_tabStyle, mutedColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_tabStyle, _tabBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_tabStyle, mutedColor);
 
             _activeTabStyle = new GUIStyle(_tabStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_activeTabStyle, _activeTabBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_activeTabStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_activeTabStyle, _activeTabBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_activeTabStyle, textColor);
 
             _dirtyTabStyle = new GUIStyle(_tabStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_dirtyTabStyle, _dirtyTabBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_dirtyTabStyle, warningColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_dirtyTabStyle, _dirtyTabBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_dirtyTabStyle, warningColor);
 
-            _gutterBackground = MakeTexture(CortexIdeLayout.Blend(bgColor, headerColor, 0.3f));
+            _gutterBackground = MakeTexture(ImguiWorkbenchLayout.Blend(bgColor, headerColor, 0.3f));
             _gutterReadOnlyStyle = new GUIStyle(GUI.skin.label);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_gutterReadOnlyStyle, _gutterBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_gutterReadOnlyStyle, mutedColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_gutterReadOnlyStyle, _gutterBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_gutterReadOnlyStyle, mutedColor);
             _gutterReadOnlyStyle.alignment = TextAnchor.UpperRight;
             _gutterReadOnlyStyle.padding = new RectOffset(4, 6, 4, 4);
             _gutterReadOnlyStyle.margin = new RectOffset(0, 0, 0, 0);
@@ -835,8 +836,8 @@ namespace Cortex.Modules.Editor
             }
 
             _editorReadOnlyStyle = new GUIStyle(GUI.skin.label);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_editorReadOnlyStyle, _editorBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_editorReadOnlyStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_editorReadOnlyStyle, _editorBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_editorReadOnlyStyle, textColor);
             _editorReadOnlyStyle.wordWrap = false;
             _editorReadOnlyStyle.richText = true;
             _editorReadOnlyStyle.alignment = TextAnchor.UpperLeft;
@@ -850,8 +851,8 @@ namespace Cortex.Modules.Editor
             }
 
             _codeTooltipStyle = new GUIStyle(GUI.skin.box);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_codeTooltipStyle, MakeTexture(CortexIdeLayout.Blend(headerColor, bgColor, 0.22f)));
-            GuiStyleUtil.ApplyTextColorToAllStates(_codeTooltipStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_codeTooltipStyle, MakeTexture(ImguiWorkbenchLayout.Blend(headerColor, bgColor, 0.22f)));
+            ImguiStyleUtil.ApplyTextColorToAllStates(_codeTooltipStyle, textColor);
             _codeTooltipStyle.alignment = TextAnchor.UpperLeft;
             _codeTooltipStyle.wordWrap = true;
             _codeTooltipStyle.richText = false;
@@ -859,32 +860,32 @@ namespace Cortex.Modules.Editor
             _codeTooltipStyle.margin = new RectOffset(0, 0, 0, 0);
             _codeTooltipStyle.border = new RectOffset(1, 1, 1, 1);
 
-            _pathBarBackground = MakeTexture(CortexIdeLayout.Blend(headerColor, bgColor, 0.3f));
+            _pathBarBackground = MakeTexture(ImguiWorkbenchLayout.Blend(headerColor, bgColor, 0.3f));
             _pathBarStyle = new GUIStyle(GUI.skin.box);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_pathBarStyle, _pathBarBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_pathBarStyle, mutedColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_pathBarStyle, _pathBarBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_pathBarStyle, mutedColor);
             _pathBarStyle.padding = new RectOffset(8, 4, 2, 2);
             _pathBarStyle.margin = new RectOffset(0, 0, 0, 0);
 
-            _statusBackground = MakeTexture(CortexIdeLayout.Blend(accentColor, bgColor, 0.15f));
+            _statusBackground = MakeTexture(ImguiWorkbenchLayout.Blend(accentColor, bgColor, 0.15f));
             _statusBarStyle = new GUIStyle(GUI.skin.box);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_statusBarStyle, _statusBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_statusBarStyle, mutedColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_statusBarStyle, _statusBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_statusBarStyle, mutedColor);
             _statusBarStyle.padding = new RectOffset(8, 8, 2, 2);
             _statusBarStyle.margin = new RectOffset(0, 0, 0, 0);
             _statusBarStyle.fontSize = 10;
 
-            _toolbarBackground = MakeTexture(CortexIdeLayout.Blend(surfaceColor, headerColor, 0.5f));
+            _toolbarBackground = MakeTexture(ImguiWorkbenchLayout.Blend(surfaceColor, headerColor, 0.5f));
             _toolbarButtonStyle = new GUIStyle(GUI.skin.button);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_toolbarButtonStyle, _toolbarBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_toolbarButtonStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_toolbarButtonStyle, _toolbarBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_toolbarButtonStyle, textColor);
             _toolbarButtonStyle.padding = new RectOffset(6, 6, 2, 2);
             _toolbarButtonStyle.margin = new RectOffset(2, 0, 0, 0);
             _toolbarButtonStyle.fontSize = 11;
 
             _contextMenuStyle = new GUIStyle(GUI.skin.box);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_contextMenuStyle, MakeTexture(CortexIdeLayout.Blend(surfaceColor, headerColor, 0.55f)));
-            GuiStyleUtil.ApplyTextColorToAllStates(_contextMenuStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_contextMenuStyle, MakeTexture(ImguiWorkbenchLayout.Blend(surfaceColor, headerColor, 0.55f)));
+            ImguiStyleUtil.ApplyTextColorToAllStates(_contextMenuStyle, textColor);
             _contextMenuStyle.padding = new RectOffset(6, 6, 6, 6);
             _contextMenuStyle.margin = new RectOffset(0, 0, 0, 0);
             _contextMenuStyle.border = new RectOffset(1, 1, 1, 1);
@@ -894,28 +895,28 @@ namespace Cortex.Modules.Editor
             _contextMenuButtonStyle.padding = new RectOffset(8, 8, 3, 3);
 
             _contextMenuHeaderStyle = new GUIStyle(GUI.skin.label);
-            GuiStyleUtil.ApplyTextColorToAllStates(_contextMenuHeaderStyle, CortexIdeLayout.GetAccentColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_contextMenuHeaderStyle, ImguiWorkbenchLayout.GetAccentColor());
             _contextMenuHeaderStyle.fontStyle = FontStyle.Bold;
             _contextMenuHeaderStyle.wordWrap = false;
 
-            _statusModeBackground = MakeTexture(CortexIdeLayout.Blend(surfaceColor, headerColor, 0.5f));
-            _statusModeActiveBackground = MakeTexture(CortexIdeLayout.Blend(accentColor, surfaceColor, 0.2f));
-            _statusModeDisabledBackground = MakeTexture(CortexIdeLayout.Blend(bgColor, surfaceColor, 0.45f));
+            _statusModeBackground = MakeTexture(ImguiWorkbenchLayout.Blend(surfaceColor, headerColor, 0.5f));
+            _statusModeActiveBackground = MakeTexture(ImguiWorkbenchLayout.Blend(accentColor, surfaceColor, 0.2f));
+            _statusModeDisabledBackground = MakeTexture(ImguiWorkbenchLayout.Blend(bgColor, surfaceColor, 0.45f));
 
             _statusModeButtonStyle = new GUIStyle(_toolbarButtonStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_statusModeButtonStyle, _statusModeBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_statusModeButtonStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_statusModeButtonStyle, _statusModeBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_statusModeButtonStyle, textColor);
             _statusModeButtonStyle.alignment = TextAnchor.MiddleCenter;
             _statusModeButtonStyle.fontStyle = FontStyle.Bold;
             _statusModeButtonStyle.margin = new RectOffset(0, 0, 0, 0);
 
             _statusModeButtonActiveStyle = new GUIStyle(_statusModeButtonStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_statusModeButtonActiveStyle, _statusModeActiveBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_statusModeButtonActiveStyle, accentColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_statusModeButtonActiveStyle, _statusModeActiveBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_statusModeButtonActiveStyle, accentColor);
 
             _statusModeButtonDisabledStyle = new GUIStyle(_statusModeButtonStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_statusModeButtonDisabledStyle, _statusModeDisabledBackground);
-            GuiStyleUtil.ApplyTextColorToAllStates(_statusModeButtonDisabledStyle, CortexIdeLayout.WithAlpha(mutedColor, 0.72f));
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_statusModeButtonDisabledStyle, _statusModeDisabledBackground);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_statusModeButtonDisabledStyle, ImguiWorkbenchLayout.WithAlpha(mutedColor, 0.72f));
 
             _statusTooltipStyle = new GUIStyle(_codeTooltipStyle);
             _statusTooltipStyle.wordWrap = true;
@@ -926,13 +927,13 @@ namespace Cortex.Modules.Editor
             _tabCloseButtonStyle.fontSize = 10;
             _tabCloseButtonStyle.padding = new RectOffset(0, 0, 0, 0);
             _tabCloseButtonStyle.margin = new RectOffset(0, 0, 0, 0);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_tabCloseButtonStyle, MakeTexture(CortexIdeLayout.Blend(headerColor, bgColor, 0.45f)));
-            GuiStyleUtil.ApplyTextColorToAllStates(_tabCloseButtonStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_tabCloseButtonStyle, MakeTexture(ImguiWorkbenchLayout.Blend(headerColor, bgColor, 0.45f)));
+            ImguiStyleUtil.ApplyTextColorToAllStates(_tabCloseButtonStyle, textColor);
 
             _emptyStateStyle = new GUIStyle(GUI.skin.label);
             _emptyStateStyle.alignment = TextAnchor.MiddleCenter;
             _emptyStateStyle.wordWrap = true;
-            GuiStyleUtil.ApplyTextColorToAllStates(_emptyStateStyle, mutedColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_emptyStateStyle, mutedColor);
             _emptyStateStyle.fontSize = 12;
 
             _codeViewSurface.Invalidate();

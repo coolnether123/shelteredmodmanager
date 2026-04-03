@@ -21,7 +21,7 @@ Follow these rules:
 - `Cortex.Renderers.Imgui`
   - concrete drawing, measurement, and execution over portable runtime-UI output
 - `Cortex.Host.Sheltered`
-  - host composition that selects the IMGUI runtime UI today and supplies the active `IWorkbenchUiSurface`
+  - host composition that selects the IMGUI runtime UI today and supplies the active shell-owned `IWorkbenchUiSurface`
 
 ## Add a renderer
 
@@ -118,7 +118,7 @@ See the recording backend test coverage in `Cortex.Tests/Rendering/RecordingRunt
 Today the composition flow is:
 
 1. `Cortex.Host.Sheltered` creates `UnityWorkbenchFrameContext`.
-2. `Cortex.Host.Sheltered` creates the active `ShelteredWorkbenchUiSurface`.
+2. `Cortex.Host.Sheltered` selects the active `ImguiWorkbenchUiSurface` from `Cortex.Shell.Unity.Imgui`.
 3. `Cortex.Host.Sheltered` selects `ImguiWorkbenchRuntimeUiFactory`.
 4. `Cortex.Renderers.Imgui` builds `ImguiRenderPipeline`.
 5. IMGUI renderers consume portable planners/controllers plus the host-owned frame context and host-supplied module UI surface.

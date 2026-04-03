@@ -6,6 +6,7 @@ using Cortex.Rendering.Models;
 using Cortex.Rendering.RuntimeUi.Shell;
 using Cortex.Services.Onboarding;
 using UnityEngine;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Shell
 {
@@ -180,9 +181,9 @@ namespace Cortex.Shell
 
         private static void DrawPanelChrome(Rect rect, float alpha)
         {
-            var surface = CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), alpha);
+            var surface = ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetSurfaceColor(), alpha);
             DrawBlock(rect, surface);
-            DrawBorder(rect, CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), alpha * 0.9f), 2f);
+            DrawBorder(rect, ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), alpha * 0.9f), 2f);
         }
 
         private static void DrawBorder(Rect rect, Color color, float thickness)
@@ -209,7 +210,7 @@ namespace Cortex.Shell
         private static GUIStyle CreatePromptTitleStyle()
         {
             var style = new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold };
-            style.normal.textColor = CortexIdeLayout.GetTextColor();
+            style.normal.textColor = ImguiWorkbenchLayout.GetTextColor();
             return style;
         }
 

@@ -7,6 +7,7 @@ using Cortex.Modules.Shared;
 using Cortex.Shell;
 using Cortex.Services.Navigation;
 using UnityEngine;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Modules.Logs
 {
@@ -19,7 +20,7 @@ namespace Cortex.Modules.Logs
     /// </summary>
     public sealed class LogsModule
     {
-        // ── filter state ──────────────────────────────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬ filter state Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         private string _levelFilter = string.Empty;
         private string _textFilter = string.Empty;
         private bool _errorsVisible = true;
@@ -27,11 +28,11 @@ namespace Cortex.Modules.Logs
         private bool _infoVisible = true;
         private int _lastEntryCount;
 
-        // ── selection state ───────────────────────────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬ selection state Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         private Vector2 _listScroll = Vector2.zero;
         private Vector2 _detailScroll = Vector2.zero;
 
-        // ── styles ────────────────────────────────────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬ styles Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         private string _appliedTheme = string.Empty;
         private GUIStyle _toolbarStyle;
         private GUIStyle _severityToggleStyle;
@@ -58,7 +59,7 @@ namespace Cortex.Modules.Logs
         private Texture2D _frameSelectedBg;
         private CortexShellViewState _viewState;
 
-        // ── constants ─────────────────────────────────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬ constants Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         private const float EntryHeight = 34f;
         private const float ToolbarHeight = 26f;
         private const float SeverityButtonWidth = 72f;
@@ -100,7 +101,7 @@ namespace Cortex.Modules.Logs
         {
             if (state.Logs.SelectedEntry == null)
             {
-                CortexIdeLayout.DrawGroup("Log Stream", delegate
+                ImguiWorkbenchLayout.DrawGroup("Log Stream", delegate
                 {
                     DrawLogList(visibleEntries, sourcePathResolver, navigationService, state);
                 }, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
@@ -108,19 +109,19 @@ namespace Cortex.Modules.Logs
             }
 
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-            CortexIdeLayout.DrawGroup("Log Stream", delegate
+            ImguiWorkbenchLayout.DrawGroup("Log Stream", delegate
             {
                 DrawLogList(visibleEntries, sourcePathResolver, navigationService, state);
             }, GUILayout.ExpandWidth(true), GUILayout.MinHeight(120f), GUILayout.Height(180f));
             GUILayout.Space(6f);
-            CortexIdeLayout.DrawGroup("Entry Details", delegate
+            ImguiWorkbenchLayout.DrawGroup("Entry Details", delegate
             {
                 DrawDetailStrip(sourcePathResolver, navigationService, state);
             }, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.EndVertical();
         }
 
-        // ── Toolbar ───────────────────────────────────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬ Toolbar Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         private void DrawToolbar(
             IList<RuntimeLogEntry> allEntries,
@@ -132,20 +133,20 @@ namespace Cortex.Modules.Logs
             GUILayout.BeginHorizontal(_toolbarStyle ?? GUI.skin.box, GUILayout.Height(ToolbarHeight));
 
             // Severity toggles styled like VS's Error/Warning/Info chips
-            DrawSeverityToggle(ref _errorsVisible, "⊗ Errors", CountBySeverity(visibleEntries, RuntimeLogSeverity.Error) + CountBySeverity(visibleEntries, RuntimeLogSeverity.Fatal), CortexIdeLayout.GetErrorColor());
-            DrawSeverityToggle(ref _warningsVisible, "⚠ Warnings", CountBySeverity(visibleEntries, RuntimeLogSeverity.Warning), CortexIdeLayout.GetWarningColor());
-            DrawSeverityToggle(ref _infoVisible, "ℹ Info", CountBySeverity(visibleEntries, RuntimeLogSeverity.Info) + CountBySeverity(visibleEntries, RuntimeLogSeverity.Debug), CortexIdeLayout.GetMutedTextColor());
+            DrawSeverityToggle(ref _errorsVisible, "Ã¢Å â€” Errors", CountBySeverity(visibleEntries, RuntimeLogSeverity.Error) + CountBySeverity(visibleEntries, RuntimeLogSeverity.Fatal), ImguiWorkbenchLayout.GetErrorColor());
+            DrawSeverityToggle(ref _warningsVisible, "Ã¢Å¡Â  Warnings", CountBySeverity(visibleEntries, RuntimeLogSeverity.Warning), ImguiWorkbenchLayout.GetWarningColor());
+            DrawSeverityToggle(ref _infoVisible, "Ã¢â€žÂ¹ Info", CountBySeverity(visibleEntries, RuntimeLogSeverity.Info) + CountBySeverity(visibleEntries, RuntimeLogSeverity.Debug), ImguiWorkbenchLayout.GetMutedTextColor());
 
             GUILayout.Space(8f);
             GUILayout.Label("Filter:", GUILayout.Width(36f));
             _textFilter = GUILayout.TextField(_textFilter ?? string.Empty, _filterInputStyle ?? GUI.skin.textField, GUILayout.ExpandWidth(true));
-            if (!string.IsNullOrEmpty(_textFilter) && GUILayout.Button("×", GUILayout.Width(20f)))
+            if (!string.IsNullOrEmpty(_textFilter) && GUILayout.Button("Ãƒâ€”", GUILayout.Width(20f)))
             {
                 _textFilter = string.Empty;
             }
 
             GUILayout.Space(6f);
-            settings.AutoScrollLogs = GUILayout.Toggle(settings.AutoScrollLogs, "↓ Auto", GUILayout.Width(60f));
+            settings.AutoScrollLogs = GUILayout.Toggle(settings.AutoScrollLogs, "Ã¢â€ â€œ Auto", GUILayout.Width(60f));
 
             if (!detachedWindow)
             {
@@ -174,7 +175,7 @@ namespace Cortex.Modules.Logs
             visible = GUILayout.Toggle(visible, label + " " + count, style, GUILayout.Width(SeverityButtonWidth));
         }
 
-        // ── Log list ──────────────────────────────────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬ Log list Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         private void DrawLogList(
             IList<RuntimeLogEntry> visibleEntries,
@@ -271,7 +272,7 @@ namespace Cortex.Modules.Logs
             GUI.contentColor = previousContent;
         }
 
-        // ── Inline detail strip ───────────────────────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬ Inline detail strip Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         private void DrawDetailStrip(
             ISourcePathResolver sourcePathResolver,
@@ -308,14 +309,14 @@ namespace Cortex.Modules.Logs
 
             if (location.Success)
             {
-                if (GUILayout.Button("▶ Source", _actionButtonActiveStyle ?? GUI.skin.button, GUILayout.Width(78f)))
+                if (GUILayout.Button("Ã¢â€“Â¶ Source", _actionButtonActiveStyle ?? GUI.skin.button, GUILayout.Width(78f)))
                 {
                     NavigateToLocation(navigationService, state, location.ResolvedPath, location.LineNumber);
                 }
             }
             else if (entry.StackFrames != null && entry.StackFrames.Count > 0)
             {
-                if (GUILayout.Button("▶ Frame", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(70f)))
+                if (GUILayout.Button("Ã¢â€“Â¶ Frame", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(70f)))
                 {
                     TryNavigateFirstFrame(navigationService, state, entry);
                 }
@@ -368,7 +369,7 @@ namespace Cortex.Modules.Logs
                 {
                     state.Logs.SelectedFrameIndex = i;
                 }
-                if (GUILayout.Button("→", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(26f)))
+                if (GUILayout.Button("Ã¢â€ â€™", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(26f)))
                 {
                     state.Logs.SelectedFrameIndex = i;
                     OpenOrDecompileFrame(navigationService, state, entry, i);
@@ -378,11 +379,11 @@ namespace Cortex.Modules.Logs
 
             if (entry.StackFrames.Count > 8)
             {
-                GUILayout.Label("… and " + (entry.StackFrames.Count - 8) + " more frames.", _entryMetaStyle ?? GUI.skin.label);
+                GUILayout.Label("Ã¢â‚¬Â¦ and " + (entry.StackFrames.Count - 8) + " more frames.", _entryMetaStyle ?? GUI.skin.label);
             }
         }
 
-        // ── Navigation ────────────────────────────────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬ Navigation Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         private void NavigateToLocation(ICortexNavigationService navigationService, CortexShellState state, string filePath, int line)
         {
@@ -463,7 +464,7 @@ namespace Cortex.Modules.Logs
             {
                 state.StatusMessage = target != null
                     ? target.StatusMessage
-                    : "Navigation failed — no source or decompiled output available for this frame.";
+                    : "Navigation failed Ã¢â‚¬â€ no source or decompiled output available for this frame.";
                 MMLog.WriteWarning("[Cortex.Logs] Runtime frame navigation failed for log entry '" +
                     (entry != null ? (entry.Source ?? "Unknown") : "Unknown") + "': " + state.StatusMessage);
                 return;
@@ -478,7 +479,7 @@ namespace Cortex.Modules.Logs
             MMLog.WriteInfo("[Cortex.Logs] Opened runtime navigation target -> " + target.FilePath + ":" + target.LineNumber);
         }
 
-        // ── Filtering ─────────────────────────────────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬ Filtering Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         private IList<RuntimeLogEntry> ApplyFilters(IList<RuntimeLogEntry> all, CortexShellState state)
         {
@@ -549,14 +550,14 @@ namespace Cortex.Modules.Logs
             return true;
         }
 
-        // ── Helpers ───────────────────────────────────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬ Helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         private static string BuildRowLabel(RuntimeLogEntry entry)
         {
             var timestamp = entry.Timestamp.ToString("HH:mm:ss");
             var level = entry.Level ?? "Info";
             var source = string.IsNullOrEmpty(entry.Source) ? "Unknown" : entry.Source;
-            var repeat = entry.RepeatCount > 1 ? "  ×" + entry.RepeatCount : string.Empty;
+            var repeat = entry.RepeatCount > 1 ? "  Ãƒâ€”" + entry.RepeatCount : string.Empty;
             var firstLine = FirstLine(entry.Message);
 
             return timestamp + "   [" + level + "]   " + source + repeat + "\n" + firstLine;
@@ -645,10 +646,10 @@ namespace Cortex.Modules.Logs
             var normalized = text.Replace("\r\n", "\n");
             var index = normalized.IndexOf('\n');
             var first = index >= 0 ? normalized.Substring(0, index) : normalized;
-            return first.Length > 140 ? first.Substring(0, 137) + "…" : first;
+            return first.Length > 140 ? first.Substring(0, 137) + "Ã¢â‚¬Â¦" : first;
         }
 
-        // ── Style management ──────────────────────────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬ Style management Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         private void EnsureStyles(CortexShellState state)
         {
@@ -664,19 +665,19 @@ namespace Cortex.Modules.Logs
 
             _appliedTheme = themeId;
 
-            var textColor = CortexIdeLayout.GetTextColor();
-            var mutedColor = CortexIdeLayout.GetMutedTextColor();
-            var accentColor = CortexIdeLayout.GetAccentColor();
-            var surfaceColor = CortexIdeLayout.GetSurfaceColor();
-            var headerColor = CortexIdeLayout.GetHeaderColor();
-            var bgColor = CortexIdeLayout.GetBackgroundColor();
-            var errorColor = CortexIdeLayout.GetErrorColor();
-            var warningColor = CortexIdeLayout.GetWarningColor();
+            var textColor = ImguiWorkbenchLayout.GetTextColor();
+            var mutedColor = ImguiWorkbenchLayout.GetMutedTextColor();
+            var accentColor = ImguiWorkbenchLayout.GetAccentColor();
+            var surfaceColor = ImguiWorkbenchLayout.GetSurfaceColor();
+            var headerColor = ImguiWorkbenchLayout.GetHeaderColor();
+            var bgColor = ImguiWorkbenchLayout.GetBackgroundColor();
+            var errorColor = ImguiWorkbenchLayout.GetErrorColor();
+            var warningColor = ImguiWorkbenchLayout.GetWarningColor();
 
             // Toolbar
-            _toolbarBg = MakeTex(CortexIdeLayout.Blend(headerColor, bgColor, 0.3f));
+            _toolbarBg = MakeTex(ImguiWorkbenchLayout.Blend(headerColor, bgColor, 0.3f));
             _toolbarStyle = new GUIStyle(GUI.skin.box);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_toolbarStyle, _toolbarBg);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_toolbarStyle, _toolbarBg);
             _toolbarStyle.padding = new RectOffset(4, 4, 2, 2);
             _toolbarStyle.margin = new RectOffset(0, 0, 0, 0);
 
@@ -686,13 +687,13 @@ namespace Cortex.Modules.Logs
             _severityToggleStyle.alignment = TextAnchor.MiddleCenter;
             _severityToggleStyle.padding = new RectOffset(8, 8, 1, 1);
             _severityToggleStyle.margin = new RectOffset(0, 2, 0, 0);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_severityToggleStyle, MakeTex(CortexIdeLayout.Blend(surfaceColor, headerColor, 0.55f)));
-            GuiStyleUtil.ApplyTextColorToAllStates(_severityToggleStyle, mutedColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_severityToggleStyle, MakeTex(ImguiWorkbenchLayout.Blend(surfaceColor, headerColor, 0.55f)));
+            ImguiStyleUtil.ApplyTextColorToAllStates(_severityToggleStyle, mutedColor);
 
             _severityToggleActiveStyle = new GUIStyle(_severityToggleStyle);
             _severityToggleActiveStyle.fontStyle = FontStyle.Bold;
-            GuiStyleUtil.ApplyBackgroundToAllStates(_severityToggleActiveStyle, MakeTex(CortexIdeLayout.Blend(accentColor, headerColor, 0.18f)));
-            GuiStyleUtil.ApplyTextColorToAllStates(_severityToggleActiveStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_severityToggleActiveStyle, MakeTex(ImguiWorkbenchLayout.Blend(accentColor, headerColor, 0.18f)));
+            ImguiStyleUtil.ApplyTextColorToAllStates(_severityToggleActiveStyle, textColor);
 
             // Filter input
             _filterInputStyle = new GUIStyle(GUI.skin.textField);
@@ -700,80 +701,80 @@ namespace Cortex.Modules.Logs
             _filterInputStyle.padding = new RectOffset(6, 4, 2, 2);
 
             // Entry buttons
-            _entryNormalBg = MakeTex(CortexIdeLayout.Blend(bgColor, surfaceColor, 0.4f));
-            _entrySelectedBg = MakeTex(CortexIdeLayout.Blend(headerColor, accentColor, 0.35f));
-            _entryErrorBg = MakeTex(CortexIdeLayout.Blend(bgColor, errorColor, 0.07f));
-            _entryWarningBg = MakeTex(CortexIdeLayout.Blend(bgColor, warningColor, 0.05f));
+            _entryNormalBg = MakeTex(ImguiWorkbenchLayout.Blend(bgColor, surfaceColor, 0.4f));
+            _entrySelectedBg = MakeTex(ImguiWorkbenchLayout.Blend(headerColor, accentColor, 0.35f));
+            _entryErrorBg = MakeTex(ImguiWorkbenchLayout.Blend(bgColor, errorColor, 0.07f));
+            _entryWarningBg = MakeTex(ImguiWorkbenchLayout.Blend(bgColor, warningColor, 0.05f));
 
             _entryButtonStyle = new GUIStyle(GUI.skin.button);
             _entryButtonStyle.alignment = TextAnchor.UpperLeft;
             _entryButtonStyle.padding = new RectOffset(8, 8, 4, 4);
             _entryButtonStyle.margin = new RectOffset(0, 0, 1, 0);
             _entryButtonStyle.fontSize = 11;
-            GuiStyleUtil.ApplyBackgroundToAllStates(_entryButtonStyle, _entryNormalBg);
-            GuiStyleUtil.ApplyTextColorToAllStates(_entryButtonStyle, mutedColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_entryButtonStyle, _entryNormalBg);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_entryButtonStyle, mutedColor);
 
             _entryButtonSelectedStyle = new GUIStyle(_entryButtonStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_entryButtonSelectedStyle, _entrySelectedBg);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_entryButtonSelectedStyle, _entrySelectedBg);
             _entryButtonSelectedStyle.fontStyle = FontStyle.Bold;
-            GuiStyleUtil.ApplyTextColorToAllStates(_entryButtonSelectedStyle, Color.white);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_entryButtonSelectedStyle, Color.white);
 
             _entryButtonErrorStyle = new GUIStyle(_entryButtonStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_entryButtonErrorStyle, _entryErrorBg);
-            GuiStyleUtil.ApplyTextColorToAllStates(_entryButtonErrorStyle, errorColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_entryButtonErrorStyle, _entryErrorBg);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_entryButtonErrorStyle, errorColor);
 
             _entryButtonWarningStyle = new GUIStyle(_entryButtonStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_entryButtonWarningStyle, _entryWarningBg);
-            GuiStyleUtil.ApplyTextColorToAllStates(_entryButtonWarningStyle, warningColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_entryButtonWarningStyle, _entryWarningBg);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_entryButtonWarningStyle, warningColor);
 
             // Meta/message label
             _entryMetaStyle = new GUIStyle(GUI.skin.label);
             _entryMetaStyle.fontSize = 10;
             _entryMetaStyle.wordWrap = true;
-            GuiStyleUtil.ApplyTextColorToAllStates(_entryMetaStyle, mutedColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_entryMetaStyle, mutedColor);
 
             _entryMessageStyle = new GUIStyle(GUI.skin.label);
             _entryMessageStyle.fontSize = 11;
             _entryMessageStyle.wordWrap = true;
-            GuiStyleUtil.ApplyTextColorToAllStates(_entryMessageStyle, textColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_entryMessageStyle, textColor);
 
             // Detail labels
             _detailLabelStyle = new GUIStyle(GUI.skin.textArea);
             _detailLabelStyle.wordWrap = true;
             _detailLabelStyle.fontSize = 11;
-            GuiStyleUtil.ApplyTextColorToAllStates(_detailLabelStyle, textColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_detailLabelStyle, textColor);
 
             _detailKeyStyle = new GUIStyle(GUI.skin.label);
             _detailKeyStyle.fontStyle = FontStyle.Bold;
             _detailKeyStyle.fontSize = 11;
-            GuiStyleUtil.ApplyTextColorToAllStates(_detailKeyStyle, accentColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_detailKeyStyle, accentColor);
 
             // Frame buttons
-            _frameBg = MakeTex(CortexIdeLayout.Blend(bgColor, surfaceColor, 0.6f));
-            _frameSelectedBg = MakeTex(CortexIdeLayout.Blend(headerColor, accentColor, 0.2f));
+            _frameBg = MakeTex(ImguiWorkbenchLayout.Blend(bgColor, surfaceColor, 0.6f));
+            _frameSelectedBg = MakeTex(ImguiWorkbenchLayout.Blend(headerColor, accentColor, 0.2f));
 
             _frameButtonStyle = new GUIStyle(GUI.skin.button);
             _frameButtonStyle.alignment = TextAnchor.MiddleLeft;
             _frameButtonStyle.fontSize = 10;
             _frameButtonStyle.padding = new RectOffset(6, 6, 2, 2);
             _frameButtonStyle.margin = new RectOffset(0, 0, 1, 0);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_frameButtonStyle, _frameBg);
-            GuiStyleUtil.ApplyTextColorToAllStates(_frameButtonStyle, mutedColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_frameButtonStyle, _frameBg);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_frameButtonStyle, mutedColor);
 
             _frameButtonSelectedStyle = new GUIStyle(_frameButtonStyle);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_frameButtonSelectedStyle, _frameSelectedBg);
-            GuiStyleUtil.ApplyTextColorToAllStates(_frameButtonSelectedStyle, textColor);
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_frameButtonSelectedStyle, _frameSelectedBg);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_frameButtonSelectedStyle, textColor);
 
             // Action buttons
             _actionButtonStyle = new GUIStyle(GUI.skin.button);
             _actionButtonStyle.fontSize = 11;
             _actionButtonStyle.padding = new RectOffset(6, 6, 2, 2);
             _actionButtonStyle.margin = new RectOffset(2, 0, 0, 0);
-            GuiStyleUtil.ApplyTextColorToAllStates(_actionButtonStyle, mutedColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_actionButtonStyle, mutedColor);
 
             _actionButtonActiveStyle = new GUIStyle(_actionButtonStyle);
             _actionButtonActiveStyle.fontStyle = FontStyle.Bold;
-            GuiStyleUtil.ApplyTextColorToAllStates(_actionButtonActiveStyle, accentColor);
+            ImguiStyleUtil.ApplyTextColorToAllStates(_actionButtonActiveStyle, accentColor);
         }
 
         private static Texture2D MakeTex(Color color)

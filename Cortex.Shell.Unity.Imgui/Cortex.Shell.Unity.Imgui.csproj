@@ -41,8 +41,8 @@
     <Compile Include="CortexShell.Runtime.cs" />
     <Compile Include="CortexShell.Search.cs" />
     <Compile Include="CortexShell.cs" />
-    <Compile Include="GuiStyleUtil.cs" />
-    <Compile Include="Layout\CortexIdeLayout.cs" />
+    <Compile Include="Styling\ImguiStyleUtil.cs" />
+    <Compile Include="Layout\ImguiWorkbenchLayout.cs" />
     <Compile Include="Modules\Build\BuildModule.cs" />
     <Compile Include="Modules\Editor\CodeViewSurface.cs" />
     <Compile Include="Modules\Editor\EditableCodeViewSurface.cs" />
@@ -78,6 +78,7 @@
     <Compile Include="Shell\ShellLayoutCoordinator.cs" />
     <Compile Include="Shell\ShellOnboardingOverlayPresenter.cs" />
     <Compile Include="Shell\ShellOverlayCoordinator.cs" />
+    <Compile Include="Ui\ImguiWorkbenchUiSurface.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Cortex.Contracts\Cortex.Contracts.csproj">

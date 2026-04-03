@@ -18,6 +18,7 @@ using Cortex.Services.Editor.Input;
 using Cortex.Services.Editor.Presentation;
 using Cortex.Services.Inspector.Identity;
 using Cortex.Services.Inspector.Lifecycle;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Modules.Editor
 {
@@ -385,27 +386,27 @@ namespace Cortex.Modules.Editor
             _tooltipSignatureStyle.clipping = TextClipping.Overflow;
             _tooltipSignatureStyle.padding = new RectOffset(0, 0, 0, 0);
             _tooltipSignatureStyle.margin = new RectOffset(0, 0, 0, 0);
-            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipSignatureStyle, CortexIdeLayout.GetTextColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_tooltipSignatureStyle, ImguiWorkbenchLayout.GetTextColor());
             _tooltipPathStyle = new GUIStyle(_baseStyle);
             _tooltipPathStyle.wordWrap = false;
             _tooltipPathStyle.clipping = TextClipping.Clip;
             _tooltipPathStyle.padding = new RectOffset(0, 0, 0, 0);
             _tooltipPathStyle.margin = new RectOffset(0, 0, 0, 0);
-            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipPathStyle, CortexIdeLayout.GetMutedTextColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_tooltipPathStyle, ImguiWorkbenchLayout.GetMutedTextColor());
             _tooltipMetaStyle = new GUIStyle(_baseStyle);
             _tooltipMetaStyle.wordWrap = true;
             _tooltipMetaStyle.clipping = TextClipping.Clip;
             _tooltipMetaStyle.padding = new RectOffset(0, 0, 0, 0);
             _tooltipMetaStyle.margin = new RectOffset(0, 0, 0, 0);
-            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipMetaStyle, CortexIdeLayout.Blend(CortexIdeLayout.GetTextColor(), CortexIdeLayout.GetMutedTextColor(), 0.38f));
+            ImguiStyleUtil.ApplyTextColorToAllStates(_tooltipMetaStyle, ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetTextColor(), ImguiWorkbenchLayout.GetMutedTextColor(), 0.38f));
             _tooltipLinkStyle = new GUIStyle(_tooltipSignatureStyle);
-            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipLinkStyle, CortexIdeLayout.GetAccentColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_tooltipLinkStyle, ImguiWorkbenchLayout.GetAccentColor());
             _tooltipDetailStyle = new GUIStyle(_baseStyle);
             _tooltipDetailStyle.wordWrap = true;
             _tooltipDetailStyle.clipping = TextClipping.Clip;
             _tooltipDetailStyle.padding = new RectOffset(0, 0, 0, 0);
             _tooltipDetailStyle.margin = new RectOffset(0, 0, 0, 0);
-            GuiStyleUtil.ApplyTextColorToAllStates(_tooltipDetailStyle, CortexIdeLayout.GetTextColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_tooltipDetailStyle, ImguiWorkbenchLayout.GetTextColor());
             _contextMenuStyle = contextMenuStyle ?? GUI.skin.box;
             _contextMenuButtonStyle = contextMenuButtonStyle ?? GUI.skin.button;
             _contextMenuHeaderStyle = contextMenuHeaderStyle ?? GUI.skin.label;
@@ -418,31 +419,31 @@ namespace Cortex.Modules.Editor
             _collapsedHintStyle.clipping = TextClipping.Overflow;
             _collapsedHintStyle.padding = new RectOffset(0, 0, 0, 0);
             _collapsedHintStyle.margin = new RectOffset(0, 0, 0, 0);
-            GuiStyleUtil.ApplyTextColorToAllStates(_collapsedHintStyle, CortexIdeLayout.GetMutedTextColor());
+            ImguiStyleUtil.ApplyTextColorToAllStates(_collapsedHintStyle, ImguiWorkbenchLayout.GetMutedTextColor());
 
             _foldGlyphStyle = new GUIStyle(GUI.skin.button);
             _foldGlyphStyle.fontSize = 10;
             _foldGlyphStyle.alignment = TextAnchor.MiddleCenter;
             _foldGlyphStyle.padding = new RectOffset(0, 0, 0, 0);
             _foldGlyphStyle.margin = new RectOffset(0, 0, 0, 0);
-            GuiStyleUtil.ApplyBackgroundToAllStates(_foldGlyphStyle, MakeFill(CortexIdeLayout.Blend(CortexIdeLayout.GetSurfaceColor(), CortexIdeLayout.GetHeaderColor(), 0.55f)));
-            GuiStyleUtil.ApplyTextColorToAllStates(_foldGlyphStyle, CortexIdeLayout.GetMutedTextColor());
+            ImguiStyleUtil.ApplyBackgroundToAllStates(_foldGlyphStyle, MakeFill(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetSurfaceColor(), ImguiWorkbenchLayout.GetHeaderColor(), 0.55f)));
+            ImguiStyleUtil.ApplyTextColorToAllStates(_foldGlyphStyle, ImguiWorkbenchLayout.GetMutedTextColor());
             _sharedContent.text = "Ag";
             _lineHeight = _baseStyle.lineHeight > 0f
                 ? Mathf.Max(18f, _baseStyle.lineHeight + 2f)
                 : Mathf.Max(18f, _baseStyle.CalcSize(_sharedContent).y + 3f);
-            _hoverFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.18f));
-            _hoverOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.78f));
-            _relatedSelectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.14f));
-            _declarationSelectionFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), new Color(0.60f, 0.82f, 0.42f, 1f), 0.72f), 0.26f));
-            _selectedFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.28f));
-            _selectionOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.95f));
-            _lineHighlightFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetSurfaceColor(), 0.35f));
-            _navigationLineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.16f));
-            _tooltipUnderlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.9f));
-            _methodTargetFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.10f));
-            _methodTargetOutlineFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.GetAccentColor(), 0.94f));
-            _methodTargetGlowFill = MakeFill(CortexIdeLayout.WithAlpha(CortexIdeLayout.Blend(CortexIdeLayout.GetAccentColor(), Color.white, 0.18f), 0.16f));
+            _hoverFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.18f));
+            _hoverOutlineFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.78f));
+            _relatedSelectionFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.14f));
+            _declarationSelectionFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetAccentColor(), new Color(0.60f, 0.82f, 0.42f, 1f), 0.72f), 0.26f));
+            _selectedFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.28f));
+            _selectionOutlineFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.95f));
+            _lineHighlightFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetSurfaceColor(), 0.35f));
+            _navigationLineFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.16f));
+            _tooltipUnderlineFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.9f));
+            _methodTargetFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.10f));
+            _methodTargetOutlineFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.GetAccentColor(), 0.94f));
+            _methodTargetGlowFill = MakeFill(ImguiWorkbenchLayout.WithAlpha(ImguiWorkbenchLayout.Blend(ImguiWorkbenchLayout.GetAccentColor(), Color.white, 0.18f), 0.16f));
             Invalidate();
         }
 
@@ -1952,7 +1953,7 @@ namespace Cortex.Modules.Editor
             style.onHover.background = null;
             style.onActive.background = null;
             style.onFocused.background = null;
-            GuiStyleUtil.ApplyTextColorToAllStates(style, _classificationPresentationService.GetColor(key));
+            ImguiStyleUtil.ApplyTextColorToAllStates(style, _classificationPresentationService.GetColor(key));
             _classificationStyles[key] = style;
             return style;
         }

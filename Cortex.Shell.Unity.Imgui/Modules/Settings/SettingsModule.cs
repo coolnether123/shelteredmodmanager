@@ -15,6 +15,7 @@ using UnityEngine;
 using Cortex.Services.Editor.Input;
 using Cortex.Services.Onboarding;
 using Cortex.Services.Settings;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Modules.Settings
 {
@@ -120,7 +121,7 @@ namespace Cortex.Modules.Settings
 
         private void DrawToolbar(ICortexSettingsStore settingsStore, WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
         {
-            CortexIdeLayout.DrawGroup(null, delegate
+            ImguiWorkbenchLayout.DrawGroup(null, delegate
             {
                 GUILayout.BeginHorizontal();
                 GUILayout.Label("Cortex Settings", GUILayout.Height(24f), GUILayout.Width(180f));
@@ -195,7 +196,7 @@ namespace Cortex.Modules.Settings
             _sessionState.SearchQuery = UiSurface
                 .DrawSearchToolbar("Search properties", _sessionState.SearchQuery, 42f, true);
 
-            CortexIdeLayout.DrawGroup(null, delegate
+            ImguiWorkbenchLayout.DrawGroup(null, delegate
             {
                 GUILayout.BeginHorizontal();
                 _sessionState.ShowModifiedOnly = GUILayout.Toggle(_sessionState.ShowModifiedOnly, "Show modified only", GUILayout.Width(140f));
@@ -207,7 +208,7 @@ namespace Cortex.Modules.Settings
 
         private void DrawNavigation(SettingsDocumentModel document, string renderActiveSectionId, NavigationInteraction interaction)
         {
-            CortexIdeLayout.DrawGroup(null, delegate
+            ImguiWorkbenchLayout.DrawGroup(null, delegate
             {
                 GUILayout.Label("Property Pages", GUILayout.Height(22f));
                 GUILayout.Space(4f);
@@ -328,7 +329,7 @@ namespace Cortex.Modules.Settings
             SettingsDocumentModel document,
             string renderActiveSectionId)
         {
-            CortexIdeLayout.DrawGroup(null, delegate
+            ImguiWorkbenchLayout.DrawGroup(null, delegate
             {
                 GUILayout.Label("Properties", GUILayout.Height(24f));
                 GUILayout.Space(4f);
@@ -779,7 +780,7 @@ namespace Cortex.Modules.Settings
             GUILayout.FlexibleSpace();
             if (IsBindingModified(settings, definition))
             {
-                DrawSettingTag("Modified", CortexIdeLayout.GetWarningColor());
+                DrawSettingTag("Modified", ImguiWorkbenchLayout.GetWarningColor());
             }
             GUILayout.EndHorizontal();
             if (!string.IsNullOrEmpty(definition.Description))
@@ -1228,11 +1229,11 @@ namespace Cortex.Modules.Settings
             GUILayout.FlexibleSpace();
             if (contribution != null && IsSearchActive() && MatchesContributionQuery(contribution))
             {
-                DrawSettingTag("Match", CortexIdeLayout.GetAccentColor());
+                DrawSettingTag("Match", ImguiWorkbenchLayout.GetAccentColor());
             }
             if (contribution != null && IsSettingModified(contribution))
             {
-                DrawSettingTag("Modified", CortexIdeLayout.GetWarningColor());
+                DrawSettingTag("Modified", ImguiWorkbenchLayout.GetWarningColor());
             }
             if (contribution != null && HasSettingActions(contribution))
             {
@@ -1401,14 +1402,14 @@ namespace Cortex.Modules.Settings
             switch (severity)
             {
                 case SettingValidationSeverity.Error:
-                    return CortexIdeLayout.GetErrorColor();
+                    return ImguiWorkbenchLayout.GetErrorColor();
                 case SettingValidationSeverity.Warning:
-                    return CortexIdeLayout.GetWarningColor();
+                    return ImguiWorkbenchLayout.GetWarningColor();
                 case SettingValidationSeverity.Info:
-                    return CortexIdeLayout.GetAccentColor();
+                    return ImguiWorkbenchLayout.GetAccentColor();
                 case SettingValidationSeverity.None:
                 default:
-                    return CortexIdeLayout.GetTextColor();
+                    return ImguiWorkbenchLayout.GetTextColor();
             }
         }
 
@@ -1561,7 +1562,7 @@ namespace Cortex.Modules.Settings
         {
             var previousBackground = GUI.backgroundColor;
             var previousContent = GUI.contentColor;
-            var swatchColor = CortexIdeLayout.ParseColor(hex, Color.white);
+            var swatchColor = ImguiWorkbenchLayout.ParseColor(hex, Color.white);
             GUI.backgroundColor = swatchColor;
             GUI.contentColor = GetReadableSwatchTextColor(swatchColor);
             GUILayout.Box(label, GUILayout.Width(82f), GUILayout.Height(18f));
@@ -1874,7 +1875,7 @@ namespace Cortex.Modules.Settings
                 return;
             }
 
-            CortexIdeLayout.DrawGroup(null, delegate
+            ImguiWorkbenchLayout.DrawGroup(null, delegate
             {
                 GUILayout.BeginHorizontal();
                 GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
