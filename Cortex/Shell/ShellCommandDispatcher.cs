@@ -9,6 +9,7 @@ namespace Cortex.Shell
     internal sealed class ShellCommandDispatcher
     {
         private readonly CortexShellState _state;
+        private readonly CortexShellViewState _viewState;
         private readonly CortexShellCommandRouter _commandRouter;
         private readonly Func<IWorkbenchRuntime> _runtimeProvider;
         private readonly Func<IDocumentService> _documentServiceProvider;
@@ -31,6 +32,7 @@ namespace Cortex.Shell
 
         public ShellCommandDispatcher(
             CortexShellState state,
+            CortexShellViewState viewState,
             CortexShellCommandRouter commandRouter,
             Func<IWorkbenchRuntime> runtimeProvider,
             Func<IDocumentService> documentServiceProvider,
@@ -50,6 +52,7 @@ namespace Cortex.Shell
             EditorSymbolInteractionService symbolInteractionService)
         {
             _state = state;
+            _viewState = viewState ?? new CortexShellViewState();
             _commandRouter = commandRouter;
             _runtimeProvider = runtimeProvider;
             _documentServiceProvider = documentServiceProvider;
@@ -99,6 +102,7 @@ namespace Cortex.Shell
             {
                 _commandContext = new CortexShellCommandContext(
                     _state,
+                    _viewState,
                     _runtimeProvider,
                     _documentServiceProvider,
                     _isVisibleProvider,

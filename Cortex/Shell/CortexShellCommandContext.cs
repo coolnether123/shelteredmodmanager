@@ -3,11 +3,13 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Editor;
 using Cortex.Presentation.Abstractions;
+using Cortex.Shell;
 
 namespace Cortex
 {
     internal sealed class CortexShellCommandContext
     {
+        private readonly CortexShellViewState _viewState;
         private readonly Func<IWorkbenchRuntime> _workbenchRuntimeAccessor;
         private readonly Func<IDocumentService> _documentServiceAccessor;
         private readonly Func<bool> _visibleAccessor;
@@ -27,6 +29,7 @@ namespace Cortex
 
         public CortexShellCommandContext(
             CortexShellState state,
+            CortexShellViewState viewState,
             Func<IWorkbenchRuntime> workbenchRuntimeAccessor,
             Func<IDocumentService> documentServiceAccessor,
             Func<bool> visibleAccessor,
@@ -45,6 +48,7 @@ namespace Cortex
             Action<EditorCommandTarget> requestDefinition)
         {
             State = state;
+            _viewState = viewState ?? new CortexShellViewState();
             _workbenchRuntimeAccessor = workbenchRuntimeAccessor;
             _documentServiceAccessor = documentServiceAccessor;
             _visibleAccessor = visibleAccessor;
@@ -64,6 +68,11 @@ namespace Cortex
         }
 
         public CortexShellState State { get; private set; }
+
+        public CortexShellViewState ViewState
+        {
+            get { return _viewState; }
+        }
 
         public IWorkbenchRuntime WorkbenchRuntime
         {
