@@ -6,14 +6,7 @@ namespace Cortex.Presentation.Abstractions
 {
     public interface IWorkbenchPresenter
     {
-        WorkbenchPresentationSnapshot BuildSnapshot(
-            WorkbenchState workbenchState,
-            LayoutState layoutState,
-            StatusState statusState,
-            ThemeState themeState,
-            FocusState focusState,
-            ICommandRegistry commandRegistry,
-            IContributionRegistry contributionRegistry);
+        WorkbenchPresentationSnapshot BuildSnapshot(IWorkbenchRuntime runtime, WorkbenchPresentationMetadata metadata);
     }
 
     public interface IWorkbenchRuntime
@@ -25,8 +18,6 @@ namespace Cortex.Presentation.Abstractions
         StatusState StatusState { get; }
         ThemeState ThemeState { get; }
         FocusState FocusState { get; }
-
-        WorkbenchPresentationSnapshot CreateSnapshot();
     }
 
     public interface IWorkbenchRuntimeFactory

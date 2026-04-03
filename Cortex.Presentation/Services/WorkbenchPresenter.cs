@@ -8,16 +8,15 @@ namespace Cortex.Presentation.Services
 {
     public sealed class WorkbenchPresenter : IWorkbenchPresenter
     {
-        public WorkbenchPresentationSnapshot BuildSnapshot(
-            WorkbenchState workbenchState,
-            LayoutState layoutState,
-            StatusState statusState,
-            ThemeState themeState,
-            FocusState focusState,
-            ICommandRegistry commandRegistry,
-            IContributionRegistry contributionRegistry)
+        public WorkbenchPresentationSnapshot BuildSnapshot(IWorkbenchRuntime runtime, WorkbenchPresentationMetadata metadata)
         {
             var snapshot = new WorkbenchPresentationSnapshot();
+            var workbenchState = runtime != null ? runtime.WorkbenchState : null;
+            var themeState = runtime != null ? runtime.ThemeState : null;
+            var focusState = runtime != null ? runtime.FocusState : null;
+            var commandRegistry = runtime != null ? runtime.CommandRegistry : null;
+            var contributionRegistry = runtime != null ? runtime.ContributionRegistry : null;
+
             if (workbenchState != null)
             {
                 snapshot.ActiveContainerId = workbenchState.ActiveContainerId ?? string.Empty;
@@ -32,6 +31,8 @@ namespace Cortex.Presentation.Services
             {
                 snapshot.ActiveThemeId = themeState.ThemeId ?? "cortex.vs-dark";
             }
+
+            snapshot.RendererSummary = metadata != null ? metadata.RendererSummary ?? string.Empty : string.Empty;
 
             PopulateThemeTokens(snapshot, contributionRegistry);
             PopulateToolRail(snapshot, workbenchState, contributionRegistry);

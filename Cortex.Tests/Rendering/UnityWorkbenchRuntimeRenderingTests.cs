@@ -1,5 +1,6 @@
 using Cortex.Host.Unity.Runtime;
 using Cortex.Plugins.Abstractions;
+using Cortex.Presentation.Abstractions;
 using Cortex.Rendering;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.RuntimeUi;
@@ -22,8 +23,8 @@ namespace Cortex.Tests.Rendering
                 Assert.NotNull(runtime.RenderPipeline.WorkbenchRenderer);
                 Assert.NotNull(runtime.RenderPipeline.PanelRenderer);
                 Assert.Same(runtimeUi, runtime.RuntimeUi);
-                Assert.Same(runtime.RenderPipeline.WorkbenchRenderer, runtime.Renderer);
                 Assert.Same(runtimeUi.RenderPipeline, runtime.RenderPipeline);
+                Assert.Same(runtimeUi.RenderPipeline.WorkbenchRenderer, runtime.Renderer);
                 Assert.Same(runtimeUi.WorkbenchUiSurface, runtime.RuntimeUi.WorkbenchUiSurface);
                 Assert.Same(runtimeUi.FrameContext, runtime.RuntimeUi.FrameContext);
             });
