@@ -368,13 +368,11 @@ namespace Cortex.Tests.Editor
             IEditorContextService editorContextService,
             StubNavigationService navigationService)
         {
-            var services = new ShellServiceMap
-            {
-                ProjectCatalog = new TestProjectCatalog(),
-                LoadedModCatalog = new TestLoadedModCatalog(),
-                NavigationService = navigationService,
-                EditorContextService = editorContextService
-            };
+            var services = new ShellServiceMap(
+                projectCatalog: new TestProjectCatalog(),
+                loadedModCatalog: new TestLoadedModCatalog(),
+                navigationService: navigationService,
+                editorContextService: editorContextService);
 
             return new WorkbenchModuleRuntimeFactory(
                 state,
@@ -507,11 +505,6 @@ namespace Cortex.Tests.Editor
             public ThemeState ThemeState { get; private set; }
 
             public FocusState FocusState { get; private set; }
-
-            public WorkbenchPresentationSnapshot CreateSnapshot()
-            {
-                return new WorkbenchPresentationSnapshot();
-            }
         }
 
         private sealed class StubNavigationService : ICortexNavigationService

@@ -2,16 +2,15 @@ using System;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
-using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
 using Cortex.Services.Navigation;
 using Cortex.Services.Semantics.Context;
 using Cortex.Services.Semantics.Hover;
-using Cortex.Services.Semantics.Diagnostics;
 using UnityEngine;
 using Cortex.Services.Editor.Context;
+using Cortex.Services.Editor.Presentation;
 using Cortex.Services.Search;
 
 namespace Cortex.Modules.Editor
@@ -36,7 +35,6 @@ namespace Cortex.Modules.Editor
         private const float MinimumUsableCodeAreaHeight = 64f;
         private const float StatusBarHeight = 20f;
         private const float GutterWidth = 52f;
-        private const double HoverVisualRefreshWindowMs = 10000d;
 
         private Vector2 _tabScroll = Vector2.zero;
         private Vector2 _editorScroll = Vector2.zero;
@@ -81,12 +79,14 @@ namespace Cortex.Modules.Editor
         private readonly IEditorHoverService _hoverService;
         private readonly IEditorService _editorService = new EditorService();
         private readonly EditorDocumentModeService _documentModeService = new EditorDocumentModeService();
+        private readonly EditorPresentationService _presentationService;
         private readonly IRenderPipeline _renderPipeline;
 
         internal EditorModule(IEditorContextService editorContextService, IRenderPipeline renderPipeline)
         {
             _renderPipeline = renderPipeline;
             _hoverService = new EditorHoverService(editorContextService);
+            _presentationService = new EditorPresentationService(_editorService, _documentModeService);
             var overlayRendererFactory = renderPipeline != null ? renderPipeline.OverlayRendererFactory : null;
             _codeViewSurface = new CodeViewSurface(editorContextService, _hoverService, overlayRendererFactory);
             _editableCodeViewSurface = new EditableCodeViewSurface(editorContextService, _hoverService, overlayRendererFactory);
@@ -141,79 +141,43 @@ namespace Cortex.Modules.Editor
 
         private void ApplyPendingHoverVisualRefresh(CortexShellState state)
         {
-            if (state == null || state.Editor == null || state.Editor.Hover == null)
+            var plan = _presentationService.BuildPendingHoverRefreshPlan(state, DateTime.UtcNow);
+            if (!plan.ShouldInvalidateSurfaces)
             {
-                return;
-            }
-
-            var hoverState = state.Editor.Hover;
-            if (string.IsNullOrEmpty(hoverState.VisualRefreshHoverKey))
-            {
-                return;
-            }
-
-            if ((DateTime.UtcNow - hoverState.VisualRefreshRequestedUtc).TotalMilliseconds > HoverVisualRefreshWindowMs)
-            {
-                CortexDeveloperLog.WriteHoverDiagnostic(
-                    "force-hover-refresh-expired",
-                    hoverState.VisualRefreshHoverKey,
-                    "editor-module");
-                hoverState.VisualRefreshHoverKey = string.Empty;
-                hoverState.VisualRefreshRequestedUtc = DateTime.MinValue;
                 return;
             }
 
             _codeViewSurface.Invalidate();
             _editableCodeViewSurface.Invalidate();
             GUI.changed = true;
-            CortexDeveloperLog.WriteHoverDiagnostic(
-                "force-hover-refresh",
-                hoverState.VisualRefreshHoverKey,
-                "editor-module");
         }
 
         private void HandleSearchShortcuts(ICommandRegistry commandRegistry, CortexShellState state)
         {
             var current = Event.current;
-            if (current == null || current.type != EventType.KeyDown || commandRegistry == null || state == null || state.Documents.ActiveDocument == null)
+            if (current == null || current.type != EventType.KeyDown || commandRegistry == null)
             {
                 return;
             }
 
-            if (GUIUtility.keyboardControl != 0 &&
-                !string.IsNullOrEmpty(GUI.GetNameOfFocusedControl()) &&
-                !string.Equals(GUI.GetNameOfFocusedControl(), FindQueryControlName, StringComparison.Ordinal))
+            var commandId = _presentationService.ResolveSearchShortcutCommand(
+                new EditorSearchShortcutInput
+                {
+                    Control = current.control,
+                    Alt = current.alt,
+                    Shift = current.shift,
+                    KeyCode = current.keyCode.ToString(),
+                    HasFocusedControl = GUIUtility.keyboardControl != 0,
+                    FocusedControlName = GUI.GetNameOfFocusedControl() ?? string.Empty
+                },
+                state);
+            if (string.IsNullOrEmpty(commandId))
             {
                 return;
             }
 
-            if (current.control && !current.alt && !current.shift && current.keyCode == KeyCode.F)
-            {
-                ExecuteWorkbenchCommand(commandRegistry, "cortex.editor.find", state);
-                current.Use();
-                return;
-            }
-
-            if (!state.Search.IsVisible)
-            {
-                return;
-            }
-
-            if (!current.control && !current.alt && !current.shift && current.keyCode == KeyCode.F3)
-            {
-                ExecuteWorkbenchCommand(commandRegistry, "cortex.search.next", state);
-                current.Use();
-            }
-            else if (!current.control && !current.alt && current.shift && current.keyCode == KeyCode.F3)
-            {
-                ExecuteWorkbenchCommand(commandRegistry, "cortex.search.previous", state);
-                current.Use();
-            }
-            else if (!current.control && !current.alt && !current.shift && current.keyCode == KeyCode.Escape)
-            {
-                ExecuteWorkbenchCommand(commandRegistry, "cortex.search.close", state);
-                current.Use();
-            }
+            ExecuteWorkbenchCommand(commandRegistry, commandId, state);
+            current.Use();
         }
 
         private void DrawEmptyState()
@@ -351,17 +315,7 @@ namespace Cortex.Modules.Editor
 
         private void StabilizeActiveDocumentViewState(IDocumentService documentService, CortexShellState state)
         {
-            var active = state != null && state.Documents != null ? state.Documents.ActiveDocument : null;
-            if (active == null)
-            {
-                return;
-            }
-
-            _editorService.EnsureDocumentState(active);
-            if (documentService != null)
-            {
-                documentService.HasExternalChanges(active);
-            }
+            _presentationService.StabilizeActiveDocument(documentService, state);
         }
 
         private void DrawFindOverlay(ICommandRegistry commandRegistry, WorkbenchSearchService workbenchSearchService, CortexShellState state)
@@ -572,10 +526,7 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            _editorService.EnsureDocumentState(active);
-            var settings = state != null ? state.Settings : null;
-            var usesUnifiedSourceSurface = _documentModeService.UsesUnifiedSourceSurface(active);
-            var isEditable = _documentModeService.IsEditingEnabled(settings, active);
+            var presentation = _presentationService.BuildCodeAreaPresentation(state);
             var rect = GUILayoutUtility.GetRect(0f, 100000f, 0f, 100000f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             // IMGUI layout passes can report a placeholder 1x1 rect before the real
             // repaint bounds exist. Keep the last usable editor viewport so the find
@@ -587,14 +538,14 @@ namespace Cortex.Modules.Editor
 
             var overlayBlockRect = BuildActiveFindInputBlockRect(state, rect);
 
-            if (usesUnifiedSourceSurface)
+            if (presentation.UsesUnifiedSourceSurface)
             {
                 var previousEditorScroll = _editorScroll;
                 _editorScroll = _editableCodeViewSurface.Draw(
                     rect,
                     _editorScroll,
                     active,
-                    isEditable,
+                    presentation.IsEditingEnabled,
                     new EditorSurfaceServices
                     {
                         DocumentService = documentService,
@@ -722,53 +673,42 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            _editorService.EnsureDocumentState(active);
-            var lineCount = _editorService.GetLineCount(active);
-            var caret = active.EditorState != null
-                ? _editorService.GetCaretPosition(active, active.EditorState.CaretIndex)
-                : new EditorCaretPosition();
-            var settings = state != null ? state.Settings : null;
-            var canEditDocument = _documentModeService.CanToggleEditing(settings, active);
-            var isEditing = _documentModeService.IsEditingEnabled(settings, active);
-            var savingAllowed = state.Settings != null && state.Settings.EnableFileSaving;
-            var analysis = active.LanguageAnalysis;
-            var errorCount = CountDiagnostics(analysis, "Error");
-            var warningCount = CountDiagnostics(analysis, "Warning");
-            var roslynLabel = BuildLanguageRuntimeLabel(state, analysis, errorCount, warningCount);
-            var augmentationLabel = BuildCompletionAugmentationLabel(state, active);
-            var modeTooltip = _documentModeService.BuildEditModeTooltip(active, settings);
-            var modeContent = new GUIContent(isEditing ? "EDIT" : "READ", modeTooltip);
+            var presentation = _presentationService.BuildStatusBarPresentation(state);
+            var modeContent = new GUIContent(presentation.IsEditing ? "EDIT" : "READ", presentation.EditModeTooltip);
             var tooltip = string.Empty;
             Rect modeRect;
-            var canToggleMode = canEditDocument;
+            var canToggleMode = presentation.CanToggleEditMode;
 
             GUILayout.BeginHorizontal(_statusBarStyle ?? GUI.skin.box, GUILayout.Height(StatusBarHeight));
             GUI.enabled = canToggleMode;
-            if (GUILayout.Button(modeContent, ResolveStatusModeButtonStyle(canToggleMode, isEditing), GUILayout.Width(68f)))
+            if (GUILayout.Button(modeContent, ResolveStatusModeButtonStyle(canToggleMode, presentation.IsEditing), GUILayout.Width(68f)))
             {
-                _documentModeService.SetEditingEnabled(settings, active, !isEditing);
-                state.StatusMessage = _documentModeService.IsEditingEnabled(settings, active)
-                    ? "Edit mode enabled for " + CortexModuleUtil.GetDocumentDisplayName(active) + "."
-                    : "Read mode enabled for " + CortexModuleUtil.GetDocumentDisplayName(active) + ".";
+                string statusMessage;
+                if (_presentationService.TryToggleEditMode(state, out statusMessage))
+                {
+                    state.StatusMessage = statusMessage;
+                    presentation = _presentationService.BuildStatusBarPresentation(state);
+                    modeContent = new GUIContent(presentation.IsEditing ? "EDIT" : "READ", presentation.EditModeTooltip);
+                }
             }
             GUI.enabled = true;
 
             modeRect = GUILayoutUtility.GetLastRect();
             tooltip = Event.current != null && modeRect.Contains(Event.current.mousePosition) ? modeContent.tooltip : string.Empty;
 
-            if (active.IsDirty)
+            if (presentation.IsDirty)
             {
                 GUILayout.Label("*", GUILayout.Width(10f));
             }
 
-            GUILayout.Label("Ln " + (caret.Line + 1) + ", Col " + (caret.Column + 1) + "   " + lineCount + " lines", GUILayout.ExpandWidth(false));
+            GUILayout.Label("Ln " + (presentation.Line + 1) + ", Col " + (presentation.Column + 1) + "   " + presentation.LineCount + " lines", GUILayout.ExpandWidth(false));
             GUILayout.Space(10f);
-            GUILayout.Label(roslynLabel, GUILayout.ExpandWidth(false));
+            GUILayout.Label(presentation.LanguageStatusLabel, GUILayout.ExpandWidth(false));
             GUILayout.Space(10f);
-            GUILayout.Label(augmentationLabel, GUILayout.ExpandWidth(false));
+            GUILayout.Label(presentation.CompletionStatusLabel, GUILayout.ExpandWidth(false));
             GUILayout.FlexibleSpace();
 
-            GUI.enabled = savingAllowed && active.SupportsSaving;
+            GUI.enabled = presentation.CanSaveAll;
             if (GUILayout.Button("Save All", _toolbarButtonStyle ?? GUI.skin.button, GUILayout.Width(70f)))
             {
                 state.StatusMessage = "Save All requested.";
@@ -777,176 +717,6 @@ namespace Cortex.Modules.Editor
             GUI.enabled = true;
             GUILayout.EndHorizontal();
             DrawStatusTooltip(modeRect, tooltip);
-        }
-
-        private static int CountDiagnostics(LanguageServiceAnalysisResponse analysis, string severity)
-        {
-            if (analysis == null || analysis.Diagnostics == null || analysis.Diagnostics.Length == 0)
-            {
-                return 0;
-            }
-
-            var count = 0;
-            for (var i = 0; i < analysis.Diagnostics.Length; i++)
-            {
-                if (string.Equals(analysis.Diagnostics[i].Severity, severity, StringComparison.OrdinalIgnoreCase))
-                {
-                    count++;
-                }
-            }
-
-            return count;
-        }
-
-        private static string BuildLanguageRuntimeLabel(CortexShellState state, LanguageServiceAnalysisResponse analysis, int errorCount, int warningCount)
-        {
-            var runtime = state != null ? state.LanguageRuntime : null;
-            var providerLabel = runtime != null &&
-                runtime.Provider != null &&
-                !string.IsNullOrEmpty(runtime.Provider.DisplayName)
-                ? runtime.Provider.DisplayName
-                : "Language";
-            if (runtime == null)
-            {
-                return providerLabel + ": offline";
-            }
-
-            if (IsExplicitlyDisabled(runtime))
-            {
-                return providerLabel + ": off";
-            }
-
-            if (runtime.HealthState == LanguageRuntimeHealthState.NoProviders)
-            {
-                return providerLabel + ": no providers";
-            }
-
-            if (runtime.HealthState == LanguageRuntimeHealthState.Unavailable)
-            {
-                return providerLabel + ": unavailable";
-            }
-
-            if (runtime.HealthState == LanguageRuntimeHealthState.Faulted)
-            {
-                return providerLabel + ": faulted";
-            }
-
-            if (runtime.LifecycleState == LanguageRuntimeLifecycleState.Starting)
-            {
-                return providerLabel + ": starting";
-            }
-
-            if (runtime.LifecycleState == LanguageRuntimeLifecycleState.Reloading)
-            {
-                return providerLabel + ": reloading";
-            }
-
-            if (analysis == null)
-            {
-                return providerLabel + ": ready";
-            }
-
-            if (!HasResolvedAnalysis(analysis))
-            {
-                return providerLabel + ": analyzing";
-            }
-
-            if (!analysis.Success)
-            {
-                return providerLabel + ": " + (string.IsNullOrEmpty(analysis.StatusMessage) ? "analysis failed" : analysis.StatusMessage);
-            }
-
-            return providerLabel + " E:" + errorCount + " W:" + warningCount;
-        }
-
-        private static bool IsExplicitlyDisabled(LanguageRuntimeSnapshot runtime)
-        {
-            return runtime != null &&
-                runtime.LifecycleState == LanguageRuntimeLifecycleState.Disabled &&
-                runtime.HealthState == LanguageRuntimeHealthState.Healthy;
-        }
-
-        private static string BuildCompletionAugmentationLabel(CortexShellState state, DocumentSession active)
-        {
-            var settings = state != null ? state.Settings : null;
-            if (settings == null || !settings.EnableCompletionAugmentation)
-            {
-                return "AI: off";
-            }
-
-            var editor = state != null ? state.Editor : null;
-            var completion = editor != null ? editor.Completion : null;
-            var providerId = completion != null ? completion.AugmentationProviderId ?? string.Empty : string.Empty;
-            var status = completion != null ? completion.AugmentationStatus ?? string.Empty : string.Empty;
-            var statusMessage = completion != null ? completion.AugmentationStatusMessage ?? string.Empty : string.Empty;
-            var hasInlineSuggestion = editor != null &&
-                active != null &&
-                completion != null &&
-                completion.InlineResponse != null &&
-                string.Equals(completion.InlineProviderId ?? string.Empty, providerId, StringComparison.OrdinalIgnoreCase);
-
-            if (string.IsNullOrEmpty(providerId) &&
-                !string.IsNullOrEmpty(settings.CompletionAugmentationProviderId))
-            {
-                providerId = settings.CompletionAugmentationProviderId ?? string.Empty;
-            }
-
-            if (string.IsNullOrEmpty(providerId))
-            {
-                return "AI: standby";
-            }
-
-            if (string.Equals(providerId, "tabby", StringComparison.OrdinalIgnoreCase) && !settings.EnableTabbyCompletion)
-            {
-                return "Tabby: off";
-            }
-
-            var providerLabel = CompletionAugmentationProviderIds.GetDisplayName(providerId);
-            if (hasInlineSuggestion)
-            {
-                return providerLabel + ": suggestion";
-            }
-
-            switch ((status ?? string.Empty).ToLowerInvariant())
-            {
-                case "starting":
-                    return providerLabel + ": starting";
-                case "thinking":
-                    return providerLabel + ": thinking";
-                case "suggestion":
-                    return providerLabel + ": suggestion";
-                case "ready":
-                    return providerLabel + ": ready";
-                case "offline":
-                    return providerLabel + ": offline";
-                case "error":
-                    return providerLabel + ": " + BuildCompletionStatusMessage(statusMessage);
-            }
-
-            return providerLabel + ": ready";
-        }
-
-        private static string BuildCompletionStatusMessage(string statusMessage)
-        {
-            if (string.IsNullOrEmpty(statusMessage))
-            {
-                return "error";
-            }
-
-            return statusMessage.Length <= 24
-                ? statusMessage
-                : statusMessage.Substring(0, 21) + "...";
-        }
-
-        private static bool HasResolvedAnalysis(LanguageServiceAnalysisResponse analysis)
-        {
-            return analysis != null &&
-                (analysis.Success ||
-                 !string.IsNullOrEmpty(analysis.StatusMessage) ||
-                 !string.IsNullOrEmpty(analysis.DocumentPath) ||
-                 analysis.DocumentVersion > 0 ||
-                 (analysis.Diagnostics != null && analysis.Diagnostics.Length > 0) ||
-                 (analysis.Classifications != null && analysis.Classifications.Length > 0));
         }
 
         private GUIStyle ResolveStatusModeButtonStyle(bool enabled, bool isEditing)
