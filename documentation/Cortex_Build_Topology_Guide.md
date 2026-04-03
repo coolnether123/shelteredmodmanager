@@ -10,7 +10,13 @@ For the decision-complete portability model and future-host checklist, see `docu
 
 - `Cortex.Contracts`
 
-This lane exists to make the desktop-first direction real before the desktop host is introduced. It is intentionally thin in this prompt, but it is the first dedicated home for contracts/models that must be consumable from `.NET 8` by a future desktop host, existing workers, or optional external bridges.
+This lane exists to make the desktop-first direction real before the desktop host is introduced. It is now the first dedicated home for contracts/models that must be consumable from both legacy `net35` code and `.NET 8` callers such as a future desktop host, existing workers, or optional external bridges.
+
+Currently extracted into this lane:
+
+- Roslyn language-service protocol contracts in `Cortex.LanguageService.Protocol`
+- completion prompt contracts in `Cortex.Contracts.Completion`
+- semantic token normalization contracts in `Cortex.Contracts.Text`
 
 Rules for this lane:
 
@@ -181,7 +187,7 @@ This keeps `Cortex.Host.Unity` Unity-generic and keeps the concrete Sheltered in
 
 After this pass, the main topology debt is explicit rather than hidden:
 
-- `Cortex.Contracts` is only a seed lane; real contract/model extraction happens in later prompts
+- more UI-neutral runtime and presentation contracts still need to move out of `net35` projects as later prompts justify them
 - most portable runtime assemblies are still `net35`, so the desktop-first boundary is visible but not yet resolved
 - IMGUI is still the only concrete renderer
 - shell/editor call sites in `Cortex` still execute IMGUI draw and event code directly

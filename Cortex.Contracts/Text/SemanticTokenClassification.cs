@@ -1,6 +1,6 @@
 using System;
 
-namespace Cortex.Core.Models
+namespace Cortex.Contracts.Text
 {
     public static class SemanticTokenClassificationNames
     {

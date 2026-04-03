@@ -1,4 +1,4 @@
-namespace Cortex.Shared
+namespace Cortex.Contracts.Completion
 {
     public static class CompletionAugmentationPromptContract
     {

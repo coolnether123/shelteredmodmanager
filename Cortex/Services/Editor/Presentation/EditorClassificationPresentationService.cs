@@ -1,4 +1,5 @@
 using System;
+using Cortex.Contracts.Text;
 using Cortex.Core.Models;
 using UnityEngine;
 

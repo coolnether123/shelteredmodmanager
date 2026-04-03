@@ -38,6 +38,11 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Cortex.Contracts\Cortex.Contracts.csproj">
+      <Project>{C458EE62-EED9-4B14-9EC3-910105D9BDFC}</Project>
+      <Name>Cortex.Contracts</Name>
+      <Private>False</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Cortex.Core\Cortex.Core.csproj">
       <Project>{A5F28666-878B-4C48-A7DA-4A19BFC79F02}</Project>
       <Name>Cortex.Core</Name>

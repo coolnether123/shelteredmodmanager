@@ -1,6 +1,6 @@
 using System.Text;
+using Cortex.Contracts.Completion;
 using Cortex.Tabby.Server.Protocol;
-using Cortex.Shared;
 
 namespace Cortex.Tabby.Server.Services;
 

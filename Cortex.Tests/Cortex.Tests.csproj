@@ -16,6 +16,7 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Cortex.Contracts\Cortex.Contracts.csproj" />
     <ProjectReference Include="..\Cortex\Cortex.csproj" />
     <ProjectReference Include="..\Cortex.Shell.Unity.Imgui\Cortex.Shell.Unity.Imgui.csproj" />
     <ProjectReference Include="..\Cortex.Plugin.Harmony\Cortex.Plugin.Harmony.csproj" />
