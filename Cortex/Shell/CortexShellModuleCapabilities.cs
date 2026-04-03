@@ -13,6 +13,7 @@ namespace Cortex
     internal interface ILogsModuleServices
     {
         CortexShellState State { get; }
+        CortexShellViewState ViewState { get; }
         ICortexNavigationService NavigationService { get; }
         ISourcePathResolver SourcePathResolver { get; }
         IRuntimeLogFeed RuntimeLogFeed { get; }
@@ -91,6 +92,7 @@ namespace Cortex
     internal interface ISettingsModuleServices
     {
         CortexShellState State { get; }
+        CortexShellViewState ViewState { get; }
         ICortexSettingsStore SettingsStore { get; }
         IProjectCatalog ProjectCatalog { get; }
         IProjectWorkspaceService ProjectWorkspaceService { get; }
@@ -111,6 +113,7 @@ namespace Cortex
         ISettingsModuleServices
     {
         private readonly CortexShellState _state;
+        private readonly CortexShellViewState _viewState;
         private readonly ShellServiceMap _services;
         private readonly Func<ICortexSettingsStore> _settingsStoreProvider;
         private readonly Func<IWorkbenchRuntime> _runtimeProvider;
@@ -119,6 +122,7 @@ namespace Cortex
 
         public CortexShellModuleServices(
             CortexShellState state,
+            CortexShellViewState viewState,
             ShellServiceMap services,
             Func<ICortexSettingsStore> settingsStoreProvider,
             Func<IWorkbenchRuntime> runtimeProvider,
@@ -126,6 +130,7 @@ namespace Cortex
             WorkbenchSearchService workbenchSearchService)
         {
             _state = state;
+            _viewState = viewState ?? new CortexShellViewState();
             _services = services;
             _settingsStoreProvider = settingsStoreProvider;
             _runtimeProvider = runtimeProvider;
@@ -134,6 +139,7 @@ namespace Cortex
         }
 
         public CortexShellState State => _state;
+        public CortexShellViewState ViewState => _viewState;
         public ICortexNavigationService NavigationService => _services.NavigationService;
         public ISourcePathResolver SourcePathResolver => _services.SourcePathResolver;
         public IRuntimeLogFeed RuntimeLogFeed => _services.RuntimeLogFeed;

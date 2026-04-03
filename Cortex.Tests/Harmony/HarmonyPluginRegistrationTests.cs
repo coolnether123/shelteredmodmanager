@@ -309,13 +309,11 @@ namespace Cortex.Tests.Harmony
 
         private static IWorkbenchModuleRuntime CreateModuleRuntime(CortexShellState state, IEditorContextService editorContextService)
         {
-            var services = new ShellServiceMap
-            {
-                ProjectCatalog = new TestProjectCatalog(),
-                LoadedModCatalog = new TestLoadedModCatalog(),
-                NavigationService = new TestNavigationService(),
-                EditorContextService = editorContextService
-            };
+            var services = new ShellServiceMap(
+                projectCatalog: new TestProjectCatalog(),
+                loadedModCatalog: new TestLoadedModCatalog(),
+                navigationService: new TestNavigationService(),
+                editorContextService: editorContextService);
 
             return new WorkbenchModuleRuntimeFactory(
                 state,
@@ -536,11 +534,6 @@ namespace Demo
             public ThemeState ThemeState { get; private set; }
 
             public FocusState FocusState { get; private set; }
-
-            public WorkbenchPresentationSnapshot CreateSnapshot()
-            {
-                return new WorkbenchPresentationSnapshot();
-            }
         }
 
         private sealed class TestEditorContextService : IEditorContextService

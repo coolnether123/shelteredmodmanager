@@ -109,6 +109,7 @@ namespace Cortex
                     _services != null ? _services.SourcePathResolver : null,
                     _services != null ? _services.NavigationService : null,
                     _services != null ? _services.State : null,
+                    _services != null ? _services.ViewState : null,
                     detachedWindow);
             }
 
@@ -520,6 +521,7 @@ namespace Cortex
                     context != null ? context.Snapshot : new WorkbenchPresentationSnapshot(),
                     _services != null ? _services.ThemeState : null,
                     _services != null ? _services.State : null,
+                    _services != null ? _services.ViewState : null,
                     context != null ? context.Ui : null);
             }
 
