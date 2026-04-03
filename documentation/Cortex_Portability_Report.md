@@ -194,9 +194,9 @@ Runtime UI boundary notes:
 - `Cortex.Rendering` remains the low-level render contract package.
 - `Cortex.Rendering` owns the portable frame/input contract used by hosts and runtime UI backends, including `IWorkbenchFrameContext` and `WorkbenchFrameInputSnapshot`.
 - `Cortex.Rendering.RuntimeUi` owns reusable popup/panel/tooltip interaction and layout behavior over those contracts, plus the extracted shell split-layout, shell menu popup, and shell overlay interaction policy that is already backend-neutral.
-- concrete runtime UI/backend selection remains host-owned; Sheltered currently selects the IMGUI runtime UI in `Cortex.Host.Sheltered`.
+- concrete runtime UI/backend selection remains outside generic Cortex; Sheltered currently selects the legacy IMGUI shell composition in `Cortex.Host.Sheltered`.
 - host-owned frame context adaptation now lives in `Cortex.Host.Unity`, while shell-generic Cortex and runtime UI backends consume the portable `Cortex.Rendering` contracts.
-- the active module `IWorkbenchUiSurface` is selected by host composition. The current concrete implementation is `Cortex.Shell.Unity.Imgui.Ui.ImguiWorkbenchUiSurface`.
+- the active module `IWorkbenchUiSurface` is selected by host/shell composition. The current concrete implementation is `Cortex.Shell.Unity.Imgui.Ui.ImguiWorkbenchUiSurface`.
 - `Cortex.Renderers.Imgui` should now be treated as a concrete executor/measurement adapter over those portable plans, not the owner of popup/panel/tooltip runtime policy.
 
 ## 7. Packaging Model

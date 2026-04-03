@@ -108,9 +108,9 @@ public sealed class ExampleModule : IWorkbenchModule
 
 ## Current backend
 
-Today the active implementation is selected by host composition.
+Today the active implementation is selected by host/shell composition.
 
-In the current Sheltered composition, the host selects `Cortex.Shell.Unity.Imgui.Ui.ImguiWorkbenchUiSurface`, which is IMGUI-backed and then passed into the selected runtime UI/backend.
+In the current Sheltered path, `Cortex.Host.Sheltered` selects `Cortex.Shell.Unity.Imgui.ImguiWorkbenchRuntimeUiComposition`, which creates the IMGUI-backed `Cortex.Shell.Unity.Imgui.Ui.ImguiWorkbenchUiSurface` and passes it into the selected runtime UI/backend.
 
 That is an implementation detail, not the module contract.
 

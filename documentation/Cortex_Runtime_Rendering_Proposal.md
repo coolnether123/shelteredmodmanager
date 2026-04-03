@@ -14,7 +14,7 @@ The first boundary refactor is now in place:
 - `Cortex.Rendering.RuntimeUi` owns shared popup/panel/tooltip layout and interaction behavior over those contracts.
 - `Cortex.Renderers.Imgui` is isolated as a concrete runtime UI/backend implementation.
 - generic shell/runtime paths no longer construct `ImguiRenderPipeline` directly.
-- Sheltered host composition now selects the IMGUI runtime UI explicitly.
+- the legacy IMGUI shell path now owns IMGUI runtime UI composition, while Sheltered host composition selects that shell path explicitly.
 - `Cortex.Host.Unity` now owns frame-context and Unity-input snapshot adaptation, and shell-generic Cortex consumes the portable runtime-UI frame contract instead of a shell-specific host UI adapter.
 - portable runtime-UI controllers no longer depend on Unity IMGUI event types or `Event.current`.
 - IMGUI now consumes portable popup draw layouts, panel element layouts, and tooltip layout plans instead of re-owning those geometry decisions locally.
@@ -30,7 +30,7 @@ The current architecture direction is correct:
 
 - `documentation/Cortex_Architecture_Guide.md` places renderer-neutral behavior in portable Cortex and keeps Unity-specific rendering integration in host-specific Cortex.
 - `documentation/Cortex_UI_Surface_Guide.md` says public modules should target `IWorkbenchUiSurface`, while renderer-neutral geometry/color models live in `Cortex.Rendering` and IMGUI implementations live in `Cortex.Renderers.Imgui`.
-- `documentation/Cortex_Portability_Report.md` says host-specific Cortex owns host rendering/backend wiring.
+- `documentation/Cortex_Portability_Report.md` says host-specific and shell-specific Cortex own host/backend wiring for the active legacy path.
 
 The current codebase already reflects part of that split:
 
@@ -47,7 +47,7 @@ That is a good foundation.
 That boundary is now enforced:
 
 - generic shell/runtime code no longer instantiates the IMGUI pipeline directly
-- `Cortex.Host.Sheltered` selects the IMGUI runtime UI explicitly
+- `Cortex.Host.Sheltered` selects the legacy IMGUI shell composition explicitly
 - `Cortex.Host.Unity` owns viewport/frame-context and Unity input snapshot adaptation
 
 That keeps backend selection and host event semantics out of portable and shell-generic Cortex code.
@@ -183,7 +183,7 @@ Responsibilities:
 - create the active backend
 - map host lifecycle to UI runtime lifecycle
 
-The host chooses the backend. The shell should not construct `ImguiRenderPipeline` directly.
+The host path chooses the backend. Generic shell code should not construct `ImguiRenderPipeline` directly.
 
 ### 4.4 Concrete renderer backends
 

@@ -1,8 +1,7 @@
 using System;
 using Cortex.Core.Abstractions;
 using Cortex.Host.Unity.Runtime;
-using Cortex.Renderers.Imgui;
-using Cortex.Shell.Unity.Imgui.Ui;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Host.Sheltered.Runtime
 {
@@ -22,7 +21,7 @@ namespace Cortex.Host.Sheltered.Runtime
                 new WindowsPathInteractionService(environment),
                 new UnityWorkbenchRuntimeFactory(
                     new ShelteredUnityWorkbenchContributionRegistrar(),
-                    new ImguiWorkbenchRuntimeUiFactory(new ImguiWorkbenchUiSurface(), frameContext)),
+                    ImguiWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext)),
                 platformModule,
                 frameContext);
 
