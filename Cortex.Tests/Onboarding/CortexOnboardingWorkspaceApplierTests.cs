@@ -15,7 +15,7 @@ namespace Cortex.Tests.Onboarding
                 context.Service.SeedSelections(context.ShellState.Onboarding, context.ShellState.Settings, context.Registry);
 
                 var selection = context.ResolveSelection();
-                var result = context.WorkspaceApplier.Preview(context.ShellState, context.Runtime, selection);
+                var result = context.WorkspaceApplier.Preview(context.ShellState, context.ViewState, context.Runtime, selection);
 
                 Assert.True(result.WasApplied);
                 Assert.Equal(CortexWorkbenchIds.ProjectsContainer, context.ShellState.Workbench.SideContainerId);
@@ -39,7 +39,7 @@ namespace Cortex.Tests.Onboarding
                 context.Service.SelectProfile(context.ShellState.Onboarding, catalog, OnboardingTestRegistryBuilder.DecompilerProfileId);
 
                 var selection = context.ResolveSelection();
-                var result = context.WorkspaceApplier.Apply(context.ShellState, context.Runtime, selection);
+                var result = context.WorkspaceApplier.Apply(context.ShellState, context.ViewState, context.Runtime, selection);
 
                 Assert.True(result.WasApplied);
                 Assert.Equal(OnboardingTestRegistryBuilder.DecompilerProfileId, context.ShellState.Onboarding.ActiveProfileId);

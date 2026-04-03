@@ -17,6 +17,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Cortex\Cortex.csproj" />
+    <ProjectReference Include="..\Cortex.Shell.Unity.Imgui\Cortex.Shell.Unity.Imgui.csproj" />
     <ProjectReference Include="..\Cortex.Plugin.Harmony\Cortex.Plugin.Harmony.csproj" />
     <ProjectReference Include="..\Cortex.Core\Cortex.Core.csproj" />
     <ProjectReference Include="..\Cortex.Host.Sheltered\Cortex.Host.Sheltered.csproj" />

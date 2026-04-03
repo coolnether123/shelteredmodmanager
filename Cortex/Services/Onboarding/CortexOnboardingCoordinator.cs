@@ -1,9 +1,8 @@
 using System;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
-using Cortex.Modules.Onboarding;
 using Cortex.Presentation.Abstractions;
-using UnityEngine;
+using Cortex.Shell;
 
 namespace Cortex.Services.Onboarding
 {
@@ -12,27 +11,23 @@ namespace Cortex.Services.Onboarding
         private readonly CortexOnboardingService _onboardingService;
         private readonly CortexOnboardingProjectSetupService _projectSetupService;
         private readonly CortexOnboardingWorkspaceApplier _workspaceApplier;
-        private readonly OnboardingModule _onboardingModule;
 
         public CortexOnboardingCoordinator()
             : this(
                 new CortexOnboardingService(),
                 new CortexOnboardingProjectSetupService(),
-                new CortexOnboardingWorkspaceApplier(),
-                new OnboardingModule())
+                new CortexOnboardingWorkspaceApplier())
         {
         }
 
         public CortexOnboardingCoordinator(
             CortexOnboardingService onboardingService,
             CortexOnboardingProjectSetupService projectSetupService,
-            CortexOnboardingWorkspaceApplier workspaceApplier,
-            OnboardingModule onboardingModule)
+            CortexOnboardingWorkspaceApplier workspaceApplier)
         {
             _onboardingService = onboardingService ?? new CortexOnboardingService();
             _projectSetupService = projectSetupService ?? new CortexOnboardingProjectSetupService();
             _workspaceApplier = workspaceApplier ?? new CortexOnboardingWorkspaceApplier();
-            _onboardingModule = onboardingModule ?? new OnboardingModule();
         }
 
         public void Open(
@@ -57,25 +52,14 @@ namespace Cortex.Services.Onboarding
             shellState.StatusMessage = reopenedByUser ? "Onboarding reopened." : "Onboarding opened.";
         }
 
-        public bool DrawModalContent(Rect modalRect, CortexShellState shellState, IContributionRegistry contributionRegistry, bool previewBackground)
+        public CortexOnboardingCatalog BuildCatalog(IContributionRegistry contributionRegistry)
         {
-            return DrawModalContent(modalRect, shellState, contributionRegistry, null, previewBackground);
+            return _onboardingService.BuildCatalog(contributionRegistry);
         }
 
-        public bool DrawModalContent(
-            Rect modalRect,
-            CortexShellState shellState,
-            IContributionRegistry contributionRegistry,
-            IPathInteractionService pathInteractionService,
-            bool previewBackground)
+        public CortexOnboardingService InteractionService
         {
-            if (shellState == null)
-            {
-                return false;
-            }
-
-            var catalog = _onboardingService.BuildCatalog(contributionRegistry);
-            return _onboardingModule.Draw(modalRect, shellState.Onboarding, catalog, _onboardingService, pathInteractionService, previewBackground);
+            get { return _onboardingService; }
         }
 
         public CortexOnboardingWorkspaceApplicationResult PreviewIfNeeded(
@@ -88,7 +72,7 @@ namespace Cortex.Services.Onboarding
                 return CortexOnboardingWorkspaceApplicationResult.Empty;
             }
 
-            var catalog = _onboardingService.BuildCatalog(contributionRegistry);
+            var catalog = BuildCatalog(contributionRegistry);
             var selection = _onboardingService.ResolveSelection(shellState.Onboarding, shellState.Settings, catalog);
             var fingerprint = _onboardingService.BuildPreviewFingerprint(selection);
             if (string.Equals(shellState.Onboarding.PreviewFingerprint, fingerprint, StringComparison.Ordinal))
@@ -113,7 +97,7 @@ namespace Cortex.Services.Onboarding
                 return CortexOnboardingWorkspaceApplicationResult.Empty;
             }
 
-            var catalog = _onboardingService.BuildCatalog(contributionRegistry);
+            var catalog = BuildCatalog(contributionRegistry);
             var selection = _onboardingService.ResolveSelection(shellState.Onboarding, shellState.Settings, catalog);
             if (selection == null)
             {

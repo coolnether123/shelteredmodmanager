@@ -7,6 +7,7 @@ using Cortex.Core.Abstractions;
 using Cortex.Host.Unity.Runtime;
 using Cortex.Presentation.Abstractions;
 using Cortex.Services.Onboarding;
+using Cortex.Shell;
 
 namespace Cortex.Tests.Testing
 {
@@ -18,6 +19,7 @@ namespace Cortex.Tests.Testing
         public readonly CortexOnboardingWorkspaceApplier WorkspaceApplier;
         public readonly CortexOnboardingCoordinator Coordinator;
         public readonly CortexShellState ShellState;
+        public readonly CortexShellViewState ViewState;
         public readonly IWorkbenchRuntime Runtime;
         public readonly IProjectCatalog ProjectCatalog;
         public readonly IProjectWorkspaceService ProjectWorkspaceService;
@@ -33,8 +35,9 @@ namespace Cortex.Tests.Testing
             Service = new CortexOnboardingService();
             ProjectSetupService = new CortexOnboardingProjectSetupService();
             WorkspaceApplier = new CortexOnboardingWorkspaceApplier();
-            Coordinator = new CortexOnboardingCoordinator(Service, ProjectSetupService, WorkspaceApplier, null);
+            Coordinator = new CortexOnboardingCoordinator(Service, ProjectSetupService, WorkspaceApplier);
             ShellState = new CortexShellState();
+            ViewState = new CortexShellViewState();
             ShellState.Settings = new CortexSettings();
             Runtime = new UnityWorkbenchRuntime();
             WorkspaceRootPath = CreateWorkspaceRoot();

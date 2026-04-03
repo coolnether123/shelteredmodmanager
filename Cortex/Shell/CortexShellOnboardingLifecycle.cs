@@ -10,6 +10,7 @@ namespace Cortex.Shell
         public CortexOnboardingWorkspaceApplicationResult Preview(
             CortexOnboardingCoordinator onboardingCoordinator,
             CortexShellState shellState,
+            CortexShellViewState viewState,
             IWorkbenchRuntime workbenchRuntime,
             IContributionRegistry contributionRegistry,
             Action<CortexOnboardingWorkspaceApplicationResult> activateContainers)
@@ -25,6 +26,11 @@ namespace Cortex.Shell
             }
 
             var result = onboardingCoordinator.PreviewIfNeeded(shellState, workbenchRuntime, contributionRegistry);
+            if (result.WasApplied && viewState != null)
+            {
+                viewState.ShowDetachedLogsWindow = false;
+            }
+
             activateContainers?.Invoke(result);
             return result;
         }
@@ -32,6 +38,7 @@ namespace Cortex.Shell
         public CortexOnboardingWorkspaceApplicationResult Complete(
             CortexOnboardingCoordinator onboardingCoordinator,
             CortexShellState shellState,
+            CortexShellViewState viewState,
             IWorkbenchRuntime workbenchRuntime,
             IContributionRegistry contributionRegistry,
             IProjectCatalog projectCatalog,
@@ -54,6 +61,11 @@ namespace Cortex.Shell
             if (!result.WasApplied)
             {
                 return result;
+            }
+
+            if (viewState != null)
+            {
+                viewState.ShowDetachedLogsWindow = false;
             }
 
             persistWorkbenchSession?.Invoke();
