@@ -38,25 +38,22 @@ namespace Cortex.Modules.Settings
         private bool _loaded;
         private Vector2 _navigationScroll = Vector2.zero;
         private Vector2 _contentScroll = Vector2.zero;
+        private readonly SettingsApplicationService _applicationService = new SettingsApplicationService();
         private readonly SettingsDocumentBuilder _documentBuilder = new SettingsDocumentBuilder();
         private readonly SettingsSearchService _searchService = new SettingsSearchService();
         private readonly SettingsDraftService _draftService = new SettingsDraftService();
+        private readonly SettingsSessionService _sessionService = new SettingsSessionService();
         private readonly SettingsContributionCollectionService _contributionCollectionService = new SettingsContributionCollectionService();
         private readonly SettingsLoadedModLinkService _loadedModLinkService = new SettingsLoadedModLinkService();
         private readonly SettingsDraftState _draftState = new SettingsDraftState();
+        private readonly SettingsSessionState _sessionState = new SettingsSessionState();
         private readonly Dictionary<string, Vector2> _multilineEditorScrolls = new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
         private bool _preserveContentScrollForNestedEditor;
         private readonly Dictionary<string, float> _sectionAnchors = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, float> _navigationAnchors = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, bool> _navigationGroupExpanded = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _collapsedNavigationGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private string _activeSectionId = WorkspaceOverviewSectionId;
-        private string _pendingSectionJumpId = string.Empty;
-        private string _settingsSearchQuery = string.Empty;
-        private string _appliedSettingsSearchQuery = string.Empty;
-        private string _lastNormalizedSearchQuery = string.Empty;
         private string _openSettingActionMenuId = string.Empty;
-        private bool _showModifiedOnly;
         private IProjectCatalog _projectCatalog;
         private IProjectWorkspaceService _workspaceService;
         private ILoadedModCatalog _loadedModCatalog;
@@ -142,7 +139,16 @@ namespace Cortex.Modules.Settings
 
                 if (GUILayout.Button("Save", GUILayout.Width(100f), GUILayout.Height(24f)))
                 {
-                    Apply(snapshot, themeState, state);
+                    state.Settings = _applicationService.Apply(
+                        _draftService,
+                        _draftState,
+                        _sessionService,
+                        _sessionState,
+                        snapshot,
+                        themeState,
+                        state.Settings,
+                        _navigationScroll.y,
+                        _contentScroll.y);
                     ApplyLoadedModMappings(state);
                     if (settingsStore != null)
                     {
@@ -164,7 +170,7 @@ namespace Cortex.Modules.Settings
 
                     _loaded = false;
                     _contentScroll = Vector2.zero;
-                    _pendingSectionJumpId = WorkspaceOverviewSectionId;
+                    _sessionState.PendingSectionJumpId = WorkspaceOverviewSectionId;
                     EnsureLoaded(snapshot, themeState, state);
                     state.StatusMessage = "Reset settings fields to defaults.";
                 }
@@ -175,13 +181,13 @@ namespace Cortex.Modules.Settings
 
         private void DrawSearchBar(SettingsDocumentModel document)
         {
-            _settingsSearchQuery = UiSurface
-                .DrawSearchToolbar("Search properties", _settingsSearchQuery, 42f, true);
+            _sessionState.SearchQuery = UiSurface
+                .DrawSearchToolbar("Search properties", _sessionState.SearchQuery, 42f, true);
 
             CortexIdeLayout.DrawGroup(null, delegate
             {
                 GUILayout.BeginHorizontal();
-                _showModifiedOnly = GUILayout.Toggle(_showModifiedOnly, "Show modified only", GUILayout.Width(140f));
+                _sessionState.ShowModifiedOnly = GUILayout.Toggle(_sessionState.ShowModifiedOnly, "Show modified only", GUILayout.Width(140f));
                 GUILayout.Space(8f);
                 GUILayout.Label(BuildSearchSummary(document), GUILayout.ExpandWidth(true));
                 GUILayout.EndHorizontal();
@@ -242,7 +248,7 @@ namespace Cortex.Modules.Settings
             var groupHasActiveSection = activeSection != null;
             var effectiveExpanded = IsNavigationGroupExpandedForDisplay(group, expanded, renderActiveSectionId);
             var groupTitle = group.Title;
-            if (searchActive || _showModifiedOnly)
+            if (searchActive || _sessionState.ShowModifiedOnly)
             {
                 groupTitle += " (" + CountVisibleSections(group).ToString(CultureInfo.InvariantCulture) + ")";
             }
@@ -632,18 +638,15 @@ namespace Cortex.Modules.Settings
             _navigationGroupExpanded.Clear();
             _collapsedNavigationGroups.Clear();
             _openSettingActionMenuId = string.Empty;
-            _lastNormalizedSearchQuery = string.Empty;
+            _sessionState.LastNormalizedSearchQuery = string.Empty;
 
-            var settings = state.Settings ?? new CortexSettings();
+            var settings = state != null && state.Settings != null ? state.Settings : new CortexSettings();
             LoadNavigationGroupState(settings);
-            _settingsSearchQuery = settings.SettingsSearchQuery ?? string.Empty;
-            _appliedSettingsSearchQuery = settings.SettingsSearchQuery ?? string.Empty;
-            _showModifiedOnly = settings.SettingsShowModifiedOnly;
-            _navigationScroll.y = Mathf.Max(0f, settings.SettingsNavigationScrollY);
-            _contentScroll.y = Mathf.Max(0f, settings.SettingsContentScrollY);
-            _activeSectionId = !string.IsNullOrEmpty(settings.SettingsActiveSectionId)
-                ? settings.SettingsActiveSectionId
-                : WorkspaceOverviewSectionId;
+            float navigationScrollY;
+            float contentScrollY;
+            _sessionService.Restore(_sessionState, settings, WorkspaceOverviewSectionId, out navigationScrollY, out contentScrollY);
+            _navigationScroll.y = navigationScrollY;
+            _contentScroll.y = contentScrollY;
             _loaded = true;
         }
 
@@ -662,7 +665,7 @@ namespace Cortex.Modules.Settings
                 var shown = 0;
                 for (var i = 0; i < snapshot.Themes.Count; i++)
                 {
-                    if (_showModifiedOnly && !string.Equals(snapshot.Themes[i].ThemeId, _selectedThemeId, StringComparison.OrdinalIgnoreCase))
+                    if (_sessionState.ShowModifiedOnly && !string.Equals(snapshot.Themes[i].ThemeId, _selectedThemeId, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
@@ -692,7 +695,7 @@ namespace Cortex.Modules.Settings
 
             DrawSectionPanel("Editor Input", delegate
             {
-                var showUndoLimit = !_showModifiedOnly || IsUndoHistoryModified();
+                var showUndoLimit = !_sessionState.ShowModifiedOnly || IsUndoHistoryModified();
                 if (!showUndoLimit)
                 {
                     return;
@@ -730,7 +733,7 @@ namespace Cortex.Modules.Settings
                     continue;
                 }
 
-                if (_showModifiedOnly && !IsBindingModified(state.Settings, bindings[i]))
+                if (_sessionState.ShowModifiedOnly && !IsBindingModified(state.Settings, bindings[i]))
                 {
                     continue;
                 }
@@ -1633,25 +1636,6 @@ namespace Cortex.Modules.Settings
             return created;
         }
 
-        private void Apply(WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
-        {
-            if (state.Settings == null)
-            {
-                state.Settings = new CortexSettings();
-            }
-
-            _draftService.ApplyDraft(_draftState, snapshot, state.Settings);
-            state.Settings.SettingsActiveSectionId = _activeSectionId ?? string.Empty;
-            state.Settings.SettingsNavigationScrollY = _navigationScroll.y;
-            state.Settings.SettingsContentScrollY = _contentScroll.y;
-            state.Settings.SettingsSearchQuery = _appliedSettingsSearchQuery ?? string.Empty;
-            state.Settings.SettingsShowModifiedOnly = _showModifiedOnly;
-            if (themeState != null)
-            {
-                themeState.ThemeId = state.Settings.ThemeId;
-            }
-        }
-
         private string GetDefaultSerializedValue(SettingContribution contribution)
         {
             return _draftService.GetDefaultSerializedValue(contribution);
@@ -1684,12 +1668,12 @@ namespace Cortex.Modules.Settings
 
         private List<SettingsSectionModel> GetVisibleSections(SettingsNavigationGroupModel group)
         {
-            return _searchService.GetVisibleSections(group, GetNormalizedSearchQuery(), _showModifiedOnly, GetSectionVisibleItemCount);
+            return _searchService.GetVisibleSections(group, GetNormalizedSearchQuery(), _sessionState.ShowModifiedOnly, GetSectionVisibleItemCount);
         }
 
         private bool IsSectionVisible(SettingsSectionModel section)
         {
-            return _searchService.IsSectionVisible(section, GetNormalizedSearchQuery(), _showModifiedOnly, GetSectionVisibleItemCount);
+            return _searchService.IsSectionVisible(section, GetNormalizedSearchQuery(), _sessionState.ShowModifiedOnly, GetSectionVisibleItemCount);
         }
 
         private int GetSectionVisibleItemCount(SettingsSectionModel section)
@@ -1709,12 +1693,12 @@ namespace Cortex.Modules.Settings
                 case SettingsSectionKind.Themes:
                     return CountVisibleThemes();
                 case SettingsSectionKind.Keybindings:
-                    return _showModifiedOnly ? CountModifiedKeybindingRows() : CountVisibleKeybindings();
+                    return _sessionState.ShowModifiedOnly ? CountModifiedKeybindingRows() : CountVisibleKeybindings();
                 case SettingsSectionKind.Editors:
-                    return _showModifiedOnly ? 0 : CountVisibleEditors();
+                    return _sessionState.ShowModifiedOnly ? 0 : CountVisibleEditors();
             }
 
-            if (_showModifiedOnly)
+            if (_sessionState.ShowModifiedOnly)
             {
                 return 0;
             }
@@ -1734,7 +1718,7 @@ namespace Cortex.Modules.Settings
 
         private int CountVisibleSections(SettingsNavigationGroupModel group)
         {
-            return _searchService.CountVisibleSections(group, GetNormalizedSearchQuery(), _showModifiedOnly, GetSectionVisibleItemCount);
+            return _searchService.CountVisibleSections(group, GetNormalizedSearchQuery(), _sessionState.ShowModifiedOnly, GetSectionVisibleItemCount);
         }
 
         private int CountVisibleThemes()
@@ -1744,7 +1728,7 @@ namespace Cortex.Modules.Settings
                 return 0;
             }
 
-            if (_showModifiedOnly)
+            if (_sessionState.ShowModifiedOnly)
             {
                 return IsThemeModified() ? 1 : 0;
             }
@@ -1868,7 +1852,7 @@ namespace Cortex.Modules.Settings
 
         private string BuildSearchSummary(SettingsDocumentModel document)
         {
-            return _searchService.BuildSearchSummary(document, GetNormalizedSearchQuery(), _showModifiedOnly, GetSectionVisibleItemCount);
+            return _searchService.BuildSearchSummary(document, GetNormalizedSearchQuery(), _sessionState.ShowModifiedOnly, GetSectionVisibleItemCount);
         }
 
         private void DrawActiveSectionBanner(SettingsDocumentModel document, string renderActiveSectionId)
@@ -1921,7 +1905,7 @@ namespace Cortex.Modules.Settings
             }
 
             var label = section.Title ?? string.Empty;
-            if (IsSearchActive() || _showModifiedOnly)
+            if (IsSearchActive() || _sessionState.ShowModifiedOnly)
             {
                 label += " (" + GetSectionVisibleItemCount(section).ToString(CultureInfo.InvariantCulture) + ")";
             }
@@ -1946,7 +1930,7 @@ namespace Cortex.Modules.Settings
                 return false;
             }
 
-            if (_showModifiedOnly && !IsSettingModified(contribution))
+            if (_sessionState.ShowModifiedOnly && !IsSettingModified(contribution))
             {
                 return false;
             }
@@ -2001,29 +1985,12 @@ namespace Cortex.Modules.Settings
 
         private string GetNormalizedSearchQuery()
         {
-            return _searchService.NormalizeQuery(_appliedSettingsSearchQuery);
+            return _sessionService.GetNormalizedSearchQuery(_sessionState, _searchService);
         }
 
         private void HandleSearchQueryChanged(SettingsDocumentModel document)
         {
-            var query = GetNormalizedSearchQuery();
-            if (string.Equals(query, _lastNormalizedSearchQuery, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            _lastNormalizedSearchQuery = query;
-            if (string.IsNullOrEmpty(query))
-            {
-                return;
-            }
-
-            var sectionId = _searchService.FindFirstVisibleSectionId(document, query, _showModifiedOnly, GetSectionVisibleItemCount);
-            if (!string.IsNullOrEmpty(sectionId))
-            {
-                _activeSectionId = sectionId;
-                _pendingSectionJumpId = sectionId;
-            }
+            _sessionService.HandleSearchQueryChanged(_sessionState, _searchService, document, GetSectionVisibleItemCount);
         }
 
         private bool ShouldDefaultGroupExpanded(string groupId)
@@ -2097,7 +2064,7 @@ namespace Cortex.Modules.Settings
 
         private string GetNavigationTargetId(SettingsDocumentModel document)
         {
-            if (document == null || string.IsNullOrEmpty(_activeSectionId))
+            if (document == null || string.IsNullOrEmpty(_sessionState.ActiveSectionId))
             {
                 return string.Empty;
             }
@@ -2105,7 +2072,7 @@ namespace Cortex.Modules.Settings
             for (var i = 0; i < document.Groups.Count; i++)
             {
                 var group = document.Groups[i];
-                var activeSection = GetActiveSection(group, _activeSectionId);
+                var activeSection = GetActiveSection(group, _sessionState.ActiveSectionId);
                 if (activeSection == null)
                 {
                     continue;
@@ -2117,7 +2084,7 @@ namespace Cortex.Modules.Settings
                     expanded = ShouldDefaultGroupExpanded(group.GroupId);
                 }
 
-                return IsNavigationGroupExpandedForDisplay(group, expanded, _activeSectionId)
+                return IsNavigationGroupExpandedForDisplay(group, expanded, _sessionState.ActiveSectionId)
                     ? activeSection.SectionId
                     : group.GroupId;
             }
@@ -2195,13 +2162,13 @@ namespace Cortex.Modules.Settings
 
             if (!string.IsNullOrEmpty(active))
             {
-                _activeSectionId = active;
+                _sessionState.ActiveSectionId = active;
             }
         }
 
         private string ResolveRenderActiveSectionId(SettingsDocumentModel document)
         {
-            return _searchService.ResolveRenderActiveSectionId(document, _activeSectionId, GetNormalizedSearchQuery(), _showModifiedOnly, GetSectionVisibleItemCount);
+            return _searchService.ResolveRenderActiveSectionId(document, _sessionState.ActiveSectionId, GetNormalizedSearchQuery(), _sessionState.ShowModifiedOnly, GetSectionVisibleItemCount);
         }
 
         private void CommitNavigationInteraction(NavigationInteraction interaction)
@@ -2225,8 +2192,7 @@ namespace Cortex.Modules.Settings
 
             if (!string.IsNullOrEmpty(interaction.RequestedSectionId))
             {
-                _activeSectionId = interaction.RequestedSectionId;
-                _pendingSectionJumpId = interaction.RequestedSectionId;
+                _sessionService.RequestSection(_sessionState, interaction.RequestedSectionId);
             }
         }
 
@@ -2250,16 +2216,16 @@ namespace Cortex.Modules.Settings
 
         private bool ApplyPendingSectionJump()
         {
-            if (string.IsNullOrEmpty(_pendingSectionJumpId))
+            if (string.IsNullOrEmpty(_sessionState.PendingSectionJumpId))
             {
                 return false;
             }
 
             float anchor;
-            if (_sectionAnchors.TryGetValue(_pendingSectionJumpId, out anchor))
+            if (_sectionAnchors.TryGetValue(_sessionState.PendingSectionJumpId, out anchor))
             {
                 _contentScroll.y = Mathf.Max(0f, anchor - 8f);
-                _pendingSectionJumpId = string.Empty;
+                _sessionState.PendingSectionJumpId = string.Empty;
                 return true;
             }
 
@@ -2268,13 +2234,12 @@ namespace Cortex.Modules.Settings
 
         private void CommitSearchQuery()
         {
-            var nextQuery = (_settingsSearchQuery ?? string.Empty).Trim();
-            if (string.Equals(_appliedSettingsSearchQuery ?? string.Empty, nextQuery, StringComparison.Ordinal))
+            var previousQuery = _sessionState.AppliedSearchQuery ?? string.Empty;
+            _sessionService.CommitSearchQuery(_sessionState);
+            if (string.Equals(previousQuery, _sessionState.AppliedSearchQuery ?? string.Empty, StringComparison.Ordinal))
             {
                 return;
             }
-
-            _appliedSettingsSearchQuery = nextQuery;
         }
 
         private void PersistUiState()
@@ -2289,11 +2254,7 @@ namespace Cortex.Modules.Settings
                 _shellState.Settings = new CortexSettings();
             }
 
-            _shellState.Settings.SettingsActiveSectionId = _activeSectionId ?? string.Empty;
-            _shellState.Settings.SettingsNavigationScrollY = _navigationScroll.y;
-            _shellState.Settings.SettingsContentScrollY = _contentScroll.y;
-            _shellState.Settings.SettingsSearchQuery = _appliedSettingsSearchQuery ?? string.Empty;
-            _shellState.Settings.SettingsShowModifiedOnly = _showModifiedOnly;
+            _sessionService.Persist(_sessionState, _shellState.Settings, _navigationScroll.y, _contentScroll.y);
         }
 
         private static bool IsThemeSetting(SettingContribution contribution)

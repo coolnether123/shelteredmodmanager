@@ -158,6 +158,26 @@ namespace Cortex.Services.Onboarding
             return true;
         }
 
+        public void ToggleOwnership(CortexOnboardingModProjectDraft draft)
+        {
+            if (draft == null)
+            {
+                return;
+            }
+
+            draft.IsOwnedByUser = !draft.IsOwnedByUser;
+        }
+
+        public void UseSelectedWorkspaceRoot(CortexOnboardingState onboardingState, CortexOnboardingModProjectDraft draft)
+        {
+            if (onboardingState == null || draft == null || string.IsNullOrEmpty(onboardingState.SelectedWorkspaceRootPath))
+            {
+                return;
+            }
+
+            draft.SourceRootPath = onboardingState.SelectedWorkspaceRootPath;
+        }
+
         private static int CompareDrafts(CortexOnboardingModProjectDraft left, CortexOnboardingModProjectDraft right)
         {
             if (left == null && right == null)

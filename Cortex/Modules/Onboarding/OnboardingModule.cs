@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
@@ -15,18 +14,8 @@ namespace Cortex.Modules.Onboarding
         private const float FooterHeight = 40f;
         private const int ThemesPerRow = 3;
         private const float WorkspaceFieldHeight = 26f;
-
-        private sealed class OnboardingStepDefinition
-        {
-            public string StepId = string.Empty;
-            public string Label = string.Empty;
-            public string Title = string.Empty;
-            public string Description = string.Empty;
-            public bool IsScrollable;
-            public Func<CortexOnboardingState, Vector2> GetScrollPosition = delegate { return Vector2.zero; };
-            public Action<CortexOnboardingState, Vector2> SetScrollPosition = delegate { };
-            public Action<CortexOnboardingState, CortexOnboardingCatalog, CortexOnboardingService> Render = delegate { };
-        }
+        private readonly CortexOnboardingFlowService _flowService = new CortexOnboardingFlowService();
+        private readonly CortexOnboardingProjectSetupService _projectSetupService = new CortexOnboardingProjectSetupService();
 
         private struct ThemePreviewPalette
         {
@@ -57,13 +46,13 @@ namespace Cortex.Modules.Onboarding
                 return false;
             }
 
-            var steps = BuildSteps(onboardingState, catalog, onboardingService, pathInteractionService);
-            if (steps.Count == 0)
+            var flow = _flowService.BuildFlow(onboardingState, catalog, onboardingService);
+            if (flow.Steps.Count == 0)
             {
                 return false;
             }
 
-            onboardingState.ActiveStepIndex = Mathf.Clamp(onboardingState.ActiveStepIndex, 0, steps.Count - 1);
+            _flowService.ClampActiveStepIndex(onboardingState, flow);
 
             var innerRect = new Rect(
                 modalRect.x + InnerPadding,
@@ -79,96 +68,18 @@ namespace Cortex.Modules.Onboarding
                 Mathf.Max(0f, footerRect.y - headerRect.yMax - 16f));
 
             GUILayout.BeginArea(headerRect);
-            DrawHeader(onboardingState, previewBackground, steps);
+            DrawHeader(onboardingState, previewBackground, flow);
             GUILayout.EndArea();
 
-            DrawStepBody(bodyRect, onboardingState, catalog, onboardingService, steps);
+            DrawStepBody(bodyRect, onboardingState, catalog, onboardingService, pathInteractionService, flow);
 
             GUILayout.BeginArea(footerRect);
-            var finishRequested = DrawFooter(onboardingState, steps.Count);
+            var finishRequested = DrawFooter(onboardingState, flow);
             GUILayout.EndArea();
             return finishRequested;
         }
 
-        private static List<OnboardingStepDefinition> BuildSteps(
-            CortexOnboardingState onboardingState,
-            CortexOnboardingCatalog catalog,
-            CortexOnboardingService onboardingService,
-            IPathInteractionService pathInteractionService)
-        {
-            var steps = new List<OnboardingStepDefinition>();
-            var selectedProfile = ResolveSelectedProfile(onboardingState, catalog, onboardingService);
-            steps.Add(new OnboardingStepDefinition
-            {
-                StepId = "profile",
-                Label = "Profile",
-                Title = "Choose your starting profile",
-                Description = "Pick the default posture Cortex should start from.",
-                IsScrollable = false,
-                Render = delegate(CortexOnboardingState state, CortexOnboardingCatalog currentCatalog, CortexOnboardingService service)
-                {
-                    DrawProfileStep(state, currentCatalog, service);
-                }
-            });
-            if (selectedProfile != null && selectedProfile.WorkflowKind == OnboardingProfileWorkflowKind.Modder)
-            {
-                steps.Add(new OnboardingStepDefinition
-                {
-                    StepId = "projects",
-                    Label = "Projects",
-                    Title = "Link active content to source roots",
-                    Description = "Mark which active content items you maintain, then point Cortex at the source roots it should treat as editable worktrees.",
-                    IsScrollable = true,
-                    GetScrollPosition = delegate(CortexOnboardingState state) { return state != null ? state.ModProjectScroll : Vector2.zero; },
-                    SetScrollPosition = delegate(CortexOnboardingState state, Vector2 value)
-                    {
-                        if (state != null)
-                        {
-                            state.ModProjectScroll = value;
-                        }
-                    },
-                    Render = delegate(CortexOnboardingState state, CortexOnboardingCatalog currentCatalog, CortexOnboardingService service)
-                    {
-                        DrawModProjectStep(state, pathInteractionService);
-                    }
-                });
-            }
-            steps.Add(new OnboardingStepDefinition
-            {
-                StepId = "layout",
-                Label = "Layout",
-                Title = "Choose a layout style",
-                Description = "Select the shell arrangement you want Cortex to apply after onboarding.",
-                IsScrollable = false,
-                Render = delegate(CortexOnboardingState state, CortexOnboardingCatalog currentCatalog, CortexOnboardingService service)
-                {
-                    DrawLayoutStep(state, currentCatalog, service);
-                }
-            });
-            steps.Add(new OnboardingStepDefinition
-            {
-                StepId = "theme",
-                Label = "Theme",
-                Title = "Choose a theme",
-                Description = "Keep it simple for v1 with built-in themes. Custom colors can layer on top later.",
-                IsScrollable = true,
-                GetScrollPosition = delegate(CortexOnboardingState state) { return state != null ? state.ThemeScroll : Vector2.zero; },
-                SetScrollPosition = delegate(CortexOnboardingState state, Vector2 value)
-                {
-                    if (state != null)
-                    {
-                        state.ThemeScroll = value;
-                    }
-                },
-                Render = delegate(CortexOnboardingState state, CortexOnboardingCatalog currentCatalog, CortexOnboardingService service)
-                {
-                    DrawThemeStep(state, currentCatalog, service);
-                }
-            });
-            return steps;
-        }
-
-        private static void DrawHeader(CortexOnboardingState onboardingState, bool previewBackground, IList<OnboardingStepDefinition> steps)
+        private static void DrawHeader(CortexOnboardingState onboardingState, bool previewBackground, CortexOnboardingFlowModel flow)
         {
             var titleStyle = CreateTitleStyle();
             var bodyStyle = CreateBodyStyle();
@@ -180,7 +91,7 @@ namespace Cortex.Modules.Onboarding
             GUILayout.Label(
                 previewBackground
                     ? "Preview the shell behind this overlay. Cortex stays blocked until you finish."
-                    : (steps.Count > 3
+                    : (flow.Steps.Count > 3
                         ? "Set your starting profile, link your active content, then choose a layout and theme. Defaults are already selected."
                         : "Set your starting profile, layout, and theme. Defaults are already selected."),
                 bodyStyle,
@@ -188,10 +99,10 @@ namespace Cortex.Modules.Onboarding
             GUILayout.EndVertical();
 
             GUILayout.BeginHorizontal(GUILayout.ExpandWidth(false));
-            for (var i = 0; i < steps.Count; i++)
+            for (var i = 0; i < flow.Steps.Count; i++)
             {
-                DrawStepChip((i + 1).ToString(), steps[i].Label, onboardingState.ActiveStepIndex == i, stepStyle);
-                if (i < steps.Count - 1)
+                DrawStepChip((i + 1).ToString(), flow.Steps[i].Label, onboardingState.ActiveStepIndex == i, stepStyle);
+                if (i < flow.Steps.Count - 1)
                 {
                     GUILayout.Space(8f);
                 }
@@ -201,30 +112,96 @@ namespace Cortex.Modules.Onboarding
             GUILayout.EndHorizontal();
         }
 
-        private static void DrawStepBody(
+        private void DrawStepBody(
             Rect bodyRect,
             CortexOnboardingState onboardingState,
             CortexOnboardingCatalog catalog,
             CortexOnboardingService onboardingService,
-            IList<OnboardingStepDefinition> steps)
+            IPathInteractionService pathInteractionService,
+            CortexOnboardingFlowModel flow)
         {
-            var step = steps[onboardingState.ActiveStepIndex];
+            var step = flow != null ? flow.ActiveStep : null;
+            if (step == null)
+            {
+                return;
+            }
+
             GUILayout.BeginArea(bodyRect);
             DrawSectionIntro(step.Title, step.Description);
             GUILayout.Space(8f);
             if (step.IsScrollable)
             {
-                var scrollPosition = GUILayout.BeginScrollView(step.GetScrollPosition(onboardingState), false, true, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-                step.SetScrollPosition(onboardingState, scrollPosition);
-                step.Render(onboardingState, catalog, onboardingService);
+                var scrollPosition = GUILayout.BeginScrollView(GetStepScrollPosition(onboardingState, step.StepKind), false, true, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+                SetStepScrollPosition(onboardingState, step.StepKind, scrollPosition);
+                DrawStepContent(step.StepKind, onboardingState, catalog, onboardingService, pathInteractionService);
                 GUILayout.EndScrollView();
             }
             else
             {
-                step.Render(onboardingState, catalog, onboardingService);
+                DrawStepContent(step.StepKind, onboardingState, catalog, onboardingService, pathInteractionService);
             }
 
             GUILayout.EndArea();
+        }
+
+        private void DrawStepContent(
+            CortexOnboardingStepKind stepKind,
+            CortexOnboardingState onboardingState,
+            CortexOnboardingCatalog catalog,
+            CortexOnboardingService onboardingService,
+            IPathInteractionService pathInteractionService)
+        {
+            switch (stepKind)
+            {
+                case CortexOnboardingStepKind.Profile:
+                    DrawProfileStep(onboardingState, catalog, onboardingService);
+                    return;
+                case CortexOnboardingStepKind.Projects:
+                    DrawModProjectStep(onboardingState, pathInteractionService);
+                    return;
+                case CortexOnboardingStepKind.Layout:
+                    DrawLayoutStep(onboardingState, catalog, onboardingService);
+                    return;
+                case CortexOnboardingStepKind.Theme:
+                    DrawThemeStep(onboardingState, catalog, onboardingService);
+                    return;
+            }
+        }
+
+        private static Vector2 GetStepScrollPosition(CortexOnboardingState onboardingState, CortexOnboardingStepKind stepKind)
+        {
+            if (onboardingState == null)
+            {
+                return Vector2.zero;
+            }
+
+            switch (stepKind)
+            {
+                case CortexOnboardingStepKind.Projects:
+                    return onboardingState.ModProjectScroll;
+                case CortexOnboardingStepKind.Theme:
+                    return onboardingState.ThemeScroll;
+                default:
+                    return Vector2.zero;
+            }
+        }
+
+        private static void SetStepScrollPosition(CortexOnboardingState onboardingState, CortexOnboardingStepKind stepKind, Vector2 value)
+        {
+            if (onboardingState == null)
+            {
+                return;
+            }
+
+            switch (stepKind)
+            {
+                case CortexOnboardingStepKind.Projects:
+                    onboardingState.ModProjectScroll = value;
+                    break;
+                case CortexOnboardingStepKind.Theme:
+                    onboardingState.ThemeScroll = value;
+                    break;
+            }
         }
 
         private static void DrawProfileStep(CortexOnboardingState onboardingState, CortexOnboardingCatalog catalog, CortexOnboardingService onboardingService)
@@ -330,7 +307,7 @@ namespace Cortex.Modules.Onboarding
             GUILayout.Space(4f);
         }
 
-        private static void DrawModProjectStep(CortexOnboardingState onboardingState, IPathInteractionService pathInteractionService)
+        private void DrawModProjectStep(CortexOnboardingState onboardingState, IPathInteractionService pathInteractionService)
         {
             if (onboardingState == null)
             {
@@ -360,7 +337,7 @@ namespace Cortex.Modules.Onboarding
             }
         }
 
-        private static bool DrawFooter(CortexOnboardingState onboardingState, int totalSteps)
+        private bool DrawFooter(CortexOnboardingState onboardingState, CortexOnboardingFlowModel flow)
         {
             GUILayout.BeginHorizontal();
             onboardingState.KeepFocused = GUILayout.Toggle(
@@ -372,20 +349,20 @@ namespace Cortex.Modules.Onboarding
 
             GUILayout.FlexibleSpace();
 
-            GUI.enabled = onboardingState.ActiveStepIndex > 0;
+            GUI.enabled = _flowService.CanMovePrevious(flow);
             if (GUILayout.Button("Back", GUILayout.Width(96f), GUILayout.Height(28f)))
             {
-                onboardingState.ActiveStepIndex = Mathf.Max(0, onboardingState.ActiveStepIndex - 1);
+                _flowService.MovePrevious(onboardingState, flow);
             }
 
             GUI.enabled = true;
             GUILayout.Space(8f);
 
-            if (onboardingState.ActiveStepIndex < totalSteps - 1)
+            if (!_flowService.IsFinalStep(flow))
             {
                 if (GUILayout.Button("Next", GUILayout.Width(120f), GUILayout.Height(28f)))
                 {
-                    onboardingState.ActiveStepIndex = Mathf.Min(totalSteps - 1, onboardingState.ActiveStepIndex + 1);
+                    _flowService.MoveNext(onboardingState, flow);
                 }
 
                 GUILayout.EndHorizontal();
@@ -568,7 +545,7 @@ namespace Cortex.Modules.Onboarding
             GUILayout.EndHorizontal();
         }
 
-        private static void DrawModProjectCard(
+        private void DrawModProjectCard(
             CortexOnboardingState onboardingState,
             CortexOnboardingModProjectDraft draft,
             IPathInteractionService pathInteractionService)
@@ -592,7 +569,7 @@ namespace Cortex.Modules.Onboarding
 
             if (DrawOwnershipToggleButton(draft.IsOwnedByUser))
             {
-                draft.IsOwnedByUser = !draft.IsOwnedByUser;
+                _projectSetupService.ToggleOwnership(draft);
             }
             GUILayout.EndHorizontal();
 
@@ -639,7 +616,7 @@ namespace Cortex.Modules.Onboarding
             GUI.enabled = !string.IsNullOrEmpty(onboardingState.SelectedWorkspaceRootPath);
             if (GUILayout.Button("Use Workspace Root", GUILayout.Width(150f), GUILayout.Height(24f)))
             {
-                draft.SourceRootPath = onboardingState.SelectedWorkspaceRootPath ?? string.Empty;
+                _projectSetupService.UseSelectedWorkspaceRoot(onboardingState, draft);
             }
             GUI.enabled = previousEnabled;
             GUILayout.EndHorizontal();
@@ -903,25 +880,6 @@ namespace Cortex.Modules.Onboarding
         private static string GetPreviewLabel(string value, string fallback)
         {
             return string.IsNullOrEmpty(value) ? fallback : value;
-        }
-
-        private static OnboardingProfileContribution ResolveSelectedProfile(
-            CortexOnboardingState onboardingState,
-            CortexOnboardingCatalog catalog,
-            CortexOnboardingService onboardingService)
-        {
-            if (catalog == null || onboardingService == null)
-            {
-                return null;
-            }
-
-            var profile = onboardingService.FindProfile(catalog, onboardingState != null ? onboardingState.SelectedProfileId : string.Empty);
-            if (profile != null)
-            {
-                return profile;
-            }
-
-            return catalog.Profiles.Count > 0 ? catalog.Profiles[0] : null;
         }
 
         private static bool DrawOwnershipToggleButton(bool isOwnedByUser)
