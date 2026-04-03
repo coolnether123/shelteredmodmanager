@@ -6,6 +6,7 @@
   <PropertyGroup Condition="
     '$(MSBuildProjectName)' == 'Cortex' or
     '$(MSBuildProjectName)' == 'Cortex.CompletionProviders' or
+    '$(MSBuildProjectName)' == 'Cortex.Contracts' or
     '$(MSBuildProjectName)' == 'Cortex.Core' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Sheltered' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Unity' or
@@ -35,6 +36,12 @@
     <When Condition="'$(MSBuildProjectName)' == 'Cortex.Plugin.Harmony'">
       <PropertyGroup>
         <CortexProjectRole>Plugin</CortexProjectRole>
+      </PropertyGroup>
+    </When>
+    <When Condition="
+      '$(MSBuildProjectName)' == 'Cortex.Contracts'">
+      <PropertyGroup>
+        <CortexProjectRole>DesktopShared</CortexProjectRole>
       </PropertyGroup>
     </When>
     <When Condition="

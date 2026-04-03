@@ -24,6 +24,11 @@ namespace Cortex.Tests.Architecture
             "Cortex.Tabby"
         };
 
+        private static readonly string[] DesktopSharedProjectNames =
+        {
+            "Cortex.Contracts"
+        };
+
         private static readonly string[] HostSpecificProjectNames =
         {
             "Cortex",
@@ -61,6 +66,7 @@ namespace Cortex.Tests.Architecture
                 .ToArray();
 
             var expected = PortableProjectNames
+                .Concat(DesktopSharedProjectNames)
                 .Concat(HostSpecificProjectNames)
                 .Concat(PluginProjectNames)
                 .Concat(ToolingProjectNames)
@@ -81,6 +87,25 @@ namespace Cortex.Tests.Architecture
                 var referencedProjects = LoadProjectReferenceNames(projectName);
                 var violations = referencedProjects.Where(hostSpecificProjects.Contains).ToArray();
 
+                Assert.True(
+                    violations.Length == 0,
+                    projectName + " references host-specific Cortex projects: " + string.Join(", ", violations));
+            }
+        }
+
+        [Fact]
+        public void DesktopSharedProjects_AreNet8Consumable_AndDoNotReferenceHostSpecificCortexProjects()
+        {
+            var hostSpecificProjects = new HashSet<string>(HostSpecificProjectNames, StringComparer.Ordinal);
+
+            foreach (var projectName in DesktopSharedProjectNames)
+            {
+                var projectText = File.ReadAllText(GetProjectPath(projectName));
+                var referencedProjects = LoadProjectReferenceNames(projectName);
+                var violations = referencedProjects.Where(hostSpecificProjects.Contains).ToArray();
+
+                Assert.Contains("<TargetFramework>netstandard2.0</TargetFramework>", projectText);
+                Assert.DoesNotContain("<TargetFrameworkVersion>v3.5</TargetFrameworkVersion>", projectText);
                 Assert.True(
                     violations.Length == 0,
                     projectName + " references host-specific Cortex projects: " + string.Join(", ", violations));
@@ -261,7 +286,7 @@ namespace Cortex.Tests.Architecture
         [Fact]
         public void PortableAndToolingProjects_DoNotHardcodeShelteredBundlePaths()
         {
-            foreach (var projectName in PortableProjectNames.Concat(PluginProjectNames).Concat(ToolingProjectNames))
+            foreach (var projectName in PortableProjectNames.Concat(DesktopSharedProjectNames).Concat(PluginProjectNames).Concat(ToolingProjectNames))
             {
                 var projectText = File.ReadAllText(GetProjectPath(projectName));
 
@@ -277,7 +302,7 @@ namespace Cortex.Tests.Architecture
         [Fact]
         public void PortableProjectSources_DoNotEmbedShelteredOrSmmPaths()
         {
-            foreach (var sourcePath in GetProjectSourceFiles(PortableProjectNames))
+            foreach (var sourcePath in GetProjectSourceFiles(PortableProjectNames.Concat(DesktopSharedProjectNames)))
             {
                 var sourceText = File.ReadAllText(sourcePath);
 
@@ -293,7 +318,7 @@ namespace Cortex.Tests.Architecture
         {
             var migrationLayerPath = Path.Combine(RepoRoot, "Cortex.Core", "Services", "JsonCortexSettingsStore.cs");
 
-            foreach (var sourcePath in GetProjectSourceFiles(PortableProjectNames))
+            foreach (var sourcePath in GetProjectSourceFiles(PortableProjectNames.Concat(DesktopSharedProjectNames)))
             {
                 if (string.Equals(sourcePath, migrationLayerPath, StringComparison.OrdinalIgnoreCase))
                 {
@@ -406,13 +431,24 @@ namespace Cortex.Tests.Architecture
         }
 
         [Fact]
-        public void SolutionFolders_ClassifyShelteredAdapterAndHarmonyPluginSeparately()
+        public void SolutionFolders_ExposeDesktopSharedLegacyHostAndExternalToolLanes()
         {
             var solutionText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.sln"));
 
+            Assert.Contains(@"""Desktop"", ""Desktop"", ""{B2BF7298-65F5-4C4A-B13B-3FD4EF5182DF}""", solutionText);
+            Assert.Contains(@"""Desktop Shared"", ""Desktop Shared"", ""{A8C48835-F53B-41D1-B062-B03E6517F331}""", solutionText);
+            Assert.Contains(@"""Desktop Host"", ""Desktop Host"", ""{A76A96F9-6592-4C92-A9E8-4E43A7F4E293}""", solutionText);
+            Assert.Contains(@"""Legacy Unity IMGUI"", ""Legacy Unity IMGUI"", ""{B9F3EFD9-8792-DBB5-53D5-5D013E0311F9}""", solutionText);
+            Assert.Contains(@"""External Workers and Tools"", ""External Workers and Tools"", ""{6D3901D8-58B2-4BCE-9CB0-2E20E9B4D1A1}""", solutionText);
+            Assert.Contains(@"""Cortex.Contracts"", ""Cortex.Contracts\Cortex.Contracts.csproj"", ""{C458EE62-EED9-4B14-9EC3-910105D9BDFC}""", solutionText);
+            Assert.Contains(@"{A8C48835-F53B-41D1-B062-B03E6517F331} = {B2BF7298-65F5-4C4A-B13B-3FD4EF5182DF}", solutionText);
+            Assert.Contains(@"{A76A96F9-6592-4C92-A9E8-4E43A7F4E293} = {B2BF7298-65F5-4C4A-B13B-3FD4EF5182DF}", solutionText);
+            Assert.Contains(@"{C458EE62-EED9-4B14-9EC3-910105D9BDFC} = {A8C48835-F53B-41D1-B062-B03E6517F331}", solutionText);
             Assert.Contains(@"""Cortex.Shell.Unity.Imgui"", ""Cortex.Shell.Unity.Imgui\Cortex.Shell.Unity.Imgui.csproj"", ""{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3}""", solutionText);
             Assert.Contains(@"{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3}.Debug|Any CPU.Build.0 = Debug|Any CPU", solutionText);
             Assert.Contains(@"{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3} = {86FA87A4-554D-7FD3-E7FA-07CF08F2607B}", solutionText);
+            Assert.Contains(@"{86FA87A4-554D-7FD3-E7FA-07CF08F2607B} = {B9F3EFD9-8792-DBB5-53D5-5D013E0311F9}", solutionText);
+            Assert.Contains(@"{D459D5A1-8460-2948-B6C6-81F3C1216BDB} = {B9F3EFD9-8792-DBB5-53D5-5D013E0311F9}", solutionText);
             Assert.Contains(@"{748B7F6E-D557-48FA-B393-6374A7582255} = {B9F3EFD9-8792-DBB5-53D5-5D013E0311F9}", solutionText);
             Assert.Contains(@"{5A6E9E3A-0E10-4F09-A3FD-9B7C0D61A2A7} = {401E6CF6-6FDB-819D-B348-2A4162B7B24D}", solutionText);
             Assert.DoesNotContain(@"{5A6E9E3A-0E10-4F09-A3FD-9B7C0D61A2A7} = {B9F3EFD9-8792-DBB5-53D5-5D013E0311F9}", solutionText);
@@ -482,6 +518,12 @@ namespace Cortex.Tests.Architecture
         {
             var reportText = File.ReadAllText(Path.Combine(RepoRoot, "documentation", "Cortex_Portability_Report.md"));
 
+            Assert.Contains("desktop-first architecture", reportText);
+            Assert.Contains("Cortex.Contracts", reportText);
+            Assert.Contains("net35", reportText);
+            Assert.Contains("Avalonia", reportText);
+            Assert.Contains("Dock", reportText);
+            Assert.Contains("Serilog", reportText);
             Assert.Contains("Portable Cortex", reportText);
             Assert.Contains("Host-Specific Cortex", reportText);
             Assert.Contains("Plugin-Specific Cortex", reportText);

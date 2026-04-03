@@ -15,6 +15,13 @@ This phase is intentionally narrow:
 - keep IMGUI supported as a concrete backend path
 - document the remaining violations clearly so later sections can remove them deliberately instead of preserving them accidentally
 
+Desktop-first direction for this phase:
+
+- Cortex is being prepared for a future `.NET 8` desktop host before that host is introduced
+- the intended desktop stack is Avalonia for rendering, Dock for workbench/docking structure, and Serilog for structured desktop/worker logging
+- `Cortex.Contracts` is the first dedicated desktop-shareable lane; new desktop-facing contracts/models must not stay trapped only in `net35` projects once they need to cross that boundary
+- the Unity IMGUI path remains supported, but only as the legacy concrete host/shell/backend path during this refactor
+
 ## Current violations to shrink
 
 The current codebase still has a few runtime/shell boundary violations or transitional seams that must shrink over later refactor sections:
