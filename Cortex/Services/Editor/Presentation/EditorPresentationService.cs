@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.LanguageService.Protocol;
 using Cortex.Modules.Shared;
 using Cortex.Services.Editor.Context;
+using Cortex.Services.Search;
 using Cortex.Services.Semantics.Diagnostics;
 
 namespace Cortex.Services.Editor.Presentation
@@ -127,6 +129,68 @@ namespace Cortex.Services.Editor.Presentation
             var settings = state.Settings;
             presentation.UsesUnifiedSourceSurface = _documentModeService.UsesUnifiedSourceSurface(active);
             presentation.IsEditingEnabled = _documentModeService.IsEditingEnabled(settings, active);
+            return presentation;
+        }
+
+        public IList<EditorTabPresentation> BuildTabStripPresentation(CortexShellState state)
+        {
+            var tabs = new List<EditorTabPresentation>();
+            if (state == null || state.Documents == null)
+            {
+                return tabs;
+            }
+
+            for (var i = 0; i < state.Documents.OpenDocuments.Count; i++)
+            {
+                var session = state.Documents.OpenDocuments[i];
+                if (session == null)
+                {
+                    continue;
+                }
+
+                tabs.Add(new EditorTabPresentation
+                {
+                    Session = session,
+                    DisplayName = CortexModuleUtil.GetDocumentDisplayName(session),
+                    IsActive = session == state.Documents.ActiveDocument,
+                    IsDirty = session.IsDirty
+                });
+            }
+
+            return tabs;
+        }
+
+        public EditorPathBarPresentation BuildPathBarPresentation(IDocumentService documentService, CortexShellState state)
+        {
+            var presentation = new EditorPathBarPresentation();
+            var active = state != null && state.Documents != null ? state.Documents.ActiveDocument : null;
+            if (active == null)
+            {
+                return presentation;
+            }
+
+            presentation.CompactPath = BuildCompactPath(active.FilePath);
+            presentation.HighlightedLine = active.HighlightedLine;
+            presentation.HasHighlightedLine = active.HighlightedLine > 0;
+            presentation.HasExternalChanges = active.HasExternalChanges;
+            presentation.AllowSaving = state != null &&
+                state.Settings != null &&
+                state.Settings.EnableFileSaving &&
+                active.SupportsSaving;
+            presentation.CanReload = documentService != null;
+            return presentation;
+        }
+
+        public EditorFindOverlayPresentation BuildFindOverlayPresentation(WorkbenchSearchService workbenchSearchService, CortexShellState state)
+        {
+            var presentation = new EditorFindOverlayPresentation();
+            if (state == null || state.Search == null)
+            {
+                return presentation;
+            }
+
+            presentation.SummaryText = BuildFindSummary(workbenchSearchService, state);
+            presentation.ScopeLabel = SearchWorkbenchPresentationService.BuildScopeLabel(state.Search.Query.Scope);
             return presentation;
         }
 
@@ -339,6 +403,55 @@ namespace Cortex.Services.Editor.Presentation
                  analysis.DocumentVersion > 0 ||
                  (analysis.Diagnostics != null && analysis.Diagnostics.Length > 0) ||
                  (analysis.Classifications != null && analysis.Classifications.Length > 0));
+        }
+
+        private static string BuildFindSummary(WorkbenchSearchService workbenchSearchService, CortexShellState state)
+        {
+            if (state == null || state.Search == null)
+            {
+                return string.Empty;
+            }
+
+            if (state.Search.PendingRefresh)
+            {
+                return string.IsNullOrEmpty(state.Search.QueryText) ? "Type to search" : "Press Enter";
+            }
+
+            var results = state.Search.Results;
+            if (results == null)
+            {
+                return "Press Enter";
+            }
+
+            var total = workbenchSearchService != null ? workbenchSearchService.CountMatches(results) : results.TotalMatchCount;
+            if (total <= 0)
+            {
+                return "0/0";
+            }
+
+            var activeIndex = state.Search.ActiveMatchIndex;
+            if (activeIndex < 0 || activeIndex >= total)
+            {
+                activeIndex = 0;
+            }
+
+            return (activeIndex + 1) + "/" + total;
+        }
+
+        private static string BuildCompactPath(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath))
+            {
+                return string.Empty;
+            }
+
+            var parts = filePath.Replace('\\', '/').Split('/');
+            if (parts.Length >= 3)
+            {
+                return ".../" + parts[parts.Length - 2] + "/" + parts[parts.Length - 1];
+            }
+
+            return filePath;
         }
     }
 }

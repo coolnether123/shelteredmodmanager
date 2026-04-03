@@ -1,25 +1,25 @@
 using System;
-using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
+using Cortex.Services.Projects;
 using UnityEngine;
 
 namespace Cortex.Modules.Projects
 {
     public sealed class ProjectsModule
     {
-        private string _modId = string.Empty;
-        private string _sourceRoot = string.Empty;
-        private string _projectFile = string.Empty;
-        private string _buildOverride = string.Empty;
-        private string _outputAssembly = string.Empty;
-        private string _outputPdb = string.Empty;
         private string _searchText = string.Empty;
-        private string _validationMessage = string.Empty;
         private Vector2 _projectScroll = Vector2.zero;
         private Vector2 _diagnosticScroll = Vector2.zero;
         private bool _showAdvanced;
+        private readonly ProjectWorkspaceInteractionService _workspaceInteractionService = new ProjectWorkspaceInteractionService();
+        private readonly ProjectWorkspaceDraft _draft;
+
+        public ProjectsModule()
+        {
+            _draft = _workspaceInteractionService.CreateDraft();
+        }
 
         public void Draw(
             IProjectCatalog catalog,
@@ -47,26 +47,18 @@ namespace Cortex.Modules.Projects
             GUILayout.EndHorizontal();
             GUILayout.Space(4f);
 
-            var projects = catalog.GetProjects();
+            var projects = _workspaceInteractionService.BuildProjectList(catalog, _searchText);
             GUILayout.Label("Projects: " + projects.Count);
             _projectScroll = GUILayout.BeginScrollView(_projectScroll, GUI.skin.box, GUILayout.ExpandHeight(true));
             for (var i = 0; i < projects.Count; i++)
             {
                 var project = projects[i];
-                var displayName = project.GetDisplayName();
-                if (!string.IsNullOrEmpty(_searchText) &&
-                    displayName.IndexOf(_searchText, StringComparison.OrdinalIgnoreCase) < 0 &&
-                    (project.SourceRootPath ?? string.Empty).IndexOf(_searchText, StringComparison.OrdinalIgnoreCase) < 0)
-                {
-                    continue;
-                }
-
-                var label = displayName + "\n" + (project.SourceRootPath ?? string.Empty);
+                var label = project.DisplayName + "\n" + project.SourceRootPath;
                 if (GUILayout.Button(label, GUILayout.ExpandWidth(true), GUILayout.MinHeight(46f)))
                 {
-                    state.SelectedProject = project;
-                    Load(project);
-                    state.StatusMessage = "Selected project " + project.GetDisplayName();
+                    state.SelectedProject = project.Project;
+                    ApplyDraft(_workspaceInteractionService.LoadDraft(project.Project));
+                    state.StatusMessage = "Selected project " + project.DisplayName;
                 }
             }
             GUILayout.EndScrollView();
@@ -89,7 +81,7 @@ namespace Cortex.Modules.Projects
             GUILayout.Label("Enter the root folder for the source tree you want Cortex to map. Cortex will infer the project id and .csproj automatically.");
             DrawPathField(
                 "Source Folder",
-                ref _sourceRoot,
+                ref _draft.SourceRoot,
                 pathInteractionService,
                 new CortexPathFieldOptions
                 {
@@ -101,8 +93,8 @@ namespace Cortex.Modules.Projects
                     {
                         SelectionKind = PathSelectionKind.Folder,
                         Title = "Select source folder",
-                        InitialPath = !string.IsNullOrEmpty(_sourceRoot)
-                            ? _sourceRoot
+                        InitialPath = !string.IsNullOrEmpty(_draft.SourceRoot)
+                            ? _draft.SourceRoot
                             : (state != null && state.Settings != null ? state.Settings.WorkspaceRootPath : string.Empty)
                     }
                 });
@@ -110,30 +102,30 @@ namespace Cortex.Modules.Projects
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Apply Source Folder", GUILayout.Width(160f)))
             {
-                ApplySourceFolder(catalog, workspaceService, state, true);
+                _workspaceInteractionService.ApplySourceFolder(catalog, workspaceService, _draft, state, true);
             }
             if (GUILayout.Button("Import Workspace", GUILayout.Width(120f)))
             {
-                ImportWorkspaceProjects(catalog, workspaceService, state);
+                _workspaceInteractionService.ImportWorkspaceProjects(catalog, workspaceService, state);
             }
             if (GUILayout.Button("Validate", GUILayout.Width(90f)))
             {
-                _validationMessage = BuildValidation(workspaceService, CreateDefinition());
+                _draft.ValidationMessage = _workspaceInteractionService.BuildValidation(workspaceService, _workspaceInteractionService.CreateDefinition(_draft));
             }
             GUILayout.EndHorizontal();
 
             GUILayout.Space(4f);
-            GUILayout.Label("Detected Project ID: " + (string.IsNullOrEmpty(_modId) ? "Not detected yet" : _modId));
-            GUILayout.Label("Detected Project File: " + (string.IsNullOrEmpty(_projectFile) ? "Not found yet" : _projectFile));
+            GUILayout.Label("Detected Project ID: " + (string.IsNullOrEmpty(_draft.ModId) ? "Not detected yet" : _draft.ModId));
+            GUILayout.Label("Detected Project File: " + (string.IsNullOrEmpty(_draft.ProjectFile) ? "Not found yet" : _draft.ProjectFile));
             GUILayout.Label("Selected source folder is used by the editor file tree once the project is saved and selected.");
 
             _showAdvanced = GUILayout.Toggle(_showAdvanced, "Show Advanced Build Fields");
             if (_showAdvanced)
             {
-                DrawField("Project ID", ref _modId);
+                DrawField("Project ID", ref _draft.ModId);
                 DrawPathField(
                     "Project File",
-                    ref _projectFile,
+                    ref _draft.ProjectFile,
                     pathInteractionService,
                     new CortexPathFieldOptions
                     {
@@ -145,37 +137,32 @@ namespace Cortex.Modules.Projects
                         {
                             SelectionKind = PathSelectionKind.OpenFile,
                             Title = "Select project file",
-                            InitialPath = !string.IsNullOrEmpty(_projectFile) ? _projectFile : _sourceRoot,
+                            InitialPath = !string.IsNullOrEmpty(_draft.ProjectFile) ? _draft.ProjectFile : _draft.SourceRoot,
                             Filter = "C# Project|*.csproj|All Files|*.*"
                         }
                     });
-                DrawField("Build Override", ref _buildOverride);
-                DrawField("Output DLL", ref _outputAssembly);
-                DrawField("Output PDB", ref _outputPdb);
+                DrawField("Build Override", ref _draft.BuildOverride);
+                DrawField("Output DLL", ref _draft.OutputAssembly);
+                DrawField("Output PDB", ref _draft.OutputPdb);
             }
 
             GUILayout.Space(6f);
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Save Project", GUILayout.Width(120f)))
             {
-                SaveProject(catalog, workspaceService, state);
+                _workspaceInteractionService.SaveProject(catalog, workspaceService, _draft, state);
             }
 
             if (state.SelectedProject != null && GUILayout.Button("Delete Selected", GUILayout.Width(120f)))
             {
-                catalog.Remove(state.SelectedProject.ModId);
-                state.SelectedProject = null;
-                _validationMessage = string.Empty;
-                ClearFields();
-                state.StatusMessage = "Deleted selected project.";
-                state.Diagnostics.Add("Deleted the selected project mapping.");
+                _workspaceInteractionService.DeleteSelected(catalog, _draft, state);
             }
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
 
             GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandHeight(true));
             GUILayout.Label("Validation");
-            GUILayout.TextArea(string.IsNullOrEmpty(_validationMessage) ? "Validate the project to confirm the source root, .csproj path, and build output paths." : _validationMessage, GUILayout.ExpandHeight(true));
+            GUILayout.TextArea(string.IsNullOrEmpty(_draft.ValidationMessage) ? "Validate the project to confirm the source root, .csproj path, and build output paths." : _draft.ValidationMessage, GUILayout.ExpandHeight(true));
             GUILayout.EndVertical();
             DrawDiagnostics(state);
             GUILayout.EndVertical();
@@ -193,15 +180,11 @@ namespace Cortex.Modules.Projects
             GUILayout.BeginHorizontal();
             if (state.SelectedProject != null && !string.IsNullOrEmpty(state.SelectedProject.SourceRootPath) && GUILayout.Button("Use Selected Source", GUILayout.Width(140f)))
             {
-                Load(state.SelectedProject);
-                _validationMessage = BuildValidation(workspaceService, state.SelectedProject);
-                state.StatusMessage = "Loaded the selected project's source mapping into the editor.";
-                state.Diagnostics.Add("Prepared the selected project's source folder for editing.");
+                _workspaceInteractionService.UseSelectedProjectSource(workspaceService, state.SelectedProject, _draft, state);
             }
             if (GUILayout.Button("Use Workspace Root", GUILayout.Width(140f)))
             {
-                _sourceRoot = state.Settings != null ? state.Settings.WorkspaceRootPath ?? string.Empty : string.Empty;
-                PrepareAnalysis(workspaceService, _sourceRoot, string.Empty, state);
+                _workspaceInteractionService.UseWorkspaceRoot(workspaceService, _draft, state);
             }
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
@@ -229,8 +212,8 @@ namespace Cortex.Modules.Projects
 
         private void DrawLoadedModAssistant(IProjectCatalog catalog, IProjectWorkspaceService workspaceService, ILoadedModCatalog loadedModCatalog, CortexShellState state)
         {
-            var loadedMods = loadedModCatalog != null ? loadedModCatalog.GetLoadedMods() : null;
-            if (loadedMods == null || loadedMods.Count == 0)
+            var suggestions = _workspaceInteractionService.BuildLoadedModSuggestions(catalog, workspaceService, loadedModCatalog);
+            if (suggestions.Count == 0)
             {
                 return;
             }
@@ -240,46 +223,27 @@ namespace Cortex.Modules.Projects
             GUILayout.Label("Use this when content is active under the host but Cortex does not yet know where its editable source lives.");
 
             var shown = 0;
-            for (var i = 0; i < loadedMods.Count; i++)
+            for (var i = 0; i < suggestions.Count; i++)
             {
-                var mod = loadedMods[i];
-                if (mod == null || string.IsNullOrEmpty(mod.ModId))
-                {
-                    continue;
-                }
-
-                var existing = catalog.GetProject(mod.ModId);
-                if (existing != null && !string.IsNullOrEmpty(existing.SourceRootPath) && Directory.Exists(existing.SourceRootPath))
-                {
-                    continue;
-                }
-
-                var inferredSourceRoot = workspaceService != null ? workspaceService.FindLikelySourceRoot(mod.RootPath) : string.Empty;
-                var analysis = workspaceService != null ? workspaceService.AnalyzeSourceRoot(inferredSourceRoot, mod.ModId) : null;
+                var suggestion = suggestions[i];
+                var mod = suggestion.LoadedMod;
+                var analysis = suggestion.Analysis;
 
                 GUILayout.BeginVertical(GUI.skin.box);
                 GUILayout.Label(mod.ModId + "  |  " + mod.RootPath);
-                GUILayout.Label(string.IsNullOrEmpty(inferredSourceRoot)
+                GUILayout.Label(string.IsNullOrEmpty(suggestion.SuggestedSourceRoot)
                     ? "No obvious source root found. Start from the runtime content root or set a custom workspace path."
-                    : "Suggested source folder: " + inferredSourceRoot);
+                    : "Suggested source folder: " + suggestion.SuggestedSourceRoot);
 
                 GUILayout.BeginHorizontal();
                 if (analysis != null && analysis.Definition != null && GUILayout.Button("Insert Mapping", GUILayout.Width(120f)))
                 {
-                    catalog.Upsert(analysis.Definition);
-                    state.SelectedProject = catalog.GetProject(mod.ModId) ?? analysis.Definition;
-                    Load(state.SelectedProject);
-                    _validationMessage = BuildValidation(workspaceService, state.SelectedProject);
-                    state.StatusMessage = "Inserted source mapping for loaded mod " + mod.ModId + ".";
-                    state.Diagnostics.Add("Inserted mapping for loaded mod " + mod.ModId + ".");
+                    _workspaceInteractionService.InsertSuggestion(catalog, workspaceService, suggestion, _draft, state);
                 }
 
                 if (analysis != null && analysis.Definition != null && GUILayout.Button("Use In Editor", GUILayout.Width(110f)))
                 {
-                    Load(analysis.Definition);
-                    _validationMessage = BuildValidation(workspaceService, analysis.Definition);
-                    state.StatusMessage = "Prepared source mapping fields for " + mod.ModId + ".";
-                    state.Diagnostics.Add("Prepared inferred source folder for loaded mod " + mod.ModId + ".");
+                    _workspaceInteractionService.UseSuggestion(workspaceService, suggestion, _draft, state);
                 }
                 GUILayout.EndHorizontal();
                 GUILayout.EndVertical();
@@ -299,137 +263,21 @@ namespace Cortex.Modules.Projects
             GUILayout.EndVertical();
         }
 
-        private void ImportWorkspaceProjects(IProjectCatalog catalog, IProjectWorkspaceService workspaceService, CortexShellState state)
+        private void ApplyDraft(ProjectWorkspaceDraft draft)
         {
-            var root = state.Settings != null ? state.Settings.WorkspaceRootPath : string.Empty;
-            var importResult = workspaceService != null ? workspaceService.DiscoverWorkspaceProjects(root) : new ProjectWorkspaceImportResult();
-            for (var i = 0; i < importResult.Definitions.Count; i++)
+            if (draft == null)
             {
-                catalog.Upsert(importResult.Definitions[i]);
-            }
-
-            state.StatusMessage = importResult.StatusMessage;
-            for (var i = 0; i < importResult.Diagnostics.Count; i++)
-            {
-                state.Diagnostics.Add(importResult.Diagnostics[i]);
-            }
-        }
-
-        private void ApplySourceFolder(IProjectCatalog catalog, IProjectWorkspaceService workspaceService, CortexShellState state, bool saveProject)
-        {
-            var analysis = PrepareAnalysis(workspaceService, _sourceRoot, _modId, state);
-            if (analysis == null || !analysis.Success || analysis.Definition == null)
-            {
+                _workspaceInteractionService.ClearDraft(_draft);
                 return;
             }
 
-            PreserveAdvancedFields(analysis.Definition);
-            Load(analysis.Definition);
-            _validationMessage = BuildValidation(workspaceService, analysis.Definition);
-
-            if (saveProject)
-            {
-                catalog.Upsert(analysis.Definition);
-                state.SelectedProject = catalog.GetProject(analysis.Definition.ModId) ?? analysis.Definition;
-            }
-
-            state.Workbench.RequestedContainerId = CortexWorkbenchIds.EditorContainer;
-            state.StatusMessage = "Applied source folder for " + analysis.Definition.GetDisplayName() + ".";
-        }
-
-        private ProjectWorkspaceAnalysis PrepareAnalysis(IProjectWorkspaceService workspaceService, string sourceRoot, string preferredModId, CortexShellState state)
-        {
-            var analysis = workspaceService != null ? workspaceService.AnalyzeSourceRoot(sourceRoot, preferredModId) : null;
-            if (analysis == null)
-            {
-                state.StatusMessage = "Project workspace analysis is unavailable.";
-                state.Diagnostics.Add(state.StatusMessage);
-                return null;
-            }
-
-            for (var i = 0; i < analysis.Diagnostics.Count; i++)
-            {
-                state.Diagnostics.Add(analysis.Diagnostics[i]);
-            }
-
-            state.StatusMessage = analysis.StatusMessage;
-            return analysis;
-        }
-
-        private void SaveProject(IProjectCatalog catalog, IProjectWorkspaceService workspaceService, CortexShellState state)
-        {
-            var definition = CreateDefinition();
-            catalog.Upsert(definition);
-            state.SelectedProject = catalog.GetProject(definition.ModId) ?? definition;
-            _validationMessage = BuildValidation(workspaceService, definition);
-            state.StatusMessage = "Saved project " + definition.GetDisplayName();
-            state.Diagnostics.Add("Saved project mapping for " + definition.GetDisplayName() + " using source folder " + (definition.SourceRootPath ?? string.Empty) + ".");
-        }
-
-        private void PreserveAdvancedFields(CortexProjectDefinition definition)
-        {
-            if (definition == null)
-            {
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(_buildOverride))
-            {
-                definition.BuildCommandOverride = _buildOverride;
-            }
-            if (!string.IsNullOrEmpty(_outputAssembly))
-            {
-                definition.OutputAssemblyPath = _outputAssembly;
-            }
-            if (!string.IsNullOrEmpty(_outputPdb))
-            {
-                definition.OutputPdbPath = _outputPdb;
-            }
-        }
-
-        private string BuildValidation(IProjectWorkspaceService workspaceService, CortexProjectDefinition definition)
-        {
-            var validation = workspaceService != null ? workspaceService.Validate(definition) : new ProjectValidationResult();
-            return string.Join("\n", validation.Lines.ToArray());
-        }
-
-        private CortexProjectDefinition CreateDefinition()
-        {
-            var modId = _modId;
-            if (string.IsNullOrEmpty(modId) && !string.IsNullOrEmpty(_sourceRoot))
-            {
-                modId = Path.GetFileName(_sourceRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            }
-
-            return new CortexProjectDefinition
-            {
-                ModId = modId,
-                SourceRootPath = _sourceRoot,
-                ProjectFilePath = _projectFile,
-                BuildCommandOverride = _buildOverride,
-                OutputAssemblyPath = _outputAssembly,
-                OutputPdbPath = _outputPdb
-            };
-        }
-
-        private void Load(CortexProjectDefinition project)
-        {
-            _modId = project != null ? project.ModId ?? string.Empty : string.Empty;
-            _sourceRoot = project != null ? project.SourceRootPath ?? string.Empty : string.Empty;
-            _projectFile = project != null ? project.ProjectFilePath ?? string.Empty : string.Empty;
-            _buildOverride = project != null ? project.BuildCommandOverride ?? string.Empty : string.Empty;
-            _outputAssembly = project != null ? project.OutputAssemblyPath ?? string.Empty : string.Empty;
-            _outputPdb = project != null ? project.OutputPdbPath ?? string.Empty : string.Empty;
-        }
-
-        private void ClearFields()
-        {
-            _modId = string.Empty;
-            _sourceRoot = string.Empty;
-            _projectFile = string.Empty;
-            _buildOverride = string.Empty;
-            _outputAssembly = string.Empty;
-            _outputPdb = string.Empty;
+            _draft.ModId = draft.ModId ?? string.Empty;
+            _draft.SourceRoot = draft.SourceRoot ?? string.Empty;
+            _draft.ProjectFile = draft.ProjectFile ?? string.Empty;
+            _draft.BuildOverride = draft.BuildOverride ?? string.Empty;
+            _draft.OutputAssembly = draft.OutputAssembly ?? string.Empty;
+            _draft.OutputPdb = draft.OutputPdb ?? string.Empty;
+            _draft.ValidationMessage = draft.ValidationMessage ?? string.Empty;
         }
 
         private static void DrawField(string label, ref string value)

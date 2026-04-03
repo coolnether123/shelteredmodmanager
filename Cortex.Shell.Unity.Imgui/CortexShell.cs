@@ -18,6 +18,7 @@ using Cortex.Services.Search;
 using Cortex.Shell;
 using Cortex.Rendering.RuntimeUi;
 using Cortex.Presentation.Services;
+using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex
 {
@@ -34,7 +35,7 @@ namespace Cortex
         private readonly ShellLayoutCoordinator _layoutCoordinator;
         private readonly ShellOverlayCoordinator _overlayCoordinator;
         private readonly ShellCommandDispatcher _commandDispatcher;
-        private readonly ShellStatusPresenter _statusPresenter;
+        private readonly ImguiShellStatusPresenter _statusPresenter;
 
         private readonly EditorSymbolInteractionService _editorSymbolInteractionService = new EditorSymbolInteractionService();
         private readonly WorkbenchSearchService _workbenchSearchService = new WorkbenchSearchService();
@@ -62,7 +63,7 @@ namespace Cortex
         private CortexShellModuleServices _moduleServices;
         private CortexShellModuleCompositionService _moduleCompositionService;
         private CortexShellModuleActivationService _moduleActivationService;
-        private CortexShellModuleRenderService _moduleRenderService;
+        private ImguiShellModuleRenderer _moduleRenderService;
         private bool _moduleContributionsRegistered;
         private readonly WorkbenchRuntimeAccess _runtimeAccess;
 
@@ -213,7 +214,7 @@ namespace Cortex
                 ExecuteSearchOrAdvance,
                 CloseFind,
                 _editorSymbolInteractionService);
-            _statusPresenter = new ShellStatusPresenter(_state, ExecuteCommand);
+            _statusPresenter = new ImguiShellStatusPresenter(_state, ExecuteCommand);
         }
 
         public void StartShell()

@@ -5,14 +5,14 @@ using Cortex.Modules.Shared;
 using Cortex.Presentation.Models;
 using UnityEngine;
 
-namespace Cortex.Shell
+namespace Cortex.Shell.Unity.Imgui
 {
-    internal sealed class ShellStatusPresenter
+    internal sealed class ImguiShellStatusPresenter
     {
         private readonly CortexShellState _state;
         private readonly Func<string, object, bool> _executeCommandFunc;
 
-        public ShellStatusPresenter(CortexShellState state, Func<string, object, bool> executeCommandFunc)
+        public ImguiShellStatusPresenter(CortexShellState state, Func<string, object, bool> executeCommandFunc)
         {
             _state = state;
             _executeCommandFunc = executeCommandFunc;
@@ -21,27 +21,35 @@ namespace Cortex.Shell
         public void DrawStatusStrip(WorkbenchPresentationSnapshot snapshot, GUIStyle sectionStyle, GUIStyle statusStyle, GUIStyle captionStyle)
         {
             GUILayout.BeginHorizontal(sectionStyle, GUILayout.Height(22f));
-            DrawStatusItems(snapshot?.LeftStatusItems, captionStyle);
+            DrawStatusItems(snapshot != null ? snapshot.LeftStatusItems : null, captionStyle);
             GUILayout.FlexibleSpace();
 
-            var msg = string.IsNullOrEmpty(_state.StatusMessage) ? (snapshot?.RendererSummary ?? "Ready") : _state.StatusMessage;
+            var msg = string.IsNullOrEmpty(_state.StatusMessage) ? (snapshot != null ? snapshot.RendererSummary ?? "Ready" : "Ready") : _state.StatusMessage;
             GUILayout.Label(msg, statusStyle);
             GUILayout.FlexibleSpace();
 
-            var themeId = snapshot?.ActiveThemeId ?? (_state.Settings?.ThemeId ?? "vs-dark");
+            var themeId = snapshot != null ? snapshot.ActiveThemeId : ((_state.Settings != null ? _state.Settings.ThemeId : null) ?? "vs-dark");
             GUILayout.Label(themeId, captionStyle, GUILayout.ExpandWidth(false));
             GUILayout.Space(8f);
 
-            DrawStatusItems(snapshot?.RightStatusItems, captionStyle);
+            DrawStatusItems(snapshot != null ? snapshot.RightStatusItems : null, captionStyle);
             GUILayout.EndHorizontal();
         }
 
         private void DrawStatusItems(IList<StatusItemContribution> items, GUIStyle captionStyle)
         {
-            if (items == null) return;
+            if (items == null)
+            {
+                return;
+            }
+
             foreach (var item in items)
             {
-                if (item == null) continue;
+                if (item == null)
+                {
+                    continue;
+                }
+
                 var prevColor = GUI.contentColor;
                 GUI.contentColor = RuntimeLogVisuals.GetAccentColor(string.IsNullOrEmpty(item.Severity) ? "Info" : item.Severity);
                 var label = item.Text ?? item.ItemId ?? "Status";
@@ -49,8 +57,13 @@ namespace Cortex.Shell
                 {
                     _executeCommandFunc(item.CommandId, null);
                 }
-                else GUILayout.Label(label, captionStyle);
-                GUI.contentColor = prevColor; GUILayout.Space(6f);
+                else
+                {
+                    GUILayout.Label(label, captionStyle);
+                }
+
+                GUI.contentColor = prevColor;
+                GUILayout.Space(6f);
             }
         }
     }
