@@ -43,7 +43,7 @@ namespace Cortex.Services.Onboarding
             onboardingState.KeepFocused = false;
             onboardingState.PreviewFingerprint = string.Empty;
             onboardingState.FinishPrompt.IsVisible = false;
-            onboardingState.FinishPrompt.Anchor = UnityEngine.Vector2.zero;
+            onboardingState.FinishPrompt.Anchor = Cortex.Rendering.Models.RenderPoint.Zero;
         }
 
         public CortexOnboardingCatalog BuildCatalog(IContributionRegistry contributionRegistry)

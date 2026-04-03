@@ -10,8 +10,10 @@ using Cortex.Services.Semantics.Context;
 using Cortex.Services.Semantics.Hover;
 using UnityEngine;
 using Cortex.Services.Editor.Context;
+using Cortex.Services.Editor.Commands;
 using Cortex.Services.Editor.Presentation;
 using Cortex.Services.Search;
+using Cortex.Shell.Unity.Imgui.Services.Editor.Commands;
 
 namespace Cortex.Modules.Editor
 {
@@ -81,12 +83,14 @@ namespace Cortex.Modules.Editor
         private readonly EditorDocumentModeService _documentModeService = new EditorDocumentModeService();
         private readonly EditorPresentationService _presentationService;
         private readonly IRenderPipeline _renderPipeline;
+        private readonly IClipboardService _clipboardService;
 
         internal EditorModule(IEditorContextService editorContextService, IRenderPipeline renderPipeline)
         {
             _renderPipeline = renderPipeline;
             _hoverService = new EditorHoverService(editorContextService);
             _presentationService = new EditorPresentationService(_editorService, _documentModeService);
+            _clipboardService = new ImguiClipboardService();
             var overlayRendererFactory = renderPipeline != null ? renderPipeline.OverlayRendererFactory : null;
             _codeViewSurface = new CodeViewSurface(editorContextService, _hoverService, overlayRendererFactory);
             _editableCodeViewSurface = new EditableCodeViewSurface(editorContextService, _hoverService, overlayRendererFactory);
@@ -105,7 +109,7 @@ namespace Cortex.Modules.Editor
             IRenderPipeline renderPipeline,
             CortexShellState state)
         {
-            EditorCommandContributions.EnsureRegistered(commandRegistry, contributionRegistry, state);
+            EditorCommandContributions.EnsureRegistered(commandRegistry, contributionRegistry, state, _clipboardService);
             EnsureStyles(state);
             ApplyPendingHoverVisualRefresh(state);
             HandleSearchShortcuts(commandRegistry, state);

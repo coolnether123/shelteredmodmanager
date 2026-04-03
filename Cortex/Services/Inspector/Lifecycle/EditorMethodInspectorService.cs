@@ -8,7 +8,7 @@ namespace Cortex.Services.Inspector.Lifecycle
 {
     internal sealed class EditorMethodInspectorService
     {
-        private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
+        private readonly EditorClassificationService _classificationService = new EditorClassificationService();
         private readonly IEditorContextService _contextService;
 
         public EditorMethodInspectorService(IEditorContextService contextService)
@@ -31,7 +31,7 @@ namespace Cortex.Services.Inspector.Lifecycle
 
             inspector.IsVisible = true;
             inspector.Title = !string.IsNullOrEmpty(target.SymbolText) ? target.SymbolText : "Method";
-            inspector.Classification = _classificationPresentationService.NormalizeClassification(classification);
+            inspector.Classification = _classificationService.NormalizeClassification(classification);
             inspector.ContextKey = target.ContextKey ?? string.Empty;
             if (!preserveSections)
             {
@@ -97,13 +97,13 @@ namespace Cortex.Services.Inspector.Lifecycle
                 return false;
             }
 
-            var normalizedClassification = _classificationPresentationService.NormalizeClassification(classification);
+            var normalizedClassification = _classificationService.NormalizeClassification(classification);
             if (IsMethodLike(normalizedClassification))
             {
                 return true;
             }
 
-            return IsMethodLike(_classificationPresentationService.NormalizeClassification(symbolKind));
+            return IsMethodLike(_classificationService.NormalizeClassification(symbolKind));
         }
 
         public bool EnsureRelationshipsRequest(CortexShellState state)

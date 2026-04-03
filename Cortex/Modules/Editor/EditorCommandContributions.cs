@@ -13,7 +13,11 @@ namespace Cortex.Modules.Editor
     {
         private static bool _registered;
 
-        public static void EnsureRegistered(ICommandRegistry commandRegistry, IContributionRegistry contributionRegistry, CortexShellState state)
+        public static void EnsureRegistered(
+            ICommandRegistry commandRegistry,
+            IContributionRegistry contributionRegistry,
+            CortexShellState state,
+            IClipboardService clipboardService)
         {
             if (_registered || commandRegistry == null || contributionRegistry == null || state == null)
             {
@@ -21,7 +25,7 @@ namespace Cortex.Modules.Editor
             }
 
             _registered = true;
-            new EditorContextCommandRegistrar(commandRegistry, contributionRegistry, state).Register();
+            new EditorContextCommandRegistrar(commandRegistry, contributionRegistry, state, clipboardService).Register();
         }
 
         private sealed class EditorContextCommandRegistrar
@@ -29,27 +33,44 @@ namespace Cortex.Modules.Editor
             private readonly ICommandRegistry _commandRegistry;
             private readonly IContributionRegistry _contributionRegistry;
             private readonly CortexShellState _state;
-            private readonly IEditorService _editorService = new EditorService();
-            private readonly IClipboardService _clipboardService = new EditorClipboardService();
-            private readonly EditorCommandAvailabilityService _availabilityService = new EditorCommandAvailabilityService();
-            private readonly EditorCommandExecutionStrategyService _executionStrategyService = new EditorCommandExecutionStrategyService();
-            private readonly EditorContextActionResolverService _actionResolverService = new EditorContextActionResolverService();
-            private readonly EditorSymbolInteractionService _symbolInteractionService = new EditorSymbolInteractionService();
-            private readonly EditorLogicalDocumentTargetResolutionService _targetResolutionService = new EditorLogicalDocumentTargetResolutionService();
-            private readonly EditorMutationExecutionService _mutationExecutionService = new EditorMutationExecutionService();
-            private readonly UsingDirectiveOrganizationService _usingDirectiveOrganizationService = new UsingDirectiveOrganizationService();
-            private readonly IEditorSemanticRequestService _semanticRequestService = new EditorSemanticRequestService();
-            private readonly IEditorQuickActionsService _quickActionsService = new EditorQuickActionsService();
-            private readonly IEditorSemanticWorkbenchService _semanticWorkbenchService = new EditorSemanticWorkbenchService();
+            private readonly IEditorService _editorService;
+            private readonly IClipboardService _clipboardService;
+            private readonly EditorCommandAvailabilityService _availabilityService;
+            private readonly EditorCommandExecutionStrategyService _executionStrategyService;
+            private readonly EditorContextActionResolverService _actionResolverService;
+            private readonly EditorSymbolInteractionService _symbolInteractionService;
+            private readonly EditorLogicalDocumentTargetResolutionService _targetResolutionService;
+            private readonly EditorMutationExecutionService _mutationExecutionService;
+            private readonly UsingDirectiveOrganizationService _usingDirectiveOrganizationService;
+            private readonly IEditorSemanticRequestService _semanticRequestService;
+            private readonly IEditorQuickActionsService _quickActionsService;
+            private readonly IEditorSemanticWorkbenchService _semanticWorkbenchService;
 
             public EditorContextCommandRegistrar(
                 ICommandRegistry commandRegistry,
                 IContributionRegistry contributionRegistry,
-                CortexShellState state)
+                CortexShellState state,
+                IClipboardService clipboardService)
             {
                 _commandRegistry = commandRegistry;
                 _contributionRegistry = contributionRegistry;
                 _state = state;
+                _editorService = new EditorService();
+                _clipboardService = clipboardService ?? new MemoryClipboardService();
+                _targetResolutionService = new EditorLogicalDocumentTargetResolutionService();
+                _executionStrategyService = new EditorCommandExecutionStrategyService(_targetResolutionService, _clipboardService);
+                _availabilityService = new EditorCommandAvailabilityService(_executionStrategyService);
+                _actionResolverService = new EditorContextActionResolverService();
+                _symbolInteractionService = new EditorSymbolInteractionService();
+                _mutationExecutionService = new EditorMutationExecutionService(
+                    _editorService,
+                    new EditorDocumentModeService(),
+                    _targetResolutionService,
+                    _clipboardService);
+                _usingDirectiveOrganizationService = new UsingDirectiveOrganizationService();
+                _semanticRequestService = new EditorSemanticRequestService();
+                _quickActionsService = new EditorQuickActionsService();
+                _semanticWorkbenchService = new EditorSemanticWorkbenchService();
             }
 
             public void Register()

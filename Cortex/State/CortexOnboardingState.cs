@@ -1,5 +1,5 @@
-using UnityEngine;
 using System.Collections.Generic;
+using Cortex.Rendering.Models;
 
 namespace Cortex
 {
@@ -26,12 +26,12 @@ namespace Cortex
     public sealed class CortexOnboardingPromptState
     {
         public bool IsVisible;
-        public Vector2 Anchor;
+        public RenderPoint Anchor;
 
         public CortexOnboardingPromptState()
         {
             IsVisible = false;
-            Anchor = Vector2.zero;
+            Anchor = RenderPoint.Zero;
         }
     }
 
@@ -50,8 +50,8 @@ namespace Cortex
         public string SelectedThemeId;
         public string SelectedWorkspaceRootPath;
         public string PreviewFingerprint;
-        public Vector2 ThemeScroll;
-        public Vector2 ModProjectScroll;
+        public RenderPoint ThemeScroll;
+        public RenderPoint ModProjectScroll;
         public readonly CortexOnboardingPromptState FinishPrompt = new CortexOnboardingPromptState();
         public readonly List<CortexOnboardingModProjectDraft> ModProjectDrafts = new List<CortexOnboardingModProjectDraft>();
 
@@ -70,8 +70,8 @@ namespace Cortex
             SelectedThemeId = string.Empty;
             SelectedWorkspaceRootPath = string.Empty;
             PreviewFingerprint = string.Empty;
-            ThemeScroll = Vector2.zero;
-            ModProjectScroll = Vector2.zero;
+            ThemeScroll = RenderPoint.Zero;
+            ModProjectScroll = RenderPoint.Zero;
         }
 
         public void ResetInteractionState()
@@ -80,17 +80,17 @@ namespace Cortex
             HasUserSelectedTheme = false;
             ActiveStepIndex = 0;
             PreviewFingerprint = string.Empty;
-            ThemeScroll = Vector2.zero;
-            ModProjectScroll = Vector2.zero;
+            ThemeScroll = RenderPoint.Zero;
+            ModProjectScroll = RenderPoint.Zero;
             FinishPrompt.IsVisible = false;
-            FinishPrompt.Anchor = Vector2.zero;
+            FinishPrompt.Anchor = RenderPoint.Zero;
         }
 
         public void ResetModProjectDrafts()
         {
             SelectedWorkspaceRootPath = string.Empty;
             ModProjectDrafts.Clear();
-            ModProjectScroll = Vector2.zero;
+            ModProjectScroll = RenderPoint.Zero;
         }
     }
 }

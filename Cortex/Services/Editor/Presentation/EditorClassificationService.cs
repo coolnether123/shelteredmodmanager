@@ -1,11 +1,9 @@
 using System;
 using Cortex.Contracts.Text;
-using Cortex.Core.Models;
-using UnityEngine;
 
 namespace Cortex.Services.Editor.Presentation
 {
-    internal sealed class EditorClassificationPresentationService
+    internal sealed class EditorClassificationService
     {
         private const string DefaultTextHex = "#D4D4D4";
         private const string CommentHex = "#6A9955";
@@ -60,16 +58,6 @@ namespace Cortex.Services.Editor.Presentation
                 default:
                     return DefaultTextHex;
             }
-        }
-
-        public Color GetColor(string classification)
-        {
-            return GetColor(classification, string.Empty);
-        }
-
-        public Color GetColor(string classification, string semanticTokenType)
-        {
-            return CortexIdeLayout.ParseColor(GetHexColor(classification, semanticTokenType), CortexIdeLayout.GetTextColor());
         }
 
         public bool IsHoverCandidate(string classification, string rawText)

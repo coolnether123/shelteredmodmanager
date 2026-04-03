@@ -7,7 +7,7 @@ namespace Cortex.Services.Editor.Presentation
 {
     internal sealed class EditorSelectionInspectionService
     {
-        private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
+        private readonly EditorClassificationService _classificationService = new EditorClassificationService();
         private string _lastSelectionLogKey = string.Empty;
 
         public void ApplySelection(
@@ -57,7 +57,7 @@ namespace Cortex.Services.Editor.Presentation
             int column,
             LanguageServiceHoverResponse hoverResponse)
         {
-            var normalizedClassification = _classificationPresentationService.NormalizeClassification(tokenClassification);
+            var normalizedClassification = _classificationService.NormalizeClassification(tokenClassification);
             var resolvedKind = hoverResponse != null && !string.IsNullOrEmpty(hoverResponse.SymbolKind)
                 ? hoverResponse.SymbolKind
                 : normalizedClassification;

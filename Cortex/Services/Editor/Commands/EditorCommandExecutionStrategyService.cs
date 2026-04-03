@@ -10,7 +10,7 @@ namespace Cortex.Services.Editor.Commands
         private readonly IClipboardService _clipboardService;
 
         public EditorCommandExecutionStrategyService()
-            : this(new EditorLogicalDocumentTargetResolutionService(), new EditorClipboardService())
+            : this(new EditorLogicalDocumentTargetResolutionService(), new MemoryClipboardService())
         {
         }
 
@@ -19,7 +19,7 @@ namespace Cortex.Services.Editor.Commands
             IClipboardService clipboardService)
         {
             _targetResolutionService = targetResolutionService ?? new EditorLogicalDocumentTargetResolutionService();
-            _clipboardService = clipboardService ?? new EditorClipboardService();
+            _clipboardService = clipboardService ?? new MemoryClipboardService();
         }
 
         public EditorCommandAvailability GetAvailability(string commandId, CortexShellState state, EditorCommandTarget target)

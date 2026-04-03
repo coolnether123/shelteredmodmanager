@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
-using UnityEngine;
 using Cortex.Services.Semantics.Completion.Augmentation;
 
 namespace Cortex.Services.Semantics.Completion
@@ -368,7 +367,7 @@ namespace Cortex.Services.Semantics.Completion
             }
 
             var next = editorState.SelectedIndex + delta;
-            editorState.SelectedIndex = Mathf.Max(0, Mathf.Min(response.Items.Length - 1, next));
+            editorState.SelectedIndex = Math.Max(0, Math.Min(response.Items.Length - 1, next));
         }
 
         public bool ApplySelectedCompletion(DocumentSession session, CortexCompletionInteractionState editorState, IEditorService editorService)

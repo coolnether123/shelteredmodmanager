@@ -3,7 +3,6 @@ using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.LanguageService.Protocol;
 using Cortex.Services.Semantics.Requests;
-using UnityEngine;
 
 namespace Cortex.Services.Semantics.Completion
 {
@@ -69,7 +68,7 @@ namespace Cortex.Services.Semantics.Completion
                 return false;
             }
 
-            var caretIndex = Mathf.Max(0, session.EditorState.CaretIndex);
+            var caretIndex = Math.Max(0, session.EditorState.CaretIndex);
             var caret = editorService.GetCaretPosition(session, caretIndex);
             editorState.RequestedKey = _requestFactory.BuildCompletionRequestKey(session.FilePath, session.TextVersion, caretIndex, explicitInvocation, triggerCharacter);
             editorState.RequestedDocumentPath = session.FilePath ?? string.Empty;

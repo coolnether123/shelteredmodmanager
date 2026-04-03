@@ -57,6 +57,11 @@
       <Name>Cortex.Core</Name>
       <Private>False</Private>
     </ProjectReference>
+    <ProjectReference Include="..\Cortex.Shell.Unity.Imgui\Cortex.Shell.Unity.Imgui.csproj">
+      <Project>{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3}</Project>
+      <Name>Cortex.Shell.Unity.Imgui</Name>
+      <Private>False</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj">
       <Project>{7A570620-E51D-499E-A28E-13A1D8156417}</Project>
       <Name>Cortex.Host.Unity</Name>

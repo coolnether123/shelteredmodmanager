@@ -163,8 +163,6 @@ namespace Cortex
                 _state,
                 _viewState,
                 _moduleContributionRegistry,
-                null,
-                _moduleRegistrar,
                 _extensionRegistry,
                 _runtimeAccess,
                 _languageRuntimeService,

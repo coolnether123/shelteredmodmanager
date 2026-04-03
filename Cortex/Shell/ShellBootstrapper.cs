@@ -28,8 +28,6 @@ namespace Cortex.Shell
             CortexShellState state,
             CortexShellViewState viewState,
             CortexShellModuleContributionRegistry moduleContributionRegistry,
-            CortexShellModuleServices moduleServices,
-            CortexShellBuiltInModuleRegistrar moduleRegistrar,
             IWorkbenchExtensionRegistry extensionRegistry,
             IWorkbenchRuntimeAccess runtimeAccess,
             ILanguageRuntimeControl languageRuntimeControl,
