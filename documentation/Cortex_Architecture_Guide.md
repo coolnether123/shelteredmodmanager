@@ -56,10 +56,12 @@ Portable Cortex assemblies own:
 - low-level render, geometry, and frame/input contracts in `Cortex.Rendering`
 - popup/panel/tooltip runtime interaction and layout behavior in `Cortex.Rendering.RuntimeUi`
 - shell split-layout math, menu popup placement-dismissal policy, and overlay capture/onboarding prompt policy in `Cortex.Rendering.RuntimeUi`
+- headless editor/workspace/reference/search decision services that shape prepared models for a shell without taking direct Unity IMGUI dependencies
 
 Portable Cortex assemblies do not own Harmony behavior, Harmony state, Harmony-specific contracts, or Sheltered-specific filesystem/package layouts.
 
 Shell IMGUI callers in `Cortex` still execute draw calls and Unity event consumption locally, but the backend-neutral shell geometry and interaction rules that are shared across current shell surfaces should live in `Cortex.Rendering.RuntimeUi` rather than stay buried inline in IMGUI branches.
+The supported Unity IMGUI path is now explicitly a legacy shell/host lane: draw-only presenters and IMGUI execution helpers belong in `Cortex.Shell.Unity.Imgui`, while project workspace orchestration, reference-browser selection/decompile decisions, search-result shaping, and editor presentation decisions stay headless in `Cortex` services.
 
 ### Sheltered host layer
 
@@ -74,6 +76,7 @@ Sheltered-specific Cortex assemblies own:
 Sheltered-specific projects may depend on portable Cortex libraries, but not the other way around.
 
 `Cortex.Host.Unity` is the reusable Unity-host runtime layer. `Cortex.Host.Sheltered` is the concrete Sheltered adapter that supplies environment paths, bundled workbench contributions, and concrete host composition.
+Bridge concerns remain optional integration seams around the runtime and shell; they are not the architectural center of Cortex and should not pull generic IDE/runtime code back toward a game-specific host shape.
 
 `Cortex.Host.Unity` may depend on Unity build references, but it must not own any committed Sheltered install path. The active Unity managed reference path is supplied externally through the centralized Cortex build properties.
 

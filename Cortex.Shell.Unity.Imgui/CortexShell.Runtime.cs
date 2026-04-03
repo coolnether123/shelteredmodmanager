@@ -9,6 +9,7 @@ using Cortex.Presentation.Models;
 using Cortex.Rendering;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.RuntimeUi;
+using Cortex.Shell.Unity.Imgui;
 using UnityEngine;
 
 namespace Cortex
@@ -176,11 +177,11 @@ namespace Cortex
             return _moduleActivationService;
         }
 
-        private CortexShellModuleRenderService GetModuleRenderService()
+        private ImguiShellModuleRenderer GetModuleRenderService()
         {
             if (_moduleRenderService == null)
             {
-                _moduleRenderService = new CortexShellModuleRenderService(
+                _moduleRenderService = new ImguiShellModuleRenderer(
                     GetModuleCompositionService(),
                     GetModuleActivationService(),
                     GetWorkbenchUiSurface,

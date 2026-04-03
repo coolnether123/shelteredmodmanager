@@ -44,6 +44,8 @@ Current section focus:
 - settings document building, validation, contribution collection, and apply logic should live in headless services/builders/models instead of the IMGUI settings module
 - settings session/apply behavior and onboarding flow-step selection should be reusable services/models rather than IMGUI-only module logic
 - editor decisions and status presentation should move into headless services while the IMGUI editor module stays focused on drawing, scroll state, and direct Unity event handling
+- project workspace mapping/import flows, reference-browser selection and decompile coordination, and search-result shaping should live in headless services while the IMGUI modules stay focused on field widgets, scroll state, and click execution
+- IMGUI-only status-strip/module-render presenters should live in `Cortex.Shell.Unity.Imgui` instead of the generic `Cortex` assembly so the legacy shell ownership is obvious
 
 ## Target ownership boundaries for this phase
 
@@ -79,7 +81,7 @@ This includes shell/presentation-owned snapshot assembly: the runtime exposes st
 Window placement, collapsed chrome geometry, detached-log window visibility, and layout-tree bookkeeping are shell-local view concerns and should live in shell-owned state rather than generic shared runtime state.
 When runtime visibility flags need to reflect shell-owned layout intent, update them from an explicit shell lifecycle/service step instead of mutating runtime state during draw/layout tree construction.
 The same rule applies to onboarding overlays: the coordinator/service layer should own onboarding state transitions, selection, preview, completion, and workspace application, while a shell-owned onboarding presenter owns modal geometry, IMGUI drawing, prompt placement, focus, and input capture presentation.
-The same ownership split applies to startup/configuration and settings/editor modules: headless runtime services should own host-neutral startup/configuration, plugin loading, and workbench service composition, while shell code keeps only host bootstrap and window/view concerns. Shell modules may keep IMGUI widgets, textures, scroll state, and draw-time composition, but settings document shaping, settings session/apply behavior, validation, contribution collection, onboarding flow-step selection, editor mode/status decisions, and shortcut interpretation should move into headless services or presentation builders.
+The same ownership split applies to startup/configuration and settings/editor/workspace modules: headless runtime services should own host-neutral startup/configuration, plugin loading, workbench service composition, project workspace orchestration, reference-browser state, search-result shaping, and editor presentation decisions, while shell code keeps only host bootstrap and window/view concerns. Shell modules may keep IMGUI widgets, textures, scroll state, and draw-time composition, but settings document shaping, settings session/apply behavior, validation, contribution collection, onboarding flow-step selection, editor mode/status decisions, shortcut interpretation, project mapping workflows, reference selection/decompile coordination, and search summaries should move into headless services or presentation builders.
 
 ### Bridge/host ownership
 

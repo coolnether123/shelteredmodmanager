@@ -60,11 +60,9 @@
     <Compile Include="Shell\WorkbenchExtensionServices.cs" />
     <Compile Include="Shell\ShellFeatureRegistry.cs" />
     <Compile Include="Shell\CortexShellOnboardingLifecycle.cs" />
-    <Compile Include="Shell\CortexShellModuleRenderService.cs" />
     <Compile Include="Shell\ShellBootstrapper.cs" />
     <Compile Include="Shell\ShellCommandDispatcher.cs" />
     <Compile Include="Shell\ShellSessionCoordinator.cs" />
-    <Compile Include="Shell\ShellStatusPresenter.cs" />
     <Compile Include="WorkbenchPluginLoader.cs" />
     <Compile Include="GuiStyleUtil.cs" />
     <Compile Include="Layout\CortexIdeLayout.cs" />
@@ -195,12 +193,15 @@
     <Compile Include="Services\Onboarding\CortexOnboardingProjectSetupService.cs" />
     <Compile Include="Services\Onboarding\CortexOnboardingService.cs" />
     <Compile Include="Services\Onboarding\CortexOnboardingWorkspaceApplier.cs" />
+    <Compile Include="Services\Projects\ProjectWorkspaceInteractionService.cs" />
+    <Compile Include="Services\Reference\ReferenceBrowserSessionService.cs" />
     <Compile Include="Services\Settings\SettingsApplicationService.cs" />
     <Compile Include="Services\Settings\SettingsContributionCollectionService.cs" />
     <Compile Include="Services\Settings\SettingsDocumentBuilder.cs" />
     <Compile Include="Services\Settings\SettingsDraftService.cs" />
     <Compile Include="Services\Settings\SettingsLoadedModLinkService.cs" />
     <Compile Include="Services\Settings\SettingsModels.cs" />
+    <Compile Include="Services\Search\SearchWorkbenchPresentationService.cs" />
     <Compile Include="Services\Settings\SettingsSearchService.cs" />
     <Compile Include="Services\Settings\SettingsSessionService.cs" />
     <Compile Include="Services\Shell\NullCortexHostServices.cs" />

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
@@ -7,6 +6,7 @@ using Cortex.Modules.Shared;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.Models;
 using Cortex.Services.Navigation;
+using Cortex.Services.Reference;
 using UnityEngine;
 
 namespace Cortex.Modules.Reference
@@ -18,21 +18,12 @@ namespace Cortex.Modules.Reference
         private const float MemberRowHeight = 46f;
 
         private string _appliedTheme = string.Empty;
-        private string _assemblyFilter = string.Empty;
-        private string _typeName = string.Empty;
-        private string _memberFilter = string.Empty;
-        private bool _ignoreCache;
         private Vector2 _assemblyScroll = Vector2.zero;
         private Vector2 _typeScroll = Vector2.zero;
         private Vector2 _memberScroll = Vector2.zero;
         private Vector2 _previewScroll = Vector2.zero;
-        private readonly List<ReferenceAssemblyDescriptor> _assemblies = new List<ReferenceAssemblyDescriptor>();
-        private readonly List<ReferenceTypeDescriptor> _types = new List<ReferenceTypeDescriptor>();
-        private readonly List<ReferenceMemberDescriptor> _members = new List<ReferenceMemberDescriptor>();
         private readonly IHoverTooltipRenderer _hoverTooltipRenderer;
-        private ReferenceAssemblyDescriptor _selectedAssembly;
-        private ReferenceTypeDescriptor _selectedType;
-        private ReferenceMemberDescriptor _selectedMember;
+        private readonly ReferenceBrowserSessionService _browserSession = new ReferenceBrowserSessionService();
         private GUIStyle _summaryStyle;
         private GUIStyle _summaryCaptionStyle;
         private GUIStyle _filterBoxStyle;
@@ -65,7 +56,7 @@ namespace Cortex.Modules.Reference
         public void Draw(IReferenceCatalogService referenceCatalogService, ICortexNavigationService navigationService, CortexShellState state)
         {
             EnsureStyles();
-            EnsureAssembliesLoaded(referenceCatalogService, state);
+            _browserSession.EnsureAssembliesLoaded(referenceCatalogService, state);
             if (_hoverTooltipRenderer != null)
             {
                 _hoverTooltipRenderer.ResetTextTooltip();
@@ -113,16 +104,16 @@ namespace Cortex.Modules.Reference
                 DrawMemberToolbar();
                 GUILayout.BeginHorizontal();
                 var previousEnabled = GUI.enabled;
-                GUI.enabled = _selectedMember != null;
+                GUI.enabled = _browserSession.SelectedMember != null;
                 if (GUILayout.Button("Decompile Member", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(132f)))
                 {
-                    DecompileMember(navigationService, state, _selectedMember);
+                    _browserSession.DecompileSelectedMember(navigationService, state);
                 }
 
-                GUI.enabled = _selectedType != null;
+                GUI.enabled = _browserSession.SelectedType != null;
                 if (GUILayout.Button("Decompile Type", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(120f)))
                 {
-                    DecompileType(navigationService, state, _selectedType);
+                    _browserSession.DecompileSelectedType(navigationService, state);
                 }
 
                 GUI.enabled = previousEnabled;
@@ -139,6 +130,7 @@ namespace Cortex.Modules.Reference
 
         private void DrawPreviewPane(ICortexNavigationService navigationService, CortexShellState state)
         {
+            var selection = _browserSession.BuildSelectionPresentation();
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
 
             if (state.Documents.ActiveDocument != null)
@@ -153,31 +145,31 @@ namespace Cortex.Modules.Reference
 
             CortexIdeLayout.DrawGroup("Reference Details", delegate
             {
-                DrawMetadataRow("Assembly", _selectedAssembly != null ? _selectedAssembly.DisplayName : "None selected");
-                DrawMetadataRow("Path", _selectedAssembly != null ? _selectedAssembly.AssemblyPath : "Select an assembly to browse its types.");
-                DrawMetadataRow("Type", BuildSelectedTypeLabel());
-                DrawMetadataRow("Member", BuildSelectedMemberLabel());
+                DrawMetadataRow("Assembly", selection.AssemblyLabel);
+                DrawMetadataRow("Path", selection.AssemblyPath);
+                DrawMetadataRow("Type", selection.TypeLabel);
+                DrawMetadataRow("Member", selection.MemberLabel);
                 GUILayout.Space(4f);
 
                 GUILayout.BeginHorizontal();
                 GUILayout.Label("Ignore Cache", GUILayout.Width(90f));
-                _ignoreCache = GUILayout.Toggle(_ignoreCache, _ignoreCache ? "On" : "Off", GUILayout.Width(54f));
+                _browserSession.IgnoreCache = GUILayout.Toggle(_browserSession.IgnoreCache, _browserSession.IgnoreCache ? "On" : "Off", GUILayout.Width(54f));
                 GUILayout.FlexibleSpace();
                 GUILayout.EndHorizontal();
 
                 GUILayout.Space(6f);
                 GUILayout.BeginHorizontal();
                 var previousEnabled = GUI.enabled;
-                GUI.enabled = _selectedMember != null;
+                GUI.enabled = _browserSession.SelectedMember != null;
                 if (GUILayout.Button("Decompile Selected Member", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(188f)))
                 {
-                    DecompileMember(navigationService, state, _selectedMember);
+                    _browserSession.DecompileSelectedMember(navigationService, state);
                 }
 
-                GUI.enabled = _selectedType != null;
+                GUI.enabled = _browserSession.SelectedType != null;
                 if (GUILayout.Button("Decompile Selected Type", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(170f)))
                 {
-                    DecompileType(navigationService, state, _selectedType);
+                    _browserSession.DecompileSelectedType(navigationService, state);
                 }
 
                 GUI.enabled = state.LastReferenceResult != null &&
@@ -185,32 +177,13 @@ namespace Cortex.Modules.Reference
                     File.Exists(state.LastReferenceResult.CachePath);
                 if (GUILayout.Button("Open Decompiled Source", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(178f)))
                 {
-                    if (navigationService != null)
-                    {
-                        if (_selectedMember != null)
-                        {
-                            navigationService.OpenDecompilerMethodTarget(
-                                state,
-                                _selectedMember.AssemblyPath,
-                                _selectedMember.MetadataToken,
-                                string.Empty,
-                                _selectedMember.DeclaringTypeName,
-                                string.Empty,
-                                _ignoreCache,
-                                "Opened decompiled source.",
-                                "Could not open decompiled source.");
-                        }
-                        else
-                        {
-                            navigationService.OpenDecompilerResult(state, state.LastReferenceResult, "Opened decompiled cache file.", "Could not open decompiled cache file.");
-                        }
-                    }
+                    _browserSession.OpenDecompilerResult(navigationService, state);
                 }
 
                 GUI.enabled = state.LastReferenceResult != null;
                 if (GUILayout.Button("Clear Result", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(108f)))
                 {
-                    state.LastReferenceResult = null;
+                    _browserSession.ClearDecompilerResult(state);
                 }
 
                 GUI.enabled = previousEnabled;
@@ -256,28 +229,30 @@ namespace Cortex.Modules.Reference
 
         private void DrawSelectionSummary()
         {
+            var selection = _browserSession.BuildSelectionPresentation();
             GUILayout.BeginVertical(_summaryStyle ?? GUI.skin.box);
-            GUILayout.Label(BuildSelectionPath(), _detailLabelStyle ?? GUI.skin.label);
-            GUILayout.Label(BuildSelectionCaption(), _summaryCaptionStyle ?? GUI.skin.label);
+            GUILayout.Label(selection.SelectionPath, _detailLabelStyle ?? GUI.skin.label);
+            GUILayout.Label(selection.SelectionCaption, _summaryCaptionStyle ?? GUI.skin.label);
             GUILayout.EndVertical();
             GUILayout.Space(6f);
         }
 
         private void DrawAssemblyToolbar(IReferenceCatalogService referenceCatalogService, CortexShellState state)
         {
+            var assemblyItems = _browserSession.BuildAssemblyItems();
             GUILayout.BeginHorizontal(GUI.skin.box, GUILayout.Height(28f));
             GUILayout.Label("Search", GUILayout.Width(52f));
-            _assemblyFilter = GUILayout.TextField(_assemblyFilter ?? string.Empty, _filterBoxStyle ?? GUI.skin.textField, GUILayout.ExpandWidth(true));
-            if (!string.IsNullOrEmpty(_assemblyFilter) && GUILayout.Button("x", GUILayout.Width(20f)))
+            _browserSession.AssemblyFilter = GUILayout.TextField(_browserSession.AssemblyFilter ?? string.Empty, _filterBoxStyle ?? GUI.skin.textField, GUILayout.ExpandWidth(true));
+            if (!string.IsNullOrEmpty(_browserSession.AssemblyFilter) && GUILayout.Button("x", GUILayout.Width(20f)))
             {
-                _assemblyFilter = string.Empty;
+                _browserSession.AssemblyFilter = string.Empty;
             }
 
             GUILayout.Space(6f);
-            GUILayout.Label(CountMatchingAssemblies() + " shown", _rowMetaStyle ?? GUI.skin.label, GUILayout.Width(68f));
+            GUILayout.Label(assemblyItems.Count + " shown", _rowMetaStyle ?? GUI.skin.label, GUILayout.Width(68f));
             if (GUILayout.Button("Refresh", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(72f)))
             {
-                ReloadAssemblies(referenceCatalogService, state);
+                _browserSession.ReloadAssemblies(referenceCatalogService, state);
                 state.StatusMessage = "Reference assemblies refreshed.";
             }
 
@@ -286,61 +261,55 @@ namespace Cortex.Modules.Reference
 
         private void DrawTypeToolbar()
         {
+            var typeItems = _browserSession.BuildTypeItems();
             GUILayout.BeginHorizontal(GUI.skin.box, GUILayout.Height(28f));
             GUILayout.Label("Filter", GUILayout.Width(52f));
-            _typeName = GUILayout.TextField(_typeName ?? string.Empty, _filterBoxStyle ?? GUI.skin.textField, GUILayout.ExpandWidth(true));
-            if (!string.IsNullOrEmpty(_typeName) && GUILayout.Button("x", GUILayout.Width(20f)))
+            _browserSession.TypeFilter = GUILayout.TextField(_browserSession.TypeFilter ?? string.Empty, _filterBoxStyle ?? GUI.skin.textField, GUILayout.ExpandWidth(true));
+            if (!string.IsNullOrEmpty(_browserSession.TypeFilter) && GUILayout.Button("x", GUILayout.Width(20f)))
             {
-                _typeName = string.Empty;
+                _browserSession.TypeFilter = string.Empty;
             }
 
             GUILayout.Space(6f);
-            GUILayout.Label(CountMatchingTypes() + " shown", _rowMetaStyle ?? GUI.skin.label, GUILayout.Width(68f));
+            GUILayout.Label(typeItems.Count + " shown", _rowMetaStyle ?? GUI.skin.label, GUILayout.Width(68f));
             GUILayout.EndHorizontal();
         }
 
         private void DrawMemberToolbar()
         {
+            var memberItems = _browserSession.BuildMemberItems();
             GUILayout.BeginHorizontal(GUI.skin.box, GUILayout.Height(28f));
             GUILayout.Label("Filter", GUILayout.Width(52f));
-            _memberFilter = GUILayout.TextField(_memberFilter ?? string.Empty, _filterBoxStyle ?? GUI.skin.textField, GUILayout.ExpandWidth(true));
-            if (!string.IsNullOrEmpty(_memberFilter) && GUILayout.Button("x", GUILayout.Width(20f)))
+            _browserSession.MemberFilter = GUILayout.TextField(_browserSession.MemberFilter ?? string.Empty, _filterBoxStyle ?? GUI.skin.textField, GUILayout.ExpandWidth(true));
+            if (!string.IsNullOrEmpty(_browserSession.MemberFilter) && GUILayout.Button("x", GUILayout.Width(20f)))
             {
-                _memberFilter = string.Empty;
+                _browserSession.MemberFilter = string.Empty;
             }
 
             GUILayout.Space(6f);
-            GUILayout.Label(CountMatchingMembers() + " shown", _rowMetaStyle ?? GUI.skin.label, GUILayout.Width(68f));
+            GUILayout.Label(memberItems.Count + " shown", _rowMetaStyle ?? GUI.skin.label, GUILayout.Width(68f));
             GUILayout.EndHorizontal();
         }
 
         private void DrawAssemblyList(IReferenceCatalogService referenceCatalogService, CortexShellState state)
         {
-            var visibleCount = 0;
-            for (var i = 0; i < _assemblies.Count; i++)
+            var assemblyItems = _browserSession.BuildAssemblyItems();
+            for (var i = 0; i < assemblyItems.Count; i++)
             {
-                var assembly = _assemblies[i];
-                if (!MatchesText(assembly.DisplayName + " " + assembly.AssemblyPath, _assemblyFilter))
-                {
-                    continue;
-                }
-
-                visibleCount++;
-                var location = Path.GetDirectoryName(assembly.AssemblyPath) ?? string.Empty;
-                var locationText = CompactPath(location, 56);
+                var assembly = assemblyItems[i];
                 if (DrawSelectableRow(
-                    assembly.DisplayName,
-                    locationText,
-                    Path.GetFileName(assembly.AssemblyPath),
-                    ComposeTooltip(assembly.DisplayName, assembly.AssemblyPath),
-                    IsSelectedAssembly(assembly),
+                    assembly.Title,
+                    assembly.Subtitle,
+                    assembly.Meta,
+                    assembly.Tooltip,
+                    assembly.IsSelected,
                     AssemblyRowHeight))
                 {
-                    SelectAssembly(referenceCatalogService, assembly, state);
+                    _browserSession.SelectAssembly(referenceCatalogService, assembly.Assembly, state);
                 }
             }
 
-            if (visibleCount == 0)
+            if (assemblyItems.Count == 0)
             {
                 GUILayout.Label("No assemblies match the current search.", _emptyStateStyle ?? GUI.skin.label);
             }
@@ -348,38 +317,29 @@ namespace Cortex.Modules.Reference
 
         private void DrawTypeList(IReferenceCatalogService referenceCatalogService, CortexShellState state)
         {
-            if (_selectedAssembly == null)
+            if (_browserSession.SelectedAssembly == null)
             {
                 GUILayout.Label("Select an assembly to browse its exported and internal top-level types.", _emptyStateStyle ?? GUI.skin.label);
                 return;
             }
 
-            var visibleCount = 0;
-            for (var i = 0; i < _types.Count; i++)
+            var typeItems = _browserSession.BuildTypeItems();
+            for (var i = 0; i < typeItems.Count; i++)
             {
-                var type = _types[i];
-                if (!MatchesText(type.FullName, _typeName))
-                {
-                    continue;
-                }
-
-                visibleCount++;
-                string shortName;
-                string namespaceName;
-                SplitTypeName(type.FullName, out shortName, out namespaceName);
+                var type = typeItems[i];
                 if (DrawSelectableRow(
-                    shortName,
-                    namespaceName,
-                    FormatMetadataToken(type.MetadataToken),
-                    ComposeTooltip(type.FullName, FormatMetadataToken(type.MetadataToken)),
-                    IsSelectedType(type),
+                    type.Title,
+                    type.Subtitle,
+                    type.Meta,
+                    type.Tooltip,
+                    type.IsSelected,
                     TypeRowHeight))
                 {
-                    SelectType(referenceCatalogService, type, state);
+                    _browserSession.SelectType(referenceCatalogService, type.Type, state);
                 }
             }
 
-            if (visibleCount == 0)
+            if (typeItems.Count == 0)
             {
                 GUILayout.Label("No types match the current filter.", _emptyStateStyle ?? GUI.skin.label);
             }
@@ -387,46 +347,29 @@ namespace Cortex.Modules.Reference
 
         private void DrawMemberList(CortexShellState state)
         {
-            if (_selectedType == null)
+            if (_browserSession.SelectedType == null)
             {
                 GUILayout.Label("Select a type to inspect its constructors and methods.", _emptyStateStyle ?? GUI.skin.label);
                 return;
             }
 
-            var visibleCount = 0;
-            for (var i = 0; i < _members.Count; i++)
+            var memberItems = _browserSession.BuildMemberItems();
+            for (var i = 0; i < memberItems.Count; i++)
             {
-                var member = _members[i];
-                var filterText = member.DisplayName + " " + member.DeclaringTypeName;
-                if (!MatchesText(filterText, _memberFilter))
-                {
-                    continue;
-                }
-
-                visibleCount++;
-                string memberTitle;
-                string signature;
-                SplitMemberDisplay(member.DisplayName, out memberTitle, out signature);
-                var subtitle = ShortTypeName(member.DeclaringTypeName);
-                if (!string.IsNullOrEmpty(signature))
-                {
-                    subtitle = subtitle + " " + signature;
-                }
-
+                var member = memberItems[i];
                 if (DrawSelectableRow(
-                    memberTitle,
-                    subtitle,
-                    FormatMetadataToken(member.MetadataToken),
-                    ComposeTooltip(member.DeclaringTypeName + "." + member.DisplayName, FormatMetadataToken(member.MetadataToken)),
-                    IsSelectedMember(member),
+                    member.Title,
+                    member.Subtitle,
+                    member.Meta,
+                    member.Tooltip,
+                    member.IsSelected,
                     MemberRowHeight))
                 {
-                    _selectedMember = member;
-                    state.StatusMessage = "Selected member " + member.DeclaringTypeName + "." + member.DisplayName;
+                    _browserSession.SelectMember(member.Member, state);
                 }
             }
 
-            if (visibleCount == 0)
+            if (memberItems.Count == 0)
             {
                 GUILayout.Label("No members match the current filter.", _emptyStateStyle ?? GUI.skin.label);
             }
@@ -487,131 +430,6 @@ namespace Cortex.Modules.Reference
                     RegisterHoverTooltip(valueRect, value);
                 }
             }
-        }
-
-        private void EnsureAssembliesLoaded(IReferenceCatalogService referenceCatalogService, CortexShellState state)
-        {
-            if (_assemblies.Count == 0)
-            {
-                ReloadAssemblies(referenceCatalogService, state);
-            }
-        }
-
-        private void ReloadAssemblies(IReferenceCatalogService referenceCatalogService, CortexShellState state)
-        {
-            _assemblies.Clear();
-            _types.Clear();
-            _members.Clear();
-            _selectedAssembly = null;
-            _selectedType = null;
-            _selectedMember = null;
-
-            var assemblies = referenceCatalogService != null
-                ? referenceCatalogService.GetAssemblies(state.Settings != null ? state.Settings.ReferenceAssemblyRootPath : string.Empty)
-                : new List<ReferenceAssemblyDescriptor>();
-            for (var i = 0; i < assemblies.Count; i++)
-            {
-                _assemblies.Add(assemblies[i]);
-            }
-        }
-
-        private void SelectAssembly(IReferenceCatalogService referenceCatalogService, ReferenceAssemblyDescriptor assembly, CortexShellState state)
-        {
-            if (assembly == null)
-            {
-                return;
-            }
-
-            _selectedAssembly = assembly;
-            _selectedType = null;
-            _selectedMember = null;
-            LoadTypes(referenceCatalogService, assembly);
-            state.StatusMessage = "Selected assembly " + assembly.DisplayName;
-        }
-
-        private void LoadTypes(IReferenceCatalogService referenceCatalogService, ReferenceAssemblyDescriptor assembly)
-        {
-            _types.Clear();
-            _members.Clear();
-            _selectedType = null;
-            _selectedMember = null;
-            if (assembly == null || referenceCatalogService == null)
-            {
-                return;
-            }
-
-            var types = referenceCatalogService.GetTypes(assembly.AssemblyPath);
-            for (var i = 0; i < types.Count; i++)
-            {
-                _types.Add(types[i]);
-            }
-        }
-
-        private void SelectType(IReferenceCatalogService referenceCatalogService, ReferenceTypeDescriptor type, CortexShellState state)
-        {
-            if (type == null)
-            {
-                return;
-            }
-
-            _selectedType = type;
-            _selectedMember = null;
-            LoadMembers(referenceCatalogService, type);
-            state.StatusMessage = "Selected type " + type.DisplayName;
-        }
-
-        private void LoadMembers(IReferenceCatalogService referenceCatalogService, ReferenceTypeDescriptor type)
-        {
-            _members.Clear();
-            _selectedMember = null;
-            if (type == null || referenceCatalogService == null)
-            {
-                return;
-            }
-
-            var members = referenceCatalogService.GetMembers(type.AssemblyPath, type.FullName);
-            for (var i = 0; i < members.Count; i++)
-            {
-                _members.Add(members[i]);
-            }
-        }
-
-        private void DecompileMember(ICortexNavigationService navigationService, CortexShellState state, ReferenceMemberDescriptor member)
-        {
-            if (member == null || navigationService == null)
-            {
-                return;
-            }
-
-            _selectedMember = member;
-            int highlightedLine;
-            var response = navigationService.RequestDecompilerMethodView(
-                state,
-                member.AssemblyPath,
-                member.MetadataToken,
-                string.Empty,
-                member.DeclaringTypeName,
-                string.Empty,
-                _ignoreCache,
-                out highlightedLine);
-            if (response == null)
-            {
-                state.StatusMessage = "Could not decompile " + member.DeclaringTypeName + "." + member.DisplayName;
-                return;
-            }
-
-            state.StatusMessage = "Decompiled " + member.DeclaringTypeName + "." + member.DisplayName;
-        }
-
-        private void DecompileType(ICortexNavigationService navigationService, CortexShellState state, ReferenceTypeDescriptor type)
-        {
-            if (type == null || navigationService == null)
-            {
-                return;
-            }
-
-            navigationService.RequestDecompilerSource(state, type.AssemblyPath, type.MetadataToken, DecompilerEntityKind.Type, _ignoreCache);
-            state.StatusMessage = "Decompiled type " + type.DisplayName;
         }
 
         private void EnsureStyles()
@@ -708,205 +526,6 @@ namespace Cortex.Modules.Reference
             _tooltipStyle.alignment = TextAnchor.UpperLeft;
             _tooltipStyle.padding = new RectOffset(10, 10, 8, 8);
             _tooltipStyle.margin = new RectOffset(0, 0, 0, 0);
-        }
-
-        private int CountMatchingAssemblies()
-        {
-            var count = 0;
-            for (var i = 0; i < _assemblies.Count; i++)
-            {
-                if (MatchesText(_assemblies[i].DisplayName + " " + _assemblies[i].AssemblyPath, _assemblyFilter))
-                {
-                    count++;
-                }
-            }
-
-            return count;
-        }
-
-        private int CountMatchingTypes()
-        {
-            var count = 0;
-            for (var i = 0; i < _types.Count; i++)
-            {
-                if (MatchesText(_types[i].FullName, _typeName))
-                {
-                    count++;
-                }
-            }
-
-            return count;
-        }
-
-        private int CountMatchingMembers()
-        {
-            var count = 0;
-            for (var i = 0; i < _members.Count; i++)
-            {
-                if (MatchesText(_members[i].DisplayName + " " + _members[i].DeclaringTypeName, _memberFilter))
-                {
-                    count++;
-                }
-            }
-
-            return count;
-        }
-
-        private bool IsSelectedAssembly(ReferenceAssemblyDescriptor assembly)
-        {
-            return _selectedAssembly != null &&
-                assembly != null &&
-                string.Equals(_selectedAssembly.AssemblyPath, assembly.AssemblyPath, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private bool IsSelectedType(ReferenceTypeDescriptor type)
-        {
-            return _selectedType != null &&
-                type != null &&
-                string.Equals(_selectedType.FullName, type.FullName, StringComparison.Ordinal);
-        }
-
-        private bool IsSelectedMember(ReferenceMemberDescriptor member)
-        {
-            return _selectedMember != null &&
-                member != null &&
-                _selectedMember.MetadataToken == member.MetadataToken &&
-                string.Equals(_selectedMember.DeclaringTypeName, member.DeclaringTypeName, StringComparison.Ordinal);
-        }
-
-        private string BuildSelectionPath()
-        {
-            var assemblyName = _selectedAssembly != null ? _selectedAssembly.DisplayName : "Assembly";
-            var typeName = _selectedType != null ? ShortTypeName(_selectedType.FullName) : "Type";
-            var memberName = _selectedMember != null ? _selectedMember.DisplayName : "Member";
-            return assemblyName + "  >  " + typeName + "  >  " + memberName;
-        }
-
-        private string BuildSelectionCaption()
-        {
-            if (_selectedAssembly == null)
-            {
-                return "Browse reference assemblies, then narrow down to a type and member before decompiling.";
-            }
-
-            if (_selectedType == null)
-            {
-                return "Assembly selected. Pick a type to inspect its members and decompile a focused target.";
-            }
-
-            if (_selectedMember == null)
-            {
-                return "Type selected. Pick a member to inspect its signature or decompile just that method.";
-            }
-
-            return "Selected " + _selectedMember.DeclaringTypeName + "." + _selectedMember.DisplayName + ".";
-        }
-
-        private string BuildSelectedTypeLabel()
-        {
-            return _selectedType != null ? _selectedType.FullName : "No type selected";
-        }
-
-        private string BuildSelectedMemberLabel()
-        {
-            return _selectedMember != null ? _selectedMember.DisplayName : "No member selected";
-        }
-
-        private static string CompactPath(string value, int maxLength)
-        {
-            if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
-            {
-                return value ?? string.Empty;
-            }
-
-            var tailLength = Mathf.Max(18, maxLength / 2);
-            var headLength = Mathf.Max(12, maxLength - tailLength - 3);
-            if (value.Length <= headLength + tailLength + 3)
-            {
-                return value;
-            }
-
-            return value.Substring(0, headLength) + "..." + value.Substring(value.Length - tailLength);
-        }
-
-        private static string ShortTypeName(string fullName)
-        {
-            if (string.IsNullOrEmpty(fullName))
-            {
-                return "Unknown";
-            }
-
-            var separatorIndex = fullName.LastIndexOf('.');
-            return separatorIndex >= 0 && separatorIndex < fullName.Length - 1
-                ? fullName.Substring(separatorIndex + 1)
-                : fullName;
-        }
-
-        private static void SplitTypeName(string fullName, out string shortName, out string namespaceName)
-        {
-            if (string.IsNullOrEmpty(fullName))
-            {
-                shortName = "Unknown";
-                namespaceName = "(global namespace)";
-                return;
-            }
-
-            var separatorIndex = fullName.LastIndexOf('.');
-            if (separatorIndex <= 0 || separatorIndex >= fullName.Length - 1)
-            {
-                shortName = fullName;
-                namespaceName = "(global namespace)";
-                return;
-            }
-
-            shortName = fullName.Substring(separatorIndex + 1);
-            namespaceName = fullName.Substring(0, separatorIndex);
-        }
-
-        private static void SplitMemberDisplay(string displayName, out string title, out string signature)
-        {
-            if (string.IsNullOrEmpty(displayName))
-            {
-                title = "Unknown";
-                signature = string.Empty;
-                return;
-            }
-
-            var openParen = displayName.IndexOf('(');
-            if (openParen <= 0)
-            {
-                title = displayName;
-                signature = string.Empty;
-                return;
-            }
-
-            title = displayName.Substring(0, openParen);
-            signature = displayName.Substring(openParen);
-        }
-
-        private static string FormatMetadataToken(int metadataToken)
-        {
-            return "0x" + metadataToken.ToString("X8");
-        }
-
-        private static bool MatchesText(string value, string filter)
-        {
-            return string.IsNullOrEmpty(filter) || (value ?? string.Empty).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private static string ComposeTooltip(string primary, string secondary)
-        {
-            if (string.IsNullOrEmpty(primary))
-            {
-                return secondary ?? string.Empty;
-            }
-
-            if (string.IsNullOrEmpty(secondary))
-            {
-                return primary;
-            }
-
-            return primary + "\n" + secondary;
         }
 
         private void RegisterHoverTooltip(Rect anchorRect, string text)

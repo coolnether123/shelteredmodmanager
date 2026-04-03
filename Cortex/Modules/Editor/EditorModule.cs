@@ -195,6 +195,7 @@ namespace Cortex.Modules.Editor
 
         private void DrawTabStrip(CortexShellState state)
         {
+            var tabs = _presentationService.BuildTabStripPresentation(state);
             _tabScroll = GUILayout.BeginScrollView(
                 _tabScroll,
                 false,
@@ -206,12 +207,12 @@ namespace Cortex.Modules.Editor
 
             GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
 
-            for (var i = 0; i < state.Documents.OpenDocuments.Count; i++)
+            for (var i = 0; i < tabs.Count; i++)
             {
-                var session = state.Documents.OpenDocuments[i];
-                var isActive = session == state.Documents.ActiveDocument;
-                var displayName = CortexModuleUtil.GetDocumentDisplayName(session);
-                var style = isActive ? _activeTabStyle : (session.IsDirty ? _dirtyTabStyle : _tabStyle);
+                var tab = tabs[i];
+                var session = tab.Session;
+                var isActive = tab.IsActive;
+                var style = isActive ? _activeTabStyle : (tab.IsDirty ? _dirtyTabStyle : _tabStyle);
                 var tabRect = GUILayoutUtility.GetRect(TabWidth, TabWidth, TabHeight, TabHeight);
                 var current = Event.current;
                 var isHovered = current != null && tabRect.Contains(current.mousePosition);
@@ -228,7 +229,7 @@ namespace Cortex.Modules.Editor
                     break;
                 }
 
-                if (GUI.Toggle(tabRect, isActive, displayName, style ?? GUI.skin.button) && !isActive)
+                if (GUI.Toggle(tabRect, isActive, tab.DisplayName, style ?? GUI.skin.button) && !isActive)
                 {
                     state.Documents.ActiveDocument = session;
                     state.Documents.ActiveDocumentPath = session.FilePath;
@@ -260,27 +261,26 @@ namespace Cortex.Modules.Editor
                 return;
             }
 
-            var allowSaving = state.Settings != null && state.Settings.EnableFileSaving && active.SupportsSaving;
-            var canReload = documentService != null;
+            var presentation = _presentationService.BuildPathBarPresentation(documentService, state);
             var closeRequested = false;
 
             GUILayout.BeginHorizontal(_pathBarStyle ?? GUI.skin.box, GUILayout.Height(PathBarHeight));
 
-            GUILayout.Label(BuildCompactPath(active.FilePath), GUILayout.ExpandWidth(true));
+            GUILayout.Label(presentation.CompactPath, GUILayout.ExpandWidth(true));
 
-            if (active.HighlightedLine > 0)
+            if (presentation.HasHighlightedLine)
             {
-                GUILayout.Label("Ln " + active.HighlightedLine, GUILayout.Width(62f));
+                GUILayout.Label("Ln " + presentation.HighlightedLine, GUILayout.Width(62f));
             }
 
-            if (active.HasExternalChanges)
+            if (presentation.HasExternalChanges)
             {
                 GUILayout.Label("External change", GUILayout.Width(120f));
             }
 
             var previousEnabled = GUI.enabled;
 
-            GUI.enabled = allowSaving;
+            GUI.enabled = presentation.AllowSaving;
             if (GUILayout.Button("Save", _toolbarButtonStyle ?? GUI.skin.button, GUILayout.Width(52f)))
             {
                 if (documentService.Save(active))
@@ -293,7 +293,7 @@ namespace Cortex.Modules.Editor
                 }
             }
 
-            GUI.enabled = canReload;
+            GUI.enabled = presentation.CanReload;
             if (GUILayout.Button("Reload", _toolbarButtonStyle ?? GUI.skin.button, GUILayout.Width(56f)))
             {
                 documentService.Reload(active);
@@ -337,6 +337,7 @@ namespace Cortex.Modules.Editor
 
             var menuHeight = search.ScopeMenuOpen ? 94f : 0f;
             var overlayRect = BuildFindOverlayRect(codeAreaRect, menuHeight);
+            var presentation = _presentationService.BuildFindOverlayPresentation(workbenchSearchService, state);
             var topRowRect = new Rect(FindOverlayPadding, FindOverlayPadding, overlayRect.width - FindOverlayPadding * 2f, FindOverlayTopRowHeight);
             var bottomRowRect = new Rect(FindOverlayPadding, topRowRect.yMax + 4f, overlayRect.width - FindOverlayPadding * 2f, FindOverlayBottomRowHeight);
             var queryRect = new Rect(topRowRect.x, topRowRect.y, topRowRect.width - 104f, topRowRect.height);
@@ -372,7 +373,7 @@ namespace Cortex.Modules.Editor
                 }
             }
 
-            GUI.Label(summaryRect, BuildFindSummary(workbenchSearchService, state));
+            GUI.Label(summaryRect, presentation.SummaryText);
 
             if (GUI.Button(prevRect, "<", _toolbarButtonStyle ?? GUI.skin.button))
             {
@@ -405,7 +406,7 @@ namespace Cortex.Modules.Editor
                 search.ActiveMatchIndex = -1;
             }
 
-            if (GUI.Button(scopeRect, BuildScopeLabel(query.Scope) + " v", _toolbarButtonStyle ?? GUI.skin.button))
+            if (GUI.Button(scopeRect, presentation.ScopeLabel + " v", _toolbarButtonStyle ?? GUI.skin.button))
             {
                 search.ScopeMenuOpen = !search.ScopeMenuOpen;
             }
@@ -448,45 +449,6 @@ namespace Cortex.Modules.Editor
                 state.Search.ActiveMatchIndex = -1;
                 state.Search.FocusQueryRequested = true;
                 ExecuteWorkbenchCommand(commandRegistry, "cortex.window.search", state);
-            }
-        }
-
-        private string BuildFindSummary(WorkbenchSearchService workbenchSearchService, CortexShellState state)
-        {
-            if (state == null || state.Search == null)
-            {
-                return string.Empty;
-            }
-
-            if (state.Search.PendingRefresh)
-            {
-                return string.IsNullOrEmpty(state.Search.QueryText) ? "Type to search" : "Press Enter";
-            }
-
-            var results = state.Search.Results;
-            if (results == null)
-            {
-                return "Press Enter";
-            }
-
-            var total = workbenchSearchService != null ? workbenchSearchService.CountMatches(results) : results.TotalMatchCount;
-            if (total <= 0)
-            {
-                return results.StatusMessage ?? "No matches";
-            }
-
-            var active = state.Search.ActiveMatchIndex >= 0 ? state.Search.ActiveMatchIndex + 1 : 0;
-            return active + "/" + total;
-        }
-
-        private static string BuildScopeLabel(SearchScopeKind scope)
-        {
-            switch (scope)
-            {
-                case SearchScopeKind.AllOpenDocuments: return "All open documents";
-                case SearchScopeKind.CurrentProject: return "Current project";
-                case SearchScopeKind.EntireSolution: return "Entire solution";
-                default: return "Current document";
             }
         }
 
@@ -795,22 +757,6 @@ namespace Cortex.Modules.Editor
         private static RenderColor ToRenderColor(Color color)
         {
             return new RenderColor(color.r, color.g, color.b, color.a);
-        }
-
-        private static string BuildCompactPath(string filePath)
-        {
-            if (string.IsNullOrEmpty(filePath))
-            {
-                return string.Empty;
-            }
-
-            var parts = filePath.Replace('\\', '/').Split('/');
-            if (parts.Length >= 3)
-            {
-                return ".../" + parts[parts.Length - 2] + "/" + parts[parts.Length - 1];
-            }
-
-            return filePath;
         }
 
         private void EnsureStyles(CortexShellState state)

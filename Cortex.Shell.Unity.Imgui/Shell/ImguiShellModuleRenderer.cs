@@ -4,9 +4,9 @@ using Cortex.Presentation.Models;
 using Cortex.Rendering.RuntimeUi;
 using UnityEngine;
 
-namespace Cortex
+namespace Cortex.Shell.Unity.Imgui
 {
-    internal sealed class CortexShellModuleRenderService
+    internal sealed class ImguiShellModuleRenderer
     {
         private readonly CortexShellModuleCompositionService _compositionService;
         private readonly CortexShellModuleActivationService _activationService;
@@ -14,7 +14,7 @@ namespace Cortex
         private readonly Func<string, bool> _canActivateContainer;
         private readonly Func<string, string> _buildActivationBlockedMessage;
 
-        public CortexShellModuleRenderService(
+        public ImguiShellModuleRenderer(
             CortexShellModuleCompositionService compositionService,
             CortexShellModuleActivationService activationService,
             Func<IWorkbenchUiSurface> workbenchUiSurfaceProvider,
@@ -28,12 +28,6 @@ namespace Cortex
             _buildActivationBlockedMessage = buildActivationBlockedMessage;
         }
 
-        /// <summary>
-        /// Renders the active module for a container, including activation and blocked-state fallback handling.
-        /// </summary>
-        /// <param name="snapshot">The current workbench presentation snapshot.</param>
-        /// <param name="containerId">The target workbench container identifier.</param>
-        /// <param name="detachedWindow">Whether the module is being rendered in a detached host window.</param>
         public void DrawActiveModule(WorkbenchPresentationSnapshot snapshot, string containerId, bool detachedWindow)
         {
             if (_canActivateContainer != null && !_canActivateContainer(containerId))

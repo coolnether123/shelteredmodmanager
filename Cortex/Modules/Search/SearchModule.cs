@@ -24,6 +24,7 @@ namespace Cortex.Modules.Search
         private Texture2D _summaryBackground;
         private Texture2D _activeBackground;
         private string _appliedTheme = string.Empty;
+        private readonly SearchWorkbenchPresentationService _presentationService = new SearchWorkbenchPresentationService();
         private readonly SemanticWorkspaceEditService _workspaceEditService = new SemanticWorkspaceEditService();
 
         public void Draw(
@@ -36,12 +37,13 @@ namespace Cortex.Modules.Search
             CortexShellState state)
         {
             EnsureStyles();
-            EnsureResults(searchService, projectCatalog, sourceLookupIndex, textSearchService, state);
+            _presentationService.RefreshResultsIfPending(searchService, projectCatalog, sourceLookupIndex, textSearchService, state);
+            var summary = _presentationService.BuildSummary(state);
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
-            if (HasSemanticView(state))
+            if (summary.HasSemanticView)
             {
-                DrawSemanticSummary(state);
+                DrawSemanticSummary(summary);
                 GUILayout.Space(6f);
                 _scroll = GUILayout.BeginScrollView(_scroll, GUI.skin.box, GUILayout.ExpandHeight(true));
                 DrawSemanticContent(navigationService, documentService, state);
@@ -49,7 +51,7 @@ namespace Cortex.Modules.Search
             }
             else
             {
-                DrawSearchSummary(state);
+                DrawSearchSummary(summary);
                 GUILayout.Space(6f);
                 _scroll = GUILayout.BeginScrollView(_scroll, GUI.skin.box, GUILayout.ExpandHeight(true));
                 DrawSearchResults(searchService, navigationService, state);
@@ -58,19 +60,11 @@ namespace Cortex.Modules.Search
             GUILayout.EndVertical();
         }
 
-        private static bool HasSemanticView(CortexShellState state)
-        {
-            return state != null &&
-                state.Semantic != null &&
-                state.Semantic.Workbench != null &&
-                state.Semantic.Workbench.ActiveView != SemanticWorkbenchViewKind.None;
-        }
-
-        private void DrawSemanticSummary(CortexShellState state)
+        private void DrawSemanticSummary(SearchWorkbenchSummaryPresentation summary)
         {
             GUILayout.BeginVertical(_summaryStyle ?? GUI.skin.box);
-            GUILayout.Label(BuildSemanticTitle(state), _documentStyle ?? GUI.skin.label);
-            GUILayout.Label(BuildSemanticStatus(state), _summaryCaptionStyle ?? GUI.skin.label);
+            GUILayout.Label(summary != null ? summary.Title : string.Empty, _documentStyle ?? GUI.skin.label);
+            GUILayout.Label(summary != null ? summary.Status : string.Empty, _summaryCaptionStyle ?? GUI.skin.label);
             GUILayout.EndVertical();
         }
 
@@ -165,7 +159,7 @@ namespace Cortex.Modules.Search
                     var firstEdit = preview.Documents[0].Edits != null && preview.Documents[0].Edits.Length > 0
                         ? preview.Documents[0].Edits[0]
                         : null;
-                    OpenDocumentAtRange(navigationService, state, preview.Documents[0].DocumentPath, firstEdit != null ? firstEdit.Range : null);
+                    _presentationService.OpenLocation(navigationService, state, preview.Documents[0].DocumentPath, firstEdit != null ? firstEdit.Range : null);
                 }
             }
 
@@ -193,7 +187,7 @@ namespace Cortex.Modules.Search
 
             if (GUILayout.Button("Open Definition", _actionButtonStyle ?? GUI.skin.button, GUILayout.Width(120f)))
             {
-                OpenDefinitionTarget(navigationService, state, peekDefinition);
+                _presentationService.OpenDefinition(navigationService, state, peekDefinition);
             }
 
             GUILayout.Space(6f);
@@ -258,9 +252,9 @@ namespace Cortex.Modules.Search
                 GUILayout.BeginVertical(GUI.skin.box);
                 GUILayout.Label(item.FlowKind + ": " + (item.SymbolDisplay ?? string.Empty), _documentStyle ?? GUI.skin.label);
                 GUILayout.Label(item.Relationship ?? string.Empty, _documentMetaStyle ?? GUI.skin.label);
-                if (GUILayout.Button(BuildLocationButtonLabel(item.Location), _resultButtonStyle ?? GUI.skin.button, GUILayout.Height(24f)))
+                if (GUILayout.Button(_presentationService.BuildLocationButtonLabel(item.Location), _resultButtonStyle ?? GUI.skin.button, GUILayout.Height(24f)))
                 {
-                    OpenDocumentAtRange(navigationService, state, item.Location.DocumentPath, item.Location.Range);
+                    _presentationService.OpenLocation(navigationService, state, item.Location.DocumentPath, item.Location.Range);
                 }
 
                 GUILayout.EndVertical();
@@ -323,9 +317,9 @@ namespace Cortex.Modules.Search
                 GUILayout.BeginVertical(GUI.skin.box);
                 GUILayout.Label(Path.GetFileName(location.DocumentPath) + "  " + (location.Relationship ?? string.Empty), _documentStyle ?? GUI.skin.label);
                 GUILayout.Label(location.DocumentPath ?? string.Empty, _documentMetaStyle ?? GUI.skin.label);
-                if (GUILayout.Button(BuildLocationButtonLabel(location), _resultButtonStyle ?? GUI.skin.button, GUILayout.Height(24f)))
+                if (GUILayout.Button(_presentationService.BuildLocationButtonLabel(location), _resultButtonStyle ?? GUI.skin.button, GUILayout.Height(24f)))
                 {
-                    OpenDocumentAtRange(navigationService, state, location.DocumentPath, location.Range);
+                    _presentationService.OpenLocation(navigationService, state, location.DocumentPath, location.Range);
                 }
 
                 GUILayout.EndVertical();
@@ -356,7 +350,7 @@ namespace Cortex.Modules.Search
 
                     if (GUILayout.Button(edit.PreviewText ?? edit.NewText ?? string.Empty, _resultButtonStyle ?? GUI.skin.button))
                     {
-                        OpenDocumentAtRange(navigationService, state, document.DocumentPath, edit.Range);
+                        _presentationService.OpenLocation(navigationService, state, document.DocumentPath, edit.Range);
                     }
                 }
 
@@ -365,14 +359,12 @@ namespace Cortex.Modules.Search
             }
         }
 
-        private void DrawSearchSummary(CortexShellState state)
+        private void DrawSearchSummary(SearchWorkbenchSummaryPresentation summary)
         {
             GUILayout.BeginVertical(_summaryStyle ?? GUI.skin.box);
-            GUILayout.Label("Search", _documentStyle ?? GUI.skin.label);
-
-            var results = state != null && state.Search != null ? state.Search.Results : null;
-            GUILayout.Label(results != null ? results.StatusMessage ?? "Search ready." : "Search results will appear here.", _summaryCaptionStyle ?? GUI.skin.label);
-            GUILayout.Label(BuildScopeCaption(state), _summaryCaptionStyle ?? GUI.skin.label);
+            GUILayout.Label(summary != null ? summary.Title : string.Empty, _documentStyle ?? GUI.skin.label);
+            GUILayout.Label(summary != null ? summary.Status : string.Empty, _summaryCaptionStyle ?? GUI.skin.label);
+            GUILayout.Label(summary != null ? summary.ScopeCaption : string.Empty, _summaryCaptionStyle ?? GUI.skin.label);
             GUILayout.EndVertical();
         }
 
@@ -419,186 +411,6 @@ namespace Cortex.Modules.Search
                 GUILayout.EndVertical();
                 GUILayout.Space(4f);
             }
-        }
-
-        private void EnsureResults(
-            WorkbenchSearchService searchService,
-            IProjectCatalog projectCatalog,
-            ISourceLookupIndex sourceLookupIndex,
-            ITextSearchService textSearchService,
-            CortexShellState state)
-        {
-            var searchState = state != null ? state.Search : null;
-            if (searchState == null || !searchState.PendingRefresh)
-            {
-                return;
-            }
-
-            var query = BuildQuery(searchState);
-            if (string.IsNullOrEmpty(query.SearchText))
-            {
-                searchState.Results = new TextSearchResultSet
-                {
-                    Query = query,
-                    GeneratedUtc = DateTime.UtcNow,
-                    StatusMessage = "Enter text to search."
-                };
-                searchState.LastExecutedFingerprint = string.Empty;
-                searchState.PendingRefresh = false;
-                searchState.ActiveMatchIndex = -1;
-                return;
-            }
-
-            searchState.Results = searchService != null
-                ? searchService.Search(query, state, projectCatalog, sourceLookupIndex, textSearchService)
-                : new TextSearchResultSet
-                {
-                    Query = query,
-                    GeneratedUtc = DateTime.UtcNow,
-                    StatusMessage = "Search service was not available."
-                };
-            searchState.LastExecutedFingerprint = searchService != null ? searchService.BuildFingerprint(query) : string.Empty;
-            searchState.PendingRefresh = false;
-
-            var totalMatches = searchState.Results != null ? searchState.Results.TotalMatchCount : 0;
-            if (totalMatches <= 0)
-            {
-                searchState.ActiveMatchIndex = -1;
-            }
-            else if (searchState.ActiveMatchIndex < 0 || searchState.ActiveMatchIndex >= totalMatches)
-            {
-                searchState.ActiveMatchIndex = 0;
-            }
-        }
-
-        private static TextSearchQuery BuildQuery(CortexSearchInteractionState searchState)
-        {
-            return new TextSearchQuery
-            {
-                SearchText = searchState != null ? searchState.QueryText ?? string.Empty : string.Empty,
-                Scope = searchState != null ? searchState.Query.Scope : SearchScopeKind.CurrentDocument,
-                MatchCase = searchState != null && searchState.Query.MatchCase,
-                WholeWord = searchState != null && searchState.Query.WholeWord
-            };
-        }
-
-        private string BuildSemanticTitle(CortexShellState state)
-        {
-            switch (state.Semantic.Workbench.ActiveView)
-            {
-                case SemanticWorkbenchViewKind.RenamePreview:
-                    return "Semantic Rename";
-                case SemanticWorkbenchViewKind.References:
-                    return "Semantic References";
-                case SemanticWorkbenchViewKind.PeekDefinition:
-                    return "Peek Definition";
-                case SemanticWorkbenchViewKind.CallHierarchy:
-                    return "Call Hierarchy";
-                case SemanticWorkbenchViewKind.ValueSource:
-                    return "Value Source";
-                case SemanticWorkbenchViewKind.UnitTestGeneration:
-                    return "Unit Test Generation";
-                case SemanticWorkbenchViewKind.BaseSymbols:
-                    return "Base Symbols";
-                case SemanticWorkbenchViewKind.Implementations:
-                    return "Implementations";
-                case SemanticWorkbenchViewKind.DocumentEditPreview:
-                    return "Document Edit Preview";
-                default:
-                    return "Semantic Results";
-            }
-        }
-
-        private string BuildSemanticStatus(CortexShellState state)
-        {
-            if (state == null || state.Semantic == null)
-            {
-                return string.Empty;
-            }
-
-            switch (state.Semantic.Workbench.ActiveView)
-            {
-                case SemanticWorkbenchViewKind.RenamePreview:
-                    return state.Semantic.Workbench.RenamePreview != null ? state.Semantic.Workbench.RenamePreview.StatusMessage ?? string.Empty : string.Empty;
-                case SemanticWorkbenchViewKind.References:
-                    return state.Semantic.Workbench.References != null ? state.Semantic.Workbench.References.StatusMessage ?? string.Empty : string.Empty;
-                case SemanticWorkbenchViewKind.PeekDefinition:
-                    return state.Semantic.Workbench.PeekDefinition != null ? state.Semantic.Workbench.PeekDefinition.StatusMessage ?? string.Empty : string.Empty;
-                case SemanticWorkbenchViewKind.CallHierarchy:
-                    return state.Semantic.Workbench.CallHierarchy != null ? state.Semantic.Workbench.CallHierarchy.StatusMessage ?? string.Empty : string.Empty;
-                case SemanticWorkbenchViewKind.ValueSource:
-                    return state.Semantic.Workbench.ValueSource != null ? state.Semantic.Workbench.ValueSource.StatusMessage ?? string.Empty : string.Empty;
-                case SemanticWorkbenchViewKind.UnitTestGeneration:
-                    return state.Semantic.Workbench.UnitTestGeneration != null ? state.Semantic.Workbench.UnitTestGeneration.StatusMessage ?? string.Empty : string.Empty;
-                case SemanticWorkbenchViewKind.BaseSymbols:
-                    return state.Semantic.Workbench.BaseSymbols != null ? state.Semantic.Workbench.BaseSymbols.StatusMessage ?? string.Empty : string.Empty;
-                case SemanticWorkbenchViewKind.Implementations:
-                    return state.Semantic.Workbench.Implementations != null ? state.Semantic.Workbench.Implementations.StatusMessage ?? string.Empty : string.Empty;
-                case SemanticWorkbenchViewKind.DocumentEditPreview:
-                    return state.Semantic.Workbench.DocumentEditPreview != null ? state.Semantic.Workbench.DocumentEditPreview.StatusMessage ?? string.Empty : string.Empty;
-                default:
-                    return string.Empty;
-            }
-        }
-
-        private string BuildScopeCaption(CortexShellState state)
-        {
-            var searchState = state != null ? state.Search : null;
-            if (searchState == null)
-            {
-                return string.Empty;
-            }
-
-            return "Scope: " + BuildScopeLabel(searchState.Query.Scope);
-        }
-
-        private static string BuildScopeLabel(SearchScopeKind scope)
-        {
-            switch (scope)
-            {
-                case SearchScopeKind.AllOpenDocuments: return "All open documents";
-                case SearchScopeKind.CurrentProject: return "Current project";
-                case SearchScopeKind.EntireSolution: return "Entire solution";
-                default: return "Current document";
-            }
-        }
-
-        private static string BuildLocationButtonLabel(LanguageServiceSymbolLocation location)
-        {
-            return "Ln " + (location != null && location.Range != null ? location.Range.StartLine.ToString() : "0") +
-                ", Col " + (location != null && location.Range != null ? location.Range.StartColumn.ToString() : "0") +
-                "  " + (location != null ? location.PreviewText ?? location.LineText ?? string.Empty : string.Empty);
-        }
-
-        private static void OpenDocumentAtRange(ICortexNavigationService navigationService, CortexShellState state, string documentPath, LanguageServiceRange range)
-        {
-            if (navigationService == null || string.IsNullOrEmpty(documentPath))
-            {
-                return;
-            }
-
-            navigationService.OpenDocument(state, documentPath, range != null ? range.StartLine : 1, "Opened " + Path.GetFileName(documentPath) + ".", "Could not open " + Path.GetFileName(documentPath) + ".");
-        }
-
-        private static void OpenDefinitionTarget(ICortexNavigationService navigationService, CortexShellState state, LanguageServiceDefinitionResponse response)
-        {
-            if (navigationService == null || state == null || response == null)
-            {
-                return;
-            }
-
-            navigationService.OpenLanguageSymbolTarget(
-                state,
-                response.SymbolDisplay,
-                response.SymbolKind,
-                response.MetadataName,
-                response.ContainingTypeName,
-                response.ContainingAssemblyName,
-                response.DocumentationCommentId,
-                response.DocumentPath,
-                response.Range,
-                "Opened definition.",
-                "Could not open definition.");
         }
 
         private void EnsureStyles()

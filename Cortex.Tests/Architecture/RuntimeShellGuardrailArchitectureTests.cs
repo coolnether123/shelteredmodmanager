@@ -162,6 +162,12 @@ namespace Cortex.Tests.Architecture
             var settingsSessionServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Settings", "SettingsSessionService.cs");
             var editorModuleText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Modules", "Editor", "EditorModule.cs");
             var editorPresentationServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Editor", "Presentation", "EditorPresentationService.cs");
+            var projectsModuleText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Modules", "Projects", "ProjectsModule.cs");
+            var projectWorkspaceServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Projects", "ProjectWorkspaceInteractionService.cs");
+            var searchModuleText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Modules", "Search", "SearchModule.cs");
+            var searchPresentationServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Search", "SearchWorkbenchPresentationService.cs");
+            var referenceModuleText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Modules", "Reference", "ReferenceModule.cs");
+            var referenceBrowserServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Reference", "ReferenceBrowserSessionService.cs");
 
             Assert.Contains("SettingsDraftService", settingsModuleText);
             Assert.Contains("SettingsApplicationService", settingsModuleText);
@@ -181,7 +187,39 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("_presentationService.ResolveSearchShortcutCommand(", editorModuleText);
             Assert.DoesNotContain("private static string BuildLanguageRuntimeLabel(", editorModuleText);
             Assert.DoesNotContain("private static string BuildCompletionAugmentationLabel(", editorModuleText);
+            Assert.Contains("BuildTabStripPresentation(state)", editorModuleText);
+            Assert.Contains("BuildPathBarPresentation(documentService, state)", editorModuleText);
+            Assert.Contains("BuildFindOverlayPresentation(workbenchSearchService, state)", editorModuleText);
+            Assert.DoesNotContain("private string BuildFindSummary(", editorModuleText);
+            Assert.DoesNotContain("private static string BuildCompactPath(", editorModuleText);
             Assert.Contains("class EditorPresentationService", editorPresentationServiceText);
+            Assert.Contains("BuildTabStripPresentation", editorPresentationServiceText);
+            Assert.Contains("BuildPathBarPresentation", editorPresentationServiceText);
+            Assert.Contains("BuildFindOverlayPresentation", editorPresentationServiceText);
+
+            Assert.Contains("ProjectWorkspaceInteractionService", projectsModuleText);
+            Assert.DoesNotContain("private void ApplySourceFolder(", projectsModuleText);
+            Assert.DoesNotContain("private void SaveProject(", projectsModuleText);
+            Assert.DoesNotContain("private CortexProjectDefinition CreateDefinition(", projectsModuleText);
+            Assert.Contains("class ProjectWorkspaceInteractionService", projectWorkspaceServiceText);
+            Assert.Contains("ApplySourceFolder(", projectWorkspaceServiceText);
+            Assert.Contains("BuildLoadedModSuggestions(", projectWorkspaceServiceText);
+
+            Assert.Contains("SearchWorkbenchPresentationService", searchModuleText);
+            Assert.DoesNotContain("private void EnsureResults(", searchModuleText);
+            Assert.DoesNotContain("private static TextSearchQuery BuildQuery(", searchModuleText);
+            Assert.DoesNotContain("private string BuildSemanticTitle(", searchModuleText);
+            Assert.Contains("class SearchWorkbenchPresentationService", searchPresentationServiceText);
+            Assert.Contains("RefreshResultsIfPending(", searchPresentationServiceText);
+            Assert.Contains("BuildSummary(", searchPresentationServiceText);
+
+            Assert.Contains("ReferenceBrowserSessionService", referenceModuleText);
+            Assert.DoesNotContain("private void ReloadAssemblies(", referenceModuleText);
+            Assert.DoesNotContain("private void DecompileMember(", referenceModuleText);
+            Assert.DoesNotContain("private string BuildSelectionPath(", referenceModuleText);
+            Assert.Contains("class ReferenceBrowserSessionService", referenceBrowserServiceText);
+            Assert.Contains("BuildAssemblyItems(", referenceBrowserServiceText);
+            Assert.Contains("BuildSelectionPresentation(", referenceBrowserServiceText);
         }
 
         [Fact]

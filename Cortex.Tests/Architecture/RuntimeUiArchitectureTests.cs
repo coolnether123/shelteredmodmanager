@@ -195,7 +195,7 @@ namespace Cortex.Tests.Architecture
         public void WorkbenchUiSurfaceImplementation_IsHostOwned_NotShellOwned()
         {
             var shellRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "CortexShell.Runtime.cs"));
-            var moduleRenderServiceText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "Shell", "CortexShellModuleRenderService.cs"));
+            var imguiModuleRendererText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "Shell", "ImguiShellModuleRenderer.cs"));
             var shelteredCompositionText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Sheltered", "Runtime", "ShelteredUnityHostComposition.cs"));
             var shelteredUiSurfaceText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Sheltered", "Runtime", "ShelteredWorkbenchUiSurface.cs"));
             var runtimeUiFactoryText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Renderers.Imgui", "ImguiWorkbenchRuntimeUiFactory.cs"));
@@ -204,7 +204,8 @@ namespace Cortex.Tests.Architecture
             Assert.False(File.Exists(Path.Combine(RepoRoot, "Cortex", "Layout", "CortexUi.cs")));
             Assert.DoesNotContain("CortexWorkbenchUiSurface", shellRuntimeText);
             Assert.DoesNotContain("new ShelteredWorkbenchUiSurface()", shellRuntimeText);
-            Assert.DoesNotContain(": IWorkbenchUiSurface", moduleRenderServiceText);
+            Assert.DoesNotContain(": IWorkbenchUiSurface", imguiModuleRendererText);
+            Assert.Contains("class ImguiShellModuleRenderer", imguiModuleRendererText);
             Assert.Contains("new ShelteredWorkbenchUiSurface()", shelteredCompositionText);
             Assert.Contains("ImguiWorkbenchRuntimeUiFactory", shelteredCompositionText);
             Assert.Contains("class ShelteredWorkbenchUiSurface : IWorkbenchUiSurface", shelteredUiSurfaceText);
@@ -213,6 +214,7 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("return new ImguiWorkbenchRuntimeUi(_workbenchUiSurface, _frameContext);", runtimeUiFactoryText);
             Assert.Contains("_workbenchUiSurface = workbenchUiSurface ?? NullWorkbenchUiSurface.Instance;", runtimeUiText);
             Assert.Contains("return runtimeUi != null ? runtimeUi.WorkbenchUiSurface : NullWorkbenchUiSurface.Instance;", shellRuntimeText);
+            Assert.False(File.Exists(Path.Combine(RepoRoot, "Cortex", "Shell", "CortexShellModuleRenderService.cs")));
         }
 
         [Fact]

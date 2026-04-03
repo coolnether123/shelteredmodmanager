@@ -1,5 +1,7 @@
 namespace Cortex.Services.Editor.Presentation
 {
+    using Cortex.Core.Models;
+
     internal sealed class EditorSearchShortcutInput
     {
         public bool Control;
@@ -28,6 +30,30 @@ namespace Cortex.Services.Editor.Presentation
         public string LanguageStatusLabel = string.Empty;
         public string CompletionStatusLabel = string.Empty;
         public string EditModeTooltip = string.Empty;
+    }
+
+    internal sealed class EditorTabPresentation
+    {
+        public DocumentSession Session;
+        public string DisplayName = string.Empty;
+        public bool IsActive;
+        public bool IsDirty;
+    }
+
+    internal sealed class EditorPathBarPresentation
+    {
+        public string CompactPath = string.Empty;
+        public int HighlightedLine;
+        public bool HasHighlightedLine;
+        public bool HasExternalChanges;
+        public bool AllowSaving;
+        public bool CanReload;
+    }
+
+    internal sealed class EditorFindOverlayPresentation
+    {
+        public string SummaryText = string.Empty;
+        public string ScopeLabel = string.Empty;
     }
 
     internal sealed class EditorHoverRefreshPlan

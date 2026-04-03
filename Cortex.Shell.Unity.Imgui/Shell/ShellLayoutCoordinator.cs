@@ -7,6 +7,7 @@ using Cortex.Presentation.Models;
 using Cortex.Rendering;
 using Cortex.Rendering.Models;
 using Cortex.Rendering.RuntimeUi.Shell;
+using Cortex.Shell.Unity.Imgui;
 using UnityEngine;
 
 namespace Cortex.Shell
@@ -17,7 +18,7 @@ namespace Cortex.Shell
         private readonly CortexShellViewState _viewState;
         private readonly CortexShellLayoutHostRouter _layoutHostRouter;
         private readonly Func<IWorkbenchRuntime> _runtimeProvider;
-        private readonly Func<CortexShellModuleRenderService> _renderServiceProvider;
+        private readonly Func<ImguiShellModuleRenderer> _renderServiceProvider;
         private readonly Func<WorkbenchFrameInputSnapshot> _frameInputProvider;
 
         private string _draggingContainerId = string.Empty;
@@ -28,7 +29,7 @@ namespace Cortex.Shell
             CortexShellViewState viewState,
             CortexShellLayoutHostRouter layoutHostRouter,
             Func<IWorkbenchRuntime> runtimeProvider,
-            Func<CortexShellModuleRenderService> renderServiceProvider,
+            Func<ImguiShellModuleRenderer> renderServiceProvider,
             Func<WorkbenchFrameInputSnapshot> frameInputProvider)
         {
             _state = state;
