@@ -9,6 +9,7 @@ using Cortex.Presentation.Abstractions;
 using Cortex.Presentation.Models;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering;
+using Cortex.Rendering.Models;
 using Cortex.Services.Navigation;
 using UnityEngine;
 using Cortex.Services.Editor.Context;
@@ -16,6 +17,7 @@ using Cortex.Services.Onboarding;
 using Cortex.Services.Search;
 using Cortex.Shell;
 using Cortex.Rendering.RuntimeUi;
+using Cortex.Presentation.Services;
 
 namespace Cortex
 {
@@ -25,9 +27,8 @@ namespace Cortex
         private const int MainWindowId = 0xC07E;
         private const int LogsWindowId = 0xC07F;
 
-        private Rect _windowRect = new Rect(70f, 70f, 1180f, 760f);
-        private Rect _logWindowRect = new Rect(100f, 100f, 980f, 620f);
         private readonly CortexShellState _state = new CortexShellState();
+        private readonly CortexShellViewState _viewState = new CortexShellViewState();
         private readonly ShellBootstrapper _bootstrapper;
         private readonly ShellSessionCoordinator _sessionCoordinator;
         private readonly ShellLayoutCoordinator _layoutCoordinator;
@@ -46,6 +47,7 @@ namespace Cortex
         private readonly CortexLanguageRuntimeService _languageRuntimeService;
         private readonly CortexOnboardingCoordinator _onboardingCoordinator = new CortexOnboardingCoordinator();
         private readonly CortexShellOnboardingLifecycle _onboardingLifecycle = new CortexShellOnboardingLifecycle();
+        private readonly ShellOnboardingOverlayPresenter _onboardingOverlayPresenter = new ShellOnboardingOverlayPresenter();
 
         private IWorkbenchRuntime _workbenchRuntime;
         private ICortexSettingsStore _settingsStore;
@@ -81,6 +83,7 @@ namespace Cortex
         private Texture2D _collapsedWindowBackground;
         private string _appliedThemeId = string.Empty;
         private WorkbenchPresentationSnapshot _frameSnapshot;
+        private readonly IWorkbenchPresenter _snapshotPresenter = new WorkbenchPresenter();
         private readonly Dictionary<string, Rect> _menuGroupRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
 
         private ShellServiceMap _services;
@@ -143,7 +146,7 @@ namespace Cortex
 
         public CortexShellController()
         {
-            _services = new ShellServiceMap();
+            _services = ShellServiceMap.Empty;
             _runtimeAccess = new WorkbenchRuntimeAccess(_state, () => _moduleCompositionService ?? GetModuleCompositionService());
             _languageRuntimeService = new CortexLanguageRuntimeService(
                 _state,
@@ -157,6 +160,7 @@ namespace Cortex
                 null);
             _bootstrapper = new ShellBootstrapper(
                 _state,
+                _viewState,
                 _moduleContributionRegistry,
                 null,
                 _moduleRegistrar,
@@ -167,7 +171,7 @@ namespace Cortex
                 _languageRuntimeService);
             _sessionCoordinator = new ShellSessionCoordinator(
                 _state,
-                _lifecycleCoordinator,
+                _viewState,
                 () => NavigationService,
                 () => LoadedModCatalog,
                 () => ProjectCatalog,
@@ -175,19 +179,23 @@ namespace Cortex
                 () => _settingsStore);
             _layoutCoordinator = new ShellLayoutCoordinator(
                 _state,
+                _viewState,
                 _layoutHostRouter,
                 () => _workbenchRuntime,
                 () => GetModuleRenderService(),
                 () => GetCurrentFrameInputSnapshot());
             _overlayCoordinator = new ShellOverlayCoordinator(
                 _state,
+                _viewState,
                 _onboardingCoordinator,
                 _onboardingLifecycle,
+                _onboardingOverlayPresenter,
                 () => OverlayInputCaptureService,
                 () => GetCurrentFrameInputSnapshot(),
                 ConsumeCurrentInputEvent);
             _commandDispatcher = new ShellCommandDispatcher(
                 _state,
+                _viewState,
                 _commandRouter,
                 () => _workbenchRuntime,
                 () => DocumentService,
@@ -253,33 +261,34 @@ namespace Cortex
                 PreviewOnboardingSelections();
             }
 
-            _frameSnapshot = _workbenchRuntime != null ? _workbenchRuntime.CreateSnapshot() : new WorkbenchPresentationSnapshot();
+            _frameSnapshot = BuildPresentationSnapshot();
+            _layoutCoordinator.SynchronizeRuntimeLayoutState();
             CortexIdeLayout.ApplyTheme(_frameSnapshot.ThemeTokens, _frameSnapshot.ActiveThemeId);
             EnsureStyles(_frameSnapshot.ThemeTokens, _frameSnapshot.ActiveThemeId);
             var previousSkin = GUI.skin;
             GUI.skin = CortexIdeLayout.GetWorkbenchSkin(previousSkin);
             ClampWindowsToScreen();
             UpdateOverlayInputCapture();
-            if (_state.Chrome.Main.IsCollapsed)
+            if (_viewState.MainWindow.IsCollapsed)
             {
-                DrawCollapsedWindowButton(_state.Chrome.Main, ">", "Cortex");
+                DrawCollapsedWindowButton(_viewState.MainWindow, ">", "Cortex");
             }
             else
             {
-                _windowRect = GUI.Window(MainWindowId, _windowRect, DrawWindow, "Cortex IDE", _windowStyle);
-                _state.Chrome.Main.ExpandedRect = _windowRect;
+                _viewState.MainWindow.CurrentRect = ToRenderRect(GUI.Window(MainWindowId, ToRect(_viewState.MainWindow.CurrentRect), DrawWindow, "Cortex IDE", _windowStyle));
+                _viewState.MainWindow.ExpandedRect = _viewState.MainWindow.CurrentRect;
             }
 
-            if (_state.Logs.ShowDetachedWindow && !_state.Onboarding.IsActive)
+            if (_viewState.ShowDetachedLogsWindow && !_state.Onboarding.IsActive)
             {
-                if (_state.Chrome.Logs.IsCollapsed)
+                if (_viewState.LogsWindow.IsCollapsed)
                 {
-                    DrawCollapsedWindowButton(_state.Chrome.Logs, ">", "Logs");
+                    DrawCollapsedWindowButton(_viewState.LogsWindow, ">", "Logs");
                 }
                 else
                 {
-                    _logWindowRect = GUI.Window(LogsWindowId, _logWindowRect, DrawLogsWindow, "Cortex Logs", _windowStyle);
-                    _state.Chrome.Logs.ExpandedRect = _logWindowRect;
+                    _viewState.LogsWindow.CurrentRect = ToRenderRect(GUI.Window(LogsWindowId, ToRect(_viewState.LogsWindow.CurrentRect), DrawLogsWindow, "Cortex Logs", _windowStyle));
+                    _viewState.LogsWindow.ExpandedRect = _viewState.LogsWindow.CurrentRect;
                 }
             }
 
@@ -294,11 +303,12 @@ namespace Cortex
 
         private void DrawWindow(int windowId)
         {
-            var snapshot = _frameSnapshot ?? (_workbenchRuntime != null ? _workbenchRuntime.CreateSnapshot() : new WorkbenchPresentationSnapshot());
+            var snapshot = _frameSnapshot ?? BuildPresentationSnapshot();
             var onboardingActive = IsOnboardingActive();
             const float headerHeight = 30f;
             const float statusHeight = 24f;
-            var contentRect = new Rect(6f, 24f, Mathf.Max(0f, _windowRect.width - 12f), Mathf.Max(0f, _windowRect.height - 30f));
+            var currentRect = ToRect(_viewState.MainWindow.CurrentRect);
+            var contentRect = new Rect(6f, 24f, Mathf.Max(0f, currentRect.width - 12f), Mathf.Max(0f, currentRect.height - 30f));
             var headerRect = new Rect(contentRect.x, contentRect.y, contentRect.width, headerHeight);
             var statusRect = new Rect(contentRect.x, Mathf.Max(contentRect.y + headerHeight + 8f, contentRect.yMax - statusHeight), contentRect.width, statusHeight);
             var workbenchTop = headerRect.yMax + 2f;
@@ -331,7 +341,7 @@ namespace Cortex
             if (!onboardingActive)
             {
                 DrawOpenMenuPanel(snapshot, headerRect);
-                ApplyWindowResize(windowId, ref _windowRect, 920f, 580f);
+                ApplyWindowResize(windowId, ref _viewState.MainWindow.CurrentRect, _viewState.MainWindow.MinWidth, _viewState.MainWindow.MinHeight);
                 GUI.DragWindow(new Rect(0f, 0f, 10000f, 28f));
             }
         }
@@ -343,21 +353,17 @@ namespace Cortex
             DrawLogsWindowHeaderActions();
             DrawActiveModule(_frameSnapshot, CortexWorkbenchIds.LogsContainer, true);
             GUILayout.EndVertical();
-            ApplyWindowResize(windowId, ref _logWindowRect, 760f, 420f);
+            ApplyWindowResize(windowId, ref _viewState.LogsWindow.CurrentRect, _viewState.LogsWindow.MinWidth, _viewState.LogsWindow.MinHeight);
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));
         }
 
         private void InitializeSettingsAndServices()
         {
-            _bootstrapper.InitializeSettings(out _windowRect, out _logWindowRect);
+            _bootstrapper.InitializeSettings();
             var hostEnvironment = _bootstrapper.HostEnvironment ?? _hostEnvironment ?? NullCortexHostServices.Instance.Environment;
             var settings = _state.Settings;
             _settingsStore = _bootstrapper.SettingsStore;
             _workbenchPersistenceService = _bootstrapper.PersistenceService;
-            _state.Chrome.Main.ExpandedRect = _windowRect;
-            _state.Chrome.Main.CollapsedRect = CortexWindowChromeController.BuildCollapsedRect(_windowRect, 126f, 28f);
-            _state.Chrome.Logs.ExpandedRect = _logWindowRect;
-            _state.Chrome.Logs.CollapsedRect = CortexWindowChromeController.BuildCollapsedRect(_logWindowRect, 110f, 26f);
 
             InitializeServices(hostEnvironment, settings);
         }
@@ -400,7 +406,7 @@ namespace Cortex
             EnableRuntimeLogIntegration();
         }
 
-        private void UpdateOverlayInputCapture() => _overlayCoordinator.UpdateOverlayInputCapture(_sessionCoordinator.Visible, _windowRect, _logWindowRect);
+        private void UpdateOverlayInputCapture() => _overlayCoordinator.UpdateOverlayInputCapture(_sessionCoordinator.Visible, ToRect(_viewState.MainWindow.CurrentRect), ToRect(_viewState.LogsWindow.CurrentRect));
         private void ReleaseOverlayInputCapture() => _overlayCoordinator.ReleaseOverlayInputCapture();
 
         private int GetScreenWidth()
@@ -426,7 +432,7 @@ namespace Cortex
         private void ApplySettingsChanges()
         {
             _sessionCoordinator.PersistSession();
-            _sessionCoordinator.PersistWindowSettings(_windowRect, _state.Chrome.Main.IsCollapsed, _state.Chrome.Main.ExpandedRect);
+            _sessionCoordinator.PersistWindowSettings();
 
             var hostEnv = _bootstrapper.HostEnvironment;
             _state.Settings = _bootstrapper.BuildEffectiveSettings(_state.Settings, hostEnv);
@@ -437,7 +443,10 @@ namespace Cortex
                 _settingsStore.Save(_state.Settings);
             }
 
-            _windowRect = new Rect(_state.Settings.WindowX, _state.Settings.WindowY, _state.Settings.WindowWidth, _state.Settings.WindowHeight);
+            var mainWindowRect = new RenderRect(_state.Settings.WindowX, _state.Settings.WindowY, _state.Settings.WindowWidth, _state.Settings.WindowHeight);
+            _viewState.MainWindow.CurrentRect = mainWindowRect;
+            _viewState.MainWindow.ExpandedRect = mainWindowRect;
+            _viewState.MainWindow.CollapsedRect = CortexWindowChromeController.BuildCollapsedRect(mainWindowRect, _viewState.MainWindow.CollapsedWidth, _viewState.MainWindow.CollapsedHeight);
             ClampWindowsToScreen();
             _state.ReloadSettingsRequested = false;
             _state.StatusMessage = "Cortex settings applied.";
@@ -450,33 +459,31 @@ namespace Cortex
             }
         }
 
-        private void PersistWindowSettings() => _sessionCoordinator.PersistWindowSettings(_windowRect, _state.Chrome.Main.IsCollapsed, _state.Chrome.Main.ExpandedRect);
+        private void PersistWindowSettings() => _sessionCoordinator.PersistWindowSettings();
 
         private void ClampWindowsToScreen()
         {
             var sw = GetScreenWidth(); var sh = GetScreenHeight();
-            _windowRect = ClampRectToScreen(_windowRect, 920f, 580f, sw, sh);
-            _logWindowRect = ClampRectToScreen(_logWindowRect, 760f, 420f, sw, sh);
-            _state.Chrome.Main.ExpandedRect = ClampRectToScreen(_state.Chrome.Main.ExpandedRect.width > 0f ? _state.Chrome.Main.ExpandedRect : _windowRect, 920f, 580f, sw, sh);
-            _state.Chrome.Logs.ExpandedRect = ClampRectToScreen(_state.Chrome.Logs.ExpandedRect.width > 0f ? _state.Chrome.Logs.ExpandedRect : _logWindowRect, 760f, 420f, sw, sh);
-            _state.Chrome.Main.CollapsedRect = ClampRectToScreen(_state.Chrome.Main.CollapsedRect.width > 0f ? _state.Chrome.Main.CollapsedRect : CortexWindowChromeController.BuildCollapsedRect(_windowRect, 126f, 28f), 126f, 28f, sw, sh);
-            _state.Chrome.Logs.CollapsedRect = ClampRectToScreen(_state.Chrome.Logs.CollapsedRect.width > 0f ? _state.Chrome.Logs.CollapsedRect : CortexWindowChromeController.BuildCollapsedRect(_logWindowRect, 110f, 26f), 110f, 26f, sw, sh);
+            ClampWindowToScreen(_viewState.MainWindow, sw, sh);
+            ClampWindowToScreen(_viewState.LogsWindow, sw, sh);
         }
 
-        private Rect ClampRectToScreen(Rect rect, float minWidth, float minHeight, int sw, int sh)
+        private RenderRect ClampRectToScreen(RenderRect rect, float minWidth, float minHeight, int sw, int sh)
         {
-            var width = Mathf.Clamp(rect.width, minWidth, Math.Max(minWidth, sw - 20f));
-            var height = Mathf.Clamp(rect.height, minHeight, Math.Max(minHeight, sh - 20f));
-            var x = Mathf.Clamp(rect.x, 0f, Math.Max(0f, sw - width));
-            var y = Mathf.Clamp(rect.y, 0f, Math.Max(0f, sh - height));
-            return new Rect(x, y, width, height);
+            var width = Mathf.Clamp(rect.Width, minWidth, Math.Max(minWidth, sw - 20f));
+            var height = Mathf.Clamp(rect.Height, minHeight, Math.Max(minHeight, sh - 20f));
+            var x = Mathf.Clamp(rect.X, 0f, Math.Max(0f, sw - width));
+            var y = Mathf.Clamp(rect.Y, 0f, Math.Max(0f, sh - height));
+            return new RenderRect(x, y, width, height);
         }
 
         private void FitMainWindowToScreen()
         {
             var sw = GetScreenWidth(); var sh = GetScreenHeight();
-            _windowRect = new Rect(Mathf.Max(10f, sw * 0.05f), Mathf.Max(10f, sh * 0.05f), Mathf.Max(980f, sw * 0.9f), Mathf.Max(620f, sh * 0.88f));
-            _state.Chrome.Main.ExpandedRect = _windowRect;
+            var fittedRect = new RenderRect(Mathf.Max(10f, sw * 0.05f), Mathf.Max(10f, sh * 0.05f), Mathf.Max(980f, sw * 0.9f), Mathf.Max(620f, sh * 0.88f));
+            _viewState.MainWindow.CurrentRect = fittedRect;
+            _viewState.MainWindow.ExpandedRect = fittedRect;
+            _viewState.MainWindow.CollapsedRect = CortexWindowChromeController.BuildCollapsedRect(fittedRect, _viewState.MainWindow.CollapsedWidth, _viewState.MainWindow.CollapsedHeight);
         }
 
         private void EnableRuntimeLogIntegration() => (_bootstrapper.PlatformModule ?? NullCortexPlatformModule.Instance).ConfigureRuntimeLogging(true);
@@ -541,17 +548,29 @@ namespace Cortex
             if (_collapsedWindowStyle == null) { _collapsedWindowBackground = MakeTex(CortexIdeLayout.ParseColor(themeTokens != null ? themeTokens.HeaderColor : string.Empty, new Color(0.09f, 0.11f, 0.15f, 0.98f))); _collapsedWindowStyle = new GUIStyle(GUI.skin.button) { alignment = TextAnchor.MiddleLeft, padding = new RectOffset(10, 10, 4, 4), fontStyle = FontStyle.Bold }; GuiStyleUtil.ApplyBackgroundToAllStates(_collapsedWindowStyle, _collapsedWindowBackground); GuiStyleUtil.ApplyTextColorToAllStates(_collapsedWindowStyle, textColor); }
         }
 
-        private void DrawCollapsedWindowButton(CortexWindowChromeState chromeState, string glyph, string title)
+        private void DrawCollapsedWindowButton(CortexShellWindowViewState chromeState, string glyph, string title)
         {
-            if (chromeState != null && CortexWindowChromeController.DrawCollapsedButton(chromeState.CollapsedRect, glyph + " " + title, _collapsedWindowStyle)) chromeState.IsCollapsed = false;
+            if (chromeState != null && CortexWindowChromeController.DrawCollapsedButton(ToRect(chromeState.CollapsedRect), glyph + " " + title, _collapsedWindowStyle))
+            {
+                chromeState.IsCollapsed = false;
+                chromeState.CurrentRect = chromeState.ExpandedRect;
+            }
         }
 
         private void DrawLogsWindowHeaderActions()
         {
             GUILayout.BeginHorizontal(); GUILayout.FlexibleSpace();
             var actions = new List<CortexWindowAction>();
-            actions.Add(BuildGlyphWindowAction("logs.collapse", "_", "Minimize logs window", delegate { _logWindowRect = CortexWindowChromeController.ToggleCollapsed(_state.Chrome.Logs, _logWindowRect, 110f, 26f); }));
-            actions.Add(BuildGlyphWindowAction("logs.close", "X", "Close detached logs window", delegate { _state.Logs.ShowDetachedWindow = false; _state.Chrome.Logs.IsCollapsed = false; }));
+            actions.Add(BuildGlyphWindowAction("logs.collapse", "_", "Minimize logs window", delegate
+            {
+                _viewState.LogsWindow.CurrentRect = CortexWindowChromeController.ToggleCollapsed(_viewState.LogsWindow, _viewState.LogsWindow.CurrentRect, _viewState.LogsWindow.CollapsedWidth, _viewState.LogsWindow.CollapsedHeight);
+            }));
+            actions.Add(BuildGlyphWindowAction("logs.close", "X", "Close detached logs window", delegate
+            {
+                _viewState.ShowDetachedLogsWindow = false;
+                _viewState.LogsWindow.IsCollapsed = false;
+                _viewState.LogsWindow.CurrentRect = _viewState.LogsWindow.ExpandedRect;
+            }));
             CortexWindowChromeController.DrawActions(actions);
             GUILayout.EndHorizontal();
         }
@@ -559,16 +578,43 @@ namespace Cortex
         private static Texture2D MakeTex(Color color) { var texture = new Texture2D(1, 1); texture.SetPixel(0, 0, color); texture.Apply(); return texture; }
         private static CortexWindowAction BuildGlyphWindowAction(string actionId, string label, string toolTip, Action execute) => new CortexWindowAction { ActionId = actionId, Label = label, ToolTip = toolTip, Width = 24f, Height = 20f, Execute = execute };
 
-        private void ApplyWindowResize(int windowId, ref Rect windowRect, float minWidth, float minHeight)
+        private void ApplyWindowResize(int windowId, ref RenderRect windowRect, float minWidth, float minHeight)
         {
-            var sw = GetScreenWidth(); var sh = GetScreenHeight(); var localRect = new Rect(0f, 0f, windowRect.width, windowRect.height);
+            var sw = GetScreenWidth(); var sh = GetScreenHeight(); var localRect = new Rect(0f, 0f, windowRect.Width, windowRect.Height);
             localRect = CortexWindowChromeController.DrawResizeHandle(windowId, localRect, minWidth, minHeight, Math.Max(minWidth, sw - 12f), Math.Max(minHeight, sh - 12f));
-            windowRect.width = localRect.width; windowRect.height = localRect.height;
+            windowRect = new RenderRect(windowRect.X, windowRect.Y, localRect.width, localRect.height);
+        }
+
+        private void ClampWindowToScreen(CortexShellWindowViewState windowState, int screenWidth, int screenHeight)
+        {
+            if (windowState == null)
+            {
+                return;
+            }
+
+            var currentRect = windowState.CurrentRect.Width > 0f ? windowState.CurrentRect : windowState.ExpandedRect;
+            var expandedRect = windowState.ExpandedRect.Width > 0f ? windowState.ExpandedRect : currentRect;
+            var collapsedRect = windowState.CollapsedRect.Width > 0f
+                ? windowState.CollapsedRect
+                : CortexWindowChromeController.BuildCollapsedRect(currentRect, windowState.CollapsedWidth, windowState.CollapsedHeight);
+
+            windowState.CurrentRect = ClampRectToScreen(currentRect, windowState.IsCollapsed ? windowState.CollapsedWidth : windowState.MinWidth, windowState.IsCollapsed ? windowState.CollapsedHeight : windowState.MinHeight, screenWidth, screenHeight);
+            windowState.ExpandedRect = ClampRectToScreen(expandedRect, windowState.MinWidth, windowState.MinHeight, screenWidth, screenHeight);
+            windowState.CollapsedRect = ClampRectToScreen(collapsedRect, windowState.CollapsedWidth, windowState.CollapsedHeight, screenWidth, screenHeight);
+
+            if (windowState.IsCollapsed)
+            {
+                windowState.CurrentRect = windowState.CollapsedRect;
+            }
+            else
+            {
+                windowState.CurrentRect = windowState.ExpandedRect;
+            }
         }
 
         private void ApplyServiceMap(ShellServiceMap services)
         {
-            _services = services ?? new ShellServiceMap();
+            _services = services ?? ShellServiceMap.Empty;
             ResetModuleRuntime();
         }
 

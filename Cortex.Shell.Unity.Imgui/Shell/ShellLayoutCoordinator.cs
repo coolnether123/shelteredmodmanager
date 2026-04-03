@@ -14,6 +14,7 @@ namespace Cortex.Shell
     internal sealed class ShellLayoutCoordinator
     {
         private readonly CortexShellState _state;
+        private readonly CortexShellViewState _viewState;
         private readonly CortexShellLayoutHostRouter _layoutHostRouter;
         private readonly Func<IWorkbenchRuntime> _runtimeProvider;
         private readonly Func<CortexShellModuleRenderService> _renderServiceProvider;
@@ -24,12 +25,14 @@ namespace Cortex.Shell
 
         public ShellLayoutCoordinator(
             CortexShellState state,
+            CortexShellViewState viewState,
             CortexShellLayoutHostRouter layoutHostRouter,
             Func<IWorkbenchRuntime> runtimeProvider,
             Func<CortexShellModuleRenderService> renderServiceProvider,
             Func<WorkbenchFrameInputSnapshot> frameInputProvider)
         {
             _state = state;
+            _viewState = viewState ?? new CortexShellViewState();
             _layoutHostRouter = layoutHostRouter;
             _runtimeProvider = runtimeProvider;
             _renderServiceProvider = renderServiceProvider;
@@ -43,8 +46,21 @@ namespace Cortex.Shell
             if (workspaceRect.width <= 0f || workspaceRect.height <= 0f) return;
 
             var layoutRoot = BuildLayoutTree(snapshot, workspaceRect);
-            _state.Workbench.LayoutRoot = layoutRoot;
+            _viewState.LayoutRoot = layoutRoot;
             DrawLayoutTree(layoutRoot, workspaceRect, snapshot, tabStyle, activeTabStyle, tabCloseButtonStyle, captionStyle);
+        }
+
+        public void SynchronizeRuntimeLayoutState()
+        {
+            var runtime = _runtimeProvider();
+            if (runtime == null || runtime.WorkbenchState == null)
+            {
+                return;
+            }
+
+            runtime.WorkbenchState.PrimarySideHostVisible = !string.IsNullOrEmpty(_state.Workbench.SideContainerId);
+            runtime.WorkbenchState.SecondarySideHostVisible = !string.IsNullOrEmpty(_state.Workbench.SecondarySideContainerId);
+            runtime.WorkbenchState.PanelHostVisible = !string.IsNullOrEmpty(_state.Workbench.PanelContainerId);
         }
 
         private CortexLayoutNode BuildLayoutTree(WorkbenchPresentationSnapshot snapshot, Rect workspaceRect)
@@ -53,14 +69,6 @@ namespace Cortex.Shell
             var leftVisible = HasHostItems(snapshot, WorkbenchHostLocation.PrimarySideHost) || isDragging;
             var rightVisible = HasHostItems(snapshot, WorkbenchHostLocation.SecondarySideHost) || isDragging;
             var panelVisible = HasHostItems(snapshot, WorkbenchHostLocation.PanelHost) || isDragging;
-
-            var runtime = _runtimeProvider();
-            if (runtime != null)
-            {
-                runtime.WorkbenchState.PrimarySideHostVisible = leftVisible;
-                runtime.WorkbenchState.SecondarySideHostVisible = rightVisible;
-                runtime.WorkbenchState.PanelHostVisible = panelVisible;
-            }
 
             var root = CreateLeaf("layout.editor", WorkbenchHostLocation.DocumentHost, snapshot);
             if (panelVisible) root = CreateSplitNode("layout.panel", CortexLayoutSplitDirection.Vertical, root, CreateLeaf("layout.panel.leaf", WorkbenchHostLocation.PanelHost, snapshot));

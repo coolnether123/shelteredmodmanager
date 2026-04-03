@@ -9,6 +9,7 @@
     '$(MSBuildProjectName)' == 'Cortex.Core' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Sheltered' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Unity' or
+    '$(MSBuildProjectName)' == 'Cortex.Shell.Unity.Imgui' or
     '$(MSBuildProjectName)' == 'Cortex.Ollama' or
     '$(MSBuildProjectName)' == 'Cortex.OpenRouter' or
     '$(MSBuildProjectName)' == 'Cortex.PathPicker.Host' or
@@ -76,6 +77,7 @@
     '$(MSBuildProjectName)' == 'Cortex' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Sheltered' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Unity' or
+    '$(MSBuildProjectName)' == 'Cortex.Shell.Unity.Imgui' or
     '$(MSBuildProjectName)' == 'Cortex.Platform.ModAPI' or
     '$(MSBuildProjectName)' == 'Cortex.Plugin.Harmony' or
     '$(MSBuildProjectName)' == 'Cortex.Renderers.Imgui' or
@@ -127,6 +129,7 @@
     '$(MSBuildProjectName)' == 'Cortex.Renderers.Imgui' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Sheltered' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Unity' or
+    '$(MSBuildProjectName)' == 'Cortex.Shell.Unity.Imgui' or
     '$(MSBuildProjectName)' == 'Cortex.Platform.ModAPI'">
     <CortexBundleContentKind>HostRuntimeAssembly</CortexBundleContentKind>
   </PropertyGroup>

@@ -43,7 +43,11 @@ namespace Cortex
                 "shell.collapse", "_", "Minimize",
                 delegate
                 {
-                    _windowRect = CortexWindowChromeController.ToggleCollapsed(_state.Chrome.Main, _windowRect, 126f, 28f);
+                    _viewState.MainWindow.CurrentRect = CortexWindowChromeController.ToggleCollapsed(
+                        _viewState.MainWindow,
+                        _viewState.MainWindow.CurrentRect,
+                        _viewState.MainWindow.CollapsedWidth,
+                        _viewState.MainWindow.CollapsedHeight);
                 }));
             actions.Add(BuildGlyphWindowAction(
                 "shell.close", "X", "Close Cortex",
@@ -130,7 +134,7 @@ namespace Cortex
                 return;
             }
 
-            var popupRectModel = ShellMenuPopupController.BuildPopupRect(ToRenderRect(headerRect), ToRenderRect(anchorRect), _windowRect.width, items.Count);
+            var popupRectModel = ShellMenuPopupController.BuildPopupRect(ToRenderRect(headerRect), ToRenderRect(anchorRect), _viewState.MainWindow.CurrentRect.Width, items.Count);
             var popupRect = ToRect(popupRectModel);
 
             GUILayout.BeginArea(popupRect, _sectionStyle);
@@ -411,11 +415,11 @@ namespace Cortex
             var renderer = snapshot != null ? snapshot.RendererSummary : string.Empty;
             return "Right: " + GetContainerTitle(snapshot, _state.Workbench.SecondarySideContainerId) +
                 " | Editor: " + GetContainerTitle(snapshot, _state.Workbench.EditorContainerId) +
-                " | Panel: " + (_state.Logs.ShowDetachedWindow ? "Detached Logs" : GetContainerTitle(snapshot, _state.Workbench.PanelContainerId)) +
+                " | Panel: " + (_viewState.ShowDetachedLogsWindow ? "Detached Logs" : GetContainerTitle(snapshot, _state.Workbench.PanelContainerId)) +
                 " | Theme: " + (snapshot != null && !string.IsNullOrEmpty(snapshot.ActiveThemeId) ? snapshot.ActiveThemeId : "cortex.vs-dark") +
                 " | Open docs: " + _state.Documents.OpenDocuments.Count +
                 " | Projects: " + ProjectCatalog.GetProjects().Count +
-                " | Logs window: " + (_state.Logs.ShowDetachedWindow ? "Open" : "Docked") +
+                " | Logs window: " + (_viewState.ShowDetachedLogsWindow ? "Open" : "Docked") +
                 (string.IsNullOrEmpty(renderer) ? string.Empty : " | " + renderer);
         }
 

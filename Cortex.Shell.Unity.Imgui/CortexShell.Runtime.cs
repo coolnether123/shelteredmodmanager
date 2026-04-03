@@ -5,6 +5,7 @@ using Cortex.Core.Models;
 using Cortex.Modules.Editor;
 using Cortex.Modules.Shared;
 using Cortex.Plugins.Abstractions;
+using Cortex.Presentation.Models;
 using Cortex.Rendering;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.RuntimeUi;
@@ -52,6 +53,7 @@ namespace Cortex
             {
                 _moduleServices = new CortexShellModuleServices(
                     _state,
+                    _viewState,
                     _services,
                     () => _settingsStore,
                     () => _workbenchRuntime,
@@ -76,6 +78,36 @@ namespace Cortex
             var runtimeUiProvider = _workbenchRuntime as IWorkbenchRuntimeUiProvider;
             var runtimeUi = runtimeUiProvider != null ? runtimeUiProvider.RuntimeUi : null;
             return runtimeUi != null ? runtimeUi.RenderPipeline : NullWorkbenchRuntimeUi.Instance.RenderPipeline;
+        }
+
+        private WorkbenchPresentationSnapshot BuildPresentationSnapshot()
+        {
+            if (_workbenchRuntime == null)
+            {
+                return new WorkbenchPresentationSnapshot();
+            }
+
+            return _snapshotPresenter.BuildSnapshot(_workbenchRuntime, BuildPresentationMetadata()) ?? new WorkbenchPresentationSnapshot();
+        }
+
+        private WorkbenchPresentationMetadata BuildPresentationMetadata()
+        {
+            return new WorkbenchPresentationMetadata
+            {
+                RendererSummary = BuildRendererSummary(GetRenderPipeline())
+            };
+        }
+
+        private static string BuildRendererSummary(IRenderPipeline renderPipeline)
+        {
+            var renderer = renderPipeline != null ? renderPipeline.WorkbenchRenderer : null;
+            var capabilities = renderer != null ? renderer.Capabilities : null;
+            if (renderer == null || string.IsNullOrEmpty(renderer.DisplayName) || capabilities == null)
+            {
+                return string.Empty;
+            }
+
+            return renderer.DisplayName + " | Capabilities v" + capabilities.CapabilityVersion;
         }
 
         private IWorkbenchUiSurface GetWorkbenchUiSurface()

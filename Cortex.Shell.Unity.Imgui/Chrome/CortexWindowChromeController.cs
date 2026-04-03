@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Cortex.Rendering.Models;
+using Cortex.Shell;
 using UnityEngine;
 
 namespace Cortex.Chrome
@@ -22,12 +24,12 @@ namespace Cortex.Chrome
         private static Vector2 _resizeStartMouse = Vector2.zero;
         private static int _draggingSplitterId = -1;
 
-        public static Rect BuildCollapsedRect(Rect expandedRect, float width, float height)
+        public static RenderRect BuildCollapsedRect(RenderRect expandedRect, float width, float height)
         {
-            return new Rect(expandedRect.x, expandedRect.y, width, height);
+            return CortexShellWindowViewState.BuildCollapsedRect(expandedRect, width, height);
         }
 
-        public static Rect ToggleCollapsed(CortexWindowChromeState state, Rect currentRect, float collapsedWidth, float collapsedHeight)
+        public static RenderRect ToggleCollapsed(CortexShellWindowViewState state, RenderRect currentRect, float collapsedWidth, float collapsedHeight)
         {
             if (state == null)
             {
@@ -43,7 +45,7 @@ namespace Cortex.Chrome
             }
 
             state.IsCollapsed = false;
-            if (state.ExpandedRect.width <= 0f || state.ExpandedRect.height <= 0f)
+            if (state.ExpandedRect.Width <= 0f || state.ExpandedRect.Height <= 0f)
             {
                 state.ExpandedRect = currentRect;
             }
