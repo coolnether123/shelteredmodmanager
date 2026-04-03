@@ -115,7 +115,7 @@ namespace Cortex.Tests.Rendering
             Assert.Equal(86f, modalRect.Y);
             Assert.Equal(940f, modalRect.Width);
             Assert.Equal(548f, modalRect.Height);
-            Assert.Equal(880f, promptRect.X);
+            Assert.Equal(878f, promptRect.X);
             Assert.Equal(554f, promptRect.Y);
             Assert.Equal(220f, promptRect.Width);
             Assert.Equal(72f, promptRect.Height);

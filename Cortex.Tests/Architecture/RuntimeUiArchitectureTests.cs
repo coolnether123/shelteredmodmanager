@@ -131,10 +131,10 @@ namespace Cortex.Tests.Architecture
         }
 
         [Fact]
-        public void ShellGenericCode_ConsumesPortableRuntimeUiFrameContext()
+        public void UnityImguiShell_ConsumesPortableRuntimeUiFrameContext()
         {
-            var shellText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "CortexShell.cs"));
-            var shellRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "CortexShell.Runtime.cs"));
+            var shellText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "CortexShell.cs"));
+            var shellRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "CortexShell.Runtime.cs"));
             var shellBootstrapperText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "Shell", "ShellBootstrapper.cs"));
 
             Assert.Contains("IWorkbenchFrameContext", shellText);
@@ -150,9 +150,10 @@ namespace Cortex.Tests.Architecture
         [Fact]
         public void ShellChrome_ConsumesPortableShellUiPolicies_WhileKeepingImguiExecutionLocal()
         {
-            var shellChromeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "CortexShell.Chrome.cs"));
-            var shellLayoutText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "Shell", "ShellLayoutCoordinator.cs"));
-            var shellOverlayText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "Shell", "ShellOverlayCoordinator.cs"));
+            var shellChromeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "CortexShell.Chrome.cs"));
+            var shellLayoutText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "Shell", "ShellLayoutCoordinator.cs"));
+            var shellOverlayText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "Shell", "ShellOverlayCoordinator.cs"));
+            var shellOnboardingPresenterText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "Shell", "ShellOnboardingOverlayPresenter.cs"));
 
             Assert.Contains("ShellMenuPopupController.BuildPopupRect", shellChromeText);
             Assert.Contains("ShellMenuPopupController.EvaluateDismissal", shellChromeText);
@@ -164,8 +165,9 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("GUILayout.BeginArea", shellLayoutText);
 
             Assert.Contains("ShellOverlayInteractionController.ResolveInputCapture", shellOverlayText);
-            Assert.Contains("ShellOverlayInteractionController.EvaluateOnboardingInput", shellOverlayText);
-            Assert.Contains("GUI.ModalWindow", shellOverlayText);
+            Assert.Contains("ShellOnboardingOverlayPresenter", shellOverlayText);
+            Assert.Contains("ShellOverlayInteractionController.EvaluateOnboardingInput", shellOnboardingPresenterText);
+            Assert.Contains("GUI.ModalWindow", shellOnboardingPresenterText);
         }
 
         [Fact]
@@ -174,6 +176,7 @@ namespace Cortex.Tests.Architecture
             var genericDirectories = new[]
             {
                 Path.Combine(RepoRoot, "Cortex"),
+                Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui"),
                 Path.Combine(RepoRoot, "Cortex.Host.Unity")
             };
 
@@ -191,7 +194,7 @@ namespace Cortex.Tests.Architecture
         [Fact]
         public void WorkbenchUiSurfaceImplementation_IsHostOwned_NotShellOwned()
         {
-            var shellRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "CortexShell.Runtime.cs"));
+            var shellRuntimeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Shell.Unity.Imgui", "CortexShell.Runtime.cs"));
             var moduleRenderServiceText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex", "Shell", "CortexShellModuleRenderService.cs"));
             var shelteredCompositionText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Sheltered", "Runtime", "ShelteredUnityHostComposition.cs"));
             var shelteredUiSurfaceText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Sheltered", "Runtime", "ShelteredWorkbenchUiSurface.cs"));

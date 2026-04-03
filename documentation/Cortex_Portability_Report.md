@@ -2,6 +2,8 @@
 
 This document is the decision-complete portability map for Cortex after the Sheltered refactor.
 
+For the current runtime/shell separation guardrails that sit on top of this topology, see `documentation/Cortex_Runtime_Shell_Separation_Guardrails.md`.
+
 Use it when:
 
 - auditing whether a change belongs in portable Cortex or a host adapter
