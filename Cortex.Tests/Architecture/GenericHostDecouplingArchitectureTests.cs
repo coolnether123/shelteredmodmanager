@@ -78,13 +78,10 @@ namespace Cortex.Tests.Architecture
                 Path.Combine(RepoRoot, "Cortex.Core", "Models", "ContributionModels.cs"),
                 Path.Combine(RepoRoot, "Cortex.Core", "Models", "WorkbenchIds.cs"),
                 Path.Combine(RepoRoot, "Cortex", "State", "CortexShellState.cs"),
-                Path.Combine(RepoRoot, "Cortex", "Shell", "CortexShellModuleCapabilities.cs"),
                 Path.Combine(RepoRoot, "Cortex", "Shell", "ModuleRuntime.cs"),
                 Path.Combine(RepoRoot, "Cortex", "Shell", "ShellBootstrapper.cs"),
-                Path.Combine(RepoRoot, "Cortex", "Shell", "CortexShellBuiltInModuleContributions.cs"),
                 Path.Combine(RepoRoot, "Cortex", "Shell", "WorkbenchExtensionServices.cs"),
-                Path.Combine(RepoRoot, "Cortex", "WorkbenchPluginLoader.cs"),
-                Path.Combine(RepoRoot, "Cortex", "Modules", "FileExplorer", "FileExplorerModule.cs")
+                Path.Combine(RepoRoot, "Cortex", "WorkbenchPluginLoader.cs")
             }
             .Concat(Directory.GetFiles(Path.Combine(RepoRoot, "Cortex", "Modules", "Editor"), "*.cs", SearchOption.AllDirectories))
             .Concat(Directory.GetFiles(Path.Combine(RepoRoot, "Cortex", "Services", "Inspector", "Actions"), "*.cs", SearchOption.AllDirectories))

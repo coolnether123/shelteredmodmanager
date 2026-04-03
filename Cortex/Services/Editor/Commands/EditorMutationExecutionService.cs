@@ -17,7 +17,7 @@ namespace Cortex.Services.Editor.Commands
                 new EditorService(),
                 new EditorDocumentModeService(),
                 new EditorLogicalDocumentTargetResolutionService(),
-                new EditorClipboardService())
+                new MemoryClipboardService())
         {
         }
 
@@ -30,7 +30,7 @@ namespace Cortex.Services.Editor.Commands
             _editorService = editorService ?? new EditorService();
             _documentModeService = documentModeService ?? new EditorDocumentModeService();
             _targetResolutionService = targetResolutionService ?? new EditorLogicalDocumentTargetResolutionService();
-            _clipboardService = clipboardService ?? new EditorClipboardService();
+            _clipboardService = clipboardService ?? new MemoryClipboardService();
         }
 
         public bool TryExecuteClipboardCommand(string commandId, CortexShellState state, EditorCommandTarget target, out string statusMessage)

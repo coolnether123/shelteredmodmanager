@@ -6,7 +6,17 @@ namespace Cortex.Services.Editor.Commands
 {
     internal sealed class EditorCommandAvailabilityService
     {
-        private readonly EditorCommandExecutionStrategyService _strategyService = new EditorCommandExecutionStrategyService();
+        private readonly EditorCommandExecutionStrategyService _strategyService;
+
+        public EditorCommandAvailabilityService()
+            : this(new EditorCommandExecutionStrategyService())
+        {
+        }
+
+        public EditorCommandAvailabilityService(EditorCommandExecutionStrategyService strategyService)
+        {
+            _strategyService = strategyService ?? new EditorCommandExecutionStrategyService();
+        }
 
         public bool TryGetAvailability(string commandId, CortexShellState state, EditorCommandTarget target, out string disabledReason)
         {

@@ -27,7 +27,7 @@ Desktop-first direction for this phase:
 The current codebase still has a few runtime/shell boundary violations or transitional seams that must shrink over later refactor sections:
 
 - `CortexShellState` is still a catch-all state object. It mixes runtime-owned application state, shell-local interaction state, and Unity-facing layout geometry in one generic-looking type.
-- `Cortex` is still the active Unity IMGUI shell assembly. That is acceptable for current execution, but it means shell code still contains Unity drawing/event handling and should not be treated as a headless runtime layer.
+- `Cortex` still carries transitional shell/runtime seams such as generic shell state and shell-oriented registration flow, but active IMGUI module executors, layout/theme helpers, onboarding geometry, and system clipboard access now live in `Cortex.Shell.Unity.Imgui`.
 - `UnityWorkbenchRuntime` is host-owned, but its name still reads like the generic runtime instead of a Unity-hosted composition/runtime shell.
 - `IWorkbenchRuntimeUi` is still a transitional seam that bundles render pipeline, UI surface, and frame context together. It is currently a shell/backend seam, not a pure headless runtime contract.
 - Some shell-local layout/chrome behavior is still executed directly in IMGUI call sites even though the reusable policy is already moving into `Cortex.Rendering.RuntimeUi`.
@@ -45,7 +45,7 @@ Current section focus:
 - settings session/apply behavior and onboarding flow-step selection should be reusable services/models rather than IMGUI-only module logic
 - editor decisions and status presentation should move into headless services while the IMGUI editor module stays focused on drawing, scroll state, and direct Unity event handling
 - project workspace mapping/import flows, reference-browser selection and decompile coordination, and search-result shaping should live in headless services while the IMGUI modules stay focused on field widgets, scroll state, and click execution
-- IMGUI-only status-strip/module-render presenters should live in `Cortex.Shell.Unity.Imgui` instead of the generic `Cortex` assembly so the legacy shell ownership is obvious
+- IMGUI-only status-strip/module-render presenters, module executors and IMGUI layout/theme helpers should live in `Cortex.Shell.Unity.Imgui` instead of the generic `Cortex` assembly so the legacy shell ownership is obvious
 
 ## Target ownership boundaries for this phase
 
@@ -149,7 +149,7 @@ Current test coverage lives in:
 
 This guardrail pass does not itself:
 
-- move major shell/editor modules
+- fully finish the remaining shell-local state cleanup
 - redesign workbench visuals or interaction flow
 - build a generalized transport/protocol stack
 - replace IMGUI

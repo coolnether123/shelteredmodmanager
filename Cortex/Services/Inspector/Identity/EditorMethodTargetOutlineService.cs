@@ -10,7 +10,7 @@ namespace Cortex.Services.Inspector.Identity
     {
         private const int MaxHeaderSearchLines = 8;
 
-        private readonly EditorClassificationPresentationService _classificationPresentationService = new EditorClassificationPresentationService();
+        private readonly EditorClassificationService _classificationService = new EditorClassificationService();
         private string _cachedKey = string.Empty;
         private EditorMethodTargetOutline[] _cachedOutlines = new EditorMethodTargetOutline[0];
 
@@ -154,7 +154,7 @@ namespace Cortex.Services.Inspector.Identity
                     continue;
                 }
 
-                var resolvedClassification = _classificationPresentationService.ResolvePresentationClassification(
+                var resolvedClassification = _classificationService.ResolvePresentationClassification(
                     span.Classification,
                     span.SemanticTokenType);
                 if (!CanInspectSymbol(symbolText, resolvedClassification))
@@ -189,7 +189,7 @@ namespace Cortex.Services.Inspector.Identity
                 return false;
             }
 
-            var normalizedClassification = _classificationPresentationService.NormalizeClassification(classification);
+            var normalizedClassification = _classificationService.NormalizeClassification(classification);
             return !string.IsNullOrEmpty(normalizedClassification) &&
                 (normalizedClassification.IndexOf("method", StringComparison.OrdinalIgnoreCase) >= 0 ||
                  normalizedClassification.IndexOf("property", StringComparison.OrdinalIgnoreCase) >= 0 ||

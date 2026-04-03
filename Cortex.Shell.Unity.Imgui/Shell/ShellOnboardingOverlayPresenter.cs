@@ -71,11 +71,11 @@ namespace Cortex.Shell
         {
             var fullscreenRect = new Rect(0f, 0f, input.ViewportSize.Width, input.ViewportSize.Height);
             var modalRect = ToRect(ShellOverlayInteractionController.BuildOnboardingModalRect(ToRenderRect(fullscreenRect)));
-            var hasPromptAnchor = onboardingState != null && onboardingState.FinishPrompt.Anchor != Vector2.zero;
+            var hasPromptAnchor = onboardingState != null && HasAnchor(onboardingState.FinishPrompt.Anchor);
             var promptRect = ToRect(
                 ShellOverlayInteractionController.BuildOnboardingPromptRect(
                     ToRenderRect(modalRect),
-                    ToRenderPoint(onboardingState != null ? onboardingState.FinishPrompt.Anchor : Vector2.zero),
+                    onboardingState != null ? onboardingState.FinishPrompt.Anchor : RenderPoint.Zero,
                     hasPromptAnchor));
             var pointerPosition = input.HasCurrentEvent ? ToVector2(input.CurrentMousePosition) : Vector2.zero;
 
@@ -116,7 +116,7 @@ namespace Cortex.Shell
             else if (result.ActionKind == ShellOnboardingOverlayActionKind.ShowPrompt)
             {
                 onboardingState.FinishPrompt.IsVisible = true;
-                onboardingState.FinishPrompt.Anchor = ToVector2(result.PromptAnchor);
+                onboardingState.FinishPrompt.Anchor = result.PromptAnchor;
             }
 
             if (result.ShouldConsumeInput)
@@ -218,9 +218,9 @@ namespace Cortex.Shell
             return new Vector2(point.X, point.Y);
         }
 
-        private static RenderPoint ToRenderPoint(Vector2 point)
+        private static bool HasAnchor(RenderPoint point)
         {
-            return new RenderPoint(point.x, point.y);
+            return point.X != 0f || point.Y != 0f;
         }
 
         private static RenderRect ToRenderRect(Rect rect)

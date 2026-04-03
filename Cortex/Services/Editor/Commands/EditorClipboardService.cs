@@ -1,5 +1,3 @@
-using UnityEngine;
-
 namespace Cortex.Services.Editor.Commands
 {
     internal interface IClipboardService
@@ -8,16 +6,18 @@ namespace Cortex.Services.Editor.Commands
         void SetText(string text);
     }
 
-    internal sealed class EditorClipboardService : IClipboardService
+    internal sealed class MemoryClipboardService : IClipboardService
     {
+        private static string _text = string.Empty;
+
         public string GetText()
         {
-            return GUIUtility.systemCopyBuffer ?? string.Empty;
+            return _text ?? string.Empty;
         }
 
         public void SetText(string text)
         {
-            GUIUtility.systemCopyBuffer = text ?? string.Empty;
+            _text = text ?? string.Empty;
         }
     }
 }

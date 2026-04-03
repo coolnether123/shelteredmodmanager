@@ -1,8 +1,6 @@
 using System;
 using Cortex.Core.Models;
-using Cortex.Modules.Editor;
 using Cortex.Modules.Shared;
-using UnityEngine;
 
 namespace Cortex
 {

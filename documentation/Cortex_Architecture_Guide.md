@@ -60,8 +60,8 @@ Portable Cortex assemblies own:
 
 Portable Cortex assemblies do not own Harmony behavior, Harmony state, Harmony-specific contracts, or Sheltered-specific filesystem/package layouts.
 
-Shell IMGUI callers in `Cortex` still execute draw calls and Unity event consumption locally, but the backend-neutral shell geometry and interaction rules that are shared across current shell surfaces should live in `Cortex.Rendering.RuntimeUi` rather than stay buried inline in IMGUI branches.
-The supported Unity IMGUI path is now explicitly a legacy shell/host lane: draw-only presenters and IMGUI execution helpers belong in `Cortex.Shell.Unity.Imgui`, while project workspace orchestration, reference-browser selection/decompile decisions, search-result shaping, and editor presentation decisions stay headless in `Cortex` services.
+Shell IMGUI callers in `Cortex.Shell.Unity.Imgui` still execute draw calls and Unity event consumption locally, but the backend-neutral shell geometry and interaction rules that are shared across current shell surfaces should live in `Cortex.Rendering.RuntimeUi` rather than stay buried inline in IMGUI branches.
+The supported Unity IMGUI path is now explicitly a legacy shell/host lane: draw-only presenters, IMGUI execution helpers, module executors, and shell layout/theme helpers belong in `Cortex.Shell.Unity.Imgui`, while project workspace orchestration, reference-browser selection/decompile decisions, search-result shaping, and editor presentation decisions stay headless in `Cortex` services.
 
 ### Sheltered host layer
 

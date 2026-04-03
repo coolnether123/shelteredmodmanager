@@ -2,6 +2,7 @@ using System;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Modules.Shared;
+using Cortex.Rendering.Models;
 using UnityEngine;
 using Cortex.Services.Onboarding;
 
@@ -178,9 +179,9 @@ namespace Cortex.Modules.Onboarding
             switch (stepKind)
             {
                 case CortexOnboardingStepKind.Projects:
-                    return onboardingState.ModProjectScroll;
+                    return ToVector2(onboardingState.ModProjectScroll);
                 case CortexOnboardingStepKind.Theme:
-                    return onboardingState.ThemeScroll;
+                    return ToVector2(onboardingState.ThemeScroll);
                 default:
                     return Vector2.zero;
             }
@@ -196,12 +197,22 @@ namespace Cortex.Modules.Onboarding
             switch (stepKind)
             {
                 case CortexOnboardingStepKind.Projects:
-                    onboardingState.ModProjectScroll = value;
+                    onboardingState.ModProjectScroll = ToRenderPoint(value);
                     break;
                 case CortexOnboardingStepKind.Theme:
-                    onboardingState.ThemeScroll = value;
+                    onboardingState.ThemeScroll = ToRenderPoint(value);
                     break;
             }
+        }
+
+        private static Vector2 ToVector2(RenderPoint point)
+        {
+            return new Vector2(point.X, point.Y);
+        }
+
+        private static RenderPoint ToRenderPoint(Vector2 point)
+        {
+            return new RenderPoint(point.x, point.y);
         }
 
         private static void DrawProfileStep(CortexOnboardingState onboardingState, CortexOnboardingCatalog catalog, CortexOnboardingService onboardingService)
