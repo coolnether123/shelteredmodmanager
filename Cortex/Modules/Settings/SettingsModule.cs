@@ -162,21 +162,32 @@ namespace Cortex.Modules.Settings
 
                 if (GUILayout.Button("Reset", GUILayout.Width(100f), GUILayout.Height(24f)))
                 {
-                    state.Settings = new CortexSettings();
-                    if (themeState != null)
-                    {
-                        themeState.ThemeId = state.Settings.ThemeId;
-                    }
-
-                    _loaded = false;
-                    _contentScroll = Vector2.zero;
-                    _sessionState.PendingSectionJumpId = WorkspaceOverviewSectionId;
-                    EnsureLoaded(snapshot, themeState, state);
-                    state.StatusMessage = "Reset settings fields to defaults.";
+                    ResetToDefaults(snapshot, themeState, state);
                 }
 
                 GUILayout.EndHorizontal();
             }, GUILayout.Height(56f), GUILayout.ExpandWidth(true));
+        }
+
+        internal void ResetToDefaults(WorkbenchPresentationSnapshot snapshot, ThemeState themeState, CortexShellState state)
+        {
+            if (state == null)
+            {
+                return;
+            }
+
+            state.Settings = new CortexSettings();
+            if (themeState != null)
+            {
+                themeState.ThemeId = state.Settings.ThemeId;
+            }
+
+            _loaded = false;
+            _contentScroll = Vector2.zero;
+            EnsureLoaded(snapshot, themeState, state);
+            _sessionService.RequestSection(_sessionState, WorkspaceOverviewSectionId);
+            _sessionService.Persist(_sessionState, state.Settings, _navigationScroll.y, _contentScroll.y);
+            state.StatusMessage = "Reset settings fields to defaults.";
         }
 
         private void DrawSearchBar(SettingsDocumentModel document)
