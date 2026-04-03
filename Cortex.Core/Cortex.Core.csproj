@@ -54,14 +54,7 @@
     <Compile Include="Models\EditorKeybindingModels.cs" />
     <Compile Include="Models\EditorModels.cs" />
     <Compile Include="Models\SearchModels.cs" />
-    <Compile Include="Models\SemanticTokenClassification.cs" />
     <Compile Include="Models\SemanticModels.cs" />
-    <Compile Include="..\Shared\CompletionAugmentationPromptContract.cs">
-      <Link>Shared\CompletionAugmentationPromptContract.cs</Link>
-    </Compile>
-    <Compile Include="..\Cortex.LanguageService.Protocol\LanguageServiceProtocol.cs">
-      <Link>Protocol\LanguageServiceProtocol.cs</Link>
-    </Compile>
     <Compile Include="Models\ModuleWorkflowModels.cs" />
     <Compile Include="Models\NavigationModels.cs" />
     <Compile Include="Models\RuntimeLogEntry.cs" />
@@ -103,6 +96,11 @@
     <Compile Include="Services\WorkspaceLocator.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Cortex.Contracts\Cortex.Contracts.csproj">
+      <Project>{C458EE62-EED9-4B14-9EC3-910105D9BDFC}</Project>
+      <Name>Cortex.Contracts</Name>
+      <Private>False</Private>
+    </ProjectReference>
     <ProjectReference Include="..\GameModding.Shared\GameModding.Shared.csproj">
       <Project>{6AA53E5A-2A1B-4EE4-9B3E-B85E99A28C21}</Project>
       <Name>GameModding.Shared</Name>

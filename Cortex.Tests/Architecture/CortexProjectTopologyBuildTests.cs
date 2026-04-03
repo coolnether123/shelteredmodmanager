@@ -94,7 +94,7 @@ namespace Cortex.Tests.Architecture
         }
 
         [Fact]
-        public void DesktopSharedProjects_AreNet8Consumable_AndDoNotReferenceHostSpecificCortexProjects()
+        public void DesktopSharedProjects_AreMultiTargetedForRuntimeAndDesktopConsumption_AndDoNotReferenceHostSpecificCortexProjects()
         {
             var hostSpecificProjects = new HashSet<string>(HostSpecificProjectNames, StringComparer.Ordinal);
 
@@ -104,12 +104,36 @@ namespace Cortex.Tests.Architecture
                 var referencedProjects = LoadProjectReferenceNames(projectName);
                 var violations = referencedProjects.Where(hostSpecificProjects.Contains).ToArray();
 
-                Assert.Contains("<TargetFramework>netstandard2.0</TargetFramework>", projectText);
-                Assert.DoesNotContain("<TargetFrameworkVersion>v3.5</TargetFrameworkVersion>", projectText);
+                Assert.Contains("<TargetFrameworks>net35;net8.0</TargetFrameworks>", projectText);
+                Assert.DoesNotContain("<TargetFramework>netstandard2.0</TargetFramework>", projectText);
                 Assert.True(
                     violations.Length == 0,
                     projectName + " references host-specific Cortex projects: " + string.Join(", ", violations));
             }
+        }
+
+        [Fact]
+        public void WorkerFacingContracts_AreOwnedByCortexContracts_InsteadOfLinkedSourceCopies()
+        {
+            var contractsSources = GetProjectSourceFiles("Cortex.Contracts");
+            var coreProjectText = File.ReadAllText(GetProjectPath("Cortex.Core"));
+            var workerProjectText = File.ReadAllText(GetProjectPath("Cortex.Roslyn.Worker"));
+            var tabbyServerProjectText = File.ReadAllText(GetProjectPath("Cortex.Tabby.Server"));
+
+            Assert.Contains(Path.Combine(RepoRoot, "Cortex.Contracts", "LanguageService", "LanguageServiceProtocol.cs"), contractsSources);
+            Assert.Contains(Path.Combine(RepoRoot, "Cortex.Contracts", "Completion", "CompletionAugmentationPromptContract.cs"), contractsSources);
+            Assert.Contains(Path.Combine(RepoRoot, "Cortex.Contracts", "Text", "SemanticTokenClassification.cs"), contractsSources);
+
+            Assert.Contains(@"..\Cortex.Contracts\Cortex.Contracts.csproj", coreProjectText);
+            Assert.Contains(@"..\Cortex.Contracts\Cortex.Contracts.csproj", workerProjectText);
+            Assert.Contains(@"..\Cortex.Contracts\Cortex.Contracts.csproj", tabbyServerProjectText);
+
+            Assert.DoesNotContain(@"..\Cortex.LanguageService.Protocol\LanguageServiceProtocol.cs", coreProjectText);
+            Assert.DoesNotContain(@"..\Shared\CompletionAugmentationPromptContract.cs", coreProjectText);
+            Assert.DoesNotContain(@"Models\SemanticTokenClassification.cs", coreProjectText);
+            Assert.DoesNotContain(@"..\Cortex.Core\Models\SemanticTokenClassification.cs", workerProjectText);
+            Assert.DoesNotContain(@"..\Cortex.LanguageService.Protocol\LanguageServiceProtocol.cs", workerProjectText);
+            Assert.DoesNotContain(@"..\Shared\CompletionAugmentationPromptContract.cs", tabbyServerProjectText);
         }
 
         [Fact]
@@ -521,6 +545,9 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("desktop-first architecture", reportText);
             Assert.Contains("Cortex.Contracts", reportText);
             Assert.Contains("net35", reportText);
+            Assert.Contains("LanguageServiceProtocol", reportText);
+            Assert.Contains("CompletionAugmentationPromptContract", reportText);
+            Assert.Contains("SemanticTokenClassification", reportText);
             Assert.Contains("Avalonia", reportText);
             Assert.Contains("Dock", reportText);
             Assert.Contains("Serilog", reportText);

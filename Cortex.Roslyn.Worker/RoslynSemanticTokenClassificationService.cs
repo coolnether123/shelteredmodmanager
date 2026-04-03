@@ -1,4 +1,4 @@
-using Cortex.Core.Models;
+using Cortex.Contracts.Text;
 using Cortex.LanguageService.Protocol;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;

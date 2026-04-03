@@ -918,7 +918,7 @@ namespace Cortex.Roslyn.Worker
             foreach (var span in spans)
             {
                 ISymbol resolvedSymbol = null;
-                if (Cortex.Core.Models.SemanticTokenClassification.IsGeneric(span.ClassificationType))
+                if (Cortex.Contracts.Text.SemanticTokenClassification.IsGeneric(span.ClassificationType))
                 {
                     genericSymbolCache.TryGetValue(span.TextSpan.Start, out resolvedSymbol);
                     if (!genericSymbolCache.ContainsKey(span.TextSpan.Start))

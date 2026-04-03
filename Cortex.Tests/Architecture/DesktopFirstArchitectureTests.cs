@@ -28,19 +28,37 @@ namespace Cortex.Tests.Architecture
         public void DesktopSharedProject_RemainsHostNeutral_AndFreeOfUnityOrImguiTokens()
         {
             var projectText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Contracts", "Cortex.Contracts.csproj");
-            var sourceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Contracts", "AssemblyMarker.cs");
+            var markerText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Contracts", "AssemblyMarker.cs");
+            var protocolText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Contracts", "LanguageService", "LanguageServiceProtocol.cs");
+            var completionText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Contracts", "Completion", "CompletionAugmentationPromptContract.cs");
+            var semanticText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Contracts", "Text", "SemanticTokenClassification.cs");
             var propsText = ArchitectureTestEnvironment.ReadRepoFile("Directory.Build.props");
             var referencedProjects = ArchitectureTestEnvironment.LoadProjectReferenceNames("Cortex.Contracts");
 
-            Assert.Contains("<TargetFramework>netstandard2.0</TargetFramework>", projectText);
-            Assert.DoesNotContain("<TargetFrameworkVersion>v3.5</TargetFrameworkVersion>", projectText);
+            Assert.Contains("<TargetFrameworks>net35;net8.0</TargetFrameworks>", projectText);
+            Assert.DoesNotContain("<TargetFramework>netstandard2.0</TargetFramework>", projectText);
             Assert.Contains("'$(MSBuildProjectName)' == 'Cortex.Contracts'", propsText);
             Assert.Contains("<CortexProjectRole>DesktopShared</CortexProjectRole>", propsText);
             Assert.Empty(referencedProjects.Where(name => HostSpecificProjectNames.Contains(name, StringComparer.Ordinal)));
-            Assert.DoesNotContain("UnityEngine", sourceText);
-            Assert.DoesNotContain("Imgui", sourceText);
-            Assert.DoesNotContain("Sheltered", sourceText);
-            Assert.DoesNotContain("ModAPI", sourceText);
+            Assert.Contains("namespace Cortex.LanguageService.Protocol", protocolText);
+            Assert.Contains("namespace Cortex.Contracts.Completion", completionText);
+            Assert.Contains("namespace Cortex.Contracts.Text", semanticText);
+            Assert.DoesNotContain("UnityEngine", markerText);
+            Assert.DoesNotContain("UnityEngine", protocolText);
+            Assert.DoesNotContain("UnityEngine", completionText);
+            Assert.DoesNotContain("UnityEngine", semanticText);
+            Assert.DoesNotContain("Imgui", markerText);
+            Assert.DoesNotContain("Imgui", protocolText);
+            Assert.DoesNotContain("Imgui", completionText);
+            Assert.DoesNotContain("Imgui", semanticText);
+            Assert.DoesNotContain("Sheltered", markerText);
+            Assert.DoesNotContain("Sheltered", protocolText);
+            Assert.DoesNotContain("Sheltered", completionText);
+            Assert.DoesNotContain("Sheltered", semanticText);
+            Assert.DoesNotContain("ModAPI", markerText);
+            Assert.DoesNotContain("ModAPI", protocolText);
+            Assert.DoesNotContain("ModAPI", completionText);
+            Assert.DoesNotContain("ModAPI", semanticText);
         }
 
         [Fact]

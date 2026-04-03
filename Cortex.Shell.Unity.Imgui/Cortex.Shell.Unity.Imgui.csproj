@@ -49,6 +49,11 @@
     <Compile Include="Shell\ShellOverlayCoordinator.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Cortex.Contracts\Cortex.Contracts.csproj">
+      <Project>{C458EE62-EED9-4B14-9EC3-910105D9BDFC}</Project>
+      <Name>Cortex.Contracts</Name>
+      <Private>False</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Cortex\Cortex.csproj">
       <Project>{D982DFB0-FEA1-4DC8-A001-35F5181F212A}</Project>
       <Name>Cortex</Name>

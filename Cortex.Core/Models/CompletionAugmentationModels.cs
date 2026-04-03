@@ -1,5 +1,5 @@
 using Cortex.LanguageService.Protocol;
-using Cortex.Shared;
+using Cortex.Contracts.Completion;
 
 namespace Cortex.Core.Models
 {

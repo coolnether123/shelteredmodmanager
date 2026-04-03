@@ -23,16 +23,21 @@ The intended desktop host stack for this phase is:
 
 The current portability blocker is explicit: most reusable Cortex runtime assemblies are still `net35`, while the first external worker/tool projects are already `net8`. Any contract, protocol, or model that a future desktop host and current workers both need must not remain trapped only in the `net35` projects.
 
-The first dedicated `.NET 8`-consumable lane is now:
+The first dedicated shared lane that crosses the `net35` boundary is now:
 
 - `Cortex.Contracts`
 
-Prompt 1 keeps that lane intentionally thin. Later prompts move proven, UI-neutral contracts and models there as they are extracted from `net35`-only projects.
+It is multi-targeted for both `net35` and `net8.0` so the same sources can serve the current runtime path, external workers, and a future desktop host without linked-source duplication.
 
-The categories most likely to move into that lane are:
+The first extracted contracts now living in that lane are:
 
-- worker and language-service protocol contracts currently shared through linked source
-- UI-neutral runtime, presentation, and plugin contracts that a desktop host must consume directly
+- `LanguageServiceProtocol` worker request/response contracts
+- `CompletionAugmentationPromptContract`
+- `SemanticTokenClassification` and `SemanticTokenClassificationNames`
+
+The categories most likely to move into that lane next are:
+
+- additional UI-neutral runtime, presentation, and plugin contracts that a desktop host must consume directly
 - stable workbench/document/editor/search models that should be shared between legacy runtime code and future desktop or worker processes
 
 ## 1. Desktop-shareable Cortex
@@ -169,20 +174,20 @@ Desktop-shareable project reference inventory:
 Current portable Cortex project reference inventory:
 
 - `Cortex.CompletionProviders -> Cortex.Core, Cortex.Tabby, Cortex.Ollama, Cortex.OpenRouter`
-- `Cortex.Core -> none`
-- `Cortex.Ollama -> Cortex.Core`
-- `Cortex.OpenRouter -> Cortex.Core`
-- `Cortex.Plugins.Abstractions -> Cortex.Core, Cortex.Presentation`
+- `Cortex.Core -> Cortex.Contracts`
+- `Cortex.Ollama -> Cortex.Contracts, Cortex.Core`
+- `Cortex.OpenRouter -> Cortex.Contracts, Cortex.Core`
+- `Cortex.Plugins.Abstractions -> Cortex.Contracts, Cortex.Core, Cortex.Presentation`
 - `Cortex.Presentation -> Cortex.Core, Cortex.Rendering`
 - `Cortex.Rendering -> Cortex.Core`
 - `Cortex.Rendering.RuntimeUi -> Cortex.Plugins.Abstractions, Cortex.Rendering`
-- `Cortex.Tabby -> Cortex.Core`
+- `Cortex.Tabby -> Cortex.Contracts, Cortex.Core`
 
 Current tooling project reference inventory:
 
 - `Cortex.PathPicker.Host -> none`
-- `Cortex.Roslyn.Worker -> none`
-- `Cortex.Tabby.Server -> none`
+- `Cortex.Roslyn.Worker -> Cortex.Contracts`
+- `Cortex.Tabby.Server -> Cortex.Contracts`
 
 Runtime UI boundary notes:
 
@@ -270,7 +275,7 @@ Do not complete these steps by widening `Cortex.Core`, `Cortex.Presentation`, or
 
 Remaining portability debt is intentionally short:
 
-- `Cortex.Contracts` is still mostly a placeholder lane; the real extractions have not happened yet.
+- more shared runtime, presentation, and plugin contracts still need to move into `Cortex.Contracts` or another desktop-consumable lane as later prompts justify them.
 - `Cortex` is still a Unity-hosted shell assembly rather than a host-neutral shell runtime assembly.
 - Shell/editor IMGUI call sites still execute raw drawing and event consumption locally even though their shared policy is increasingly portable.
 - `CortexWindowChromeController` still owns IMGUI-time splitter drag and resize execution.

@@ -1,4 +1,4 @@
-using Cortex.Core.Models;
+using Cortex.Contracts.Text;
 
 namespace Cortex.Services.Editor.Presentation
 {

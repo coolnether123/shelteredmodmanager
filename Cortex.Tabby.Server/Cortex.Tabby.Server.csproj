@@ -9,8 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\Shared\CompletionAugmentationPromptContract.cs">
-      <Link>Shared\CompletionAugmentationPromptContract.cs</Link>
-    </Compile>
+    <ProjectReference Include="..\Cortex.Contracts\Cortex.Contracts.csproj" />
   </ItemGroup>
 </Project>
