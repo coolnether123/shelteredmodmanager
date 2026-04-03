@@ -219,7 +219,11 @@ namespace Cortex.Modules.Editor
                         hasMouse,
                         ToRenderPoint(localMouse));
                 }
-                HandlePointerInput(session, state, hoverSurfaceId, hoveredToken, hoverTarget, hoveredMethodTarget, hoveredFoldRegion, editorHoverActive, current, localMouse, rect.size, commandRegistry, contributionRegistry, extensionRuntime, overlayPointerState);
+                var shouldAbortDraw = HandlePointerInput(session, state, hoverSurfaceId, hoveredToken, hoverTarget, hoveredMethodTarget, hoveredFoldRegion, editorHoverActive, current, localMouse, rect.size, commandRegistry, contributionRegistry, extensionRuntime, overlayPointerState);
+                if (shouldAbortDraw || _layout == null)
+                {
+                    return scroll;
+                }
 
                 GUI.BeginGroup(rect);
                 try
@@ -718,7 +722,7 @@ namespace Cortex.Modules.Editor
             }
         }
 
-        private void HandlePointerInput(
+        private bool HandlePointerInput(
             DocumentSession session,
             CortexShellState state,
             string hoverSurfaceId,
@@ -737,7 +741,7 @@ namespace Cortex.Modules.Editor
         {
             if (current == null)
             {
-                return;
+                return false;
             }
 
             _overlayInteractionService.TracePointerRouting(
@@ -751,7 +755,7 @@ namespace Cortex.Modules.Editor
 
             if (_overlayInteractionService.ShouldBypassSurfaceInput(current, overlayPointerState))
             {
-                return;
+                return false;
             }
 
             if (_overlayInteractionService.ShouldCloseMethodInspectorOnPointerDown(current, overlayPointerState, state))
@@ -761,7 +765,7 @@ namespace Cortex.Modules.Editor
 
             if (!hasMouse || current.type != EventType.MouseDown)
             {
-                return;
+                return false;
             }
 
             if (current.button == 0 && extensionRuntime != null)
@@ -780,15 +784,14 @@ namespace Cortex.Modules.Editor
                         current.Use();
                     }
 
-                    return;
+                    return false;
                 }
             }
 
-            if (current.button == 0 && hoveredFoldRegion != null)
+            if (TryHandleFoldToggle(session, hoveredFoldRegion, current.button))
             {
-                ToggleFold(session, hoveredFoldRegion);
                 current.Use();
-                return;
+                return true;
             }
 
             if (hoveredToken != null)
@@ -800,7 +803,7 @@ namespace Cortex.Modules.Editor
             {
                 OpenContextMenu(session, state, hoveredToken, localMouse, commandRegistry, contributionRegistry);
                 current.Use();
-                return;
+                return false;
             }
 
             if (current.button == 0 &&
@@ -818,13 +821,13 @@ namespace Cortex.Modules.Editor
                 if (opened)
                 {
                     current.Use();
-                    return;
+                    return false;
                 }
             }
 
             if (current.button != 0 || hoveredToken == null)
             {
-                return;
+                return false;
             }
 
             PublishSelectedTokenContext(session, state, hoveredToken);
@@ -844,11 +847,12 @@ namespace Cortex.Modules.Editor
                     _methodInspectorService.TryOpen(state, invocation, hoveredToken.Classification))
                 {
                     current.Use();
-                    return;
+                    return false;
                 }
             }
 
             current.Use();
+            return false;
         }
 
         private void PreHandleContextMenuInput(Event current, Vector2 localMouse)
@@ -1779,6 +1783,17 @@ namespace Cortex.Modules.Editor
                 _popupMenuRenderer.Reset();
             }
             _popupMenuItems.Clear();
+        }
+
+        private bool TryHandleFoldToggle(DocumentSession session, FoldRegion hoveredFoldRegion, int mouseButton)
+        {
+            if (mouseButton != 0 || hoveredFoldRegion == null)
+            {
+                return false;
+            }
+
+            ToggleFold(session, hoveredFoldRegion);
+            return true;
         }
 
         private CodeViewToken FindTokenAt(Vector2 contentMouse, float gutterWidth)
