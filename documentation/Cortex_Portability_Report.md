@@ -11,7 +11,44 @@ Use it when:
 - adding a future host without copying Sheltered assumptions into reusable assemblies
 - wiring a new renderer or host composition without reverse-engineering IMGUI (`documentation/Cortex_Renderer_Host_Extensibility_Guide.md`)
 
-## 1. Portable Cortex
+## 0. Desktop-first direction and the net35 boundary
+
+Cortex is being refactored toward a desktop-first architecture. The primary future client for this plan is a new `.NET 8` desktop host, while the Unity IMGUI path remains a supported legacy shell/backend.
+
+The intended desktop host stack for this phase is:
+
+- Avalonia for host rendering
+- Dock for workbench and docking structure
+- Serilog for structured desktop and worker logging
+
+The current portability blocker is explicit: most reusable Cortex runtime assemblies are still `net35`, while the first external worker/tool projects are already `net8`. Any contract, protocol, or model that a future desktop host and current workers both need must not remain trapped only in the `net35` projects.
+
+The first dedicated `.NET 8`-consumable lane is now:
+
+- `Cortex.Contracts`
+
+Prompt 1 keeps that lane intentionally thin. Later prompts move proven, UI-neutral contracts and models there as they are extracted from `net35`-only projects.
+
+The categories most likely to move into that lane are:
+
+- worker and language-service protocol contracts currently shared through linked source
+- UI-neutral runtime, presentation, and plugin contracts that a desktop host must consume directly
+- stable workbench/document/editor/search models that should be shared between legacy runtime code and future desktop or worker processes
+
+## 1. Desktop-shareable Cortex
+
+Desktop-shareable Cortex currently means:
+
+- `Cortex.Contracts`
+
+Rules for this lane:
+
+- it must stay host-neutral
+- it must stay consumable from `.NET 8`
+- it must not become another `net35` trap
+- it is the preferred home for extracted shared contracts/models once they are genuinely cross-host or worker-facing
+
+## 2. Portable Cortex
 
 Portable Cortex projects:
 
@@ -44,7 +81,7 @@ Portable Cortex must not own:
 - bundled plugin root defaults invented from generic paths
 - product-shaped output paths
 
-## 2. Host-Specific Cortex
+## 3. Host-Specific Cortex
 
 Sheltered host projects:
 
@@ -70,7 +107,13 @@ The central Sheltered path/config authority is:
 
 If a future host needs a different game/layout, it should provide its own host path/layout model in its own Cortex host project. Do not generalize a second host by widening `ShelteredHostPathLayout`.
 
-## 3. Plugin-Specific Cortex
+The current in-process host path is explicitly legacy:
+
+- Unity/IMGUI remains supported
+- IMGUI is a concrete backend/executor, not the architectural center of Cortex
+- host-specific projects should not be widened just to satisfy the future desktop host
+
+## 4. Plugin-Specific Cortex
 
 Plugin-specific Cortex currently means:
 
@@ -87,7 +130,7 @@ Plugin rules:
 Bundled first-party plugins and third-party plugins follow the same discovery model. Packaging location is host-controlled, not hardcoded in plugin code.
 `Cortex.Plugin.Harmony` stays in this plugin role even when the Sheltered bundle chooses to ship it.
 
-## 4. External-Tool Cortex
+## 5. External-Tool Cortex
 
 External-tool projects:
 
@@ -98,6 +141,7 @@ External-tool projects:
 External-tool rules:
 
 - they are not in-process host runtime assemblies
+- they remain out-of-process even while Cortex moves toward a desktop-first host
 - they package through explicit tool lanes
 - host runtime code resolves them from bundled tool roots
 - portable callers that launch bundled tools must receive host-owned paths through runtime context instead of probing package-relative layouts
@@ -105,16 +149,22 @@ External-tool rules:
 
 Current resolution behavior preserves legacy fallback paths only for compatibility, but the authoritative package lane is the tool lane.
 
-## 5. Dependency Rules
+## 6. Dependency Rules
 
 Permanent dependency rules:
 
+- desktop-shareable Cortex projects may reference only other desktop-shareable or portable Cortex projects
 - portable Cortex projects may reference only portable Cortex projects
 - plugin-specific Cortex projects may reference only portable Cortex projects
-- tooling projects may reference only portable Cortex projects
+- tooling projects may reference only portable Cortex projects or desktop-shareable projects
 - host-specific Cortex projects may reference portable Cortex projects
 - portable Cortex projects must not reference host-specific Cortex projects
+- desktop-shareable Cortex projects must not reference host-specific Cortex projects
 - generic/plugin discovery code must not derive roots from runtime content roots or implicit `Plugins` children
+
+Desktop-shareable project reference inventory:
+
+- `Cortex.Contracts -> none`
 
 Current portable Cortex project reference inventory:
 
@@ -144,7 +194,7 @@ Runtime UI boundary notes:
 - the active module `IWorkbenchUiSurface` is host-supplied. The current concrete implementation is `Cortex.Host.Sheltered.Runtime.ShelteredWorkbenchUiSurface`.
 - `Cortex.Renderers.Imgui` should now be treated as a concrete executor/measurement adapter over those portable plans, not the owner of popup/panel/tooltip runtime policy.
 
-## 6. Packaging Model
+## 7. Packaging Model
 
 Packaging is profile-driven through `CortexBundleProfile`.
 
@@ -168,7 +218,10 @@ Outputs:
 
 `FutureHostReady` is intentionally a packaging profile, not a second runnable host.
 
-## 7. Unity/Game Build References
+Portable Cortex binaries are copied once per profile into the profile's runtime assembly lane. Tool and plugin outputs are copied into their own lanes instead of being emitted as runtime assemblies.
+The centralized bundle target also removes stale plugin/tool files from runtime lanes before copying, so old `decompiler`-style placements do not survive a later packaging run.
+
+## 8. Unity/Game Build References
 
 Unity-hosted Cortex projects do not commit machine-local game install paths in their `.csproj` files.
 
@@ -181,7 +234,7 @@ Shared build input now comes from:
 
 That contract is applied centrally in `Directory.Build.props` and validated in `Directory.Build.targets`.
 
-## 8. Plugin Discovery Rule
+## 9. Plugin Discovery Rule
 
 Generic Cortex plugin discovery is allowed to use only:
 
@@ -196,7 +249,7 @@ Generic Cortex plugin discovery must not use:
 - implicit `Plugins` subfolders
 - product-shaped fallback paths
 
-## 9. Future Host Completion Steps
+## 10. Future Host Completion Steps
 
 To add a real host behind `FutureHostReady`, complete these steps in new Cortex-prefixed host projects:
 
@@ -207,26 +260,28 @@ To add a real host behind `FutureHostReady`, complete these steps in new Cortex-
 5. Decide which bundled plugins belong in that host and enable their package lane for the new profile.
 6. Decide which external tools are required and package them under the new profile's tool lane.
 7. Update centralized bundle props/targets with the new profile's host/plugin/tool routing.
-8. Add architecture tests proving portable/tooling projects still do not reference the new host projects.
+8. Add architecture tests proving portable/tooling/desktop-shareable projects still do not reference the new host projects.
 9. Add grep-style tests proving host-specific strings live only in the new host projects.
 10. Add bundle verification showing runtime, plugin, and tool lanes are separated for the new profile.
 
 Do not complete these steps by widening `Cortex.Core`, `Cortex.Presentation`, or `Cortex.Plugins.Abstractions` with host-specific fallbacks.
 
-## 10. Remaining Debt
+## 11. Remaining Debt
 
 Remaining portability debt is intentionally short:
 
+- `Cortex.Contracts` is still mostly a placeholder lane; the real extractions have not happened yet.
 - `Cortex` is still a Unity-hosted shell assembly rather than a host-neutral shell runtime assembly.
 - Shell/editor IMGUI call sites still execute raw drawing and event consumption locally even though their shared policy is increasingly portable.
 - `CortexWindowChromeController` still owns IMGUI-time splitter drag and resize execution.
 - End-to-end non-Cortex product packaging outside Cortex still assumes `Dist/SMM`.
 - `FutureHostReady` has package lanes but no second host adapter yet.
 
-## 11. Hard Boundaries
+## 12. Hard Boundaries
 
 When modifying Cortex:
 
+- put desktop-shareable contracts and models in `Cortex.Contracts` or another `.NET 8`-consumable shared lane once they need to cross the `net35` boundary
 - put reusable logic in portable Cortex only if it does not encode host identity
 - put host identity, host paths, host config readers, and host bundle assumptions in host projects only
 - put feature behavior in plugins, not in the generic shell

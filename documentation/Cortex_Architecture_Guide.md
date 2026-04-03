@@ -4,26 +4,38 @@ This document describes the permanent Cortex architecture in the current codebas
 
 For the current refactor-phase guardrails around runtime, shell, bridge/host, and IMGUI backend ownership, see `documentation/Cortex_Runtime_Shell_Separation_Guardrails.md`.
 
+The current direction is desktop-first. Cortex is being prepared for a future `.NET 8` desktop host while the existing Unity IMGUI path remains a supported legacy host/shell path. This prompt does not add the desktop host yet, but it does make the desktop-facing lanes explicit in the repo structure so later prompts can extract real contracts and models into them deliberately.
+
 Portable Cortex code provides typed extension seams, runtime capabilities, state ownership, and workbench/editor composition. Host-bound behavior is isolated in Sheltered-specific host projects. Feature-specific behavior belongs in plugins such as the extracted Harmony module.
 
 For the final portability boundary map, bundle profile intent, and future-host completion checklist, see `documentation/Cortex_Portability_Report.md`.
 
 ## 0. Solution topology
 
-The Cortex solution is intentionally split into three roles:
+The Cortex solution is intentionally split into explicit lanes:
 
+- desktop-shareable contracts/models: `Cortex.Contracts`
 - portable core/libraries: `Cortex.Core`, `Cortex.Presentation`, `Cortex.Rendering`, `Cortex.Rendering.RuntimeUi`, `Cortex.Plugins.Abstractions`, `Cortex.CompletionProviders`, `Cortex.Tabby`, `Cortex.Ollama`, `Cortex.OpenRouter`
-- host/platform modules and concrete adapters: `Cortex`, `Cortex.Renderers.Imgui`, `Cortex.Host.Unity`, `Cortex.Host.Sheltered`, `Cortex.Platform.ModAPI`
+- legacy Unity IMGUI host path: `Cortex`, `Cortex.Shell.Unity.Imgui`, `Cortex.Renderers.Imgui`, `Cortex.Host.Unity`, `Cortex.Host.Sheltered`, `Cortex.Platform.ModAPI`
 - plugin-specific feature modules: `Cortex.Plugin.Harmony`
 - external tooling: `Cortex.Roslyn.Worker`, `Cortex.Tabby.Server`, `Cortex.PathPicker.Host`
+- future desktop host lane: reserved in the solution under `Desktop Host` until the shared runtime/contracts work is ready
 
 Portable projects must not reference host-specific Cortex projects.
+Desktop-shareable projects must also stay host-neutral and must remain consumable from `.NET 8`.
+
+The intended desktop host stack for this phase is:
+
+- Avalonia for host rendering
+- Dock for workbench and docking structure
+- Serilog for structured desktop/worker logging
 
 Product-shaped bundle layouts are no longer declared inside reusable project files. Neutral project outputs now come from shared Cortex build props/targets, and bundle layouts are selected through centralized build profiles.
 
 Unity-hosted Cortex project files also no longer commit a machine-local Sheltered `UnityEngine.dll` path. That reference is supplied through the shared build contract in `Directory.Build.props` and `Directory.Build.targets`.
 
 Reusable settings and environment contracts are host-neutral. Portable Cortex code works with `WorkspaceRootPath`, `RuntimeContentRootPath`, and `ReferenceAssemblyRootPath`; only host adapters provide concrete host-specific values for those paths.
+The remaining hard boundary is `net35`: most portable runtime assemblies are still `.NET Framework 3.5`, so contracts/models that a future desktop host, workers, or optional bridges must consume cannot stay trapped there indefinitely. `Cortex.Contracts` exists specifically to give those extractions a real `.NET 8`-consumable home before the Avalonia host is introduced.
 
 ## 1. Core roles
 
