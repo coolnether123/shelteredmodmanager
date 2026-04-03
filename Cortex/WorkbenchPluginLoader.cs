@@ -13,7 +13,6 @@ namespace Cortex
     internal sealed class WorkbenchPluginLoader
     {
         private const string ManifestFileName = "cortex.plugin.json";
-        private readonly HashSet<string> _loadedAssemblyPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public IList<WorkbenchPluginLoadResult> LoadPlugins(
             CortexSettings settings,
@@ -25,10 +24,11 @@ namespace Cortex
             IWorkbenchRuntimeAccess runtimeAccess)
         {
             var results = new List<WorkbenchPluginLoadResult>();
+            var loadedAssemblyPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var descriptors = DiscoverPluginDescriptors(settings, hostEnvironment);
             for (var i = 0; i < descriptors.Count; i++)
             {
-                LoadDescriptor(descriptors[i], commandRegistry, contributionRegistry, moduleRegistry, extensionRegistry, runtimeAccess, results);
+                LoadDescriptor(descriptors[i], commandRegistry, contributionRegistry, moduleRegistry, extensionRegistry, runtimeAccess, loadedAssemblyPaths, results);
             }
 
             return results;
@@ -212,6 +212,7 @@ namespace Cortex
             IWorkbenchModuleRegistry moduleRegistry,
             IWorkbenchExtensionRegistry extensionRegistry,
             IWorkbenchRuntimeAccess runtimeAccess,
+            HashSet<string> loadedAssemblyPaths,
             IList<WorkbenchPluginLoadResult> results)
         {
             if (descriptor == null || string.IsNullOrEmpty(descriptor.AssemblyPath))
@@ -219,7 +220,7 @@ namespace Cortex
                 return;
             }
 
-            if (_loadedAssemblyPaths.Contains(descriptor.AssemblyPath))
+            if (loadedAssemblyPaths != null && loadedAssemblyPaths.Contains(descriptor.AssemblyPath))
             {
                 results.Add(new WorkbenchPluginLoadResult
                 {
@@ -282,7 +283,10 @@ namespace Cortex
                     });
                 }
 
-                _loadedAssemblyPaths.Add(descriptor.AssemblyPath);
+                if (loadedAssemblyPaths != null)
+                {
+                    loadedAssemblyPaths.Add(descriptor.AssemblyPath);
+                }
                 if (!loadedAny)
                 {
                     results.Add(new WorkbenchPluginLoadResult

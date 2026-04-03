@@ -128,8 +128,10 @@ namespace Cortex.Tests.Architecture
         public void OnboardingBoundary_KeepsCoordinatorHeadless_AndMovesOverlayDrawingToShellPresenter()
         {
             var coordinatorText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Onboarding", "CortexOnboardingCoordinator.cs");
+            var flowServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Onboarding", "CortexOnboardingFlowService.cs");
             var shellOverlayText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Shell.Unity.Imgui", "Shell", "ShellOverlayCoordinator.cs");
             var shellPresenterText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Shell.Unity.Imgui", "Shell", "ShellOnboardingOverlayPresenter.cs");
+            var onboardingModuleText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Modules", "Onboarding", "OnboardingModule.cs");
 
             Assert.DoesNotContain("using UnityEngine;", coordinatorText);
             Assert.DoesNotContain("using Cortex.Modules.Onboarding;", coordinatorText);
@@ -138,6 +140,10 @@ namespace Cortex.Tests.Architecture
             Assert.DoesNotContain("OnboardingModule", coordinatorText);
             Assert.Contains("BuildCatalog(IContributionRegistry contributionRegistry)", coordinatorText);
             Assert.Contains("CortexOnboardingService InteractionService", coordinatorText);
+            Assert.Contains("class CortexOnboardingFlowService", flowServiceText);
+            Assert.DoesNotContain("using UnityEngine;", flowServiceText);
+            Assert.Contains("CortexOnboardingFlowService", onboardingModuleText);
+            Assert.DoesNotContain("BuildSteps(", onboardingModuleText);
 
             Assert.Contains("ShellOnboardingOverlayPresenter", shellOverlayText);
             Assert.Contains("OnboardingModule", shellPresenterText);
@@ -150,19 +156,25 @@ namespace Cortex.Tests.Architecture
         public void SettingsAndEditorBoundaries_MoveHeadlessBehaviorIntoServices()
         {
             var settingsModuleText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Modules", "Settings", "SettingsModule.cs");
+            var settingsApplicationServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Settings", "SettingsApplicationService.cs");
             var settingsDraftServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Settings", "SettingsDraftService.cs");
             var settingsCollectionServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Settings", "SettingsContributionCollectionService.cs");
+            var settingsSessionServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Settings", "SettingsSessionService.cs");
             var editorModuleText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Modules", "Editor", "EditorModule.cs");
             var editorPresentationServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Services", "Editor", "Presentation", "EditorPresentationService.cs");
 
             Assert.Contains("SettingsDraftService", settingsModuleText);
+            Assert.Contains("SettingsApplicationService", settingsModuleText);
             Assert.Contains("SettingsContributionCollectionService", settingsModuleText);
+            Assert.Contains("SettingsSessionService", settingsModuleText);
             Assert.Contains("_documentBuilder.BuildDocument(snapshot)", settingsModuleText);
             Assert.DoesNotContain("private SettingsDocument BuildDocument(", settingsModuleText);
-            Assert.DoesNotContain("private static FieldInfo GetSettingField(", settingsModuleText);
+            Assert.DoesNotContain("private void Apply(", settingsModuleText);
             Assert.DoesNotContain("private SettingValidationResult BuildDefaultValidationResult(", settingsModuleText);
+            Assert.Contains("class SettingsApplicationService", settingsApplicationServiceText);
             Assert.Contains("class SettingsDraftService", settingsDraftServiceText);
             Assert.Contains("class SettingsContributionCollectionService", settingsCollectionServiceText);
+            Assert.Contains("class SettingsSessionService", settingsSessionServiceText);
 
             Assert.Contains("EditorPresentationService", editorModuleText);
             Assert.Contains("_presentationService.BuildStatusBarPresentation(state)", editorModuleText);
@@ -170,6 +182,25 @@ namespace Cortex.Tests.Architecture
             Assert.DoesNotContain("private static string BuildLanguageRuntimeLabel(", editorModuleText);
             Assert.DoesNotContain("private static string BuildCompletionAugmentationLabel(", editorModuleText);
             Assert.Contains("class EditorPresentationService", editorPresentationServiceText);
+        }
+
+        [Fact]
+        public void RuntimeCompositionBoundary_MovesHeadlessStartupOutOfShellBootstrapper()
+        {
+            var shellBootstrapperText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Shell", "ShellBootstrapper.cs");
+            var runtimeCompositionText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Runtime", "CortexRuntimeCompositionService.cs");
+
+            Assert.Contains("CortexRuntimeCompositionService", shellBootstrapperText);
+            Assert.Contains("ApplyShellWindowSettings", shellBootstrapperText);
+            Assert.DoesNotContain("new JsonCortexSettingsStore", shellBootstrapperText);
+            Assert.DoesNotContain("new ProjectCatalog", shellBootstrapperText);
+
+            Assert.Contains("class CortexRuntimeCompositionService", runtimeCompositionText);
+            Assert.Contains("InitializeSettings()", runtimeCompositionText);
+            Assert.Contains("InitializeWorkbenchRuntime(", runtimeCompositionText);
+            Assert.Contains("InitializeServices(CortexSettings settings)", runtimeCompositionText);
+            Assert.DoesNotContain("CortexShellViewState", runtimeCompositionText);
+            Assert.DoesNotContain("using UnityEngine;", runtimeCompositionText);
         }
 
         [Fact]
@@ -189,6 +220,8 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("IMGUI remains supported", docText);
             Assert.Contains("shell/presentation-owned snapshot assembly", docText);
             Assert.Contains("onboarding coordinator should stay headless", docText);
+            Assert.Contains("runtime composition and startup/configuration logic", docText);
+            Assert.Contains("settings session/apply behavior", docText);
             Assert.Contains("shell-owned onboarding presenter", docText);
             Assert.Contains("settings document building, validation, contribution collection, and apply logic", docText);
             Assert.Contains("editor decisions and status presentation", docText);

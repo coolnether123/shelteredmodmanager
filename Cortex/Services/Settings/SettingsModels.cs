@@ -86,4 +86,14 @@ namespace Cortex.Services.Settings
         public readonly Dictionary<string, string> LoadedModPathDrafts = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
         public string SelectedThemeId = string.Empty;
     }
+
+    internal sealed class SettingsSessionState
+    {
+        public string SearchQuery = string.Empty;
+        public string AppliedSearchQuery = string.Empty;
+        public string LastNormalizedSearchQuery = string.Empty;
+        public string ActiveSectionId = string.Empty;
+        public string PendingSectionJumpId = string.Empty;
+        public bool ShowModifiedOnly;
+    }
 }

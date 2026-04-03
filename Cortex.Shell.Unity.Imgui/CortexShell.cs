@@ -443,10 +443,7 @@ namespace Cortex
                 _settingsStore.Save(_state.Settings);
             }
 
-            var mainWindowRect = new RenderRect(_state.Settings.WindowX, _state.Settings.WindowY, _state.Settings.WindowWidth, _state.Settings.WindowHeight);
-            _viewState.MainWindow.CurrentRect = mainWindowRect;
-            _viewState.MainWindow.ExpandedRect = mainWindowRect;
-            _viewState.MainWindow.CollapsedRect = CortexWindowChromeController.BuildCollapsedRect(mainWindowRect, _viewState.MainWindow.CollapsedWidth, _viewState.MainWindow.CollapsedHeight);
+            _bootstrapper.ApplyShellWindowSettings(_state.Settings);
             ClampWindowsToScreen();
             _state.ReloadSettingsRequested = false;
             _state.StatusMessage = "Cortex settings applied.";

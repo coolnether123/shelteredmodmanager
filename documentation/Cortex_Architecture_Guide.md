@@ -35,7 +35,7 @@ Product-shaped bundle layouts are no longer declared inside reusable project fil
 Unity-hosted Cortex project files also no longer commit a machine-local Sheltered `UnityEngine.dll` path. That reference is supplied through the shared build contract in `Directory.Build.props` and `Directory.Build.targets`.
 
 Reusable settings and environment contracts are host-neutral. Portable Cortex code works with `WorkspaceRootPath`, `RuntimeContentRootPath`, and `ReferenceAssemblyRootPath`; only host adapters provide concrete host-specific values for those paths.
-The remaining hard boundary is `net35`: most portable runtime assemblies are still `.NET Framework 3.5`, so contracts/models that a future desktop host, workers, or optional bridges must consume cannot stay trapped there indefinitely. `Cortex.Contracts` exists specifically to give those extractions a real `.NET 8`-consumable home before the Avalonia host is introduced.
+The remaining hard boundary is `net35`: most portable runtime assemblies are still `.NET Framework 3.5`, so contracts/models that a future desktop host, workers, or optional bridges must consume cannot stay trapped there indefinitely. `Cortex.Contracts` is now the first real cross-boundary lane, housing the Roslyn language-service protocol, completion prompt contract, and semantic token classification helpers that both the current runtime graph and future host or worker processes can consume before the Avalonia host is introduced.
 
 ## 1. Core roles
 
@@ -44,12 +44,14 @@ The remaining hard boundary is `net35`: most portable runtime assemblies are sti
 Portable Cortex assemblies own:
 
 - workbench shell and layout orchestration
+- headless runtime composition and startup/configuration services for settings, service maps, and plugin discovery
 - document/session management
 - command and contribution registries
 - typed runtime capability interfaces
 - module-owned state storage
 - editor extension runtime and presentation hosts
 - shell-facing snapshot construction and projection shaping in `Cortex.Presentation`
+- reusable settings session/apply services and onboarding flow/workspace preparation services
 - plugin discovery and registration
 - low-level render, geometry, and frame/input contracts in `Cortex.Rendering`
 - popup/panel/tooltip runtime interaction and layout behavior in `Cortex.Rendering.RuntimeUi`
