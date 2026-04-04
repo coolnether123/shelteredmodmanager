@@ -1,5 +1,6 @@
 using Cortex.Core.Abstractions;
 using Cortex.Host.Sheltered.Runtime;
+using Cortex.Host.Unity.Runtime;
 using Cortex.Plugins.Abstractions;
 
 namespace Cortex.Host.Sheltered.Composition
@@ -10,7 +11,7 @@ namespace Cortex.Host.Sheltered.Composition
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             string hostStatusSummary,
-            ShelteredRenderHostCatalog renderHostCatalog)
+            UnityRenderHostCatalog renderHostCatalog)
         {
             var context = new WorkbenchPluginContext(commandRegistry, contributionRegistry, null, null, null);
             new ShelteredWorkbenchViewContributions().Register(context);

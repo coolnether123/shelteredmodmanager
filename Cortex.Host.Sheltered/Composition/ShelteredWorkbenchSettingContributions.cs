@@ -1,6 +1,7 @@
 using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Host.Sheltered.Runtime;
+using Cortex.Host.Unity.Runtime;
 using Cortex.Plugins.Abstractions;
 using Cortex.Shell;
 
@@ -13,14 +14,14 @@ namespace Cortex.Host.Sheltered.Composition
         private const string RoslynTimeoutSettingId = "language.roslyn.requestTimeoutMs";
         private const int RenderHostSettingSortOrder = 10;
 
-        public void Register(WorkbenchPluginContext context, ShelteredRenderHostCatalog renderHostCatalog)
+        public void Register(WorkbenchPluginContext context, UnityRenderHostCatalog renderHostCatalog)
         {
             if (context == null)
             {
                 return;
             }
 
-            var resolvedRenderHostCatalog = renderHostCatalog ?? ShelteredRenderHostCatalog.CreateDefault();
+            var resolvedRenderHostCatalog = renderHostCatalog ?? UnityRenderHostCatalog.CreateDefault();
             var exampleLayout = ShelteredHostPathLayout.CreateIllustrativeLayout();
 
             context.RegisterSettingSection("Workspace", "workspace", "Workspace", "workspace.general", "General", "Workspace roots, project discovery, and source resolution.", new[] { "workspace", "paths", "roots", "mods" }, 0);
@@ -147,20 +148,7 @@ namespace Cortex.Host.Sheltered.Composition
             context.RegisterSetting(nameof(CortexSettings.BuildTimeoutMs), "Build Timeout (ms)", "Maximum time allowed for build execution before timing out.", "Build", "300000", SettingValueKind.Integer, 10);
 
             context.RegisterSetting(nameof(CortexSettings.ThemeId), "Theme", "Active workbench theme identifier.", "Appearance", "cortex.vs-dark", SettingValueKind.String, 0);
-            context.RegisterSetting(
-                ShelteredRenderHostSettings.RenderHostSettingId,
-                "Render Host",
-                "Select how Cortex should present its workbench for this Sheltered host.",
-                "Appearance",
-                ShelteredRenderHostSettings.ImguiRenderHostId,
-                SettingValueKind.String,
-                RenderHostSettingSortOrder,
-                SettingEditorKind.Choice,
-                string.Empty,
-                resolvedRenderHostCatalog.SettingsHelpText,
-                new[] { "render host", "renderer", "imgui", "avalonia", "desktop host", "external host" },
-                resolvedRenderHostCatalog.BuildOptions(),
-                false);
+            UnityRenderHostSettingContributions.Register(context, resolvedRenderHostCatalog, "Appearance", RenderHostSettingSortOrder);
             context.RegisterSetting(nameof(CortexSettings.EnableFileEditing), "Enable File Editing", "Allow source files to be unlocked for direct editing inside Cortex.", "Editing", "false", SettingValueKind.Boolean, 0);
             context.RegisterSetting(nameof(CortexSettings.EnableFileSaving), "Enable File Saving", "Allow Save and Save All to write snapshot-based changes back into source files.", "Editing", "false", SettingValueKind.Boolean, 10);
             context.RegisterSetting(nameof(CortexSettings.LogsPaneWidth), "Logs Pane Width", "Preferred width for the logs/details split.", "Layout", "520", SettingValueKind.Float, 0);

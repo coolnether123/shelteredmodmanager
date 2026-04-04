@@ -15,10 +15,9 @@ namespace Cortex.Host.Sheltered.Runtime
             }
 
             var environment = new ShelteredCortexHostEnvironment();
-            var pathLayout = ShelteredHostPathLayout.FromApplicationRoot(environment.ApplicationRootPath);
-            var renderHostCatalog = new ShelteredRenderHostCatalogBuilder().Build(
-                pathLayout,
-                ShelteredRenderHostSettings.LoadSelectedRenderHostId(environment));
+            var renderHostCatalog = new UnityRenderHostCatalogBuilder().Build(
+                environment,
+                UnityRenderHostSettings.LoadSelectedRenderHostId(environment));
             var frameContext = new UnityWorkbenchFrameContext();
             var hostServices = new UnityCortexHostServices(
                 environment,
@@ -28,7 +27,7 @@ namespace Cortex.Host.Sheltered.Runtime
                     ImguiWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext)),
                 platformModule,
                 frameContext,
-                new ShelteredExternalAvaloniaHostStartupAction(renderHostCatalog));
+                new UnityExternalAvaloniaHostStartupAction(renderHostCatalog));
 
             return new UnityCortexHostCompositionRoot(hostServices);
         }

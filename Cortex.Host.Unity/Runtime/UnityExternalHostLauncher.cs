@@ -1,25 +1,24 @@
 using System;
 using System.Diagnostics;
-using Cortex.Host.Unity.Runtime;
 
-namespace Cortex.Host.Sheltered.Runtime
+namespace Cortex.Host.Unity.Runtime
 {
-    internal sealed class ShelteredExternalAvaloniaHostStartupAction : IUnityShellStartupAction
+    public sealed class UnityExternalAvaloniaHostStartupAction : IUnityShellStartupAction
     {
-        private readonly ShelteredRenderHostCatalog _catalog;
-        private readonly ShelteredExternalHostLauncher _launcher;
+        private readonly UnityRenderHostCatalog _catalog;
+        private readonly UnityExternalHostLauncher _launcher;
 
-        public ShelteredExternalAvaloniaHostStartupAction(ShelteredRenderHostCatalog catalog)
-            : this(catalog, new ShelteredExternalHostLauncher())
+        public UnityExternalAvaloniaHostStartupAction(UnityRenderHostCatalog catalog)
+            : this(catalog, new UnityExternalHostLauncher())
         {
         }
 
-        internal ShelteredExternalAvaloniaHostStartupAction(
-            ShelteredRenderHostCatalog catalog,
-            ShelteredExternalHostLauncher launcher)
+        public UnityExternalAvaloniaHostStartupAction(
+            UnityRenderHostCatalog catalog,
+            UnityExternalHostLauncher launcher)
         {
-            _catalog = catalog ?? ShelteredRenderHostCatalog.CreateDefault();
-            _launcher = launcher ?? new ShelteredExternalHostLauncher();
+            _catalog = catalog ?? UnityRenderHostCatalog.CreateDefault();
+            _launcher = launcher ?? new UnityExternalHostLauncher();
         }
 
         public void OnShellStarted(UnityShellStartupContext context)
@@ -44,13 +43,13 @@ namespace Cortex.Host.Sheltered.Runtime
         }
     }
 
-    internal sealed class ShelteredExternalHostLauncher
+    public sealed class UnityExternalHostLauncher
     {
-        public ShelteredExternalHostLaunchResult Launch(ShelteredExternalHostLaunchRequest request)
+        public UnityExternalHostLaunchResult Launch(UnityExternalHostLaunchRequest request)
         {
             if (request == null || !request.CanLaunch)
             {
-                return new ShelteredExternalHostLaunchResult(false, request != null ? request.FailureReason : "External Avalonia host launch was not available.");
+                return new UnityExternalHostLaunchResult(false, request != null ? request.FailureReason : "External Avalonia host launch was not available.");
             }
 
             try
@@ -65,21 +64,21 @@ namespace Cortex.Host.Sheltered.Runtime
 
                 if (process == null)
                 {
-                    return new ShelteredExternalHostLaunchResult(false, "External Avalonia host launch returned no process.");
+                    return new UnityExternalHostLaunchResult(false, "External Avalonia host launch returned no process.");
                 }
 
-                return new ShelteredExternalHostLaunchResult(true, request.SuccessStatusMessage);
+                return new UnityExternalHostLaunchResult(true, request.SuccessStatusMessage);
             }
             catch (Exception ex)
             {
-                return new ShelteredExternalHostLaunchResult(false, "Failed to launch external Avalonia host: " + ex.Message);
+                return new UnityExternalHostLaunchResult(false, "Failed to launch external Avalonia host: " + ex.Message);
             }
         }
     }
 
-    internal sealed class ShelteredExternalHostLaunchResult
+    public sealed class UnityExternalHostLaunchResult
     {
-        public ShelteredExternalHostLaunchResult(bool launched, string statusMessage)
+        public UnityExternalHostLaunchResult(bool launched, string statusMessage)
         {
             Launched = launched;
             StatusMessage = statusMessage ?? string.Empty;
