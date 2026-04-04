@@ -7,7 +7,9 @@ namespace Cortex.Host.Unity.Runtime
     public static class UnityRenderHostSettings
     {
         public const string RenderHostSettingId = "cortex.renderHostId";
-        public const string ImguiRenderHostId = "imgui";
+        public const string LegacyImguiRenderHostId = "imgui";
+        public const string ImguiRenderHostId = "imgui.inprocess";
+        public const string OverlayInProcessRenderHostId = "overlay.inprocess";
         public const string AvaloniaExternalRenderHostId = "avalonia.external";
 
         public static string LoadSelectedRenderHostId(ICortexHostEnvironment environment)
@@ -28,6 +30,17 @@ namespace Cortex.Host.Unity.Runtime
 
         public static string NormalizeRenderHostId(string renderHostId)
         {
+            if (string.Equals(renderHostId, LegacyImguiRenderHostId, System.StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(renderHostId, ImguiRenderHostId, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return ImguiRenderHostId;
+            }
+
+            if (string.Equals(renderHostId, OverlayInProcessRenderHostId, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return OverlayInProcessRenderHostId;
+            }
+
             if (string.Equals(renderHostId, AvaloniaExternalRenderHostId, System.StringComparison.OrdinalIgnoreCase))
             {
                 return AvaloniaExternalRenderHostId;

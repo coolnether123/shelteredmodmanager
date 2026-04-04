@@ -4,26 +4,19 @@ using Cortex.Rendering;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.RuntimeUi;
 
-namespace Cortex.Renderers.Imgui
+namespace Cortex.Renderers.Overlay
 {
-    public sealed class ImguiWorkbenchRuntimeUi : IWorkbenchRuntimeUi, IDisposable
+    public sealed class OverlayWorkbenchRuntimeUi : IWorkbenchRuntimeUi, IDisposable
     {
         private readonly IRenderPipeline _renderPipeline;
         private readonly IWorkbenchUiSurface _workbenchUiSurface;
         private readonly IWorkbenchFrameContext _frameContext;
-        private readonly WorkbenchRuntimeUiLayoutMode _layoutMode;
 
-        public ImguiWorkbenchRuntimeUi(IWorkbenchUiSurface workbenchUiSurface, IWorkbenchFrameContext frameContext)
-            : this(workbenchUiSurface, frameContext, WorkbenchRuntimeUiLayoutMode.IntegratedShellWindow)
-        {
-        }
-
-        public ImguiWorkbenchRuntimeUi(IWorkbenchUiSurface workbenchUiSurface, IWorkbenchFrameContext frameContext, WorkbenchRuntimeUiLayoutMode layoutMode)
+        public OverlayWorkbenchRuntimeUi(IWorkbenchUiSurface workbenchUiSurface, IWorkbenchFrameContext frameContext)
         {
             _frameContext = frameContext ?? NullWorkbenchFrameContext.Instance;
-            _renderPipeline = new ImguiRenderPipeline(_frameContext);
+            _renderPipeline = new UnityOverlayRenderPipeline(_frameContext);
             _workbenchUiSurface = workbenchUiSurface ?? NullWorkbenchUiSurface.Instance;
-            _layoutMode = layoutMode;
         }
 
         public IRenderPipeline RenderPipeline
@@ -43,7 +36,7 @@ namespace Cortex.Renderers.Imgui
 
         public WorkbenchRuntimeUiLayoutMode LayoutMode
         {
-            get { return _layoutMode; }
+            get { return WorkbenchRuntimeUiLayoutMode.OverlayWindows; }
         }
 
         public void Dispose()

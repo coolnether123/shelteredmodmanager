@@ -216,6 +216,7 @@
       <CortexRuntimeProjects Include="..\Cortex.OpenRouter\Cortex.OpenRouter.csproj" />
       <CortexRuntimeProjects Include="..\Cortex\Cortex.csproj" />
       <CortexRuntimeProjects Include="..\Cortex.Renderers.Imgui\Cortex.Renderers.Imgui.csproj" />
+      <CortexRuntimeProjects Include="..\Cortex.Host.Avalonia\Cortex.Host.Avalonia.csproj" />
       <CortexRuntimeProjects Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj" />
       <CortexRuntimeProjects Include="..\Cortex.Host.Sheltered\Cortex.Host.Sheltered.csproj" />
       <CortexRuntimeProjects Include="..\Cortex.Platform.ModAPI\Cortex.Platform.ModAPI.csproj" />

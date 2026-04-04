@@ -51,6 +51,35 @@ namespace Cortex.Shell
             DrawLayoutTree(layoutRoot, workspaceRect, snapshot, tabStyle, activeTabStyle, tabCloseButtonStyle, captionStyle);
         }
 
+        public bool ShouldDisplayHostSurface(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation)
+        {
+            if (hostLocation == WorkbenchHostLocation.DocumentHost)
+            {
+                return true;
+            }
+
+            return HasHostItems(snapshot, hostLocation) || !string.IsNullOrEmpty(_draggingContainerId);
+        }
+
+        public void DrawOverlayHostSurface(WorkbenchPresentationSnapshot snapshot, WorkbenchHostLocation hostLocation, Rect workspaceRect, GUIStyle tabStyle, GUIStyle activeTabStyle, GUIStyle tabCloseButtonStyle, GUIStyle captionStyle)
+        {
+            if (workspaceRect.width <= 0f || workspaceRect.height <= 0f)
+            {
+                return;
+            }
+
+            GUILayout.BeginArea(workspaceRect);
+            DrawLayoutLeaf(
+                CreateLeaf("overlay." + hostLocation.ToString(), hostLocation, snapshot),
+                snapshot,
+                workspaceRect,
+                tabStyle,
+                activeTabStyle,
+                tabCloseButtonStyle,
+                captionStyle);
+            GUILayout.EndArea();
+        }
+
         public void SynchronizeRuntimeLayoutState()
         {
             var runtime = _runtimeProvider();

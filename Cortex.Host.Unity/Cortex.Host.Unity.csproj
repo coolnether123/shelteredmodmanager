@@ -39,6 +39,8 @@
     <Compile Include="Runtime\UnityExternalHostLauncher.cs" />
     <Compile Include="Runtime\UnityCortexShellBehaviour.cs" />
     <Compile Include="Runtime\UnityCortexShellBootstrapper.cs" />
+    <Compile Include="Runtime\UnityRenderPresentationCoordinator.cs" />
+    <Compile Include="Runtime\UnityWorkbenchRuntimeUiFactorySelector.cs" />
     <Compile Include="Runtime\UnityWorkbenchFrameContext.cs" />
     <Compile Include="Runtime\UnityCortexHostCompositionRoot.cs" />
     <Compile Include="Runtime\UnityCortexHostServices.cs" />

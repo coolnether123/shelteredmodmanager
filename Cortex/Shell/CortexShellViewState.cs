@@ -34,6 +34,11 @@ namespace Cortex.Shell
     {
         public readonly CortexShellWindowViewState MainWindow = new CortexShellWindowViewState(126f, 28f, 920f, 580f);
         public readonly CortexShellWindowViewState LogsWindow = new CortexShellWindowViewState(110f, 26f, 760f, 420f);
+        public readonly CortexShellWindowViewState OverlayControlWindow = new CortexShellWindowViewState(148f, 28f, 640f, 92f);
+        public readonly CortexShellWindowViewState OverlayPrimaryWindow = new CortexShellWindowViewState(148f, 28f, 260f, 280f);
+        public readonly CortexShellWindowViewState OverlayDocumentWindow = new CortexShellWindowViewState(148f, 28f, 520f, 360f);
+        public readonly CortexShellWindowViewState OverlaySecondaryWindow = new CortexShellWindowViewState(148f, 28f, 260f, 280f);
+        public readonly CortexShellWindowViewState OverlayPanelWindow = new CortexShellWindowViewState(148f, 28f, 420f, 180f);
         public bool ShowDetachedLogsWindow;
         public CortexLayoutNode LayoutRoot;
     }

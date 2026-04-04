@@ -1,7 +1,6 @@
 using System;
 using Cortex.Core.Abstractions;
 using Cortex.Host.Unity.Runtime;
-using Cortex.Shell.Unity.Imgui;
 
 namespace Cortex.Host.Sheltered.Runtime
 {
@@ -19,15 +18,15 @@ namespace Cortex.Host.Sheltered.Runtime
                 environment,
                 UnityRenderHostSettings.LoadSelectedRenderHostId(environment));
             var frameContext = new UnityWorkbenchFrameContext();
+            var runtimeUiFactory = UnityWorkbenchRuntimeUiFactorySelector.Select(renderHostCatalog, frameContext);
             var hostServices = new UnityCortexHostServices(
                 environment,
                 new WindowsPathInteractionService(environment),
                 new UnityWorkbenchRuntimeFactory(
                     new ShelteredUnityWorkbenchContributionRegistrar(renderHostCatalog, renderHostCatalog.StatusSummary),
-                    ImguiWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext)),
+                    runtimeUiFactory),
                 platformModule,
-                frameContext,
-                new UnityExternalAvaloniaHostStartupAction(renderHostCatalog));
+                frameContext);
 
             return new UnityCortexHostCompositionRoot(hostServices);
         }

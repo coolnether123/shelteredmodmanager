@@ -1,5 +1,7 @@
 using Cortex;
+using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
+using Cortex.Rendering.RuntimeUi;
 using UnityEngine;
 
 namespace Cortex.Host.Unity.Runtime
@@ -7,10 +9,11 @@ namespace Cortex.Host.Unity.Runtime
     /// <summary>
     /// Unity host adapter that forwards MonoBehaviour lifecycle events into the host-neutral Cortex shell controller.
     /// </summary>
-    public sealed class UnityCortexShellBehaviour : MonoBehaviour
+    public sealed class UnityCortexShellBehaviour : MonoBehaviour, IUnityRenderPresentationHost
     {
         private readonly CortexShellController _controller = new CortexShellController();
         private ICortexHostServices _hostServices;
+        private UnityRenderPresentationCoordinator _presentationCoordinator;
 
         public void ConfigureHostServices(ICortexHostServices hostServices)
         {
@@ -27,7 +30,7 @@ namespace Cortex.Host.Unity.Runtime
         private void Start()
         {
             _controller.StartShell();
-            RunStartupAction();
+            SynchronizePresentation();
         }
 
         private void OnDestroy()
@@ -38,6 +41,7 @@ namespace Cortex.Host.Unity.Runtime
         private void Update()
         {
             _controller.UpdateShell();
+            SynchronizePresentation();
         }
 
         private void OnGUI()
@@ -45,26 +49,47 @@ namespace Cortex.Host.Unity.Runtime
             _controller.RenderShell();
         }
 
-        private void RunStartupAction()
+        private void SynchronizePresentation()
         {
-            var unityHostServices = _hostServices as UnityCortexHostServices;
-            var startupAction = unityHostServices != null ? unityHostServices.StartupAction : null;
-            if (startupAction == null)
+            if (_presentationCoordinator == null)
             {
-                return;
+                _presentationCoordinator = new UnityRenderPresentationCoordinator(
+                    _hostServices != null ? _hostServices.FrameContext : null,
+                    new UnityRenderHostCatalogBuilder(),
+                    new UnityExternalHostLauncher());
             }
 
-            try
-            {
-                startupAction.OnShellStarted(new UnityShellStartupContext(
-                    _hostServices,
-                    _controller.SetHostStatusMessage));
-            }
-            catch (System.Exception ex)
-            {
-                _controller.SetHostStatusMessage("Host startup action failed: " + ex.Message);
-                Debug.LogError("[Cortex.Host.Unity] Host startup action failed: " + ex);
-            }
+            _presentationCoordinator.Synchronize(this, _hostServices != null ? _hostServices.Environment : null);
+        }
+
+        CortexSettings IUnityRenderPresentationHost.Settings
+        {
+            get { return _controller.CurrentSettings; }
+        }
+
+        void IUnityRenderPresentationHost.ApplyStatusMessage(string statusMessage)
+        {
+            _controller.SetHostStatusMessage(statusMessage);
+        }
+
+        bool IUnityRenderPresentationHost.ApplyRuntimeUiFactory(IWorkbenchRuntimeUiFactory runtimeUiFactory)
+        {
+            return _controller.ApplyRuntimeUiFactory(runtimeUiFactory);
+        }
+
+        void IUnityRenderPresentationHost.SetShellVisible(bool visible)
+        {
+            _controller.SetShellVisible(visible);
+        }
+
+        void IUnityRenderPresentationHost.RegisterOrUpdateStatusItem(StatusItemContribution contribution)
+        {
+            _controller.RegisterOrUpdateStatusItem(contribution);
+        }
+
+        void IUnityRenderPresentationHost.RegisterOrUpdateSettingContribution(SettingContribution contribution)
+        {
+            _controller.RegisterOrUpdateSettingContribution(contribution);
         }
     }
 }

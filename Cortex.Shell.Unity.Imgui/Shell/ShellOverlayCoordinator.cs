@@ -47,14 +47,14 @@ namespace Cortex.Shell
             _consumeEventAction = consumeEventAction;
         }
 
-        public void UpdateOverlayInputCapture(bool visible, Rect windowRect, Rect logWindowRect)
+        public void UpdateOverlayInputCapture(bool visible, IList<ShellChromeHitRegion> chromeRegions)
         {
             var input = _frameInputProvider != null ? _frameInputProvider() : new WorkbenchFrameInputSnapshot();
             var capture = ShellOverlayInteractionController.ResolveInputCapture(
                 visible,
                 _state.Onboarding.IsActive,
                 input,
-                BuildChromeHitRegions(windowRect, logWindowRect));
+                chromeRegions);
             ApplyOverlayInputCapture(capture.CaptureMouse, capture.CaptureKeyboard);
         }
 
@@ -95,26 +95,5 @@ namespace Cortex.Shell
             });
         }
 
-        private static RenderRect ToRenderRect(Rect rect) { return new RenderRect(rect.x, rect.y, rect.width, rect.height); }
-
-        private List<ShellChromeHitRegion> BuildChromeHitRegions(Rect windowRect, Rect logWindowRect)
-        {
-            var regions = new List<ShellChromeHitRegion>();
-            regions.Add(new ShellChromeHitRegion
-            {
-                Visible = true,
-                IsCollapsed = _viewState.MainWindow.IsCollapsed,
-                ExpandedRect = ToRenderRect(windowRect),
-                CollapsedRect = _viewState.MainWindow.CollapsedRect
-            });
-            regions.Add(new ShellChromeHitRegion
-            {
-                Visible = _viewState.ShowDetachedLogsWindow,
-                IsCollapsed = _viewState.LogsWindow.IsCollapsed,
-                ExpandedRect = ToRenderRect(logWindowRect),
-                CollapsedRect = _viewState.LogsWindow.CollapsedRect
-            });
-            return regions;
-        }
     }
 }
