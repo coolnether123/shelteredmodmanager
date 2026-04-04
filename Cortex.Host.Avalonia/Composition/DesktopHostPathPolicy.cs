@@ -16,5 +16,15 @@ namespace Cortex.Host.Avalonia.Composition
         {
             return Path.Combine(dataRootPath ?? string.Empty, "cortex-desktop.log");
         }
+
+        public string ResolveShellStateFilePath(string dataRootPath)
+        {
+            return Path.Combine(dataRootPath ?? string.Empty, "desktop-shell-state.json");
+        }
+
+        public string ResolveDockLayoutFilePath(string dataRootPath)
+        {
+            return Path.Combine(dataRootPath ?? string.Empty, "desktop-dock-layout.json");
+        }
     }
 }

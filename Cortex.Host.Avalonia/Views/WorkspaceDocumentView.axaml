@@ -46,37 +46,16 @@
     </Border>
 
     <Border Grid.Row="1" Grid.Column="2" Margin="16,12,0,0" Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
-      <Grid RowDefinitions="Auto,Auto,160,*">
+      <Grid RowDefinitions="Auto,*">
         <StackPanel Spacing="4">
-          <TextBlock FontWeight="SemiBold" Text="File Preview" />
+          <TextBlock FontWeight="SemiBold" Text="Workspace Preview" />
           <TextBlock Foreground="#9CA8BC" Text="{Binding ActiveEditorDisplayName}" TextWrapping="Wrap" />
           <TextBlock Foreground="#9CA8BC" Text="{Binding ActiveEditorStatusSummary}" TextWrapping="Wrap" />
-          <TextBlock Foreground="#9CA8BC" Text="{Binding ReferenceStatusSummary}" TextWrapping="Wrap" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding BuildDefaultsSummary}" TextWrapping="Wrap" />
           <TextBlock Foreground="#9CA8BC" Text="{Binding PreviewFilePath}" TextWrapping="Wrap" />
         </StackPanel>
 
-        <StackPanel Grid.Row="1" Margin="0,12,0,0" Orientation="Horizontal" Spacing="8">
-          <TextBox Width="280" Name="SearchQueryTextBox" Text="{Binding WorkbenchSearchQuery}" />
-          <Button Click="RunSearch_OnClick" Content="Search" />
-          <TextBlock VerticalAlignment="Center" Foreground="#9CA8BC" Text="{Binding SearchStatusSummary}" TextWrapping="Wrap" />
-        </StackPanel>
-
-        <Border Grid.Row="2" Margin="0,12,0,0" Padding="8" CornerRadius="8" Background="#101521" BorderBrush="#314056" BorderThickness="1">
-          <ListBox Name="SearchResultsListBox"
-                   ItemsSource="{Binding SearchMatches}"
-                   SelectionChanged="SearchResultsListBox_OnSelectionChanged">
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <StackPanel Margin="0,0,0,6">
-                  <TextBlock Text="{Binding DisplayText}" />
-                  <TextBlock Foreground="#9CA8BC" Text="{Binding DocumentPath}" TextWrapping="Wrap" />
-                </StackPanel>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-        </Border>
-
-        <TextBox Grid.Row="3"
+        <TextBox Grid.Row="1"
                  Margin="0,12,0,0"
                  FontFamily="Cascadia Code, Consolas, Menlo"
                  Text="{Binding FilePreviewText}"

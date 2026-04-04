@@ -32,6 +32,8 @@ namespace Cortex.Host.Avalonia.Composition
             {
                 DataRootPath = dataRootPath,
                 LogFilePath = _pathPolicy.ResolveLogFilePath(dataRootPath),
+                ShellStateFilePath = _pathPolicy.ResolveShellStateFilePath(dataRootPath),
+                DockLayoutFilePath = _pathPolicy.ResolveDockLayoutFilePath(dataRootPath),
                 BridgeClient = new DesktopBridgeClientOptions
                 {
                     PipeName = ResolvePipeName(args),

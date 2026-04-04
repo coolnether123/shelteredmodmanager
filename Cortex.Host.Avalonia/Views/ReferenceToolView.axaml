@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Cortex.Host.Avalonia.Views.ReferenceToolView">
+  <Grid RowDefinitions="Auto,*,*" Margin="12">
+    <StackPanel Spacing="4">
+      <TextBlock FontSize="20" FontWeight="SemiBold" Text="{Binding ReferenceTargetDisplayName}" />
+      <TextBlock Foreground="#9CA8BC" Text="{Binding ReferenceStatusSummary}" TextWrapping="Wrap" />
+      <TextBlock Foreground="#9CA8BC" Text="{Binding ReferenceCachePath}" TextWrapping="Wrap" />
+      <TextBlock Foreground="#9CA8BC" Text="{Binding ReferenceDocumentationPath}" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <Border Grid.Row="1" Margin="0,12,0,0" Padding="8" CornerRadius="8" Background="#101521" BorderBrush="#314056" BorderThickness="1">
+      <TextBox FontFamily="Cascadia Code, Consolas, Menlo"
+               Text="{Binding ReferenceSourceText}"
+               AcceptsReturn="True"
+               IsReadOnly="True"
+               TextWrapping="NoWrap"
+               ScrollViewer.VerticalScrollBarVisibility="Auto"
+               ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+    </Border>
+
+    <Border Grid.Row="2" Margin="0,12,0,0" Padding="8" CornerRadius="8" Background="#101521" BorderBrush="#314056" BorderThickness="1">
+      <TextBox Text="{Binding ReferenceDocumentationText}"
+               AcceptsReturn="True"
+               IsReadOnly="True"
+               TextWrapping="Wrap"
+               ScrollViewer.VerticalScrollBarVisibility="Auto" />
+    </Border>
+  </Grid>
+</UserControl>

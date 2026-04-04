@@ -8,14 +8,15 @@ It is intentionally modest in this phase:
 - onboarding/workspace selection
 - settings editing
 - workspace/project browsing
+- editor document summary and preview
 - search result navigation over runtime-owned search state
-- file preview plus active editor/reference status for editor/workspace-oriented surfaces
-- Dock-owned desktop workbench structure
+- reference/source inspection for the runtime-owned reference browser lane
+- persisted Dock-owned desktop workbench structure
+- host-local runtime/status surface
 - named-pipe bridge client for the legacy runtime process
 
 It is intentionally not the full future workbench yet:
 
-- no persisted or user-customizable docking layout policy yet
 - no broad plugin surface policy yet
 - no attempt to redesign the IDE UX in this pass
 
@@ -47,6 +48,28 @@ Desktop startup and session policy now lives under `Cortex.Host.Avalonia/Composi
 
 `App.axaml.cs` is now only the Avalonia application entry and lifetime hook.
 
+The host data root now also owns:
+
+- `%LocalAppData%\Cortex.Host.Avalonia\desktop-shell-state.json`
+- `%LocalAppData%\Cortex.Host.Avalonia\desktop-dock-layout.json`
+
+## Shell state and Dock layout ownership
+
+Host-local shell ownership now lives entirely inside `Cortex.Host.Avalonia`:
+
+- `DesktopShellStateStore` persists host-local shell state and surface visibility
+- `DesktopDockLayoutPersistenceService` persists the Dock group layout state
+- `DesktopWorkbenchSurfaceRegistry` defines the known host-local workbench surfaces
+- `DesktopWorkbenchCompositionService` composes Dock layout from runtime snapshot state plus host-local persistence
+
+The Dock-specific structure stays host-local. No Dock models or persistence contracts cross into `Cortex.Bridge` or `Cortex.Shell.Shared`.
+
+Current user-directed layout policy is intentionally small and explicit:
+
+- surface visibility is host-local and persisted in shell state
+- `Save Layout` captures the current Dock arrangement for later sessions
+- `Reset Layout` drops the saved Dock arrangement and returns to the runtime-selected layout preset
+
 ## Current composition boundary
 
 The host consumes `Cortex.Bridge` for:
@@ -73,7 +96,8 @@ The desktop host owns:
 - Avalonia startup and window composition
 - named-pipe client connection lifecycle
 - snapshot-to-view-model projection
-- Dock workbench layout composition for onboarding, workspace, and settings surfaces
+- Dock workbench layout composition for onboarding, workspace, editor, search, reference, settings, and runtime/status surfaces
+- host-local shell state and Dock layout persistence
 - Serilog configuration
 - connection/lifecycle status presentation
 
@@ -90,8 +114,9 @@ What runs in the legacy runtime process:
 What runs in the desktop host process:
 
 - Avalonia window and Dock structure
+- host-local shell state and persisted layout policy
 - bridge client
-- shell status display
+- shell status display and surface visibility policy
 
 What crosses the bridge:
 
@@ -103,6 +128,8 @@ What crosses the bridge:
 What stays local to the desktop host:
 
 - `%LocalAppData%\Cortex.Host.Avalonia\cortex-desktop.log`
+- `%LocalAppData%\Cortex.Host.Avalonia\desktop-shell-state.json`
+- `%LocalAppData%\Cortex.Host.Avalonia\desktop-dock-layout.json`
 
 ## Package lane
 

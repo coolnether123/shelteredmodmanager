@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shared="clr-namespace:Cortex.Shell.Shared.Models;assembly=Cortex.Shell.Shared"
+             x:Class="Cortex.Host.Avalonia.Views.EditorDocumentView">
+  <Grid ColumnDefinitions="280,*" RowDefinitions="Auto,*" Margin="12">
+    <Border Grid.RowSpan="2" Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
+      <StackPanel>
+        <TextBlock FontWeight="SemiBold" Text="Open Documents" />
+        <ListBox Name="OpenDocumentsListBox"
+                 Margin="0,12,0,0"
+                 ItemsSource="{Binding OpenEditorDocuments}"
+                 SelectionChanged="OpenDocumentsListBox_OnSelectionChanged">
+          <ListBox.ItemTemplate>
+            <DataTemplate DataType="shared:EditorDocumentSummaryModel">
+              <StackPanel Margin="0,0,0,8">
+                <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                <TextBlock Foreground="#9CA8BC" Text="{Binding FilePath}" TextWrapping="Wrap" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </StackPanel>
+    </Border>
+
+    <StackPanel Grid.Column="1" Margin="16,0,0,0" Spacing="4">
+      <TextBlock FontSize="20" FontWeight="SemiBold" Text="{Binding ActiveEditorDisplayName}" />
+      <TextBlock Foreground="#9CA8BC" Text="{Binding ActiveEditorCompactPath}" TextWrapping="Wrap" />
+      <TextBlock Foreground="#9CA8BC" Text="{Binding ActiveEditorStatusSummary}" TextWrapping="Wrap" />
+      <TextBlock Foreground="#9CA8BC" Text="{Binding ActiveEditorMetricsSummary}" TextWrapping="Wrap" />
+      <TextBlock Foreground="#9CA8BC" Text="{Binding PreviewFilePath}" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <TextBox Grid.Row="1"
+             Grid.Column="1"
+             Margin="16,12,0,0"
+             FontFamily="Cascadia Code, Consolas, Menlo"
+             Text="{Binding FilePreviewText}"
+             AcceptsReturn="True"
+             IsReadOnly="True"
+             TextWrapping="NoWrap"
+             ScrollViewer.VerticalScrollBarVisibility="Auto"
+             ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+  </Grid>
+</UserControl>

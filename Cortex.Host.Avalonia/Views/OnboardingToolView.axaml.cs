@@ -4,7 +4,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using Avalonia.VisualTree;
 using Cortex.Host.Avalonia.ViewModels;
 
 namespace Cortex.Host.Avalonia.Views
@@ -57,7 +56,6 @@ namespace Cortex.Host.Avalonia.Views
 
             ViewModel.SetOnboardingWorkspaceRoot(OnboardingWorkspaceRootTextBox.Text ?? string.Empty);
             ViewModel.ApplyOnboarding();
-            this.FindAncestorOfType<MainWindow>()?.RebuildWorkbenchLayout();
         }
     }
 }

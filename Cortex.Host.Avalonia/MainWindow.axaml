@@ -12,11 +12,34 @@
             BorderBrush="#314056"
             BorderThickness="1"
             Background="#1D2230">
-      <StackPanel Spacing="6">
-        <TextBlock FontSize="26" FontWeight="SemiBold" Text="Cortex Desktop Host" />
-        <TextBlock Foreground="#9CA8BC"
-                   Text="Avalonia shell rendering the current Cortex workbench through Dock-owned structure." />
-      </StackPanel>
+      <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="12">
+        <StackPanel Spacing="6">
+          <TextBlock FontSize="26" FontWeight="SemiBold" Text="Cortex Desktop Host" />
+          <TextBlock Foreground="#9CA8BC"
+                     Text="Avalonia shell rendering the current Cortex workbench through Dock-owned structure." />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding LayoutModeSummary}" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Top">
+          <Button Click="SaveLayout_OnClick" Content="Save Layout" />
+          <Button Click="ResetLayout_OnClick" Content="Reset Layout" />
+        </StackPanel>
+
+        <ItemsControl Grid.Row="1" Grid.ColumnSpan="2" ItemsSource="{Binding SurfaceToggles}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel Orientation="Horizontal" ItemWidth="120" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <CheckBox Content="{Binding Title}"
+                        IsChecked="{Binding IsVisible}"
+                        IsEnabled="{Binding CanHide}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Grid>
     </Border>
 
     <Border Grid.Row="1"
@@ -31,7 +54,7 @@
     </Border>
 
     <Border Grid.Row="2" Padding="12" CornerRadius="12" Background="#1D2230" BorderBrush="#314056" BorderThickness="1">
-      <TextBlock Text="{Binding StatusMessage}" />
+      <TextBlock Text="{Binding ShellStatusMessage}" />
     </Border>
   </Grid>
 </Window>

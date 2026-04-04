@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.VisualTree;
 using Cortex.Host.Avalonia.ViewModels;
 
 namespace Cortex.Host.Avalonia.Views
@@ -34,7 +33,6 @@ namespace Cortex.Host.Avalonia.Views
             }
 
             ViewModel.SaveSettings();
-            this.FindAncestorOfType<MainWindow>()?.RebuildWorkbenchLayout();
         }
     }
 }
