@@ -1,4 +1,5 @@
 using Avalonia;
+using Cortex.Host.Avalonia.Composition;
 
 namespace Cortex.Host.Avalonia
 {
@@ -7,7 +8,7 @@ namespace Cortex.Host.Avalonia
         [System.STAThread]
         public static void Main(string[] args)
         {
-            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            new DesktopHostLaunchCoordinator().Run(args);
         }
 
         public static AppBuilder BuildAvaloniaApp()

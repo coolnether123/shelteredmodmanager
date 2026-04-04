@@ -174,6 +174,20 @@ namespace Cortex.Tabby
         {
             try
             {
+                var bundledToolRootPath = context != null ? context.BundledToolRootPath ?? string.Empty : string.Empty;
+                if (!string.IsNullOrEmpty(bundledToolRootPath))
+                {
+                    var resolvedFromToolRoot = BundledToolPathResolver.ResolveFromToolRoot(
+                        bundledToolRootPath,
+                        "tabby",
+                        "Cortex.Tabby.Server.exe",
+                        "Cortex.Tabby.Server.dll");
+                    if (!string.IsNullOrEmpty(resolvedFromToolRoot))
+                    {
+                        return resolvedFromToolRoot;
+                    }
+                }
+
                 var serverPath = BundledToolPathResolver.ResolveFromHostBin(
                     context != null ? context.HostBinPath ?? string.Empty : string.Empty,
                     "tabby",

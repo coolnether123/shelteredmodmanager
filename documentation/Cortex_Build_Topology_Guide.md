@@ -135,19 +135,19 @@ Packages the current Sheltered host bundle into `Dist\SMM\`:
 - Tabby server: `Dist\SMM\bin\tools\tabby\`
 - Windows path picker host helper: `Dist\SMM\bin\tools\windows-path-picker\`
 
-### `FutureHostReady`
+### `Desktop`
 
-Packages a desktop-host starter bundle into `artifacts\bundles\FutureHostReady\`:
+Packages the authoritative desktop-host bundle into `artifacts\bundles\Desktop\`:
 
 - portable libraries: `portable\lib\`
 - desktop host runtime assemblies: `host\lib\`
 - bridge/shared runtime assemblies needed by the host and runtime split: `host\lib\`
+- Harmony plugin: `plugins\Harmony\`
 - Roslyn worker: `tooling\roslyn\`
 - Tabby server: `tooling\tabby\`
-- Windows path picker host helper: `tooling\windows-path-picker\`
-- bundled plugin root reserved for future host packaging: `plugins\`
+- bundled tool root resolved explicitly by desktop host policy: `tooling\`
 
-This profile now has a real desktop-host lane through `Cortex.Host.Avalonia`, `Cortex.Bridge`, and `Cortex.Shell.Shared`. It is still intentionally modest: broader host plugin policy and richer desktop bundle composition remain later work.
+This profile now defines the Cortex-owned default host bundle through `Cortex.Host.Avalonia`, `Cortex.Bridge`, and `Cortex.Shell.Shared`. Its packaging policy is explicit rather than open-ended: the desktop lane currently ships the Harmony plugin plus the Roslyn and Tabby tool lanes, while Windows path picker stays on the legacy Sheltered host path.
 
 Portable Cortex binaries are copied once per profile into the profile's runtime assembly lane. Tool and plugin outputs are copied into their own lanes instead of being emitted as runtime assemblies.
 The centralized bundle target also removes stale plugin/tool files from runtime lanes before copying, so old `decompiler`-style placements do not survive a later packaging run.

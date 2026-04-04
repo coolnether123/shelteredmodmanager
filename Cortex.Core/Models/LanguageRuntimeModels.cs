@@ -129,6 +129,7 @@ namespace Cortex.Core.Models
     {
         public string ProviderId;
         public string HostBinPath;
+        public string BundledToolRootPath;
         public CortexSettings Settings;
         public LanguageProviderConfiguration ProviderConfiguration;
 
@@ -136,6 +137,7 @@ namespace Cortex.Core.Models
         {
             ProviderId = string.Empty;
             HostBinPath = string.Empty;
+            BundledToolRootPath = string.Empty;
             Settings = null;
             ProviderConfiguration = new LanguageProviderConfiguration();
         }

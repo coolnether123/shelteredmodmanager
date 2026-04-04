@@ -473,16 +473,16 @@ namespace Cortex.Tests.Architecture
         }
 
         [Fact]
-        public void BundleProfiles_AreCentralizedAndCoverShelteredAndFutureHostReady()
+        public void BundleProfiles_AreCentralizedAndCoverShelteredAndDesktop()
         {
             var propsText = File.ReadAllText(Path.Combine(RepoRoot, "Directory.Build.props"));
             var targetsText = File.ReadAllText(Path.Combine(RepoRoot, "Directory.Build.targets"));
 
             Assert.Contains("CortexBundleProfile", propsText);
             Assert.Contains("Sheltered", propsText);
-            Assert.Contains("FutureHostReady", propsText);
+            Assert.Contains("Desktop", propsText);
             Assert.Contains(@"Dist\SMM\", propsText);
-            Assert.Contains(@"artifacts\bundles\FutureHostReady\", propsText);
+            Assert.Contains(@"artifacts\bundles\Desktop\", propsText);
             Assert.Contains("CortexBundleContentKind", propsText);
             Assert.Contains("PortableRuntimeAssembly", propsText);
             Assert.Contains("HostRuntimeAssembly", propsText);
@@ -508,6 +508,10 @@ namespace Cortex.Tests.Architecture
             Assert.Contains(@"CortexBundlePortableRuntimeRootRelativePath>portable\lib\", propsText);
             Assert.Contains(@"CortexBundlePluginRootRelativePath>plugins\", propsText);
             Assert.Contains(@"CortexBundleToolRootRelativePath>tooling\", propsText);
+            Assert.Contains("Cortex.Plugin.Harmony", propsText);
+            Assert.Contains("Cortex.Roslyn.Worker", propsText);
+            Assert.Contains("Cortex.Tabby.Server", propsText);
+            Assert.DoesNotContain("'$(CortexBundleProfile)' == 'FutureHostReady'", propsText);
         }
 
         [Fact]
@@ -613,8 +617,11 @@ namespace Cortex.Tests.Architecture
             var tabbyControllerText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Tabby", "BundledTabbyServerController.cs"));
             var pathPickerServiceText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Unity", "Runtime", "WindowsPathInteractionService.cs"));
 
+            Assert.Contains("ResolveFromToolRoot", roslynFactoryText);
             Assert.Contains("ResolveFromHostBin", roslynFactoryText);
+            Assert.Contains("ResolveFromToolRoot", tabbyControllerText);
             Assert.Contains("ResolveFromHostBin", tabbyControllerText);
+            Assert.Contains("ResolveFromToolRoot", pathPickerServiceText);
             Assert.DoesNotContain(@"..\tools\tabby", tabbyControllerText);
             Assert.Contains(@"windows-path-picker", pathPickerServiceText);
         }
@@ -642,12 +649,13 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("Plugin-Specific Cortex", reportText);
             Assert.Contains("External-Tool Cortex", reportText);
             Assert.Contains("Desktop Host Completion Steps", reportText);
-            Assert.Contains("FutureHostReady", reportText);
+            Assert.Contains("Host bundle B: `Desktop`", reportText);
             Assert.Contains("Cortex.Host.Sheltered", reportText);
             Assert.Contains("Cortex.Rendering.RuntimeUi", reportText);
             Assert.Contains("Cortex.Bridge -> Cortex.Shell.Shared", reportText);
             Assert.Contains("Cortex.Shell.Shared -> none", reportText);
             Assert.Contains("BundledPluginSearchRoots", reportText);
+            Assert.Contains("BundledToolRootPath", reportText);
             Assert.Contains("CortexPluginSearchRoots", reportText);
             Assert.Contains("ConfiguredPluginSearchRoots", reportText);
             Assert.Contains("CortexUnityManagedDir", reportText);

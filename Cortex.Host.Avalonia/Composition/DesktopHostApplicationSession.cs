@@ -1,6 +1,7 @@
 using System;
 using Avalonia.Controls;
 using Cortex.Host.Avalonia.Logging;
+using Serilog;
 
 namespace Cortex.Host.Avalonia.Composition
 {
@@ -12,8 +13,15 @@ namespace Cortex.Host.Avalonia.Composition
         public DesktopHostApplicationSession(DesktopHostOptions options)
         {
             Options = options ?? new DesktopHostOptions();
-            _compositionRoot = new DesktopHostCompositionRoot(Options);
             DesktopHostLogging.Initialize(Options.LogFilePath);
+            _compositionRoot = new DesktopHostCompositionRoot(Options);
+            Log.Information(
+                "Desktop host session started. Profile={BundleProfile}, BundleRoot={BundleRoot}, Plugins={PluginSummary}, Tools={ToolSummary}, PipeName={PipeName}",
+                Options.BundleProfileName,
+                Options.EnvironmentPaths != null ? Options.EnvironmentPaths.BundleRootPath : string.Empty,
+                Options.BundledPluginSummary,
+                Options.BundledToolSummary,
+                Options.BridgeClient != null ? Options.BridgeClient.PipeName : string.Empty);
         }
 
         public DesktopHostOptions Options { get; }

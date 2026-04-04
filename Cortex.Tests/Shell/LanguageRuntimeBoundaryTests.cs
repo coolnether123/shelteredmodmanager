@@ -294,6 +294,7 @@ namespace Cortex.Tests.Shell
 
                 Assert.Equal(RoslynLanguageProviderFactory.ProviderId, configuration.ProviderId);
                 Assert.Equal("host-bin", configuration.HostBinPath);
+                Assert.Equal("tool-root", configuration.BundledToolRootPath);
                 Assert.NotNull(configuration.ProviderConfiguration);
                 Assert.Equal(RoslynLanguageProviderFactory.ProviderId, configuration.ProviderConfiguration.ProviderId);
                 Assert.Single(configuration.ProviderConfiguration.Settings);
@@ -640,22 +641,30 @@ namespace Cortex.Tests.Shell
             }
 
             public TestHostEnvironment(string hostBinPath)
-                : this(hostBinPath, string.Empty)
+                : this(hostBinPath, "tool-root", string.Empty)
             {
             }
 
             public TestHostEnvironment(string hostBinPath, string configuredPluginSearchRoots)
+                : this(hostBinPath, "tool-root", configuredPluginSearchRoots)
+            {
+            }
+
+            public TestHostEnvironment(string hostBinPath, string bundledToolRootPath, string configuredPluginSearchRoots)
             {
                 _hostBinPath = hostBinPath ?? string.Empty;
+                _bundledToolRootPath = bundledToolRootPath ?? string.Empty;
                 _configuredPluginSearchRoots = configuredPluginSearchRoots ?? string.Empty;
             }
 
+            private readonly string _bundledToolRootPath;
             private readonly string _configuredPluginSearchRoots;
 
             public string ApplicationRootPath => string.Empty;
             public string HostRootPath => string.Empty;
             public string HostBinPath => _hostBinPath;
             public string BundledPluginSearchRoots => string.Empty;
+            public string BundledToolRootPath => _bundledToolRootPath;
             public string ConfiguredPluginSearchRoots => _configuredPluginSearchRoots;
             public string ReferenceAssemblyRootPath => string.Empty;
             public string RuntimeContentRootPath => string.Empty;

@@ -287,6 +287,7 @@ namespace Cortex.Runtime
             {
                 ProviderId = resolvedProviderId,
                 HostBinPath = hostEnvironment != null ? hostEnvironment.HostBinPath : string.Empty,
+                BundledToolRootPath = hostEnvironment != null ? hostEnvironment.BundledToolRootPath : string.Empty,
                 Settings = settings,
                 ProviderConfiguration = LanguageProviderConfigurationHelper.FindConfiguration(settings, resolvedProviderId)
             };

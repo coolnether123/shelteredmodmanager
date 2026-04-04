@@ -115,6 +115,7 @@ namespace Cortex.Tests.Shell
             public string HostRootPath { get { return _rootPath; } }
             public string HostBinPath { get { return Path.Combine(_rootPath, "bin"); } }
             public string BundledPluginSearchRoots { get { return string.Empty; } }
+            public string BundledToolRootPath { get { return Path.Combine(_rootPath, "tooling"); } }
             public string ConfiguredPluginSearchRoots { get { return Path.Combine(_rootPath, "plugins"); } }
             public string ReferenceAssemblyRootPath { get { return Path.Combine(_rootPath, "refs"); } }
             public string RuntimeContentRootPath { get { return Path.Combine(_rootPath, "runtime"); } }

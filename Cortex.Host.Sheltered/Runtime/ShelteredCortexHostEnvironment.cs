@@ -32,6 +32,11 @@ namespace Cortex.Host.Sheltered.Runtime
             get { return _layout.BundledPluginSearchRoots; }
         }
 
+        public string BundledToolRootPath
+        {
+            get { return _layout.BundledToolRootPath; }
+        }
+
         public string ConfiguredPluginSearchRoots
         {
             get { return _layout.ConfiguredPluginSearchRoots; }

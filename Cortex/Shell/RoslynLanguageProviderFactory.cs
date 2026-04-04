@@ -88,6 +88,16 @@ namespace Cortex.Shell
             }
 
             var hostBinPath = configuration != null ? configuration.HostBinPath ?? string.Empty : string.Empty;
+            var bundledToolRootPath = configuration != null ? configuration.BundledToolRootPath ?? string.Empty : string.Empty;
+            if (!string.IsNullOrEmpty(bundledToolRootPath))
+            {
+                candidates.Add(BundledToolPathResolver.ResolveFromToolRoot(
+                    bundledToolRootPath,
+                    "roslyn",
+                    "Cortex.Roslyn.Worker.exe",
+                    "Cortex.Roslyn.Worker.dll"));
+            }
+
             if (!string.IsNullOrEmpty(hostBinPath))
             {
                 candidates.Add(BundledToolPathResolver.ResolveFromHostBin(

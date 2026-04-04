@@ -1,8 +1,8 @@
 <Project>
   <Target Name="CortexValidateBundleProfile"
           BeforeTargets="Build"
-          Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleProfile)' != '' and '$(CortexBundleProfile)' != 'Sheltered' and '$(CortexBundleProfile)' != 'FutureHostReady'">
-    <Error Text="Unsupported CortexBundleProfile '$(CortexBundleProfile)'. Supported profiles: Sheltered and FutureHostReady." />
+          Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleProfile)' != '' and '$(CortexBundleProfile)' != 'Sheltered' and '$(CortexBundleProfile)' != 'Desktop'">
+    <Error Text="Unsupported CortexBundleProfile '$(CortexBundleProfile)'. Supported profiles: Sheltered and Desktop." />
   </Target>
 
   <Target Name="CortexValidateUnityEngineReference"

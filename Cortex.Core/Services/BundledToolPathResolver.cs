@@ -59,6 +59,26 @@ namespace Cortex.Core.Services
             return ResolveCandidate(candidates);
         }
 
+        public static string ResolveFromToolRoot(string bundledToolRootPath, string componentId, params string[] fileNames)
+        {
+            var candidates = new List<string>();
+            if (!string.IsNullOrEmpty(bundledToolRootPath) && !string.IsNullOrEmpty(componentId))
+            {
+                for (var i = 0; fileNames != null && i < fileNames.Length; i++)
+                {
+                    var fileName = fileNames[i];
+                    if (string.IsNullOrEmpty(fileName))
+                    {
+                        continue;
+                    }
+
+                    candidates.Add(Path.Combine(Path.Combine(bundledToolRootPath, componentId), fileName));
+                }
+            }
+
+            return ResolveCandidate(candidates);
+        }
+
         public static string ResolveCandidate(IEnumerable<string> candidatePaths)
         {
             if (candidatePaths == null)

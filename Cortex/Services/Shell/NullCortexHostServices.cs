@@ -73,6 +73,11 @@ namespace Cortex.Shell
                 get { return string.Empty; }
             }
 
+            public string BundledToolRootPath
+            {
+                get { return string.Empty; }
+            }
+
             public string ConfiguredPluginSearchRoots
             {
                 get { return string.Empty; }

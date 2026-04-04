@@ -13,7 +13,7 @@ namespace Cortex.Host.Avalonia.Composition
         {
             Options = options ?? new DesktopHostOptions();
             _bridgeClient = new NamedPipeDesktopBridgeClient(Options.BridgeClient);
-            WorkbenchViewModel = new MainWindowViewModel(_bridgeClient);
+            WorkbenchViewModel = new MainWindowViewModel(_bridgeClient, Options);
 
             var surfaceRegistry = new DesktopWorkbenchSurfaceRegistry();
             var shellStateStore = new DesktopShellStateStore(Options.ShellStateFilePath);

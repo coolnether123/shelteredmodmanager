@@ -9,11 +9,12 @@ namespace Cortex.Tests.Shell
     public sealed class BundledTabbyServerControllerTests
     {
         [Fact]
-        public void ResolveServerPath_UsesHostBinToolLane()
+        public void ResolveServerPath_PrefersExplicitBundledToolRoot()
         {
             var tempRoot = Path.Combine(Path.GetTempPath(), "cortex-tabby-tools-" + Guid.NewGuid().ToString("N"));
             var hostBinPath = Path.Combine(tempRoot, "host-bin");
-            var toolPath = Path.Combine(Path.Combine(Path.Combine(hostBinPath, "tools"), "tabby"), "Cortex.Tabby.Server.dll");
+            var bundledToolRootPath = Path.Combine(tempRoot, "tooling");
+            var toolPath = Path.Combine(Path.Combine(bundledToolRootPath, "tabby"), "Cortex.Tabby.Server.dll");
 
             Directory.CreateDirectory(Path.GetDirectoryName(toolPath) ?? string.Empty);
             File.WriteAllText(toolPath, string.Empty);
@@ -23,7 +24,8 @@ namespace Cortex.Tests.Shell
                 var resolvedPath = BundledTabbyServerController.ResolveServerPath(
                     new CompletionAugmentationProviderContext
                     {
-                        HostBinPath = hostBinPath
+                        HostBinPath = hostBinPath,
+                        BundledToolRootPath = bundledToolRootPath
                     });
 
                 Assert.Equal(Path.GetFullPath(toolPath), resolvedPath);

@@ -34,14 +34,19 @@ Run the host:
 
 - `dotnet run --project Cortex.Host.Avalonia\Cortex.Host.Avalonia.csproj`
 - `dotnet run --project Cortex.Host.Avalonia\Cortex.Host.Avalonia.csproj -- --pipe-name cortex.desktop.bridge`
+- `dotnet run --project Cortex.Host.Avalonia\Cortex.Host.Avalonia.csproj -- --bundle-root D:\path\to\artifacts\bundles\Desktop`
 
 The pipe name can also be overridden on both processes with `CORTEX_DESKTOP_BRIDGE_PIPE_NAME`.
+The desktop bundle root can be overridden with `CORTEX_DESKTOP_BUNDLE_ROOT`.
 
 ## Startup and session seam
 
 Desktop startup and session policy now lives under `Cortex.Host.Avalonia/Composition`:
 
+- `DesktopHostLaunchCoordinator` is the single desktop-first entry seam used by `Program.cs`
 - `DesktopSessionStartupService` resolves command-line and environment bridge settings
+- `DesktopBundlePolicy`, `DesktopBundledPluginResolver`, and `DesktopBundledToolResolver` own the authoritative desktop bundle shape
+- `DesktopHostEnvironmentPaths` carries the resolved bundle/plugin/tool roots for the active host session
 - `DesktopHostPathPolicy` owns the host data-root and log-path convention
 - `DesktopHostOptions` and `DesktopBridgeClientOptions` carry the resolved startup/session options
 - `DesktopHostApplicationSession` owns logging, composition-root lifetime, and main-window creation
@@ -130,11 +135,18 @@ What stays local to the desktop host:
 - `%LocalAppData%\Cortex.Host.Avalonia\cortex-desktop.log`
 - `%LocalAppData%\Cortex.Host.Avalonia\desktop-shell-state.json`
 - `%LocalAppData%\Cortex.Host.Avalonia\desktop-dock-layout.json`
+- the resolved desktop bundle root, plugin roots, and tool roots used for the session
 
 ## Package lane
 
-For host-lane packaging, `FutureHostReady` now includes the Avalonia host runtime lane under:
+For host-lane packaging, `Desktop` now includes the Avalonia host runtime lane under:
 
-- `artifacts\bundles\FutureHostReady\host\lib\`
+- `artifacts\bundles\Desktop\host\lib\`
 
-That lane is currently intended for `Cortex.Host.Avalonia`, `Cortex.Bridge`, and `Cortex.Shell.Shared`.
+The authoritative desktop bundle policy for this phase is:
+
+- host runtime lane: `Cortex.Host.Avalonia`, `Cortex.Bridge`, `Cortex.Shell.Shared`
+- bundled plugin lane: `plugins\Harmony\`
+- bundled tool lane: `tooling\roslyn\` and `tooling\tabby\`
+
+The non-Cortex `Manager` entry point still owns the legacy Sheltered product launch, so true external default launch remains outside this repo-owned boundary for now.
