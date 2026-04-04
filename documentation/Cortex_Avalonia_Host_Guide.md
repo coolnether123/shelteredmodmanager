@@ -8,7 +8,8 @@ It is intentionally modest in this phase:
 - onboarding/workspace selection
 - settings editing
 - workspace/project browsing
-- file preview for one editor/workspace-oriented surface
+- search result navigation over runtime-owned search state
+- file preview plus active editor/reference status for editor/workspace-oriented surfaces
 - Dock-owned desktop workbench structure
 - named-pipe bridge client for the legacy runtime process
 
@@ -35,6 +36,17 @@ Run the host:
 
 The pipe name can also be overridden on both processes with `CORTEX_DESKTOP_BRIDGE_PIPE_NAME`.
 
+## Startup and session seam
+
+Desktop startup and session policy now lives under `Cortex.Host.Avalonia/Composition`:
+
+- `DesktopSessionStartupService` resolves command-line and environment bridge settings
+- `DesktopHostPathPolicy` owns the host data-root and log-path convention
+- `DesktopHostOptions` and `DesktopBridgeClientOptions` carry the resolved startup/session options
+- `DesktopHostApplicationSession` owns logging, composition-root lifetime, and main-window creation
+
+`App.axaml.cs` is now only the Avalonia application entry and lifetime hook.
+
 ## Current composition boundary
 
 The host consumes `Cortex.Bridge` for:
@@ -47,6 +59,7 @@ The host consumes `Cortex.Shell.Shared` for:
 - settings document/session/apply workflows
 - onboarding models and selection logic
 - workspace/project discovery and tree shaping
+- editor/search/reference workbench projection models
 
 The legacy runtime process owns:
 
@@ -70,6 +83,7 @@ What runs in the legacy runtime process:
 
 - runtime shell/session ownership
 - settings/onboarding/workspace services
+- editor/search/reference bridge projection services
 - bridge snapshot production
 - semantic intent handling
 
@@ -82,8 +96,8 @@ What runs in the desktop host process:
 What crosses the bridge:
 
 - versioned session handshake messages
-- workbench snapshots for onboarding, settings, workspace/projects, and file preview
-- semantic user intents for onboarding selection, workspace root selection/import/analyze, settings edits/save, project selection, and file preview open
+- workbench snapshots for onboarding, settings, workspace/projects, editor status, search results, reference status, and file preview
+- semantic user intents for onboarding selection, workspace root selection/import/analyze, settings edits/save, project selection, file preview open, search updates, and search-result open
 - operation results and diagnostics
 
 What stays local to the desktop host:

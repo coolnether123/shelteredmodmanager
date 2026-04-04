@@ -220,7 +220,13 @@ namespace Cortex
                 _editorSymbolInteractionService);
             _statusPresenter = new ImguiShellStatusPresenter(_state, ExecuteCommand);
             _desktopBridgeHost = TryCreateNamedPipeBridgeHost(ResolveDesktopBridgePipeName());
-            _desktopBridgeSession = new RuntimeDesktopBridgeSession(_state, () => _settingsStore, () => ProjectCatalog);
+            _desktopBridgeSession = new RuntimeDesktopBridgeSession(
+                _state,
+                () => _settingsStore,
+                () => ProjectCatalog,
+                () => SourceLookupIndex,
+                () => TextSearchService,
+                () => NavigationService);
         }
 
         public void StartShell()

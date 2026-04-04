@@ -292,6 +292,50 @@ namespace Cortex.Tests.Architecture
         }
 
         [Fact]
+        public void DesktopBridgeRuntimeBoundary_SplitsFeatureOwnership_AndSharesWorkbenchWorkflowModels()
+        {
+            var bridgeSessionText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Shell", "Bridge", "RuntimeDesktopBridgeSession.cs");
+            var settingsFeatureText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Shell", "Bridge", "RuntimeDesktopBridgeSettingsFeature.cs");
+            var workspaceFeatureText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Shell", "Bridge", "RuntimeDesktopBridgeWorkspaceFeature.cs");
+            var workbenchFeatureText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Shell", "Bridge", "RuntimeDesktopBridgeWorkbenchFeature.cs");
+            var snapshotBuilderText = ArchitectureTestEnvironment.ReadRepoFile("Cortex", "Shell", "Bridge", "RuntimeDesktopBridgeSnapshotBuilder.cs");
+            var bridgeModelsText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Bridge", "BridgeMessageModels.cs");
+            var sharedWorkflowText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Shell.Shared", "Models", "WorkbenchWorkflowModels.cs");
+
+            Assert.Contains("RuntimeDesktopBridgeSettingsFeature", bridgeSessionText);
+            Assert.Contains("RuntimeDesktopBridgeWorkspaceFeature", bridgeSessionText);
+            Assert.Contains("RuntimeDesktopBridgeWorkbenchFeature", bridgeSessionText);
+            Assert.Contains("RuntimeDesktopBridgeSnapshotBuilder", bridgeSessionText);
+            Assert.DoesNotContain("ProjectWorkspaceService", bridgeSessionText);
+            Assert.DoesNotContain("SettingsDocumentBuilder", bridgeSessionText);
+            Assert.DoesNotContain("OnboardingService", bridgeSessionText);
+
+            Assert.Contains("SettingsSearchService", settingsFeatureText);
+            Assert.Contains("SettingsApplicationService", settingsFeatureText);
+            Assert.Contains("ProjectWorkspaceInteractionService", workspaceFeatureText);
+            Assert.Contains("SearchWorkbenchPresentationService", workbenchFeatureText);
+            Assert.Contains("ReferenceBrowserSessionService", workbenchFeatureText);
+            Assert.Contains("EditorPresentationService", workbenchFeatureText);
+            Assert.Contains("BuildSnapshot", snapshotBuilderText);
+            Assert.Contains("Editor = ", snapshotBuilderText);
+            Assert.Contains("Search = ", snapshotBuilderText);
+            Assert.Contains("Reference = ", snapshotBuilderText);
+
+            Assert.Contains("UpdateSearch", bridgeModelsText);
+            Assert.Contains("OpenSearchResult", bridgeModelsText);
+            Assert.Contains("EditorWorkbenchModel", bridgeModelsText);
+            Assert.Contains("SearchWorkbenchModel", bridgeModelsText);
+            Assert.Contains("ReferenceWorkbenchModel", bridgeModelsText);
+
+            Assert.Contains("WorkbenchSearchScope", sharedWorkflowText);
+            Assert.Contains("EditorWorkbenchModel", sharedWorkflowText);
+            Assert.Contains("SearchWorkbenchModel", sharedWorkflowText);
+            Assert.Contains("ReferenceWorkbenchModel", sharedWorkflowText);
+            Assert.DoesNotContain("Avalonia", sharedWorkflowText);
+            Assert.DoesNotContain("UnityEngine", sharedWorkflowText);
+        }
+
+        [Fact]
         public void RuntimeShellGuardrailDoc_DocumentsCurrentViolationsTargetBoundariesAndTestCoverage()
         {
             var docText = ArchitectureTestEnvironment.ReadRepoFile("documentation", "Cortex_Runtime_Shell_Separation_Guardrails.md");
