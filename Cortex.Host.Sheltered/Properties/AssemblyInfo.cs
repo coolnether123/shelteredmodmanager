@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 [assembly: AssemblyTitle("Cortex.Host.Sheltered")]
 [assembly: AssemblyDescription("Concrete Sheltered host adapter and composition for Cortex.")]
@@ -13,3 +14,4 @@ using System.Runtime.InteropServices;
 [assembly: Guid("748b7f6e-d557-48fa-b393-6374a7582255")]
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: InternalsVisibleTo("Cortex.Tests")]

@@ -2,6 +2,8 @@
 
 `Cortex.Host.Avalonia` is the current desktop-first Cortex host.
 
+The Sheltered runtime can now prefer this host as an external presentation mode instead of treating Avalonia as an in-process renderer. In that path, the legacy IMGUI shell still boots the runtime and named-pipe bridge, then launches the Avalonia host out of process when the host-scoped render setting selects `avalonia.external`.
+
 It is intentionally modest in this phase:
 
 - real application shell window
@@ -37,6 +39,8 @@ Run the host:
 - `dotnet run --project Cortex.Host.Avalonia\Cortex.Host.Avalonia.csproj -- --bundle-root D:\path\to\artifacts\bundles\Desktop`
 
 The pipe name can also be overridden on both processes with `CORTEX_DESKTOP_BRIDGE_PIPE_NAME`.
+
+When the Sheltered host launches Avalonia externally, the same pipe-name convention is reused. If `Cortex.Host.Avalonia.exe` is unavailable but `Cortex.Host.Avalonia.dll` exists, the Sheltered launcher falls back to `dotnet <dll>` and reports a specific startup failure when `dotnet.exe` is not available on `PATH`.
 The desktop bundle root can be overridden with `CORTEX_DESKTOP_BUNDLE_ROOT`.
 
 ## Startup and session seam

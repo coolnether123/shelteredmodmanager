@@ -35,6 +35,7 @@
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Runtime\IUnityWorkbenchContributionRegistrar.cs" />
+    <Compile Include="Runtime\IUnityShellStartupAction.cs" />
     <Compile Include="Runtime\UnityCortexShellBehaviour.cs" />
     <Compile Include="Runtime\UnityCortexShellBootstrapper.cs" />
     <Compile Include="Runtime\UnityWorkbenchFrameContext.cs" />

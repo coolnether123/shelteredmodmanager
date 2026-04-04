@@ -10,10 +10,12 @@ namespace Cortex.Host.Unity.Runtime
     public sealed class UnityCortexShellBehaviour : MonoBehaviour
     {
         private readonly CortexShellController _controller = new CortexShellController();
+        private ICortexHostServices _hostServices;
 
         public void ConfigureHostServices(ICortexHostServices hostServices)
         {
-            _controller.ConfigureHostServices(hostServices);
+            _hostServices = hostServices;
+            _controller.ConfigureHostServices(_hostServices);
         }
 
         private void Awake()
@@ -25,6 +27,7 @@ namespace Cortex.Host.Unity.Runtime
         private void Start()
         {
             _controller.StartShell();
+            RunStartupAction();
         }
 
         private void OnDestroy()
@@ -40,6 +43,28 @@ namespace Cortex.Host.Unity.Runtime
         private void OnGUI()
         {
             _controller.RenderShell();
+        }
+
+        private void RunStartupAction()
+        {
+            var unityHostServices = _hostServices as UnityCortexHostServices;
+            var startupAction = unityHostServices != null ? unityHostServices.StartupAction : null;
+            if (startupAction == null)
+            {
+                return;
+            }
+
+            try
+            {
+                startupAction.OnShellStarted(new UnityShellStartupContext(
+                    _hostServices,
+                    _controller.SetHostStatusMessage));
+            }
+            catch (System.Exception ex)
+            {
+                _controller.SetHostStatusMessage("Host startup action failed: " + ex.Message);
+                Debug.LogError("[Cortex.Host.Unity] Host startup action failed: " + ex);
+            }
         }
     }
 }
