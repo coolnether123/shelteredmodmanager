@@ -5,7 +5,7 @@ namespace Cortex.Host.Sheltered.Composition
 {
     internal sealed class ShelteredWorkbenchAppearanceContributions
     {
-        public void Register(WorkbenchPluginContext context, string rendererDisplayName)
+        public void Register(WorkbenchPluginContext context, string hostStatusSummary)
         {
             if (context == null)
             {
@@ -216,8 +216,8 @@ namespace Cortex.Host.Sheltered.Composition
             context.RegisterStatusItem(new StatusItemContribution
             {
                 ItemId = "cortex.status.renderer",
-                Text = rendererDisplayName,
-                ToolTip = "Active Cortex renderer backend.",
+                Text = hostStatusSummary,
+                ToolTip = "Active Cortex host and render mode.",
                 CommandId = string.Empty,
                 Severity = "Info",
                 Alignment = StatusItemAlignment.Right,

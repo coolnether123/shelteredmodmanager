@@ -6,12 +6,35 @@ namespace Cortex.Host.Sheltered.Runtime
 {
     public sealed class ShelteredUnityWorkbenchContributionRegistrar : IUnityWorkbenchContributionRegistrar
     {
+        private readonly ShelteredRenderHostCatalog _renderHostCatalog;
+        private readonly string _hostStatusSummary;
+
+        public ShelteredUnityWorkbenchContributionRegistrar()
+            : this(null, null)
+        {
+        }
+
+        internal ShelteredUnityWorkbenchContributionRegistrar(
+            ShelteredRenderHostCatalog renderHostCatalog,
+            string hostStatusSummary)
+        {
+            _renderHostCatalog = renderHostCatalog ?? ShelteredRenderHostCatalog.CreateDefault();
+            _hostStatusSummary = hostStatusSummary ?? string.Empty;
+        }
+
         public void RegisterBuiltIns(
             ICommandRegistry commandRegistry,
             IContributionRegistry contributionRegistry,
             string rendererDisplayName)
         {
-            ShelteredWorkbenchComposition.RegisterBuiltIns(commandRegistry, contributionRegistry, rendererDisplayName);
+            var statusSummary = !string.IsNullOrEmpty(_hostStatusSummary)
+                ? _hostStatusSummary
+                : rendererDisplayName;
+            ShelteredWorkbenchComposition.RegisterBuiltIns(
+                commandRegistry,
+                contributionRegistry,
+                statusSummary,
+                _renderHostCatalog);
         }
     }
 }

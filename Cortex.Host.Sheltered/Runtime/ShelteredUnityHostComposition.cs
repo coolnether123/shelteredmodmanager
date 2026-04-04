@@ -15,15 +15,20 @@ namespace Cortex.Host.Sheltered.Runtime
             }
 
             var environment = new ShelteredCortexHostEnvironment();
+            var pathLayout = ShelteredHostPathLayout.FromApplicationRoot(environment.ApplicationRootPath);
+            var renderHostCatalog = new ShelteredRenderHostCatalogBuilder().Build(
+                pathLayout,
+                ShelteredRenderHostSettings.LoadSelectedRenderHostId(environment));
             var frameContext = new UnityWorkbenchFrameContext();
             var hostServices = new UnityCortexHostServices(
                 environment,
                 new WindowsPathInteractionService(environment),
                 new UnityWorkbenchRuntimeFactory(
-                    new ShelteredUnityWorkbenchContributionRegistrar(),
+                    new ShelteredUnityWorkbenchContributionRegistrar(renderHostCatalog, renderHostCatalog.StatusSummary),
                     ImguiWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext)),
                 platformModule,
-                frameContext);
+                frameContext,
+                new ShelteredExternalAvaloniaHostStartupAction(renderHostCatalog));
 
             return new UnityCortexHostCompositionRoot(hostServices);
         }

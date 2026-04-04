@@ -257,6 +257,14 @@ namespace Cortex
             _lifecycleCoordinator.OnGui(this);
         }
 
+        public void SetHostStatusMessage(string statusMessage)
+        {
+            if (!string.IsNullOrEmpty(statusMessage))
+            {
+                _state.StatusMessage = statusMessage;
+            }
+        }
+
         private void RenderVisibleShell()
         {
             if (_state.OpenOnboardingRequested)
