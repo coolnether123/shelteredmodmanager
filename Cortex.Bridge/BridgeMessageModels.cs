@@ -38,7 +38,9 @@ namespace Cortex.Bridge
         AnalyzeWorkspace = 11,
         ImportWorkspace = 12,
         SelectProject = 13,
-        OpenFilePreview = 14
+        OpenFilePreview = 14,
+        UpdateSearch = 15,
+        OpenSearchResult = 16
     }
 
     public enum BridgeOperationStatus
@@ -94,8 +96,12 @@ namespace Cortex.Bridge
         public string SettingId { get; set; } = string.Empty;
         public string SettingValue { get; set; } = string.Empty;
         public string SearchQuery { get; set; } = string.Empty;
+        public WorkbenchSearchScope SearchScope { get; set; } = WorkbenchSearchScope.CurrentDocument;
+        public bool MatchCase { get; set; }
+        public bool WholeWord { get; set; }
         public string ProjectId { get; set; } = string.Empty;
         public string FilePath { get; set; } = string.Empty;
+        public int ResultIndex { get; set; } = -1;
     }
 
     public sealed class BridgeOperationResultMessage
@@ -125,6 +131,9 @@ namespace Cortex.Bridge
         public string ThemePreviewSummary { get; set; } = string.Empty;
         public SettingsBridgeSnapshot Settings { get; set; } = new SettingsBridgeSnapshot();
         public WorkspaceBridgeSnapshot Workspace { get; set; } = new WorkspaceBridgeSnapshot();
+        public EditorWorkbenchModel Editor { get; set; } = new EditorWorkbenchModel();
+        public SearchWorkbenchModel Search { get; set; } = new SearchWorkbenchModel();
+        public ReferenceWorkbenchModel Reference { get; set; } = new ReferenceWorkbenchModel();
     }
 
     public sealed class SettingsBridgeSnapshot

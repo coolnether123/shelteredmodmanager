@@ -16,9 +16,13 @@ namespace Cortex.Host.Avalonia.ViewModels
         private WorkbenchBridgeSnapshot _snapshot = new WorkbenchBridgeSnapshot();
         private SettingsBridgeSnapshot _settingsSnapshot = new SettingsBridgeSnapshot();
         private WorkspaceBridgeSnapshot _workspaceSnapshot = new WorkspaceBridgeSnapshot();
+        private EditorWorkbenchModel _editorSnapshot = new EditorWorkbenchModel();
+        private SearchWorkbenchModel _searchSnapshot = new SearchWorkbenchModel();
+        private ReferenceWorkbenchModel _referenceSnapshot = new ReferenceWorkbenchModel();
         private string _connectionStatusMessage = "Waiting for legacy runtime bridge...";
         private string _runtimeStatusMessage = "No runtime snapshot received yet.";
         private string _selectedSettingValue = string.Empty;
+        private string _workbenchSearchQuery = string.Empty;
 
         public MainWindowViewModel(NamedPipeDesktopBridgeClient bridgeClient)
         {
@@ -30,6 +34,7 @@ namespace Cortex.Host.Avalonia.ViewModels
             ThemeOptions = new ObservableCollection<ThemeDescriptor>();
             OnboardingProfiles = new ObservableCollection<OnboardingProfileDescriptor>();
             OnboardingLayouts = new ObservableCollection<OnboardingLayoutDescriptor>();
+            SearchMatches = new ObservableCollection<SearchMatchItemViewModel>();
 
             _bridgeClient.ConnectionStatusChanged += status => Dispatcher.UIThread.Post(() => ConnectionStatusMessage = status);
             _bridgeClient.OperationStatusReceived += status => Dispatcher.UIThread.Post(() =>
@@ -50,6 +55,7 @@ namespace Cortex.Host.Avalonia.ViewModels
         public ObservableCollection<ThemeDescriptor> ThemeOptions { get; }
         public ObservableCollection<OnboardingProfileDescriptor> OnboardingProfiles { get; }
         public ObservableCollection<OnboardingLayoutDescriptor> OnboardingLayouts { get; }
+        public ObservableCollection<SearchMatchItemViewModel> SearchMatches { get; }
 
         public ShellSettings Settings
         {
@@ -212,6 +218,22 @@ namespace Cortex.Host.Avalonia.ViewModels
             get { return _workspaceSnapshot.PreviewText ?? string.Empty; }
         }
 
+        public string WorkbenchSearchQuery
+        {
+            get { return _workbenchSearchQuery; }
+            set
+            {
+                var normalized = value ?? string.Empty;
+                if (string.Equals(_workbenchSearchQuery, normalized, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _workbenchSearchQuery = normalized;
+                RaisePropertyChanged();
+            }
+        }
+
         public string PreviewFilePath
         {
             get { return _workspaceSnapshot.PreviewFilePath ?? string.Empty; }
@@ -305,6 +327,41 @@ namespace Cortex.Host.Avalonia.ViewModels
             get { return _snapshot.ThemePreviewSummary ?? string.Empty; }
         }
 
+        public string ActiveEditorDisplayName
+        {
+            get { return _editorSnapshot.ActiveDocumentDisplayName ?? string.Empty; }
+        }
+
+        public string ActiveEditorStatusSummary
+        {
+            get
+            {
+                var language = _editorSnapshot.LanguageStatusLabel ?? string.Empty;
+                var completion = _editorSnapshot.CompletionStatusLabel ?? string.Empty;
+                if (string.IsNullOrEmpty(language))
+                {
+                    return completion;
+                }
+
+                if (string.IsNullOrEmpty(completion))
+                {
+                    return language;
+                }
+
+                return language + " | " + completion;
+            }
+        }
+
+        public string SearchStatusSummary
+        {
+            get { return _searchSnapshot.StatusMessage ?? string.Empty; }
+        }
+
+        public string ReferenceStatusSummary
+        {
+            get { return _referenceSnapshot.StatusMessage ?? string.Empty; }
+        }
+
         public string ActiveWorkbenchLayoutPresetId
         {
             get { return _snapshot.ActiveLayoutPresetId ?? string.Empty; }
@@ -363,6 +420,34 @@ namespace Cortex.Host.Avalonia.ViewModels
                 RequestId = Guid.NewGuid().ToString("N"),
                 IntentType = BridgeIntentType.OpenFilePreview,
                 FilePath = filePath ?? string.Empty
+            });
+        }
+
+        public void UpdateWorkbenchSearch()
+        {
+            TrySendIntent(new BridgeIntentMessage
+            {
+                RequestId = Guid.NewGuid().ToString("N"),
+                IntentType = BridgeIntentType.UpdateSearch,
+                SearchQuery = WorkbenchSearchQuery ?? string.Empty,
+                SearchScope = _searchSnapshot.Query != null ? _searchSnapshot.Query.Scope : WorkbenchSearchScope.CurrentDocument,
+                MatchCase = _searchSnapshot.Query != null && _searchSnapshot.Query.MatchCase,
+                WholeWord = _searchSnapshot.Query != null && _searchSnapshot.Query.WholeWord
+            });
+        }
+
+        public void OpenSearchResult(SearchMatchItemViewModel result)
+        {
+            if (result == null)
+            {
+                return;
+            }
+
+            TrySendIntent(new BridgeIntentMessage
+            {
+                RequestId = Guid.NewGuid().ToString("N"),
+                IntentType = BridgeIntentType.OpenSearchResult,
+                ResultIndex = result.ResultIndex
             });
         }
 
@@ -453,6 +538,9 @@ namespace Cortex.Host.Avalonia.ViewModels
             _snapshot = snapshot ?? new WorkbenchBridgeSnapshot();
             _settingsSnapshot = _snapshot.Settings ?? new SettingsBridgeSnapshot();
             _workspaceSnapshot = _snapshot.Workspace ?? new WorkspaceBridgeSnapshot();
+            _editorSnapshot = _snapshot.Editor ?? new EditorWorkbenchModel();
+            _searchSnapshot = _snapshot.Search ?? new SearchWorkbenchModel();
+            _referenceSnapshot = _snapshot.Reference ?? new ReferenceWorkbenchModel();
 
             ReplaceCollection(ThemeOptions, _snapshot.Catalog != null ? _snapshot.Catalog.Themes : new List<ThemeDescriptor>());
             ReplaceCollection(OnboardingProfiles, _snapshot.Catalog != null ? _snapshot.Catalog.OnboardingProfiles : new List<OnboardingProfileDescriptor>());
@@ -460,6 +548,7 @@ namespace Cortex.Host.Avalonia.ViewModels
             ReplaceCollection(VisibleSettingsSections, _settingsSnapshot.VisibleSections ?? new List<SettingsSectionModel>());
             ReplaceCollection(ActiveSettings, _settingsSnapshot.ActiveSettings ?? new List<SettingDescriptor>());
             ReplaceCollection(Projects, _workspaceSnapshot.Projects ?? new List<WorkspaceProjectDefinition>());
+            ReplaceSearchMatches();
 
             WorkspaceTree.Clear();
             if (_workspaceSnapshot.WorkspaceTreeRoot != null)
@@ -468,6 +557,7 @@ namespace Cortex.Host.Avalonia.ViewModels
             }
 
             SelectedSettingValue = GetDraftValue(_settingsSnapshot.SelectedSettingId);
+            WorkbenchSearchQuery = _searchSnapshot.Query != null ? _searchSnapshot.Query.SearchText ?? string.Empty : string.Empty;
             RuntimeStatusMessage = _snapshot.StatusMessage ?? RuntimeStatusMessage;
 
             RaisePropertyChanged(nameof(Settings));
@@ -491,6 +581,10 @@ namespace Cortex.Host.Avalonia.ViewModels
             RaisePropertyChanged(nameof(SelectedSettingHelpText));
             RaisePropertyChanged(nameof(IsSelectedSettingModified));
             RaisePropertyChanged(nameof(ThemePreviewSummary));
+            RaisePropertyChanged(nameof(ActiveEditorDisplayName));
+            RaisePropertyChanged(nameof(ActiveEditorStatusSummary));
+            RaisePropertyChanged(nameof(SearchStatusSummary));
+            RaisePropertyChanged(nameof(ReferenceStatusSummary));
             RaisePropertyChanged(nameof(ActiveWorkbenchLayoutPresetId));
         }
 
@@ -541,6 +635,39 @@ namespace Cortex.Host.Avalonia.ViewModels
             foreach (var item in items ?? Enumerable.Empty<T>())
             {
                 target.Add(item);
+            }
+        }
+
+        private void ReplaceSearchMatches()
+        {
+            SearchMatches.Clear();
+            if (_searchSnapshot.Documents == null)
+            {
+                return;
+            }
+
+            foreach (var document in _searchSnapshot.Documents)
+            {
+                if (document == null || document.Matches == null)
+                {
+                    continue;
+                }
+
+                foreach (var match in document.Matches)
+                {
+                    if (match == null)
+                    {
+                        continue;
+                    }
+
+                    SearchMatches.Add(new SearchMatchItemViewModel
+                    {
+                        ResultIndex = match.ResultIndex,
+                        DisplayText = "Ln " + match.LineNumber + ", Col " + match.ColumnNumber + "  " + (match.PreviewText ?? match.LineText ?? string.Empty),
+                        DocumentPath = match.DocumentPath ?? string.Empty,
+                        IsActive = match.IsActive
+                    });
+                }
             }
         }
     }

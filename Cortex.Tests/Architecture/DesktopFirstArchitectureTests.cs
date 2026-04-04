@@ -124,6 +124,10 @@ namespace Cortex.Tests.Architecture
             var bridgeClientText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Bridge", "NamedPipeDesktopBridgeClient.cs");
             var loggingText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Logging", "DesktopHostLogging.cs");
             var appText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "App.axaml.cs");
+            var startupServiceText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Composition", "DesktopSessionStartupService.cs");
+            var pathPolicyText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Composition", "DesktopHostPathPolicy.cs");
+            var sessionText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Composition", "DesktopHostApplicationSession.cs");
+            var compositionRootText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Composition", "DesktopHostCompositionRoot.cs");
             var appStylesText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "App.axaml");
             var shellText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "MainWindow.axaml");
             var mainWindowText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "MainWindow.axaml.cs");
@@ -144,9 +148,19 @@ namespace Cortex.Tests.Architecture
             Assert.DoesNotContain("Cortex.Shell.Unity.Imgui", references);
             Assert.Contains("WriteTo.File", loggingText);
             Assert.Contains("WriteTo.Debug", loggingText);
-            Assert.Contains("MainWindow", appText);
-            Assert.Contains("--pipe-name", appText);
-            Assert.Contains("CORTEX_DESKTOP_BRIDGE_PIPE_NAME", appText);
+            Assert.Contains("DesktopSessionStartupService", appText);
+            Assert.Contains("CreateMainWindow()", appText);
+            Assert.DoesNotContain("--pipe-name", appText);
+            Assert.DoesNotContain("CORTEX_DESKTOP_BRIDGE_PIPE_NAME", appText);
+            Assert.Contains("ResolvePipeName", startupServiceText);
+            Assert.Contains("--pipe-name", startupServiceText);
+            Assert.Contains("CORTEX_DESKTOP_BRIDGE_PIPE_NAME", startupServiceText);
+            Assert.Contains("ResolveDataRootPath", pathPolicyText);
+            Assert.Contains("ResolveLogFilePath", pathPolicyText);
+            Assert.Contains("DesktopHostLogging.Initialize", sessionText);
+            Assert.Contains("DesktopHostLogging.Dispose", sessionText);
+            Assert.Contains("DesktopHostOptions", compositionRootText);
+            Assert.Contains("NamedPipeDesktopBridgeClient", compositionRootText);
             Assert.Contains("DockFluentTheme", appStylesText);
             Assert.Contains("<dock:DockControl", shellText);
             Assert.Contains("Dock-owned structure", shellText);
@@ -156,7 +170,9 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("CreateDocumentDock()", dockFactoryText);
             Assert.Contains("CreateProportionalDock()", dockFactoryText);
             Assert.Contains("CreateRootDock()", dockFactoryText);
+            Assert.Contains("DesktopBridgeClientOptions", bridgeClientText);
             Assert.Contains("NamedPipeClientStream", bridgeClientText);
+            Assert.Contains("ClientDisplayName", bridgeClientText);
             Assert.Contains("BridgeMessageType.OpenSessionRequest", bridgeClientText);
         }
 
@@ -236,6 +252,8 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("cortex-desktop.log", hostGuideText);
             Assert.Contains("dotnet run --project", hostGuideText);
             Assert.Contains("Dock", hostGuideText);
+            Assert.Contains("DesktopSessionStartupService", hostGuideText);
+            Assert.Contains("DesktopHostApplicationSession", hostGuideText);
             Assert.Contains("CORTEX_DESKTOP_BRIDGE_PIPE_NAME", hostGuideText);
             Assert.Contains("legacy runtime process", hostGuideText);
 
@@ -244,6 +262,9 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("BridgeIntentMessage", bridgeGuideText);
             Assert.Contains("named pipe", bridgeGuideText);
             Assert.Contains("CORTEX_DESKTOP_BRIDGE_PIPE_NAME", bridgeGuideText);
+            Assert.Contains("RuntimeDesktopBridgeWorkbenchFeature", bridgeGuideText);
+            Assert.Contains("SearchWorkbenchModel", bridgeGuideText);
+            Assert.Contains("ReferenceWorkbenchModel", bridgeGuideText);
         }
     }
 }

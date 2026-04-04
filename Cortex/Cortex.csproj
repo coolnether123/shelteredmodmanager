@@ -63,6 +63,11 @@
     <Compile Include="Shell\Bridge\BridgeMessageSerializer.cs" />
     <Compile Include="Shell\Bridge\IDesktopBridgeHost.cs" />
     <Compile Include="Shell\Bridge\NullDesktopBridgeHost.cs" />
+    <Compile Include="Shell\Bridge\RuntimeDesktopBridgeModelCloner.cs" />
+    <Compile Include="Shell\Bridge\RuntimeDesktopBridgeSettingsFeature.cs" />
+    <Compile Include="Shell\Bridge\RuntimeDesktopBridgeSnapshotBuilder.cs" />
+    <Compile Include="Shell\Bridge\RuntimeDesktopBridgeWorkbenchFeature.cs" />
+    <Compile Include="Shell\Bridge\RuntimeDesktopBridgeWorkspaceFeature.cs" />
     <Compile Include="Shell\Bridge\RuntimeDesktopBridgeSession.cs" />
     <Compile Include="Shell\ShellBootstrapper.cs" />
     <Compile Include="Shell\ShellCommandDispatcher.cs" />

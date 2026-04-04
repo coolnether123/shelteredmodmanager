@@ -4,21 +4,31 @@ using System.IO.Pipes;
 using System.Threading;
 using System.Threading.Tasks;
 using Cortex.Bridge;
+using Cortex.Host.Avalonia.Composition;
 
 namespace Cortex.Host.Avalonia.Bridge
 {
     internal sealed class NamedPipeDesktopBridgeClient : IDisposable
     {
-        private readonly string _pipeName;
+        private readonly DesktopBridgeClientOptions _options;
         private readonly object _writeSync = new object();
         private CancellationTokenSource _cancellation;
         private Task _connectionTask;
         private NamedPipeClientStream _stream;
         private string _sessionId = string.Empty;
 
-        public NamedPipeDesktopBridgeClient(string pipeName)
+        public NamedPipeDesktopBridgeClient(DesktopBridgeClientOptions options)
         {
-            _pipeName = string.IsNullOrEmpty(pipeName) ? DesktopBridgeProtocol.DefaultPipeName : pipeName;
+            _options = options ?? new DesktopBridgeClientOptions();
+            if (string.IsNullOrEmpty(_options.PipeName))
+            {
+                _options.PipeName = DesktopBridgeProtocol.DefaultPipeName;
+            }
+
+            if (string.IsNullOrEmpty(_options.ClientDisplayName))
+            {
+                _options.ClientDisplayName = DesktopBridgeProtocol.DefaultClientDisplayName;
+            }
         }
 
         public event Action<string> ConnectionStatusChanged;
@@ -87,7 +97,7 @@ namespace Cortex.Host.Avalonia.Bridge
                 try
                 {
                     RaiseConnectionStatus("Connecting to legacy runtime bridge...");
-                    using (var stream = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous))
+                    using (var stream = new NamedPipeClientStream(".", _options.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous))
                     {
                         _stream = stream;
                         await stream.ConnectAsync(2000, cancellationToken);
@@ -100,7 +110,7 @@ namespace Cortex.Host.Avalonia.Bridge
                             MessageType = BridgeMessageType.OpenSessionRequest,
                             OpenSessionRequest = new OpenSessionRequestMessage
                             {
-                                ClientName = DesktopBridgeProtocol.DefaultClientDisplayName,
+                                ClientName = _options.ClientDisplayName,
                                 RequestedProtocolVersion = DesktopBridgeProtocol.Version
                             }
                         }))

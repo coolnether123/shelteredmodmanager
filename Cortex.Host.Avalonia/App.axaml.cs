@@ -2,15 +2,13 @@ using System;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Cortex.Bridge;
 using Cortex.Host.Avalonia.Composition;
-using Cortex.Host.Avalonia.Logging;
 
 namespace Cortex.Host.Avalonia
 {
     public partial class App : Application
     {
-        private DesktopHostCompositionRoot _compositionRoot;
+        private DesktopHostApplicationSession _session;
 
         public override void Initialize()
         {
@@ -19,43 +17,19 @@ namespace Cortex.Host.Avalonia
 
         public override void OnFrameworkInitializationCompleted()
         {
-            _compositionRoot = new DesktopHostCompositionRoot(ResolvePipeName(Environment.GetCommandLineArgs()));
-            DesktopHostLogging.Initialize(_compositionRoot.LogFilePath);
+            _session = new DesktopSessionStartupService().Start(Environment.GetCommandLineArgs());
 
             var desktop = ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
             if (desktop != null)
             {
-                desktop.MainWindow = new MainWindow
-                {
-                    DataContext = _compositionRoot.MainWindowViewModel
-                };
+                desktop.MainWindow = _session.CreateMainWindow();
                 desktop.Exit += delegate
                 {
-                    _compositionRoot.Dispose();
-                    DesktopHostLogging.Dispose();
+                    _session.Dispose();
                 };
             }
 
             base.OnFrameworkInitializationCompleted();
-        }
-
-        private static string ResolvePipeName(string[] args)
-        {
-            if (args != null)
-            {
-                for (var i = 0; i < args.Length - 1; i++)
-                {
-                    if (string.Equals(args[i], "--pipe-name", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return args[i + 1] ?? DesktopBridgeProtocol.DefaultPipeName;
-                    }
-                }
-            }
-
-            var configuredPipeName = Environment.GetEnvironmentVariable(DesktopBridgeProtocol.PipeNameEnvironmentVariable);
-            return string.IsNullOrEmpty(configuredPipeName)
-                ? DesktopBridgeProtocol.DefaultPipeName
-                : configuredPipeName;
         }
     }
 }
