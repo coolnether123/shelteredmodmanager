@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="using:Cortex.Host.Avalonia.Models"
+             x:Class="Cortex.Host.Avalonia.Views.WorkspaceDocumentView">
+  <Grid ColumnDefinitions="300,360,*" RowDefinitions="Auto,*" Margin="12">
+    <StackPanel Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="12">
+      <TextBox Width="520" Name="WorkspaceRootTextBox" Text="{Binding Settings.WorkspaceRootPath}" />
+      <Button Click="BrowseWorkspaceRoot_OnClick" Content="Browse Folder" />
+      <Button Click="AnalyzeWorkspace_OnClick" Content="Analyze Root" />
+      <Button Click="ImportWorkspace_OnClick" Content="Import Projects" />
+    </StackPanel>
+
+    <Border Grid.Row="1" Grid.Column="0" Margin="0,12,0,0" Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
+      <StackPanel>
+        <TextBlock FontWeight="SemiBold" Text="Projects" />
+        <ListBox Name="ProjectsListBox"
+                 Margin="0,12,0,0"
+                 ItemsSource="{Binding Projects}"
+                 SelectedItem="{Binding SelectedProject}">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Margin="0,0,0,8">
+                <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                <TextBlock Foreground="#9CA8BC" Text="{Binding SourceRootPath}" TextWrapping="Wrap" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="1" Grid.Column="1" Margin="16,12,0,0" Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
+      <StackPanel>
+        <TextBlock FontWeight="SemiBold" Text="Workspace Tree" />
+        <TreeView Name="WorkspaceTreeView"
+                  Margin="0,12,0,0"
+                  ItemsSource="{Binding WorkspaceTree}"
+                  SelectionChanged="WorkspaceTreeView_OnSelectionChanged">
+          <TreeView.ItemTemplate>
+            <TreeDataTemplate DataType="models:WorkspaceFileNodeViewModel" ItemsSource="{Binding Children}">
+              <TextBlock Text="{Binding Name}" />
+            </TreeDataTemplate>
+          </TreeView.ItemTemplate>
+        </TreeView>
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="1" Grid.Column="2" Margin="16,12,0,0" Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
+      <Grid RowDefinitions="Auto,*">
+        <StackPanel Spacing="4">
+          <TextBlock FontWeight="SemiBold" Text="File Preview" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding PreviewFilePath}" TextWrapping="Wrap" />
+        </StackPanel>
+        <TextBox Grid.Row="1"
+                 Margin="0,12,0,0"
+                 FontFamily="Cascadia Code, Consolas, Menlo"
+                 Text="{Binding FilePreviewText}"
+                 AcceptsReturn="True"
+                 IsReadOnly="True"
+                 TextWrapping="NoWrap"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

@@ -1,0 +1,13 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:dockFluent="clr-namespace:Dock.Avalonia.Themes.Fluent;assembly=Dock.Avalonia.Themes.Fluent"
+             x:Class="Cortex.Host.Avalonia.App">
+  <Application.Styles>
+    <FluentTheme />
+    <dockFluent:DockFluentTheme />
+    <Style Selector="Window">
+      <Setter Property="Background" Value="#17191F" />
+      <Setter Property="Foreground" Value="#E6E8EE" />
+    </Style>
+  </Application.Styles>
+</Application>

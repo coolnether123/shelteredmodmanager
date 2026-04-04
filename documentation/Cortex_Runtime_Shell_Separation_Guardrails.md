@@ -17,10 +17,11 @@ This phase is intentionally narrow:
 
 Desktop-first direction for this phase:
 
-- Cortex is being prepared for a future `.NET 8` desktop host before that host is introduced
-- the intended desktop stack is Avalonia for rendering, Dock for workbench/docking structure, and Serilog for structured desktop/worker logging
-- `Cortex.Contracts` is the first dedicated desktop-shareable lane; new desktop-facing contracts/models must not stay trapped only in `net35` projects once they need to cross that boundary
+- Cortex now has a real `.NET 8` desktop host in `Cortex.Host.Avalonia`
+- the current desktop stack is Avalonia for rendering, Dock for workbench structure, and Serilog for structured desktop/worker logging
+- `Cortex.Contracts`, `Cortex.Bridge`, and `Cortex.Shell.Shared` are the dedicated desktop-shareable lanes; new desktop-facing contracts/models must not stay trapped only in `net35` projects once they need to cross that boundary
 - the Unity IMGUI path remains supported, but only as the legacy concrete host/shell/backend path during this refactor
+- bridge snapshot publishing and semantic intent handling stay runtime-owned in the legacy process; the desktop host only consumes snapshots, maps them into view-model state, and sends bounded intents back
 
 ## Current violations to shrink
 

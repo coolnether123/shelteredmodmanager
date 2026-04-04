@@ -82,6 +82,10 @@
     <Compile Include="Ui\ImguiWorkbenchUiSurface.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Cortex.Bridge\Cortex.Bridge.csproj">
+      <Name>Cortex.Bridge</Name>
+      <Private>False</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Cortex.Contracts\Cortex.Contracts.csproj">
       <Project>{C458EE62-EED9-4B14-9EC3-910105D9BDFC}</Project>
       <Name>Cortex.Contracts</Name>

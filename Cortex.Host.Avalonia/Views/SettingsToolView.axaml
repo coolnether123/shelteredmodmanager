@@ -1,0 +1,76 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Cortex.Host.Avalonia.Views.SettingsToolView">
+  <Grid RowDefinitions="Auto,*" Margin="12">
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <TextBox Width="420" Watermark="Search settings" Text="{Binding SettingsSearchQuery}" />
+      <Button Click="SaveSettings_OnClick" Content="Save Settings" />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="280,320,*" Margin="0,12,0,0">
+      <Border Grid.Column="0" Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
+        <StackPanel>
+          <TextBlock FontWeight="SemiBold" Text="Sections" />
+          <ListBox Name="SettingsSectionsListBox"
+                   Margin="0,12,0,0"
+                   ItemsSource="{Binding VisibleSettingsSections}"
+                   SelectedItem="{Binding SelectedSettingsSection}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Margin="0,0,0,8">
+                  <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
+                  <TextBlock Foreground="#9CA8BC" Text="{Binding Description}" TextWrapping="Wrap" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </StackPanel>
+      </Border>
+
+      <Border Grid.Column="1" Margin="16,0,0,0" Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
+        <StackPanel>
+          <TextBlock FontWeight="SemiBold" Text="Settings" />
+          <ListBox Name="SettingsListBox"
+                   Margin="0,12,0,0"
+                   ItemsSource="{Binding ActiveSettings}"
+                   SelectedItem="{Binding SelectedSetting}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Margin="0,0,0,8">
+                  <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                  <TextBlock Foreground="#9CA8BC" Text="{Binding Description}" TextWrapping="Wrap" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </StackPanel>
+      </Border>
+
+      <Border Grid.Column="2" Margin="16,0,0,0" Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="10">
+            <TextBlock FontSize="20" FontWeight="SemiBold" Text="{Binding SelectedSettingDisplayName}" />
+            <TextBlock Foreground="#9CA8BC" Text="{Binding SelectedSettingDescription}" TextWrapping="Wrap" />
+            <ComboBox Name="SettingChoiceComboBox"
+                      ItemsSource="{Binding SelectedSettingChoices}"
+                      SelectedItem="{Binding SelectedSettingChoice}"
+                      IsVisible="{Binding HasSelectedSettingChoices}"
+                      >
+              <ComboBox.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBox Name="SettingValueTextBox"
+                     Text="{Binding SelectedSettingValue}"
+                     Watermark="{Binding SelectedSettingPlaceholder}"
+                     LostFocus="SettingValueTextBox_OnLostFocus" />
+            <TextBlock Foreground="#A8D0FF" Text="{Binding SelectedSettingHelpText}" TextWrapping="Wrap" />
+            <TextBlock Foreground="#9CA8BC" Text="{Binding IsSelectedSettingModified}" />
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

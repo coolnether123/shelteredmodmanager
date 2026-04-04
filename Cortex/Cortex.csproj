@@ -31,6 +31,8 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="MMLog.cs" />
@@ -58,6 +60,9 @@
     <Compile Include="Shell\WorkbenchExtensionServices.cs" />
     <Compile Include="Shell\ShellFeatureRegistry.cs" />
     <Compile Include="Shell\CortexShellOnboardingLifecycle.cs" />
+    <Compile Include="Shell\Bridge\BridgeMessageSerializer.cs" />
+    <Compile Include="Shell\Bridge\NamedPipeDesktopBridgeHost.cs" />
+    <Compile Include="Shell\Bridge\RuntimeDesktopBridgeSession.cs" />
     <Compile Include="Shell\ShellBootstrapper.cs" />
     <Compile Include="Shell\ShellCommandDispatcher.cs" />
     <Compile Include="Shell\ShellSessionCoordinator.cs" />
@@ -189,6 +194,10 @@
       <Name>Cortex.Contracts</Name>
       <Private>False</Private>
     </ProjectReference>
+    <ProjectReference Include="..\Cortex.Bridge\Cortex.Bridge.csproj">
+      <Name>Cortex.Bridge</Name>
+      <Private>False</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Cortex.Core\Cortex.Core.csproj">
       <Project>{A5F28666-878B-4C48-A7DA-4A19BFC79F02}</Project>
       <Name>Cortex.Core</Name>
@@ -197,6 +206,10 @@
     <ProjectReference Include="..\Cortex.Presentation\Cortex.Presentation.csproj">
       <Project>{ADAEC1F0-6882-42D6-9016-E79C9EBA1605}</Project>
       <Name>Cortex.Presentation</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Shell.Shared\Cortex.Shell.Shared.csproj">
+      <Name>Cortex.Shell.Shared</Name>
       <Private>False</Private>
     </ProjectReference>
     <ProjectReference Include="..\Cortex.CompletionProviders\Cortex.CompletionProviders.csproj">
