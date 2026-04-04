@@ -5,12 +5,15 @@
 
   <PropertyGroup Condition="
     '$(MSBuildProjectName)' == 'Cortex' or
+    '$(MSBuildProjectName)' == 'Cortex.Bridge' or
     '$(MSBuildProjectName)' == 'Cortex.CompletionProviders' or
     '$(MSBuildProjectName)' == 'Cortex.Contracts' or
     '$(MSBuildProjectName)' == 'Cortex.Core' or
+    '$(MSBuildProjectName)' == 'Cortex.Host.Avalonia' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Sheltered' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Unity' or
     '$(MSBuildProjectName)' == 'Cortex.Shell.Unity.Imgui' or
+    '$(MSBuildProjectName)' == 'Cortex.Shell.Shared' or
     '$(MSBuildProjectName)' == 'Cortex.Ollama' or
     '$(MSBuildProjectName)' == 'Cortex.OpenRouter' or
     '$(MSBuildProjectName)' == 'Cortex.PathPicker.Host' or
@@ -39,7 +42,9 @@
       </PropertyGroup>
     </When>
     <When Condition="
-      '$(MSBuildProjectName)' == 'Cortex.Contracts'">
+      '$(MSBuildProjectName)' == 'Cortex.Bridge' or
+      '$(MSBuildProjectName)' == 'Cortex.Contracts' or
+      '$(MSBuildProjectName)' == 'Cortex.Shell.Shared'">
       <PropertyGroup>
         <CortexProjectRole>DesktopShared</CortexProjectRole>
       </PropertyGroup>
@@ -133,7 +138,11 @@
 
   <PropertyGroup Condition="
     '$(MSBuildProjectName)' == 'Cortex' or
+    '$(MSBuildProjectName)' == 'Cortex.Bridge' or
+    '$(MSBuildProjectName)' == 'Cortex.Contracts' or
+    '$(MSBuildProjectName)' == 'Cortex.Host.Avalonia' or
     '$(MSBuildProjectName)' == 'Cortex.Renderers.Imgui' or
+    '$(MSBuildProjectName)' == 'Cortex.Shell.Shared' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Sheltered' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Unity' or
     '$(MSBuildProjectName)' == 'Cortex.Shell.Unity.Imgui' or
@@ -183,7 +192,12 @@
 
   <PropertyGroup Condition="'$(CortexBundleProfile)' == 'FutureHostReady' and (
     '$(CortexBundleContentKind)' == 'PortableRuntimeAssembly' or
-    '$(CortexBundleContentKind)' == 'ExternalTool')">
+    '$(CortexBundleContentKind)' == 'ExternalTool' or
+    ('$(CortexBundleContentKind)' == 'HostRuntimeAssembly' and (
+      '$(MSBuildProjectName)' == 'Cortex.Bridge' or
+      '$(MSBuildProjectName)' == 'Cortex.Contracts' or
+      '$(MSBuildProjectName)' == 'Cortex.Host.Avalonia' or
+      '$(MSBuildProjectName)' == 'Cortex.Shell.Shared')))">
     <CortexBundleEnabledForProfile>true</CortexBundleEnabledForProfile>
   </PropertyGroup>
 

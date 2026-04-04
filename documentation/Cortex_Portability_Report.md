@@ -13,27 +13,33 @@ Use it when:
 
 ## 0. Desktop-first direction and the net35 boundary
 
-Cortex is being refactored toward a desktop-first architecture. The primary future client for this plan is a new `.NET 8` desktop host, while the Unity IMGUI path remains a supported legacy shell/backend.
+Cortex is being refactored toward a desktop-first architecture. The primary desktop client for this plan is now `Cortex.Host.Avalonia`, a real `.NET 8` host, while the Unity IMGUI path remains a supported legacy shell/backend.
 
-The intended desktop host stack for this phase is:
+The current desktop host stack for this phase is:
 
 - Avalonia for host rendering
-- Dock for workbench and docking structure
+- Dock for desktop workbench structure
 - Serilog for structured desktop and worker logging
 
-The current portability blocker is explicit: most reusable Cortex runtime assemblies are still `net35`, while the first external worker/tool projects are already `net8`. Any contract, protocol, or model that a future desktop host and current workers both need must not remain trapped only in the `net35` projects.
+The current host now proves the desktop lane through a Dock-owned workbench structure with onboarding, settings, workspace/project selection, and file-preview/editor-focused surfaces.
 
-The first dedicated shared lane that crosses the `net35` boundary is now:
+The current portability blocker is explicit: most reusable Cortex runtime assemblies are still `net35`, while the first external worker/tool projects are already `net8`. Any contract, protocol, or model that the desktop host and current workers both need must not remain trapped only in the `net35` projects.
 
+The dedicated shared lanes that currently cross the `net35` boundary are now:
+
+- `Cortex.Bridge`
 - `Cortex.Contracts`
+- `Cortex.Shell.Shared`
 
-It is multi-targeted for both `net35` and `net8.0` so the same sources can serve the current runtime path, external workers, and a future desktop host without linked-source duplication.
+They are multi-targeted for both `net35` and `net8.0` so the same sources can serve the current runtime path, external workers, and the Avalonia host without linked-source duplication.
 
 The first extracted contracts now living in that lane are:
 
 - `LanguageServiceProtocol` worker request/response contracts
 - `CompletionAugmentationPromptContract`
 - `SemanticTokenClassification` and `SemanticTokenClassificationNames`
+- named pipe bridge envelopes, handshake DTOs, snapshot DTOs, and semantic intent DTOs
+- settings/onboarding/workspace models and application services for the desktop shell
 
 The categories most likely to move into that lane next are:
 
@@ -44,7 +50,9 @@ The categories most likely to move into that lane next are:
 
 Desktop-shareable Cortex currently means:
 
+- `Cortex.Bridge`
 - `Cortex.Contracts`
+- `Cortex.Shell.Shared`
 
 Rules for this lane:
 
@@ -88,9 +96,10 @@ Portable Cortex must not own:
 
 ## 3. Host-Specific Cortex
 
-Sheltered host projects:
+Host-specific Cortex projects:
 
 - `Cortex`
+- `Cortex.Host.Avalonia`
 - `Cortex.Renderers.Imgui`
 - `Cortex.Host.Sheltered`
 - `Cortex.Host.Unity`
@@ -98,6 +107,7 @@ Sheltered host projects:
 
 Host-specific Cortex owns:
 
+- desktop-host startup, local persistence, and Dock workbench composition
 - Unity-hosted shell runtime seams
 - Sheltered path/config/environment mapping
 - concrete Sheltered workbench composition
@@ -117,6 +127,8 @@ The current in-process host path is explicitly legacy:
 - Unity/IMGUI remains supported
 - IMGUI is a concrete backend/executor, not the architectural center of Cortex
 - host-specific projects should not be widened just to satisfy the future desktop host
+
+`Cortex.Host.Avalonia` is the current desktop host. It consumes `Cortex.Shell.Shared` and stays out of the legacy Unity/IMGUI host graph.
 
 ## 4. Plugin-Specific Cortex
 
@@ -169,7 +181,9 @@ Permanent dependency rules:
 
 Desktop-shareable project reference inventory:
 
+- `Cortex.Bridge -> Cortex.Shell.Shared`
 - `Cortex.Contracts -> none`
+- `Cortex.Shell.Shared -> none`
 
 Current portable Cortex project reference inventory:
 
@@ -217,11 +231,11 @@ Outputs:
 Outputs:
 
 - portable runtime assemblies -> `artifacts/bundles/FutureHostReady/portable/lib/`
-- host runtime assemblies -> reserved at `artifacts/bundles/FutureHostReady/host/lib/`
+- host runtime assemblies -> `artifacts/bundles/FutureHostReady/host/lib/`
 - bundled plugins -> reserved at `artifacts/bundles/FutureHostReady/plugins/`
 - external tools -> `artifacts/bundles/FutureHostReady/tooling/<tool>/`
 
-`FutureHostReady` is intentionally a packaging profile, not a second runnable host.
+`FutureHostReady` now packages the real desktop host lane through `Cortex.Host.Avalonia`, `Cortex.Bridge`, and `Cortex.Shell.Shared`. It is still not a second full product shape: broader host plugin policy and richer desktop bundle composition remain follow-up work.
 
 Portable Cortex binaries are copied once per profile into the profile's runtime assembly lane. Tool and plugin outputs are copied into their own lanes instead of being emitted as runtime assemblies.
 The centralized bundle target also removes stale plugin/tool files from runtime lanes before copying, so old `decompiler`-style placements do not survive a later packaging run.
@@ -254,20 +268,17 @@ Generic Cortex plugin discovery must not use:
 - implicit `Plugins` subfolders
 - product-shaped fallback paths
 
-## 10. Future Host Completion Steps
+## 10. Desktop Host Completion Steps
 
-To add a real host behind `FutureHostReady`, complete these steps in new Cortex-prefixed host projects:
+To continue the real host behind `FutureHostReady`, complete these steps in Cortex-prefixed desktop host projects:
 
-1. Add a new host path/layout model in the new host adapter.
-2. Implement a new `ICortexHostEnvironment` and `ICortexHostServices` for that host.
-3. Implement a new host/platform module for loader/runtime integration.
-4. Add host-owned workbench composition for settings, onboarding, themes, and commands.
-5. Decide which bundled plugins belong in that host and enable their package lane for the new profile.
-6. Decide which external tools are required and package them under the new profile's tool lane.
-7. Update centralized bundle props/targets with the new profile's host/plugin/tool routing.
-8. Add architecture tests proving portable/tooling/desktop-shareable projects still do not reference the new host projects.
-9. Add grep-style tests proving host-specific strings live only in the new host projects.
-10. Add bundle verification showing runtime, plugin, and tool lanes are separated for the new profile.
+1. Add persisted and user-directed Dock layout policy without pushing docking assumptions back into generic shared contracts.
+2. Extract any additional UI-neutral runtime, presentation, shell, or bridge contracts the desktop host now proves are genuinely cross-boundary.
+3. Broaden the desktop editor/workbench surfaces beyond the current onboarding, settings, workspace, and file-preview path.
+4. Decide which bundled plugins belong in the desktop host and enable their package lane for the `FutureHostReady` profile.
+5. Decide which external tools are required and keep packaging them under the profile's tool lane.
+6. Add architecture tests proving portable/tooling/desktop-shareable projects still do not reference new desktop host code incorrectly.
+7. Add bundle verification showing runtime, host, plugin, and tool lanes are separated for the profile.
 
 Do not complete these steps by widening `Cortex.Core`, `Cortex.Presentation`, or `Cortex.Plugins.Abstractions` with host-specific fallbacks.
 
@@ -280,13 +291,14 @@ Remaining portability debt is intentionally short:
 - Shell/editor IMGUI call sites still execute raw drawing and event consumption locally even though their shared policy is increasingly portable.
 - `CortexWindowChromeController` still owns IMGUI-time splitter drag and resize execution.
 - End-to-end non-Cortex product packaging outside Cortex still assumes `Dist/SMM`.
-- `FutureHostReady` has package lanes but no second host adapter yet.
+- the current Avalonia host proves only a first Dock-owned set of real IDE surfaces and still lacks persisted layout policy.
+- the current named pipe bridge is intentionally narrow and only carries onboarding, settings, workspace/project browsing, and file-preview/editor-oriented snapshots and intents.
 
 ## 12. Hard Boundaries
 
 When modifying Cortex:
 
-- put desktop-shareable contracts and models in `Cortex.Contracts` or another `.NET 8`-consumable shared lane once they need to cross the `net35` boundary
+- put desktop-shareable contracts and models in `Cortex.Contracts`, `Cortex.Bridge`, `Cortex.Shell.Shared`, or another `.NET 8`-consumable shared lane once they need to cross the `net35` boundary
 - put reusable logic in portable Cortex only if it does not encode host identity
 - put host identity, host paths, host config readers, and host bundle assumptions in host projects only
 - put feature behavior in plugins, not in the generic shell

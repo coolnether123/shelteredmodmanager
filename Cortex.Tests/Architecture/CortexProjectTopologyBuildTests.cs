@@ -26,12 +26,15 @@ namespace Cortex.Tests.Architecture
 
         private static readonly string[] DesktopSharedProjectNames =
         {
-            "Cortex.Contracts"
+            "Cortex.Bridge",
+            "Cortex.Contracts",
+            "Cortex.Shell.Shared"
         };
 
         private static readonly string[] HostSpecificProjectNames =
         {
             "Cortex",
+            "Cortex.Host.Avalonia",
             "Cortex.Shell.Unity.Imgui",
             "Cortex.Host.Sheltered",
             "Cortex.Host.Unity",
@@ -110,6 +113,59 @@ namespace Cortex.Tests.Architecture
                     violations.Length == 0,
                     projectName + " references host-specific Cortex projects: " + string.Join(", ", violations));
             }
+        }
+
+        [Fact]
+        public void AvaloniaDesktopHost_ProjectStaysOnDesktopLane_AndAvoidsLegacyHostDependencies()
+        {
+            var projectText = File.ReadAllText(GetProjectPath("Cortex.Host.Avalonia"));
+            var referencedProjects = LoadProjectReferenceNames("Cortex.Host.Avalonia");
+            var appText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Avalonia", "App.axaml"));
+            var appCodeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Avalonia", "App.axaml.cs"));
+            var shellText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Avalonia", "MainWindow.axaml"));
+            var bridgeClientText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Avalonia", "Bridge", "NamedPipeDesktopBridgeClient.cs"));
+            var dockFactoryText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Host.Avalonia", "Services", "DesktopWorkbenchDockFactory.cs"));
+
+            Assert.Contains("<TargetFramework>net8.0</TargetFramework>", projectText);
+            Assert.Contains("Avalonia", projectText);
+            Assert.Contains("Dock.Avalonia", projectText);
+            Assert.Contains("Dock.Model.Mvvm", projectText);
+            Assert.Contains("Serilog", projectText);
+            Assert.Contains("Cortex.Bridge", referencedProjects);
+            Assert.Contains("Cortex.Shell.Shared", referencedProjects);
+            Assert.DoesNotContain("Cortex", referencedProjects);
+            Assert.DoesNotContain("Cortex.Host.Unity", referencedProjects);
+            Assert.DoesNotContain("Cortex.Host.Sheltered", referencedProjects);
+            Assert.DoesNotContain("Cortex.Shell.Unity.Imgui", referencedProjects);
+            Assert.DoesNotContain("Cortex.Renderers.Imgui", referencedProjects);
+            Assert.DoesNotContain("Cortex.PathPicker.Host", referencedProjects);
+            Assert.DoesNotContain("Cortex.Roslyn.Worker", referencedProjects);
+            Assert.DoesNotContain("Cortex.Tabby.Server", referencedProjects);
+            Assert.Contains("DockFluentTheme", appText);
+            Assert.Contains("--pipe-name", appCodeText);
+            Assert.Contains("DockControl", shellText);
+            Assert.Contains("NamedPipeClientStream", bridgeClientText);
+            Assert.Contains("DesktopWorkbenchDockFactory", dockFactoryText);
+            Assert.Contains("CreateDocumentDock()", dockFactoryText);
+            Assert.Contains("CreateToolDock()", dockFactoryText);
+        }
+
+        [Fact]
+        public void DesktopBridgeProject_SitsOnDesktopSharedLane_AndAvoidsHostSpecificDependencies()
+        {
+            var projectText = File.ReadAllText(GetProjectPath("Cortex.Bridge"));
+            var bridgeText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.Bridge", "BridgeMessageModels.cs"));
+            var referencedProjects = LoadProjectReferenceNames("Cortex.Bridge");
+
+            Assert.Contains("<TargetFrameworks>net35;net8.0</TargetFrameworks>", projectText);
+            Assert.Contains("Cortex.Shell.Shared", referencedProjects);
+            Assert.DoesNotContain("Cortex.Host.Avalonia", referencedProjects);
+            Assert.DoesNotContain("Cortex", referencedProjects);
+            Assert.DoesNotContain("Avalonia", bridgeText);
+            Assert.DoesNotContain("Unity", bridgeText);
+            Assert.DoesNotContain("Imgui", bridgeText);
+            Assert.Contains("BridgeMessageEnvelope", bridgeText);
+            Assert.Contains("WorkbenchBridgeSnapshot", bridgeText);
         }
 
         [Fact]
@@ -433,6 +489,10 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("BundledPlugin", propsText);
             Assert.Contains("ExternalTool", propsText);
             Assert.Contains("CortexCopyBundleOutputs", targetsText);
+            Assert.Contains("'$(MSBuildProjectName)' == 'Cortex.Bridge'", propsText);
+            Assert.Contains("'$(MSBuildProjectName)' == 'Cortex.Contracts'", propsText);
+            Assert.Contains("'$(MSBuildProjectName)' == 'Cortex.Host.Avalonia'", propsText);
+            Assert.Contains("'$(MSBuildProjectName)' == 'Cortex.Shell.Shared'", propsText);
         }
 
         [Fact]
@@ -468,7 +528,7 @@ namespace Cortex.Tests.Architecture
         }
 
         [Fact]
-        public void SolutionFolders_ExposeDesktopSharedLegacyHostAndExternalToolLanes()
+        public void SolutionFolders_ExposeDesktopSharedDesktopHostLegacyHostAndExternalToolLanes()
         {
             var solutionText = File.ReadAllText(Path.Combine(RepoRoot, "Cortex.sln"));
 
@@ -478,9 +538,18 @@ namespace Cortex.Tests.Architecture
             Assert.Contains(@"""Legacy Unity IMGUI"", ""Legacy Unity IMGUI"", ""{B9F3EFD9-8792-DBB5-53D5-5D013E0311F9}""", solutionText);
             Assert.Contains(@"""External Workers and Tools"", ""External Workers and Tools"", ""{6D3901D8-58B2-4BCE-9CB0-2E20E9B4D1A1}""", solutionText);
             Assert.Contains(@"""Cortex.Contracts"", ""Cortex.Contracts\Cortex.Contracts.csproj"", ""{C458EE62-EED9-4B14-9EC3-910105D9BDFC}""", solutionText);
+            Assert.Contains(@"""Cortex.Bridge"", ""Cortex.Bridge\Cortex.Bridge.csproj"", ""{40A0D7B5-7EAD-4B32-8DA2-B619B5DE5C2F}""", solutionText);
+            Assert.Contains(@"""Cortex.Shell.Shared"", ""Cortex.Shell.Shared\Cortex.Shell.Shared.csproj"", ""{E11C9B2D-2E3A-4E91-A2C1-15AB449E6C01}""", solutionText);
+            Assert.Contains(@"""Cortex.Host.Avalonia"", ""Cortex.Host.Avalonia\Cortex.Host.Avalonia.csproj"", ""{A4F4068D-EB9A-4C72-8FD5-4F48CE0BC781}""", solutionText);
             Assert.Contains(@"{A8C48835-F53B-41D1-B062-B03E6517F331} = {B2BF7298-65F5-4C4A-B13B-3FD4EF5182DF}", solutionText);
             Assert.Contains(@"{A76A96F9-6592-4C92-A9E8-4E43A7F4E293} = {B2BF7298-65F5-4C4A-B13B-3FD4EF5182DF}", solutionText);
             Assert.Contains(@"{C458EE62-EED9-4B14-9EC3-910105D9BDFC} = {A8C48835-F53B-41D1-B062-B03E6517F331}", solutionText);
+            Assert.Contains(@"{40A0D7B5-7EAD-4B32-8DA2-B619B5DE5C2F} = {A8C48835-F53B-41D1-B062-B03E6517F331}", solutionText);
+            Assert.Contains(@"{E11C9B2D-2E3A-4E91-A2C1-15AB449E6C01} = {A8C48835-F53B-41D1-B062-B03E6517F331}", solutionText);
+            Assert.Contains(@"{A4F4068D-EB9A-4C72-8FD5-4F48CE0BC781} = {A76A96F9-6592-4C92-A9E8-4E43A7F4E293}", solutionText);
+            Assert.Contains(@"{40A0D7B5-7EAD-4B32-8DA2-B619B5DE5C2F}.Debug|Any CPU.Build.0 = Debug|Any CPU", solutionText);
+            Assert.Contains(@"{E11C9B2D-2E3A-4E91-A2C1-15AB449E6C01}.Debug|Any CPU.Build.0 = Debug|Any CPU", solutionText);
+            Assert.Contains(@"{A4F4068D-EB9A-4C72-8FD5-4F48CE0BC781}.Debug|Any CPU.Build.0 = Debug|Any CPU", solutionText);
             Assert.Contains(@"""Cortex.Shell.Unity.Imgui"", ""Cortex.Shell.Unity.Imgui\Cortex.Shell.Unity.Imgui.csproj"", ""{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3}""", solutionText);
             Assert.Contains(@"{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3}.Debug|Any CPU.Build.0 = Debug|Any CPU", solutionText);
             Assert.Contains(@"{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3} = {86FA87A4-554D-7FD3-E7FA-07CF08F2607B}", solutionText);
@@ -551,12 +620,15 @@ namespace Cortex.Tests.Architecture
         }
 
         [Fact]
-        public void PortabilityReport_DocumentsRoleBoundaries_AndFutureHostCompletion()
+        public void PortabilityReport_DocumentsRoleBoundaries_AndDesktopHostCompletion()
         {
             var reportText = File.ReadAllText(Path.Combine(RepoRoot, "documentation", "Cortex_Portability_Report.md"));
 
             Assert.Contains("desktop-first architecture", reportText);
+            Assert.Contains("Cortex.Bridge", reportText);
             Assert.Contains("Cortex.Contracts", reportText);
+            Assert.Contains("Cortex.Shell.Shared", reportText);
+            Assert.Contains("Cortex.Host.Avalonia", reportText);
             Assert.Contains("net35", reportText);
             Assert.Contains("LanguageServiceProtocol", reportText);
             Assert.Contains("CompletionAugmentationPromptContract", reportText);
@@ -566,12 +638,15 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("Serilog", reportText);
             Assert.Contains("Portable Cortex", reportText);
             Assert.Contains("Host-Specific Cortex", reportText);
+            Assert.Contains("Host-specific Cortex projects:", reportText);
             Assert.Contains("Plugin-Specific Cortex", reportText);
             Assert.Contains("External-Tool Cortex", reportText);
-            Assert.Contains("Future Host Completion Steps", reportText);
+            Assert.Contains("Desktop Host Completion Steps", reportText);
             Assert.Contains("FutureHostReady", reportText);
             Assert.Contains("Cortex.Host.Sheltered", reportText);
             Assert.Contains("Cortex.Rendering.RuntimeUi", reportText);
+            Assert.Contains("Cortex.Bridge -> Cortex.Shell.Shared", reportText);
+            Assert.Contains("Cortex.Shell.Shared -> none", reportText);
             Assert.Contains("BundledPluginSearchRoots", reportText);
             Assert.Contains("CortexPluginSearchRoots", reportText);
             Assert.Contains("ConfiguredPluginSearchRoots", reportText);

@@ -4,7 +4,7 @@ This document describes the permanent Cortex architecture in the current codebas
 
 For the current refactor-phase guardrails around runtime, shell, bridge/host, and IMGUI backend ownership, see `documentation/Cortex_Runtime_Shell_Separation_Guardrails.md`.
 
-The current direction is desktop-first. Cortex is being prepared for a future `.NET 8` desktop host while the existing Unity IMGUI path remains a supported legacy host/shell path. This prompt does not add the desktop host yet, but it does make the desktop-facing lanes explicit in the repo structure so later prompts can extract real contracts and models into them deliberately.
+The current direction is desktop-first. Cortex now has a real `.NET 8` desktop host in `Cortex.Host.Avalonia`, while the existing Unity IMGUI path remains a supported legacy host/shell path. Desktop-facing contracts, bridge messages, and shell workflows that must cross the `net35` boundary now live in explicit shared lanes instead of being left trapped in the legacy shell graph.
 
 Portable Cortex code provides typed extension seams, runtime capabilities, state ownership, and workbench/editor composition. Host-bound behavior is isolated in Sheltered-specific host projects. Feature-specific behavior belongs in plugins such as the extracted Harmony module.
 
@@ -14,28 +14,36 @@ For the final portability boundary map, bundle profile intent, and future-host c
 
 The Cortex solution is intentionally split into explicit lanes:
 
-- desktop-shareable contracts/models: `Cortex.Contracts`
+- desktop-shareable contracts/models: `Cortex.Contracts`, `Cortex.Bridge`, `Cortex.Shell.Shared`
 - portable core/libraries: `Cortex.Core`, `Cortex.Presentation`, `Cortex.Rendering`, `Cortex.Rendering.RuntimeUi`, `Cortex.Plugins.Abstractions`, `Cortex.CompletionProviders`, `Cortex.Tabby`, `Cortex.Ollama`, `Cortex.OpenRouter`
 - legacy Unity IMGUI host path: `Cortex`, `Cortex.Shell.Unity.Imgui`, `Cortex.Renderers.Imgui`, `Cortex.Host.Unity`, `Cortex.Host.Sheltered`, `Cortex.Platform.ModAPI`
+- desktop host lane: `Cortex.Host.Avalonia`
 - plugin-specific feature modules: `Cortex.Plugin.Harmony`
 - external tooling: `Cortex.Roslyn.Worker`, `Cortex.Tabby.Server`, `Cortex.PathPicker.Host`
-- future desktop host lane: reserved in the solution under `Desktop Host` until the shared runtime/contracts work is ready
 
 Portable projects must not reference host-specific Cortex projects.
 Desktop-shareable projects must also stay host-neutral and must remain consumable from `.NET 8`.
 
-The intended desktop host stack for this phase is:
+The current desktop host stack for this phase is:
 
 - Avalonia for host rendering
-- Dock for workbench and docking structure
+- Dock for desktop workbench structure
 - Serilog for structured desktop/worker logging
+
+The current Avalonia host now renders the workbench through a Dock-owned layout with onboarding, settings, workspace selection, and file-preview/editor-oriented surfaces. Persisted layout policy, broader modules, and a fuller IDE workbench shape remain later work.
 
 Product-shaped bundle layouts are no longer declared inside reusable project files. Neutral project outputs now come from shared Cortex build props/targets, and bundle layouts are selected through centralized build profiles.
 
 Unity-hosted Cortex project files also no longer commit a machine-local Sheltered `UnityEngine.dll` path. That reference is supplied through the shared build contract in `Directory.Build.props` and `Directory.Build.targets`.
 
 Reusable settings and environment contracts are host-neutral. Portable Cortex code works with `WorkspaceRootPath`, `RuntimeContentRootPath`, and `ReferenceAssemblyRootPath`; only host adapters provide concrete host-specific values for those paths.
-The remaining hard boundary is `net35`: most portable runtime assemblies are still `.NET Framework 3.5`, so contracts/models that a future desktop host, workers, or optional bridges must consume cannot stay trapped there indefinitely. `Cortex.Contracts` is now the first real cross-boundary lane, housing the Roslyn language-service protocol, completion prompt contract, and semantic token classification helpers that both the current runtime graph and future host or worker processes can consume before the Avalonia host is introduced.
+The remaining hard boundary is still `net35`: most portable runtime assemblies are still `.NET Framework 3.5`, so contracts/models that the desktop host, workers, or optional bridges must consume cannot stay trapped there indefinitely. `Cortex.Contracts` now owns worker-facing protocol contracts, `Cortex.Bridge` owns versioned bridge envelopes and transport-safe DTOs, and `Cortex.Shell.Shared` owns desktop-consumable settings/onboarding/workspace shell workflows and models that both the legacy runtime path and the Avalonia host can consume without linked-source duplication.
+
+The current out-of-process seam is a named-pipe bridge:
+
+- the legacy runtime process publishes workbench snapshots and applies semantic intents
+- the Avalonia host process connects as a client, renders the current Dock-owned workbench, and sends bounded user intents back
+- only versioned bridge envelopes plus shared shell snapshot models cross the process boundary
 
 ## 1. Core roles
 
@@ -77,6 +85,19 @@ Sheltered-specific projects may depend on portable Cortex libraries, but not the
 
 `Cortex.Host.Unity` is the reusable Unity-host runtime layer. `Cortex.Host.Sheltered` is the concrete Sheltered adapter that supplies environment paths, bundled workbench contributions, and concrete host composition.
 Bridge concerns remain optional integration seams around the runtime and shell; they are not the architectural center of Cortex and should not pull generic IDE/runtime code back toward a game-specific host shape.
+
+For the current bridge split, runtime-side ownership stays in the legacy runtime process:
+
+- named-pipe listener ownership
+- bridge snapshot publishing
+- semantic intent application back into runtime-owned state and services
+
+Desktop-host ownership stays in `Cortex.Host.Avalonia`:
+
+- named-pipe client ownership
+- snapshot-to-view-model projection
+- Dock-owned structure and window composition
+- connection and lifecycle status presentation
 
 `Cortex.Host.Unity` may depend on Unity build references, but it must not own any committed Sheltered install path. The active Unity managed reference path is supplied externally through the centralized Cortex build properties.
 

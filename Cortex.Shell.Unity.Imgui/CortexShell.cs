@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Cortex.Chrome;
+using Cortex.Bridge;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Core.Services;
@@ -16,6 +17,7 @@ using Cortex.Services.Editor.Context;
 using Cortex.Services.Onboarding;
 using Cortex.Services.Search;
 using Cortex.Shell;
+using Cortex.Shell.Bridge;
 using Cortex.Rendering.RuntimeUi;
 using Cortex.Presentation.Services;
 using Cortex.Shell.Unity.Imgui;
@@ -49,6 +51,8 @@ namespace Cortex
         private readonly CortexOnboardingCoordinator _onboardingCoordinator = new CortexOnboardingCoordinator();
         private readonly CortexShellOnboardingLifecycle _onboardingLifecycle = new CortexShellOnboardingLifecycle();
         private readonly ShellOnboardingOverlayPresenter _onboardingOverlayPresenter = new ShellOnboardingOverlayPresenter();
+        private readonly NamedPipeDesktopBridgeHost _desktopBridgeHost;
+        private readonly RuntimeDesktopBridgeSession _desktopBridgeSession;
 
         private IWorkbenchRuntime _workbenchRuntime;
         private ICortexSettingsStore _settingsStore;
@@ -86,6 +90,8 @@ namespace Cortex
         private WorkbenchPresentationSnapshot _frameSnapshot;
         private readonly IWorkbenchPresenter _snapshotPresenter = new WorkbenchPresenter();
         private readonly Dictionary<string, Rect> _menuGroupRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        private string _desktopBridgeSessionId = string.Empty;
+        private long _lastPublishedBridgeRevision = -1;
 
         private ShellServiceMap _services;
         private IList<ILanguageProviderFactory> _hostLanguageProviderFactories = new List<ILanguageProviderFactory>();
@@ -213,6 +219,8 @@ namespace Cortex
                 CloseFind,
                 _editorSymbolInteractionService);
             _statusPresenter = new ImguiShellStatusPresenter(_state, ExecuteCommand);
+            _desktopBridgeHost = new NamedPipeDesktopBridgeHost(ResolveDesktopBridgePipeName());
+            _desktopBridgeSession = new RuntimeDesktopBridgeSession(_state, () => _settingsStore, () => ProjectCatalog);
         }
 
         public void StartShell()
@@ -223,6 +231,7 @@ namespace Cortex
         public void ShutdownShell()
         {
             _lifecycleCoordinator.Destroy(this);
+            _desktopBridgeHost.Stop();
             DisposeWorkbenchRuntime();
         }
 
@@ -234,6 +243,7 @@ namespace Cortex
             }
 
             _lifecycleCoordinator.Update(this);
+            PumpDesktopBridge();
         }
 
         public void RenderShell()
@@ -374,6 +384,8 @@ namespace Cortex
             {
                 return;
             }
+            _desktopBridgeSession.Initialize();
+            _desktopBridgeHost.Start();
             ActivateContainer(_state.Workbench.SideContainerId);
             if (!string.IsNullOrEmpty(_state.Workbench.SecondarySideContainerId))
             {
@@ -624,6 +636,132 @@ namespace Cortex
                 ActivateContainer,
                 PersistWorkbenchSession,
                 PersistWindowSettings);
+        }
+
+        private void PumpDesktopBridge()
+        {
+            BridgeMessageEnvelope inbound;
+            while (_desktopBridgeHost.TryDequeueInbound(out inbound))
+            {
+                if (inbound == null)
+                {
+                    continue;
+                }
+
+                switch (inbound.MessageType)
+                {
+                    case BridgeMessageType.OpenSessionRequest:
+                        HandleDesktopBridgeOpenSession(inbound);
+                        break;
+                    case BridgeMessageType.UserIntent:
+                        HandleDesktopBridgeIntent(inbound);
+                        break;
+                }
+            }
+
+            if (_desktopBridgeSession.SynchronizeFromRuntime())
+            {
+                PublishDesktopBridgeSnapshot(false);
+            }
+        }
+
+        private void HandleDesktopBridgeOpenSession(BridgeMessageEnvelope inbound)
+        {
+            var pipeName = ResolveDesktopBridgePipeName();
+            var request = inbound != null && inbound.OpenSessionRequest != null
+                ? inbound.OpenSessionRequest
+                : new OpenSessionRequestMessage();
+            var protocolMatched = request.RequestedProtocolVersion == DesktopBridgeProtocol.Version;
+            _desktopBridgeSessionId = Guid.NewGuid().ToString("N");
+            _lastPublishedBridgeRevision = -1;
+            _desktopBridgeHost.EnqueueOutbound(new BridgeMessageEnvelope
+            {
+                ProtocolVersion = DesktopBridgeProtocol.Version,
+                MessageId = Guid.NewGuid().ToString("N"),
+                SessionId = _desktopBridgeSessionId,
+                MessageType = BridgeMessageType.SessionOpened,
+                SessionOpened = new SessionOpenedMessage
+                {
+                    RuntimeDisplayName = DesktopBridgeProtocol.DefaultRuntimeDisplayName,
+                    PipeName = pipeName,
+                    AcceptedProtocolVersion = DesktopBridgeProtocol.Version,
+                    StatusMessage = protocolMatched
+                        ? "Connected to Cortex runtime bridge."
+                        : "Connected to Cortex runtime bridge with protocol fallback."
+                }
+            });
+            if (!protocolMatched)
+            {
+                _desktopBridgeHost.EnqueueOutbound(new BridgeMessageEnvelope
+                {
+                    ProtocolVersion = DesktopBridgeProtocol.Version,
+                    MessageId = Guid.NewGuid().ToString("N"),
+                    SessionId = _desktopBridgeSessionId,
+                    MessageType = BridgeMessageType.Diagnostic,
+                    Diagnostic = new BridgeDiagnosticMessage
+                    {
+                        Category = "protocol",
+                        Message = "Client requested protocol v" + request.RequestedProtocolVersion + "; runtime is serving v" + DesktopBridgeProtocol.Version + ".",
+                        UtcTimestamp = DateTime.UtcNow.ToString("o")
+                    }
+                });
+            }
+
+            PublishDesktopBridgeSnapshot(true);
+        }
+
+        private void HandleDesktopBridgeIntent(BridgeMessageEnvelope inbound)
+        {
+            if (inbound == null || inbound.Intent == null)
+            {
+                return;
+            }
+
+            var result = _desktopBridgeSession.ApplyIntent(inbound.Intent);
+            _desktopBridgeHost.EnqueueOutbound(new BridgeMessageEnvelope
+            {
+                ProtocolVersion = DesktopBridgeProtocol.Version,
+                MessageId = Guid.NewGuid().ToString("N"),
+                SessionId = _desktopBridgeSessionId,
+                MessageType = BridgeMessageType.OperationResult,
+                OperationResult = result
+            });
+            PublishDesktopBridgeSnapshot(true);
+        }
+
+        private void PublishDesktopBridgeSnapshot(bool force)
+        {
+            if (!_desktopBridgeHost.IsClientConnected || string.IsNullOrEmpty(_desktopBridgeSessionId))
+            {
+                return;
+            }
+
+            if (!force && _lastPublishedBridgeRevision == _desktopBridgeSession.Revision)
+            {
+                return;
+            }
+
+            _lastPublishedBridgeRevision = _desktopBridgeSession.Revision;
+            _desktopBridgeHost.EnqueueOutbound(new BridgeMessageEnvelope
+            {
+                ProtocolVersion = DesktopBridgeProtocol.Version,
+                MessageId = Guid.NewGuid().ToString("N"),
+                SessionId = _desktopBridgeSessionId,
+                MessageType = BridgeMessageType.WorkbenchSnapshot,
+                WorkbenchSnapshot = new WorkbenchSnapshotMessage
+                {
+                    Revision = _desktopBridgeSession.Revision,
+                    Snapshot = _desktopBridgeSession.BuildSnapshot()
+                }
+            });
+        }
+
+        private static string ResolveDesktopBridgePipeName()
+        {
+            var configuredPipeName = Environment.GetEnvironmentVariable(DesktopBridgeProtocol.PipeNameEnvironmentVariable);
+            return string.IsNullOrEmpty(configuredPipeName)
+                ? DesktopBridgeProtocol.DefaultPipeName
+                : configuredPipeName;
         }
 
         private CortexShellLayoutContext GetLayoutContext()
