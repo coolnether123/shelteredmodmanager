@@ -293,12 +293,22 @@ namespace Cortex.Host.Avalonia.ViewModels
 
         public string DesktopBundledPluginSummary
         {
-            get { return _hostOptions.BundledPluginSummary ?? string.Empty; }
+            get
+            {
+                return _hostOptions.EnvironmentPaths != null
+                    ? _hostOptions.EnvironmentPaths.BundledPluginSummary ?? string.Empty
+                    : string.Empty;
+            }
         }
 
         public string DesktopBundledToolSummary
         {
-            get { return _hostOptions.BundledToolSummary ?? string.Empty; }
+            get
+            {
+                return _hostOptions.EnvironmentPaths != null
+                    ? _hostOptions.EnvironmentPaths.BundledToolSummary ?? string.Empty
+                    : string.Empty;
+            }
         }
 
         public string SelectedSettingDisplayName

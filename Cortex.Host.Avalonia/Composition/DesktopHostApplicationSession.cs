@@ -19,8 +19,8 @@ namespace Cortex.Host.Avalonia.Composition
                 "Desktop host session started. Profile={BundleProfile}, BundleRoot={BundleRoot}, Plugins={PluginSummary}, Tools={ToolSummary}, PipeName={PipeName}",
                 Options.BundleProfileName,
                 Options.EnvironmentPaths != null ? Options.EnvironmentPaths.BundleRootPath : string.Empty,
-                Options.BundledPluginSummary,
-                Options.BundledToolSummary,
+                Options.EnvironmentPaths != null ? Options.EnvironmentPaths.BundledPluginSummary : string.Empty,
+                Options.EnvironmentPaths != null ? Options.EnvironmentPaths.BundledToolSummary : string.Empty,
                 Options.BridgeClient != null ? Options.BridgeClient.PipeName : string.Empty);
         }
 

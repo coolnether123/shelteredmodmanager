@@ -2,7 +2,7 @@
 
 This document records the Cortex project/build topology after the portability refactor.
 
-For the decision-complete portability model and future-host checklist, see `documentation/Cortex_Portability_Report.md`.
+For the decision-complete portability model and desktop-host follow-up boundaries, see `documentation/Cortex_Portability_Report.md`.
 
 ## 1. Project roles
 
@@ -198,4 +198,4 @@ After this pass, the main topology debt is explicit rather than hidden:
 - most portable runtime assemblies are still `net35`, so the desktop-first boundary is visible but not yet resolved
 - IMGUI is still the only concrete renderer
 - shell/editor call sites in `Cortex` still execute IMGUI draw and event code directly
-- the Avalonia host currently proves only a first Dock-owned set of settings/onboarding/workspace/editor surfaces and still lacks persisted layout policy
+- the Avalonia host now owns persisted layout and the first real workbench surfaces, but broader runtime workflows still need to move across the bridge as justified

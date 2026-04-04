@@ -45,8 +45,8 @@ Desktop startup and session policy now lives under `Cortex.Host.Avalonia/Composi
 
 - `DesktopHostLaunchCoordinator` is the single desktop-first entry seam used by `Program.cs`
 - `DesktopSessionStartupService` resolves command-line and environment bridge settings
-- `DesktopBundlePolicy`, `DesktopBundledPluginResolver`, and `DesktopBundledToolResolver` own the authoritative desktop bundle shape
-- `DesktopHostEnvironmentPaths` carries the resolved bundle/plugin/tool roots for the active host session
+- `DesktopBundlePolicy` owns the authoritative desktop bundle shape
+- `DesktopHostEnvironmentPaths` carries the resolved bundle/plugin/tool roots plus the derived plugin/tool summaries for the active host session
 - `DesktopHostPathPolicy` owns the host data-root and log-path convention
 - `DesktopHostOptions` and `DesktopBridgeClientOptions` carry the resolved startup/session options
 - `DesktopHostApplicationSession` owns logging, composition-root lifetime, and main-window creation

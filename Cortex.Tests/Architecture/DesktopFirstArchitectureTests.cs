@@ -129,8 +129,6 @@ namespace Cortex.Tests.Architecture
             var launchCoordinatorText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Composition", "DesktopHostLaunchCoordinator.cs");
             var bundlePolicyText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Composition", "DesktopBundlePolicy.cs");
             var environmentPathsText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Composition", "DesktopHostEnvironmentPaths.cs");
-            var pluginResolverText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Composition", "DesktopBundledPluginResolver.cs");
-            var toolResolverText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Composition", "DesktopBundledToolResolver.cs");
             var pathPolicyText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Composition", "DesktopHostPathPolicy.cs");
             var sessionText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Composition", "DesktopHostApplicationSession.cs");
             var compositionRootText = ArchitectureTestEnvironment.ReadRepoFile("Cortex.Host.Avalonia", "Composition", "DesktopHostCompositionRoot.cs");
@@ -171,8 +169,6 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("ResolvePipeName", startupServiceText);
             Assert.Contains("ResolveBundleRootOverride", startupServiceText);
             Assert.Contains("DesktopBundlePolicy", startupServiceText);
-            Assert.Contains("DesktopBundledPluginResolver", startupServiceText);
-            Assert.Contains("DesktopBundledToolResolver", startupServiceText);
             Assert.Contains("--pipe-name", startupServiceText);
             Assert.Contains("CORTEX_DESKTOP_BRIDGE_PIPE_NAME", startupServiceText);
             Assert.Contains("CORTEX_DESKTOP_BUNDLE_ROOT", startupServiceText);
@@ -183,8 +179,9 @@ namespace Cortex.Tests.Architecture
             Assert.DoesNotContain("windows-path-picker", bundlePolicyText);
             Assert.Contains("BundleRootPath", environmentPathsText);
             Assert.Contains("BundledToolRootPath", environmentPathsText);
-            Assert.Contains("ResolveBundledSearchRoots", pluginResolverText);
-            Assert.Contains("ResolveComponentRootPath", toolResolverText);
+            Assert.Contains("BundledPluginSearchRoots", environmentPathsText);
+            Assert.Contains("BundledPluginSummary", environmentPathsText);
+            Assert.Contains("BundledToolSummary", environmentPathsText);
             Assert.Contains("StartWithClassicDesktopLifetime", launchCoordinatorText);
             Assert.Contains("ResolveDataRootPath", pathPolicyText);
             Assert.Contains("ResolveBundleRootPath", pathPolicyText);
@@ -321,6 +318,7 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("DesktopDockLayoutPersistenceService", hostGuideText);
             Assert.Contains("DesktopBundlePolicy", hostGuideText);
             Assert.Contains("DesktopHostLaunchCoordinator", hostGuideText);
+            Assert.Contains("DesktopHostEnvironmentPaths", hostGuideText);
             Assert.Contains("Desktop", hostGuideText);
             Assert.Contains("desktop-shell-state.json", hostGuideText);
             Assert.Contains("desktop-dock-layout.json", hostGuideText);
