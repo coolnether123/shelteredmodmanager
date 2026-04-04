@@ -648,7 +648,7 @@ namespace Cortex.Tests.Architecture
             Assert.Contains("Host-specific Cortex projects:", reportText);
             Assert.Contains("Plugin-Specific Cortex", reportText);
             Assert.Contains("External-Tool Cortex", reportText);
-            Assert.Contains("Desktop Host Completion Steps", reportText);
+            Assert.Contains("Desktop Host Follow-Up Boundaries", reportText);
             Assert.Contains("Host bundle B: `Desktop`", reportText);
             Assert.Contains("Cortex.Host.Sheltered", reportText);
             Assert.Contains("Cortex.Rendering.RuntimeUi", reportText);

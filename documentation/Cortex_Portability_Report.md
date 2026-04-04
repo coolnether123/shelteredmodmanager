@@ -269,17 +269,21 @@ Generic Cortex plugin discovery must not use:
 - implicit `Plugins` subfolders
 - product-shaped fallback paths
 
-## 10. Desktop Host Completion Steps
+## 10. Desktop Host Follow-Up Boundaries
 
-To continue the real host behind `Desktop`, complete these steps in Cortex-prefixed desktop host projects:
+The default-host phase is now landed inside Cortex-owned code:
 
-1. Add persisted and user-directed Dock layout policy without pushing docking assumptions back into generic shared contracts.
-2. Extract any additional UI-neutral runtime, presentation, shell, or bridge contracts the desktop host now proves are genuinely cross-boundary.
-3. Broaden the desktop editor/workbench surfaces beyond the current onboarding, settings, workspace, and file-preview path.
-4. Extend or adjust the desktop plugin set only when the desktop host proves it needs more than the current Harmony lane.
-5. Decide which external tools are required and keep packaging them under the profile's tool lane.
-6. Add architecture tests proving portable/tooling/desktop-shareable projects still do not reference new desktop host code incorrectly.
-7. Add bundle verification showing runtime, host, plugin, and tool lanes are separated for the profile.
+1. `Cortex.Host.Avalonia` is the authoritative desktop host direction.
+2. `Desktop` is the authoritative Cortex-owned desktop bundle profile.
+3. Persisted Dock layout, broader workbench surfaces, and desktop-first startup/session policy are now host-owned.
+4. Shared bridge/contracts lanes carry the current desktop-facing runtime snapshots and intents.
+
+The remaining follow-up work is intentionally narrower:
+
+1. Extract additional UI-neutral runtime, presentation, shell, or bridge contracts only when a real desktop workflow proves the need.
+2. Extend or adjust the desktop plugin set only when the desktop host proves it needs more than the current Harmony lane.
+3. Keep tool policy explicit; add more desktop-bundled tools only when the workflow requires them.
+4. Move beyond bridge-browsing/status surfaces only when runtime-owned editor/build workflows are ready to cross cleanly.
 
 Do not complete these steps by widening `Cortex.Core`, `Cortex.Presentation`, or `Cortex.Plugins.Abstractions` with host-specific fallbacks.
 

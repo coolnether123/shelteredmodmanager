@@ -1,4 +1,6 @@
 using System;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 
 namespace Cortex.Host.Avalonia.Composition
 {

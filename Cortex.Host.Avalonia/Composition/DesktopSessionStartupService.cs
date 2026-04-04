@@ -8,28 +8,18 @@ namespace Cortex.Host.Avalonia.Composition
     {
         private readonly DesktopHostPathPolicy _pathPolicy;
         private readonly DesktopBundlePolicy _bundlePolicy;
-        private readonly DesktopBundledPluginResolver _bundledPluginResolver;
-        private readonly DesktopBundledToolResolver _bundledToolResolver;
 
         public DesktopSessionStartupService()
-            : this(
-                new DesktopHostPathPolicy(),
-                new DesktopBundlePolicy(),
-                new DesktopBundledPluginResolver(),
-                new DesktopBundledToolResolver())
+            : this(new DesktopHostPathPolicy(), new DesktopBundlePolicy())
         {
         }
 
         public DesktopSessionStartupService(
             DesktopHostPathPolicy pathPolicy,
-            DesktopBundlePolicy bundlePolicy,
-            DesktopBundledPluginResolver bundledPluginResolver,
-            DesktopBundledToolResolver bundledToolResolver)
+            DesktopBundlePolicy bundlePolicy)
         {
             _pathPolicy = pathPolicy ?? new DesktopHostPathPolicy();
             _bundlePolicy = bundlePolicy ?? new DesktopBundlePolicy();
-            _bundledPluginResolver = bundledPluginResolver ?? new DesktopBundledPluginResolver();
-            _bundledToolResolver = bundledToolResolver ?? new DesktopBundledToolResolver();
         }
 
         public DesktopHostApplicationSession Start(string[] args)
@@ -56,9 +46,6 @@ namespace Cortex.Host.Avalonia.Composition
                 LogFilePath = _pathPolicy.ResolveLogFilePath(dataRootPath),
                 ShellStateFilePath = _pathPolicy.ResolveShellStateFilePath(dataRootPath),
                 DockLayoutFilePath = _pathPolicy.ResolveDockLayoutFilePath(dataRootPath),
-                BundledPluginSearchRoots = _bundledPluginResolver.ResolveBundledSearchRoots(environmentPaths, _bundlePolicy),
-                BundledPluginSummary = _bundledPluginResolver.BuildSummary(environmentPaths, _bundlePolicy),
-                BundledToolSummary = _bundledToolResolver.BuildSummary(environmentPaths, _bundlePolicy),
                 StartupModeSummary = BuildStartupModeSummary(environmentPaths),
                 EnvironmentPaths = environmentPaths,
                 BridgeClient = new DesktopBridgeClientOptions
