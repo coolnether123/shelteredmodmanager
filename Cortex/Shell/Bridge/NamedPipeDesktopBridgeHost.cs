@@ -7,7 +7,7 @@ using Cortex.Bridge;
 
 namespace Cortex.Shell.Bridge
 {
-    internal sealed class NamedPipeDesktopBridgeHost : IDisposable
+    internal sealed class NamedPipeDesktopBridgeHost : IDesktopBridgeHost
     {
         private readonly string _pipeName;
         private readonly object _sync = new object();

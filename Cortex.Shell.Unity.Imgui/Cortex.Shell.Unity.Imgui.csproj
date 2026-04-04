@@ -64,6 +64,9 @@
     <Compile Include="Modules\Settings\SettingsModule.cs" />
     <Compile Include="Modules\Shared\CortexPathField.cs" />
     <Compile Include="Modules\Shared\RuntimeLogVisuals.cs" />
+    <Compile Include="..\Cortex\Shell\Bridge\NamedPipeDesktopBridgeHost.cs">
+      <Link>Bridge\NamedPipeDesktopBridgeHost.cs</Link>
+    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\Editor\Input\EditorKeybindingService.cs" />
     <Compile Include="Services\Editor\Input\EditorOverlayInteractionService.cs" />
