@@ -511,7 +511,8 @@ namespace Cortex.Plugins.Abstractions
             Action<string> writeValue = null,
             Func<string> readDefaultValue = null,
             Func<string, SettingValidationResult> validateValue = null,
-            SettingActionContribution[] actions = null)
+            SettingActionContribution[] actions = null,
+            bool requiresRestart = false)
         {
             RegisterSetting(new SettingContribution
             {
@@ -535,6 +536,7 @@ namespace Cortex.Plugins.Abstractions
                 ReadDefaultValue = readDefaultValue,
                 ValidateValue = validateValue,
                 Actions = actions ?? new SettingActionContribution[0],
+                RequiresRestart = requiresRestart,
                 SortOrder = sortOrder
             });
         }

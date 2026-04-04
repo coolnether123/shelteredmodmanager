@@ -118,6 +118,7 @@
 
   <PropertyGroup Condition="'$(IsCortexProject)' == 'true'">
     <CortexBundleEnabledForProfile>false</CortexBundleEnabledForProfile>
+    <CortexBundleCopyThisTarget>false</CortexBundleCopyThisTarget>
     <CortexBundleContentKind>None</CortexBundleContentKind>
     <CortexBundleComponentId></CortexBundleComponentId>
     <CortexBundleDestinationRelativePath></CortexBundleDestinationRelativePath>
@@ -174,6 +175,7 @@
     <CortexBundleRoot>$(CortexRepositoryRoot)Dist\SMM\</CortexBundleRoot>
     <CortexBundlePortableRuntimeRootRelativePath>bin\decompiler\</CortexBundlePortableRuntimeRootRelativePath>
     <CortexBundleHostRuntimeRootRelativePath>bin\decompiler\</CortexBundleHostRuntimeRootRelativePath>
+    <CortexBundleDesktopHostRootRelativePath>bin\tools\desktop-host\host\lib\</CortexBundleDesktopHostRootRelativePath>
     <CortexBundlePluginRootRelativePath>bin\plugins\</CortexBundlePluginRootRelativePath>
     <CortexBundleToolRootRelativePath>bin\tools\</CortexBundleToolRootRelativePath>
   </PropertyGroup>
@@ -212,11 +214,42 @@
     <CortexBundleDestinationRelativePath>$(CortexBundleHostRuntimeRootRelativePath)</CortexBundleDestinationRelativePath>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Cortex.Host.Avalonia' and '$(CortexBundleEnabledForProfile)' == 'true' and '$(CortexBundleProfile)' == 'Sheltered'">
+    <CortexBundleDestinationRelativePath>$(CortexBundleDesktopHostRootRelativePath)</CortexBundleDestinationRelativePath>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(CortexBundleEnabledForProfile)' == 'true' and '$(CortexBundleContentKind)' == 'BundledPlugin' and '$(CortexBundleComponentId)' != ''">
     <CortexBundleDestinationRelativePath>$(CortexBundlePluginRootRelativePath)$(CortexBundleComponentId)\</CortexBundleDestinationRelativePath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(CortexBundleEnabledForProfile)' == 'true' and '$(CortexBundleContentKind)' == 'ExternalTool' and '$(CortexBundleComponentId)' != ''">
     <CortexBundleDestinationRelativePath>$(CortexBundleToolRootRelativePath)$(CortexBundleComponentId)\</CortexBundleDestinationRelativePath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(CortexBundleEnabledForProfile)' == 'true'">
+    <CortexBundleCopyThisTarget>true</CortexBundleCopyThisTarget>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="
+    '$(MSBuildProjectName)' == 'Cortex.Bridge' or
+    '$(MSBuildProjectName)' == 'Cortex.Contracts' or
+    '$(MSBuildProjectName)' == 'Cortex.Shell.Shared'">
+    <CortexBundleCopyThisTarget>false</CortexBundleCopyThisTarget>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="
+    '$(CortexBundleProfile)' == 'Sheltered' and (
+      ('$(MSBuildProjectName)' == 'Cortex.Bridge' and '$(TargetFramework)' == 'net35') or
+      ('$(MSBuildProjectName)' == 'Cortex.Contracts' and '$(TargetFramework)' == 'net35') or
+      ('$(MSBuildProjectName)' == 'Cortex.Shell.Shared' and '$(TargetFramework)' == 'net35'))">
+    <CortexBundleCopyThisTarget>true</CortexBundleCopyThisTarget>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="
+    '$(CortexBundleProfile)' == 'Desktop' and (
+      ('$(MSBuildProjectName)' == 'Cortex.Bridge' and '$(TargetFramework)' == 'net8.0') or
+      ('$(MSBuildProjectName)' == 'Cortex.Contracts' and '$(TargetFramework)' == 'net8.0') or
+      ('$(MSBuildProjectName)' == 'Cortex.Shell.Shared' and '$(TargetFramework)' == 'net8.0'))">
+    <CortexBundleCopyThisTarget>true</CortexBundleCopyThisTarget>
   </PropertyGroup>
 </Project>

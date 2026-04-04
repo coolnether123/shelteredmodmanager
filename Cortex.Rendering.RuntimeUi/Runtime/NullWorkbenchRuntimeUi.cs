@@ -31,6 +31,11 @@ namespace Cortex.Rendering.RuntimeUi
             get { return NullWorkbenchFrameContext.Instance; }
         }
 
+        public WorkbenchRuntimeUiLayoutMode LayoutMode
+        {
+            get { return WorkbenchRuntimeUiLayoutMode.IntegratedShellWindow; }
+        }
+
         private sealed class NullRenderPipeline : IRenderPipeline
         {
             private static readonly IWorkbenchRenderer WorkbenchRendererInstance = new NullWorkbenchRenderer();

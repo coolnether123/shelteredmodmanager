@@ -17,5 +17,13 @@ namespace Cortex.Shell.Unity.Imgui
         {
             return new ImguiWorkbenchRuntimeUiFactory(CreateWorkbenchUiSurface(), frameContext);
         }
+
+        public static IWorkbenchRuntimeUiFactory CreateOverlayRuntimeUiFactory(IWorkbenchFrameContext frameContext)
+        {
+            return new ImguiWorkbenchRuntimeUiFactory(
+                CreateWorkbenchUiSurface(),
+                frameContext,
+                WorkbenchRuntimeUiLayoutMode.OverlayWindows);
+        }
     }
 }

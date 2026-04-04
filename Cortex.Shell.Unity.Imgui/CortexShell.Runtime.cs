@@ -130,6 +130,72 @@ namespace Cortex
             return _hostFrameContext ?? NullWorkbenchFrameContext.Instance;
         }
 
+        public CortexSettings CurrentSettings
+        {
+            get { return _state.Settings; }
+        }
+
+        private WorkbenchRuntimeUiLayoutMode GetRuntimeUiLayoutMode()
+        {
+            var runtimeUiProvider = _workbenchRuntime as IWorkbenchRuntimeUiProvider;
+            var runtimeUi = runtimeUiProvider != null ? runtimeUiProvider.RuntimeUi : null;
+            return runtimeUi != null
+                ? runtimeUi.LayoutMode
+                : WorkbenchRuntimeUiLayoutMode.IntegratedShellWindow;
+        }
+
+        public bool ApplyRuntimeUiFactory(IWorkbenchRuntimeUiFactory runtimeUiFactory)
+        {
+            var runtimeUiSwitcher = _workbenchRuntime as IWorkbenchRuntimeUiSwitcher;
+            if (runtimeUiSwitcher == null)
+            {
+                return false;
+            }
+
+            var switched = runtimeUiSwitcher.SwitchRuntimeUi(
+                runtimeUiFactory != null
+                    ? runtimeUiFactory.Create()
+                    : NullWorkbenchRuntimeUi.Instance);
+            if (!switched)
+            {
+                return false;
+            }
+
+            ReleaseOverlayInputCapture();
+            ResetModuleRuntime();
+            ClampWindowsToScreen();
+            return true;
+        }
+
+        public void RegisterOrUpdateStatusItem(StatusItemContribution contribution)
+        {
+            if (_workbenchRuntime == null || contribution == null)
+            {
+                return;
+            }
+
+            _workbenchRuntime.ContributionRegistry.RegisterStatusItem(contribution);
+        }
+
+        public void RegisterOrUpdateSettingContribution(SettingContribution contribution)
+        {
+            if (_workbenchRuntime == null || contribution == null)
+            {
+                return;
+            }
+
+            _workbenchRuntime.ContributionRegistry.RegisterSetting(contribution);
+        }
+
+        public void SetShellVisible(bool visible)
+        {
+            _sessionCoordinator.Visible = visible;
+            if (!visible)
+            {
+                ReleaseOverlayInputCapture();
+            }
+        }
+
         private void DisposeWorkbenchRuntime()
         {
             var disposable = _workbenchRuntime as IDisposable;

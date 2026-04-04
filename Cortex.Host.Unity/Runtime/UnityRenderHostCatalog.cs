@@ -65,8 +65,14 @@ namespace Cortex.Host.Unity.Runtime
                 DisplayName = "IMGUI",
                 Description = "Run Cortex directly inside the active game host with the current IMGUI shell."
             });
-            catalog.SettingsHelpText = "Select how Cortex presents its workbench for the current host.";
-            catalog.StatusSummary = "Host: IMGUI (in-game)";
+            catalog.AvailableOptions.Add(new SettingChoiceOption
+            {
+                Value = UnityRenderHostSettings.OverlayInProcessRenderHostId,
+                DisplayName = "Overlay",
+                Description = "Render Cortex as separate in-game overlay windows so the editor, sidebars, and panel can live on distinct host surfaces."
+            });
+            catalog.SettingsHelpText = "Select how Cortex presents its workbench for the current host. Saving applies the new presentation live without restarting the game.";
+            catalog.StatusSummary = "Presentation: IMGUI (in-game)";
             return catalog;
         }
     }
@@ -131,7 +137,7 @@ namespace Cortex.Host.Unity.Runtime
                 {
                     Value = UnityRenderHostSettings.AvaloniaExternalRenderHostId,
                     DisplayName = "Avalonia",
-                    Description = "Launch the external Avalonia desktop host on next startup. IMGUI stays available as the bootstrap and fallback surface."
+                    Description = "Launch the external Avalonia desktop host live over the runtime bridge. IMGUI remains the in-game bootstrap and fallback surface."
                 });
             }
             else if (!string.IsNullOrEmpty(catalog.AvaloniaLaunchRequest.FailureReason))
@@ -143,7 +149,9 @@ namespace Cortex.Host.Unity.Runtime
                 string.Equals(catalog.SelectedRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase) &&
                 catalog.AvaloniaLaunchRequest.CanLaunch
                     ? UnityRenderHostSettings.AvaloniaExternalRenderHostId
-                    : UnityRenderHostSettings.ImguiRenderHostId;
+                    : string.Equals(catalog.SelectedRenderHostId, UnityRenderHostSettings.OverlayInProcessRenderHostId, StringComparison.OrdinalIgnoreCase)
+                        ? UnityRenderHostSettings.OverlayInProcessRenderHostId
+                        : UnityRenderHostSettings.ImguiRenderHostId;
 
             catalog.SettingsHelpText = BuildSettingsHelpText(catalog);
             catalog.StatusSummary = BuildStatusSummary(catalog);
@@ -211,7 +219,8 @@ namespace Cortex.Host.Unity.Runtime
         {
             var helpText =
                 "Select how Cortex presents its workbench for the current host. " +
-                "IMGUI runs inside the game. Avalonia launches the external desktop host on the next startup over the runtime bridge.";
+                "IMGUI runs inside the game in a single IDE window. Overlay runs inside the game as separate workbench windows for the main surfaces. " +
+                "Avalonia launches the external desktop host live over the runtime bridge while the game remains interactive.";
             if (catalog != null && catalog.UnavailableReasons.Count > 0)
             {
                 helpText += " Unavailable right now: " + string.Join(" ", CopyUnavailableReasons(catalog.UnavailableReasons));
@@ -224,21 +233,26 @@ namespace Cortex.Host.Unity.Runtime
         {
             if (catalog == null)
             {
-                return "Host: IMGUI (in-game)";
+                return "Presentation: IMGUI (in-game)";
             }
 
             if (string.Equals(catalog.EffectiveRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase))
             {
-                return "Host: Avalonia (external) | Renderer: IMGUI bridge bootstrap";
+                return "Presentation: Avalonia (external) | Runtime UI: IMGUI bootstrap";
+            }
+
+            if (string.Equals(catalog.EffectiveRenderHostId, UnityRenderHostSettings.OverlayInProcessRenderHostId, StringComparison.OrdinalIgnoreCase))
+            {
+                return "Presentation: Overlay (in-game)";
             }
 
             if (string.Equals(catalog.SelectedRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase) &&
                 catalog.UnavailableReasons.Count > 0)
             {
-                return "Host: IMGUI (Avalonia unavailable)";
+                return "Presentation: IMGUI (Avalonia unavailable)";
             }
 
-            return "Host: IMGUI (in-game)";
+            return "Presentation: IMGUI (in-game)";
         }
 
         private static string BuildStartupStatusMessage(UnityRenderHostCatalog catalog)

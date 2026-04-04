@@ -13,11 +13,27 @@ namespace Cortex.Tests.Shell
     public sealed class UnityRenderHostCatalogTests
     {
         [Fact]
-        public void RenderHostSetting_FallsBackToImgui_WhenMissingOrInvalid()
+        public void RenderHostSetting_NormalizesLegacyAndKnownModes_AndFallsBackToImgui_WhenInvalid()
         {
             Assert.Equal(
                 UnityRenderHostSettings.ImguiRenderHostId,
                 UnityRenderHostSettings.ReadSelectedRenderHostId(new CortexSettings()));
+
+            var legacyImguiSettings = new CortexSettings
+            {
+                ModuleSettings = new[]
+                {
+                    new ModuleSettingValue
+                    {
+                        SettingId = UnityRenderHostSettings.RenderHostSettingId,
+                        Value = UnityRenderHostSettings.LegacyImguiRenderHostId
+                    }
+                }
+            };
+
+            Assert.Equal(
+                UnityRenderHostSettings.ImguiRenderHostId,
+                UnityRenderHostSettings.ReadSelectedRenderHostId(legacyImguiSettings));
 
             var invalidSettings = new CortexSettings
             {
@@ -34,6 +50,22 @@ namespace Cortex.Tests.Shell
             Assert.Equal(
                 UnityRenderHostSettings.ImguiRenderHostId,
                 UnityRenderHostSettings.ReadSelectedRenderHostId(invalidSettings));
+
+            var overlaySettings = new CortexSettings
+            {
+                ModuleSettings = new[]
+                {
+                    new ModuleSettingValue
+                    {
+                        SettingId = UnityRenderHostSettings.RenderHostSettingId,
+                        Value = UnityRenderHostSettings.OverlayInProcessRenderHostId
+                    }
+                }
+            };
+
+            Assert.Equal(
+                UnityRenderHostSettings.OverlayInProcessRenderHostId,
+                UnityRenderHostSettings.ReadSelectedRenderHostId(overlaySettings));
 
             var avaloniaSettings = new CortexSettings
             {
@@ -79,6 +111,39 @@ namespace Cortex.Tests.Shell
             {
                 DeleteTempRoot(root);
             }
+        }
+
+        [Fact]
+        public void CatalogBuilder_ExposesOverlayChoice_AndUsesIt_WhenSelected()
+        {
+            var builder = new UnityRenderHostCatalogBuilder(File.Exists, delegate(string name) { return string.Empty; });
+            var catalog = builder.Build(
+                new TestHostEnvironment(Path.GetTempPath(), string.Empty),
+                UnityRenderHostSettings.OverlayInProcessRenderHostId);
+
+            Assert.Equal(UnityRenderHostSettings.OverlayInProcessRenderHostId, catalog.EffectiveRenderHostId);
+            Assert.Contains(
+                catalog.BuildOptions(),
+                option => string.Equals(option.Value, UnityRenderHostSettings.OverlayInProcessRenderHostId, StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(
+                catalog.UnavailableReasons,
+                reason => reason.IndexOf("Overlay (in-process):", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Equal("Presentation: Overlay (in-game)", catalog.StatusSummary);
+        }
+
+        [Fact]
+        public void RuntimeUiFactorySelector_ReturnsOverlayLayoutMode_WhenOverlayIsEffective()
+        {
+            var catalog = UnityRenderHostCatalog.CreateDefault();
+            catalog.EffectiveRenderHostId = UnityRenderHostSettings.OverlayInProcessRenderHostId;
+
+            var runtimeUi = UnityWorkbenchRuntimeUiFactorySelector
+                .Select(catalog, NullWorkbenchFrameContext.Instance)
+                .Create();
+
+            Assert.Equal(WorkbenchRuntimeUiLayoutMode.OverlayWindows, runtimeUi.LayoutMode);
+            Assert.Equal("cortex.renderer.unity-overlay", runtimeUi.RenderPipeline.WorkbenchRenderer.RendererId);
+            Assert.Equal("Unity Overlay Renderer", runtimeUi.RenderPipeline.WorkbenchRenderer.DisplayName);
         }
 
         [Fact]
@@ -137,7 +202,9 @@ namespace Cortex.Tests.Shell
 
             Assert.NotNull(setting);
             Assert.Equal("Appearance", setting.Scope);
+            Assert.Equal("Presentation Mode", setting.DisplayName);
             Assert.Equal(SettingEditorKind.Choice, setting.EditorKind);
+            Assert.False(setting.RequiresRestart);
             Assert.Contains(
                 setting.Options,
                 option => string.Equals(option.Value, UnityRenderHostSettings.ImguiRenderHostId, StringComparison.OrdinalIgnoreCase));

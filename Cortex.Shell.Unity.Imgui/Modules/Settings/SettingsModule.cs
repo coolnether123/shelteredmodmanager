@@ -140,6 +140,7 @@ namespace Cortex.Modules.Settings
 
                 if (GUILayout.Button("Save", GUILayout.Width(100f), GUILayout.Height(24f)))
                 {
+                    var restartRequiredChanges = GetPendingRestartRequiredSettingNames(snapshot);
                     state.Settings = _applicationService.Apply(
                         _draftService,
                         _draftState,
@@ -158,7 +159,7 @@ namespace Cortex.Modules.Settings
 
                     state.ReloadSettingsRequested = true;
                     _loaded = false;
-                    state.StatusMessage = "Saved Cortex settings.";
+                    state.StatusMessage = BuildSaveStatusMessage(restartRequiredChanges);
                 }
 
                 if (GUILayout.Button("Reset", GUILayout.Width(100f), GUILayout.Height(24f)))
@@ -1136,19 +1137,31 @@ namespace Cortex.Modules.Settings
 
             GUILayout.BeginHorizontal();
             DrawSettingLabelColumn(contribution);
-            GUILayout.BeginVertical(GUILayout.Width(CompactEditorWidth + 80f));
-            var toolbarIndex = selectedIndex < 0 ? 0 : selectedIndex;
-            var nextIndex = GUILayout.Toolbar(toolbarIndex, labels, GUILayout.Width(CompactEditorWidth + 80f), GUILayout.Height(24f));
+            GUILayout.BeginVertical(GUILayout.MinWidth(CompactEditorWidth + 80f), GUILayout.ExpandWidth(true));
             if (selectedIndex < 0 && string.IsNullOrEmpty(currentValue))
             {
-                _textValues[contribution.SettingId] = options[toolbarIndex].Value ?? string.Empty;
-                selectedIndex = toolbarIndex;
+                _textValues[contribution.SettingId] = options[0].Value ?? string.Empty;
+                selectedIndex = 0;
             }
-            else if (nextIndex >= 0 && nextIndex < options.Length && nextIndex != selectedIndex)
+
+            GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
+            for (var i = 0; i < options.Length; i++)
             {
-                _textValues[contribution.SettingId] = options[nextIndex].Value ?? string.Empty;
-                selectedIndex = nextIndex;
+                var isSelected = i == selectedIndex;
+                var nextSelected = GUILayout.Toggle(
+                    isSelected,
+                    labels[i],
+                    GUI.skin.button,
+                    GUILayout.Height(26f),
+                    GUILayout.MinWidth(120f),
+                    GUILayout.ExpandWidth(true));
+                if (nextSelected && !isSelected)
+                {
+                    _textValues[contribution.SettingId] = options[i].Value ?? string.Empty;
+                    selectedIndex = i;
+                }
             }
+            GUILayout.EndHorizontal();
 
             if (selectedIndex >= 0 && selectedIndex < options.Length && !string.IsNullOrEmpty(options[selectedIndex].Description))
             {
@@ -1235,6 +1248,10 @@ namespace Cortex.Modules.Settings
             {
                 DrawSettingTag("Modified", ImguiWorkbenchLayout.GetWarningColor());
             }
+            if (contribution != null && contribution.RequiresRestart)
+            {
+                DrawSettingTag("Restart", ImguiWorkbenchLayout.GetAccentColor());
+            }
             if (contribution != null && HasSettingActions(contribution))
             {
                 var isMenuOpen = string.Equals(_openSettingActionMenuId, contribution.SettingId, StringComparison.OrdinalIgnoreCase);
@@ -1267,6 +1284,11 @@ namespace Cortex.Modules.Settings
             else if (!string.IsNullOrEmpty(contribution.PlaceholderText) && string.IsNullOrEmpty(GetDefaultSerializedValue(contribution)))
             {
                 GUILayout.Label("Example: " + contribution.PlaceholderText);
+            }
+
+            if (contribution.RequiresRestart)
+            {
+                GUILayout.Label("Requires restarting Cortex/the current host after saving.");
             }
 
             var validation = GetValidationResult(contribution);
@@ -1656,6 +1678,45 @@ namespace Cortex.Modules.Settings
         private string GetSerializedDraftValue(SettingContribution contribution)
         {
             return _draftService.GetSerializedDraftValue(_draftState, contribution);
+        }
+
+        private string[] GetPendingRestartRequiredSettingNames(WorkbenchPresentationSnapshot snapshot)
+        {
+            var names = new List<string>();
+            if (snapshot == null)
+            {
+                return names.ToArray();
+            }
+
+            for (var i = 0; i < snapshot.Settings.Count; i++)
+            {
+                var contribution = snapshot.Settings[i];
+                if (contribution == null || !contribution.RequiresRestart || !IsSettingModified(contribution))
+                {
+                    continue;
+                }
+
+                var name = !string.IsNullOrEmpty(contribution.DisplayName)
+                    ? contribution.DisplayName
+                    : contribution.SettingId ?? string.Empty;
+                if (!string.IsNullOrEmpty(name) && !names.Contains(name))
+                {
+                    names.Add(name);
+                }
+            }
+
+            return names.ToArray();
+        }
+
+        private static string BuildSaveStatusMessage(string[] restartRequiredChanges)
+        {
+            if (restartRequiredChanges == null || restartRequiredChanges.Length == 0)
+            {
+                return "Saved Cortex settings.";
+            }
+
+            return "Saved Cortex settings. Restart Cortex/the game to apply: " +
+                string.Join(", ", restartRequiredChanges) + ".";
         }
 
         private string NormalizeSerializedValue(SettingContribution contribution, string rawValue)

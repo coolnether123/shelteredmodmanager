@@ -35,9 +35,11 @@
   <ItemGroup>
     <Compile Include="Chrome\CortexWindowChromeController.cs" />
     <Compile Include="Composition\ImguiWorkbenchRuntimeUiComposition.cs" />
+    <Compile Include="Composition\OverlayWorkbenchRuntimeUiComposition.cs" />
     <Compile Include="CortexShell.Chrome.cs" />
     <Compile Include="CortexShell.CompletionAugmentation.cs" />
     <Compile Include="CortexShell.Language.cs" />
+    <Compile Include="CortexShell.Overlay.cs" />
     <Compile Include="CortexShell.Onboarding.cs" />
     <Compile Include="CortexShell.Runtime.cs" />
     <Compile Include="CortexShell.Search.cs" />
@@ -83,6 +85,7 @@
     <Compile Include="Shell\ShellOnboardingOverlayPresenter.cs" />
     <Compile Include="Shell\ShellOverlayCoordinator.cs" />
     <Compile Include="Ui\ImguiWorkbenchUiSurface.cs" />
+    <Compile Include="Ui\OverlayWorkbenchUiSurface.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Cortex.Bridge\Cortex.Bridge.csproj">

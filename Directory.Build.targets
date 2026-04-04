@@ -14,7 +14,7 @@
   <Target Name="CortexRemoveLegacyBundleOutputs"
           AfterTargets="Build"
           BeforeTargets="CortexCopyBundleOutputs"
-          Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleEnabledForProfile)' == 'true' and '$(CortexBundleRoot)' != '' and '$(TargetDir)' != '' and ('$(CortexBundleContentKind)' == 'BundledPlugin' or '$(CortexBundleContentKind)' == 'ExternalTool')">
+          Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleCopyThisTarget)' == 'true' and '$(CortexBundleRoot)' != '' and '$(TargetDir)' != '' and ('$(CortexBundleContentKind)' == 'BundledPlugin' or '$(CortexBundleContentKind)' == 'ExternalTool')">
     <ItemGroup>
       <CortexBundleFiles Include="$(TargetDir)**\*"
                          Exclude="$(TargetDir)**\*.cache;$(TargetDir)**\*.runtimeconfig.dev.json" />
@@ -30,7 +30,7 @@
 
   <Target Name="CortexCopyBundleOutputs"
           AfterTargets="Build"
-          Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleEnabledForProfile)' == 'true' and '$(CortexBundleRoot)' != '' and '$(CortexBundleDestinationRelativePath)' != '' and '$(TargetDir)' != ''">
+          Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleCopyThisTarget)' == 'true' and '$(CortexBundleRoot)' != '' and '$(CortexBundleDestinationRelativePath)' != '' and '$(TargetDir)' != ''">
     <ItemGroup>
       <CortexBundleFiles Include="$(TargetDir)**\*"
                          Exclude="$(TargetDir)**\*.cache;$(TargetDir)**\*.runtimeconfig.dev.json" />

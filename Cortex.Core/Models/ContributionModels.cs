@@ -178,6 +178,7 @@ namespace Cortex.Core.Models
         public Func<string> ReadDefaultValue;
         public Func<string, SettingValidationResult> ValidateValue;
         public SettingActionContribution[] Actions;
+        public bool RequiresRestart;
         public int SortOrder;
     }
 

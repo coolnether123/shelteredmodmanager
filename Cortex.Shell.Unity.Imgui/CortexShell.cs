@@ -291,15 +291,22 @@ namespace Cortex
             var previousSkin = GUI.skin;
             GUI.skin = ImguiWorkbenchLayout.GetWorkbenchSkin(previousSkin);
             ClampWindowsToScreen();
-            UpdateOverlayInputCapture();
-            if (_viewState.MainWindow.IsCollapsed)
+            if (GetRuntimeUiLayoutMode() == WorkbenchRuntimeUiLayoutMode.OverlayWindows)
             {
-                DrawCollapsedWindowButton(_viewState.MainWindow, ">", "Cortex");
+                RenderOverlayShell();
             }
             else
             {
-                _viewState.MainWindow.CurrentRect = ToRenderRect(GUI.Window(MainWindowId, ToRect(_viewState.MainWindow.CurrentRect), DrawWindow, "Cortex IDE", _windowStyle));
-                _viewState.MainWindow.ExpandedRect = _viewState.MainWindow.CurrentRect;
+                UpdateOverlayInputCapture();
+                if (_viewState.MainWindow.IsCollapsed)
+                {
+                    DrawCollapsedWindowButton(_viewState.MainWindow, ">", "Cortex");
+                }
+                else
+                {
+                    _viewState.MainWindow.CurrentRect = ToRenderRect(GUI.Window(MainWindowId, ToRect(_viewState.MainWindow.CurrentRect), DrawWindow, "Cortex IDE", _windowStyle));
+                    _viewState.MainWindow.ExpandedRect = _viewState.MainWindow.CurrentRect;
+                }
             }
 
             if (_viewState.ShowDetachedLogsWindow && !_state.Onboarding.IsActive)
@@ -431,7 +438,7 @@ namespace Cortex
             EnableRuntimeLogIntegration();
         }
 
-        private void UpdateOverlayInputCapture() => _overlayCoordinator.UpdateOverlayInputCapture(_sessionCoordinator.Visible, ToRect(_viewState.MainWindow.CurrentRect), ToRect(_viewState.LogsWindow.CurrentRect));
+        private void UpdateOverlayInputCapture() => _overlayCoordinator.UpdateOverlayInputCapture(_sessionCoordinator.Visible, BuildChromeHitRegions());
         private void ReleaseOverlayInputCapture() => _overlayCoordinator.ReleaseOverlayInputCapture();
 
         private int GetScreenWidth()
@@ -471,7 +478,10 @@ namespace Cortex
             _bootstrapper.ApplyShellWindowSettings(_state.Settings);
             ClampWindowsToScreen();
             _state.ReloadSettingsRequested = false;
-            _state.StatusMessage = "Cortex settings applied.";
+            if (string.IsNullOrEmpty(_state.StatusMessage))
+            {
+                _state.StatusMessage = "Cortex settings applied.";
+            }
             if (_workbenchRuntime != null)
             {
                 _workbenchRuntime.LayoutState.PrimarySideWidth = _state.Settings.ProjectsPaneWidth;
@@ -488,6 +498,11 @@ namespace Cortex
             var sw = GetScreenWidth(); var sh = GetScreenHeight();
             ClampWindowToScreen(_viewState.MainWindow, sw, sh);
             ClampWindowToScreen(_viewState.LogsWindow, sw, sh);
+            ClampWindowToScreen(_viewState.OverlayControlWindow, sw, sh);
+            ClampWindowToScreen(_viewState.OverlayPrimaryWindow, sw, sh);
+            ClampWindowToScreen(_viewState.OverlayDocumentWindow, sw, sh);
+            ClampWindowToScreen(_viewState.OverlaySecondaryWindow, sw, sh);
+            ClampWindowToScreen(_viewState.OverlayPanelWindow, sw, sh);
         }
 
         private RenderRect ClampRectToScreen(RenderRect rect, float minWidth, float minHeight, int sw, int sh)
@@ -501,6 +516,12 @@ namespace Cortex
 
         private void FitMainWindowToScreen()
         {
+            if (GetRuntimeUiLayoutMode() == WorkbenchRuntimeUiLayoutMode.OverlayWindows)
+            {
+                FitOverlayWindowsToScreen();
+                return;
+            }
+
             var sw = GetScreenWidth(); var sh = GetScreenHeight();
             var fittedRect = new RenderRect(Mathf.Max(10f, sw * 0.05f), Mathf.Max(10f, sh * 0.05f), Mathf.Max(980f, sw * 0.9f), Mathf.Max(620f, sh * 0.88f));
             _viewState.MainWindow.CurrentRect = fittedRect;
@@ -790,7 +811,7 @@ namespace Cortex
             try
             {
                 var type = Type.GetType(
-                    "Cortex.Shell.Bridge.NamedPipeDesktopBridgeHost, Cortex.Shell.Unity.Imgui",
+                    "Cortex.Shell.Bridge.NamedPipeDesktopBridgeHost, Cortex",
                     throwOnError: false);
                 if (type != null)
                 {
