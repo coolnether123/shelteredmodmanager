@@ -17,7 +17,8 @@ namespace Cortex.Host.Avalonia
 
         public override void OnFrameworkInitializationCompleted()
         {
-            _session = new DesktopSessionStartupService().Start(Environment.GetCommandLineArgs());
+            _session = DesktopHostLaunchCoordinator.GetActiveSession() ??
+                new DesktopSessionStartupService().Start(Environment.GetCommandLineArgs());
 
             var desktop = ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
             if (desktop != null)

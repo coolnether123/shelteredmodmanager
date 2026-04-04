@@ -6,6 +6,17 @@
       <TextBlock FontSize="20" FontWeight="SemiBold" Text="Runtime and Host Status" />
       <Border Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
         <StackPanel Spacing="6">
+          <TextBlock FontWeight="SemiBold" Text="Desktop Host Bundle" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding Workbench.DesktopStartupSummary}" TextWrapping="Wrap" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding Workbench.DesktopBundleProfileName}" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding Workbench.DesktopBundleRootPath}" TextWrapping="Wrap" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding Workbench.DesktopBundledPluginSummary}" TextWrapping="Wrap" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding Workbench.DesktopBundledToolSummary}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Border Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
+        <StackPanel Spacing="6">
           <TextBlock FontWeight="SemiBold" Text="Shell Layout" />
           <TextBlock Foreground="#9CA8BC" Text="{Binding LayoutModeSummary}" TextWrapping="Wrap" />
           <TextBlock Foreground="#9CA8BC" Text="{Binding ActiveWorkbenchLayoutPresetId}" />

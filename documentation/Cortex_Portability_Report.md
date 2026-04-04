@@ -226,16 +226,16 @@ Outputs:
 - bundled plugins -> `Dist/SMM/bin/plugins/<plugin>/`
 - external tools -> `Dist/SMM/bin/tools/<tool>/`
 
-### Host bundle B: `FutureHostReady`
+### Host bundle B: `Desktop`
 
 Outputs:
 
-- portable runtime assemblies -> `artifacts/bundles/FutureHostReady/portable/lib/`
-- host runtime assemblies -> `artifacts/bundles/FutureHostReady/host/lib/`
-- bundled plugins -> reserved at `artifacts/bundles/FutureHostReady/plugins/`
-- external tools -> `artifacts/bundles/FutureHostReady/tooling/<tool>/`
+- portable runtime assemblies -> `artifacts/bundles/Desktop/portable/lib/`
+- host runtime assemblies -> `artifacts/bundles/Desktop/host/lib/`
+- bundled plugins -> `artifacts/bundles/Desktop/plugins/<plugin>/`
+- external tools -> `artifacts/bundles/Desktop/tooling/<tool>/`
 
-`FutureHostReady` now packages the real desktop host lane through `Cortex.Host.Avalonia`, `Cortex.Bridge`, and `Cortex.Shell.Shared`. It is still not a second full product shape: broader host plugin policy and richer desktop bundle composition remain follow-up work.
+`Desktop` now packages the real desktop host lane through `Cortex.Host.Avalonia`, `Cortex.Bridge`, and `Cortex.Shell.Shared`. The desktop bundle policy is explicit in Cortex-owned code: it currently ships Harmony as the bundled plugin lane and Roslyn plus Tabby as the required tool lanes, while the Windows path picker remains on the Sheltered/Unity path.
 
 Portable Cortex binaries are copied once per profile into the profile's runtime assembly lane. Tool and plugin outputs are copied into their own lanes instead of being emitted as runtime assemblies.
 The centralized bundle target also removes stale plugin/tool files from runtime lanes before copying, so old `decompiler`-style placements do not survive a later packaging run.
@@ -258,6 +258,7 @@ That contract is applied centrally in `Directory.Build.props` and validated in `
 Generic Cortex plugin discovery is allowed to use only:
 
 - `ICortexHostEnvironment.BundledPluginSearchRoots`
+- `ICortexHostEnvironment.BundledToolRootPath` for bundled tool resolution
 - `CortexSettings.CortexPluginSearchRoots`
 
 Hosts may seed `CortexSettings.CortexPluginSearchRoots` through `ICortexHostEnvironment.ConfiguredPluginSearchRoots`.
@@ -270,12 +271,12 @@ Generic Cortex plugin discovery must not use:
 
 ## 10. Desktop Host Completion Steps
 
-To continue the real host behind `FutureHostReady`, complete these steps in Cortex-prefixed desktop host projects:
+To continue the real host behind `Desktop`, complete these steps in Cortex-prefixed desktop host projects:
 
 1. Add persisted and user-directed Dock layout policy without pushing docking assumptions back into generic shared contracts.
 2. Extract any additional UI-neutral runtime, presentation, shell, or bridge contracts the desktop host now proves are genuinely cross-boundary.
 3. Broaden the desktop editor/workbench surfaces beyond the current onboarding, settings, workspace, and file-preview path.
-4. Decide which bundled plugins belong in the desktop host and enable their package lane for the `FutureHostReady` profile.
+4. Extend or adjust the desktop plugin set only when the desktop host proves it needs more than the current Harmony lane.
 5. Decide which external tools are required and keep packaging them under the profile's tool lane.
 6. Add architecture tests proving portable/tooling/desktop-shareable projects still do not reference new desktop host code incorrectly.
 7. Add bundle verification showing runtime, host, plugin, and tool lanes are separated for the profile.
@@ -291,7 +292,7 @@ Remaining portability debt is intentionally short:
 - Shell/editor IMGUI call sites still execute raw drawing and event consumption locally even though their shared policy is increasingly portable.
 - `CortexWindowChromeController` still owns IMGUI-time splitter drag and resize execution.
 - End-to-end non-Cortex product packaging outside Cortex still assumes `Dist/SMM`.
-- the current Avalonia host proves only a first Dock-owned set of real IDE surfaces and still lacks persisted layout policy.
+- end-to-end non-Cortex product startup still flows through `Manager`, so true external default launch remains outside the Cortex-owned boundary.
 - the current named pipe bridge is intentionally narrow and only carries onboarding, settings, workspace/project browsing, and file-preview/editor-oriented snapshots and intents.
 
 ## 12. Hard Boundaries

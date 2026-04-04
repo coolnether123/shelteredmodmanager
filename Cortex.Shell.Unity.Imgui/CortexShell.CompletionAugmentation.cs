@@ -34,6 +34,9 @@ namespace Cortex
                 {
                     HostBinPath = _bootstrapper.HostEnvironment != null
                         ? _bootstrapper.HostEnvironment.HostBinPath ?? string.Empty
+                        : string.Empty,
+                    BundledToolRootPath = _bootstrapper.HostEnvironment != null
+                        ? _bootstrapper.HostEnvironment.BundledToolRootPath ?? string.Empty
                         : string.Empty
                 },
                 delegate(string message)

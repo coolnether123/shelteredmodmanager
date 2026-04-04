@@ -280,6 +280,7 @@ namespace Cortex.Tests.Shell
             public string HostRootPath => string.Empty;
             public string HostBinPath => _hostBinPath;
             public string BundledPluginSearchRoots => _bundledPluginSearchRoots;
+            public string BundledToolRootPath => string.Empty;
             public string ConfiguredPluginSearchRoots => string.Empty;
             public string ReferenceAssemblyRootPath => string.Empty;
             public string RuntimeContentRootPath => string.Empty;

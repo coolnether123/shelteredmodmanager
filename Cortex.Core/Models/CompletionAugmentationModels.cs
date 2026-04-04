@@ -85,6 +85,7 @@ namespace Cortex.Core.Models
     public sealed class CompletionAugmentationProviderContext
     {
         public string HostBinPath;
+        public string BundledToolRootPath;
     }
 
     /// <summary>

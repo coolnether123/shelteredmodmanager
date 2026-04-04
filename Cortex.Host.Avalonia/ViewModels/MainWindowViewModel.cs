@@ -5,6 +5,7 @@ using System.Linq;
 using Avalonia.Threading;
 using Cortex.Bridge;
 using Cortex.Host.Avalonia.Bridge;
+using Cortex.Host.Avalonia.Composition;
 using Cortex.Host.Avalonia.Models;
 using Cortex.Shell.Shared.Models;
 
@@ -13,6 +14,7 @@ namespace Cortex.Host.Avalonia.ViewModels
     internal sealed class MainWindowViewModel : ViewModelBase
     {
         private readonly NamedPipeDesktopBridgeClient _bridgeClient;
+        private readonly DesktopHostOptions _hostOptions;
         private WorkbenchBridgeSnapshot _snapshot = new WorkbenchBridgeSnapshot();
         private SettingsBridgeSnapshot _settingsSnapshot = new SettingsBridgeSnapshot();
         private WorkspaceBridgeSnapshot _workspaceSnapshot = new WorkspaceBridgeSnapshot();
@@ -24,9 +26,10 @@ namespace Cortex.Host.Avalonia.ViewModels
         private string _selectedSettingValue = string.Empty;
         private string _workbenchSearchQuery = string.Empty;
 
-        public MainWindowViewModel(NamedPipeDesktopBridgeClient bridgeClient)
+        public MainWindowViewModel(NamedPipeDesktopBridgeClient bridgeClient, DesktopHostOptions hostOptions)
         {
             _bridgeClient = bridgeClient;
+            _hostOptions = hostOptions ?? new DesktopHostOptions();
             Projects = new ObservableCollection<WorkspaceProjectDefinition>();
             OpenEditorDocuments = new ObservableCollection<EditorDocumentSummaryModel>();
             WorkspaceTree = new ObservableCollection<WorkspaceFileNodeViewModel>();
@@ -266,6 +269,36 @@ namespace Cortex.Host.Avalonia.ViewModels
         public string StatusMessage
         {
             get { return ConnectionStatusMessage + " | " + RuntimeStatusMessage; }
+        }
+
+        public string DesktopStartupSummary
+        {
+            get { return _hostOptions.StartupModeSummary ?? string.Empty; }
+        }
+
+        public string DesktopBundleProfileName
+        {
+            get { return _hostOptions.BundleProfileName ?? string.Empty; }
+        }
+
+        public string DesktopBundleRootPath
+        {
+            get
+            {
+                return _hostOptions.EnvironmentPaths != null
+                    ? _hostOptions.EnvironmentPaths.BundleRootPath ?? string.Empty
+                    : string.Empty;
+            }
+        }
+
+        public string DesktopBundledPluginSummary
+        {
+            get { return _hostOptions.BundledPluginSummary ?? string.Empty; }
+        }
+
+        public string DesktopBundledToolSummary
+        {
+            get { return _hostOptions.BundledToolSummary ?? string.Empty; }
         }
 
         public string SelectedSettingDisplayName

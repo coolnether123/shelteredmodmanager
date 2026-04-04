@@ -178,8 +178,8 @@
     <CortexBundleToolRootRelativePath>bin\tools\</CortexBundleToolRootRelativePath>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleProfile)' == 'FutureHostReady'">
-    <CortexBundleRoot>$(CortexRepositoryRoot)artifacts\bundles\FutureHostReady\</CortexBundleRoot>
+  <PropertyGroup Condition="'$(IsCortexProject)' == 'true' and '$(CortexBundleProfile)' == 'Desktop'">
+    <CortexBundleRoot>$(CortexRepositoryRoot)artifacts\bundles\Desktop\</CortexBundleRoot>
     <CortexBundlePortableRuntimeRootRelativePath>portable\lib\</CortexBundlePortableRuntimeRootRelativePath>
     <CortexBundleHostRuntimeRootRelativePath>host\lib\</CortexBundleHostRuntimeRootRelativePath>
     <CortexBundlePluginRootRelativePath>plugins\</CortexBundlePluginRootRelativePath>
@@ -190,9 +190,12 @@
     <CortexBundleEnabledForProfile>true</CortexBundleEnabledForProfile>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(CortexBundleProfile)' == 'FutureHostReady' and (
+  <PropertyGroup Condition="'$(CortexBundleProfile)' == 'Desktop' and (
     '$(CortexBundleContentKind)' == 'PortableRuntimeAssembly' or
-    '$(CortexBundleContentKind)' == 'ExternalTool' or
+    ('$(CortexBundleContentKind)' == 'BundledPlugin' and '$(MSBuildProjectName)' == 'Cortex.Plugin.Harmony') or
+    ('$(CortexBundleContentKind)' == 'ExternalTool' and (
+      '$(MSBuildProjectName)' == 'Cortex.Roslyn.Worker' or
+      '$(MSBuildProjectName)' == 'Cortex.Tabby.Server')) or
     ('$(CortexBundleContentKind)' == 'HostRuntimeAssembly' and (
       '$(MSBuildProjectName)' == 'Cortex.Bridge' or
       '$(MSBuildProjectName)' == 'Cortex.Contracts' or

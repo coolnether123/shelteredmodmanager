@@ -290,6 +290,15 @@ namespace Cortex.Host.Unity.Runtime
         private static string ResolvePickerExecutablePath(ICortexHostEnvironment hostEnvironment)
         {
             var candidates = new List<string>();
+            var bundledToolRootPath = hostEnvironment != null ? hostEnvironment.BundledToolRootPath : string.Empty;
+            if (!string.IsNullOrEmpty(bundledToolRootPath))
+            {
+                candidates.Add(BundledToolPathResolver.ResolveFromToolRoot(
+                    bundledToolRootPath,
+                    "windows-path-picker",
+                    PickerExecutableName));
+            }
+
             AddBundledToolCandidates(candidates, hostEnvironment != null ? hostEnvironment.HostBinPath : string.Empty);
 
             var assemblyLocation = typeof(WindowsPathInteractionService).Assembly.Location;

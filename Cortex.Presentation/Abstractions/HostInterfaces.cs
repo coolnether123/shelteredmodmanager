@@ -15,6 +15,8 @@ namespace Cortex.Presentation.Abstractions
 
         string BundledPluginSearchRoots { get; }
 
+        string BundledToolRootPath { get; }
+
         string ConfiguredPluginSearchRoots { get; }
 
         string ReferenceAssemblyRootPath { get; }
