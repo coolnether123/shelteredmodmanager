@@ -51,7 +51,7 @@ namespace Cortex
         private readonly CortexOnboardingCoordinator _onboardingCoordinator = new CortexOnboardingCoordinator();
         private readonly CortexShellOnboardingLifecycle _onboardingLifecycle = new CortexShellOnboardingLifecycle();
         private readonly ShellOnboardingOverlayPresenter _onboardingOverlayPresenter = new ShellOnboardingOverlayPresenter();
-        private readonly NamedPipeDesktopBridgeHost _desktopBridgeHost;
+        private readonly IDesktopBridgeHost _desktopBridgeHost;
         private readonly RuntimeDesktopBridgeSession _desktopBridgeSession;
 
         private IWorkbenchRuntime _workbenchRuntime;
@@ -219,7 +219,7 @@ namespace Cortex
                 CloseFind,
                 _editorSymbolInteractionService);
             _statusPresenter = new ImguiShellStatusPresenter(_state, ExecuteCommand);
-            _desktopBridgeHost = new NamedPipeDesktopBridgeHost(ResolveDesktopBridgePipeName());
+            _desktopBridgeHost = TryCreateNamedPipeBridgeHost(ResolveDesktopBridgePipeName());
             _desktopBridgeSession = new RuntimeDesktopBridgeSession(_state, () => _settingsStore, () => ProjectCatalog);
         }
 
@@ -762,6 +762,33 @@ namespace Cortex
             return string.IsNullOrEmpty(configuredPipeName)
                 ? DesktopBridgeProtocol.DefaultPipeName
                 : configuredPipeName;
+        }
+
+        /// <summary>
+        /// Attempts to instantiate <c>NamedPipeDesktopBridgeHost</c> via reflection so that no
+        /// static type reference to <c>System.IO.Pipes.NamedPipeServerStream</c> exists at the
+        /// class-metadata level of this assembly.  On Unity 5.3 / legacy Mono runtimes where
+        /// System.IO.Pipes is unavailable the reflection call throws and we fall back to the
+        /// no-op <see cref="NullDesktopBridgeHost"/> so the rest of the shell initialises cleanly.
+        /// </summary>
+        private static IDesktopBridgeHost TryCreateNamedPipeBridgeHost(string pipeName)
+        {
+            try
+            {
+                var type = Type.GetType(
+                    "Cortex.Shell.Bridge.NamedPipeDesktopBridgeHost, Cortex.Shell.Unity.Imgui",
+                    throwOnError: false);
+                if (type != null)
+                {
+                    return (IDesktopBridgeHost)Activator.CreateInstance(type, pipeName);
+                }
+            }
+            catch
+            {
+                // System.IO.Pipes not supported on this runtime — desktop bridge unavailable.
+            }
+
+            return new NullDesktopBridgeHost();
         }
 
         private CortexShellLayoutContext GetLayoutContext()
