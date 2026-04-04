@@ -2,11 +2,11 @@ using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Presentation.Abstractions;
 
-namespace Cortex.Host.Sheltered.Runtime
+namespace Cortex.Host.Unity.Runtime
 {
-    internal static class ShelteredRenderHostSettings
+    public static class UnityRenderHostSettings
     {
-        public const string RenderHostSettingId = "sheltered.renderHostId";
+        public const string RenderHostSettingId = "cortex.renderHostId";
         public const string ImguiRenderHostId = "imgui";
         public const string AvaloniaExternalRenderHostId = "avalonia.external";
 

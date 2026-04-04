@@ -6,7 +6,7 @@ namespace Cortex.Host.Sheltered.Runtime
 {
     public sealed class ShelteredUnityWorkbenchContributionRegistrar : IUnityWorkbenchContributionRegistrar
     {
-        private readonly ShelteredRenderHostCatalog _renderHostCatalog;
+        private readonly UnityRenderHostCatalog _renderHostCatalog;
         private readonly string _hostStatusSummary;
 
         public ShelteredUnityWorkbenchContributionRegistrar()
@@ -15,10 +15,10 @@ namespace Cortex.Host.Sheltered.Runtime
         }
 
         internal ShelteredUnityWorkbenchContributionRegistrar(
-            ShelteredRenderHostCatalog renderHostCatalog,
+            UnityRenderHostCatalog renderHostCatalog,
             string hostStatusSummary)
         {
-            _renderHostCatalog = renderHostCatalog ?? ShelteredRenderHostCatalog.CreateDefault();
+            _renderHostCatalog = renderHostCatalog ?? UnityRenderHostCatalog.CreateDefault();
             _hostStatusSummary = hostStatusSummary ?? string.Empty;
         }
 

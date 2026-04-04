@@ -2,24 +2,39 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Cortex.Core.Models;
+using Cortex.Presentation.Abstractions;
 
-namespace Cortex.Host.Sheltered.Runtime
+namespace Cortex.Host.Unity.Runtime
 {
-    internal sealed class ShelteredRenderHostCatalog
+    public sealed class UnityRenderHostCatalog
     {
-        public string SelectedRenderHostId = ShelteredRenderHostSettings.ImguiRenderHostId;
-        public string EffectiveRenderHostId = ShelteredRenderHostSettings.ImguiRenderHostId;
-        public string SettingsHelpText = string.Empty;
-        public string StatusSummary = string.Empty;
-        public string StartupStatusMessage = string.Empty;
-        public readonly List<string> UnavailableReasons = new List<string>();
-        public readonly List<SettingChoiceOption> AvailableOptions = new List<SettingChoiceOption>();
-        public ShelteredExternalHostLaunchRequest AvaloniaLaunchRequest = new ShelteredExternalHostLaunchRequest();
-
-        public SettingChoiceOption[] BuildOptions()
+        public UnityRenderHostCatalog()
         {
-            return AvailableOptions.ToArray();
+            SelectedRenderHostId = UnityRenderHostSettings.ImguiRenderHostId;
+            EffectiveRenderHostId = UnityRenderHostSettings.ImguiRenderHostId;
+            SettingsHelpText = string.Empty;
+            StatusSummary = string.Empty;
+            StartupStatusMessage = string.Empty;
+            UnavailableReasons = new List<string>();
+            AvailableOptions = new List<SettingChoiceOption>();
+            AvaloniaLaunchRequest = new UnityExternalHostLaunchRequest();
         }
+
+        public string SelectedRenderHostId { get; set; }
+
+        public string EffectiveRenderHostId { get; set; }
+
+        public string SettingsHelpText { get; set; }
+
+        public string StatusSummary { get; set; }
+
+        public string StartupStatusMessage { get; set; }
+
+        public IList<string> UnavailableReasons { get; private set; }
+
+        public IList<SettingChoiceOption> AvailableOptions { get; private set; }
+
+        public UnityExternalHostLaunchRequest AvaloniaLaunchRequest { get; set; }
 
         public bool ShouldLaunchAvaloniaExternalHost
         {
@@ -27,35 +42,55 @@ namespace Cortex.Host.Sheltered.Runtime
             {
                 return string.Equals(
                     EffectiveRenderHostId,
-                    ShelteredRenderHostSettings.AvaloniaExternalRenderHostId,
+                    UnityRenderHostSettings.AvaloniaExternalRenderHostId,
                     StringComparison.OrdinalIgnoreCase) &&
                     AvaloniaLaunchRequest != null &&
                     AvaloniaLaunchRequest.CanLaunch;
             }
         }
 
-        public static ShelteredRenderHostCatalog CreateDefault()
+        public SettingChoiceOption[] BuildOptions()
         {
-            var catalog = new ShelteredRenderHostCatalog();
+            var options = new SettingChoiceOption[AvailableOptions.Count];
+            AvailableOptions.CopyTo(options, 0);
+            return options;
+        }
+
+        public static UnityRenderHostCatalog CreateDefault()
+        {
+            var catalog = new UnityRenderHostCatalog();
             catalog.AvailableOptions.Add(new SettingChoiceOption
             {
-                Value = ShelteredRenderHostSettings.ImguiRenderHostId,
+                Value = UnityRenderHostSettings.ImguiRenderHostId,
                 DisplayName = "IMGUI",
-                Description = "Run Cortex directly inside the game with the current IMGUI shell."
+                Description = "Run Cortex directly inside the active game host with the current IMGUI shell."
             });
-            catalog.SettingsHelpText = "Select how Cortex presents its workbench in the Sheltered host.";
+            catalog.SettingsHelpText = "Select how Cortex presents its workbench for the current host.";
             catalog.StatusSummary = "Host: IMGUI (in-game)";
             return catalog;
         }
     }
 
-    internal sealed class ShelteredExternalHostLaunchRequest
+    public sealed class UnityExternalHostLaunchRequest
     {
-        public string CommandPath = string.Empty;
-        public string Arguments = string.Empty;
-        public string WorkingDirectory = string.Empty;
-        public string SuccessStatusMessage = string.Empty;
-        public string FailureReason = string.Empty;
+        public UnityExternalHostLaunchRequest()
+        {
+            CommandPath = string.Empty;
+            Arguments = string.Empty;
+            WorkingDirectory = string.Empty;
+            SuccessStatusMessage = string.Empty;
+            FailureReason = string.Empty;
+        }
+
+        public string CommandPath { get; set; }
+
+        public string Arguments { get; set; }
+
+        public string WorkingDirectory { get; set; }
+
+        public string SuccessStatusMessage { get; set; }
+
+        public string FailureReason { get; set; }
 
         public bool CanLaunch
         {
@@ -63,7 +98,7 @@ namespace Cortex.Host.Sheltered.Runtime
         }
     }
 
-    internal sealed class ShelteredRenderHostCatalogBuilder
+    public sealed class UnityRenderHostCatalogBuilder
     {
         private const string DesktopBridgePipeNameEnvironmentVariable = "CORTEX_DESKTOP_BRIDGE_PIPE_NAME";
         private const string DesktopBridgeDefaultPipeName = "cortex.desktop.bridge";
@@ -71,12 +106,12 @@ namespace Cortex.Host.Sheltered.Runtime
         private readonly Func<string, bool> _fileExists;
         private readonly Func<string, string> _readEnvironmentVariable;
 
-        public ShelteredRenderHostCatalogBuilder()
+        public UnityRenderHostCatalogBuilder()
             : this(File.Exists, Environment.GetEnvironmentVariable)
         {
         }
 
-        internal ShelteredRenderHostCatalogBuilder(
+        public UnityRenderHostCatalogBuilder(
             Func<string, bool> fileExists,
             Func<string, string> readEnvironmentVariable)
         {
@@ -84,17 +119,17 @@ namespace Cortex.Host.Sheltered.Runtime
             _readEnvironmentVariable = readEnvironmentVariable ?? Environment.GetEnvironmentVariable;
         }
 
-        public ShelteredRenderHostCatalog Build(ShelteredHostPathLayout layout, string selectedRenderHostId)
+        public UnityRenderHostCatalog Build(ICortexHostEnvironment environment, string selectedRenderHostId)
         {
-            var catalog = ShelteredRenderHostCatalog.CreateDefault();
-            catalog.SelectedRenderHostId = ShelteredRenderHostSettings.NormalizeRenderHostId(selectedRenderHostId);
-            catalog.AvaloniaLaunchRequest = CreateAvaloniaLaunchRequest(layout);
+            var catalog = UnityRenderHostCatalog.CreateDefault();
+            catalog.SelectedRenderHostId = UnityRenderHostSettings.NormalizeRenderHostId(selectedRenderHostId);
+            catalog.AvaloniaLaunchRequest = CreateAvaloniaLaunchRequest(environment);
 
             if (catalog.AvaloniaLaunchRequest.CanLaunch)
             {
                 catalog.AvailableOptions.Add(new SettingChoiceOption
                 {
-                    Value = ShelteredRenderHostSettings.AvaloniaExternalRenderHostId,
+                    Value = UnityRenderHostSettings.AvaloniaExternalRenderHostId,
                     DisplayName = "Avalonia",
                     Description = "Launch the external Avalonia desktop host on next startup. IMGUI stays available as the bootstrap and fallback surface."
                 });
@@ -105,10 +140,10 @@ namespace Cortex.Host.Sheltered.Runtime
             }
 
             catalog.EffectiveRenderHostId =
-                string.Equals(catalog.SelectedRenderHostId, ShelteredRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(catalog.SelectedRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase) &&
                 catalog.AvaloniaLaunchRequest.CanLaunch
-                    ? ShelteredRenderHostSettings.AvaloniaExternalRenderHostId
-                    : ShelteredRenderHostSettings.ImguiRenderHostId;
+                    ? UnityRenderHostSettings.AvaloniaExternalRenderHostId
+                    : UnityRenderHostSettings.ImguiRenderHostId;
 
             catalog.SettingsHelpText = BuildSettingsHelpText(catalog);
             catalog.StatusSummary = BuildStatusSummary(catalog);
@@ -116,10 +151,10 @@ namespace Cortex.Host.Sheltered.Runtime
             return catalog;
         }
 
-        internal ShelteredExternalHostLaunchRequest CreateAvaloniaLaunchRequest(ShelteredHostPathLayout layout)
+        public UnityExternalHostLaunchRequest CreateAvaloniaLaunchRequest(ICortexHostEnvironment environment)
         {
-            var request = new ShelteredExternalHostLaunchRequest();
-            var runtimeCandidates = BuildRuntimeCandidates(layout);
+            var request = new UnityExternalHostLaunchRequest();
+            var runtimeCandidates = BuildRuntimeCandidates(environment);
             var dotNetPath = ResolveDotNetPath();
             string dllOnlyRoot = null;
 
@@ -172,32 +207,32 @@ namespace Cortex.Host.Sheltered.Runtime
             return request;
         }
 
-        private string BuildSettingsHelpText(ShelteredRenderHostCatalog catalog)
+        private string BuildSettingsHelpText(UnityRenderHostCatalog catalog)
         {
             var helpText =
-                "Select how Cortex presents its workbench in the Sheltered host. " +
-                "IMGUI runs in-game. Avalonia launches the external desktop host on the next startup over the runtime bridge.";
+                "Select how Cortex presents its workbench for the current host. " +
+                "IMGUI runs inside the game. Avalonia launches the external desktop host on the next startup over the runtime bridge.";
             if (catalog != null && catalog.UnavailableReasons.Count > 0)
             {
-                helpText += " Unavailable right now: " + string.Join(" ", catalog.UnavailableReasons.ToArray());
+                helpText += " Unavailable right now: " + string.Join(" ", CopyUnavailableReasons(catalog.UnavailableReasons));
             }
 
             return helpText;
         }
 
-        private static string BuildStatusSummary(ShelteredRenderHostCatalog catalog)
+        private static string BuildStatusSummary(UnityRenderHostCatalog catalog)
         {
             if (catalog == null)
             {
                 return "Host: IMGUI (in-game)";
             }
 
-            if (string.Equals(catalog.EffectiveRenderHostId, ShelteredRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(catalog.EffectiveRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase))
             {
                 return "Host: Avalonia (external) | Renderer: IMGUI bridge bootstrap";
             }
 
-            if (string.Equals(catalog.SelectedRenderHostId, ShelteredRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase) &&
+            if (string.Equals(catalog.SelectedRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase) &&
                 catalog.UnavailableReasons.Count > 0)
             {
                 return "Host: IMGUI (Avalonia unavailable)";
@@ -206,14 +241,14 @@ namespace Cortex.Host.Sheltered.Runtime
             return "Host: IMGUI (in-game)";
         }
 
-        private static string BuildStartupStatusMessage(ShelteredRenderHostCatalog catalog)
+        private static string BuildStartupStatusMessage(UnityRenderHostCatalog catalog)
         {
             if (catalog == null)
             {
                 return string.Empty;
             }
 
-            if (string.Equals(catalog.SelectedRenderHostId, ShelteredRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(catalog.SelectedRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase))
             {
                 return catalog.AvaloniaLaunchRequest != null && catalog.AvaloniaLaunchRequest.CanLaunch
                     ? "Launching external Avalonia host."
@@ -224,12 +259,35 @@ namespace Cortex.Host.Sheltered.Runtime
             return string.Empty;
         }
 
-        private List<RuntimeRootCandidate> BuildRuntimeCandidates(ShelteredHostPathLayout layout)
+        private List<RuntimeRootCandidate> BuildRuntimeCandidates(ICortexHostEnvironment environment)
         {
             var candidates = new List<RuntimeRootCandidate>();
-            if (layout != null && !string.IsNullOrEmpty(layout.HostBinPath))
+            if (environment != null)
             {
-                AddRuntimeCandidate(candidates, Path.Combine(layout.HostBinPath, "decompiler"), string.Empty);
+                var bundledToolRootPath = NormalizePath(environment.BundledToolRootPath);
+                if (!string.IsNullOrEmpty(bundledToolRootPath))
+                {
+                    var nestedDesktopHostBundleRoot = Path.Combine(bundledToolRootPath, "desktop-host");
+                    AddRuntimeCandidate(
+                        candidates,
+                        Path.Combine(Path.Combine(nestedDesktopHostBundleRoot, "host"), "lib"),
+                        nestedDesktopHostBundleRoot);
+                    AddRuntimeCandidate(
+                        candidates,
+                        Path.Combine(Path.Combine(bundledToolRootPath, "host"), "lib"),
+                        bundledToolRootPath);
+                }
+
+                var hostBinPath = NormalizePath(environment.HostBinPath);
+                if (!string.IsNullOrEmpty(hostBinPath))
+                {
+                    var embeddedDesktopHostBundleRoot = Path.Combine(Path.Combine(hostBinPath, "tools"), "desktop-host");
+                    AddRuntimeCandidate(
+                        candidates,
+                        Path.Combine(Path.Combine(embeddedDesktopHostBundleRoot, "host"), "lib"),
+                        embeddedDesktopHostBundleRoot);
+                    AddRuntimeCandidate(candidates, Path.Combine(hostBinPath, "decompiler"), string.Empty);
+                }
             }
 
             var configuredBundleRoot = NormalizePath(_readEnvironmentVariable(DesktopBundleRootEnvironmentVariable));
@@ -241,7 +299,7 @@ namespace Cortex.Host.Sheltered.Runtime
                     configuredBundleRoot);
             }
 
-            var repoRoot = TryFindRepositoryRoot(layout != null ? layout.ApplicationRootPath : string.Empty);
+            var repoRoot = TryFindRepositoryRoot(environment != null ? environment.ApplicationRootPath : string.Empty);
             if (!string.IsNullOrEmpty(repoRoot))
             {
                 var desktopBundleRoot = Path.Combine(
@@ -343,6 +401,22 @@ namespace Cortex.Host.Sheltered.Runtime
             return string.Empty;
         }
 
+        private static string[] CopyUnavailableReasons(IList<string> reasons)
+        {
+            var copy = new string[reasons != null ? reasons.Count : 0];
+            if (reasons == null)
+            {
+                return copy;
+            }
+
+            for (var i = 0; i < reasons.Count; i++)
+            {
+                copy[i] = reasons[i] ?? string.Empty;
+            }
+
+            return copy;
+        }
+
         private static string QuoteArgument(string value)
         {
             return "\"" + (value ?? string.Empty).Replace("\"", "\\\"") + "\"";
@@ -367,8 +441,8 @@ namespace Cortex.Host.Sheltered.Runtime
 
         private sealed class RuntimeRootCandidate
         {
-            public string HostRuntimeRootPath = string.Empty;
-            public string BundleRootPath = string.Empty;
+            public string HostRuntimeRootPath;
+            public string BundleRootPath;
         }
     }
 }

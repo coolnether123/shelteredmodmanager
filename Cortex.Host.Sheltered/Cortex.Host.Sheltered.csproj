@@ -41,9 +41,6 @@
     <Compile Include="Composition\ShelteredWorkbenchViewContributions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Runtime\ShelteredCortexHostEnvironment.cs" />
-    <Compile Include="Runtime\ShelteredExternalHostLauncher.cs" />
-    <Compile Include="Runtime\ShelteredRenderHostCatalog.cs" />
-    <Compile Include="Runtime\ShelteredRenderHostSettings.cs" />
     <Compile Include="Runtime\ShelteredHostPathLayout.cs" />
     <Compile Include="Runtime\ShelteredUnityHostComposition.cs" />
     <Compile Include="Runtime\ShelteredUnityWorkbenchContributionRegistrar.cs" />
@@ -91,4 +88,17 @@
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+
+  <PropertyGroup>
+    <CortexDesktopHostBundleRoot>$(MSBuildProjectDirectory)\..\Dist\SMM\bin\tools\desktop-host\</CortexDesktopHostBundleRoot>
+  </PropertyGroup>
+
+  <Target Name="BuildBundledDesktopHost"
+          AfterTargets="Build"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(CortexBundleProfile)' == 'Sheltered'">
+    <MSBuild Projects="..\Cortex.Host.Avalonia\Cortex.Host.Avalonia.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);Platform=AnyCPU;CortexDesktopHostBundleRoot=$(CortexDesktopHostBundleRoot)"
+             BuildInParallel="false" />
+  </Target>
 </Project>

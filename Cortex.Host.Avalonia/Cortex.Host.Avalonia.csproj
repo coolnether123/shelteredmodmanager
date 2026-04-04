@@ -26,4 +26,19 @@
     <ProjectReference Include="..\Cortex.Bridge\Cortex.Bridge.csproj" />
     <ProjectReference Include="..\Cortex.Shell.Shared\Cortex.Shell.Shared.csproj" />
   </ItemGroup>
+
+  <Target Name="CopyBundledDesktopHostRuntime"
+          AfterTargets="Build"
+          Condition="'$(CortexDesktopHostBundleRoot)' != ''">
+    <ItemGroup>
+      <BundledDesktopHostFiles Include="$(TargetDir)**\*"
+                               Exclude="$(TargetDir)**\*.cache;$(TargetDir)**\*.runtimeconfig.dev.json" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(CortexDesktopHostBundleRoot)host\lib\" />
+
+    <Copy SourceFiles="@(BundledDesktopHostFiles)"
+          DestinationFiles="@(BundledDesktopHostFiles->'$(CortexDesktopHostBundleRoot)host\lib\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>
