@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Cortex.Host.Avalonia.Views.StatusToolView">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="12" Spacing="10">
+      <TextBlock FontSize="20" FontWeight="SemiBold" Text="Runtime and Host Status" />
+      <Border Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
+        <StackPanel Spacing="6">
+          <TextBlock FontWeight="SemiBold" Text="Shell Layout" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding LayoutModeSummary}" TextWrapping="Wrap" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding ActiveWorkbenchLayoutPresetId}" />
+        </StackPanel>
+      </Border>
+
+      <Border Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
+        <StackPanel Spacing="6">
+          <TextBlock FontWeight="SemiBold" Text="Bridge" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding Workbench.ConnectionStatusMessage}" TextWrapping="Wrap" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding Workbench.RuntimeStatusMessage}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Border Padding="12" CornerRadius="12" Background="#151924" BorderBrush="#314056" BorderThickness="1">
+        <StackPanel Spacing="6">
+          <TextBlock FontWeight="SemiBold" Text="Runtime Defaults" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding Workbench.BuildDefaultsSummary}" TextWrapping="Wrap" />
+          <TextBlock Foreground="#9CA8BC" Text="{Binding Workbench.Settings.WorkspaceRootPath}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

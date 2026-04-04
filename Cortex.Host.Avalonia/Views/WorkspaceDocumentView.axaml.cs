@@ -73,22 +73,5 @@ namespace Cortex.Host.Avalonia.Views
                 ViewModel.LoadFilePreview(selected.FullPath);
             }
         }
-
-        private void RunSearch_OnClick(object sender, RoutedEventArgs e)
-        {
-            if (ViewModel != null)
-            {
-                ViewModel.UpdateWorkbenchSearch();
-            }
-        }
-
-        private void SearchResultsListBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            var selected = SearchResultsListBox.SelectedItem as SearchMatchItemViewModel;
-            if (ViewModel != null && selected != null)
-            {
-                ViewModel.OpenSearchResult(selected);
-            }
-        }
     }
 }

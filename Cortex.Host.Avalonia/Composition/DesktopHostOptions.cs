@@ -4,6 +4,8 @@ namespace Cortex.Host.Avalonia.Composition
     {
         public string DataRootPath { get; set; } = string.Empty;
         public string LogFilePath { get; set; } = string.Empty;
+        public string ShellStateFilePath { get; set; } = string.Empty;
+        public string DockLayoutFilePath { get; set; } = string.Empty;
         public DesktopBridgeClientOptions BridgeClient { get; set; } = new DesktopBridgeClientOptions();
     }
 }

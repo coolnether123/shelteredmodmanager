@@ -1,5 +1,6 @@
 using System;
 using Cortex.Host.Avalonia.Bridge;
+using Cortex.Host.Avalonia.Services;
 using Cortex.Host.Avalonia.ViewModels;
 
 namespace Cortex.Host.Avalonia.Composition
@@ -12,11 +13,26 @@ namespace Cortex.Host.Avalonia.Composition
         {
             Options = options ?? new DesktopHostOptions();
             _bridgeClient = new NamedPipeDesktopBridgeClient(Options.BridgeClient);
-            MainWindowViewModel = new MainWindowViewModel(_bridgeClient);
+            WorkbenchViewModel = new MainWindowViewModel(_bridgeClient);
+
+            var surfaceRegistry = new DesktopWorkbenchSurfaceRegistry();
+            var shellStateStore = new DesktopShellStateStore(Options.ShellStateFilePath);
+            var dockLayoutPersistence = new DesktopDockLayoutPersistenceService(Options.DockLayoutFilePath);
+
+            WorkbenchCompositionService = new DesktopWorkbenchCompositionService(
+                surfaceRegistry,
+                shellStateStore,
+                dockLayoutPersistence);
+            ShellViewModel = new DesktopShellViewModel(WorkbenchViewModel);
+            ShellViewModel.ApplyShellState(
+                WorkbenchCompositionService.CurrentShellState,
+                WorkbenchCompositionService.SurfaceRegistry.Definitions);
         }
 
         public DesktopHostOptions Options { get; }
-        public MainWindowViewModel MainWindowViewModel { get; private set; }
+        public MainWindowViewModel WorkbenchViewModel { get; }
+        public DesktopShellViewModel ShellViewModel { get; }
+        public DesktopWorkbenchCompositionService WorkbenchCompositionService { get; }
 
         public void Dispose()
         {

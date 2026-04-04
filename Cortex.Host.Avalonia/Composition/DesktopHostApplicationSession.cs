@@ -20,10 +20,9 @@ namespace Cortex.Host.Avalonia.Composition
 
         public Window CreateMainWindow()
         {
-            return new MainWindow
-            {
-                DataContext = _compositionRoot.MainWindowViewModel
-            };
+            return new MainWindow(
+                _compositionRoot.ShellViewModel,
+                _compositionRoot.WorkbenchCompositionService);
         }
 
         public void Dispose()

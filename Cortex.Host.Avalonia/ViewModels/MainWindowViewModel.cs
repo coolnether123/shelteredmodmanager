@@ -28,6 +28,7 @@ namespace Cortex.Host.Avalonia.ViewModels
         {
             _bridgeClient = bridgeClient;
             Projects = new ObservableCollection<WorkspaceProjectDefinition>();
+            OpenEditorDocuments = new ObservableCollection<EditorDocumentSummaryModel>();
             WorkspaceTree = new ObservableCollection<WorkspaceFileNodeViewModel>();
             VisibleSettingsSections = new ObservableCollection<SettingsSectionModel>();
             ActiveSettings = new ObservableCollection<SettingDescriptor>();
@@ -49,6 +50,7 @@ namespace Cortex.Host.Avalonia.ViewModels
         }
 
         public ObservableCollection<WorkspaceProjectDefinition> Projects { get; }
+        public ObservableCollection<EditorDocumentSummaryModel> OpenEditorDocuments { get; }
         public ObservableCollection<WorkspaceFileNodeViewModel> WorkspaceTree { get; }
         public ObservableCollection<SettingsSectionModel> VisibleSettingsSections { get; }
         public ObservableCollection<SettingDescriptor> ActiveSettings { get; }
@@ -332,6 +334,11 @@ namespace Cortex.Host.Avalonia.ViewModels
             get { return _editorSnapshot.ActiveDocumentDisplayName ?? string.Empty; }
         }
 
+        public string ActiveEditorCompactPath
+        {
+            get { return _editorSnapshot.CompactPath ?? string.Empty; }
+        }
+
         public string ActiveEditorStatusSummary
         {
             get
@@ -352,14 +359,86 @@ namespace Cortex.Host.Avalonia.ViewModels
             }
         }
 
+        public string ActiveEditorMetricsSummary
+        {
+            get
+            {
+                return "Line " + _editorSnapshot.CaretLine +
+                    ", Column " + _editorSnapshot.CaretColumn +
+                    " | " + _editorSnapshot.LineCount + " lines" +
+                    (_editorSnapshot.IsDirty ? " | Modified" : string.Empty) +
+                    (_editorSnapshot.AllowSaving ? " | Save enabled" : " | Save disabled");
+            }
+        }
+
+        public string SearchTitle
+        {
+            get { return _searchSnapshot.Title ?? string.Empty; }
+        }
+
         public string SearchStatusSummary
         {
             get { return _searchSnapshot.StatusMessage ?? string.Empty; }
         }
 
+        public string SearchScopeCaption
+        {
+            get { return _searchSnapshot.ScopeCaption ?? string.Empty; }
+        }
+
+        public string SearchMatchCountSummary
+        {
+            get
+            {
+                var total = _searchSnapshot.TotalMatchCount;
+                if (total <= 0)
+                {
+                    return "No matches.";
+                }
+
+                return total + " match(es)";
+            }
+        }
+
         public string ReferenceStatusSummary
         {
             get { return _referenceSnapshot.StatusMessage ?? string.Empty; }
+        }
+
+        public string ReferenceTargetDisplayName
+        {
+            get { return _referenceSnapshot.ResolvedTargetDisplayName ?? string.Empty; }
+        }
+
+        public string ReferenceCachePath
+        {
+            get { return _referenceSnapshot.CachePath ?? string.Empty; }
+        }
+
+        public string ReferenceDocumentationPath
+        {
+            get { return _referenceSnapshot.XmlDocumentationPath ?? string.Empty; }
+        }
+
+        public string ReferenceDocumentationText
+        {
+            get { return _referenceSnapshot.XmlDocumentationText ?? string.Empty; }
+        }
+
+        public string ReferenceSourceText
+        {
+            get { return _referenceSnapshot.SourceText ?? string.Empty; }
+        }
+
+        public string BuildDefaultsSummary
+        {
+            get
+            {
+                return "Build " + Settings.DefaultBuildConfiguration +
+                    " | Timeout " + Settings.BuildTimeoutMs + " ms" +
+                    (Settings.EnableFileEditing ? " | Edit enabled" : " | Edit disabled") +
+                    (Settings.EnableFileSaving ? " | Save enabled" : " | Save disabled");
+            }
         }
 
         public string ActiveWorkbenchLayoutPresetId
@@ -548,6 +627,7 @@ namespace Cortex.Host.Avalonia.ViewModels
             ReplaceCollection(VisibleSettingsSections, _settingsSnapshot.VisibleSections ?? new List<SettingsSectionModel>());
             ReplaceCollection(ActiveSettings, _settingsSnapshot.ActiveSettings ?? new List<SettingDescriptor>());
             ReplaceCollection(Projects, _workspaceSnapshot.Projects ?? new List<WorkspaceProjectDefinition>());
+            ReplaceCollection(OpenEditorDocuments, _editorSnapshot.OpenDocuments ?? new List<EditorDocumentSummaryModel>());
             ReplaceSearchMatches();
 
             WorkspaceTree.Clear();
@@ -582,9 +662,20 @@ namespace Cortex.Host.Avalonia.ViewModels
             RaisePropertyChanged(nameof(IsSelectedSettingModified));
             RaisePropertyChanged(nameof(ThemePreviewSummary));
             RaisePropertyChanged(nameof(ActiveEditorDisplayName));
+            RaisePropertyChanged(nameof(ActiveEditorCompactPath));
             RaisePropertyChanged(nameof(ActiveEditorStatusSummary));
+            RaisePropertyChanged(nameof(ActiveEditorMetricsSummary));
+            RaisePropertyChanged(nameof(SearchTitle));
             RaisePropertyChanged(nameof(SearchStatusSummary));
+            RaisePropertyChanged(nameof(SearchScopeCaption));
+            RaisePropertyChanged(nameof(SearchMatchCountSummary));
             RaisePropertyChanged(nameof(ReferenceStatusSummary));
+            RaisePropertyChanged(nameof(ReferenceTargetDisplayName));
+            RaisePropertyChanged(nameof(ReferenceCachePath));
+            RaisePropertyChanged(nameof(ReferenceDocumentationPath));
+            RaisePropertyChanged(nameof(ReferenceDocumentationText));
+            RaisePropertyChanged(nameof(ReferenceSourceText));
+            RaisePropertyChanged(nameof(BuildDefaultsSummary));
             RaisePropertyChanged(nameof(ActiveWorkbenchLayoutPresetId));
         }
 
