@@ -5,7 +5,7 @@ namespace Cortex.Bridge
 {
     public static class DesktopBridgeProtocol
     {
-        public const int Version = 1;
+        public const int Version = 2;
         public const string DefaultPipeName = "cortex.desktop.bridge";
         public const string PipeNameEnvironmentVariable = "CORTEX_DESKTOP_BRIDGE_PIPE_NAME";
         public const string DefaultClientDisplayName = "Cortex Desktop Host";
@@ -19,7 +19,12 @@ namespace Cortex.Bridge
         WorkbenchSnapshot = 2,
         UserIntent = 3,
         OperationResult = 4,
-        Diagnostic = 5
+        Diagnostic = 5,
+        OverlayPresentationSnapshot = 6,
+        OverlayInputIntent = 7,
+        OverlayHostLifecycle = 8,
+        OverlayWindowStateChanged = 9,
+        Heartbeat = 10
     }
 
     public enum BridgeIntentType
@@ -62,12 +67,19 @@ namespace Cortex.Bridge
         public BridgeIntentMessage Intent { get; set; }
         public BridgeOperationResultMessage OperationResult { get; set; }
         public BridgeDiagnosticMessage Diagnostic { get; set; }
+        public OverlayPresentationSnapshotMessage OverlayPresentationSnapshot { get; set; }
+        public OverlayInputIntentMessage OverlayInputIntent { get; set; }
+        public OverlayHostLifecycleMessage OverlayHostLifecycle { get; set; }
+        public OverlayWindowStateChangedMessage OverlayWindowStateChanged { get; set; }
+        public BridgeHeartbeatMessage Heartbeat { get; set; }
     }
 
     public sealed class OpenSessionRequestMessage
     {
         public string ClientName { get; set; } = DesktopBridgeProtocol.DefaultClientDisplayName;
         public int RequestedProtocolVersion { get; set; } = DesktopBridgeProtocol.Version;
+        public string LaunchToken { get; set; } = string.Empty;
+        public BridgeCapabilitySet Capabilities { get; set; } = new BridgeCapabilitySet();
     }
 
     public sealed class SessionOpenedMessage
@@ -76,6 +88,8 @@ namespace Cortex.Bridge
         public string PipeName { get; set; } = DesktopBridgeProtocol.DefaultPipeName;
         public int AcceptedProtocolVersion { get; set; } = DesktopBridgeProtocol.Version;
         public string StatusMessage { get; set; } = string.Empty;
+        public BridgeCapabilitySet Capabilities { get; set; } = new BridgeCapabilitySet();
+        public string LaunchToken { get; set; } = string.Empty;
     }
 
     public sealed class WorkbenchSnapshotMessage
@@ -119,6 +133,13 @@ namespace Cortex.Bridge
         public string UtcTimestamp { get; set; } = string.Empty;
     }
 
+    public sealed class BridgeHeartbeatMessage
+    {
+        public long WorkbenchRevision { get; set; }
+        public long OverlayRevision { get; set; }
+        public string UtcTimestamp { get; set; } = string.Empty;
+    }
+
     public sealed class WorkbenchBridgeSnapshot
     {
         public string WorkbenchId { get; set; } = "default";
@@ -134,6 +155,7 @@ namespace Cortex.Bridge
         public EditorWorkbenchModel Editor { get; set; } = new EditorWorkbenchModel();
         public SearchWorkbenchModel Search { get; set; } = new SearchWorkbenchModel();
         public ReferenceWorkbenchModel Reference { get; set; } = new ReferenceWorkbenchModel();
+        public OverlayPresentationSnapshot Overlay { get; set; } = new OverlayPresentationSnapshot();
     }
 
     public sealed class SettingsBridgeSnapshot

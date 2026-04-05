@@ -726,7 +726,7 @@ namespace Cortex.Host.Avalonia.ViewModels
         {
             if (!_bridgeClient.TrySendIntent(intent))
             {
-                RuntimeStatusMessage = "Legacy runtime bridge is not connected.";
+                RuntimeStatusMessage = "Cortex runtime bridge is not connected.";
                 return false;
             }
 

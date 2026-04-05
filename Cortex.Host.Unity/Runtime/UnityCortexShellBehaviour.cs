@@ -35,6 +35,11 @@ namespace Cortex.Host.Unity.Runtime
 
         private void OnDestroy()
         {
+            if (_presentationCoordinator != null)
+            {
+                _presentationCoordinator.Shutdown(this);
+            }
+
             _controller.ShutdownShell();
         }
 
@@ -77,9 +82,9 @@ namespace Cortex.Host.Unity.Runtime
             return _controller.ApplyRuntimeUiFactory(runtimeUiFactory);
         }
 
-        void IUnityRenderPresentationHost.SetShellVisible(bool visible)
+        void IUnityRenderPresentationHost.RequestExternalHostShutdown()
         {
-            _controller.SetShellVisible(visible);
+            _controller.RequestExternalHostShutdown();
         }
 
         void IUnityRenderPresentationHost.RegisterOrUpdateStatusItem(StatusItemContribution contribution)

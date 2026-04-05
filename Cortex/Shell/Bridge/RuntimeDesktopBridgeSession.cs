@@ -2,7 +2,9 @@ using System;
 using Cortex.Bridge;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
+using Cortex.Presentation.Abstractions;
 using Cortex.Services.Navigation;
+using Cortex.Shell;
 
 namespace Cortex.Shell.Bridge
 {
@@ -12,6 +14,7 @@ namespace Cortex.Shell.Bridge
         private readonly RuntimeDesktopBridgeSettingsFeature _settingsFeature;
         private readonly RuntimeDesktopBridgeWorkspaceFeature _workspaceFeature;
         private readonly RuntimeDesktopBridgeWorkbenchFeature _workbenchFeature;
+        private readonly RuntimeDesktopBridgeOverlayFeature _overlayFeature;
         private readonly RuntimeDesktopBridgeSnapshotBuilder _snapshotBuilder;
         private string _statusMessage = string.Empty;
         private string _cachedStatusMessage = string.Empty;
@@ -19,6 +22,8 @@ namespace Cortex.Shell.Bridge
 
         public RuntimeDesktopBridgeSession(
             CortexShellState shellState,
+            CortexShellViewState viewState,
+            Func<IWorkbenchRuntime> runtimeAccessor,
             Func<ICortexSettingsStore> settingsStoreAccessor,
             Func<IProjectCatalog> projectCatalogAccessor,
             Func<ISourceLookupIndex> sourceLookupIndexAccessor,
@@ -34,7 +39,8 @@ namespace Cortex.Shell.Bridge
                 sourceLookupIndexAccessor,
                 textSearchServiceAccessor,
                 navigationServiceAccessor);
-            _snapshotBuilder = new RuntimeDesktopBridgeSnapshotBuilder(_settingsFeature, _workspaceFeature, _workbenchFeature);
+            _overlayFeature = new RuntimeDesktopBridgeOverlayFeature(_shellState, viewState, runtimeAccessor);
+            _snapshotBuilder = new RuntimeDesktopBridgeSnapshotBuilder(_settingsFeature, _workspaceFeature, _workbenchFeature, _overlayFeature);
         }
 
         public long Revision
@@ -47,6 +53,7 @@ namespace Cortex.Shell.Bridge
             _settingsFeature.Initialize();
             _workspaceFeature.Initialize();
             _workbenchFeature.Initialize();
+            _overlayFeature.Initialize();
             _statusMessage = ResolveRuntimeStatusMessage("Legacy runtime bridge ready.");
             CacheRuntimeMirror();
             Touch();
@@ -119,6 +126,36 @@ namespace Cortex.Shell.Bridge
             CacheRuntimeMirror();
             Touch();
             return result;
+        }
+
+        public bool SynchronizeOverlayPresentation(OverlayPresentationSnapshot overlaySnapshot)
+        {
+            return _overlayFeature.SynchronizeFromRuntime(overlaySnapshot);
+        }
+
+        public long OverlayRevision
+        {
+            get { return _overlayFeature.Revision; }
+        }
+
+        public OverlayPresentationSnapshot BuildOverlaySnapshot()
+        {
+            return _overlayFeature.BuildSnapshot();
+        }
+
+        public bool ApplyOverlayInputIntent(OverlayInputIntentMessage intent, out string statusMessage)
+        {
+            return _overlayFeature.TryApplyInputIntent(intent, out statusMessage);
+        }
+
+        public bool ApplyOverlayWindowState(OverlayWindowStateChangedMessage message, out string statusMessage)
+        {
+            return _overlayFeature.TryApplyWindowState(message, out statusMessage);
+        }
+
+        public bool ApplyOverlayLifecycle(OverlayHostLifecycleMessage message, out string statusMessage)
+        {
+            return _overlayFeature.TryApplyLifecycle(message, out statusMessage);
         }
 
         public WorkbenchBridgeSnapshot BuildSnapshot()

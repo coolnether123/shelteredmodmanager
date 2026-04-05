@@ -1,5 +1,7 @@
 using Avalonia;
+using Avalonia.Skia;
 using Cortex.Host.Avalonia.Composition;
+using Serilog;
 
 namespace Cortex.Host.Avalonia
 {
@@ -8,13 +10,26 @@ namespace Cortex.Host.Avalonia
         [System.STAThread]
         public static void Main(string[] args)
         {
-            new DesktopHostLaunchCoordinator().Run(args);
+            try
+            {
+                new DesktopHostLaunchCoordinator().Run(args);
+            }
+            catch (System.Exception ex)
+            {
+                Log.Fatal(ex, "Cortex desktop host terminated during startup.");
+                throw;
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
 
         public static AppBuilder BuildAvaloniaApp()
         {
             return AppBuilder.Configure<App>()
-                .UsePlatformDetect()
+                .UseWin32()
+                .UseSkia()
                 .LogToTrace();
         }
     }

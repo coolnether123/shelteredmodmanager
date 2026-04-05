@@ -56,13 +56,13 @@ namespace Cortex.Host.Unity.Runtime
         }
     }
 
-    public sealed class UnityExternalHostLauncher
+    public class UnityExternalHostLauncher
     {
-        public UnityExternalHostLaunchResult Launch(UnityExternalHostLaunchRequest request)
+        public virtual UnityExternalHostLaunchResult Launch(UnityExternalHostLaunchRequest request)
         {
             if (request == null || !request.CanLaunch)
             {
-                return new UnityExternalHostLaunchResult(false, request != null ? request.FailureReason : "External Avalonia host launch was not available.", 0);
+                return new UnityExternalHostLaunchResult(false, request != null ? request.FailureReason : "External Avalonia host launch was not available.", 0, DateTime.MinValue, request != null ? request.LaunchToken : string.Empty);
             }
 
             try
@@ -70,32 +70,45 @@ namespace Cortex.Host.Unity.Runtime
                 var process = Process.Start(new ProcessStartInfo
                 {
                     FileName = request.CommandPath,
-                    Arguments = request.Arguments ?? string.Empty,
+                    Arguments = BuildArguments(request),
                     WorkingDirectory = request.WorkingDirectory ?? string.Empty,
                     UseShellExecute = false
                 });
 
                 if (process == null)
                 {
-                    return new UnityExternalHostLaunchResult(false, "External Avalonia host launch returned no process.", 0);
+                    return new UnityExternalHostLaunchResult(false, "External Avalonia host launch returned no process.", 0, DateTime.MinValue, request.LaunchToken);
                 }
 
-                return new UnityExternalHostLaunchResult(true, request.SuccessStatusMessage, process.Id);
+                return new UnityExternalHostLaunchResult(true, request.SuccessStatusMessage, process.Id, process.StartTime.ToUniversalTime(), request.LaunchToken);
             }
             catch (Exception ex)
             {
-                return new UnityExternalHostLaunchResult(false, "Failed to launch external Avalonia host: " + ex.Message, 0);
+                return new UnityExternalHostLaunchResult(false, "Failed to launch external Avalonia host: " + ex.Message, 0, DateTime.MinValue, request.LaunchToken);
             }
+        }
+
+        private static string BuildArguments(UnityExternalHostLaunchRequest request)
+        {
+            var arguments = request != null ? request.Arguments ?? string.Empty : string.Empty;
+            if (request == null || string.IsNullOrEmpty(request.LaunchToken))
+            {
+                return arguments;
+            }
+
+            return arguments + " --launch-token \"" + request.LaunchToken.Replace("\"", "\\\"") + "\"";
         }
     }
 
     public sealed class UnityExternalHostLaunchResult
     {
-        public UnityExternalHostLaunchResult(bool launched, string statusMessage, int processId)
+        public UnityExternalHostLaunchResult(bool launched, string statusMessage, int processId, DateTime processStartTimeUtc, string launchToken)
         {
             Launched = launched;
             StatusMessage = statusMessage ?? string.Empty;
             ProcessId = processId;
+            ProcessStartTimeUtc = processStartTimeUtc;
+            LaunchToken = launchToken ?? string.Empty;
         }
 
         public bool Launched { get; private set; }
@@ -103,5 +116,9 @@ namespace Cortex.Host.Unity.Runtime
         public string StatusMessage { get; private set; }
 
         public int ProcessId { get; private set; }
+
+        public DateTime ProcessStartTimeUtc { get; private set; }
+
+        public string LaunchToken { get; private set; }
     }
 }

@@ -3,6 +3,7 @@ using Cortex.Rendering;
 using Cortex.Rendering.RuntimeUi;
 using Cortex.Shell.Unity.Imgui;
 using Cortex.Shell.Unity.Overlay;
+using Cortex.Core.Models;
 
 namespace Cortex.Host.Unity.Runtime
 {
@@ -17,6 +18,11 @@ namespace Cortex.Host.Unity.Runtime
             if (string.Equals(effectiveRenderHostId, UnityRenderHostSettings.OverlayInProcessRenderHostId, StringComparison.OrdinalIgnoreCase))
             {
                 return OverlayWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext);
+            }
+
+            if (string.Equals(effectiveRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase))
+            {
+                return ExternalOverlayWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext);
             }
 
             return ImguiWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext);
