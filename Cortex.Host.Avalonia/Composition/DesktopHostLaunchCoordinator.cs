@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using Serilog;
 
 namespace Cortex.Host.Avalonia.Composition
 {
@@ -26,10 +27,12 @@ namespace Cortex.Host.Avalonia.Composition
 
             try
             {
+                Log.Information("Starting Avalonia desktop host lifetime. ArgsCount={ArgsCount}", args != null ? args.Length : 0);
                 Program.BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
             }
             finally
             {
+                Log.Information("Avalonia desktop host lifetime exited.");
                 if (ReferenceEquals(_activeSession, session))
                 {
                     _activeSession = null;

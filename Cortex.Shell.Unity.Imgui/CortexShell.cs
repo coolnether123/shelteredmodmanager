@@ -88,10 +88,17 @@ namespace Cortex
         private Texture2D _collapsedWindowBackground;
         private string _appliedThemeId = string.Empty;
         private WorkbenchPresentationSnapshot _frameSnapshot;
+        private OverlayPresentationSnapshot _frameOverlaySnapshot;
         private readonly IWorkbenchPresenter _snapshotPresenter = new WorkbenchPresenter();
+        private readonly OverlayPresentationSnapshotBuilder _overlaySnapshotBuilder = new OverlayPresentationSnapshotBuilder();
         private readonly Dictionary<string, Rect> _menuGroupRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
         private string _desktopBridgeSessionId = string.Empty;
         private long _lastPublishedBridgeRevision = -1;
+        private long _lastPublishedOverlayRevision = -1;
+        private int _desktopBridgeAcceptedProtocolVersion = 1;
+        private string _desktopBridgeClientLaunchToken = string.Empty;
+        private BridgeCapabilitySet _desktopBridgeClientCapabilities = new BridgeCapabilitySet();
+        private DateTime _lastPublishedHeartbeatUtc = DateTime.MinValue;
 
         private ShellServiceMap _services;
         private IList<ILanguageProviderFactory> _hostLanguageProviderFactories = new List<ILanguageProviderFactory>();
@@ -222,6 +229,8 @@ namespace Cortex
             _desktopBridgeHost = TryCreateNamedPipeBridgeHost(ResolveDesktopBridgePipeName());
             _desktopBridgeSession = new RuntimeDesktopBridgeSession(
                 _state,
+                _viewState,
+                () => _workbenchRuntime,
                 () => _settingsStore,
                 () => ProjectCatalog,
                 () => SourceLookupIndex,
@@ -285,6 +294,7 @@ namespace Cortex
             }
 
             _frameSnapshot = BuildPresentationSnapshot();
+            _frameOverlaySnapshot = BuildOverlayPresentationSnapshot(_frameSnapshot);
             _layoutCoordinator.SynchronizeRuntimeLayoutState();
             ImguiWorkbenchLayout.ApplyTheme(_frameSnapshot.ThemeTokens, _frameSnapshot.ActiveThemeId);
             EnsureStyles(_frameSnapshot.ThemeTokens, _frameSnapshot.ActiveThemeId);
@@ -294,6 +304,11 @@ namespace Cortex
             if (GetRuntimeUiLayoutMode() == WorkbenchRuntimeUiLayoutMode.OverlayWindows)
             {
                 RenderOverlayShell();
+            }
+            else if (GetRuntimeUiLayoutMode() == WorkbenchRuntimeUiLayoutMode.ExternalOverlayWindows)
+            {
+                EnsureOverlayWindowLayout();
+                ReleaseOverlayInputCapture();
             }
             else
             {
@@ -328,6 +343,7 @@ namespace Cortex
             }
 
             _frameSnapshot = null;
+            _frameOverlaySnapshot = null;
             GUI.skin = previousSkin;
         }
 
@@ -516,7 +532,8 @@ namespace Cortex
 
         private void FitMainWindowToScreen()
         {
-            if (GetRuntimeUiLayoutMode() == WorkbenchRuntimeUiLayoutMode.OverlayWindows)
+            if (GetRuntimeUiLayoutMode() == WorkbenchRuntimeUiLayoutMode.OverlayWindows ||
+                GetRuntimeUiLayoutMode() == WorkbenchRuntimeUiLayoutMode.ExternalOverlayWindows)
             {
                 FitOverlayWindowsToScreen();
                 return;
@@ -691,10 +708,24 @@ namespace Cortex
                     case BridgeMessageType.UserIntent:
                         HandleDesktopBridgeIntent(inbound);
                         break;
+                    case BridgeMessageType.OverlayInputIntent:
+                        HandleDesktopBridgeOverlayInputIntent(inbound);
+                        break;
+                    case BridgeMessageType.OverlayWindowStateChanged:
+                        HandleDesktopBridgeOverlayWindowStateChanged(inbound);
+                        break;
+                    case BridgeMessageType.OverlayHostLifecycle:
+                        HandleDesktopBridgeOverlayLifecycle(inbound);
+                        break;
                 }
             }
 
+            var overlayChanged = _desktopBridgeSession.SynchronizeOverlayPresentation(BuildOverlayPresentationSnapshot());
             if (_desktopBridgeSession.SynchronizeFromRuntime())
+            {
+                PublishDesktopBridgeSnapshot(false);
+            }
+            else if (overlayChanged)
             {
                 PublishDesktopBridgeSnapshot(false);
             }
@@ -706,9 +737,17 @@ namespace Cortex
             var request = inbound != null && inbound.OpenSessionRequest != null
                 ? inbound.OpenSessionRequest
                 : new OpenSessionRequestMessage();
-            var protocolMatched = request.RequestedProtocolVersion == DesktopBridgeProtocol.Version;
+            var requestedProtocolVersion = request.RequestedProtocolVersion > 0 ? request.RequestedProtocolVersion : 1;
+            _desktopBridgeAcceptedProtocolVersion = Math.Min(requestedProtocolVersion, DesktopBridgeProtocol.Version);
+            var protocolMatched = _desktopBridgeAcceptedProtocolVersion == DesktopBridgeProtocol.Version;
             _desktopBridgeSessionId = Guid.NewGuid().ToString("N");
             _lastPublishedBridgeRevision = -1;
+            _lastPublishedOverlayRevision = -1;
+            _lastPublishedHeartbeatUtc = DateTime.MinValue;
+            _desktopBridgeClientLaunchToken = request.LaunchToken ?? string.Empty;
+            _desktopBridgeClientCapabilities = _desktopBridgeAcceptedProtocolVersion >= 2
+                ? CopyCapabilities(request.Capabilities)
+                : new BridgeCapabilitySet();
             _desktopBridgeHost.EnqueueOutbound(new BridgeMessageEnvelope
             {
                 ProtocolVersion = DesktopBridgeProtocol.Version,
@@ -719,7 +758,9 @@ namespace Cortex
                 {
                     RuntimeDisplayName = DesktopBridgeProtocol.DefaultRuntimeDisplayName,
                     PipeName = pipeName,
-                    AcceptedProtocolVersion = DesktopBridgeProtocol.Version,
+                    AcceptedProtocolVersion = _desktopBridgeAcceptedProtocolVersion,
+                    LaunchToken = _desktopBridgeClientLaunchToken,
+                    Capabilities = BuildBridgeCapabilities(_desktopBridgeAcceptedProtocolVersion),
                     StatusMessage = protocolMatched
                         ? "Connected to Cortex runtime bridge."
                         : "Connected to Cortex runtime bridge with protocol fallback."
@@ -764,6 +805,60 @@ namespace Cortex
             PublishDesktopBridgeSnapshot(true);
         }
 
+        private void HandleDesktopBridgeOverlayInputIntent(BridgeMessageEnvelope inbound)
+        {
+            if (inbound == null || inbound.OverlayInputIntent == null)
+            {
+                return;
+            }
+
+            string statusMessage;
+            if (_desktopBridgeSession.ApplyOverlayInputIntent(inbound.OverlayInputIntent, out statusMessage) &&
+                !string.IsNullOrEmpty(statusMessage))
+            {
+                _state.StatusMessage = statusMessage;
+            }
+
+            PublishDesktopBridgeSnapshot(true);
+        }
+
+        private void HandleDesktopBridgeOverlayWindowStateChanged(BridgeMessageEnvelope inbound)
+        {
+            if (inbound == null || inbound.OverlayWindowStateChanged == null)
+            {
+                return;
+            }
+
+            string statusMessage;
+            if (_desktopBridgeSession.ApplyOverlayWindowState(inbound.OverlayWindowStateChanged, out statusMessage) &&
+                !string.IsNullOrEmpty(statusMessage))
+            {
+                _state.StatusMessage = statusMessage;
+            }
+
+            PublishDesktopBridgeSnapshot(true);
+        }
+
+        private void HandleDesktopBridgeOverlayLifecycle(BridgeMessageEnvelope inbound)
+        {
+            if (inbound == null || inbound.OverlayHostLifecycle == null)
+            {
+                return;
+            }
+
+            string statusMessage;
+            if (_desktopBridgeSession.ApplyOverlayLifecycle(inbound.OverlayHostLifecycle, out statusMessage) &&
+                !string.IsNullOrEmpty(statusMessage))
+            {
+                _state.StatusMessage = statusMessage;
+            }
+
+            if (inbound.OverlayHostLifecycle.Kind == OverlayHostLifecycleKind.RequestLatestSnapshot)
+            {
+                PublishDesktopBridgeSnapshot(true);
+            }
+        }
+
         private void PublishDesktopBridgeSnapshot(bool force)
         {
             if (!_desktopBridgeHost.IsClientConnected || string.IsNullOrEmpty(_desktopBridgeSessionId))
@@ -771,24 +866,128 @@ namespace Cortex
                 return;
             }
 
-            if (!force && _lastPublishedBridgeRevision == _desktopBridgeSession.Revision)
+            var workbenchChanged = _lastPublishedBridgeRevision != _desktopBridgeSession.Revision;
+            var overlayChanged = ShouldPublishOverlaySnapshots() && _lastPublishedOverlayRevision != _desktopBridgeSession.OverlayRevision;
+            var heartbeatDue = (DateTime.UtcNow - _lastPublishedHeartbeatUtc).TotalSeconds >= 5d;
+            if (!force && !workbenchChanged && !overlayChanged && !heartbeatDue)
             {
                 return;
             }
 
-            _lastPublishedBridgeRevision = _desktopBridgeSession.Revision;
-            _desktopBridgeHost.EnqueueOutbound(new BridgeMessageEnvelope
+            if (force || workbenchChanged)
             {
-                ProtocolVersion = DesktopBridgeProtocol.Version,
-                MessageId = Guid.NewGuid().ToString("N"),
-                SessionId = _desktopBridgeSessionId,
-                MessageType = BridgeMessageType.WorkbenchSnapshot,
-                WorkbenchSnapshot = new WorkbenchSnapshotMessage
+                _lastPublishedBridgeRevision = _desktopBridgeSession.Revision;
+                _desktopBridgeHost.EnqueueOutbound(new BridgeMessageEnvelope
                 {
-                    Revision = _desktopBridgeSession.Revision,
-                    Snapshot = _desktopBridgeSession.BuildSnapshot()
+                    ProtocolVersion = DesktopBridgeProtocol.Version,
+                    MessageId = Guid.NewGuid().ToString("N"),
+                    SessionId = _desktopBridgeSessionId,
+                    MessageType = BridgeMessageType.WorkbenchSnapshot,
+                    WorkbenchSnapshot = new WorkbenchSnapshotMessage
+                    {
+                        Revision = _desktopBridgeSession.Revision,
+                        Snapshot = _desktopBridgeSession.BuildSnapshot()
+                    }
+                });
+            }
+
+            if (ShouldPublishOverlaySnapshots())
+            {
+                var overlayRevision = _desktopBridgeSession.OverlayRevision;
+                if (force || overlayChanged)
+                {
+                    _lastPublishedOverlayRevision = overlayRevision;
+                    _desktopBridgeHost.EnqueueOutbound(new BridgeMessageEnvelope
+                    {
+                        ProtocolVersion = DesktopBridgeProtocol.Version,
+                        MessageId = Guid.NewGuid().ToString("N"),
+                        SessionId = _desktopBridgeSessionId,
+                        MessageType = BridgeMessageType.OverlayPresentationSnapshot,
+                        OverlayPresentationSnapshot = new OverlayPresentationSnapshotMessage
+                        {
+                            Revision = overlayRevision,
+                            Snapshot = _desktopBridgeSession.BuildOverlaySnapshot()
+                        }
+                    });
                 }
-            });
+            }
+
+            if (heartbeatDue || force)
+            {
+                _lastPublishedHeartbeatUtc = DateTime.UtcNow;
+                _desktopBridgeHost.EnqueueOutbound(new BridgeMessageEnvelope
+                {
+                    ProtocolVersion = DesktopBridgeProtocol.Version,
+                    MessageId = Guid.NewGuid().ToString("N"),
+                    SessionId = _desktopBridgeSessionId,
+                    MessageType = BridgeMessageType.Heartbeat,
+                    Heartbeat = new BridgeHeartbeatMessage
+                    {
+                        WorkbenchRevision = _desktopBridgeSession.Revision,
+                        OverlayRevision = _desktopBridgeSession.OverlayRevision,
+                        UtcTimestamp = _lastPublishedHeartbeatUtc.ToString("o")
+                    }
+                });
+            }
+        }
+
+        private bool ShouldPublishOverlaySnapshots()
+        {
+            return _desktopBridgeAcceptedProtocolVersion >= 2 &&
+                HasBridgeFeature(_desktopBridgeClientCapabilities, DesktopBridgeFeatureIds.OverlayPresentation);
+        }
+
+        private static BridgeCapabilitySet BuildBridgeCapabilities(int acceptedProtocolVersion)
+        {
+            var capabilities = new BridgeCapabilitySet();
+            if (acceptedProtocolVersion < 2)
+            {
+                return capabilities;
+            }
+
+            capabilities.Features.Add(DesktopBridgeFeatureIds.OverlayPresentation);
+            capabilities.Features.Add(DesktopBridgeFeatureIds.OverlayInputIntents);
+            capabilities.Features.Add(DesktopBridgeFeatureIds.OverlayLifecycle);
+            capabilities.Features.Add(DesktopBridgeFeatureIds.OverlayWindowStateSync);
+            capabilities.Features.Add(DesktopBridgeFeatureIds.Heartbeat);
+            return capabilities;
+        }
+
+        private static BridgeCapabilitySet CopyCapabilities(BridgeCapabilitySet source)
+        {
+            var copy = new BridgeCapabilitySet();
+            if (source == null || source.Features == null)
+            {
+                return copy;
+            }
+
+            for (var i = 0; i < source.Features.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(source.Features[i]))
+                {
+                    copy.Features.Add(source.Features[i]);
+                }
+            }
+
+            return copy;
+        }
+
+        private static bool HasBridgeFeature(BridgeCapabilitySet capabilities, string featureId)
+        {
+            if (capabilities == null || capabilities.Features == null || string.IsNullOrEmpty(featureId))
+            {
+                return false;
+            }
+
+            for (var i = 0; i < capabilities.Features.Count; i++)
+            {
+                if (string.Equals(capabilities.Features[i], featureId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static string ResolveDesktopBridgePipeName()

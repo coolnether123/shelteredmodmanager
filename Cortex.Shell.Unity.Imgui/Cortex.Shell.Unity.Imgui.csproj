@@ -36,6 +36,7 @@
     <Compile Include="Chrome\CortexWindowChromeController.cs" />
     <Compile Include="Composition\ImguiWorkbenchRuntimeUiComposition.cs" />
     <Compile Include="Composition\OverlayWorkbenchRuntimeUiComposition.cs" />
+    <Compile Include="Composition\ExternalOverlayWorkbenchRuntimeUiComposition.cs" />
     <Compile Include="CortexShell.Chrome.cs" />
     <Compile Include="CortexShell.CompletionAugmentation.cs" />
     <Compile Include="CortexShell.Language.cs" />

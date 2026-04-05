@@ -68,6 +68,11 @@ The host data root now also owns:
 - `%LocalAppData%\Cortex.Host.Avalonia\desktop-shell-state.json`
 - `%LocalAppData%\Cortex.Host.Avalonia\desktop-dock-layout.json`
 
+The desktop-host log follows the launch host:
+
+- Sheltered bundle launch: `SMM\cortex-desktop.log`
+- standalone desktop-host launch: `%LocalAppData%\Cortex.Host.Avalonia\cortex-desktop.log`
+
 ## Shell state and Dock layout ownership
 
 Host-local shell ownership now lives entirely inside `Cortex.Host.Avalonia`:
@@ -142,7 +147,7 @@ What crosses the bridge:
 
 What stays local to the desktop host:
 
-- `%LocalAppData%\Cortex.Host.Avalonia\cortex-desktop.log`
+- `SMM\cortex-desktop.log` when launched from the Sheltered bundle, otherwise `%LocalAppData%\Cortex.Host.Avalonia\cortex-desktop.log`
 - `%LocalAppData%\Cortex.Host.Avalonia\desktop-shell-state.json`
 - `%LocalAppData%\Cortex.Host.Avalonia\desktop-dock-layout.json`
 - the resolved desktop bundle root, plugin roots, and tool roots used for the session

@@ -7,15 +7,18 @@ namespace Cortex.Shell.Bridge
         private readonly RuntimeDesktopBridgeSettingsFeature _settingsFeature;
         private readonly RuntimeDesktopBridgeWorkspaceFeature _workspaceFeature;
         private readonly RuntimeDesktopBridgeWorkbenchFeature _workbenchFeature;
+        private readonly RuntimeDesktopBridgeOverlayFeature _overlayFeature;
 
         public RuntimeDesktopBridgeSnapshotBuilder(
             RuntimeDesktopBridgeSettingsFeature settingsFeature,
             RuntimeDesktopBridgeWorkspaceFeature workspaceFeature,
-            RuntimeDesktopBridgeWorkbenchFeature workbenchFeature)
+            RuntimeDesktopBridgeWorkbenchFeature workbenchFeature,
+            RuntimeDesktopBridgeOverlayFeature overlayFeature)
         {
             _settingsFeature = settingsFeature;
             _workspaceFeature = workspaceFeature;
             _workbenchFeature = workbenchFeature;
+            _overlayFeature = overlayFeature;
         }
 
         public WorkbenchBridgeSnapshot Build(string statusMessage)
@@ -34,7 +37,8 @@ namespace Cortex.Shell.Bridge
                 Workspace = _workspaceFeature.BuildSnapshot(),
                 Editor = _workbenchFeature.BuildEditorSnapshot(),
                 Search = _workbenchFeature.BuildSearchSnapshot(),
-                Reference = _workbenchFeature.BuildReferenceSnapshot()
+                Reference = _workbenchFeature.BuildReferenceSnapshot(),
+                Overlay = _overlayFeature != null ? _overlayFeature.BuildSnapshot() : new OverlayPresentationSnapshot()
             };
         }
     }

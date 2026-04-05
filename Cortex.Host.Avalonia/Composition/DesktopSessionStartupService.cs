@@ -33,20 +33,23 @@ namespace Cortex.Host.Avalonia.Composition
             var bundleRootPath = _pathPolicy.ResolveBundleRootPath(
                 AppContext.BaseDirectory,
                 ResolveBundleRootOverride(args));
+            var logFilePath = _pathPolicy.ResolveLogFilePath(dataRootPath, AppContext.BaseDirectory, bundleRootPath);
             var environmentPaths = DesktopHostEnvironmentPaths.Create(
                 AppContext.BaseDirectory,
                 bundleRootPath,
                 _bundlePolicy);
             Directory.CreateDirectory(dataRootPath);
+            EnsureParentDirectoryExists(logFilePath);
 
             return new DesktopHostOptions
             {
                 BundleProfileName = _bundlePolicy.ProfileName,
                 DataRootPath = dataRootPath,
-                LogFilePath = _pathPolicy.ResolveLogFilePath(dataRootPath),
+                LogFilePath = logFilePath,
                 ShellStateFilePath = _pathPolicy.ResolveShellStateFilePath(dataRootPath),
                 DockLayoutFilePath = _pathPolicy.ResolveDockLayoutFilePath(dataRootPath),
                 StartupModeSummary = BuildStartupModeSummary(environmentPaths),
+                LaunchToken = ResolveOptionValue(args, "--launch-token"),
                 EnvironmentPaths = environmentPaths,
                 BridgeClient = new DesktopBridgeClientOptions
                 {
@@ -104,6 +107,26 @@ namespace Cortex.Host.Avalonia.Composition
             var bundleRootPath = environmentPaths != null ? environmentPaths.BundleRootPath ?? string.Empty : string.Empty;
             return "Desktop-first launch profile " + _bundlePolicy.ProfileName +
                 " with Avalonia as the host entry point. BundleRoot=" + bundleRootPath + ".";
+        }
+
+        private static void EnsureParentDirectoryExists(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath))
+            {
+                return;
+            }
+
+            try
+            {
+                var parentDirectory = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(parentDirectory))
+                {
+                    Directory.CreateDirectory(parentDirectory);
+                }
+            }
+            catch
+            {
+            }
         }
     }
 }

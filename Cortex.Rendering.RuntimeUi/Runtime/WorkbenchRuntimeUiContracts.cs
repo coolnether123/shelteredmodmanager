@@ -7,7 +7,8 @@ namespace Cortex.Rendering.RuntimeUi
     public enum WorkbenchRuntimeUiLayoutMode
     {
         IntegratedShellWindow = 0,
-        OverlayWindows = 1
+        OverlayWindows = 1,
+        ExternalOverlayWindows = 2
     }
 
     public interface IWorkbenchRuntimeUi

@@ -25,7 +25,7 @@ namespace Cortex.Host.Unity.Runtime
                 HelpText = resolvedRenderHostCatalog.SettingsHelpText,
                 Keywords = new[] { "presentation mode", "render host", "renderer", "imgui", "overlay", "avalonia", "desktop host", "external host" },
                 Options = resolvedRenderHostCatalog.BuildOptions(),
-                AllowEmpty = false,
+                IsRequired = true,
                 RequiresRestart = false
             };
         }

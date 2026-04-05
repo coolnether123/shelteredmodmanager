@@ -2,12 +2,58 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:dockFluent="clr-namespace:Dock.Avalonia.Themes.Fluent;assembly=Dock.Avalonia.Themes.Fluent"
              x:Class="Cortex.Host.Avalonia.App">
+  <Application.Resources>
+    <SolidColorBrush x:Key="CortexWindowBrush">#17191F</SolidColorBrush>
+    <SolidColorBrush x:Key="CortexSurfaceBrush">#151924</SolidColorBrush>
+    <SolidColorBrush x:Key="CortexSurfaceAltBrush">#101521</SolidColorBrush>
+    <SolidColorBrush x:Key="CortexBorderBrush">#314056</SolidColorBrush>
+    <SolidColorBrush x:Key="CortexTextBrush">#E6E8EE</SolidColorBrush>
+    <SolidColorBrush x:Key="CortexMutedTextBrush">#9CA8BC</SolidColorBrush>
+    <SolidColorBrush x:Key="CortexAccentBrush">#A8D0FF</SolidColorBrush>
+    <SolidColorBrush x:Key="CortexSelectionBrush">#243247</SolidColorBrush>
+  </Application.Resources>
   <Application.Styles>
     <FluentTheme />
     <dockFluent:DockFluentTheme />
     <Style Selector="Window">
-      <Setter Property="Background" Value="#17191F" />
-      <Setter Property="Foreground" Value="#E6E8EE" />
+      <Setter Property="Background" Value="{StaticResource CortexWindowBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource CortexTextBrush}" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="Background" Value="{StaticResource CortexSurfaceAltBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource CortexBorderBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource CortexTextBrush}" />
+      <Setter Property="CaretBrush" Value="{StaticResource CortexAccentBrush}" />
+      <Setter Property="SelectionBrush" Value="{StaticResource CortexSelectionBrush}" />
+    </Style>
+    <Style Selector="Button">
+      <Setter Property="Background" Value="{StaticResource CortexSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource CortexBorderBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource CortexTextBrush}" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="Background" Value="{StaticResource CortexSurfaceAltBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource CortexBorderBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource CortexTextBrush}" />
+    </Style>
+    <Style Selector="ListBox">
+      <Setter Property="Background" Value="{StaticResource CortexSurfaceAltBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource CortexBorderBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource CortexTextBrush}" />
+    </Style>
+    <Style Selector="TreeView">
+      <Setter Property="Background" Value="{StaticResource CortexSurfaceAltBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource CortexBorderBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource CortexTextBrush}" />
+    </Style>
+    <Style Selector="ListBoxItem:selected">
+      <Setter Property="Background" Value="{StaticResource CortexSelectionBrush}" />
+    </Style>
+    <Style Selector="TreeViewItem:selected">
+      <Setter Property="Background" Value="{StaticResource CortexSelectionBrush}" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Foreground" Value="{StaticResource CortexMutedTextBrush}" />
     </Style>
   </Application.Styles>
 </Application>

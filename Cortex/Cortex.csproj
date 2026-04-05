@@ -64,6 +64,8 @@
     <Compile Include="Shell\Bridge\IDesktopBridgeHost.cs" />
     <Compile Include="Shell\Bridge\NullDesktopBridgeHost.cs" />
     <Compile Include="Shell\Bridge\RuntimeDesktopBridgeModelCloner.cs" />
+    <Compile Include="Shell\Bridge\OverlayPresentationSnapshotBuilder.cs" />
+    <Compile Include="Shell\Bridge\RuntimeDesktopBridgeOverlayFeature.cs" />
     <Compile Include="Shell\Bridge\RuntimeDesktopBridgeSettingsFeature.cs" />
     <Compile Include="Shell\Bridge\RuntimeDesktopBridgeSnapshotBuilder.cs" />
     <Compile Include="Shell\Bridge\RuntimeDesktopBridgeWorkbenchFeature.cs" />

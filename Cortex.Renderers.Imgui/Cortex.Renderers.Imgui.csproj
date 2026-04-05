@@ -50,6 +50,8 @@
     <Compile Include="Overlay\OverlayWorkbenchRuntimeUiFactory.cs" />
     <Compile Include="Overlay\UnityOverlayRenderPipeline.cs" />
     <Compile Include="Overlay\UnityOverlayWorkbenchRenderer.cs" />
+    <Compile Include="Overlay\ExternalOverlayRuntimeUi.cs" />
+    <Compile Include="Overlay\ExternalOverlayRuntimeUiFactory.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -86,6 +86,7 @@ namespace Cortex.Host.Unity.Runtime
             WorkingDirectory = string.Empty;
             SuccessStatusMessage = string.Empty;
             FailureReason = string.Empty;
+            LaunchToken = string.Empty;
         }
 
         public string CommandPath { get; set; }
@@ -97,6 +98,8 @@ namespace Cortex.Host.Unity.Runtime
         public string SuccessStatusMessage { get; set; }
 
         public string FailureReason { get; set; }
+
+        public string LaunchToken { get; set; }
 
         public bool CanLaunch
         {
@@ -220,7 +223,7 @@ namespace Cortex.Host.Unity.Runtime
             var helpText =
                 "Select how Cortex presents its workbench for the current host. " +
                 "IMGUI runs inside the game in a single IDE window. Overlay runs inside the game as separate workbench windows for the main surfaces. " +
-                "Avalonia launches the external desktop host live over the runtime bridge while the game remains interactive.";
+                "Avalonia launches the external overlay host live over the runtime bridge while the game remains interactive.";
             if (catalog != null && catalog.UnavailableReasons.Count > 0)
             {
                 helpText += " Unavailable right now: " + string.Join(" ", CopyUnavailableReasons(catalog.UnavailableReasons));
@@ -238,7 +241,7 @@ namespace Cortex.Host.Unity.Runtime
 
             if (string.Equals(catalog.EffectiveRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase))
             {
-                return "Presentation: Avalonia (external) | Runtime UI: IMGUI bootstrap";
+                return "Presentation: Avalonia (external overlay)";
             }
 
             if (string.Equals(catalog.EffectiveRenderHostId, UnityRenderHostSettings.OverlayInProcessRenderHostId, StringComparison.OrdinalIgnoreCase))

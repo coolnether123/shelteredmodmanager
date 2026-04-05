@@ -147,6 +147,21 @@ namespace Cortex.Tests.Shell
         }
 
         [Fact]
+        public void RuntimeUiFactorySelector_ReturnsExternalOverlayLayoutMode_WhenAvaloniaExternalIsEffective()
+        {
+            var catalog = UnityRenderHostCatalog.CreateDefault();
+            catalog.EffectiveRenderHostId = UnityRenderHostSettings.AvaloniaExternalRenderHostId;
+
+            var runtimeUi = UnityWorkbenchRuntimeUiFactorySelector
+                .Select(catalog, NullWorkbenchFrameContext.Instance)
+                .Create();
+
+            Assert.Equal(WorkbenchRuntimeUiLayoutMode.ExternalOverlayWindows, runtimeUi.LayoutMode);
+            Assert.Equal("cortex.renderer.external-overlay", runtimeUi.RenderPipeline.WorkbenchRenderer.RendererId);
+            Assert.Equal("External Overlay Presenter", runtimeUi.RenderPipeline.WorkbenchRenderer.DisplayName);
+        }
+
+        [Fact]
         public void CatalogBuilder_ExposesAvaloniaChoice_WhenDesktopHostExecutableIsAvailable()
         {
             var root = CreateTempRoot();

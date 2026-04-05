@@ -28,9 +28,8 @@ namespace Cortex.Host.Avalonia.Composition
 
         public Window CreateMainWindow()
         {
-            return new MainWindow(
-                _compositionRoot.ShellViewModel,
-                _compositionRoot.WorkbenchCompositionService);
+            Log.Information("Creating desktop host primary overlay window.");
+            return _compositionRoot.OverlayWindowManager.GetOrCreatePrimaryWindow();
         }
 
         public void Dispose()
@@ -41,6 +40,7 @@ namespace Cortex.Host.Avalonia.Composition
             }
 
             _disposed = true;
+            Log.Information("Disposing desktop host session.");
             _compositionRoot.Dispose();
             DesktopHostLogging.Dispose();
         }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Cortex.Bridge;
 using Cortex.Core.Models;
 using Cortex.Modules.Editor;
 using Cortex.Modules.Shared;
@@ -91,6 +92,24 @@ namespace Cortex
             return _snapshotPresenter.BuildSnapshot(_workbenchRuntime, BuildPresentationMetadata()) ?? new WorkbenchPresentationSnapshot();
         }
 
+        private OverlayPresentationSnapshot BuildOverlayPresentationSnapshot()
+        {
+            return BuildOverlayPresentationSnapshot(BuildPresentationSnapshot());
+        }
+
+        private OverlayPresentationSnapshot BuildOverlayPresentationSnapshot(WorkbenchPresentationSnapshot snapshot)
+        {
+            EnsureOverlayWindowLayout();
+            return _overlaySnapshotBuilder.Build(
+                _state,
+                _viewState,
+                snapshot ?? new WorkbenchPresentationSnapshot(),
+                _desktopBridgeSession != null ? _desktopBridgeSession.OverlayRevision + 1 : 0,
+                GetScreenWidth(),
+                GetScreenHeight(),
+                ResolvePresentationModeId());
+        }
+
         private WorkbenchPresentationMetadata BuildPresentationMetadata()
         {
             return new WorkbenchPresentationMetadata
@@ -144,6 +163,22 @@ namespace Cortex
                 : WorkbenchRuntimeUiLayoutMode.IntegratedShellWindow;
         }
 
+        private string ResolvePresentationModeId()
+        {
+            var layoutMode = GetRuntimeUiLayoutMode();
+            if (layoutMode == WorkbenchRuntimeUiLayoutMode.ExternalOverlayWindows)
+            {
+                return "avalonia.external";
+            }
+
+            if (layoutMode == WorkbenchRuntimeUiLayoutMode.OverlayWindows)
+            {
+                return "overlay.inprocess";
+            }
+
+            return "imgui.inprocess";
+        }
+
         public bool ApplyRuntimeUiFactory(IWorkbenchRuntimeUiFactory runtimeUiFactory)
         {
             var runtimeUiSwitcher = _workbenchRuntime as IWorkbenchRuntimeUiSwitcher;
@@ -194,6 +229,30 @@ namespace Cortex
             {
                 ReleaseOverlayInputCapture();
             }
+        }
+
+        public void RequestExternalHostShutdown()
+        {
+            if (!_desktopBridgeHost.IsClientConnected || string.IsNullOrEmpty(_desktopBridgeSessionId))
+            {
+                return;
+            }
+
+            _desktopBridgeHost.EnqueueOutbound(new BridgeMessageEnvelope
+            {
+                ProtocolVersion = DesktopBridgeProtocol.Version,
+                MessageId = Guid.NewGuid().ToString("N"),
+                SessionId = _desktopBridgeSessionId,
+                MessageType = BridgeMessageType.OverlayHostLifecycle,
+                OverlayHostLifecycle = new OverlayHostLifecycleMessage
+                {
+                    Revision = _desktopBridgeSession != null ? _desktopBridgeSession.OverlayRevision : 0,
+                    Kind = OverlayHostLifecycleKind.ShutdownRequested,
+                    LaunchToken = _desktopBridgeClientLaunchToken ?? string.Empty,
+                    StatusMessage = "Runtime requested external overlay host shutdown.",
+                    UtcTimestamp = DateTime.UtcNow.ToString("o")
+                }
+            });
         }
 
         private void DisposeWorkbenchRuntime()
