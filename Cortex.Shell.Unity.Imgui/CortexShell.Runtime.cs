@@ -173,7 +173,7 @@ namespace Cortex
 
             if (layoutMode == WorkbenchRuntimeUiLayoutMode.OverlayWindows)
             {
-                return "overlay.inprocess";
+                return "imgui.inprocess";
             }
 
             return "imgui.inprocess";

@@ -65,12 +65,6 @@ namespace Cortex.Host.Unity.Runtime
                 DisplayName = "IMGUI",
                 Description = "Run Cortex directly inside the active game host with the current IMGUI shell."
             });
-            catalog.AvailableOptions.Add(new SettingChoiceOption
-            {
-                Value = UnityRenderHostSettings.OverlayInProcessRenderHostId,
-                DisplayName = "Overlay",
-                Description = "Render Cortex as separate in-game overlay windows so the editor, sidebars, and panel can live on distinct host surfaces."
-            });
             catalog.SettingsHelpText = "Select how Cortex presents its workbench for the current host. Saving applies the new presentation live without restarting the game.";
             catalog.StatusSummary = "Presentation: IMGUI (in-game)";
             return catalog;
@@ -152,9 +146,7 @@ namespace Cortex.Host.Unity.Runtime
                 string.Equals(catalog.SelectedRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase) &&
                 catalog.AvaloniaLaunchRequest.CanLaunch
                     ? UnityRenderHostSettings.AvaloniaExternalRenderHostId
-                    : string.Equals(catalog.SelectedRenderHostId, UnityRenderHostSettings.OverlayInProcessRenderHostId, StringComparison.OrdinalIgnoreCase)
-                        ? UnityRenderHostSettings.OverlayInProcessRenderHostId
-                        : UnityRenderHostSettings.ImguiRenderHostId;
+                    : UnityRenderHostSettings.ImguiRenderHostId;
 
             catalog.SettingsHelpText = BuildSettingsHelpText(catalog);
             catalog.StatusSummary = BuildStatusSummary(catalog);
@@ -222,8 +214,8 @@ namespace Cortex.Host.Unity.Runtime
         {
             var helpText =
                 "Select how Cortex presents its workbench for the current host. " +
-                "IMGUI runs inside the game in a single IDE window. Overlay runs inside the game as separate workbench windows for the main surfaces. " +
-                "Avalonia launches the external overlay host live over the runtime bridge while the game remains interactive.";
+                "IMGUI runs inside the game with the current Unity shell. " +
+                "Avalonia launches the external desktop host live over the runtime bridge while the game remains interactive.";
             if (catalog != null && catalog.UnavailableReasons.Count > 0)
             {
                 helpText += " Unavailable right now: " + string.Join(" ", CopyUnavailableReasons(catalog.UnavailableReasons));
@@ -242,11 +234,6 @@ namespace Cortex.Host.Unity.Runtime
             if (string.Equals(catalog.EffectiveRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase))
             {
                 return "Presentation: Avalonia (external overlay)";
-            }
-
-            if (string.Equals(catalog.EffectiveRenderHostId, UnityRenderHostSettings.OverlayInProcessRenderHostId, StringComparison.OrdinalIgnoreCase))
-            {
-                return "Presentation: Overlay (in-game)";
             }
 
             if (string.Equals(catalog.SelectedRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase) &&

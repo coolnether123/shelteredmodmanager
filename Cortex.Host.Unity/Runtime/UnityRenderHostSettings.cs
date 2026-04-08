@@ -31,14 +31,10 @@ namespace Cortex.Host.Unity.Runtime
         public static string NormalizeRenderHostId(string renderHostId)
         {
             if (string.Equals(renderHostId, LegacyImguiRenderHostId, System.StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(renderHostId, ImguiRenderHostId, System.StringComparison.OrdinalIgnoreCase))
+                string.Equals(renderHostId, ImguiRenderHostId, System.StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(renderHostId, OverlayInProcessRenderHostId, System.StringComparison.OrdinalIgnoreCase))
             {
                 return ImguiRenderHostId;
-            }
-
-            if (string.Equals(renderHostId, OverlayInProcessRenderHostId, System.StringComparison.OrdinalIgnoreCase))
-            {
-                return OverlayInProcessRenderHostId;
             }
 
             if (string.Equals(renderHostId, AvaloniaExternalRenderHostId, System.StringComparison.OrdinalIgnoreCase))
