@@ -7,6 +7,7 @@ using Cortex.Modules.Editor;
 using Cortex.Modules.Shared;
 using Cortex.Plugins.Abstractions;
 using Cortex.Presentation.Models;
+using Cortex.Presentation.Runtime;
 using Cortex.Rendering;
 using Cortex.Rendering.Abstractions;
 using Cortex.Rendering.RuntimeUi;
@@ -165,18 +166,18 @@ namespace Cortex
 
         private string ResolvePresentationModeId()
         {
+            if (string.Equals(GetModuleSettingValueForRenderer(RenderHostPresentationIds.RenderHostSettingId), RenderHostPresentationIds.DearImguiInProcessRenderHostId, StringComparison.OrdinalIgnoreCase))
+            {
+                return RenderHostPresentationIds.DearImguiInProcessRenderHostId;
+            }
+
             var layoutMode = GetRuntimeUiLayoutMode();
             if (layoutMode == WorkbenchRuntimeUiLayoutMode.ExternalOverlayWindows)
             {
-                return "avalonia.external";
+                return RenderHostPresentationIds.AvaloniaExternalRenderHostId;
             }
 
-            if (layoutMode == WorkbenchRuntimeUiLayoutMode.OverlayWindows)
-            {
-                return "imgui.inprocess";
-            }
-
-            return "imgui.inprocess";
+            return RenderHostPresentationIds.ImguiInProcessRenderHostId;
         }
 
         public bool ApplyRuntimeUiFactory(IWorkbenchRuntimeUiFactory runtimeUiFactory)
@@ -224,6 +225,15 @@ namespace Cortex
 
         public void SetShellVisible(bool visible)
         {
+            if (_sessionCoordinator.Visible != visible)
+            {
+                MMLog.WriteInfo(
+                    "[Cortex] Shell visibility changed. Visible=" + visible +
+                    ", Renderer=" + (CurrentRendererId ?? string.Empty) +
+                    ", FocusedContainer=" + (_state.Workbench.FocusedContainerId ?? string.Empty) +
+                    ", StatusMessage=" + (_state.StatusMessage ?? string.Empty) + ".");
+            }
+
             _sessionCoordinator.Visible = visible;
             if (!visible)
             {

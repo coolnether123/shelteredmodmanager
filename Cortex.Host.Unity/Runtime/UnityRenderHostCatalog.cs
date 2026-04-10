@@ -10,8 +10,8 @@ namespace Cortex.Host.Unity.Runtime
     {
         public UnityRenderHostCatalog()
         {
-            SelectedRenderHostId = UnityRenderHostSettings.ImguiRenderHostId;
-            EffectiveRenderHostId = UnityRenderHostSettings.ImguiRenderHostId;
+            SelectedRenderHostId = UnityRenderHostSettings.DearImguiRenderHostId;
+            EffectiveRenderHostId = UnityRenderHostSettings.DearImguiRenderHostId;
             SettingsHelpText = string.Empty;
             StatusSummary = string.Empty;
             StartupStatusMessage = string.Empty;
@@ -65,8 +65,14 @@ namespace Cortex.Host.Unity.Runtime
                 DisplayName = "IMGUI",
                 Description = "Run Cortex directly inside the active game host with the current IMGUI shell."
             });
+            catalog.AvailableOptions.Add(new SettingChoiceOption
+            {
+                Value = UnityRenderHostSettings.DearImguiRenderHostId,
+                DisplayName = "Dear ImGui",
+                Description = "Run Cortex directly inside the active game host with the Dear ImGui renderer."
+            });
             catalog.SettingsHelpText = "Select how Cortex presents its workbench for the current host. Saving applies the new presentation live without restarting the game.";
-            catalog.StatusSummary = "Presentation: IMGUI (in-game)";
+            catalog.StatusSummary = "Presentation: Dear ImGui (in-game)";
             return catalog;
         }
     }
@@ -126,27 +132,11 @@ namespace Cortex.Host.Unity.Runtime
         {
             var catalog = UnityRenderHostCatalog.CreateDefault();
             catalog.SelectedRenderHostId = UnityRenderHostSettings.NormalizeRenderHostId(selectedRenderHostId);
-            catalog.AvaloniaLaunchRequest = CreateAvaloniaLaunchRequest(environment);
-
-            if (catalog.AvaloniaLaunchRequest.CanLaunch)
+            catalog.AvaloniaLaunchRequest = new UnityExternalHostLaunchRequest
             {
-                catalog.AvailableOptions.Add(new SettingChoiceOption
-                {
-                    Value = UnityRenderHostSettings.AvaloniaExternalRenderHostId,
-                    DisplayName = "Avalonia",
-                    Description = "Launch the external Avalonia desktop host live over the runtime bridge. IMGUI remains the in-game bootstrap and fallback surface."
-                });
-            }
-            else if (!string.IsNullOrEmpty(catalog.AvaloniaLaunchRequest.FailureReason))
-            {
-                catalog.UnavailableReasons.Add("Avalonia (external): " + catalog.AvaloniaLaunchRequest.FailureReason);
-            }
-
-            catalog.EffectiveRenderHostId =
-                string.Equals(catalog.SelectedRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase) &&
-                catalog.AvaloniaLaunchRequest.CanLaunch
-                    ? UnityRenderHostSettings.AvaloniaExternalRenderHostId
-                    : UnityRenderHostSettings.ImguiRenderHostId;
+                FailureReason = "Avalonia external presentation is disabled for the Unity host."
+            };
+            catalog.EffectiveRenderHostId = ResolveInProcessRenderHostId(catalog.SelectedRenderHostId);
 
             catalog.SettingsHelpText = BuildSettingsHelpText(catalog);
             catalog.StatusSummary = BuildStatusSummary(catalog);
@@ -214,8 +204,7 @@ namespace Cortex.Host.Unity.Runtime
         {
             var helpText =
                 "Select how Cortex presents its workbench for the current host. " +
-                "IMGUI runs inside the game with the current Unity shell. " +
-                "Avalonia launches the external desktop host live over the runtime bridge while the game remains interactive.";
+                "IMGUI and Dear ImGui both run inside the game process.";
             if (catalog != null && catalog.UnavailableReasons.Count > 0)
             {
                 helpText += " Unavailable right now: " + string.Join(" ", CopyUnavailableReasons(catalog.UnavailableReasons));
@@ -228,18 +217,12 @@ namespace Cortex.Host.Unity.Runtime
         {
             if (catalog == null)
             {
-                return "Presentation: IMGUI (in-game)";
+                return "Presentation: Dear ImGui (in-game)";
             }
 
-            if (string.Equals(catalog.EffectiveRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(catalog.EffectiveRenderHostId, UnityRenderHostSettings.DearImguiRenderHostId, StringComparison.OrdinalIgnoreCase))
             {
-                return "Presentation: Avalonia (external overlay)";
-            }
-
-            if (string.Equals(catalog.SelectedRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase) &&
-                catalog.UnavailableReasons.Count > 0)
-            {
-                return "Presentation: IMGUI (Avalonia unavailable)";
+                return "Presentation: Dear ImGui (in-game)";
             }
 
             return "Presentation: IMGUI (in-game)";
@@ -252,15 +235,14 @@ namespace Cortex.Host.Unity.Runtime
                 return string.Empty;
             }
 
-            if (string.Equals(catalog.SelectedRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase))
-            {
-                return catalog.AvaloniaLaunchRequest != null && catalog.AvaloniaLaunchRequest.CanLaunch
-                    ? "Launching external Avalonia host."
-                    : "Avalonia external host unavailable. Using IMGUI: " +
-                        (catalog.AvaloniaLaunchRequest != null ? catalog.AvaloniaLaunchRequest.FailureReason ?? string.Empty : string.Empty);
-            }
-
             return string.Empty;
+        }
+
+        private static string ResolveInProcessRenderHostId(string renderHostId)
+        {
+            return string.Equals(renderHostId, UnityRenderHostSettings.DearImguiRenderHostId, StringComparison.OrdinalIgnoreCase)
+                ? UnityRenderHostSettings.DearImguiRenderHostId
+                : UnityRenderHostSettings.ImguiRenderHostId;
         }
 
         private List<RuntimeRootCandidate> BuildRuntimeCandidates(ICortexHostEnvironment environment)

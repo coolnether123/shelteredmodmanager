@@ -4,14 +4,15 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{7A570620-E51D-499E-A28E-13A1D8156417}</ProjectGuid>
+    <ProjectGuid>{A1A79F9D-7F31-4DB1-8D9A-DAF403A8273D}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Cortex.Host.Unity</RootNamespace>
-    <AssemblyName>Cortex.Host.Unity</AssemblyName>
+    <RootNamespace>Cortex.Renderers.DearImgui</RootNamespace>
+    <AssemblyName>Cortex.Renderers.DearImgui</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -33,33 +34,30 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DearImguiRenderPipeline.cs" />
+    <Compile Include="DearImguiWorkbenchRenderer.cs" />
+    <Compile Include="DearImguiWorkbenchRuntimeUi.cs" />
+    <Compile Include="DearImguiWorkbenchRuntimeUiComposition.cs" />
+    <Compile Include="DearImguiWorkbenchRuntimeUiFactory.cs" />
+    <Compile Include="DearImguiWorkbenchUiSurface.cs" />
+    <Compile Include="Native\DearImguiNative.cs" />
+    <Compile Include="Native\DearImguiNativeLoader.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Runtime\IUnityWorkbenchContributionRegistrar.cs" />
-    <Compile Include="Runtime\IUnityShellStartupAction.cs" />
-    <Compile Include="Runtime\UnityExternalHostLauncher.cs" />
-    <Compile Include="Runtime\UnityCortexShellBehaviour.cs" />
-    <Compile Include="Runtime\UnityCortexShellBootstrapper.cs" />
-    <Compile Include="Runtime\UnityRenderPresentationCoordinator.cs" />
-    <Compile Include="Runtime\UnityWorkbenchRuntimeUiFactorySelector.cs" />
-    <Compile Include="Runtime\UnityWorkbenchFrameContext.cs" />
-    <Compile Include="Runtime\UnityCortexHostCompositionRoot.cs" />
-    <Compile Include="Runtime\UnityCortexHostServices.cs" />
-    <Compile Include="Runtime\UnityRenderHostCatalog.cs" />
-    <Compile Include="Runtime\UnityRenderHostSettingContributions.cs" />
-    <Compile Include="Runtime\UnityRenderHostSettings.cs" />
-    <Compile Include="Runtime\UnityWorkbenchRuntime.cs" />
-    <Compile Include="Runtime\UnityWorkbenchRuntimeFactory.cs" />
-    <Compile Include="Runtime\WindowsPathInteractionService.cs" />
+    <Compile Include="Runtime\DearImguiInputAdapter.cs" />
+    <Compile Include="Runtime\DearImguiUnityBackend.cs" />
+    <Compile Include="Shell\DearImguiPresentationBehaviour.cs" />
+    <Compile Include="Shell\DearImguiShellPresenter.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Cortex.Renderers.DearImgui\Cortex.Renderers.DearImgui.csproj">
-      <Project>{A1A79F9D-7F31-4DB1-8D9A-DAF403A8273D}</Project>
-      <Name>Cortex.Renderers.DearImgui</Name>
-      <Private>False</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Cortex.Shell.Unity.Imgui\Cortex.Shell.Unity.Imgui.csproj">
-      <Project>{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3}</Project>
-      <Name>Cortex.Shell.Unity.Imgui</Name>
+    <None Include="Native\cimgui.dll">
+      <TargetPath>cimgui.dll</TargetPath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Cortex.Bridge\Cortex.Bridge.csproj">
+      <Project>{FB836336-222B-4E2A-B020-D74D4F7735A8}</Project>
+      <Name>Cortex.Bridge</Name>
       <Private>False</Private>
     </ProjectReference>
     <ProjectReference Include="..\Cortex\Cortex.csproj">
@@ -90,6 +88,16 @@
     <ProjectReference Include="..\Cortex.Rendering.RuntimeUi\Cortex.Rendering.RuntimeUi.csproj">
       <Project>{8F6A2F38-54DF-4B49-8FC4-7F909D1AF6D3}</Project>
       <Name>Cortex.Rendering.RuntimeUi</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Shell.Shared\Cortex.Shell.Shared.csproj">
+      <Project>{258D01D1-E6B8-4E07-86CC-683122377C53}</Project>
+      <Name>Cortex.Shell.Shared</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Shell.Unity.Imgui\Cortex.Shell.Unity.Imgui.csproj">
+      <Project>{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3}</Project>
+      <Name>Cortex.Shell.Unity.Imgui</Name>
       <Private>False</Private>
     </ProjectReference>
   </ItemGroup>

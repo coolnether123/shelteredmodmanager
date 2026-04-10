@@ -1,6 +1,7 @@
 using System;
 using Cortex.Rendering;
 using Cortex.Rendering.RuntimeUi;
+using Cortex.Renderers.DearImgui;
 using Cortex.Shell.Unity.Imgui;
 using Cortex.Core.Models;
 
@@ -12,11 +13,11 @@ namespace Cortex.Host.Unity.Runtime
         {
             var effectiveRenderHostId = renderHostCatalog != null
                 ? UnityRenderHostSettings.NormalizeRenderHostId(renderHostCatalog.EffectiveRenderHostId)
-                : UnityRenderHostSettings.ImguiRenderHostId;
+                : UnityRenderHostSettings.DearImguiRenderHostId;
 
-            if (string.Equals(effectiveRenderHostId, UnityRenderHostSettings.AvaloniaExternalRenderHostId, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(effectiveRenderHostId, UnityRenderHostSettings.DearImguiRenderHostId, StringComparison.OrdinalIgnoreCase))
             {
-                return ExternalOverlayWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext);
+                return DearImguiWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext);
             }
 
             return ImguiWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(frameContext);

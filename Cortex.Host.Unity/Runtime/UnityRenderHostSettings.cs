@@ -1,22 +1,24 @@
 using Cortex.Core.Models;
 using Cortex.Core.Services;
 using Cortex.Presentation.Abstractions;
+using Cortex.Presentation.Runtime;
 
 namespace Cortex.Host.Unity.Runtime
 {
     public static class UnityRenderHostSettings
     {
-        public const string RenderHostSettingId = "cortex.renderHostId";
-        public const string LegacyImguiRenderHostId = "imgui";
-        public const string ImguiRenderHostId = "imgui.inprocess";
-        public const string OverlayInProcessRenderHostId = "overlay.inprocess";
-        public const string AvaloniaExternalRenderHostId = "avalonia.external";
+        public const string RenderHostSettingId = RenderHostPresentationIds.RenderHostSettingId;
+        public const string LegacyImguiRenderHostId = RenderHostPresentationIds.LegacyImguiRenderHostId;
+        public const string ImguiRenderHostId = RenderHostPresentationIds.ImguiInProcessRenderHostId;
+        public const string DearImguiRenderHostId = RenderHostPresentationIds.DearImguiInProcessRenderHostId;
+        public const string OverlayInProcessRenderHostId = RenderHostPresentationIds.OverlayInProcessLegacyRenderHostId;
+        public const string AvaloniaExternalRenderHostId = RenderHostPresentationIds.AvaloniaExternalRenderHostId;
 
         public static string LoadSelectedRenderHostId(ICortexHostEnvironment environment)
         {
             if (environment == null)
             {
-                return ImguiRenderHostId;
+                return DearImguiRenderHostId;
             }
 
             var store = new JsonCortexSettingsStore(environment.SettingsFilePath);
@@ -25,7 +27,10 @@ namespace Cortex.Host.Unity.Runtime
 
         public static string ReadSelectedRenderHostId(CortexSettings settings)
         {
-            return NormalizeRenderHostId(ReadModuleSettingValue(settings, RenderHostSettingId));
+            var configuredValue = ReadModuleSettingValue(settings, RenderHostSettingId);
+            return string.IsNullOrEmpty(configuredValue)
+                ? DearImguiRenderHostId
+                : NormalizeRenderHostId(configuredValue);
         }
 
         public static string NormalizeRenderHostId(string renderHostId)
@@ -37,12 +42,12 @@ namespace Cortex.Host.Unity.Runtime
                 return ImguiRenderHostId;
             }
 
-            if (string.Equals(renderHostId, AvaloniaExternalRenderHostId, System.StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(renderHostId, DearImguiRenderHostId, System.StringComparison.OrdinalIgnoreCase))
             {
-                return AvaloniaExternalRenderHostId;
+                return DearImguiRenderHostId;
             }
 
-            return ImguiRenderHostId;
+            return DearImguiRenderHostId;
         }
 
         private static string ReadModuleSettingValue(CortexSettings settings, string settingId)
