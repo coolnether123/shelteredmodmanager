@@ -276,31 +276,15 @@ namespace Cortex
 
         private void RenderVisibleShell()
         {
-            if (_state.OpenOnboardingRequested)
+            if (!PrepareShellFrameForRender())
             {
-                _state.OpenOnboardingRequested = false;
-                OpenOnboarding(true);
-            }
-
-            if (!_sessionCoordinator.Visible)
-            {
-                ReleaseOverlayInputCapture();
                 return;
             }
 
-            if (_state.Onboarding.IsActive)
-            {
-                PreviewOnboardingSelections();
-            }
-
-            _frameSnapshot = BuildPresentationSnapshot();
-            _frameOverlaySnapshot = BuildOverlayPresentationSnapshot(_frameSnapshot);
-            _layoutCoordinator.SynchronizeRuntimeLayoutState();
             ImguiWorkbenchLayout.ApplyTheme(_frameSnapshot.ThemeTokens, _frameSnapshot.ActiveThemeId);
             EnsureStyles(_frameSnapshot.ThemeTokens, _frameSnapshot.ActiveThemeId);
             var previousSkin = GUI.skin;
             GUI.skin = ImguiWorkbenchLayout.GetWorkbenchSkin(previousSkin);
-            ClampWindowsToScreen();
             if (GetRuntimeUiLayoutMode() == WorkbenchRuntimeUiLayoutMode.OverlayWindows)
             {
                 RenderOverlayShell();
@@ -308,11 +292,9 @@ namespace Cortex
             else if (GetRuntimeUiLayoutMode() == WorkbenchRuntimeUiLayoutMode.ExternalOverlayWindows)
             {
                 EnsureOverlayWindowLayout();
-                ReleaseOverlayInputCapture();
             }
             else
             {
-                UpdateOverlayInputCapture();
                 if (_viewState.MainWindow.IsCollapsed)
                 {
                     DrawCollapsedWindowButton(_viewState.MainWindow, ">", "Cortex");
@@ -345,6 +327,66 @@ namespace Cortex
             _frameSnapshot = null;
             _frameOverlaySnapshot = null;
             GUI.skin = previousSkin;
+        }
+
+        private bool PrepareShellFrameForRender()
+        {
+            if (_state.OpenOnboardingRequested)
+            {
+                _state.OpenOnboardingRequested = false;
+                OpenOnboarding(true);
+            }
+
+            if (!_sessionCoordinator.Visible)
+            {
+                _frameSnapshot = null;
+                _frameOverlaySnapshot = null;
+                ReleaseOverlayInputCapture();
+                return false;
+            }
+
+            if (_state.Onboarding.IsActive)
+            {
+                PreviewOnboardingSelections();
+            }
+
+            _frameSnapshot = BuildPresentationSnapshot();
+            _frameOverlaySnapshot = BuildOverlayPresentationSnapshot(_frameSnapshot);
+            _layoutCoordinator.SynchronizeRuntimeLayoutState();
+            ClampWindowsToScreen();
+            _layoutCoordinator.SynchronizeLayoutTree(_frameSnapshot, ResolveMainWorkbenchRect());
+
+            if (GetRuntimeUiLayoutMode() == WorkbenchRuntimeUiLayoutMode.ExternalOverlayWindows)
+            {
+                EnsureOverlayWindowLayout();
+                ReleaseOverlayInputCapture();
+            }
+            else
+            {
+                UpdateOverlayInputCapture();
+            }
+
+            return true;
+        }
+
+        private RenderRect ResolveMainWorkbenchRect()
+        {
+            var currentRect = _viewState.MainWindow.CurrentRect.Width > 0f
+                ? _viewState.MainWindow.CurrentRect
+                : _viewState.MainWindow.ExpandedRect;
+            var contentX = currentRect.X + 6f;
+            var contentY = currentRect.Y + 24f;
+            var contentWidth = Math.Max(0f, currentRect.Width - 12f);
+            var contentHeight = Math.Max(0f, currentRect.Height - 30f);
+            var headerHeight = 30f;
+            var statusHeight = 24f;
+            var workbenchTop = contentY + headerHeight + 2f;
+            var statusTop = Math.Max(contentY + headerHeight + 8f, contentY + contentHeight - statusHeight);
+            return new RenderRect(
+                contentX,
+                workbenchTop,
+                contentWidth,
+                Math.Max(0f, statusTop - workbenchTop - 3f));
         }
 
         private void DrawWindow(int windowId)

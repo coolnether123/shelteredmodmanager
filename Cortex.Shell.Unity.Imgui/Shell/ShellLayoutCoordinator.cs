@@ -93,6 +93,17 @@ namespace Cortex.Shell
             runtime.WorkbenchState.PanelHostVisible = !string.IsNullOrEmpty(_state.Workbench.PanelContainerId);
         }
 
+        public void SynchronizeLayoutTree(WorkbenchPresentationSnapshot snapshot, RenderRect workspaceRect)
+        {
+            if (workspaceRect.Width <= 0f || workspaceRect.Height <= 0f)
+            {
+                _viewState.LayoutRoot = null;
+                return;
+            }
+
+            _viewState.LayoutRoot = BuildLayoutTree(snapshot, ToRect(workspaceRect));
+        }
+
         private CortexLayoutNode BuildLayoutTree(WorkbenchPresentationSnapshot snapshot, Rect workspaceRect)
         {
             var isDragging = !string.IsNullOrEmpty(_draggingContainerId);
