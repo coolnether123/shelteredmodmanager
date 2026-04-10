@@ -10,6 +10,7 @@
     '$(MSBuildProjectName)' == 'Cortex.Contracts' or
     '$(MSBuildProjectName)' == 'Cortex.Core' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Avalonia' or
+    '$(MSBuildProjectName)' == 'Cortex.Renderers.DearImgui' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Sheltered' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Unity' or
     '$(MSBuildProjectName)' == 'Cortex.Shell.Unity.Imgui' or
@@ -21,6 +22,7 @@
     '$(MSBuildProjectName)' == 'Cortex.Plugin.Harmony' or
     '$(MSBuildProjectName)' == 'Cortex.Plugins.Abstractions' or
     '$(MSBuildProjectName)' == 'Cortex.Presentation' or
+    '$(MSBuildProjectName)' == 'Cortex.Renderers.DearImgui' or
     '$(MSBuildProjectName)' == 'Cortex.Renderers.Imgui' or
     '$(MSBuildProjectName)' == 'Cortex.Rendering' or
     '$(MSBuildProjectName)' == 'Cortex.Rendering.RuntimeUi' or
@@ -92,6 +94,7 @@
     '$(MSBuildProjectName)' == 'Cortex.Shell.Unity.Imgui' or
     '$(MSBuildProjectName)' == 'Cortex.Platform.ModAPI' or
     '$(MSBuildProjectName)' == 'Cortex.Plugin.Harmony' or
+    '$(MSBuildProjectName)' == 'Cortex.Renderers.DearImgui' or
     '$(MSBuildProjectName)' == 'Cortex.Renderers.Imgui' or
     '$(MSBuildProjectName)' == 'Cortex.Tests'">
     <CortexUsesUnityEngine>true</CortexUsesUnityEngine>
@@ -142,6 +145,7 @@
     '$(MSBuildProjectName)' == 'Cortex.Bridge' or
     '$(MSBuildProjectName)' == 'Cortex.Contracts' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Avalonia' or
+    '$(MSBuildProjectName)' == 'Cortex.Renderers.DearImgui' or
     '$(MSBuildProjectName)' == 'Cortex.Renderers.Imgui' or
     '$(MSBuildProjectName)' == 'Cortex.Shell.Shared' or
     '$(MSBuildProjectName)' == 'Cortex.Host.Sheltered' or

@@ -2,13 +2,14 @@
 
 `Cortex.Host.Avalonia` is the current desktop-first Cortex host.
 
-The Unity in-game runtime can now prefer this host as an external presentation mode instead of treating Avalonia as an in-process renderer. In that path, the legacy IMGUI shell still boots the runtime and named-pipe bridge, then launches the Avalonia host out of process when the host-scoped presentation mode selects `avalonia.external`.
+The Unity in-game runtime no longer selects this host as a presentation mode. The Unity host is limited to in-process IMGUI and Dear ImGui presentation, while `Cortex.Host.Avalonia` remains a separate desktop host lane.
 
 Current Unity presentation modes are intentionally split by lane:
 
 - `imgui.inprocess` for the legacy in-game shell
-- `overlay.inprocess` for the in-game Unity overlay renderer path with overlay-specific runtime UI chrome and multi-surface window layout
-- `avalonia.external` for the external desktop host
+- `dearimgui.inprocess` for the in-game Dear ImGui renderer path
+
+`overlay.inprocess` and `avalonia.external` are legacy setting aliases only in the Unity host. They are normalized back to in-game presentation and are not supported presentation modes there anymore.
 
 It is intentionally modest in this phase:
 
