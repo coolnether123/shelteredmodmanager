@@ -39,6 +39,7 @@
     <Compile Include="Composition\ExternalOverlayWorkbenchRuntimeUiComposition.cs" />
     <Compile Include="CortexShell.Chrome.cs" />
     <Compile Include="CortexShell.CompletionAugmentation.cs" />
+    <Compile Include="CortexShell.ExternalRenderer.cs" />
     <Compile Include="CortexShell.Language.cs" />
     <Compile Include="CortexShell.Overlay.cs" />
     <Compile Include="CortexShell.Onboarding.cs" />
@@ -136,6 +137,10 @@
     <ProjectReference Include="..\Cortex.Renderers.Imgui\Cortex.Renderers.Imgui.csproj">
       <Project>{4D1B939A-3C10-4A7B-B6C4-259D50848A5A}</Project>
       <Name>Cortex.Renderers.Imgui</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Cortex.Shell.Shared\Cortex.Shell.Shared.csproj">
+      <Name>Cortex.Shell.Shared</Name>
       <Private>False</Private>
     </ProjectReference>
   </ItemGroup>

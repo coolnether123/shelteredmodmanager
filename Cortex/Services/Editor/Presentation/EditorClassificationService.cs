@@ -3,7 +3,7 @@ using Cortex.Contracts.Text;
 
 namespace Cortex.Services.Editor.Presentation
 {
-    internal sealed class EditorClassificationService
+    public sealed class EditorClassificationService
     {
         private const string DefaultTextHex = "#D4D4D4";
         private const string CommentHex = "#6A9955";

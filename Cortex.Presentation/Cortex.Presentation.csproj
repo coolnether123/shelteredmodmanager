@@ -33,6 +33,7 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Runtime\RenderHostPresentationIds.cs" />
     <Compile Include="Abstractions\HostInterfaces.cs" />
     <Compile Include="Abstractions\Interfaces.cs" />
     <Compile Include="Models\MethodInspectorPresentationModels.cs" />
