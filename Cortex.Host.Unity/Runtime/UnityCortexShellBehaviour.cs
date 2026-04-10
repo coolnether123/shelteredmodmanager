@@ -2,6 +2,7 @@ using Cortex;
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
 using Cortex.Rendering.RuntimeUi;
+using Cortex.Renderers.DearImgui;
 using UnityEngine;
 
 namespace Cortex.Host.Unity.Runtime
@@ -11,9 +12,11 @@ namespace Cortex.Host.Unity.Runtime
     /// </summary>
     public sealed class UnityCortexShellBehaviour : MonoBehaviour, IUnityRenderPresentationHost
     {
+        private const int OverlayGuiDepth = -10000;
         private readonly CortexShellController _controller = new CortexShellController();
         private ICortexHostServices _hostServices;
         private UnityRenderPresentationCoordinator _presentationCoordinator;
+        private DearImguiPresentationBehaviour _dearImguiPresentation;
 
         public void ConfigureHostServices(ICortexHostServices hostServices)
         {
@@ -25,6 +28,7 @@ namespace Cortex.Host.Unity.Runtime
         {
             gameObject.name = "Cortex.Shell";
             DontDestroyOnLoad(gameObject);
+            AttachDearImguiPresentation();
         }
 
         private void Start()
@@ -51,7 +55,41 @@ namespace Cortex.Host.Unity.Runtime
 
         private void OnGUI()
         {
-            _controller.RenderShell();
+            var previousDepth = GUI.depth;
+            GUI.depth = OverlayGuiDepth;
+            if (string.Equals(_controller.CurrentRendererId, DearImguiWorkbenchRenderer.RendererIdValue, System.StringComparison.OrdinalIgnoreCase))
+            {
+                if (_dearImguiPresentation != null)
+                {
+                    _dearImguiPresentation.RenderOnGui();
+                }
+
+                GUI.depth = previousDepth;
+                return;
+            }
+
+            try
+            {
+                _controller.RenderShell();
+            }
+            finally
+            {
+                GUI.depth = previousDepth;
+            }
+        }
+
+        private void AttachDearImguiPresentation()
+        {
+            if (_dearImguiPresentation == null)
+            {
+                _dearImguiPresentation = gameObject.GetComponent<DearImguiPresentationBehaviour>();
+                if (_dearImguiPresentation == null)
+                {
+                    _dearImguiPresentation = gameObject.AddComponent<DearImguiPresentationBehaviour>();
+                }
+            }
+
+            _dearImguiPresentation.Configure(_controller);
         }
 
         private void SynchronizePresentation()

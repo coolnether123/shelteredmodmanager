@@ -5,6 +5,7 @@ using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
 using Cortex.Rendering;
 using Cortex.Rendering.RuntimeUi;
+using Cortex.Renderers.DearImgui;
 using Cortex.Shell.Unity.Imgui;
 using System.Diagnostics;
 using System;
@@ -75,8 +76,8 @@ namespace Cortex.Host.Unity.Runtime
                 _externalHostSession != null &&
                 !IsTrackedExternalHostAlive())
             {
-                Log.WriteWarning("Tracked external overlay host is no longer alive. Falling back to IMGUI.");
-                host.ApplyStatusMessage("External overlay host exited. Falling back to in-process presentation.");
+                Log.WriteWarning("Tracked external Avalonia host is no longer alive. Falling back to IMGUI.");
+                host.ApplyStatusMessage("External Avalonia host exited. Falling back to in-process presentation.");
                 host.ApplyRuntimeUiFactory(ImguiWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(_frameContext));
                 _suppressedLaunchSignature = launchSignature;
                 _lastSuppressedLogSignature = launchSignature;
@@ -104,18 +105,18 @@ namespace Cortex.Host.Unity.Runtime
                 {
                     if (!string.Equals(_lastSuppressedLogSignature, launchSignature, StringComparison.OrdinalIgnoreCase))
                     {
-                        Log.WriteWarning("External overlay host launch is suppressed for the current launch signature after a previous failure or crash.");
+                        Log.WriteWarning("External Avalonia host launch is suppressed for the current launch signature after a previous failure or crash.");
                         _lastSuppressedLogSignature = launchSignature;
                     }
 
-                    host.ApplyStatusMessage("External overlay host is currently suppressed after a failed launch or crash. Switch away and back to retry.");
+                    host.ApplyStatusMessage("External Avalonia host is currently suppressed after a failed launch or crash. Switch away and back to retry.");
                 }
                 else if (ShouldRelaunchExternalHost(catalog, launchSignature))
                 {
                     TryStopTrackedExternalHost(host);
                     var request = CloneRequest(catalog.AvaloniaLaunchRequest, Guid.NewGuid().ToString("N"));
                     Log.WriteInfo(
-                        "Launching external overlay host. Command=" + (request.CommandPath ?? string.Empty) +
+                        "Launching external Avalonia host. Command=" + (request.CommandPath ?? string.Empty) +
                         ", Arguments=" + (request.Arguments ?? string.Empty) +
                         ", WorkingDirectory=" + (request.WorkingDirectory ?? string.Empty) + ".");
                     var launchResult = _externalHostLauncher.Launch(request);
@@ -123,7 +124,7 @@ namespace Cortex.Host.Unity.Runtime
                     if (launchResult.Launched)
                     {
                         Log.WriteInfo(
-                            "External overlay host launched successfully. ProcessId=" + launchResult.ProcessId +
+                            "External Avalonia host launched successfully. ProcessId=" + launchResult.ProcessId +
                             ", LaunchToken=" + (launchResult.LaunchToken ?? string.Empty) + ".");
                         _externalHostSession = new UnityExternalHostSession(
                             launchSignature,
@@ -135,7 +136,7 @@ namespace Cortex.Host.Unity.Runtime
                     }
                     else
                     {
-                        Log.WriteWarning("External overlay host launch failed. Status=" + (launchResult.StatusMessage ?? string.Empty) + ".");
+                        Log.WriteWarning("External Avalonia host launch failed. Status=" + (launchResult.StatusMessage ?? string.Empty) + ".");
                         _suppressedLaunchSignature = launchSignature;
                         _lastSuppressedLogSignature = string.Empty;
                         host.ApplyRuntimeUiFactory(ImguiWorkbenchRuntimeUiComposition.CreateRuntimeUiFactory(_frameContext));
@@ -228,7 +229,7 @@ namespace Cortex.Host.Unity.Runtime
             try
             {
                 Log.WriteInfo(
-                    "Stopping tracked external overlay host. ProcessId=" + _externalHostSession.ProcessId +
+                    "Stopping tracked external Avalonia host. ProcessId=" + _externalHostSession.ProcessId +
                     ", LaunchToken=" + (_externalHostSession.LaunchToken ?? string.Empty) + ".");
                 host.RequestExternalHostShutdown();
                 var process = Process.GetProcessById(_externalHostSession.ProcessId);
@@ -237,7 +238,7 @@ namespace Cortex.Host.Unity.Runtime
                     process.WaitForExit(1500);
                     if (!process.HasExited)
                     {
-                        Log.WriteWarning("External overlay host did not exit after graceful shutdown request. Killing process " + _externalHostSession.ProcessId + ".");
+                        Log.WriteWarning("External Avalonia host did not exit after graceful shutdown request. Killing process " + _externalHostSession.ProcessId + ".");
                         process.Kill();
                     }
                 }

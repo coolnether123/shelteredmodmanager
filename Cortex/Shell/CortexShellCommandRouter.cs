@@ -18,6 +18,7 @@ namespace Cortex
                 delegate(CommandExecutionContext context)
                 {
                     commandContext.Visible = !commandContext.Visible;
+                    MMLog.WriteInfo("[Cortex] Toggle command executed. Visible=" + commandContext.Visible + ".");
                     if (!commandContext.Visible)
                     {
                         commandContext.PersistWorkbenchSession();
