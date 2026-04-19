@@ -7,18 +7,19 @@ using Cortex.Core.Models;
 using Cortex.Presentation.Models;
 using Cortex.Presentation.Runtime;
 using Cortex.Renderers.DearImgui.Native;
+using Cortex.Rendering.Models;
+using Cortex.Rendering.RuntimeUi.Shell;
 using Cortex.Services.Editor.Presentation;
 using Cortex.Shell.Shared.Models;
-using Cortex.Core.Models;
 
 namespace Cortex.Renderers.DearImgui
 {
     internal sealed class DearImguiShellPresenter
     {
-        private const float WindowPadding = 6f;
-        private const float HeaderHeight = 30f;
-        private const float StatusHeight = 24f;
-        private const float SplitterSpacing = 6f;
+        private const float WindowPadding = RendererShellChromeDefaults.WindowPadding;
+        private const float HeaderHeight = RendererShellChromeDefaults.HeaderHeight;
+        private const float StatusHeight = RendererShellChromeDefaults.StatusHeight;
+        private const float SplitterSpacing = 5f;
         private const float SecondaryPaneWidth = 300f;
         private const int DefaultInputCapacity = 2048;
 
@@ -34,21 +35,46 @@ namespace Cortex.Renderers.DearImgui
                 return false;
             }
 
-            var frame = controller.CreateShellFrameForRenderer() ?? new RendererShellFrameModel();
-            if (!frame.IsVisible)
+            var frame = controller.CreateShellFrameForRenderer();
+            if (frame == null || !frame.IsVisible || frame.Chrome == null || frame.MainWindow == null)
             {
                 return false;
             }
 
             var presentation = controller.CreatePresentationSnapshotForRenderer() ?? new WorkbenchPresentationSnapshot();
-            var bridge = controller.CreateWorkbenchBridgeSnapshotForRenderer() ?? new WorkbenchBridgeSnapshot();
+            var bridge = controller.CreateWorkbenchBridgeSnapshotForRenderer(presentation) ?? new WorkbenchBridgeSnapshot();
             var document = controller.CreateActiveDocumentContentForRenderer() ?? new RendererDocumentContentModel();
+            var chrome = frame.Chrome;
 
-            DrawMainMenu(controller, presentation);
-            DrawShellWindow(controller, frame, presentation, bridge, document, viewportWidth, viewportHeight);
-            if (frame.ShowDetachedLogsWindow && !frame.OnboardingActive)
+            var themeColorCount = PushThemeColors(presentation.ThemeTokens);
+            try
             {
-                DrawDetachedLogsWindow(controller, frame.LogsWindow);
+                var integratedChrome = UsesIntegratedChrome(chrome);
+                if (!integratedChrome || chrome.UseGlobalMainMenu)
+                {
+                    DrawMainMenu(controller, presentation);
+                }
+
+                if (integratedChrome && frame.MainWindow != null && frame.MainWindow.IsCollapsed)
+                {
+                    DrawCollapsedShellWindow(controller, frame.MainWindow, chrome);
+                }
+                else
+                {
+                    DrawShellWindow(controller, frame, presentation, bridge, document, viewportWidth, viewportHeight);
+                }
+
+                if (frame.ShowDetachedLogsWindow && !frame.OnboardingActive && frame.LogsWindow != null)
+                {
+                    DrawDetachedLogsWindow(controller, frame.LogsWindow);
+                }
+            }
+            finally
+            {
+                if (themeColorCount > 0)
+                {
+                    DearImguiNative.igPopStyleColor(themeColorCount);
+                }
             }
 
             return true;
@@ -61,7 +87,13 @@ namespace Cortex.Renderers.DearImgui
                 return;
             }
 
-            var groups = GroupMenuItems(snapshot.MainMenuItems);
+            DrawMenuGroups(controller, snapshot);
+            DearImguiNative.igEndMainMenuBar();
+        }
+
+        private void DrawMenuGroups(CortexShellController controller, WorkbenchPresentationSnapshot snapshot)
+        {
+            var groups = GroupMenuItems(snapshot != null ? snapshot.MainMenuItems : null);
             for (var i = 0; i < groups.Count; i++)
             {
                 var group = groups[i];
@@ -82,8 +114,34 @@ namespace Cortex.Renderers.DearImgui
 
                 DearImguiNative.igEndMenu();
             }
+        }
 
-            DearImguiNative.igEndMainMenuBar();
+        private void DrawCollapsedShellWindow(CortexShellController controller, RendererShellWindowModel window, RendererShellChromeModel chrome)
+        {
+            var width = window != null && window.CollapsedWidth > 0f ? window.CollapsedWidth : RendererShellChromeDefaults.MainWindowCollapsedWidth;
+            var height = window != null && window.CollapsedHeight > 0f ? window.CollapsedHeight : RendererShellChromeDefaults.MainWindowCollapsedHeight;
+            DearImguiNative.igSetNextWindowPos(new DearImguiNative.ImVec2(window != null ? window.X : 24f, window != null ? window.Y : 24f), DearImguiNative.ImGuiCond.Always, new DearImguiNative.ImVec2(0f, 0f));
+            DearImguiNative.igSetNextWindowSize(new DearImguiNative.ImVec2(width, height), DearImguiNative.ImGuiCond.Always);
+            var flags =
+                DearImguiNative.ImGuiWindowFlags.NoTitleBar |
+                DearImguiNative.ImGuiWindowFlags.NoResize |
+                DearImguiNative.ImGuiWindowFlags.NoScrollbar |
+                DearImguiNative.ImGuiWindowFlags.NoCollapse |
+                DearImguiNative.ImGuiWindowFlags.NoSavedSettings;
+            if (!DearImguiNative.igBegin(ResolveBrandText(chrome), IntPtr.Zero, flags))
+            {
+                DearImguiNative.igEnd();
+                return;
+            }
+
+            var buttonWidth = Math.Max(1f, width - (WindowPadding * 2f));
+            var buttonHeight = Math.Max(1f, height - (WindowPadding * 2f));
+            if (DearImguiNative.igButton("> " + ResolveBrandText(chrome) + "##restore-main-window", new DearImguiNative.ImVec2(buttonWidth, buttonHeight)))
+            {
+                controller.ExecuteRendererChromeAction(ResolveCollapseActionId(chrome));
+            }
+
+            DearImguiNative.igEnd();
         }
 
         private void DrawShellWindow(
@@ -95,22 +153,45 @@ namespace Cortex.Renderers.DearImgui
             float viewportWidth,
             float viewportHeight)
         {
-            var window = frame != null ? frame.MainWindow : new RendererShellWindowModel();
+            var window = frame.MainWindow;
+            var chrome = frame.Chrome;
             var width = window.Width > 0f ? window.Width : Math.Max(920f, viewportWidth * 0.82f);
             var height = window.Height > 0f ? window.Height : Math.Max(580f, viewportHeight * 0.78f);
             DearImguiNative.igSetNextWindowPos(new DearImguiNative.ImVec2(window.X, window.Y), DearImguiNative.ImGuiCond.Always, new DearImguiNative.ImVec2(0f, 0f));
             DearImguiNative.igSetNextWindowSize(new DearImguiNative.ImVec2(width, height), DearImguiNative.ImGuiCond.Always);
-            if (!DearImguiNative.igBegin(string.IsNullOrEmpty(window.Title) ? "Cortex IDE" : window.Title, IntPtr.Zero, DearImguiNative.ImGuiWindowFlags.None))
+            var integratedChrome = UsesIntegratedChrome(chrome);
+            var flags = !integratedChrome || chrome.UseGlobalMainMenu
+                ? DearImguiNative.ImGuiWindowFlags.None
+                : DearImguiNative.ImGuiWindowFlags.MenuBar;
+            if (!DearImguiNative.igBegin(string.IsNullOrEmpty(window.Title) ? "Cortex IDE" : window.Title, IntPtr.Zero, flags))
             {
                 DearImguiNative.igEnd();
                 return;
             }
 
-            DrawToolbar(controller, snapshot);
-            DearImguiNative.igSeparator();
+            if (integratedChrome)
+            {
+                if (!chrome.UseGlobalMainMenu)
+                {
+                    DrawWindowMenuBar(controller, snapshot, chrome);
+                }
 
-            var contentWidth = Math.Max(0f, width - (WindowPadding * 2f));
-            var contentHeight = Math.Max(0f, height - HeaderHeight - StatusHeight - (WindowPadding * 4f));
+                DrawIntegratedHeader(controller, snapshot, chrome);
+            }
+            else
+            {
+                DrawToolbar(controller, snapshot);
+                DearImguiNative.igSeparator();
+            }
+
+            var padding = chrome.WindowPadding > 0f ? chrome.WindowPadding : WindowPadding;
+            var headerHeight = chrome.HeaderHeight > 0f ? chrome.HeaderHeight : HeaderHeight;
+            var statusHeight = chrome.StatusHeight > 0f ? chrome.StatusHeight : StatusHeight;
+            var titleBarHeight = integratedChrome
+                ? (chrome.TitleBarHeight > 0f ? chrome.TitleBarHeight : RendererShellChromeDefaults.TitleBarHeight)
+                : 0f;
+            var contentWidth = Math.Max(0f, width - (padding * 2f));
+            var contentHeight = Math.Max(0f, height - titleBarHeight - headerHeight - statusHeight - chrome.HeaderWorkbenchGap - chrome.WorkbenchStatusGap - padding);
             if (DearImguiNative.igBeginChild_Str("cortex.layout.root", new DearImguiNative.ImVec2(contentWidth, contentHeight), false, DearImguiNative.ImGuiWindowFlags.None))
             {
                 DrawLayoutNode(controller, snapshot, bridge, document, frame != null ? frame.LayoutRoot : null, contentWidth, contentHeight);
@@ -120,6 +201,50 @@ namespace Cortex.Renderers.DearImgui
             DearImguiNative.igSeparator();
             DrawInlineStatus(snapshot, bridge, controller);
             DearImguiNative.igEnd();
+        }
+
+        private void DrawWindowMenuBar(CortexShellController controller, WorkbenchPresentationSnapshot snapshot, RendererShellChromeModel chrome)
+        {
+            if (!DearImguiNative.igBeginMenuBar())
+            {
+                return;
+            }
+
+            DearImguiNative.igTextUnformatted(ResolveBrandText(chrome), IntPtr.Zero);
+            DearImguiNative.igSameLine(0f, 12f);
+            DrawMenuGroups(controller, snapshot);
+            DearImguiNative.igEndMenuBar();
+        }
+
+        private void DrawIntegratedHeader(CortexShellController controller, WorkbenchPresentationSnapshot snapshot, RendererShellChromeModel chrome)
+        {
+            if (chrome.ShowToolbarItems && snapshot.ToolbarItems.Count > 0)
+            {
+                DrawToolbar(controller, snapshot);
+                DearImguiNative.igSameLine(0f, 12f);
+            }
+
+            if (!string.IsNullOrEmpty(chrome.ContextText))
+            {
+                DearImguiNative.igTextUnformatted(chrome.ContextText, IntPtr.Zero);
+                DearImguiNative.igSameLine(0f, 12f);
+            }
+
+            if (chrome.ShowWindowActions)
+            {
+                if (DearImguiNative.igButton(ResolveCollapseActionLabel(chrome), new DearImguiNative.ImVec2(28f, 0f)))
+                {
+                    controller.ExecuteRendererChromeAction(ResolveCollapseActionId(chrome));
+                }
+
+                DearImguiNative.igSameLine(0f, 6f);
+                if (DearImguiNative.igButton(ResolveCloseActionLabel(chrome), new DearImguiNative.ImVec2(28f, 0f)))
+                {
+                    controller.ExecuteRendererChromeAction(ResolveCloseActionId(chrome));
+                }
+            }
+
+            DearImguiNative.igSeparator();
         }
 
         private void DrawDetachedLogsWindow(CortexShellController controller, RendererShellWindowModel window)
@@ -159,10 +284,12 @@ namespace Cortex.Renderers.DearImgui
                 node.SecondChild != null)
             {
                 var ratio = node.SplitRatio > 0f ? node.SplitRatio : 0.5f;
+                var allocatedRect = new RenderRect(0f, 0f, width, height);
                 if (string.Equals(node.SplitDirection, CortexLayoutSplitDirection.Horizontal.ToString(), StringComparison.OrdinalIgnoreCase))
                 {
-                    var firstWidth = Math.Max(180f, (width * ratio) - (SplitterSpacing * 0.5f));
-                    var secondWidth = Math.Max(180f, width - firstWidth - SplitterSpacing);
+                    var splitLayout = ShellSplitLayoutPlanner.BuildHorizontal(allocatedRect, ratio, SplitterSpacing, 180f, 180f);
+                    var firstWidth = splitLayout.FirstRect.Width;
+                    var secondWidth = splitLayout.SecondRect.Width;
                     if (DearImguiNative.igBeginChild_Str(node.NodeId + ".first", new DearImguiNative.ImVec2(firstWidth, height), true, DearImguiNative.ImGuiWindowFlags.None))
                     {
                         DrawLayoutNode(controller, snapshot, bridge, document, node.FirstChild, firstWidth, height);
@@ -177,8 +304,9 @@ namespace Cortex.Renderers.DearImgui
                 }
                 else
                 {
-                    var firstHeight = Math.Max(140f, (height * ratio) - (SplitterSpacing * 0.5f));
-                    var secondHeight = Math.Max(120f, height - firstHeight - SplitterSpacing);
+                    var splitLayout = ShellSplitLayoutPlanner.BuildVertical(allocatedRect, ratio, SplitterSpacing, 140f, 120f);
+                    var firstHeight = splitLayout.FirstRect.Height;
+                    var secondHeight = splitLayout.SecondRect.Height;
                     if (DearImguiNative.igBeginChild_Str(node.NodeId + ".first", new DearImguiNative.ImVec2(width, firstHeight), true, DearImguiNative.ImGuiWindowFlags.None))
                     {
                         DrawLayoutNode(controller, snapshot, bridge, document, node.FirstChild, width, firstHeight);
@@ -291,8 +419,16 @@ namespace Cortex.Renderers.DearImgui
 
         private void DrawSettings(CortexShellController controller, SettingsBridgeSnapshot snapshot)
         {
+            if (snapshot == null)
+            {
+                DearImguiNative.igTextWrapped("Settings are not available yet.");
+                return;
+            }
+
             var searchQuery = snapshot != null ? snapshot.SearchQuery ?? string.Empty : string.Empty;
-            DearImguiNative.igSetNextItemWidth(260f);
+            DearImguiNative.igTextUnformatted("Cortex Settings", IntPtr.Zero);
+            DearImguiNative.igSameLine(0f, 16f);
+            DearImguiNative.igSetNextItemWidth(320f);
             if (DrawInputText("Search##settings", ref searchQuery, 1024))
             {
                 controller.ApplyBridgeIntentForRenderer(new BridgeIntentMessage
@@ -303,6 +439,16 @@ namespace Cortex.Renderers.DearImgui
             }
 
             DearImguiNative.igSameLine(0f, 8f);
+            if (DearImguiNative.igButton("Clear##settings.search", new DearImguiNative.ImVec2(0f, 0f)))
+            {
+                controller.ApplyBridgeIntentForRenderer(new BridgeIntentMessage
+                {
+                    IntentType = BridgeIntentType.SetSettingsSearchQuery,
+                    SearchQuery = string.Empty
+                });
+            }
+
+            DearImguiNative.igSameLine(0f, 12f);
             if (DearImguiNative.igButton("Save Settings", new DearImguiNative.ImVec2(0f, 0f)))
             {
                 controller.ApplyBridgeIntentForRenderer(new BridgeIntentMessage
@@ -313,11 +459,68 @@ namespace Cortex.Renderers.DearImgui
 
             DearImguiNative.igSeparator();
 
-            if (DearImguiNative.igBeginChild_Str("settings.sections", new DearImguiNative.ImVec2(240f, 0f), true, DearImguiNative.ImGuiWindowFlags.None))
+            if (DearImguiNative.igBeginChild_Str("settings.sections", new DearImguiNative.ImVec2(275f, 0f), true, DearImguiNative.ImGuiWindowFlags.None))
             {
-                for (var i = 0; i < snapshot.VisibleSections.Count; i++)
+                DearImguiNative.igTextUnformatted("Property Pages", IntPtr.Zero);
+                DearImguiNative.igSeparator();
+                DrawSettingsNavigation(controller, snapshot);
+            }
+            DearImguiNative.igEndChild();
+
+            DearImguiNative.igSameLine(0f, 12f);
+
+            if (DearImguiNative.igBeginChild_Str("settings.values", new DearImguiNative.ImVec2(0f, 0f), true, DearImguiNative.ImGuiWindowFlags.None))
+            {
+                DrawSettingsValues(controller, snapshot);
+            }
+            DearImguiNative.igEndChild();
+        }
+
+        private void DrawSettingsNavigation(CortexShellController controller, SettingsBridgeSnapshot snapshot)
+        {
+            var document = snapshot != null ? snapshot.Document : null;
+            if (document == null || document.Groups == null || document.Groups.Count == 0)
+            {
+                DearImguiNative.igTextWrapped("No settings sections are registered.");
+                return;
+            }
+
+            var anyVisible = false;
+            for (var groupIndex = 0; groupIndex < document.Groups.Count; groupIndex++)
+            {
+                var group = document.Groups[groupIndex];
+                if (group == null || group.Sections == null)
                 {
-                    var section = snapshot.VisibleSections[i];
+                    continue;
+                }
+
+                var groupHasVisibleSection = false;
+                for (var sectionIndex = 0; sectionIndex < group.Sections.Count; sectionIndex++)
+                {
+                    if (IsSettingsSectionVisible(snapshot, group.Sections[sectionIndex]))
+                    {
+                        groupHasVisibleSection = true;
+                        break;
+                    }
+                }
+
+                if (!groupHasVisibleSection)
+                {
+                    continue;
+                }
+
+                anyVisible = true;
+                DearImguiNative.igTextUnformatted(group.Title ?? "Settings", IntPtr.Zero);
+                DearImguiNative.igSeparator();
+
+                for (var sectionIndex = 0; sectionIndex < group.Sections.Count; sectionIndex++)
+                {
+                    var section = group.Sections[sectionIndex];
+                    if (!IsSettingsSectionVisible(snapshot, section))
+                    {
+                        continue;
+                    }
+
                     var selected = string.Equals(snapshot.SelectedSectionId, section.SectionId, StringComparison.OrdinalIgnoreCase);
                     if (DearImguiNative.igSelectable_Bool(section.Title ?? section.SectionId, selected, DearImguiNative.ImGuiSelectableFlags.None, new DearImguiNative.ImVec2(0f, 0f)))
                     {
@@ -329,50 +532,123 @@ namespace Cortex.Renderers.DearImgui
                     }
                 }
             }
-            DearImguiNative.igEndChild();
 
-            DearImguiNative.igSameLine(0f, 12f);
-
-            if (DearImguiNative.igBeginChild_Str("settings.values", new DearImguiNative.ImVec2(0f, 0f), true, DearImguiNative.ImGuiWindowFlags.None))
+            if (!anyVisible)
             {
-                for (var i = 0; i < snapshot.ActiveSettings.Count; i++)
+                DearImguiNative.igTextWrapped("No property pages match the current search.");
+            }
+        }
+
+        private void DrawSettingsValues(CortexShellController controller, SettingsBridgeSnapshot snapshot)
+        {
+            var activeSection = FindSettingsSection(snapshot, snapshot.SelectedSectionId);
+            if (activeSection != null)
+            {
+                DearImguiNative.igTextUnformatted(activeSection.Title ?? "Properties", IntPtr.Zero);
+                if (!string.IsNullOrEmpty(activeSection.Description))
                 {
-                    var setting = snapshot.ActiveSettings[i];
-                    var currentValue = ResolveDraftValue(snapshot, setting.SettingId, setting.DefaultValue);
-                    DearImguiNative.igTextUnformatted(setting.DisplayName ?? setting.SettingId, IntPtr.Zero);
-                    if (!string.IsNullOrEmpty(setting.Description))
-                    {
-                        DearImguiNative.igTextWrapped(setting.Description);
-                    }
+                    DearImguiNative.igTextWrapped(activeSection.Description);
+                }
 
-                    if (setting.EditorKind == ShellSettingEditorKind.Choice || setting.ValueKind == ShellSettingValueKind.Boolean)
+                DearImguiNative.igSeparator();
+            }
+
+            if (snapshot.ActiveSettings == null || snapshot.ActiveSettings.Count == 0)
+            {
+                DearImguiNative.igTextWrapped("No editable settings are registered for this section.");
+                return;
+            }
+
+            for (var i = 0; i < snapshot.ActiveSettings.Count; i++)
+            {
+                var setting = snapshot.ActiveSettings[i];
+                if (setting == null)
+                {
+                    continue;
+                }
+
+                var currentValue = ResolveDraftValue(snapshot, setting.SettingId, setting.DefaultValue);
+                DearImguiNative.igTextUnformatted(setting.DisplayName ?? setting.SettingId, IntPtr.Zero);
+                if (!string.IsNullOrEmpty(setting.Description))
+                {
+                    DearImguiNative.igTextWrapped(setting.Description);
+                }
+
+                if (setting.EditorKind == ShellSettingEditorKind.Choice || setting.ValueKind == ShellSettingValueKind.Boolean)
+                {
+                    DrawSettingChoices(controller, setting, currentValue);
+                }
+                else
+                {
+                    var inputValue = currentValue;
+                    DearImguiNative.igSetNextItemWidth(GetSettingEditorWidth(setting));
+                    if (DrawInputText("##setting." + (setting.SettingId ?? string.Empty), ref inputValue, DefaultInputCapacity))
                     {
-                        DrawSettingChoices(controller, setting, currentValue);
-                    }
-                    else
-                    {
-                        var inputValue = currentValue;
-                        DearImguiNative.igSetNextItemWidth(420f);
-                        if (DrawInputText("##" + (setting.SettingId ?? string.Empty), ref inputValue, DefaultInputCapacity))
+                        controller.ApplyBridgeIntentForRenderer(new BridgeIntentMessage
                         {
-                            controller.ApplyBridgeIntentForRenderer(new BridgeIntentMessage
-                            {
-                                IntentType = BridgeIntentType.SetSettingValue,
-                                SettingId = setting.SettingId,
-                                SettingValue = inputValue
-                            });
-                        }
+                            IntentType = BridgeIntentType.SetSettingValue,
+                            SettingId = setting.SettingId,
+                            SettingValue = inputValue
+                        });
                     }
+                }
 
-                    if (!string.IsNullOrEmpty(setting.HelpText))
-                    {
-                        DearImguiNative.igTextWrapped(setting.HelpText);
-                    }
+                if (!string.IsNullOrEmpty(setting.HelpText))
+                {
+                    DearImguiNative.igTextWrapped(setting.HelpText);
+                }
 
-                    DearImguiNative.igSeparator();
+                DearImguiNative.igSeparator();
+            }
+        }
+
+        private static bool IsSettingsSectionVisible(SettingsBridgeSnapshot snapshot, SettingsSectionModel section)
+        {
+            if (snapshot == null || section == null || snapshot.VisibleSections == null)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < snapshot.VisibleSections.Count; i++)
+            {
+                var visible = snapshot.VisibleSections[i];
+                if (visible != null && string.Equals(visible.SectionId, section.SectionId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
                 }
             }
-            DearImguiNative.igEndChild();
+
+            return false;
+        }
+
+        private static SettingsSectionModel FindSettingsSection(SettingsBridgeSnapshot snapshot, string sectionId)
+        {
+            var document = snapshot != null ? snapshot.Document : null;
+            if (document == null || document.Sections == null || string.IsNullOrEmpty(sectionId))
+            {
+                return null;
+            }
+
+            for (var i = 0; i < document.Sections.Count; i++)
+            {
+                var section = document.Sections[i];
+                if (section != null && string.Equals(section.SectionId, sectionId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return section;
+                }
+            }
+
+            return null;
+        }
+
+        private static float GetSettingEditorWidth(SettingDescriptor setting)
+        {
+            if (setting != null && setting.EditorKind == ShellSettingEditorKind.MultilineText)
+            {
+                return 620f;
+            }
+
+            return 460f;
         }
 
         private void DrawSettingChoices(CortexShellController controller, SettingDescriptor setting, string currentValue)
@@ -398,6 +674,11 @@ namespace Cortex.Renderers.DearImgui
             for (var optionIndex = 0; optionIndex < options.Length; optionIndex++)
             {
                 var option = options[optionIndex];
+                if (option == null)
+                {
+                    continue;
+                }
+
                 var selected = string.Equals(currentValue, option.Value, StringComparison.OrdinalIgnoreCase);
                 if (DearImguiNative.igSelectable_Bool(option.DisplayName ?? option.Value, selected, DearImguiNative.ImGuiSelectableFlags.None, new DearImguiNative.ImVec2(0f, 0f)))
                 {
@@ -923,6 +1204,12 @@ namespace Cortex.Renderers.DearImgui
 
         private void DrawInlineStatus(WorkbenchPresentationSnapshot snapshot, WorkbenchBridgeSnapshot bridge, CortexShellController controller)
         {
+            if (snapshot == null)
+            {
+                DearImguiNative.igTextUnformatted((bridge != null ? bridge.StatusMessage : controller.CurrentStatusMessage) ?? controller.CurrentStatusMessage ?? string.Empty, IntPtr.Zero);
+                return;
+            }
+
             RenderStatusItems(snapshot.LeftStatusItems);
             if (snapshot.LeftStatusItems.Count > 0)
             {
@@ -940,6 +1227,11 @@ namespace Cortex.Renderers.DearImgui
 
         private static void RenderStatusItems(IList<StatusItemContribution> items)
         {
+            if (items == null)
+            {
+                return;
+            }
+
             for (var i = 0; i < items.Count; i++)
             {
                 if (i > 0)
@@ -1133,13 +1425,73 @@ namespace Cortex.Renderers.DearImgui
             }
         }
 
+        private static bool UsesIntegratedChrome(RendererShellChromeModel chrome)
+        {
+            return chrome != null &&
+                chrome.ChromeMode == RendererShellChromeMode.IntegratedWindowHeader;
+        }
+
+        private static string ResolveBrandText(RendererShellChromeModel chrome)
+        {
+            return ResolveContractText(chrome != null ? chrome.BrandText : string.Empty, RendererShellChromeDefaults.BrandText);
+        }
+
+        private static string ResolveCollapseActionId(RendererShellChromeModel chrome)
+        {
+            return ResolveContractText(chrome != null ? chrome.CollapseActionId : string.Empty, RendererShellChromeDefaults.CollapseActionId);
+        }
+
+        private static string ResolveCloseActionId(RendererShellChromeModel chrome)
+        {
+            return ResolveContractText(chrome != null ? chrome.CloseActionId : string.Empty, RendererShellChromeDefaults.CloseActionId);
+        }
+
+        private static string ResolveCollapseActionLabel(RendererShellChromeModel chrome)
+        {
+            return ResolveContractText(chrome != null ? chrome.CollapseActionLabel : string.Empty, RendererShellChromeDefaults.CollapseActionLabel);
+        }
+
+        private static string ResolveCloseActionLabel(RendererShellChromeModel chrome)
+        {
+            return ResolveContractText(chrome != null ? chrome.CloseActionLabel : string.Empty, RendererShellChromeDefaults.CloseActionLabel);
+        }
+
+        private static string ResolveContractText(string value, string fallback)
+        {
+            return !string.IsNullOrEmpty(value) ? value : fallback;
+        }
+
+        private static int PushThemeColors(ThemeTokenSet tokens)
+        {
+            var text = ParseUnityColor(tokens != null ? tokens.TextColor : string.Empty, new UnityEngine.Color(0.95f, 0.95f, 0.95f, 1f));
+            var surface = ParseUnityColor(tokens != null ? tokens.SurfaceColor : string.Empty, new UnityEngine.Color(0.08f, 0.08f, 0.1f, 0.94f));
+            var header = ParseUnityColor(tokens != null ? tokens.HeaderColor : string.Empty, new UnityEngine.Color(0.16f, 0.17f, 0.2f, 0.98f));
+            var border = ParseUnityColor(tokens != null ? tokens.BorderColor : string.Empty, new UnityEngine.Color(0.19f, 0.21f, 0.27f, 1f));
+            var accent = ParseUnityColor(tokens != null ? tokens.AccentColor : string.Empty, new UnityEngine.Color(0.35f, 0.74f, 1f, 1f));
+
+            DearImguiNative.igPushStyleColor_Vec4(DearImguiNative.ImGuiCol.Text, ToImVec4(text));
+            DearImguiNative.igPushStyleColor_Vec4(DearImguiNative.ImGuiCol.ChildBg, ToImVec4(surface));
+            DearImguiNative.igPushStyleColor_Vec4(DearImguiNative.ImGuiCol.Border, ToImVec4(border));
+            DearImguiNative.igPushStyleColor_Vec4(DearImguiNative.ImGuiCol.Button, ToImVec4(UnityEngine.Color.Lerp(surface, header, 0.6f)));
+            DearImguiNative.igPushStyleColor_Vec4(DearImguiNative.ImGuiCol.ButtonHovered, ToImVec4(UnityEngine.Color.Lerp(header, accent, 0.2f)));
+            DearImguiNative.igPushStyleColor_Vec4(DearImguiNative.ImGuiCol.ButtonActive, ToImVec4(UnityEngine.Color.Lerp(header, accent, 0.35f)));
+            DearImguiNative.igPushStyleColor_Vec4(DearImguiNative.ImGuiCol.Header, ToImVec4(UnityEngine.Color.Lerp(header, accent, 0.18f)));
+            DearImguiNative.igPushStyleColor_Vec4(DearImguiNative.ImGuiCol.HeaderHovered, ToImVec4(UnityEngine.Color.Lerp(header, accent, 0.3f)));
+            DearImguiNative.igPushStyleColor_Vec4(DearImguiNative.ImGuiCol.HeaderActive, ToImVec4(UnityEngine.Color.Lerp(header, accent, 0.45f)));
+            return 9;
+        }
+
         private static DearImguiNative.ImVec4 ParseColor(string hex)
         {
+            return ToImVec4(ParseUnityColor(hex, UnityEngine.Color.white));
+        }
+
+        private static UnityEngine.Color ParseUnityColor(string hex, UnityEngine.Color fallback)
+        {
             UnityEngine.Color parsed;
-            var color = UnityEngine.ColorUtility.TryParseHtmlString(hex ?? string.Empty, out parsed)
+            return UnityEngine.ColorUtility.TryParseHtmlString(hex ?? string.Empty, out parsed)
                 ? parsed
-                : UnityEngine.Color.white;
-            return ToImVec4(color);
+                : fallback;
         }
 
         private static DearImguiNative.ImVec4 ToImVec4(UnityEngine.Color color)

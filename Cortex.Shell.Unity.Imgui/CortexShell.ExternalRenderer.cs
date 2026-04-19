@@ -48,20 +48,46 @@ namespace Cortex
 
         public RendererShellFrameModel CreateShellFrameForRenderer()
         {
-            var mainWindow = _viewState.MainWindow != null ? _viewState.MainWindow : new Shell.CortexShellWindowViewState(126f, 28f, 920f, 580f);
-            var logsWindow = _viewState.LogsWindow != null ? _viewState.LogsWindow : new Shell.CortexShellWindowViewState(110f, 26f, 760f, 420f);
+            var mainWindow = _viewState.MainWindow != null
+                ? _viewState.MainWindow
+                : new Shell.CortexShellWindowViewState(
+                    RendererShellChromeDefaults.MainWindowCollapsedWidth,
+                    RendererShellChromeDefaults.MainWindowCollapsedHeight,
+                    920f,
+                    580f);
+            var logsWindow = _viewState.LogsWindow != null
+                ? _viewState.LogsWindow
+                : new Shell.CortexShellWindowViewState(
+                    RendererShellChromeDefaults.LogsWindowCollapsedWidth,
+                    RendererShellChromeDefaults.LogsWindowCollapsedHeight,
+                    760f,
+                    420f);
             return new RendererShellFrameModel
             {
                 IsVisible = _sessionCoordinator.Visible,
                 ShowDetachedLogsWindow = _viewState.ShowDetachedLogsWindow,
                 OnboardingActive = _state.Onboarding != null && _state.Onboarding.IsActive,
-                MainWindow = CreateWindowModel(mainWindow, "Cortex IDE"),
-                LogsWindow = CreateWindowModel(logsWindow, "Cortex Logs"),
+                MainWindow = CreateWindowModel(
+                    mainWindow,
+                    "Cortex IDE",
+                    RendererShellChromeDefaults.MainWindowCollapsedWidth,
+                    RendererShellChromeDefaults.MainWindowCollapsedHeight),
+                LogsWindow = CreateWindowModel(
+                    logsWindow,
+                    "Cortex Logs",
+                    RendererShellChromeDefaults.LogsWindowCollapsedWidth,
+                    RendererShellChromeDefaults.LogsWindowCollapsedHeight),
+                Chrome = CreateChromeModel(),
                 LayoutRoot = CreateLayoutNodeModel(_viewState.LayoutRoot)
             };
         }
 
         public WorkbenchBridgeSnapshot CreateWorkbenchBridgeSnapshotForRenderer()
+        {
+            return CreateWorkbenchBridgeSnapshotForRenderer(BuildPresentationSnapshot());
+        }
+
+        public WorkbenchBridgeSnapshot CreateWorkbenchBridgeSnapshotForRenderer(WorkbenchPresentationSnapshot presentation)
         {
             if (_desktopBridgeSession == null)
             {
@@ -73,6 +99,10 @@ namespace Cortex
             }
 
             _desktopBridgeSession.SynchronizeFromRuntime();
+            if (presentation != null)
+            {
+                _desktopBridgeSession.SynchronizeSettingsPresentation(presentation);
+            }
             return _desktopBridgeSession.BuildSnapshot();
         }
 
@@ -95,6 +125,40 @@ namespace Cortex
         public bool ExecuteRendererCommand(string commandId)
         {
             return !string.IsNullOrEmpty(commandId) && ExecuteCommand(commandId, null);
+        }
+
+        public bool ExecuteRendererChromeAction(string actionId)
+        {
+            if (string.Equals(actionId, RendererShellChromeDefaults.CollapseActionId, StringComparison.OrdinalIgnoreCase))
+            {
+                ToggleMainWindowCollapsedForRenderer();
+                return true;
+            }
+
+            if (string.Equals(actionId, RendererShellChromeDefaults.CloseActionId, StringComparison.OrdinalIgnoreCase))
+            {
+                CloseShellForRenderer();
+                return true;
+            }
+
+            return false;
+        }
+
+        private void ToggleMainWindowCollapsedForRenderer()
+        {
+            var window = _viewState.MainWindow;
+            window.CurrentRect = Shell.CortexShellWindowViewState.ToggleCollapsed(
+                window,
+                window.CurrentRect,
+                window.CollapsedWidth,
+                window.CollapsedHeight);
+        }
+
+        private void CloseShellForRenderer()
+        {
+            PersistWorkbenchSession();
+            PersistWindowSettings();
+            SetShellVisible(false);
         }
 
         public void ActivateContainerFromRenderer(string containerId)
@@ -408,21 +472,78 @@ namespace Cortex
             settings.ModuleSettings = entries.ToArray();
         }
 
-        private static RendererShellWindowModel CreateWindowModel(Shell.CortexShellWindowViewState windowState, string title)
+        private static RendererShellWindowModel CreateWindowModel(
+            Shell.CortexShellWindowViewState windowState,
+            string title,
+            float fallbackCollapsedWidth,
+            float fallbackCollapsedHeight)
         {
-            var rect = windowState != null && windowState.CurrentRect.Width > 0f
-                ? windowState.CurrentRect
-                : windowState != null
-                    ? windowState.ExpandedRect
-                    : new RenderRect(0f, 0f, 0f, 0f);
+            var rect = ResolveWindowRect(windowState);
             return new RendererShellWindowModel
             {
                 X = rect.X,
                 Y = rect.Y,
                 Width = rect.Width,
                 Height = rect.Height,
+                CollapsedWidth = windowState != null ? windowState.CollapsedWidth : fallbackCollapsedWidth,
+                CollapsedHeight = windowState != null ? windowState.CollapsedHeight : fallbackCollapsedHeight,
                 IsCollapsed = windowState != null && windowState.IsCollapsed,
                 Title = title ?? string.Empty
+            };
+        }
+
+        private static RenderRect ResolveWindowRect(Shell.CortexShellWindowViewState windowState)
+        {
+            if (windowState == null)
+            {
+                return new RenderRect(0f, 0f, 0f, 0f);
+            }
+
+            if (windowState.IsCollapsed)
+            {
+                if (windowState.CollapsedRect.Width > 0f && windowState.CollapsedRect.Height > 0f)
+                {
+                    return windowState.CollapsedRect;
+                }
+
+                return windowState.CurrentRect.Width > 0f && windowState.CurrentRect.Height > 0f
+                    ? windowState.CurrentRect
+                    : Shell.CortexShellWindowViewState.BuildCollapsedRect(
+                        windowState.ExpandedRect,
+                        windowState.CollapsedWidth,
+                        windowState.CollapsedHeight);
+            }
+
+            if (windowState.ExpandedRect.Width > 0f && windowState.ExpandedRect.Height > 0f)
+            {
+                return windowState.ExpandedRect;
+            }
+
+            return windowState.CurrentRect.Width > 0f && windowState.CurrentRect.Height > 0f
+                ? windowState.CurrentRect
+                : new RenderRect(0f, 0f, 0f, 0f);
+        }
+
+        private RendererShellChromeModel CreateChromeModel()
+        {
+            return new RendererShellChromeModel
+            {
+                ChromeMode = RendererShellChromeMode.IntegratedWindowHeader,
+                BrandText = RendererShellChromeDefaults.BrandText,
+                ContextText = _state.SelectedProject != null ? _state.SelectedProject.GetDisplayName() : string.Empty,
+                WindowPadding = RendererShellChromeDefaults.WindowPadding,
+                TitleBarHeight = RendererShellChromeDefaults.TitleBarHeight,
+                HeaderHeight = RendererShellChromeDefaults.HeaderHeight,
+                StatusHeight = RendererShellChromeDefaults.StatusHeight,
+                HeaderWorkbenchGap = RendererShellChromeDefaults.HeaderWorkbenchGap,
+                WorkbenchStatusGap = RendererShellChromeDefaults.WorkbenchStatusGap,
+                UseGlobalMainMenu = false,
+                ShowWindowActions = true,
+                ShowToolbarItems = false,
+                CollapseActionId = RendererShellChromeDefaults.CollapseActionId,
+                CloseActionId = RendererShellChromeDefaults.CloseActionId,
+                CollapseActionLabel = RendererShellChromeDefaults.CollapseActionLabel,
+                CloseActionLabel = RendererShellChromeDefaults.CloseActionLabel
             };
         }
 

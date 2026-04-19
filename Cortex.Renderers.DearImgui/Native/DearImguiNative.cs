@@ -109,9 +109,16 @@ namespace Cortex.Renderers.DearImgui.Native
             Always = 1
         }
 
+        [Flags]
         public enum ImGuiWindowFlags
         {
-            None = 0
+            None = 0,
+            NoTitleBar = 1 << 0,
+            NoResize = 1 << 1,
+            NoScrollbar = 1 << 3,
+            NoCollapse = 1 << 5,
+            NoSavedSettings = 1 << 8,
+            MenuBar = 1 << 10
         }
 
         public enum ImGuiSelectableFlags
@@ -357,6 +364,16 @@ namespace Cortex.Renderers.DearImgui.Native
             GetExport<igEndMainMenuBarDelegate>("igEndMainMenuBar")();
         }
 
+        public static bool igBeginMenuBar()
+        {
+            return GetExport<igBeginMenuBarDelegate>("igBeginMenuBar")();
+        }
+
+        public static void igEndMenuBar()
+        {
+            GetExport<igEndMenuBarDelegate>("igEndMenuBar")();
+        }
+
         public static bool igBeginMenu(string label, bool enabled)
         {
             return GetExport<igBeginMenuDelegate>("igBeginMenu")(label, enabled);
@@ -544,6 +561,13 @@ namespace Cortex.Renderers.DearImgui.Native
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void igEndMainMenuBarDelegate();
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private delegate bool igBeginMenuBarDelegate();
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void igEndMenuBarDelegate();
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)]

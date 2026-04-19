@@ -116,6 +116,7 @@ namespace Cortex.Shell
             if (rightVisible) root = CreateSplitNode("layout.secondary", CortexLayoutSplitDirection.Horizontal, root, CreateLeaf("layout.secondary.leaf", WorkbenchHostLocation.SecondarySideHost, snapshot));
             if (leftVisible) root = CreateSplitNode("layout.primary", CortexLayoutSplitDirection.Horizontal, CreateLeaf("layout.primary.leaf", WorkbenchHostLocation.PrimarySideHost, snapshot), root);
 
+            ApplyResolvedSplitRatios(root, workspaceRect);
             return root;
         }
 
@@ -179,6 +180,30 @@ namespace Cortex.Shell
                 splitLayout = ShellSplitLayoutPlanner.BuildVerticalFromSplitPoint(allocatedRenderRect, updatedVerticalSplit, splitterThickness);
                 DrawLayoutTree(node.ChildA, ToRect(splitLayout.FirstRect), snapshot, tabStyle, activeTabStyle, tabCloseButtonStyle, captionStyle);
                 DrawLayoutTree(node.ChildB, ToRect(splitLayout.SecondRect), snapshot, tabStyle, activeTabStyle, tabCloseButtonStyle, captionStyle);
+            }
+        }
+
+        private void ApplyResolvedSplitRatios(CortexLayoutNode node, Rect allocatedArea)
+        {
+            if (node == null || node.Split == CortexLayoutSplitDirection.None || allocatedArea.width <= 0f || allocatedArea.height <= 0f)
+            {
+                return;
+            }
+
+            const float splitterThickness = 5f;
+            node.SplitRatio = ResolveSplitRatio(node, allocatedArea);
+            var allocatedRenderRect = ToRenderRect(allocatedArea);
+            if (node.Split == CortexLayoutSplitDirection.Horizontal)
+            {
+                var splitLayout = ShellSplitLayoutPlanner.BuildHorizontal(allocatedRenderRect, node.SplitRatio, splitterThickness, 180f, 180f);
+                ApplyResolvedSplitRatios(node.ChildA, ToRect(splitLayout.FirstRect));
+                ApplyResolvedSplitRatios(node.ChildB, ToRect(splitLayout.SecondRect));
+            }
+            else
+            {
+                var splitLayout = ShellSplitLayoutPlanner.BuildVertical(allocatedRenderRect, node.SplitRatio, splitterThickness, 140f, 120f);
+                ApplyResolvedSplitRatios(node.ChildA, ToRect(splitLayout.FirstRect));
+                ApplyResolvedSplitRatios(node.ChildB, ToRect(splitLayout.SecondRect));
             }
         }
 
