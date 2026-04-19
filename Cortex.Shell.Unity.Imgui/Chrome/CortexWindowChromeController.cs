@@ -31,26 +31,7 @@ namespace Cortex.Chrome
 
         public static RenderRect ToggleCollapsed(CortexShellWindowViewState state, RenderRect currentRect, float collapsedWidth, float collapsedHeight)
         {
-            if (state == null)
-            {
-                return currentRect;
-            }
-
-            if (!state.IsCollapsed)
-            {
-                state.ExpandedRect = currentRect;
-                state.CollapsedRect = BuildCollapsedRect(currentRect, collapsedWidth, collapsedHeight);
-                state.IsCollapsed = true;
-                return state.CollapsedRect;
-            }
-
-            state.IsCollapsed = false;
-            if (state.ExpandedRect.Width <= 0f || state.ExpandedRect.Height <= 0f)
-            {
-                state.ExpandedRect = currentRect;
-            }
-
-            return state.ExpandedRect;
+            return CortexShellWindowViewState.ToggleCollapsed(state, currentRect, collapsedWidth, collapsedHeight);
         }
 
         public static Rect DrawResizeHandle(int windowId, Rect windowRect, float minWidth, float minHeight, float maxWidth, float maxHeight)

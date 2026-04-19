@@ -3,6 +3,7 @@ using Cortex.Bridge;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Models;
 using Cortex.Presentation.Abstractions;
+using Cortex.Presentation.Models;
 using Cortex.Services.Navigation;
 using Cortex.Shell;
 
@@ -80,6 +81,20 @@ namespace Cortex.Shell.Bridge
             }
 
             return changed;
+        }
+
+        public bool SynchronizeSettingsPresentation(WorkbenchPresentationSnapshot snapshot)
+        {
+            var changed = _settingsFeature.SynchronizeFromPresentation(snapshot);
+            if (!changed)
+            {
+                return false;
+            }
+
+            _workspaceFeature.RefreshFromSettings();
+            CacheRuntimeMirror();
+            Touch();
+            return true;
         }
 
         public BridgeOperationResultMessage ApplyIntent(BridgeIntentMessage intent)
