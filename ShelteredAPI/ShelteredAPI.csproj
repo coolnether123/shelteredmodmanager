@@ -73,6 +73,17 @@
     <Compile Include="Harmony\SettingsInputModePromptPatches.cs" />
     <Compile Include="Harmony\SettingsKeybindsButtonPatches.cs" />
     <Compile Include="Interactions\ObjectButtonInjector.cs" />
+    <Compile Include="Scenarios\IShelteredCustomScenario.cs" />
+    <Compile Include="Scenarios\ScenarioApplier.cs" />
+    <Compile Include="Scenarios\ScenarioEditorController.cs" />
+    <Compile Include="Scenarios\ScenarioEditorSession.cs" />
+    <Compile Include="Scenarios\ScenarioValidatorImpl.cs" />
+    <Compile Include="Scenarios\ScenarioWorldReady.cs" />
+    <Compile Include="Scenarios\ShelteredCustomScenarioPatches.cs" />
+    <Compile Include="Scenarios\ShelteredScenarioRuntimeBindingManager.cs" />
+    <Compile Include="Scenarios\ShelteredCustomScenarioService.cs" />
+    <Compile Include="Scenarios\ShelteredScenarioDefBuilder.cs" />
+    <Compile Include="Scenarios\ShelteredScenarioRegistration.cs" />
     <Compile Include="Input\ShelteredTouchpadInputRouter.cs" />
     <Compile Include="Input\ShelteredInputActions.cs" />
     <Compile Include="Input\ShelteredVanillaInputActions.cs" />

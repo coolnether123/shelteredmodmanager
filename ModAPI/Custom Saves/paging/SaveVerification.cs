@@ -343,47 +343,104 @@ namespace ModAPI.Hooks.Paging
         }
 
         public enum VerificationState { Match, VersionMismatch, Warning, Missing, Unknown }
+        public enum ModCompareStatus { Match, VersionDiff, Extra, Missing }
+
+        public sealed class ModCompareEntry
+        {
+            public string activeId;
+            public string activeVersion;
+            public string savedId;
+            public string savedVersion;
+            public ModCompareStatus status;
+        }
 
         public static VerificationState Verify(SlotManifest manifest)
+        {
+            return Verify(manifest, true);
+        }
+
+        public static VerificationState VerifyRequired(SlotManifest manifest)
+        {
+            return Verify(manifest, false);
+        }
+
+        public static VerificationState Verify(SlotManifest manifest, bool includeExtraMods)
         {
             if (manifest == null) return VerificationState.Unknown; 
             if (manifest.lastLoadedMods == null) return VerificationState.Unknown;
 
-            var activeMods = PluginManager.LoadedMods;
-            
-            // 1. Check for Missing Mods (Critical - Red)
-            foreach(var savedMod in manifest.lastLoadedMods)
-            {
-                 var activeMod = activeMods.Find(m => string.Equals(m.Id, savedMod.modId, StringComparison.OrdinalIgnoreCase));
-                 if (activeMod == null) return VerificationState.Missing; 
-            }
+            var comparison = BuildModComparison(PluginManager.LoadedMods, manifest.lastLoadedMods, includeExtraMods);
+            if (comparison.Any(c => c.status == ModCompareStatus.Missing))
+                return VerificationState.Missing;
 
-            // 2. Check for Version Mismatches (Warning - Yellow)
-            bool versionMismatch = false;
-            foreach(var savedMod in manifest.lastLoadedMods)
-            {
-                 var activeMod = activeMods.Find(m => string.Equals(m.Id, savedMod.modId, StringComparison.OrdinalIgnoreCase));
-                 if (activeMod != null && activeMod.Version != savedMod.version)
-                 {
-                     versionMismatch = true;
-                 }
-            }
+            if (comparison.Any(c => c.status == ModCompareStatus.VersionDiff))
+                return VerificationState.VersionMismatch;
 
-            // 3. Check for Extra Mods (Warning - Yellow)
-            // If user has more mods active than the save intended
-            bool extraMods = false;
-            foreach (var activeMod in activeMods)
+            if (includeExtraMods && comparison.Any(c => c.status == ModCompareStatus.Extra))
+                return VerificationState.Warning;
+
+            return VerificationState.Match;
+        }
+
+        public static List<ModCompareEntry> BuildModComparison(List<ModEntry> active, LoadedModInfo[] saved, bool includeExtraMods)
+        {
+            var result = new List<ModCompareEntry>();
+            if (active == null)
+                active = new List<ModEntry>();
+            if (saved == null)
+                saved = new LoadedModInfo[0];
+
+            foreach (var s in saved)
             {
-                if (!manifest.lastLoadedMods.Any(m => string.Equals(m.modId, activeMod.Id, StringComparison.OrdinalIgnoreCase)))
+                if (s == null || string.IsNullOrEmpty(s.modId))
+                    continue;
+
+                var entry = new ModCompareEntry { savedId = s.modId, savedVersion = s.version };
+                var match = active.Find(a => a != null && string.Equals(a.Id, s.modId, StringComparison.OrdinalIgnoreCase));
+
+                if (match == null)
                 {
-                    extraMods = true;
+                    entry.status = ModCompareStatus.Missing;
+                }
+                else
+                {
+                    entry.activeId = match.Id;
+                    entry.activeVersion = match.Version;
+                    entry.status = HasVersionMismatch(match.Version, s.version)
+                        ? ModCompareStatus.VersionDiff
+                        : ModCompareStatus.Match;
+                }
+
+                result.Add(entry);
+            }
+
+            if (includeExtraMods)
+            {
+                foreach (var a in active)
+                {
+                    if (a == null || string.IsNullOrEmpty(a.Id))
+                        continue;
+
+                    if (!saved.Any(s => s != null && string.Equals(s.modId, a.Id, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        result.Add(new ModCompareEntry {
+                            activeId = a.Id,
+                            activeVersion = a.Version,
+                            status = ModCompareStatus.Extra
+                        });
+                    }
                 }
             }
 
-            if (versionMismatch) return VerificationState.VersionMismatch;
-            if (extraMods) return VerificationState.Warning;
+            return result;
+        }
 
-            return VerificationState.Match;
+        private static bool HasVersionMismatch(string activeVersion, string requiredVersion)
+        {
+            if (string.IsNullOrEmpty(requiredVersion))
+                return false;
+
+            return !string.Equals(activeVersion ?? string.Empty, requiredVersion, StringComparison.OrdinalIgnoreCase);
         }
     }
 }
