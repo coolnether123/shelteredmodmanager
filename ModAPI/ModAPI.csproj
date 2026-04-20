@@ -51,6 +51,7 @@
     </Reference>
     <Reference Include="System.Core" />
     <Reference Include="System" />
+    <Reference Include="System.Xml" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="UnityEngine">
       <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
@@ -91,6 +92,17 @@
     <Compile Include="Core\SharedAssemblyResolver.cs" />
     <Compile Include="Core\LoggerExtensions.cs" />
     <Compile Include="Core\ContextExtensions.cs" />
+    <Compile Include="Scenarios\CustomScenarioContracts.cs" />
+    <Compile Include="Scenarios\ICustomScenarioService.cs" />
+    <Compile Include="Scenarios\ScenarioCatalog.cs" />
+    <Compile Include="Scenarios\ScenarioDefinition.cs" />
+    <Compile Include="Scenarios\ScenarioDefinitionSerializer.cs" />
+    <Compile Include="Scenarios\ScenarioDependencyManifest.cs" />
+    <Compile Include="Scenarios\ScenarioLoader.cs" />
+    <Compile Include="Scenarios\ScenarioPipelineSmokeTest.cs" />
+    <Compile Include="Scenarios\ScenarioRuntimeBinding.cs" />
+    <Compile Include="Scenarios\ScenarioValidator.cs" />
+    <Compile Include="Scenarios\ValidationResult.cs" />
     <Compile Include="Input\InputBinding.cs" />
     <Compile Include="Input\ModInputAction.cs" />
     <Compile Include="Input\InputActionRegistry.cs" />

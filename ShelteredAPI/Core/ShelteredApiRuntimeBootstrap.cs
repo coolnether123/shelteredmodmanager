@@ -1,7 +1,9 @@
 using ModAPI.Core;
 using ModAPI.Actors;
 using ModAPI.InputServices;
+using ModAPI.Scenarios;
 using ShelteredAPI.Input;
+using ShelteredAPI.Scenarios;
 using UnityEngine;
 
 namespace ShelteredAPI.Core
@@ -75,6 +77,12 @@ namespace ShelteredAPI.Core
             RegisterApi("ShelteredAPI.ActorEvents", (IActorEvents)actors);
             RegisterApi(GameRuntimeApiIds.ActorSerialization, (IActorSerializationService)actors);
             RegisterApi("ShelteredAPI.ActorSerialization", (IActorSerializationService)actors);
+
+            ICustomScenarioService customScenarios = ShelteredCustomScenarioService.Instance;
+            ShelteredScenarioRuntimeBindingManager.Instance.EnsureHooked();
+            ShelteredCustomScenarioService.Instance.RefreshDefinitionCatalog();
+            RegisterApi(GameRuntimeApiIds.CustomScenarios, customScenarios);
+            RegisterApi("ShelteredAPI.CustomScenarios", customScenarios);
         }
 
         private static void RegisterApi<T>(string apiId, T implementation) where T : class
