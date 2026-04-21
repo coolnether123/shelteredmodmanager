@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ModAPI.Core;
 using ModAPI.Inspector;
 using UnityEngine;
 
