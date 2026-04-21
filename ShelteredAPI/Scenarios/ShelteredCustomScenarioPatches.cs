@@ -337,6 +337,28 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
+    [PatchPolicy(PatchDomain.Scenarios, "ScenarioAuthoringSimulationFreeze",
+        TargetBehavior = "Scenario authoring keeps Sheltered's simulation and game clock frozen even when the vanilla pause panel is hidden.",
+        FailureMode = "The editor hides the pause menu, but shelter actors and in-game time keep advancing.",
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring simulation freeze patch host.")]
+    internal static class ScenarioAuthoringSimulationFreezePatches
+    {
+        [HarmonyPatch(typeof(UIPanelManager), nameof(UIPanelManager.timePaused), MethodType.Getter)]
+        [HarmonyPostfix]
+        private static void TimePausedGetterPostfix(ref bool __result)
+        {
+            if (ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation())
+                __result = true;
+        }
+
+        [HarmonyPatch(typeof(GameTime), "Update")]
+        [HarmonyPrefix]
+        private static bool GameTimeUpdatePrefix()
+        {
+            return !ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation();
+        }
+    }
+
     [PatchPolicy(PatchDomain.Scenarios, "ShelteredScenarioDefinitionApply",
         TargetBehavior = "Active scenario definitions are applied after save load once the Sheltered world is ready.",
         FailureMode = "A scenario-bound save loads as vanilla until the next successful scenario apply.",
