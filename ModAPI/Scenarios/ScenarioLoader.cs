@@ -36,7 +36,7 @@ namespace ModAPI.Scenarios
             ScenarioDefinition definition = _serializer.Load(info.FilePath);
             ScenarioValidationResult validation = _validator.Validate(definition, info.FilePath);
             if (!validation.IsValid)
-                throw new InvalidDataException("Scenario '" + scenarioId + "' failed validation: " + JoinIssues(validation.Issues));
+                throw new InvalidOperationException("Scenario '" + scenarioId + "' failed validation: " + JoinIssues(validation.Issues));
 
             return definition;
         }

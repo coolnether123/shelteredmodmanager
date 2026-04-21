@@ -21,6 +21,14 @@ namespace ShelteredAPI.Scenarios
             get { return Time.frameCount <= _blockSlotClicksUntilFrame; }
         }
 
+        public static bool ShouldBlockSlotInteraction(Component component)
+        {
+            if (IsSlotClickBlocked)
+                return true;
+
+            return IsScenarioSelectionOverlayActive(component);
+        }
+
         public static void BlockSlotClicksBriefly()
         {
             _blockSlotClicksUntilFrame = Math.Max(_blockSlotClicksUntilFrame, Time.frameCount + 2);
@@ -46,6 +54,18 @@ namespace ShelteredAPI.Scenarios
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Clearing pending custom scenario state. scenarioId=" + state.ScenarioId + ".");
                 ShelteredCustomScenarioService.Instance.ClearState();
             }
+        }
+
+        private static bool IsScenarioSelectionOverlayActive(Component component)
+        {
+            if (component == null)
+                return false;
+
+            ScenarioSelectionPanel scenarioPanel = component.GetComponentInParent<ScenarioSelectionPanel>();
+            return scenarioPanel != null
+                && scenarioPanel.gameObject != null
+                && scenarioPanel.gameObject.activeInHierarchy
+                && scenarioPanel.IsShowing();
         }
     }
 
@@ -291,9 +311,9 @@ namespace ShelteredAPI.Scenarios
     {
         [HarmonyPatch(typeof(SlotSelectionPanel), "OnSlotSelected")]
         [HarmonyPrefix]
-        private static bool OnSlotSelectedPrefix()
+        private static bool OnSlotSelectedPrefix(SlotSelectionPanel __instance)
         {
-            bool allowed = !ShelteredCustomScenarioRuntimeState.IsSlotClickBlocked;
+            bool allowed = !ShelteredCustomScenarioRuntimeState.ShouldBlockSlotInteraction(__instance);
             if (!allowed)
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Blocked SlotSelectionPanel.OnSlotSelected during guarded UI click.");
             return allowed;
@@ -301,9 +321,9 @@ namespace ShelteredAPI.Scenarios
 
         [HarmonyPatch(typeof(SlotSelectionPanel), "OnSlotChosen")]
         [HarmonyPrefix]
-        private static bool OnSlotChosenPrefix()
+        private static bool OnSlotChosenPrefix(SlotSelectionPanel __instance)
         {
-            bool allowed = !ShelteredCustomScenarioRuntimeState.IsSlotClickBlocked;
+            bool allowed = !ShelteredCustomScenarioRuntimeState.ShouldBlockSlotInteraction(__instance);
             if (!allowed)
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Blocked SlotSelectionPanel.OnSlotChosen during guarded UI click.");
             return allowed;
@@ -311,9 +331,9 @@ namespace ShelteredAPI.Scenarios
 
         [HarmonyPatch(typeof(SaveSlotButton), "OnClick")]
         [HarmonyPrefix]
-        private static bool SaveSlotButtonClickPrefix()
+        private static bool SaveSlotButtonClickPrefix(SaveSlotButton __instance)
         {
-            bool allowed = !ShelteredCustomScenarioRuntimeState.IsSlotClickBlocked;
+            bool allowed = !ShelteredCustomScenarioRuntimeState.ShouldBlockSlotInteraction(__instance);
             if (!allowed)
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Blocked SaveSlotButton.OnClick during guarded UI click.");
             return allowed;
