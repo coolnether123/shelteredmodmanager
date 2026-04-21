@@ -1,6 +1,7 @@
 using System;
 using ModAPI.Core;
 using ModAPI.Events;
+using ModAPI.Hooks;
 using ModAPI.Saves;
 using ModAPI.Scenarios;
 using UnityEngine.SceneManagement;

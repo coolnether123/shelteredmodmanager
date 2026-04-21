@@ -533,7 +533,7 @@ namespace ShelteredAPI.Scenarios
 
             ExitCustomMode(panel, state, scenarioButtons);
             ShelteredCustomScenarioRuntimeState.BlockSlotClicksBriefly();
-            QueueNewGameSaveTarget(startupSave.scenarioId, startupSave);
+            QueueNewGameSaveTarget(startupSave.scenarioId, startupSave, GetLaunchVirtualSaveType());
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Selected custom scenario: " + scenario.Id
                 + " startupSaveId=" + startupSave.id + " startupSlot=" + startupSave.absoluteSlot + ".");
 
