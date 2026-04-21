@@ -14,6 +14,7 @@ namespace ShelteredAPI.Scenarios
     internal static class ShelteredCustomScenarioRuntimeState
     {
         private static int _blockSlotClicksUntilFrame;
+        private static int _lastLoggedBlockedUntilFrame = -1;
 
         public static bool IsSlotClickBlocked
         {
@@ -23,6 +24,12 @@ namespace ShelteredAPI.Scenarios
         public static void BlockSlotClicksBriefly()
         {
             _blockSlotClicksUntilFrame = Math.Max(_blockSlotClicksUntilFrame, Time.frameCount + 2);
+            if (_lastLoggedBlockedUntilFrame != _blockSlotClicksUntilFrame)
+            {
+                _lastLoggedBlockedUntilFrame = _blockSlotClicksUntilFrame;
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Slot clicks blocked until frame " + _blockSlotClicksUntilFrame
+                    + " (current=" + Time.frameCount + ").");
+            }
         }
 
         public static bool HasPendingCustomScenario()
@@ -35,7 +42,10 @@ namespace ShelteredAPI.Scenarios
         {
             CustomScenarioState state = ShelteredCustomScenarioService.Instance.CurrentState;
             if (state != null && state.LifecycleState == CustomScenarioLifecycleState.Pending)
+            {
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Clearing pending custom scenario state. scenarioId=" + state.ScenarioId + ".");
                 ShelteredCustomScenarioService.Instance.ClearState();
+            }
         }
     }
 
@@ -46,77 +56,16 @@ namespace ShelteredAPI.Scenarios
     [HarmonyPatch(typeof(ScenarioSelectionPanel))]
     internal static class ShelteredCustomScenarioSelectionPatches
     {
-        private const string HubLabel = "Custom Scenarios";
-        private static readonly Dictionary<int, bool> ButtonsCreated = new Dictionary<int, bool>();
-        private static readonly Dictionary<int, int> BaseButtonCount = new Dictionary<int, int>();
-        private static readonly Dictionary<int, List<UIButton>> OriginalButtons = new Dictionary<int, List<UIButton>>();
-        private static readonly Dictionary<int, UIButton> HubButtons = new Dictionary<int, UIButton>();
-        private static readonly Dictionary<int, List<UIButton>> CustomButtons = new Dictionary<int, List<UIButton>>();
-        private static readonly HashSet<int> CustomModePanels = new HashSet<int>();
+        private static ShelteredScenarioSelectionBrowserController Controller
+        {
+            get { return ShelteredScenarioSelectionBrowserController.Instance; }
+        }
 
         [HarmonyPostfix]
         [HarmonyPatch("OnShow")]
         private static void OnShowPostfix(ScenarioSelectionPanel __instance, List<UIButton> ___m_scenarioButtons)
         {
-            try
-            {
-                if (__instance == null || ___m_scenarioButtons == null)
-                    return;
-
-                CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
-                if (scenarios.Length == 0)
-                    return;
-
-                int instanceId = __instance.GetInstanceID();
-                if (ButtonsCreated.ContainsKey(instanceId) && ButtonsCreated[instanceId])
-                    return;
-
-                if (___m_scenarioButtons.Count == 0)
-                    return;
-
-                UIButton sourceButton = ___m_scenarioButtons[___m_scenarioButtons.Count - 1];
-                if (sourceButton == null || sourceButton.gameObject == null)
-                    return;
-
-                if (!OriginalButtons.ContainsKey(instanceId))
-                    OriginalButtons[instanceId] = new List<UIButton>(___m_scenarioButtons);
-
-                float spacingY = MeasureSpacing(___m_scenarioButtons);
-                GameObject hubObject = GameObject.Instantiate(sourceButton.gameObject, sourceButton.transform.parent);
-                hubObject.name = "ShelteredAPI_CustomScenarios_HubButton";
-                hubObject.SetActive(true);
-
-                UIButton hubButton = hubObject.GetComponent<UIButton>();
-                if (hubButton == null)
-                    hubButton = hubObject.AddComponent<UIButton>();
-
-                hubButton.transform.localPosition = sourceButton.transform.localPosition + new Vector3(0f, spacingY, 0f);
-                ConfigureButton(hubObject, HubLabel);
-
-                UIEventListener listener = UIEventListener.Get(hubObject);
-                listener.onPress = delegate(GameObject go, bool pressed)
-                {
-                    if (pressed)
-                        ShelteredCustomScenarioRuntimeState.BlockSlotClicksBriefly();
-                };
-                listener.onClick = delegate(GameObject go)
-                {
-                    ShelteredCustomScenarioRuntimeState.BlockSlotClicksBriefly();
-                    EnterCustomMode(__instance, ___m_scenarioButtons);
-                };
-
-                ___m_scenarioButtons.Add(hubButton);
-                BaseButtonCount[instanceId] = ___m_scenarioButtons.Count - 1;
-                HubButtons[instanceId] = hubButton;
-                ButtonsCreated[instanceId] = true;
-
-                MMLog.WriteDebug("[ShelteredCustomScenarioSelection] Added custom scenario hub with "
-                    + scenarios.Length + " registered scenario(s).");
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("[ShelteredCustomScenarioSelection] OnShow failed: " + ex.Message);
-            }
+            Controller.Initialize(__instance, ___m_scenarioButtons);
         }
 
         [HarmonyPrefix]
@@ -129,32 +78,13 @@ namespace ShelteredAPI.Scenarios
             UILabel ___m_scenarioHighScore,
             GameObject ___m_stasis_scoreLabelsRoot)
         {
-            int instanceId = __instance.GetInstanceID();
-            if (!CustomModePanels.Contains(instanceId))
-            {
-                int baseCount = BaseButtonCount.ContainsKey(instanceId) ? BaseButtonCount[instanceId] : 2;
-                if (___m_selectedScenario == baseCount)
-                {
-                    SetScenarioText(___m_scenarioNameLabel, ___m_scenarioDescLabel, ___m_scenarioHighScore, ___m_stasis_scoreLabelsRoot,
-                        HubLabel,
-                        "Browse custom scenarios registered by loaded mods.");
-                    return false;
-                }
-
-                return true;
-            }
-
-            CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
-            if (___m_selectedScenario >= 0 && ___m_selectedScenario < scenarios.Length)
-            {
-                CustomScenarioInfo scenario = scenarios[___m_selectedScenario];
-                SlotManifest manifest = ShelteredCustomScenarioService.Instance.CreateDependencyManifest(scenario);
-                SaveVerification.VerificationState dependencyState = SaveVerification.VerifyRequired(manifest);
-                SetScenarioText(___m_scenarioNameLabel, ___m_scenarioDescLabel, ___m_scenarioHighScore, ___m_stasis_scoreLabelsRoot,
-                    dependencyState == SaveVerification.VerificationState.Match ? scenario.DisplayName : scenario.DisplayName + " [LOCKED]",
-                    BuildScenarioDescription(scenario.Description, manifest, dependencyState));
-            }
-            return false;
+            return Controller.HandleScenarioSelected(
+                __instance,
+                ___m_selectedScenario,
+                ___m_scenarioNameLabel,
+                ___m_scenarioDescLabel,
+                ___m_scenarioHighScore,
+                ___m_stasis_scoreLabelsRoot);
         }
 
         [HarmonyPostfix]
@@ -168,26 +98,14 @@ namespace ShelteredAPI.Scenarios
             GameObject ___m_stasis_scoreLabelsRoot,
             SlotSelectionPanel ___selectionPanel)
         {
-            try
-            {
-                int instanceId = __instance.GetInstanceID();
-                if (!CustomModePanels.Contains(instanceId))
-                    return;
-
-                if (___selectionPanel != null)
-                    ___selectionPanel.m_inputEnabled = false;
-
-                if (___m_selectedScenario == -1)
-                {
-                    CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
-                    SetScenarioText(___m_scenarioNameLabel, ___m_scenarioDescLabel, ___m_scenarioHighScore, ___m_stasis_scoreLabelsRoot,
-                        HubLabel,
-                        scenarios.Length + " custom scenario(s) available.");
-                }
-            }
-            catch
-            {
-            }
+            Controller.HandleUpdate(
+                __instance,
+                ___m_selectedScenario,
+                ___m_scenarioNameLabel,
+                ___m_scenarioDescLabel,
+                ___m_scenarioHighScore,
+                ___m_stasis_scoreLabelsRoot,
+                ___selectionPanel);
         }
 
         [HarmonyPrefix]
@@ -195,367 +113,27 @@ namespace ShelteredAPI.Scenarios
         private static bool OnScenarioChosenPrefix(
             ScenarioSelectionPanel __instance,
             int ___m_selectedScenario,
-            List<UIButton> ___m_scenarioButtons)
+            List<UIButton> ___m_scenarioButtons,
+            UILabel ___m_scenarioNameLabel,
+            UILabel ___m_scenarioDescLabel,
+            UILabel ___m_scenarioHighScore,
+            GameObject ___m_stasis_scoreLabelsRoot)
         {
-            int instanceId = __instance.GetInstanceID();
-            if (!CustomModePanels.Contains(instanceId))
-            {
-                int baseCount = BaseButtonCount.ContainsKey(instanceId) ? BaseButtonCount[instanceId] : 2;
-                if (___m_selectedScenario == baseCount)
-                {
-                    EnterCustomMode(__instance, ___m_scenarioButtons);
-                    return false;
-                }
-
-                ShelteredCustomScenarioRuntimeState.ClearPendingCustomScenario();
-                return true;
-            }
-
-            CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
-            if (___m_selectedScenario < 0 || ___m_selectedScenario >= scenarios.Length)
-                return false;
-
-            CustomScenarioInfo scenario = scenarios[___m_selectedScenario];
-            SlotManifest manifest = ShelteredCustomScenarioService.Instance.CreateDependencyManifest(scenario);
-            SaveVerification.VerificationState dependencyState = SaveVerification.VerifyRequired(manifest);
-            if (dependencyState != SaveVerification.VerificationState.Match)
-            {
-                SaveDetailsWindow.ShowScenario(scenario.DisplayName, manifest, dependencyState, delegate
-                {
-                    StartCustomScenario(__instance, ___m_scenarioButtons, scenario);
-                });
-                return false;
-            }
-
-            if (!StartCustomScenario(__instance, ___m_scenarioButtons, scenario))
-            {
-                MMLog.WriteWarning("[ShelteredCustomScenarioSelection] Failed to select custom scenario: " + scenario.Id);
-                return false;
-            }
-
-            return true;
+            return Controller.HandleScenarioChosen(__instance, ___m_selectedScenario, ___m_scenarioButtons);
         }
 
         [HarmonyPrefix]
         [HarmonyPatch("OnCancel")]
         private static bool OnCancelPrefix(ScenarioSelectionPanel __instance, List<UIButton> ___m_scenarioButtons)
         {
-            int instanceId = __instance.GetInstanceID();
-            if (!CustomModePanels.Contains(instanceId))
-                return true;
-
-            ExitCustomMode(__instance, ___m_scenarioButtons);
-            return false;
+            return Controller.HandleCancel(__instance, ___m_scenarioButtons);
         }
 
         [HarmonyPostfix]
         [HarmonyPatch("OnDestroy")]
         private static void OnDestroyPostfix(ScenarioSelectionPanel __instance)
         {
-            Cleanup(__instance.GetInstanceID());
-        }
-
-        private static void EnterCustomMode(ScenarioSelectionPanel panel, List<UIButton> scenarioButtons)
-        {
-            if (panel == null || scenarioButtons == null)
-                return;
-
-            int instanceId = panel.GetInstanceID();
-            CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
-            if (scenarios.Length == 0)
-                return;
-
-            if (!CustomButtons.ContainsKey(instanceId))
-                CustomButtons[instanceId] = new List<UIButton>();
-
-            DestroyButtons(CustomButtons[instanceId]);
-            CustomButtons[instanceId].Clear();
-
-            List<UIButton> originals;
-            if (OriginalButtons.TryGetValue(instanceId, out originals))
-            {
-                for (int i = 0; i < originals.Count; i++)
-                {
-                    if (originals[i] != null && originals[i].gameObject != null)
-                        originals[i].gameObject.SetActive(false);
-                }
-            }
-
-            UIButton hubButton;
-            if (HubButtons.TryGetValue(instanceId, out hubButton) && hubButton != null && hubButton.gameObject != null)
-                hubButton.gameObject.SetActive(false);
-
-            UIButton source = hubButton;
-            if (source == null && originals != null && originals.Count > 0)
-                source = originals[0];
-            if (source == null)
-                return;
-
-            Vector3 basePosition = source.transform.localPosition;
-            if (originals != null && originals.Count > 0 && originals[0] != null)
-                basePosition = originals[0].transform.localPosition;
-
-            float spacingY = originals != null ? MeasureSpacing(originals) : -60f;
-            scenarioButtons.Clear();
-
-            for (int i = 0; i < scenarios.Length; i++)
-            {
-                CustomScenarioInfo scenario = scenarios[i];
-                GameObject buttonObject = GameObject.Instantiate(source.gameObject, source.transform.parent);
-                buttonObject.name = "ShelteredAPI_CustomScenario_" + SanitizeObjectName(scenario.Id);
-                buttonObject.SetActive(true);
-
-                UIButton button = buttonObject.GetComponent<UIButton>();
-                if (button == null)
-                    button = buttonObject.AddComponent<UIButton>();
-
-                button.transform.localPosition = basePosition + new Vector3(0f, spacingY * i, 0f);
-                bool locked = ShelteredCustomScenarioService.Instance.VerifyDependencies(scenario) != SaveVerification.VerificationState.Match;
-                ConfigureButton(buttonObject, locked ? scenario.DisplayName + " [LOCKED]" : scenario.DisplayName, locked);
-
-                int capturedIndex = i;
-                UIEventListener listener = UIEventListener.Get(buttonObject);
-                listener.onPress = delegate(GameObject go, bool pressed)
-                {
-                    if (pressed)
-                        ShelteredCustomScenarioRuntimeState.BlockSlotClicksBriefly();
-                };
-                listener.onClick = delegate(GameObject go)
-                {
-                    ShelteredCustomScenarioRuntimeState.BlockSlotClicksBriefly();
-                    Traverse.Create(panel).Field("m_selectedScenario").SetValue(capturedIndex);
-                    panel.OnScenarioChosen();
-                };
-
-                CustomButtons[instanceId].Add(button);
-                scenarioButtons.Add(button);
-            }
-
-            CustomModePanels.Add(instanceId);
-            Traverse.Create(panel).Field("m_selectedScenario").SetValue(-1);
-            MMLog.WriteDebug("[ShelteredCustomScenarioSelection] Entered custom scenario list for panel " + instanceId + ".");
-        }
-
-        private static void ExitCustomMode(ScenarioSelectionPanel panel, List<UIButton> scenarioButtons)
-        {
-            if (panel == null || scenarioButtons == null)
-                return;
-
-            int instanceId = panel.GetInstanceID();
-            List<UIButton> buttons;
-            if (CustomButtons.TryGetValue(instanceId, out buttons))
-            {
-                DestroyButtons(buttons);
-                buttons.Clear();
-            }
-
-            scenarioButtons.Clear();
-            List<UIButton> originals;
-            if (OriginalButtons.TryGetValue(instanceId, out originals))
-            {
-                for (int i = 0; i < originals.Count; i++)
-                {
-                    UIButton button = originals[i];
-                    if (button == null || button.gameObject == null)
-                        continue;
-
-                    button.gameObject.SetActive(true);
-                    scenarioButtons.Add(button);
-                }
-            }
-
-            UIButton hubButton;
-            if (HubButtons.TryGetValue(instanceId, out hubButton) && hubButton != null && hubButton.gameObject != null)
-            {
-                hubButton.gameObject.SetActive(true);
-                scenarioButtons.Add(hubButton);
-            }
-
-            CustomModePanels.Remove(instanceId);
-            Traverse.Create(panel).Field("m_selectedScenario").SetValue(-1);
-            MMLog.WriteDebug("[ShelteredCustomScenarioSelection] Exited custom scenario list for panel " + instanceId + ".");
-        }
-
-        private static void Cleanup(int instanceId)
-        {
-            ButtonsCreated.Remove(instanceId);
-            BaseButtonCount.Remove(instanceId);
-            CustomModePanels.Remove(instanceId);
-            OriginalButtons.Remove(instanceId);
-            HubButtons.Remove(instanceId);
-
-            List<UIButton> buttons;
-            if (CustomButtons.TryGetValue(instanceId, out buttons))
-                DestroyButtons(buttons);
-            CustomButtons.Remove(instanceId);
-        }
-
-        private static bool StartCustomScenario(ScenarioSelectionPanel panel, List<UIButton> scenarioButtons, CustomScenarioInfo scenario)
-        {
-            if (scenario == null)
-                return false;
-
-            if (!ShelteredCustomScenarioService.Instance.MarkSelected(scenario.Id))
-                return false;
-
-            ExitCustomMode(panel, scenarioButtons);
-            ShelteredCustomScenarioRuntimeState.BlockSlotClicksBriefly();
-            MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Selected custom scenario: " + scenario.Id);
-            return true;
-        }
-
-        private static void ConfigureButton(GameObject buttonObject, string label)
-        {
-            ConfigureButton(buttonObject, label, false);
-        }
-
-        private static void ConfigureButton(GameObject buttonObject, string label, bool locked)
-        {
-            if (buttonObject == null)
-                return;
-
-            UIButton button = buttonObject.GetComponent<UIButton>();
-            if (button != null && button.onClick != null)
-                button.onClick.Clear();
-
-            UIButtonMessage[] messages = buttonObject.GetComponentsInChildren<UIButtonMessage>(true);
-            for (int i = 0; i < messages.Length; i++)
-            {
-                if (messages[i] != null)
-                    UnityEngine.Object.Destroy(messages[i]);
-            }
-
-            UILocalize[] localizers = buttonObject.GetComponentsInChildren<UILocalize>(true);
-            for (int i = 0; i < localizers.Length; i++)
-            {
-                if (localizers[i] != null)
-                    UnityEngine.Object.Destroy(localizers[i]);
-            }
-
-            UILabel[] labels = buttonObject.GetComponentsInChildren<UILabel>(true);
-            for (int i = 0; i < labels.Length; i++)
-            {
-                if (labels[i] != null)
-                {
-                    labels[i].text = label ?? string.Empty;
-                    if (locked)
-                        labels[i].color = new Color(1f, 0.35f, 0.35f);
-                }
-            }
-        }
-
-        private static void SetScenarioText(
-            UILabel nameLabel,
-            UILabel descriptionLabel,
-            UILabel highScoreLabel,
-            GameObject stasisScoreLabelsRoot,
-            string name,
-            string description)
-        {
-            if (nameLabel != null)
-                nameLabel.text = name ?? string.Empty;
-            if (descriptionLabel != null)
-                descriptionLabel.text = description ?? string.Empty;
-            if (highScoreLabel != null)
-                highScoreLabel.text = string.Empty;
-            if (stasisScoreLabelsRoot != null)
-                stasisScoreLabelsRoot.SetActive(false);
-        }
-
-        private static string BuildScenarioDescription(string description, SlotManifest manifest, SaveVerification.VerificationState state)
-        {
-            if (state == SaveVerification.VerificationState.Match)
-                return description ?? string.Empty;
-
-            string reason = BuildDependencySummary(manifest, state);
-            if (string.IsNullOrEmpty(description))
-                return "[LOCKED] " + reason;
-
-            return "[LOCKED] " + reason + "\n" + description;
-        }
-
-        private static string BuildDependencySummary(SlotManifest manifest, SaveVerification.VerificationState state)
-        {
-            if (manifest == null)
-                return "Scenario dependency metadata is unavailable.";
-
-            List<SaveVerification.ModCompareEntry> comparison = SaveVerification.BuildModComparison(
-                PluginManager.LoadedMods,
-                manifest.lastLoadedMods,
-                false);
-
-            int missing = 0;
-            int versionDiff = 0;
-            for (int i = 0; i < comparison.Count; i++)
-            {
-                if (comparison[i].status == SaveVerification.ModCompareStatus.Missing)
-                    missing++;
-                else if (comparison[i].status == SaveVerification.ModCompareStatus.VersionDiff)
-                    versionDiff++;
-            }
-
-            if (missing > 0 && versionDiff > 0)
-                return "Cannot start: " + missing + " required mod(s) missing and " + versionDiff + " version mismatch(es).";
-            if (missing > 0)
-                return "Cannot start: " + missing + " required mod(s) missing.";
-            if (versionDiff > 0)
-                return "Cannot start: " + versionDiff + " required mod version mismatch(es).";
-            if (state == SaveVerification.VerificationState.Unknown)
-                return "Cannot start: dependency metadata could not be verified.";
-
-            return "Cannot start until required mods are satisfied.";
-        }
-
-        private static float MeasureSpacing(IList<UIButton> buttons)
-        {
-            float spacingY = -60f;
-            try
-            {
-                if (buttons != null && buttons.Count >= 2 && buttons[buttons.Count - 1] != null && buttons[buttons.Count - 2] != null)
-                {
-                    float last = buttons[buttons.Count - 1].transform.localPosition.y;
-                    float previous = buttons[buttons.Count - 2].transform.localPosition.y;
-                    float measured = last - previous;
-                    if (Mathf.Abs(measured) > 1f)
-                        spacingY = measured;
-                }
-
-                if (Mathf.Abs(spacingY) > 140f)
-                    spacingY = Mathf.Sign(spacingY) * 120f;
-            }
-            catch
-            {
-            }
-
-            return spacingY;
-        }
-
-        private static void DestroyButtons(List<UIButton> buttons)
-        {
-            if (buttons == null)
-                return;
-
-            for (int i = 0; i < buttons.Count; i++)
-            {
-                UIButton button = buttons[i];
-                if (button != null && button.gameObject != null)
-                    UnityEngine.Object.Destroy(button.gameObject);
-            }
-        }
-
-        private static string SanitizeObjectName(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return "unknown";
-
-            char[] chars = value.ToCharArray();
-            for (int i = 0; i < chars.Length; i++)
-            {
-                if (!char.IsLetterOrDigit(chars[i]) && chars[i] != '_' && chars[i] != '-')
-                    chars[i] = '_';
-            }
-
-            return new string(chars);
+            Controller.Cleanup(__instance);
         }
     }
 
@@ -625,6 +203,7 @@ namespace ShelteredAPI.Scenarios
         [HarmonyPostfix]
         private static void SurvivalChosenPostfix()
         {
+            MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Survival mode chosen; checking for stale pending custom scenario state.");
             ShelteredCustomScenarioRuntimeState.ClearPendingCustomScenario();
         }
 
@@ -632,6 +211,7 @@ namespace ShelteredAPI.Scenarios
         [HarmonyPostfix]
         private static void SlotSelectionCancelPostfix()
         {
+            MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Slot selection cancelled; checking for stale pending custom scenario state.");
             ShelteredCustomScenarioRuntimeState.ClearPendingCustomScenario();
         }
     }
@@ -713,21 +293,30 @@ namespace ShelteredAPI.Scenarios
         [HarmonyPrefix]
         private static bool OnSlotSelectedPrefix()
         {
-            return !ShelteredCustomScenarioRuntimeState.IsSlotClickBlocked;
+            bool allowed = !ShelteredCustomScenarioRuntimeState.IsSlotClickBlocked;
+            if (!allowed)
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Blocked SlotSelectionPanel.OnSlotSelected during guarded UI click.");
+            return allowed;
         }
 
         [HarmonyPatch(typeof(SlotSelectionPanel), "OnSlotChosen")]
         [HarmonyPrefix]
         private static bool OnSlotChosenPrefix()
         {
-            return !ShelteredCustomScenarioRuntimeState.IsSlotClickBlocked;
+            bool allowed = !ShelteredCustomScenarioRuntimeState.IsSlotClickBlocked;
+            if (!allowed)
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Blocked SlotSelectionPanel.OnSlotChosen during guarded UI click.");
+            return allowed;
         }
 
         [HarmonyPatch(typeof(SaveSlotButton), "OnClick")]
         [HarmonyPrefix]
         private static bool SaveSlotButtonClickPrefix()
         {
-            return !ShelteredCustomScenarioRuntimeState.IsSlotClickBlocked;
+            bool allowed = !ShelteredCustomScenarioRuntimeState.IsSlotClickBlocked;
+            if (!allowed)
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Blocked SaveSlotButton.OnClick during guarded UI click.");
+            return allowed;
         }
     }
 }

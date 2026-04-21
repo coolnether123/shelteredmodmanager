@@ -6,6 +6,8 @@ Canonical signatures: `documentation/API_Signatures_Reference.md`.
 
 Content-specific guidance: `documentation/ShelteredAPI_Content_Guide.md`.
 
+Custom scenario authoring guidance: `documentation/Custom_Scenarios_Guide.md`.
+
 ## 1. What ShelteredAPI Adds
 
 - `IGameHelper` implementation and `ShelteredAPI.Adapters.GameHelperExtensions`

@@ -98,6 +98,7 @@
     <Compile Include="Scenarios\ScenarioDefinition.cs" />
     <Compile Include="Scenarios\ScenarioDefinitionSerializer.cs" />
     <Compile Include="Scenarios\ScenarioDependencyManifest.cs" />
+    <Compile Include="Scenarios\ScenarioFrameworkVerification.cs" />
     <Compile Include="Scenarios\ScenarioLoader.cs" />
     <Compile Include="Scenarios\ScenarioPipelineSmokeTest.cs" />
     <Compile Include="Scenarios\ScenarioRuntimeBinding.cs" />

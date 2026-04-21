@@ -77,6 +77,7 @@
     <Compile Include="Scenarios\ScenarioApplier.cs" />
     <Compile Include="Scenarios\ScenarioEditorController.cs" />
     <Compile Include="Scenarios\ScenarioEditorSession.cs" />
+    <Compile Include="Scenarios\ShelteredScenarioSelectionBrowserController.cs" />
     <Compile Include="Scenarios\ScenarioValidatorImpl.cs" />
     <Compile Include="Scenarios\ScenarioWorldReady.cs" />
     <Compile Include="Scenarios\ShelteredCustomScenarioPatches.cs" />
