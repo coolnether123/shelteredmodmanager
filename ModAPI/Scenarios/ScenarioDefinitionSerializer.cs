@@ -362,6 +362,28 @@ namespace ModAPI.Scenarios
                 }
             }
 
+            XmlElement spriteSwaps = Child(element, "SpriteSwaps");
+            if (spriteSwaps != null)
+            {
+                XmlNodeList swapNodes = spriteSwaps.GetElementsByTagName("Swap");
+                for (int i = 0; i < swapNodes.Count; i++)
+                {
+                    XmlElement swapElement = swapNodes[i] as XmlElement;
+                    if (swapElement == null)
+                        continue;
+
+                    result.SpriteSwaps.Add(new SpriteSwapRule
+                    {
+                        Id = AttributeOrChild(swapElement, "id", "Id"),
+                        TargetPath = AttributeOrChild(swapElement, "targetPath", "TargetPath"),
+                        SpriteId = AttributeOrChild(swapElement, "spriteId", "SpriteId"),
+                        RelativePath = AttributeOrChild(swapElement, "path", "Path"),
+                        Day = ReadNullableIntAttribute(swapElement, "day"),
+                        TargetComponent = ReadEnumAttribute(swapElement, "targetComponent", ScenarioSpriteTargetComponentKind.Auto)
+                    });
+                }
+            }
+
             return result;
         }
 
@@ -575,6 +597,22 @@ namespace ModAPI.Scenarios
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
+
+            writer.WriteStartElement("SpriteSwaps");
+            for (int i = 0; i < value.SpriteSwaps.Count; i++)
+            {
+                SpriteSwapRule swap = value.SpriteSwaps[i];
+                writer.WriteStartElement("Swap");
+                WriteAttribute(writer, "id", swap.Id);
+                WriteAttribute(writer, "targetPath", swap.TargetPath);
+                WriteAttribute(writer, "spriteId", swap.SpriteId);
+                WriteAttribute(writer, "path", swap.RelativePath);
+                if (swap.Day.HasValue)
+                    writer.WriteAttributeString("day", swap.Day.Value.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("targetComponent", swap.TargetComponent.ToString());
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
             writer.WriteEndElement();
         }
 
@@ -744,6 +782,15 @@ namespace ModAPI.Scenarios
                 return fallback;
 
             try { return (T)Enum.Parse(typeof(T), raw, true); }
+            catch { return fallback; }
+        }
+
+        private static T ReadEnumAttribute<T>(XmlElement element, string attributeName, T fallback)
+        {
+            if (element == null || !element.HasAttribute(attributeName))
+                return fallback;
+
+            try { return (T)Enum.Parse(typeof(T), element.GetAttribute(attributeName), true); }
             catch { return fallback; }
         }
 

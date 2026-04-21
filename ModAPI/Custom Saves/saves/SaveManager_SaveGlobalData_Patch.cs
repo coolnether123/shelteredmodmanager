@@ -38,15 +38,24 @@ namespace ModAPI.Hooks
                     byte[] bytes = saveData.GetBytes();
 
                     // Overwrite the active custom save with the new data
-                    var updatedEntry = ExpandedVanillaSaves.Instance.Overwrite(SaveRuntimeState.ActiveCustomSave.id, null, bytes);
+                    SaveEntry active = SaveRuntimeState.ActiveCustomSave;
+                    string scenarioId = active != null && !string.IsNullOrEmpty(active.scenarioId)
+                        ? active.scenarioId
+                        : "Standard";
+                    ISaveApi saveApi = ExpandedVanillaSaves.IsStandardScenario(scenarioId)
+                        ? (ISaveApi)ExpandedVanillaSaves.Instance
+                        : ScenarioSaves.GetRegistry(scenarioId);
+                    var updatedEntry = saveApi.Overwrite(active.id, null, bytes);
                     if (updatedEntry != null)
                     {
                         SaveRuntimeState.ActiveCustomSave = updatedEntry;
-                        MMLog.Write("[SaveGlobalData_Patch] Successfully updated custom save file and manifest.");
+                        MMLog.Write("[SaveGlobalData_Patch] Successfully updated custom save file and manifest. scenario=" + scenarioId
+                            + " saveId=" + updatedEntry.id + " absoluteSlot=" + updatedEntry.absoluteSlot + ".");
                     }
                     else
                     {
-                        MMLog.WriteError("[SaveGlobalData_Patch] Overwrite operation failed.");
+                        MMLog.WriteError("[SaveGlobalData_Patch] Overwrite operation failed. scenario=" + scenarioId
+                            + " saveId=" + (active != null ? active.id : "<null>") + ".");
                     }
 
                     // Let vanilla SaveGlobalData run so global preferences (audio/language/input/etc.)

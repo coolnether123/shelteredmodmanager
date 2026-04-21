@@ -46,6 +46,13 @@ namespace ShelteredAPI.Scenarios
                 IconRef icon = definition.AssetReferences.CustomIcons[i];
                 ValidateSprite(packRoot, icon != null ? icon.RelativePath : null, "icon", result);
             }
+
+            for (int i = 0; i < definition.AssetReferences.SpriteSwaps.Count; i++)
+            {
+                SpriteSwapRule swap = definition.AssetReferences.SpriteSwaps[i];
+                if (swap != null && !string.IsNullOrEmpty(swap.RelativePath))
+                    ValidateSprite(packRoot, swap.RelativePath, "sprite swap", result);
+            }
         }
 
         private static void ValidateSprite(string packRoot, string relativePath, string kind, ScenarioValidationResult result)

@@ -225,10 +225,29 @@ namespace ModAPI.Scenarios
         {
             CustomSprites = new List<SpriteRef>();
             CustomIcons = new List<IconRef>();
+            SpriteSwaps = new List<SpriteSwapRule>();
         }
 
         public List<SpriteRef> CustomSprites { get; private set; }
         public List<IconRef> CustomIcons { get; private set; }
+        public List<SpriteSwapRule> SpriteSwaps { get; private set; }
+    }
+
+    public enum ScenarioSpriteTargetComponentKind
+    {
+        Auto = 0,
+        SpriteRenderer = 1,
+        UI2DSprite = 2
+    }
+
+    public class SpriteSwapRule
+    {
+        public string Id { get; set; }
+        public string TargetPath { get; set; }
+        public string SpriteId { get; set; }
+        public string RelativePath { get; set; }
+        public int? Day { get; set; }
+        public ScenarioSpriteTargetComponentKind TargetComponent { get; set; }
     }
 
     public class SpriteRef

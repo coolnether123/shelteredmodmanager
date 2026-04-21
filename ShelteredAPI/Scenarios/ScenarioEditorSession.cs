@@ -52,5 +52,6 @@ namespace ShelteredAPI.Scenarios
         public ScenarioPlaytestState PlaytestState { get; set; }
         public bool RequestedRestart { get; set; }
         public ScenarioEditCategory CurrentEditCategory { get; set; }
+        public bool HasAppliedToCurrentWorld { get; set; }
     }
 }

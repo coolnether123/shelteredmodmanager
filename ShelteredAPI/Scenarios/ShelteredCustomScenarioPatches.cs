@@ -4,9 +4,11 @@ using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Harmony;
+using ModAPI.Hooks;
 using ModAPI.Hooks.Paging;
 using ModAPI.Saves;
 using ModAPI.Scenarios;
+using ModAPI.UI;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
@@ -15,18 +17,21 @@ namespace ShelteredAPI.Scenarios
     {
         private static int _blockSlotClicksUntilFrame;
         private static int _lastLoggedBlockedUntilFrame = -1;
+        private static bool _customModeActive;
 
         public static bool IsSlotClickBlocked
         {
             get { return Time.frameCount <= _blockSlotClicksUntilFrame; }
         }
 
+        public static void SetCustomModeActive(bool active)
+        {
+            _customModeActive = active;
+        }
+
         public static bool ShouldBlockSlotInteraction(Component component)
         {
-            if (IsSlotClickBlocked)
-                return true;
-
-            return IsScenarioSelectionOverlayActive(component);
+            return UIFlowGuard.BlockSlotClicks || IsSlotClickBlocked || _customModeActive;
         }
 
         public static void BlockSlotClicksBriefly()
@@ -54,18 +59,6 @@ namespace ShelteredAPI.Scenarios
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Clearing pending custom scenario state. scenarioId=" + state.ScenarioId + ".");
                 ShelteredCustomScenarioService.Instance.ClearState();
             }
-        }
-
-        private static bool IsScenarioSelectionOverlayActive(Component component)
-        {
-            if (component == null)
-                return false;
-
-            ScenarioSelectionPanel scenarioPanel = component.GetComponentInParent<ScenarioSelectionPanel>();
-            return scenarioPanel != null
-                && scenarioPanel.gameObject != null
-                && scenarioPanel.gameObject.activeInHierarchy
-                && scenarioPanel.IsShowing();
         }
     }
 
@@ -234,6 +227,71 @@ namespace ShelteredAPI.Scenarios
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Slot selection cancelled; checking for stale pending custom scenario state.");
             ShelteredCustomScenarioRuntimeState.ClearPendingCustomScenario();
         }
+
+        [HarmonyPatch(typeof(CustomisationPanel), "OnCancel")]
+        [HarmonyPrefix]
+        private static void CustomisationCancelPrefix(CustomisationPanel __instance)
+        {
+            if (__instance == null)
+                return;
+
+            int currentPage = 0;
+            try { currentPage = Traverse.Create(__instance).Field("m_currentPageIndex").GetValue<int>(); }
+            catch { }
+
+            if (currentPage != 0)
+                return;
+
+            PlatformSaveProxy.Target pendingTarget;
+            bool draftCancelled = false;
+            if (PlatformSaveProxy.TryGetNextSave(SaveManager.SaveType.Slot1, out pendingTarget) && pendingTarget != null)
+            {
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Customisation cancelled before game start. Clearing queued startup save. scenarioId="
+                    + pendingTarget.scenarioId + " saveId=" + pendingTarget.saveId + ".");
+
+                bool isDraftStartup = string.Equals(
+                    pendingTarget.scenarioId,
+                    ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
+                    StringComparison.OrdinalIgnoreCase);
+
+                if (isDraftStartup)
+                {
+                    ScenarioAuthoringBootstrapService.Instance.CancelPendingDraft("Customisation was cancelled before the scenario world started.");
+                    draftCancelled = true;
+                }
+                else if (!string.IsNullOrEmpty(pendingTarget.scenarioId)
+                    && !string.Equals(pendingTarget.scenarioId, "Standard", StringComparison.OrdinalIgnoreCase))
+                {
+                    ScenarioSaves.Delete(pendingTarget.scenarioId, pendingTarget.saveId);
+                }
+
+                PlatformSaveProxy.ClearNextSave(SaveManager.SaveType.Slot1);
+            }
+
+            // Guard covers the edge case where a draft was queued but no save target was
+            // registered yet (e.g. the UI flow was interrupted before QueueNewGameSaveTarget ran).
+            if (!draftCancelled)
+                ScenarioAuthoringBootstrapService.Instance.CancelPendingDraft("Customisation was cancelled before the scenario world started.");
+
+            ShelteredCustomScenarioRuntimeState.ClearPendingCustomScenario();
+        }
+    }
+
+    [PatchPolicy(PatchDomain.Scenarios, "ScenarioAuthoringGlobalUiIsolation",
+        TargetBehavior = "Global gameplay hotkeys do not steal focus while scenario authoring owns the live shelter scene.",
+        FailureMode = "Pause/map/clipboard hotkeys can still open vanilla panels during authoring pause.",
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring global UI isolation patch host.")]
+    internal static class ScenarioAuthoringGlobalUiIsolationPatches
+    {
+        [HarmonyPatch(typeof(UI_InputListener), "UpdateManager")]
+        [HarmonyPrefix]
+        private static bool UpdateManagerPrefix()
+        {
+            if (!ScenarioAuthoringRuntimeGuards.ShouldSuppressGlobalGameplayUi())
+                return true;
+
+            return false;
+        }
     }
 
     [PatchPolicy(PatchDomain.Scenarios, "ShelteredScenarioDefinitionApply",
@@ -254,6 +312,7 @@ namespace ShelteredAPI.Scenarios
                 if (binding == null || string.IsNullOrEmpty(binding.ScenarioId) || !binding.IsActive)
                 {
                     _lastAppliedKey = null;
+                    ScenarioSpriteSwapService.Instance.Clear("No active scenario binding was available for startup.");
                     return;
                 }
 

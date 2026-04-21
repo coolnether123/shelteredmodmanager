@@ -119,6 +119,8 @@ namespace ModAPI.Scenarios
                 IconRef icon = definition.AssetReferences.CustomIcons[i];
                 ValidateAssetPath(packRoot, icon != null ? icon.RelativePath : null, "icon", result);
             }
+
+            ValidateSpriteSwaps(definition.AssetReferences, packRoot, result);
         }
 
         private static void ValidateInventory(ScenarioDefinition definition, ScenarioValidationResult result)
@@ -153,6 +155,57 @@ namespace ModAPI.Scenarios
                 if (room.WireSpriteIndex.HasValue && room.WireSpriteIndex.Value < 0)
                     result.AddError("Room edit #" + i + " has negative wireSpriteIndex.");
             }
+        }
+
+        private static void ValidateSpriteSwaps(AssetReferencesDefinition assets, string packRoot, ScenarioValidationResult result)
+        {
+            if (assets == null || assets.SpriteSwaps == null)
+                return;
+
+            for (int i = 0; i < assets.SpriteSwaps.Count; i++)
+            {
+                SpriteSwapRule swap = assets.SpriteSwaps[i];
+                if (swap == null)
+                {
+                    result.AddError("Sprite swap #" + i + " is null.");
+                    continue;
+                }
+
+                if (TrimToNull(swap.TargetPath) == null)
+                    result.AddError("Sprite swap #" + i + " is missing targetPath.");
+
+                bool hasSpriteId = TrimToNull(swap.SpriteId) != null;
+                bool hasRelativePath = TrimToNull(swap.RelativePath) != null;
+                if (!hasSpriteId && !hasRelativePath)
+                    result.AddError("Sprite swap #" + i + " must specify spriteId or path.");
+
+                if (swap.Day.HasValue && swap.Day.Value < 1)
+                    result.AddError("Sprite swap #" + i + " has day less than 1.");
+
+                if (!Enum.IsDefined(typeof(ScenarioSpriteTargetComponentKind), swap.TargetComponent))
+                    result.AddError("Sprite swap #" + i + " has invalid targetComponent '" + swap.TargetComponent + "'.");
+
+                if (hasSpriteId && !HasSpriteReference(assets, swap.SpriteId))
+                    result.AddError("Sprite swap #" + i + " references unknown spriteId '" + swap.SpriteId + "'.");
+
+                if (hasRelativePath)
+                    ValidateAssetPath(packRoot, swap.RelativePath, "sprite swap", result);
+            }
+        }
+
+        private static bool HasSpriteReference(AssetReferencesDefinition assets, string spriteId)
+        {
+            if (assets == null || assets.CustomSprites == null || string.IsNullOrEmpty(spriteId))
+                return false;
+
+            for (int i = 0; i < assets.CustomSprites.Count; i++)
+            {
+                SpriteRef sprite = assets.CustomSprites[i];
+                if (sprite != null && string.Equals(sprite.Id, spriteId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
 
         private static void ValidateAssetPath(string packRoot, string relativePath, string assetKind, ScenarioValidationResult result)

@@ -15,7 +15,6 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioApplier _applier = new ScenarioApplier();
         private ScenarioEditorSession _session;
         private string _lastScenarioFilePath;
-        private bool _pausedByEditor;
 
         public static ScenarioEditorController Instance
         {
@@ -92,27 +91,39 @@ namespace ShelteredAPI.Scenarios
         public ScenarioApplyResult BeginPlaytest()
         {
             ScenarioEditorSession session = RequireSession();
-            if (!ScenarioWorldReady.IsReady())
+            if (session.PlaytestState == ScenarioPlaytestState.Playtesting)
+            {
+                ScenarioApplyResult alreadyRunning = new ScenarioApplyResult();
+                alreadyRunning.AddMessage("Playtest is already running.");
+                return alreadyRunning;
+            }
+
+            string blockingReason;
+            if (!ScenarioWorldReady.Evaluate(out blockingReason))
             {
                 ScenarioApplyResult notReady = new ScenarioApplyResult();
-                notReady.AddMessage("World is not ready for scenario apply; playtest did not start.");
+                notReady.AddMessage("World is not ready for scenario apply; playtest did not start. " + blockingReason);
                 return notReady;
             }
 
-            if (!PauseManager.isPaused && Time.timeScale != 0f)
-                MMLog.WriteWarning("[ScenarioEditorController] BeginPlaytest called while game was not paused.");
-
-            ScenarioApplyResult result = _applier.ApplyAll(session.WorkingDefinition, _lastScenarioFilePath);
-            ShelteredScenarioRuntimeBindingManager.Instance.SetBinding(new ScenarioRuntimeBinding
+            bool reusedLiveWorld = session.HasAppliedToCurrentWorld;
+            ScenarioApplyResult result;
+            if (!reusedLiveWorld)
             {
-                ScenarioId = session.WorkingDefinition.Id,
-                VersionApplied = session.WorkingDefinition.Version,
-                IsActive = true,
-                IsConvertedToNormalSave = false,
-                DayCreated = GameTime.Day
-            });
+                result = _applier.ApplyAll(session.WorkingDefinition, _lastScenarioFilePath);
+                session.HasAppliedToCurrentWorld = true;
+            }
+            else
+            {
+                result = new ScenarioApplyResult();
+                result.AddMessage("Playtest resumed without reapplying scenario changes; the current live shelter already matches the authoring draft.");
+            }
+
+            EnsureRuntimeBinding(session);
             session.PlaytestState = ScenarioPlaytestState.Playtesting;
             ResumeFromEditor();
+            MMLog.WriteInfo("[ScenarioEditorController] Playtest started for scenario '" + session.WorkingDefinition.Id
+                + "'. Messages=" + result.Messages.Length + ", reusedLiveWorld=" + reusedLiveWorld + ".");
             return result;
         }
 
@@ -138,13 +149,33 @@ namespace ShelteredAPI.Scenarios
 
         public void CloseEditor(bool resumeGame)
         {
+            ScenarioEditorSession previous;
             lock (_sync)
             {
+                previous = _session;
                 _session = null;
+                _lastScenarioFilePath = null;
             }
 
-            if (resumeGame)
+            ScenarioSpriteSwapService.Instance.Clear("Scenario editor closed.");
+            ResumeFromEditor();
+            MMLog.WriteInfo("[ScenarioEditorController] Editor session closed. resumeGame=" + resumeGame
+                + ", hadPreviousSession=" + (previous != null) + ".");
+        }
+
+        public void MaintainAuthoringPause()
+        {
+            ScenarioEditorSession session = CurrentSession;
+            if (session == null)
+                return;
+
+            if (session.PlaytestState == ScenarioPlaytestState.Playtesting)
+            {
                 ResumeFromEditor();
+                return;
+            }
+
+            PauseForEditor();
         }
 
         private static ScenarioEditorSession CreateSession(ScenarioDefinition definition)
@@ -154,8 +185,25 @@ namespace ShelteredAPI.Scenarios
                 WorkingDefinition = ScenarioDefinitionCloner.Clone(definition),
                 OriginalDefinition = ScenarioDefinitionCloner.Clone(definition),
                 PlaytestState = ScenarioPlaytestState.Idle,
-                CurrentEditCategory = ScenarioEditCategory.Family
+                CurrentEditCategory = ScenarioEditCategory.Family,
+                HasAppliedToCurrentWorld = false
             };
+        }
+
+        private static void EnsureRuntimeBinding(ScenarioEditorSession session)
+        {
+            if (session == null || session.WorkingDefinition == null)
+                return;
+
+            ShelteredScenarioRuntimeBindingManager.Instance.SetBinding(new ScenarioRuntimeBinding
+            {
+                ScenarioId = session.WorkingDefinition.Id,
+                VersionApplied = session.WorkingDefinition.Version,
+                IsActive = true,
+                IsConvertedToNormalSave = false,
+                DayCreated = GameTime.Day,
+                LastEditorSaveTick = Environment.TickCount
+            });
         }
 
         private static ScenarioDefinition CreateBlankDefinition(ScenarioBaseGameMode baseMode)
@@ -182,25 +230,12 @@ namespace ShelteredAPI.Scenarios
 
         private void PauseForEditor()
         {
-            if (PauseManager.isPaused || Time.timeScale == 0f)
-                return;
-
-            PauseManager.Pause();
-            if (!PauseManager.isPaused)
-                Time.timeScale = 0f;
-            _pausedByEditor = true;
+            ScenarioAuthoringPauseService.Instance.EnsurePaused("Scenario authoring active.");
         }
 
         private void ResumeFromEditor()
         {
-            if (!_pausedByEditor)
-                return;
-
-            if (PauseManager.isPaused)
-                PauseManager.Resume();
-            else if (Time.timeScale == 0f)
-                Time.timeScale = 1f;
-            _pausedByEditor = false;
+            ScenarioAuthoringPauseService.Instance.ReleasePause("Scenario authoring released simulation.");
         }
     }
 }
