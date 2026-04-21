@@ -422,9 +422,28 @@ public class CustomScenarioRegistration
     public string Version { get; set; }
     public int Order { get; set; }
     public string OwnerModId { get; set; }
+    public Assembly OwnerAssembly { get; set; }
     public LoadedModInfo[] RequiredMods { get; set; }
     public object Definition { get; set; }
     public CustomScenarioDefinitionFactory DefinitionFactory { get; set; }
+    public Action<CustomScenarioEventArgs> OnSelected { get; set; }
+    public Action<CustomScenarioEventArgs> OnSpawned { get; set; }
+    public object UserData { get; set; }
+}
+
+public interface IScenarioDependencyResolver
+{
+    bool IsLoaded(string modId);
+}
+
+public interface IScenarioDependencyVersionResolver : IScenarioDependencyResolver
+{
+    string GetLoadedVersion(string modId);
+}
+
+public static class ScenarioFrameworkVerification
+{
+    public static ScenarioValidationResult Run();
 }
 
 // ShelteredAPI.Scenarios class-based authoring helper

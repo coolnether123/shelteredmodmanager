@@ -234,6 +234,9 @@ Important distinction:
 - many public contracts are in `ModAPI`
 - `ShelteredAPI` usually supplies the concrete runtime behavior
 
+Related guide:
+- `documentation/Custom_Scenarios_Guide.md`
+
 ## 12. Recommended Reading Order
 
 1. `documentation/API_Signatures_Reference.md`

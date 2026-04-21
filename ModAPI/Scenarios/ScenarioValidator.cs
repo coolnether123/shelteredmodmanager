@@ -9,11 +9,22 @@ namespace ModAPI.Scenarios
         bool IsLoaded(string modId);
     }
 
-    public sealed class ModRegistryScenarioDependencyResolver : IScenarioDependencyResolver
+    public interface IScenarioDependencyVersionResolver : IScenarioDependencyResolver
+    {
+        string GetLoadedVersion(string modId);
+    }
+
+    public sealed class ModRegistryScenarioDependencyResolver : IScenarioDependencyVersionResolver
     {
         public bool IsLoaded(string modId)
         {
             return !string.IsNullOrEmpty(modId) && ModRegistry.GetMod(modId) != null;
+        }
+
+        public string GetLoadedVersion(string modId)
+        {
+            ModEntry loaded = !string.IsNullOrEmpty(modId) ? ModRegistry.GetMod(modId) : null;
+            return loaded != null ? loaded.Version : null;
         }
     }
 
@@ -73,13 +84,22 @@ namespace ModAPI.Scenarios
 
                 if (!string.IsNullOrEmpty(dependency.version))
                 {
-                    ModEntry loaded = ModRegistry.GetMod(dependency.modId);
-                    string activeVersion = loaded != null ? loaded.Version : null;
+                    string activeVersion = GetLoadedVersion(dependency.modId);
                     if (!string.Equals(activeVersion ?? string.Empty, dependency.version, StringComparison.OrdinalIgnoreCase))
                         result.AddError("Required dependency mod version mismatch: " + dependency.modId
                             + " requires " + dependency.version + " but active version is " + (activeVersion ?? "<unknown>") + ".");
                 }
             }
+        }
+
+        private string GetLoadedVersion(string modId)
+        {
+            IScenarioDependencyVersionResolver versionResolver = _dependencyResolver as IScenarioDependencyVersionResolver;
+            if (versionResolver != null)
+                return versionResolver.GetLoadedVersion(modId);
+
+            ModEntry loaded = !string.IsNullOrEmpty(modId) ? ModRegistry.GetMod(modId) : null;
+            return loaded != null ? loaded.Version : null;
         }
 
         private static void ValidateAssets(ScenarioDefinition definition, string scenarioFilePath, ScenarioValidationResult result)

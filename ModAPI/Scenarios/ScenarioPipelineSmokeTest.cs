@@ -123,11 +123,16 @@ namespace ModAPI.Scenarios
             }
         }
 
-        private sealed class NoDependencyWarnings : IScenarioDependencyResolver
+        private sealed class NoDependencyWarnings : IScenarioDependencyVersionResolver
         {
             public bool IsLoaded(string modId)
             {
                 return true;
+            }
+
+            public string GetLoadedVersion(string modId)
+            {
+                return null;
             }
         }
 

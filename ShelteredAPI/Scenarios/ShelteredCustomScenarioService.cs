@@ -17,6 +17,7 @@ namespace ShelteredAPI.Scenarios
         {
             public CustomScenarioRegistration Registration;
             public CustomScenarioInfo Info;
+            public bool IsDefinitionBacked;
         }
 
         private static readonly ShelteredCustomScenarioService _instance = new ShelteredCustomScenarioService();
@@ -61,6 +62,7 @@ namespace ShelteredAPI.Scenarios
         public void RefreshDefinitionCatalog()
         {
             _definitionCatalog.Refresh();
+            SyncDefinitionRegistrations();
         }
 
         public ScenarioInfo[] ListDefinitions()
@@ -291,6 +293,110 @@ namespace ShelteredAPI.Scenarios
             return true;
         }
 
+        private void SyncDefinitionRegistrations()
+        {
+            ScenarioInfo[] definitions = _definitionCatalog.ListAll();
+            Dictionary<string, ScenarioInfo> current = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < definitions.Length; i++)
+            {
+                if (definitions[i] != null && !string.IsNullOrEmpty(definitions[i].Id))
+                    current[definitions[i].Id] = definitions[i];
+            }
+
+            lock (_sync)
+            {
+                List<string> stale = new List<string>();
+                foreach (KeyValuePair<string, ScenarioRecord> pair in _registrations)
+                {
+                    if (pair.Value != null && pair.Value.IsDefinitionBacked && !current.ContainsKey(pair.Key))
+                        stale.Add(pair.Key);
+                }
+
+                for (int i = 0; i < stale.Count; i++)
+                    _registrations.Remove(stale[i]);
+
+                for (int i = 0; i < definitions.Length; i++)
+                {
+                    ScenarioInfo definition = definitions[i];
+                    if (definition == null || string.IsNullOrEmpty(definition.Id))
+                        continue;
+
+                    ScenarioRecord existing;
+                    if (_registrations.TryGetValue(definition.Id, out existing) && existing != null && !existing.IsDefinitionBacked)
+                        continue;
+
+                    ScenarioRecord record = CreateDefinitionRecord(definition);
+                    _registrations[definition.Id] = record;
+                    MirrorSaveScenarioDescriptor(record.Info);
+                }
+            }
+        }
+
+        private ScenarioRecord CreateDefinitionRecord(ScenarioInfo definition)
+        {
+            LoadedModInfo[] requiredMods = LoadDefinitionDependencies(definition.Id);
+            CustomScenarioRegistration registration = new CustomScenarioRegistration
+            {
+                Id = definition.Id,
+                DisplayName = TrimToNull(definition.DisplayName) ?? definition.Id,
+                Description = "XML scenario pack from " + (TrimToNull(definition.OwnerModId) ?? "loaded mod") + ".",
+                Version = TrimToNull(definition.Version) ?? "1.0",
+                OwnerModId = TrimToNull(definition.OwnerModId),
+                RequiredMods = ScenarioDependencyManifest.CloneRequiredMods(requiredMods),
+                DefinitionFactory = new CustomScenarioDefinitionFactory(
+                    delegate(CustomScenarioBuildContext context) { return BuildScenarioDefFromDefinition(definition.Id); })
+            };
+
+            ScenarioRecord record = CreateRecord(registration);
+            record.IsDefinitionBacked = true;
+            return record;
+        }
+
+        private ScenarioDef BuildScenarioDefFromDefinition(string scenarioId)
+        {
+            ScenarioDefinition definition;
+            string scenarioFilePath;
+            ScenarioValidationResult validation;
+            if (!TryLoadDefinition(scenarioId, out definition, out scenarioFilePath, out validation))
+                throw new InvalidOperationException("Scenario XML failed validation: " + FormatValidationIssues(validation));
+
+            ShelteredScenarioDefBuilder builder = new ShelteredScenarioDefBuilder()
+                .SetId(definition.Id)
+                .SetNameKey(!string.IsNullOrEmpty(definition.DisplayName) ? definition.DisplayName : definition.Id)
+                .SetDescriptionKey(definition.Description ?? string.Empty)
+                .UseInModes(
+                    definition.BaseGameMode == ScenarioBaseGameMode.Survival,
+                    definition.BaseGameMode == ScenarioBaseGameMode.Surrounded,
+                    definition.BaseGameMode == ScenarioBaseGameMode.Stasis)
+                .OnceOnly(false);
+
+            string stageId = definition.Id + ".main";
+            if (definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers.Count > 0
+                && !string.IsNullOrEmpty(definition.TriggersAndEvents.Triggers[0].Id))
+            {
+                stageId = definition.TriggersAndEvents.Triggers[0].Id;
+            }
+
+            builder.AddSimpleStage(stageId);
+            return builder.Build();
+        }
+
+        private static string FormatValidationIssues(ScenarioValidationResult validation)
+        {
+            if (validation == null || validation.Issues.Length == 0)
+                return "no details were provided.";
+
+            List<string> parts = new List<string>();
+            ScenarioValidationIssue[] issues = validation.Issues;
+            for (int i = 0; i < issues.Length; i++)
+            {
+                if (issues[i] != null)
+                    parts.Add(issues[i].Severity + ": " + issues[i].Message);
+            }
+
+            return string.Join("; ", parts.ToArray());
+        }
+
         internal bool MarkSpawned(string scenarioId)
         {
             ScenarioRecord record;
@@ -306,6 +412,7 @@ namespace ShelteredAPI.Scenarios
                 };
             }
 
+            ShelteredScenarioRuntimeBindingManager.Instance.SetBinding(CreateRuntimeBinding(record.Info));
             CustomScenarioEventArgs args = CreateArgs(CustomScenarioEventType.Spawned, record.Info);
             InvokeRegistrationCallback(record.Registration.OnSpawned, args, record.Info.Id, "OnSpawned");
             Raise(ScenarioSpawned, args);
@@ -409,8 +516,27 @@ namespace ShelteredAPI.Scenarios
             return new ScenarioRecord
             {
                 Registration = registration,
-                Info = info
+                Info = info,
+                IsDefinitionBacked = false
             };
+        }
+
+        private static ScenarioRuntimeBinding CreateRuntimeBinding(CustomScenarioInfo info)
+        {
+            return new ScenarioRuntimeBinding
+            {
+                ScenarioId = info != null ? info.Id : null,
+                VersionApplied = info != null ? info.Version : null,
+                IsActive = true,
+                IsConvertedToNormalSave = false,
+                DayCreated = GetCurrentDay()
+            };
+        }
+
+        private static int GetCurrentDay()
+        {
+            try { return GameTime.Day; }
+            catch { return 0; }
         }
 
         private CustomScenarioBuildContext PrepareBuildContext(ScenarioRecord record, CustomScenarioBuildContext context)

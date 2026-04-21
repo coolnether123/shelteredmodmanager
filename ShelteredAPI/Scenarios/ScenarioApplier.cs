@@ -18,6 +18,8 @@ namespace ShelteredAPI.Scenarios
         public int FamilyChanges { get; set; }
         public int InventoryChanges { get; set; }
         public int BunkerChanges { get; set; }
+        public int TriggerChanges { get; set; }
+        public int ConditionChanges { get; set; }
 
         public string[] Messages
         {
@@ -58,17 +60,8 @@ namespace ShelteredAPI.Scenarios
             FamilyApply(definition, result);
             InventoryApply(definition, result);
             BunkerVisualApply(definition, result);
-
-            if (definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers.Count > 0)
-            {
-                result.AddMessage("Triggers are parsed but not registered yet in this phase.");
-            }
-
-            if (definition.WinLossConditions != null
-                && (definition.WinLossConditions.WinConditions.Count > 0 || definition.WinLossConditions.LossConditions.Count > 0))
-            {
-                result.AddMessage("Win/loss conditions are parsed but not watched yet in this phase.");
-            }
+            TriggerApply(definition, result);
+            WinLossConditionApply(definition, result);
 
             LogResult(definition, result);
             return result;
@@ -157,14 +150,9 @@ namespace ShelteredAPI.Scenarios
                     result.FamilyChanges++;
                 }
 
-                if (config.Stats.Count > 0 || config.Traits.Count > 0 || config.Skills.Count > 0)
-                {
-                    // The v1 data model captures stats/traits/skills, but Sheltered applies
-                    // most of those through BaseStats and Traits internals that also drive
-                    // UI and save data. Renaming/gender changes are safe post-spawn; deeper
-                    // mutation needs a dedicated adapter so we do not corrupt live saves.
-                    result.AddMessage("Family stats/traits/skills parsed for '" + (config.Name ?? string.Empty) + "' but deferred to a dedicated character adapter.");
-                }
+                ApplyStats(member, config, result);
+                ApplyTraits(member, config, result);
+                ApplySkills(member, config, result);
             }
 
             if (definition.FamilySetup.OverrideVanillaFamily && definition.FamilySetup.Members.Count > members.Count)
@@ -257,14 +245,321 @@ namespace ShelteredAPI.Scenarios
                 }
             }
 
-            if (definition.BunkerEdits.ObjectPlacements.Count > 0)
-                result.AddMessage("Object placements are parsed but deferred until prefab resolution is wired to ContentRegistry/ObjectManager.");
+            ObjectPlacementApply(definition, result);
+        }
+
+        public void ObjectPlacementApply(ScenarioDefinition definition, ScenarioApplyResult result)
+        {
+            if (definition == null || definition.BunkerEdits == null || definition.BunkerEdits.ObjectPlacements.Count == 0)
+                return;
+
+            ObjectManager manager = ObjectManager.Instance;
+            if (manager == null)
+            {
+                result.AddMessage("ObjectManager is not ready; object placements skipped.");
+                return;
+            }
+
+            for (int i = 0; i < definition.BunkerEdits.ObjectPlacements.Count; i++)
+            {
+                ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
+                if (placement == null)
+                    continue;
+
+                if (!string.IsNullOrEmpty(placement.PrefabReference))
+                {
+                    result.AddMessage("Object placement #" + i + " uses PrefabReference '" + placement.PrefabReference
+                        + "' and is deferred because direct prefab-path instantiation is not safe for live saves.");
+                    continue;
+                }
+
+                ObjectManager.ObjectType objectType;
+                if (!TryParseObjectType(placement.DefinitionReference, out objectType))
+                {
+                    result.AddMessage("Object placement #" + i + " has unknown DefinitionReference: " + (placement.DefinitionReference ?? string.Empty));
+                    continue;
+                }
+
+                if (!manager.HasPrefab(objectType))
+                {
+                    result.AddMessage("Object placement #" + i + " skipped because ObjectManager has no prefab for " + objectType + ".");
+                    continue;
+                }
+
+                int level = GetIntProperty(placement.CustomProperties, "level", 1);
+                bool lockDeconstruct = GetBoolProperty(placement.CustomProperties, "lockDeconstruct", false);
+                bool movable = GetBoolProperty(placement.CustomProperties, "movable", true);
+                Vector2 position = new Vector2(
+                    placement.Position != null ? placement.Position.X : 0f,
+                    placement.Position != null ? placement.Position.Y : 0f);
+
+                Obj_Base spawned = manager.SpawnObject(objectType, level, position, lockDeconstruct, movable);
+                if (spawned == null)
+                {
+                    result.AddMessage("Object placement #" + i + " failed to spawn " + objectType + " at " + position.x + "," + position.y + ".");
+                    continue;
+                }
+
+                if (placement.Rotation != null)
+                    spawned.transform.eulerAngles = new Vector3(placement.Rotation.X, placement.Rotation.Y, placement.Rotation.Z);
+
+                result.BunkerChanges++;
+            }
+        }
+
+        public void TriggerApply(ScenarioDefinition definition, ScenarioApplyResult result)
+        {
+            if (definition == null || definition.TriggersAndEvents == null || definition.TriggersAndEvents.Triggers.Count == 0)
+                return;
+
+            for (int i = 0; i < definition.TriggersAndEvents.Triggers.Count; i++)
+            {
+                TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
+                if (trigger == null)
+                    continue;
+
+                string type = trigger.Type ?? string.Empty;
+                result.AddMessage("Trigger '" + (trigger.Id ?? ("#" + i)) + "' of type '" + type
+                    + "' is deferred because the XML schema does not yet define a safe runtime action target to invoke.");
+            }
+        }
+
+        public void WinLossConditionApply(ScenarioDefinition definition, ScenarioApplyResult result)
+        {
+            if (definition == null || definition.WinLossConditions == null)
+                return;
+
+            ApplyConditionList(definition.WinLossConditions.WinConditions, "win", result);
+            ApplyConditionList(definition.WinLossConditions.LossConditions, "loss", result);
+        }
+
+        private static void ApplyStats(FamilyMember member, FamilyMemberConfig config, ScenarioApplyResult result)
+        {
+            if (member == null || config == null || config.Stats.Count == 0 || member.BaseStats == null)
+                return;
+
+            for (int i = 0; i < config.Stats.Count; i++)
+            {
+                StatOverride stat = config.Stats[i];
+                if (stat == null)
+                    continue;
+
+                BaseStats.StatType statType;
+                if (!TryParseStatType(stat.StatId, out statType))
+                {
+                    result.AddMessage("Unknown stat id skipped for '" + (config.Name ?? member.firstName) + "': " + (stat.StatId ?? string.Empty));
+                    continue;
+                }
+
+                BaseStat target = member.BaseStats.GetStatByEnum(statType);
+                if (target == null)
+                {
+                    result.AddMessage("Stat target was unavailable for '" + (config.Name ?? member.firstName) + "': " + statType + ".");
+                    continue;
+                }
+
+                int level = Mathf.Clamp(stat.Value, 0, 20);
+                target.SetInitialLevel(level, 20);
+                result.FamilyChanges++;
+            }
+        }
+
+        private static void ApplyTraits(FamilyMember member, FamilyMemberConfig config, ScenarioApplyResult result)
+        {
+            if (member == null || config == null || config.Traits.Count == 0 || member.traits == null)
+                return;
+
+            for (int i = 0; i < config.Traits.Count; i++)
+            {
+                string traitId = config.Traits[i];
+                Traits.Strength strength;
+                if (TryParseStrengthTrait(traitId, out strength))
+                {
+                    if (member.traits.AddStrength(strength))
+                        result.FamilyChanges++;
+                    else
+                        result.AddMessage("Strength trait was already active or blocked by its paired weakness: " + traitId);
+                    continue;
+                }
+
+                Traits.Weakness weakness;
+                if (TryParseWeaknessTrait(traitId, out weakness))
+                {
+                    if (member.traits.AddWeakness(weakness, true))
+                        result.FamilyChanges++;
+                    else
+                        result.AddMessage("Weakness trait was already active or blocked by its paired strength: " + traitId);
+                    continue;
+                }
+
+                result.AddMessage("Unknown trait id skipped for '" + (config.Name ?? member.firstName) + "': " + (traitId ?? string.Empty));
+            }
+        }
+
+        private static void ApplySkills(FamilyMember member, FamilyMemberConfig config, ScenarioApplyResult result)
+        {
+            if (member == null || config == null || config.Skills.Count == 0)
+                return;
+
+            for (int i = 0; i < config.Skills.Count; i++)
+            {
+                SkillOverride skill = config.Skills[i];
+                if (skill == null)
+                    continue;
+
+                result.AddMessage("Skill '" + (skill.SkillId ?? string.Empty) + "' level " + skill.Level
+                    + " for '" + (config.Name ?? member.firstName)
+                    + "' is deferred because Sheltered exposes no stable runtime skill/save API comparable to BaseStats or Traits.");
+            }
+        }
+
+        private static void ApplyConditionList(List<ConditionDef> conditions, string outcome, ScenarioApplyResult result)
+        {
+            if (conditions == null || conditions.Count == 0)
+                return;
+
+            for (int i = 0; i < conditions.Count; i++)
+            {
+                ConditionDef condition = conditions[i];
+                if (condition == null)
+                    continue;
+
+                result.AddMessage(outcome + " condition '" + (condition.Id ?? ("#" + i)) + "' of type '" + (condition.Type ?? string.Empty)
+                    + "' is deferred because active scenario bindings do not yet persist the spawned QuestInstance id needed to complete/fail the scenario safely.");
+            }
+        }
+
+        private static bool TryParseStatType(string value, out BaseStats.StatType statType)
+        {
+            statType = BaseStats.StatType.Max;
+            string trimmed = TrimToNull(value);
+            if (trimmed == null)
+                return false;
+
+            try
+            {
+                object parsed = Enum.Parse(typeof(BaseStats.StatType), trimmed, true);
+                statType = (BaseStats.StatType)parsed;
+                return statType != BaseStats.StatType.Max;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryParseStrengthTrait(string value, out Traits.Strength strength)
+        {
+            strength = Traits.Strength.Max;
+            string trimmed = TrimTraitPrefix(value, "Strength:");
+            if (trimmed == null)
+                return false;
+
+            try
+            {
+                object parsed = Enum.Parse(typeof(Traits.Strength), trimmed, true);
+                strength = (Traits.Strength)parsed;
+                return strength != Traits.Strength.Max;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryParseWeaknessTrait(string value, out Traits.Weakness weakness)
+        {
+            weakness = Traits.Weakness.Max;
+            string trimmed = TrimTraitPrefix(value, "Weakness:");
+            if (trimmed == null)
+                return false;
+
+            try
+            {
+                object parsed = Enum.Parse(typeof(Traits.Weakness), trimmed, true);
+                weakness = (Traits.Weakness)parsed;
+                return weakness != Traits.Weakness.Max;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryParseObjectType(string value, out ObjectManager.ObjectType objectType)
+        {
+            objectType = ObjectManager.ObjectType.Undefined;
+            string trimmed = TrimToNull(value);
+            if (trimmed == null)
+                return false;
+
+            try
+            {
+                object parsed = Enum.Parse(typeof(ObjectManager.ObjectType), trimmed, true);
+                objectType = (ObjectManager.ObjectType)parsed;
+                return objectType != ObjectManager.ObjectType.Undefined && objectType != ObjectManager.ObjectType.Max;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string TrimTraitPrefix(string value, string prefix)
+        {
+            string trimmed = TrimToNull(value);
+            if (trimmed == null)
+                return null;
+
+            if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return TrimToNull(trimmed.Substring(prefix.Length));
+
+            return trimmed.IndexOf(':') >= 0 ? null : trimmed;
+        }
+
+        private static int GetIntProperty(List<ScenarioProperty> properties, string key, int fallback)
+        {
+            string value = GetProperty(properties, key);
+            int parsed;
+            return !string.IsNullOrEmpty(value) && int.TryParse(value, out parsed) ? parsed : fallback;
+        }
+
+        private static bool GetBoolProperty(List<ScenarioProperty> properties, string key, bool fallback)
+        {
+            string value = GetProperty(properties, key);
+            bool parsed;
+            return !string.IsNullOrEmpty(value) && bool.TryParse(value, out parsed) ? parsed : fallback;
+        }
+
+        private static string GetProperty(List<ScenarioProperty> properties, string key)
+        {
+            if (properties == null || string.IsNullOrEmpty(key))
+                return null;
+
+            for (int i = 0; i < properties.Count; i++)
+            {
+                ScenarioProperty property = properties[i];
+                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
+                    return property.Value;
+            }
+
+            return null;
+        }
+
+        private static string TrimToNull(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return null;
+
+            string trimmed = value.Trim();
+            return trimmed.Length == 0 ? null : trimmed;
         }
 
         private static void LogResult(ScenarioDefinition definition, ScenarioApplyResult result)
         {
             MMLog.WriteInfo("[ShelteredScenarioApplier] Applied scenario '" + definition.Id + "': familyChanges="
-                + result.FamilyChanges + ", inventoryChanges=" + result.InventoryChanges + ", bunkerChanges=" + result.BunkerChanges + ".");
+                + result.FamilyChanges + ", inventoryChanges=" + result.InventoryChanges + ", bunkerChanges=" + result.BunkerChanges
+                + ", triggerChanges=" + result.TriggerChanges + ", conditionChanges=" + result.ConditionChanges + ".");
 
             string[] messages = result.Messages;
             for (int i = 0; i < messages.Length; i++)
