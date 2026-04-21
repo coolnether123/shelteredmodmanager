@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Core;
+using ModAPI.Scenarios;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 

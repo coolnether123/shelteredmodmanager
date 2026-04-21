@@ -41,12 +41,7 @@ namespace ShelteredAPI.Scenarios
 
             switch (button)
             {
-                case PlatformInput.InputButton.Action:
-                case PlatformInput.InputButton.Interact:
-                case PlatformInput.InputButton.GoHere:
-                case PlatformInput.InputButton.Context:
                 case PlatformInput.InputButton.Cancel:
-                case PlatformInput.InputButton.Focus:
                 case PlatformInput.InputButton.CancelJob:
                 case PlatformInput.InputButton.NextChar:
                 case PlatformInput.InputButton.PrevChar:

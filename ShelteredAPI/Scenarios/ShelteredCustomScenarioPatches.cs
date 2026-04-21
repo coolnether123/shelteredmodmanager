@@ -294,6 +294,49 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
+    [PatchPolicy(PatchDomain.Scenarios, "ScenarioAuthoringPauseOwnership",
+        TargetBehavior = "Scenario authoring owns pause without allowing the vanilla pause panel/menu stack to reopen.",
+        FailureMode = "Authoring pause can route back through the vanilla pause flow and reopen the pause menu panel.",
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring pause ownership patch host.")]
+    internal static class ScenarioAuthoringPauseOwnershipPatches
+    {
+        [HarmonyPatch(typeof(PauseManager), "Pause")]
+        [HarmonyPrefix]
+        private static bool PausePrefix()
+        {
+            if (!ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation())
+                return true;
+
+            ScenarioAuthoringPauseService.Instance.EnsurePaused("Vanilla pause request intercepted while scenario authoring owned the shelter scene.");
+            return false;
+        }
+
+        [HarmonyPatch(typeof(PauseManager), "Resume")]
+        [HarmonyPrefix]
+        private static bool ResumePrefix()
+        {
+            if (!ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation())
+                return true;
+
+            MMLog.WriteInfo("[ScenarioAuthoringPause] Ignored vanilla resume request while scenario authoring owned the pause state.");
+            return false;
+        }
+
+        [HarmonyPatch(typeof(UIPanelManager), "PushPanel", new[] { typeof(BasePanel) })]
+        [HarmonyPrefix]
+        private static bool PushPanelPrefix(BasePanel panel)
+        {
+            if (!ScenarioAuthoringPauseService.Instance.ShouldSuppressPauseMenu())
+                return true;
+
+            if (!ScenarioAuthoringPauseService.Instance.IsPauseMenuPanel(panel))
+                return true;
+
+            MMLog.WriteInfo("[ScenarioAuthoringPause] Suppressed UIPanelManager.PushPanel for the vanilla pause menu while authoring.");
+            return false;
+        }
+    }
+
     [PatchPolicy(PatchDomain.Scenarios, "ShelteredScenarioDefinitionApply",
         TargetBehavior = "Active scenario definitions are applied after save load once the Sheltered world is ready.",
         FailureMode = "A scenario-bound save loads as vanilla until the next successful scenario apply.",
