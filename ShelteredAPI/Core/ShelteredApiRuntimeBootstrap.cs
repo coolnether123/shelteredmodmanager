@@ -27,7 +27,6 @@ namespace ShelteredAPI.Core
 
                 ScenarioAuthoringInputActions.EnsureRegistered();
                 ScenarioAuthoringRuntimeDriver.EnsureCreated();
-                ShelteredInputActions.EnsureRegistered();
                 ShelteredVanillaInputActions.EnsureRegistered();
                 ShelteredKeybindsProvider.Instance.EnsureLoaded();
                 ScrollInputService.RegisterSource(UnityScrollInputSource.Instance);
