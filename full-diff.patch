@@ -1,0 +1,223 @@
+diff --git a/ModAPI/Core/IGameHelper.cs b/ModAPI/Core/IGameHelper.cs
+index b4aa593..fc312f1 100644
+--- a/ModAPI/Core/IGameHelper.cs
++++ b/ModAPI/Core/IGameHelper.cs
+@@ -38,6 +38,7 @@ namespace ModAPI.Core
+         public const string ActorSimulation = "GameRuntime.ActorSimulation";
+         public const string ActorEvents = "GameRuntime.ActorEvents";
+         public const string ActorSerialization = "GameRuntime.ActorSerialization";
++        public const string CustomScenarios = "GameRuntime.CustomScenarios";
+     }
+ 
+     /// <summary>
+diff --git a/ModAPI/Harmony/PatchRegistry.cs b/ModAPI/Harmony/PatchRegistry.cs
+index 312ee5b..396d311 100644
+--- a/ModAPI/Harmony/PatchRegistry.cs
++++ b/ModAPI/Harmony/PatchRegistry.cs
+@@ -22,7 +22,8 @@ namespace ModAPI.Harmony
+         Events,
+         Interactions,
+         Characters,
+-        World
++        World,
++        Scenarios
+     }
+ 
+     /// <summary>
+diff --git a/ModAPI/ModAPI.csproj b/ModAPI/ModAPI.csproj
+index 6159a60..d68376d 100644
+--- a/ModAPI/ModAPI.csproj
++++ b/ModAPI/ModAPI.csproj
+@@ -51,6 +51,7 @@
+     </Reference>
+     <Reference Include="System.Core" />
+     <Reference Include="System" />
++    <Reference Include="System.Xml" />
+     <Reference Include="System.Web.Extensions" />
+     <Reference Include="UnityEngine">
+       <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+@@ -91,6 +92,16 @@
+     <Compile Include="Core\SharedAssemblyResolver.cs" />
+     <Compile Include="Core\LoggerExtensions.cs" />
+     <Compile Include="Core\ContextExtensions.cs" />
++    <Compile Include="Scenarios\CustomScenarioContracts.cs" />
++    <Compile Include="Scenarios\ICustomScenarioService.cs" />
++    <Compile Include="Scenarios\ScenarioCatalog.cs" />
++    <Compile Include="Scenarios\ScenarioDefinition.cs" />
++    <Compile Include="Scenarios\ScenarioDefinitionSerializer.cs" />
++    <Compile Include="Scenarios\ScenarioLoader.cs" />
++    <Compile Include="Scenarios\ScenarioPipelineSmokeTest.cs" />
++    <Compile Include="Scenarios\ScenarioRuntimeBinding.cs" />
++    <Compile Include="Scenarios\ScenarioValidator.cs" />
++    <Compile Include="Scenarios\ValidationResult.cs" />
+     <Compile Include="Input\InputBinding.cs" />
+     <Compile Include="Input\ModInputAction.cs" />
+     <Compile Include="Input\InputActionRegistry.cs" />
+diff --git a/ShelteredAPI/Core/ShelteredApiRuntimeBootstrap.cs b/ShelteredAPI/Core/ShelteredApiRuntimeBootstrap.cs
+index d13fbe7..3ae5644 100644
+--- a/ShelteredAPI/Core/ShelteredApiRuntimeBootstrap.cs
++++ b/ShelteredAPI/Core/ShelteredApiRuntimeBootstrap.cs
+@@ -1,7 +1,9 @@
+ using ModAPI.Core;
+ using ModAPI.Actors;
+ using ModAPI.InputServices;
++using ModAPI.Scenarios;
+ using ShelteredAPI.Input;
++using ShelteredAPI.Scenarios;
+ using UnityEngine;
+ 
+ namespace ShelteredAPI.Core
+@@ -75,6 +77,12 @@ namespace ShelteredAPI.Core
+             RegisterApi("ShelteredAPI.ActorEvents", (IActorEvents)actors);
+             RegisterApi(GameRuntimeApiIds.ActorSerialization, (IActorSerializationService)actors);
+             RegisterApi("ShelteredAPI.ActorSerialization", (IActorSerializationService)actors);
++
++            ICustomScenarioService customScenarios = ShelteredCustomScenarioService.Instance;
++            ShelteredScenarioRuntimeBindingManager.Instance.EnsureHooked();
++            ShelteredCustomScenarioService.Instance.RefreshDefinitionCatalog();
++            RegisterApi(GameRuntimeApiIds.CustomScenarios, customScenarios);
++            RegisterApi("ShelteredAPI.CustomScenarios", customScenarios);
+         }
+ 
+         private static void RegisterApi<T>(string apiId, T implementation) where T : class
+diff --git a/ShelteredAPI/ShelteredAPI.csproj b/ShelteredAPI/ShelteredAPI.csproj
+index 602d599..a3f4735 100644
+--- a/ShelteredAPI/ShelteredAPI.csproj
++++ b/ShelteredAPI/ShelteredAPI.csproj
+@@ -73,6 +73,17 @@
+     <Compile Include="Harmony\SettingsInputModePromptPatches.cs" />
+     <Compile Include="Harmony\SettingsKeybindsButtonPatches.cs" />
+     <Compile Include="Interactions\ObjectButtonInjector.cs" />
++    <Compile Include="Scenarios\IShelteredCustomScenario.cs" />
++    <Compile Include="Scenarios\ScenarioApplier.cs" />
++    <Compile Include="Scenarios\ScenarioEditorController.cs" />
++    <Compile Include="Scenarios\ScenarioEditorSession.cs" />
++    <Compile Include="Scenarios\ScenarioValidatorImpl.cs" />
++    <Compile Include="Scenarios\ScenarioWorldReady.cs" />
++    <Compile Include="Scenarios\ShelteredCustomScenarioPatches.cs" />
++    <Compile Include="Scenarios\ShelteredScenarioRuntimeBindingManager.cs" />
++    <Compile Include="Scenarios\ShelteredCustomScenarioService.cs" />
++    <Compile Include="Scenarios\ShelteredScenarioDefBuilder.cs" />
++    <Compile Include="Scenarios\ShelteredScenarioRegistration.cs" />
+     <Compile Include="Input\ShelteredTouchpadInputRouter.cs" />
+     <Compile Include="Input\ShelteredInputActions.cs" />
+     <Compile Include="Input\ShelteredVanillaInputActions.cs" />
+diff --git a/documentation/API_Signatures_Reference.md b/documentation/API_Signatures_Reference.md
+index f53f77a..7433408 100644
+--- a/documentation/API_Signatures_Reference.md
++++ b/documentation/API_Signatures_Reference.md
+@@ -392,6 +392,57 @@ public static bool IsAPIRegistered(string apiName);
+ public static bool UnregisterAPI(string apiName, string providerModId = null);
+ public static List<string> GetRegisteredAPIs();
+ 
++// ModAPI.Scenarios.ICustomScenarioService
++public static class GameRuntimeApiIds
++{
++    public const string CustomScenarios = "GameRuntime.CustomScenarios";
++}
++
++public interface ICustomScenarioService
++{
++    event Action<CustomScenarioEventArgs> ScenarioRegistered;
++    event Action<CustomScenarioEventArgs> ScenarioUnregistered;
++    event Action<CustomScenarioEventArgs> ScenarioSelected;
++    event Action<CustomScenarioEventArgs> ScenarioSpawned;
++    event Action<CustomScenarioEventArgs> StateChanged;
++
++    CustomScenarioState CurrentState { get; }
++    CustomScenarioRegistrationResult Register(CustomScenarioRegistration registration);
++    bool Unregister(string scenarioId);
++    bool TryGet(string scenarioId, out CustomScenarioInfo scenario);
++    CustomScenarioInfo[] List();
++    bool TryCreateDefinition(string scenarioId, CustomScenarioBuildContext context, out object definition, out string errorMessage);
++}
++
++// ShelteredAPI.Scenarios class-based authoring helper
++public interface IShelteredCustomScenario
++{
++    string Id { get; }
++    string DisplayName { get; }
++    string Description { get; }
++    string Version { get; }
++    int Order { get; }
++    object UserData { get; }
++    ScenarioDef BuildDefinition(CustomScenarioBuildContext context);
++    void OnSelected(CustomScenarioEventArgs args);
++    void OnSpawned(CustomScenarioEventArgs args);
++}
++
++public abstract class ShelteredCustomScenarioBase : IShelteredCustomScenario
++{
++    public abstract string Id { get; }
++    public abstract string DisplayName { get; }
++    public virtual string Description { get; }
++    public virtual string Version { get; }
++    public virtual int Order { get; }
++    public virtual object UserData { get; }
++    public abstract ScenarioDef BuildDefinition(CustomScenarioBuildContext context);
++    public virtual void OnSelected(CustomScenarioEventArgs args);
++    public virtual void OnSpawned(CustomScenarioEventArgs args);
++    public CustomScenarioRegistration ToRegistration();
++    public CustomScenarioRegistrationResult Register();
++}
++
+ // ModAPI.Core.ModRegistry
+ public static bool Find(string modId);
+ public static ModEntry GetMod(string modId);
+diff --git a/documentation/ShelteredAPI_Guide.md b/documentation/ShelteredAPI_Guide.md
+index f4afa8a..fb99931 100644
+--- a/documentation/ShelteredAPI_Guide.md
++++ b/documentation/ShelteredAPI_Guide.md
+@@ -21,6 +21,7 @@ Content-specific guidance: `documentation/ShelteredAPI_Content_Guide.md`.
+   - `ShelteredAPI.ActorSerialization`
+ - Sheltered-specific UI and input helpers under `ShelteredAPI.*`
+ - Sheltered-specific content registration and runtime injection under `ShelteredAPI.Content`
++- Sheltered-specific custom scenario authoring and runtime hooks under `ShelteredAPI.Scenarios`
+ 
+ ## 2. Referencing It
+ 
+@@ -36,8 +37,10 @@ Common imports:
+ using ModAPI.Core;
+ using ModAPI.Events;
+ using ModAPI.Actors;
++using ModAPI.Scenarios;
+ using ShelteredAPI.Adapters;
+ using ShelteredAPI.Content;
++using ShelteredAPI.Scenarios;
+ ```
+ 
+ ## 3. Usage Example
+@@ -71,6 +74,25 @@ public class MyPlugin : IModPlugin
+             priority: 50,
+             cadence: TimeTriggerCadence.SixHour,
+             callback: batch => ctx.Log.Info("Tick seq=" + batch.Sequence + " day=" + batch.Day));
++
++        ICustomScenarioService scenarios;
++        if (ModAPIRegistry.TryGetAPI(GameRuntimeApiIds.CustomScenarios, out scenarios))
++            scenarios.Register(new LongRoadScenario().ToRegistration());
++    }
++}
++
++public sealed class LongRoadScenario : ShelteredCustomScenarioBase
++{
++    public override string Id { get { return "com.mymod.scenario.longroad"; } }
++    public override string DisplayName { get { return "The Long Road"; } }
++    public override string Description { get { return "Gather resources and survive the long road."; } }
++
++    public override ScenarioDef BuildDefinition(CustomScenarioBuildContext context)
++    {
++        return CreateDefinition()
++            .UseInModes(true, false, false)
++            .AddSimpleStage("longroad_intro")
++            .Build();
+     }
+ }
+ ```
+@@ -80,6 +102,7 @@ public class MyPlugin : IModPlugin
+ - scheduler/events compatibility surfaces such as `GameEvents` and `GameTimeTriggerHelper` are hosted in `ModAPI.dll` in the 1.3 line
+ - actor contracts live in `ModAPI.Actors`; `ShelteredAPI` provides the default runtime implementation
+ - item, recipe, loot, asset, and content-localization APIs live in `ShelteredAPI.Content`
++- custom scenario contracts live in `ModAPI.Scenarios`; Sheltered `ScenarioDef` creation and in-game hooks live in `ShelteredAPI.Scenarios`
+ - the content injector is manager-scoped and will rebind when a new family/session recreates Sheltered runtime managers
+ - register triggers and runtime behavior in `Start(...)`, not constructors
+ - use unique IDs for triggers, actor bindings, components, and adapters

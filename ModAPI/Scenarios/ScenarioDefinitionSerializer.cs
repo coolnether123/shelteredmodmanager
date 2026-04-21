@@ -86,7 +86,7 @@ namespace ModAPI.Scenarios
         private static ScenarioDefinition ReadDocument(XmlDocument document)
         {
             if (document == null || document.DocumentElement == null || document.DocumentElement.Name != "Scenario")
-                throw new InvalidDataException("Scenario XML must have a <Scenario> root element.");
+                throw new FormatException("Scenario XML must have a <Scenario> root element.");
 
             XmlElement root = document.DocumentElement;
             ScenarioDefinition definition = new ScenarioDefinition();
