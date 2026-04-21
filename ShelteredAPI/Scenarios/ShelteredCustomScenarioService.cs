@@ -28,6 +28,7 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioCatalog _definitionCatalog;
         private readonly ScenarioLoader _definitionLoader;
         private readonly ScenarioValidatorImpl _definitionValidator;
+        private readonly ScenarioAuthoringDraftRepository _draftRepository;
 
         public static ShelteredCustomScenarioService Instance
         {
@@ -57,6 +58,7 @@ namespace ShelteredAPI.Scenarios
             _definitionCatalog = new ScenarioCatalog(new ModRegistryScenarioModFolderSource(), _definitionSerializer);
             _definitionValidator = new ScenarioValidatorImpl();
             _definitionLoader = new ScenarioLoader(_definitionCatalog, _definitionSerializer, new ScenarioValidator());
+            _draftRepository = ScenarioAuthoringDraftRepository.Instance;
         }
 
         public void RefreshDefinitionCatalog()
@@ -67,13 +69,13 @@ namespace ShelteredAPI.Scenarios
 
         public ScenarioInfo[] ListDefinitions()
         {
-            return _definitionLoader.ListAll();
+            return GetAllDefinitionInfos();
         }
 
         public ScenarioValidationResult ValidateDefinition(string scenarioId)
         {
             ScenarioInfo info;
-            if (!_definitionCatalog.TryGet(scenarioId, out info) || info == null)
+            if (!TryGetDefinitionInfo(scenarioId, out info) || info == null)
             {
                 ScenarioValidationResult missing = new ScenarioValidationResult();
                 missing.AddError("Scenario is not indexed: " + scenarioId);
@@ -100,7 +102,7 @@ namespace ShelteredAPI.Scenarios
             validation = new ScenarioValidationResult();
 
             ScenarioInfo info;
-            if (!_definitionCatalog.TryGet(scenarioId, out info) || info == null)
+            if (!TryGetDefinitionInfo(scenarioId, out info) || info == null)
             {
                 validation.AddError("Scenario is not indexed: " + scenarioId);
                 return false;
@@ -295,7 +297,7 @@ namespace ShelteredAPI.Scenarios
 
         private void SyncDefinitionRegistrations()
         {
-            ScenarioInfo[] definitions = _definitionCatalog.ListAll();
+            ScenarioInfo[] definitions = GetAllDefinitionInfos();
             Dictionary<string, ScenarioInfo> current = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < definitions.Length; i++)
             {
@@ -578,7 +580,7 @@ namespace ShelteredAPI.Scenarios
             try
             {
                 ScenarioInfo info;
-                if (!_definitionCatalog.TryGet(scenarioId, out info) || info == null)
+                if (!TryGetDefinitionInfo(scenarioId, out info) || info == null)
                     return new LoadedModInfo[0];
 
                 ScenarioDefinition definition = _definitionSerializer.Load(info.FilePath);
@@ -589,6 +591,59 @@ namespace ShelteredAPI.Scenarios
                 MMLog.WriteWarning("[ShelteredCustomScenarioService] Failed to load dependency manifest for '" + scenarioId + "': " + ex.Message);
                 return new LoadedModInfo[0];
             }
+        }
+
+        private bool TryGetDefinitionInfo(string scenarioId, out ScenarioInfo info)
+        {
+            info = null;
+            if (string.IsNullOrEmpty(scenarioId))
+                return false;
+
+            if (_definitionCatalog.TryGet(scenarioId, out info) && info != null)
+                return true;
+
+            return _draftRepository.TryGet(scenarioId, out info) && info != null;
+        }
+
+        private ScenarioInfo[] GetAllDefinitionInfos()
+        {
+            List<ScenarioInfo> combined = new List<ScenarioInfo>();
+            Dictionary<string, ScenarioInfo> byId = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
+            AddDefinitionInfos(byId, _definitionCatalog.ListAll());
+            AddDefinitionInfos(byId, _draftRepository.ListAll());
+
+            foreach (KeyValuePair<string, ScenarioInfo> pair in byId)
+                combined.Add(pair.Value);
+
+            combined.Sort(CompareScenarioDefinitionInfo);
+            return combined.ToArray();
+        }
+
+        private static void AddDefinitionInfos(Dictionary<string, ScenarioInfo> target, ScenarioInfo[] source)
+        {
+            if (target == null || source == null)
+                return;
+
+            for (int i = 0; i < source.Length; i++)
+            {
+                ScenarioInfo info = source[i];
+                if (info == null || string.IsNullOrEmpty(info.Id) || target.ContainsKey(info.Id))
+                    continue;
+
+                target[info.Id] = info;
+            }
+        }
+
+        private static int CompareScenarioDefinitionInfo(ScenarioInfo left, ScenarioInfo right)
+        {
+            if (ReferenceEquals(left, right)) return 0;
+            if (left == null) return 1;
+            if (right == null) return -1;
+
+            int name = string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
+            if (name != 0) return name;
+
+            return string.Compare(left.Id, right.Id, StringComparison.OrdinalIgnoreCase);
         }
 
         private static int CompareScenarioInfo(CustomScenarioInfo left, CustomScenarioInfo right)

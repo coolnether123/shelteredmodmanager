@@ -25,6 +25,8 @@ namespace ShelteredAPI.Core
             {
                 if (_initialized) return;
 
+                ScenarioAuthoringInputActions.EnsureRegistered();
+                ScenarioAuthoringRuntimeDriver.EnsureCreated();
                 ShelteredInputActions.EnsureRegistered();
                 ShelteredVanillaInputActions.EnsureRegistered();
                 ShelteredKeybindsProvider.Instance.EnsureLoaded();
@@ -79,10 +81,13 @@ namespace ShelteredAPI.Core
             RegisterApi("ShelteredAPI.ActorSerialization", (IActorSerializationService)actors);
 
             ICustomScenarioService customScenarios = ShelteredCustomScenarioService.Instance;
+            IScenarioAuthoringBackend scenarioAuthoring = ScenarioAuthoringBackendService.Instance;
             ShelteredScenarioRuntimeBindingManager.Instance.EnsureHooked();
             ShelteredCustomScenarioService.Instance.RefreshDefinitionCatalog();
             RegisterApi(GameRuntimeApiIds.CustomScenarios, customScenarios);
             RegisterApi("ShelteredAPI.CustomScenarios", customScenarios);
+            RegisterApi(GameRuntimeApiIds.ScenarioAuthoring, scenarioAuthoring);
+            RegisterApi("ShelteredAPI.ScenarioAuthoring", scenarioAuthoring);
         }
 
         private static void RegisterApi<T>(string apiId, T implementation) where T : class

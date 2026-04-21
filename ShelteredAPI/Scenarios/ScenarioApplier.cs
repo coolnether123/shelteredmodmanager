@@ -20,6 +20,7 @@ namespace ShelteredAPI.Scenarios
         public int BunkerChanges { get; set; }
         public int TriggerChanges { get; set; }
         public int ConditionChanges { get; set; }
+        public int SpriteSwapChanges { get; set; }
 
         public string[] Messages
         {
@@ -62,6 +63,7 @@ namespace ShelteredAPI.Scenarios
             BunkerVisualApply(definition, result);
             TriggerApply(definition, result);
             WinLossConditionApply(definition, result);
+            ScenarioSpriteSwapService.Instance.Activate(definition, scenarioFilePath, result);
 
             LogResult(definition, result);
             return result;
@@ -559,7 +561,8 @@ namespace ShelteredAPI.Scenarios
         {
             MMLog.WriteInfo("[ShelteredScenarioApplier] Applied scenario '" + definition.Id + "': familyChanges="
                 + result.FamilyChanges + ", inventoryChanges=" + result.InventoryChanges + ", bunkerChanges=" + result.BunkerChanges
-                + ", triggerChanges=" + result.TriggerChanges + ", conditionChanges=" + result.ConditionChanges + ".");
+                + ", triggerChanges=" + result.TriggerChanges + ", conditionChanges=" + result.ConditionChanges
+                + ", spriteSwapChanges=" + result.SpriteSwapChanges + ".");
 
             string[] messages = result.Messages;
             for (int i = 0; i < messages.Length; i++)

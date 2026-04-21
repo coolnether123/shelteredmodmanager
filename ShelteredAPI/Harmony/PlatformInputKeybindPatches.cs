@@ -3,6 +3,7 @@ using ModAPI.Core;
 using ModAPI.Harmony;
 using ModAPI.InputActions;
 using ShelteredAPI.Input;
+using ShelteredAPI.Scenarios;
 using UnityEngine;
 
 namespace ShelteredAPI.Harmony
@@ -125,6 +126,15 @@ namespace ShelteredAPI.Harmony
 
         private static bool TryResolveInputButton(PlatformInput.InputButton button, KeyState state, ref bool result)
         {
+            // Scenario authoring uses the same mouse buttons as Sheltered's world controls.
+            // If those buttons leak into vanilla gameplay, selecting a target also issues
+            // move/orders to survivors. Keep the editor in exclusive control until playtest.
+            if (ScenarioAuthoringRuntimeGuards.ShouldBlockGameplayButton(button))
+            {
+                result = false;
+                return true;
+            }
+
             InputBinding binding;
             if (!ShelteredVanillaInputActions.TryGetBinding(button, out binding))
                 return false;
