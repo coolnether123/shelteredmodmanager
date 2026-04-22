@@ -24,8 +24,9 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
+            ScenarioAuthoringTarget hovered = null;
             bool selectionMode = ScenarioAuthoringRuntimeGuards.ShouldResolveSelection()
-                && ScenarioAuthoringInputActions.IsSelectionModifierHeld();
+                && (ScenarioAuthoringInputActions.IsSelectionModifierHeld() || IsAddSelectionHeld());
             bool changed = state.SelectionModeActive != selectionMode;
             state.SelectionModeActive = selectionMode;
 
@@ -39,7 +40,6 @@ namespace ShelteredAPI.Scenarios
             }
             else
             {
-                ScenarioAuthoringTarget hovered;
                 if (TryResolveHoveredTarget(out hovered))
                 {
                     if (!AreSameTarget(state.HoveredTarget, hovered))
@@ -54,22 +54,27 @@ namespace ShelteredAPI.Scenarios
                     changed = true;
                 }
 
-                if (ScenarioAuthoringInputActions.IsConfirmSelectionDown() && hovered != null && !AreSameTarget(state.SelectedTarget, hovered))
-                {
-                    state.SelectedTarget = hovered.Copy();
-                    state.StatusMessage = "Selected " + hovered.DisplayName + ".";
-                    changed = true;
-                }
-
                 if (ScenarioAuthoringInputActions.IsConfirmSelectionDown() && hovered != null)
-                    ScenarioAuthoringSelectionMenuService.Instance.OpenMenu(state, hovered);
+                {
+                    changed |= ApplySelection(state, hovered);
+                }
             }
 
-            if (ScenarioAuthoringInputActions.IsClearSelectionDown() && state.SelectedTarget != null)
+            if (ScenarioAuthoringInputActions.IsClearSelectionDown())
             {
-                state.SelectedTarget = null;
-                state.StatusMessage = "Selection cleared.";
-                changed = true;
+                ScenarioAuthoringTarget menuTarget = state.SelectedTarget ?? hovered;
+                if (selectionMode && menuTarget != null)
+                {
+                    ScenarioAuthoringSelectionMenuService.Instance.OpenMenu(state, menuTarget);
+                    changed = true;
+                }
+                else if (state.SelectedTarget != null)
+                {
+                    state.SelectedTarget = null;
+                    state.MultiSelection.Clear();
+                    state.StatusMessage = "Selection cleared.";
+                    changed = true;
+                }
             }
 
             ScenarioHoverVisualService.Instance.UpdateFromState(state);
@@ -82,7 +87,7 @@ namespace ShelteredAPI.Scenarios
             target = null;
             if (UICamera.hoveredObject != null)
                 return false;
-            if (ScenarioAuthoringImguiRenderModule.IsPointerOverInteractiveUi())
+            if (ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>().PointerOverAuthoringUi)
                 return false;
 
             Camera camera = Camera.main;
@@ -194,6 +199,43 @@ namespace ShelteredAPI.Scenarios
                 WorldPoint = worldPoint
             };
             return _adapterRegistry.TryCreateTarget(gridContext, out target) && target != null;
+        }
+
+        private static bool ApplySelection(ScenarioAuthoringState state, ScenarioAuthoringTarget hovered)
+        {
+            if (state == null || hovered == null)
+                return false;
+
+            if (IsAddSelectionHeld())
+            {
+                for (int i = 0; i < state.MultiSelection.Count; i++)
+                {
+                    if (AreSameTarget(state.MultiSelection[i], hovered))
+                    {
+                        state.StatusMessage = hovered.DisplayName + " is already in the selection.";
+                        return true;
+                    }
+                }
+
+                if (state.SelectedTarget != null && state.MultiSelection.Count == 0)
+                    state.MultiSelection.Add(state.SelectedTarget.Copy());
+
+                state.MultiSelection.Add(hovered.Copy());
+                state.SelectedTarget = hovered.Copy();
+                state.StatusMessage = "Added " + hovered.DisplayName + " to the selection.";
+                return true;
+            }
+
+            state.SelectedTarget = hovered.Copy();
+            state.MultiSelection.Clear();
+            state.MultiSelection.Add(hovered.Copy());
+            state.StatusMessage = "Selected " + hovered.DisplayName + ".";
+            return true;
+        }
+
+        private static bool IsAddSelectionHeld()
+        {
+            return UnityEngine.Input.GetKey(KeyCode.LeftShift) || UnityEngine.Input.GetKey(KeyCode.RightShift);
         }
 
         private static Vector3 ResolveMouseWorldPoint(Camera camera)

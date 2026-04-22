@@ -208,6 +208,12 @@ namespace ShelteredAPI.Harmony
 
         private static bool TryResolveGameplayAxis(PlatformInput.InputAxis axis, bool raw, ref float result)
         {
+            if (ScenarioAuthoringRuntimeGuards.ShouldBlockGameplayAxis(axis))
+            {
+                result = 0f;
+                return true;
+            }
+
             float resolved;
             if (!ShelteredTouchpadInputRouter.TryGetGameplayAxis(axis, raw, out resolved))
                 return false;
@@ -218,6 +224,12 @@ namespace ShelteredAPI.Harmony
 
         private static bool TryResolveMenuAxis(PlatformInput.MenuInputAxis axis, bool raw, ref float result)
         {
+            if (ScenarioAuthoringRuntimeGuards.ShouldBlockMenuAxis(axis))
+            {
+                result = 0f;
+                return true;
+            }
+
             float resolved;
             if (!ShelteredTouchpadInputRouter.TryGetMenuAxis(axis, raw, out resolved))
                 return false;

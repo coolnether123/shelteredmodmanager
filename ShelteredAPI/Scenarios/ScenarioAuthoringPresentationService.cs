@@ -19,6 +19,7 @@ namespace ShelteredAPI.Scenarios
 
         private ScenarioAuthoringPresentationService()
         {
+            Register(new ScenarioAuthoringShellImguiRenderModule());
             Register(new ScenarioAuthoringImguiRenderModule());
             Register(new ScenarioAuthoringNguiRenderModule());
         }
@@ -80,6 +81,7 @@ namespace ShelteredAPI.Scenarios
             module.Render(new ScenarioAuthoringPresentationSnapshot
             {
                 State = state,
+                ShellViewModel = backend.GetShellViewModel(),
                 ShellDocument = backend.GetShellDocument(),
                 InspectorDocument = backend.GetInspectorDocument(),
                 HoverDocument = backend.GetHoverDocument()
