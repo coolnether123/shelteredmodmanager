@@ -438,7 +438,7 @@ namespace ShelteredAPI.Scenarios
                 }
 
                 button.transform.localPosition = GetScenarioSlotPosition(metrics, i);
-                bool locked = ShelteredCustomScenarioService.Instance.VerifyDependencies(scenario) != SaveVerification.VerificationState.Match;
+                bool locked = ShelteredCustomScenarioService.Instance.VerifyDependencies(scenario) != ScenarioDependencyVerificationState.Match;
                 ConfigureButton(
                     button.gameObject,
                     locked ? entry.Label + " [LOCKED]" : entry.Label,

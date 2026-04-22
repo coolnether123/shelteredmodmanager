@@ -11,7 +11,7 @@ namespace ShelteredAPI.Scenarios
     /// <summary>
     /// Sheltered runtime implementation of the neutral custom scenario service contract.
     /// </summary>
-    public sealed class ShelteredCustomScenarioService : ICustomScenarioService
+    public sealed class ShelteredCustomScenarioService : ICustomScenarioService, IShelteredCustomScenarioService
     {
         private sealed class ScenarioRecord
         {
@@ -20,19 +20,18 @@ namespace ShelteredAPI.Scenarios
             public bool IsDefinitionBacked;
         }
 
-        private static readonly ShelteredCustomScenarioService _instance = new ShelteredCustomScenarioService();
         private readonly Dictionary<string, ScenarioRecord> _registrations = new Dictionary<string, ScenarioRecord>(StringComparer.OrdinalIgnoreCase);
         private readonly object _sync = new object();
-        private CustomScenarioState _state = CustomScenarioState.None();
-        private readonly ScenarioDefinitionSerializer _definitionSerializer;
-        private readonly ScenarioCatalog _definitionCatalog;
-        private readonly ScenarioLoader _definitionLoader;
-        private readonly ScenarioValidatorImpl _definitionValidator;
+        private readonly IScenarioDefinitionSerializer _definitionSerializer;
+        private readonly IScenarioDefinitionCatalog _definitionCatalog;
+        private readonly IScenarioDefinitionValidator _definitionValidator;
         private readonly ScenarioAuthoringDraftRepository _draftRepository;
+        private readonly IScenarioStateManager _stateManager;
+        private readonly IScenarioRuntimeBindingService _runtimeBindingService;
 
         public static ShelteredCustomScenarioService Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ShelteredCustomScenarioService>(); }
         }
 
         public event Action<CustomScenarioEventArgs> ScenarioRegistered;
@@ -45,20 +44,24 @@ namespace ShelteredAPI.Scenarios
         {
             get
             {
-                lock (_sync)
-                {
-                    return _state.Copy();
-                }
+                return _stateManager.GetCustomScenarioState();
             }
         }
 
-        private ShelteredCustomScenarioService()
+        internal ShelteredCustomScenarioService(
+            IScenarioDefinitionSerializer definitionSerializer,
+            IScenarioDefinitionCatalog definitionCatalog,
+            IScenarioDefinitionValidator definitionValidator,
+            ScenarioAuthoringDraftRepository draftRepository,
+            IScenarioStateManager stateManager,
+            IScenarioRuntimeBindingService runtimeBindingService)
         {
-            _definitionSerializer = new ScenarioDefinitionSerializer();
-            _definitionCatalog = new ScenarioCatalog(new ModRegistryScenarioModFolderSource(), _definitionSerializer);
-            _definitionValidator = new ScenarioValidatorImpl();
-            _definitionLoader = new ScenarioLoader(_definitionCatalog, _definitionSerializer, new ScenarioValidator());
-            _draftRepository = ScenarioAuthoringDraftRepository.Instance;
+            _definitionSerializer = definitionSerializer;
+            _definitionCatalog = definitionCatalog;
+            _definitionValidator = definitionValidator;
+            _draftRepository = draftRepository ?? ScenarioAuthoringDraftRepository.Instance;
+            _stateManager = stateManager;
+            _runtimeBindingService = runtimeBindingService;
         }
 
         public void RefreshDefinitionCatalog()
@@ -158,12 +161,13 @@ namespace ShelteredAPI.Scenarios
                     return false;
 
                 _registrations.Remove(scenarioId);
-                if (string.Equals(_state.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
-                {
-                    _state = CustomScenarioState.None();
+                CustomScenarioState currentState = _stateManager.GetCustomScenarioState();
+                if (currentState != null && string.Equals(currentState.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
                     clearedState = true;
-                }
             }
+
+            if (clearedState)
+                _stateManager.SetCustomScenarioState(CustomScenarioState.None(), "custom-scenario", "Scenario unregistered.");
 
             Raise(ScenarioUnregistered, CustomScenarioEventType.Unregistered, removed.Info);
             if (clearedState)
@@ -209,7 +213,7 @@ namespace ShelteredAPI.Scenarios
             return result;
         }
 
-        internal bool TryCreateScenarioDef(string scenarioId, CustomScenarioBuildContext context, out ScenarioDef definition, out string errorMessage)
+        public bool TryCreateScenarioDef(string scenarioId, CustomScenarioBuildContext context, out ScenarioDef definition, out string errorMessage)
         {
             definition = null;
             errorMessage = null;
@@ -264,7 +268,7 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        internal bool MarkSelected(string scenarioId)
+        public bool MarkSelected(string scenarioId)
         {
             ScenarioRecord record;
             lock (_sync)
@@ -273,20 +277,17 @@ namespace ShelteredAPI.Scenarios
                     return false;
             }
 
-            if (VerifyDependencies(record.Info) != SaveVerification.VerificationState.Match)
+            if (VerifyDependencies(record.Info) != ScenarioDependencyVerificationState.Match)
             {
                 MMLog.WriteWarning("[ShelteredCustomScenarioService] Custom scenario dependencies are not satisfied: " + scenarioId);
                 return false;
             }
 
-            lock (_sync)
+            _stateManager.SetCustomScenarioState(new CustomScenarioState
             {
-                _state = new CustomScenarioState
-                {
-                    ScenarioId = record.Info.Id,
-                    LifecycleState = CustomScenarioLifecycleState.Pending
-                };
-            }
+                ScenarioId = record.Info.Id,
+                LifecycleState = CustomScenarioLifecycleState.Pending
+            }, "custom-scenario", "Scenario selected.");
 
             CustomScenarioEventArgs args = CreateArgs(CustomScenarioEventType.Selected, record.Info);
             InvokeRegistrationCallback(record.Registration.OnSelected, args, record.Info.Id, "OnSelected");
@@ -399,22 +400,22 @@ namespace ShelteredAPI.Scenarios
             return string.Join("; ", parts.ToArray());
         }
 
-        internal bool MarkSpawned(string scenarioId)
+        public bool MarkSpawned(string scenarioId)
         {
             ScenarioRecord record;
             lock (_sync)
             {
                 if (!_registrations.TryGetValue(scenarioId, out record))
                     return false;
-
-                _state = new CustomScenarioState
-                {
-                    ScenarioId = record.Info.Id,
-                    LifecycleState = CustomScenarioLifecycleState.Active
-                };
             }
 
-            ShelteredScenarioRuntimeBindingManager.Instance.SetBinding(CreateRuntimeBinding(record.Info));
+            _stateManager.SetCustomScenarioState(new CustomScenarioState
+            {
+                ScenarioId = record.Info.Id,
+                LifecycleState = CustomScenarioLifecycleState.Active
+            }, "custom-scenario", "Scenario spawned.");
+
+            _runtimeBindingService.SetBinding(CreateRuntimeBinding(record.Info));
             CustomScenarioEventArgs args = CreateArgs(CustomScenarioEventType.Spawned, record.Info);
             InvokeRegistrationCallback(record.Registration.OnSpawned, args, record.Info.Id, "OnSpawned");
             Raise(ScenarioSpawned, args);
@@ -422,23 +423,23 @@ namespace ShelteredAPI.Scenarios
             return true;
         }
 
-        internal void ClearState()
+        public void ClearState()
         {
             CustomScenarioInfo previousInfo = null;
             bool hadState = false;
             lock (_sync)
             {
-                if (!string.IsNullOrEmpty(_state.ScenarioId))
+                CustomScenarioState currentState = _stateManager.GetCustomScenarioState();
+                if (currentState != null && !string.IsNullOrEmpty(currentState.ScenarioId))
                 {
                     hadState = true;
                     ScenarioRecord record;
-                    if (_registrations.TryGetValue(_state.ScenarioId, out record))
+                    if (_registrations.TryGetValue(currentState.ScenarioId, out record))
                         previousInfo = record.Info;
                 }
-
-                _state = CustomScenarioState.None();
             }
 
+            _stateManager.SetCustomScenarioState(CustomScenarioState.None(), "custom-scenario", "State cleared.");
             if (hadState)
                 Raise(StateChanged, CustomScenarioEventType.Cleared, previousInfo);
         }
@@ -555,7 +556,7 @@ namespace ShelteredAPI.Scenarios
             return result;
         }
 
-        internal SlotManifest CreateDependencyManifest(CustomScenarioInfo info)
+        public SlotManifest CreateDependencyManifest(CustomScenarioInfo info)
         {
             if (info == null)
                 return ScenarioDependencyManifest.Create("Custom Scenario", new LoadedModInfo[0]);
@@ -567,9 +568,9 @@ namespace ShelteredAPI.Scenarios
             return ScenarioDependencyManifest.Create(info.DisplayName, required);
         }
 
-        internal SaveVerification.VerificationState VerifyDependencies(CustomScenarioInfo info)
+        public ScenarioDependencyVerificationState VerifyDependencies(CustomScenarioInfo info)
         {
-            return SaveVerification.VerifyRequired(CreateDependencyManifest(info));
+            return MapVerificationState(SaveVerification.VerifyRequired(CreateDependencyManifest(info)));
         }
 
         private LoadedModInfo[] LoadDefinitionDependencies(string scenarioId)
@@ -752,6 +753,23 @@ namespace ShelteredAPI.Scenarios
 
             string trimmed = value.Trim();
             return trimmed.Length == 0 ? null : trimmed;
+        }
+
+        private static ScenarioDependencyVerificationState MapVerificationState(SaveVerification.VerificationState state)
+        {
+            switch (state)
+            {
+                case SaveVerification.VerificationState.Match:
+                    return ScenarioDependencyVerificationState.Match;
+                case SaveVerification.VerificationState.VersionMismatch:
+                    return ScenarioDependencyVerificationState.VersionMismatch;
+                case SaveVerification.VerificationState.Warning:
+                    return ScenarioDependencyVerificationState.Warning;
+                case SaveVerification.VerificationState.Missing:
+                    return ScenarioDependencyVerificationState.Missing;
+                default:
+                    return ScenarioDependencyVerificationState.Unknown;
+            }
         }
     }
 }

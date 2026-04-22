@@ -1,15 +1,20 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using ModAPI.Core;
 using ModAPI.Scenarios;
-using ShelteredAPI.Content;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScenarioSpriteSwapPlanner
     {
+        private readonly IScenarioSpriteAssetResolver _assetResolver;
+
+        public ScenarioSpriteSwapPlanner(IScenarioSpriteAssetResolver assetResolver)
+        {
+            _assetResolver = assetResolver;
+        }
+
         internal sealed class PlannedSwap
         {
             public string RuleId;
@@ -30,7 +35,7 @@ namespace ShelteredAPI.Scenarios
                 return plan;
             }
 
-            string packRoot = !string.IsNullOrEmpty(scenarioFilePath) ? Path.GetDirectoryName(scenarioFilePath) : null;
+            string packRoot = !string.IsNullOrEmpty(scenarioFilePath) ? System.IO.Path.GetDirectoryName(scenarioFilePath) : null;
             Dictionary<string, PlannedSwap> byTarget = new Dictionary<string, PlannedSwap>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < definition.AssetReferences.SpriteSwaps.Count; i++)
             {
@@ -42,7 +47,13 @@ namespace ShelteredAPI.Scenarios
                 if (effectiveDay > currentDay)
                     continue;
 
-                Sprite sprite = ResolveSprite(definition, packRoot, rule);
+                Sprite sprite = _assetResolver.ResolveSprite(
+                    definition,
+                    packRoot,
+                    rule.SpriteId,
+                    rule.RelativePath,
+                    rule.RuntimeSpriteKey,
+                    "sprite swap target '" + rule.TargetPath + "'");
                 if (sprite == null)
                     continue;
 
@@ -69,47 +80,6 @@ namespace ShelteredAPI.Scenarios
 
             plan.Sort(ComparePlannedSwap);
             return plan;
-        }
-
-        private static Sprite ResolveSprite(ScenarioDefinition definition, string packRoot, SpriteSwapRule rule)
-        {
-            string relativePath = ResolveRelativePath(definition, rule);
-            if (string.IsNullOrEmpty(relativePath) || string.IsNullOrEmpty(packRoot))
-                return null;
-
-            try
-            {
-                return AssetLoader.LoadSprite(packRoot, relativePath, 100f);
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("[ScenarioSpriteSwapPlanner] Failed to load sprite swap asset for target '" + rule.TargetPath
-                    + "': " + relativePath + " (" + ex.Message + ")");
-                return null;
-            }
-        }
-
-        private static string ResolveRelativePath(ScenarioDefinition definition, SpriteSwapRule rule)
-        {
-            if (rule == null)
-                return null;
-
-            if (!string.IsNullOrEmpty(rule.RelativePath))
-                return rule.RelativePath;
-
-            if (definition == null || definition.AssetReferences == null || definition.AssetReferences.CustomSprites == null || string.IsNullOrEmpty(rule.SpriteId))
-                return null;
-
-            for (int i = 0; i < definition.AssetReferences.CustomSprites.Count; i++)
-            {
-                SpriteRef sprite = definition.AssetReferences.CustomSprites[i];
-                if (sprite != null && string.Equals(sprite.Id, rule.SpriteId, StringComparison.OrdinalIgnoreCase))
-                    return sprite.RelativePath;
-            }
-
-            MMLog.WriteWarning("[ScenarioSpriteSwapPlanner] Sprite swap references unknown spriteId '" + rule.SpriteId
-                + "' for target '" + rule.TargetPath + "'.");
-            return null;
         }
 
         private static int ComparePlannedSwap(PlannedSwap left, PlannedSwap right)

@@ -34,13 +34,27 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public sealed class ScenarioApplier
+    public sealed class ScenarioApplier : IScenarioApplier
     {
+        private readonly IScenarioSpriteAssetResolver _assetResolver;
+        private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
+        private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
+
         private static readonly FieldInfo BaseCharacterFirstNameField = typeof(BaseCharacter).GetField("m_firstName", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterMaleField = typeof(BaseCharacter).GetField("m_male", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo InventoryRandomStartCountField = typeof(InventoryManager).GetField("numberOfRandomStartingItems", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo InventoryRandomStartItemsField = typeof(InventoryManager).GetField("listOfRandomStartingItems", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo ShelterRoomGridWiresSpritesField = typeof(ShelterRoomGrid).GetField("wiresSprites", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        internal ScenarioApplier(
+            IScenarioSpriteAssetResolver assetResolver,
+            IScenarioSpriteSwapEngine spriteSwapEngine,
+            IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine)
+        {
+            _assetResolver = assetResolver;
+            _spriteSwapEngine = spriteSwapEngine;
+            _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
+        }
 
         public ScenarioApplyResult ApplyAll(ScenarioDefinition definition)
         {
@@ -63,13 +77,14 @@ namespace ShelteredAPI.Scenarios
             BunkerVisualApply(definition, result);
             TriggerApply(definition, result);
             WinLossConditionApply(definition, result);
-            ScenarioSpriteSwapService.Instance.Activate(definition, scenarioFilePath, result);
+            _spriteSwapEngine.Activate(definition, scenarioFilePath, result);
+            _sceneSpritePlacementEngine.Activate(definition, scenarioFilePath, result);
 
             LogResult(definition, result);
             return result;
         }
 
-        private static void PreloadAssets(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result)
+        private void PreloadAssets(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result)
         {
             if (definition == null || definition.AssetReferences == null || string.IsNullOrEmpty(scenarioFilePath))
                 return;
@@ -86,7 +101,7 @@ namespace ShelteredAPI.Scenarios
 
                 try
                 {
-                    if (AssetLoader.LoadSprite(packRoot, sprite.RelativePath, 100f) == null)
+                    if (_assetResolver.ResolveSprite(definition, packRoot, sprite.Id, sprite.RelativePath, null, "preload sprite '" + sprite.RelativePath + "'") == null)
                         result.AddMessage("Sprite asset failed to load: " + sprite.RelativePath);
                 }
                 catch (Exception ex)
@@ -103,7 +118,7 @@ namespace ShelteredAPI.Scenarios
 
                 try
                 {
-                    if (AssetLoader.LoadSprite(packRoot, icon.RelativePath, 100f) == null)
+                    if (_assetResolver.ResolveSprite(definition, packRoot, icon.Id, icon.RelativePath, null, "preload icon '" + icon.RelativePath + "'") == null)
                         result.AddMessage("Icon asset failed to load: " + icon.RelativePath);
                 }
                 catch (Exception ex)

@@ -162,41 +162,7 @@ namespace ShelteredAPI.Scenarios
         {
             try
             {
-                CustomScenarioState state = ShelteredCustomScenarioService.Instance.CurrentState;
-                if (state == null || state.LifecycleState != CustomScenarioLifecycleState.Pending || string.IsNullOrEmpty(state.ScenarioId))
-                    return;
-
-                if (!ScenarioWorldReady.IsReady())
-                    return;
-
-                CustomScenarioInfo scenarioInfo;
-                if (!ShelteredCustomScenarioService.Instance.TryGet(state.ScenarioId, out scenarioInfo)
-                    || ShelteredCustomScenarioService.Instance.VerifyDependencies(scenarioInfo) != SaveVerification.VerificationState.Match)
-                {
-                    MMLog.WriteWarning("[ShelteredCustomScenarioSpawn] Dependencies are not satisfied; custom scenario will not spawn: " + state.ScenarioId);
-                    ShelteredCustomScenarioService.Instance.ClearState();
-                    return;
-                }
-
-                ScenarioDef definition;
-                string error;
-                if (!ShelteredCustomScenarioService.Instance.TryCreateScenarioDef(state.ScenarioId, null, out definition, out error))
-                {
-                    MMLog.WriteWarning("[ShelteredCustomScenarioSpawn] " + error);
-                    ShelteredCustomScenarioService.Instance.ClearState();
-                    return;
-                }
-
-                QuestInstance instance = QuestManager.instance.SpawnQuestOrScenario(definition);
-                if (instance == null)
-                {
-                    MMLog.WriteWarning("[ShelteredCustomScenarioSpawn] QuestManager failed to spawn custom scenario: " + state.ScenarioId);
-                    ShelteredCustomScenarioService.Instance.ClearState();
-                    return;
-                }
-
-                ShelteredCustomScenarioService.Instance.MarkSpawned(state.ScenarioId);
-                MMLog.WriteInfo("[ShelteredCustomScenarioSpawn] Spawned custom scenario: " + state.ScenarioId);
+                ScenarioCompositionRoot.Resolve<IScenarioRuntimeOrchestrator>().UpdatePendingScenarioSpawn();
             }
             catch (Exception ex)
             {
@@ -366,63 +332,16 @@ namespace ShelteredAPI.Scenarios
     [HarmonyPatch(typeof(QuestManager), "UpdateManager")]
     internal static class ShelteredScenarioDefinitionApplyPatches
     {
-        private static string _lastAppliedKey;
-
         [HarmonyPostfix]
         private static void UpdateManagerPostfix()
         {
             try
             {
-                ScenarioRuntimeBinding binding = ShelteredScenarioRuntimeBindingManager.Instance.GetActiveBindingForStartup();
-                if (binding == null || string.IsNullOrEmpty(binding.ScenarioId) || !binding.IsActive)
-                {
-                    _lastAppliedKey = null;
-                    ScenarioSpriteSwapService.Instance.Clear("No active scenario binding was available for startup.");
-                    return;
-                }
-
-                string applyKey = ShelteredScenarioRuntimeBindingManager.Instance.CurrentRevision
-                    + "|" + binding.ScenarioId + "|" + (binding.VersionApplied ?? string.Empty);
-                if (string.Equals(_lastAppliedKey, applyKey, StringComparison.OrdinalIgnoreCase))
-                    return;
-
-                if (!ScenarioWorldReady.IsReady())
-                    return;
-
-                ScenarioDefinition definition;
-                string scenarioFilePath;
-                ScenarioValidationResult validation;
-                if (!ShelteredCustomScenarioService.Instance.TryLoadDefinition(binding.ScenarioId, out definition, out scenarioFilePath, out validation))
-                {
-                    LogValidationFailure(binding.ScenarioId, validation);
-                    _lastAppliedKey = applyKey;
-                    return;
-                }
-
-                ScenarioApplyResult apply = new ScenarioApplier().ApplyAll(definition, scenarioFilePath);
-                _lastAppliedKey = applyKey;
-                MMLog.WriteInfo("[ShelteredScenarioDefinitionApply] Applied active scenario binding: " + binding.ScenarioId
-                    + " messages=" + apply.Messages.Length + ".");
+                ScenarioCompositionRoot.Resolve<IScenarioRuntimeOrchestrator>().UpdateActiveScenarioApply();
             }
             catch (Exception ex)
             {
                 MMLog.WriteWarning("[ShelteredScenarioDefinitionApply] UpdateManager hook failed: " + ex.Message);
-            }
-        }
-
-        private static void LogValidationFailure(string scenarioId, ScenarioValidationResult validation)
-        {
-            if (validation == null)
-            {
-                MMLog.WriteWarning("[ShelteredScenarioDefinitionApply] Scenario failed to load: " + scenarioId);
-                return;
-            }
-
-            ScenarioValidationIssue[] issues = validation.Issues;
-            for (int i = 0; i < issues.Length; i++)
-            {
-                if (issues[i] != null)
-                    MMLog.WriteWarning("[ShelteredScenarioDefinitionApply] " + scenarioId + " " + issues[i].Severity + ": " + issues[i].Message);
             }
         }
     }

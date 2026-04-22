@@ -5,9 +5,8 @@ using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
 {
-    internal sealed class ScenarioAuthoringPauseService
+    internal sealed class ScenarioAuthoringPauseService : IScenarioPauseService
     {
-        private static readonly ScenarioAuthoringPauseService _instance = new ScenarioAuthoringPauseService();
         private static readonly FieldInfo PauseCountField = typeof(PauseManager).GetField("m_pauseCount", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly FieldInfo TimePausedField = typeof(PauseManager).GetField("m_timePaused", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly FieldInfo PreviousTimescaleField = typeof(PauseManager).GetField("m_previousTimescale", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -20,7 +19,7 @@ namespace ShelteredAPI.Scenarios
 
         public static ScenarioAuthoringPauseService Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioAuthoringPauseService>(); }
         }
 
         public bool OwnsPause
@@ -28,7 +27,7 @@ namespace ShelteredAPI.Scenarios
             get { return _ownsPause; }
         }
 
-        private ScenarioAuthoringPauseService()
+        internal ScenarioAuthoringPauseService()
         {
         }
 

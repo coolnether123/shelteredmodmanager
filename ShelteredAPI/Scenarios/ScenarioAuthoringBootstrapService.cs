@@ -10,12 +10,12 @@ namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScenarioAuthoringBootstrapService
     {
-        private static readonly ScenarioAuthoringBootstrapService _instance = new ScenarioAuthoringBootstrapService();
         private readonly object _sync = new object();
-        private readonly ScenarioAuthoringBackendService _backend = ScenarioAuthoringBackendService.Instance;
-        private readonly ScenarioAuthoringDraftRepository _draftRepository = ScenarioAuthoringDraftRepository.Instance;
-        private readonly ScenarioAuthoringMenuService _menuService = ScenarioAuthoringMenuService.Instance;
-        private readonly ScenarioAuthoringPresentationService _presentation = ScenarioAuthoringPresentationService.Instance;
+        private readonly ScenarioAuthoringBackendService _backend;
+        private readonly ScenarioAuthoringDraftRepository _draftRepository;
+        private readonly ScenarioAuthoringMenuService _menuService;
+        private readonly ScenarioAuthoringPresentationService _presentation;
+        private readonly IScenarioEditorService _editorService;
         private ScenarioAuthoringSession _pendingSession;
         private ScenarioAuthoringSession _activeSession;
         private string _lastPendingDraftId;
@@ -23,11 +23,21 @@ namespace ShelteredAPI.Scenarios
 
         public static ScenarioAuthoringBootstrapService Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioAuthoringBootstrapService>(); }
         }
 
-        private ScenarioAuthoringBootstrapService()
+        internal ScenarioAuthoringBootstrapService(
+            ScenarioAuthoringBackendService backend,
+            ScenarioAuthoringDraftRepository draftRepository,
+            ScenarioAuthoringMenuService menuService,
+            ScenarioAuthoringPresentationService presentation,
+            IScenarioEditorService editorService)
         {
+            _backend = backend ?? ScenarioAuthoringBackendService.Instance;
+            _draftRepository = draftRepository ?? ScenarioAuthoringDraftRepository.Instance;
+            _menuService = menuService ?? ScenarioAuthoringMenuService.Instance;
+            _presentation = presentation ?? ScenarioAuthoringPresentationService.Instance;
+            _editorService = editorService;
             try { GameEvents.OnAfterLoad += HandleAfterLoad; }
             catch { }
         }
@@ -104,7 +114,7 @@ namespace ShelteredAPI.Scenarios
         {
             HandleActiveSessionBoundaries();
             TryBootstrapPendingDraft();
-            ScenarioEditorController.Instance.MaintainAuthoringPause();
+            _editorService.MaintainAuthoringPause();
             _backend.Update();
             _presentation.Update();
             _menuService.Update(GetActiveSession());
@@ -154,7 +164,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioEditorSession editorSession;
             try
             {
-                editorSession = ScenarioEditorController.Instance.LoadEditMode(pending.ScenarioFilePath);
+                editorSession = _editorService.LoadEditMode(pending.ScenarioFilePath);
             }
             catch (Exception ex)
             {
@@ -183,12 +193,12 @@ namespace ShelteredAPI.Scenarios
             _menuService.Open(pending, true);
         }
 
-        private static void ActivateScenarioBinding(ScenarioAuthoringSession session)
+        private void ActivateScenarioBinding(ScenarioAuthoringSession session)
         {
             if (session == null)
                 return;
 
-            ScenarioEditorSession editorSession = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession editorSession = _editorService.CurrentSession;
             ShelteredScenarioRuntimeBindingManager.Instance.SetBinding(new ScenarioRuntimeBinding
             {
                 ScenarioId = session.DraftId,
@@ -223,7 +233,7 @@ namespace ShelteredAPI.Scenarios
                 return;
             }
 
-            if (ScenarioEditorController.Instance.CurrentSession == null)
+            if (_editorService.CurrentSession == null)
                 CloseActiveSession("Scenario editor session was no longer available.", true);
         }
 
@@ -239,7 +249,7 @@ namespace ShelteredAPI.Scenarios
                 _activeSession = null;
             }
 
-            ScenarioEditorController.Instance.CloseEditor(resumeGame);
+            _editorService.CloseEditor(resumeGame);
             _backend.ClearActiveSession(reason);
             ClearLaunchRedirects(previous, reason);
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Closed active authoring session '" + previous.DraftId
