@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
@@ -8,6 +9,7 @@ namespace ShelteredAPI.Scenarios
         event Action<ScenarioAuthoringState> StateChanged;
 
         ScenarioAuthoringState CurrentState { get; }
+        ScenarioAuthoringShellViewModel GetShellViewModel();
         ScenarioAuthoringInspectorDocument GetShellDocument();
         ScenarioAuthoringInspectorDocument GetInspectorDocument();
         ScenarioAuthoringInspectorDocument GetHoverDocument();
@@ -31,6 +33,32 @@ namespace ShelteredAPI.Scenarios
 
         public const string ActionShellToggle = "shell.toggle";
         public const string ActionShellShow = "shell.show";
+        public const string ActionShellHideAll = "shell.hide_all";
+        public const string ActionShellResetLayout = "shell.layout.reset";
+        public const string ActionShellMinimalMode = "shell.layout.minimal_mode";
+        public const string ActionShellFocusSelection = "shell.layout.focus_selection";
+        public const string ActionShellOpenSettings = "shell.settings.open";
+        public const string ActionShellCloseSettings = "shell.settings.close";
+        public const string ActionShellSettingsReset = "shell.settings.reset";
+        public const string ActionShellToggleWindowMenu = "shell.menu.windows";
+        public const string ActionWindowTogglePrefix = "shell.window.toggle.";
+        public const string ActionWindowCollapsePrefix = "shell.window.collapse.";
+        public const string ActionWindowRestorePrefix = "shell.window.restore.";
+        public const string ActionSettingTogglePrefix = "shell.setting.toggle.";
+        public const string ActionSettingIncreasePrefix = "shell.setting.increase.";
+        public const string ActionSettingDecreasePrefix = "shell.setting.decrease.";
+        public const string ActionSettingSelectPrefix = "shell.setting.select.";
+        public const string ActionInspectorTabPrefix = "inspector.tab.";
+        public const string ActionShellTabShelter = "shell.tab.shelter";
+        public const string ActionShellTabBuild = "shell.tab.build";
+        public const string ActionShellTabSurvivors = "shell.tab.survivors";
+        public const string ActionShellTabStockpile = "shell.tab.stockpile";
+        public const string ActionShellTabTriggers = "shell.tab.triggers";
+        public const string ActionShellTabJobs = "shell.tab.jobs";
+        public const string ActionShellTabQuests = "shell.tab.quests";
+        public const string ActionShellTabArt = "shell.tab.art";
+        public const string ActionShellTabTest = "shell.tab.test";
+        public const string ActionShellTabShell = "shell.tab.shell";
         public const string ActionSave = "editor.save";
         public const string ActionPlaytest = "editor.playtest.toggle";
         public const string ActionCloseEditor = "editor.close";
@@ -82,6 +110,49 @@ namespace ShelteredAPI.Scenarios
     {
         ReplaceExisting = 0,
         PlaceNew = 1
+    }
+
+    public enum ScenarioAuthoringShellTab
+    {
+        Shelter = 0,
+        Build = 1,
+        Survivors = 2,
+        Stockpile = 3,
+        Triggers = 4,
+        Jobs = 5,
+        Quests = 6,
+        Art = 7,
+        Test = 8,
+        Shell = 9
+    }
+
+    public enum ScenarioAuthoringInspectorTab
+    {
+        Properties = 0,
+        Interactions = 1,
+        Visuals = 2,
+        Runtime = 3,
+        Notes = 4
+    }
+
+    public enum ScenarioAuthoringShellDock
+    {
+        Top = 0,
+        Left = 1,
+        Right = 2,
+        Bottom = 3,
+        Overlay = 4,
+        Floating = 5,
+        Status = 6
+    }
+
+    public enum ScenarioAuthoringSettingKind
+    {
+        Toggle = 0,
+        Float = 1,
+        Integer = 2,
+        Choice = 3,
+        ReadOnly = 4
     }
 
     public enum ScenarioAuthoringTargetKind
@@ -143,33 +214,349 @@ namespace ShelteredAPI.Scenarios
 
     public sealed class ScenarioAuthoringState
     {
+        public ScenarioAuthoringState()
+        {
+            WindowStates = new List<ScenarioAuthoringWindowState>();
+            MultiSelection = new List<ScenarioAuthoringTarget>();
+            ScrollStates = new List<ScenarioAuthoringPanelScrollState>();
+            Settings = new ScenarioAuthoringSettingsSnapshot();
+        }
+
         public bool IsActive { get; set; }
         public bool ShellVisible { get; set; }
         public bool SelectionModeActive { get; set; }
         public ScenarioAuthoringTool ActiveTool { get; set; }
+        public ScenarioAuthoringShellTab ActiveShellTab { get; set; }
         public ScenarioAssetAuthoringMode AssetMode { get; set; }
+        public string ActiveLayoutPreset { get; set; }
+        public bool MinimalMode { get; set; }
+        public bool FocusSelectionMode { get; set; }
         public string ActiveDraftId { get; set; }
         public string ActiveScenarioFilePath { get; set; }
         public string StatusMessage { get; set; }
         public ScenarioAuthoringTarget HoveredTarget { get; set; }
         public ScenarioAuthoringTarget SelectedTarget { get; set; }
+        public List<ScenarioAuthoringTarget> MultiSelection { get; private set; }
+        public string TimelineSelectionId { get; set; }
+        public ScenarioAuthoringInspectorTab InspectorTab { get; set; }
+        public string FilterText { get; set; }
+        public string SearchText { get; set; }
+        public bool SettingsWindowOpen { get; set; }
+        public List<ScenarioAuthoringWindowState> WindowStates { get; private set; }
+        public List<ScenarioAuthoringPanelScrollState> ScrollStates { get; private set; }
+        public ScenarioAuthoringSettingsSnapshot Settings { get; set; }
 
         public ScenarioAuthoringState Copy()
         {
-            return new ScenarioAuthoringState
+            ScenarioAuthoringState copy = new ScenarioAuthoringState
             {
                 IsActive = IsActive,
                 ShellVisible = ShellVisible,
                 SelectionModeActive = SelectionModeActive,
                 ActiveTool = ActiveTool,
+                ActiveShellTab = ActiveShellTab,
                 AssetMode = AssetMode,
+                ActiveLayoutPreset = ActiveLayoutPreset,
+                MinimalMode = MinimalMode,
+                FocusSelectionMode = FocusSelectionMode,
                 ActiveDraftId = ActiveDraftId,
                 ActiveScenarioFilePath = ActiveScenarioFilePath,
                 StatusMessage = StatusMessage,
                 HoveredTarget = HoveredTarget != null ? HoveredTarget.Copy() : null,
-                SelectedTarget = SelectedTarget != null ? SelectedTarget.Copy() : null
+                SelectedTarget = SelectedTarget != null ? SelectedTarget.Copy() : null,
+                TimelineSelectionId = TimelineSelectionId,
+                InspectorTab = InspectorTab,
+                FilterText = FilterText,
+                SearchText = SearchText,
+                SettingsWindowOpen = SettingsWindowOpen,
+                Settings = Settings != null ? Settings.Copy() : new ScenarioAuthoringSettingsSnapshot()
+            };
+
+            for (int i = 0; MultiSelection != null && i < MultiSelection.Count; i++)
+            {
+                ScenarioAuthoringTarget target = MultiSelection[i];
+                if (target != null)
+                    copy.MultiSelection.Add(target.Copy());
+            }
+
+            for (int i = 0; WindowStates != null && i < WindowStates.Count; i++)
+            {
+                ScenarioAuthoringWindowState state = WindowStates[i];
+                if (state != null)
+                    copy.WindowStates.Add(state.Copy());
+            }
+
+            for (int i = 0; ScrollStates != null && i < ScrollStates.Count; i++)
+            {
+                ScenarioAuthoringPanelScrollState scroll = ScrollStates[i];
+                if (scroll != null)
+                    copy.ScrollStates.Add(scroll.Copy());
+            }
+
+            return copy;
+        }
+    }
+
+    public sealed class ScenarioAuthoringWindowDefinition
+    {
+        public string Id { get; set; }
+        public string Title { get; set; }
+        public ScenarioAuthoringShellDock Dock { get; set; }
+        public bool DefaultVisible { get; set; }
+        public bool DefaultCollapsed { get; set; }
+        public bool DefaultPinned { get; set; }
+        public int Order { get; set; }
+        public float DefaultWidth { get; set; }
+        public float DefaultHeight { get; set; }
+        public float MinWidth { get; set; }
+        public float MinHeight { get; set; }
+    }
+
+    public sealed class ScenarioAuthoringWindowState
+    {
+        public string Id { get; set; }
+        public bool Visible { get; set; }
+        public bool Collapsed { get; set; }
+        public bool Pinned { get; set; }
+        public int Order { get; set; }
+        public float Width { get; set; }
+        public float Height { get; set; }
+
+        public ScenarioAuthoringWindowState Copy()
+        {
+            return new ScenarioAuthoringWindowState
+            {
+                Id = Id,
+                Visible = Visible,
+                Collapsed = Collapsed,
+                Pinned = Pinned,
+                Order = Order,
+                Width = Width,
+                Height = Height
             };
         }
+    }
+
+    public sealed class ScenarioAuthoringPanelScrollState
+    {
+        public string PanelId { get; set; }
+        public float X { get; set; }
+        public float Y { get; set; }
+
+        public ScenarioAuthoringPanelScrollState Copy()
+        {
+            return new ScenarioAuthoringPanelScrollState
+            {
+                PanelId = PanelId,
+                X = X,
+                Y = Y
+            };
+        }
+    }
+
+    public sealed class ScenarioAuthoringSettingDefinition
+    {
+        public string Id { get; set; }
+        public string Section { get; set; }
+        public string Label { get; set; }
+        public string Description { get; set; }
+        public ScenarioAuthoringSettingKind Kind { get; set; }
+        public string DefaultValue { get; set; }
+        public float MinValue { get; set; }
+        public float MaxValue { get; set; }
+        public float Step { get; set; }
+        public string[] ChoiceValues { get; set; }
+        public string[] ChoiceLabels { get; set; }
+    }
+
+    public sealed class ScenarioAuthoringSettingValue
+    {
+        public string Id { get; set; }
+        public string Value { get; set; }
+
+        public ScenarioAuthoringSettingValue Copy()
+        {
+            return new ScenarioAuthoringSettingValue
+            {
+                Id = Id,
+                Value = Value
+            };
+        }
+    }
+
+    public sealed class ScenarioAuthoringSettingsSnapshot
+    {
+        private readonly List<ScenarioAuthoringSettingValue> _values = new List<ScenarioAuthoringSettingValue>();
+
+        public List<ScenarioAuthoringSettingValue> Values
+        {
+            get { return _values; }
+        }
+
+        public string Get(string id, string fallback)
+        {
+            for (int i = 0; i < _values.Count; i++)
+            {
+                ScenarioAuthoringSettingValue value = _values[i];
+                if (value != null && string.Equals(value.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return value.Value ?? fallback;
+            }
+
+            return fallback;
+        }
+
+        public bool GetBool(string id, bool fallback)
+        {
+            string value = Get(id, fallback ? "true" : "false");
+            bool parsed;
+            return bool.TryParse(value, out parsed) ? parsed : fallback;
+        }
+
+        public int GetInt(string id, int fallback)
+        {
+            string value = Get(id, fallback.ToString());
+            int parsed;
+            return int.TryParse(value, out parsed) ? parsed : fallback;
+        }
+
+        public float GetFloat(string id, float fallback)
+        {
+            string value = Get(id, fallback.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            float parsed;
+            return float.TryParse(
+                value,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out parsed)
+                ? parsed
+                : fallback;
+        }
+
+        public void Set(string id, string value)
+        {
+            if (string.IsNullOrEmpty(id))
+                return;
+
+            for (int i = 0; i < _values.Count; i++)
+            {
+                ScenarioAuthoringSettingValue entry = _values[i];
+                if (entry != null && string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase))
+                {
+                    entry.Value = value;
+                    return;
+                }
+            }
+
+            _values.Add(new ScenarioAuthoringSettingValue
+            {
+                Id = id,
+                Value = value
+            });
+        }
+
+        public ScenarioAuthoringSettingsSnapshot Copy()
+        {
+            ScenarioAuthoringSettingsSnapshot copy = new ScenarioAuthoringSettingsSnapshot();
+            for (int i = 0; i < _values.Count; i++)
+            {
+                ScenarioAuthoringSettingValue entry = _values[i];
+                if (entry != null)
+                    copy.Values.Add(entry.Copy());
+            }
+
+            return copy;
+        }
+    }
+
+    public sealed class ScenarioAuthoringShellWindowViewModel
+    {
+        public string Id { get; set; }
+        public string Title { get; set; }
+        public string Subtitle { get; set; }
+        public ScenarioAuthoringShellDock Dock { get; set; }
+        public bool Visible { get; set; }
+        public bool Collapsed { get; set; }
+        public float Width { get; set; }
+        public float Height { get; set; }
+        public ScenarioAuthoringInspectorAction[] HeaderActions { get; set; }
+        public ScenarioAuthoringInspectorSection[] Sections { get; set; }
+    }
+
+    public sealed class ScenarioAuthoringSettingsItemViewModel
+    {
+        public string Id { get; set; }
+        public string Label { get; set; }
+        public string Description { get; set; }
+        public string ValueText { get; set; }
+        public ScenarioAuthoringSettingKind Kind { get; set; }
+        public bool BoolValue { get; set; }
+        public bool Enabled { get; set; }
+        public bool CanIncrease { get; set; }
+        public bool CanDecrease { get; set; }
+        public string[] ChoiceLabels { get; set; }
+        public string[] ChoiceValues { get; set; }
+        public int SelectedChoiceIndex { get; set; }
+    }
+
+    public sealed class ScenarioAuthoringSettingsSectionViewModel
+    {
+        public string Id { get; set; }
+        public string Title { get; set; }
+        public ScenarioAuthoringSettingsItemViewModel[] Items { get; set; }
+    }
+
+    public sealed class ScenarioAuthoringSettingsViewModel
+    {
+        public string Title { get; set; }
+        public string Subtitle { get; set; }
+        public ScenarioAuthoringInspectorAction[] HeaderActions { get; set; }
+        public ScenarioAuthoringSettingsSectionViewModel[] Sections { get; set; }
+    }
+
+    public sealed class ScenarioAuthoringContextMenuModel
+    {
+        public bool Visible { get; set; }
+        public string Title { get; set; }
+        public string Detail { get; set; }
+        public float AnchorX { get; set; }
+        public float AnchorY { get; set; }
+        public ScenarioAuthoringInspectorAction[] Actions { get; set; }
+
+        public ScenarioAuthoringContextMenuModel Copy()
+        {
+            ScenarioAuthoringContextMenuModel copy = new ScenarioAuthoringContextMenuModel
+            {
+                Visible = Visible,
+                Title = Title,
+                Detail = Detail,
+                AnchorX = AnchorX,
+                AnchorY = AnchorY
+            };
+
+            if (Actions != null)
+            {
+                copy.Actions = new ScenarioAuthoringInspectorAction[Actions.Length];
+                Array.Copy(Actions, copy.Actions, Actions.Length);
+            }
+
+            return copy;
+        }
+    }
+
+    public sealed class ScenarioAuthoringShellViewModel
+    {
+        public string Title { get; set; }
+        public string Subtitle { get; set; }
+        public string DraftLabel { get; set; }
+        public string ModeLabel { get; set; }
+        public string TimeLabel { get; set; }
+        public ScenarioAuthoringInspectorAction[] Tabs { get; set; }
+        public ScenarioAuthoringInspectorAction[] ToolbarActions { get; set; }
+        public ScenarioAuthoringInspectorAction[] WindowMenuActions { get; set; }
+        public ScenarioAuthoringShellWindowViewModel[] Windows { get; set; }
+        public ScenarioAuthoringSettingsViewModel Settings { get; set; }
+        public ScenarioAuthoringContextMenuModel ContextMenu { get; set; }
+        public string[] StatusEntries { get; set; }
     }
 
     public sealed class ScenarioAuthoringInspectorDocument
@@ -254,6 +641,7 @@ namespace ShelteredAPI.Scenarios
     public sealed class ScenarioAuthoringPresentationSnapshot
     {
         public ScenarioAuthoringState State { get; set; }
+        public ScenarioAuthoringShellViewModel ShellViewModel { get; set; }
         public ScenarioAuthoringInspectorDocument ShellDocument { get; set; }
         public ScenarioAuthoringInspectorDocument InspectorDocument { get; set; }
         public ScenarioAuthoringInspectorDocument HoverDocument { get; set; }

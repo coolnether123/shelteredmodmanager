@@ -45,6 +45,7 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Xml" />
     <Reference Include="UnityEngine">
       <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
       <Private>False</Private>
@@ -81,20 +82,31 @@
     <Compile Include="Scenarios\ScenarioAuthoringBootstrapService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringBackendService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringCaptureService.cs" />
+    <Compile Include="Scenarios\ScenarioAuthoringCommandService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringContracts.cs" />
+    <Compile Include="Scenarios\ScenarioAuthoringContextMenuService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringDraftRepository.cs" />
+    <Compile Include="Scenarios\ScenarioAuthoringCameraGuardService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringInputActions.cs" />
+    <Compile Include="Scenarios\ScenarioAuthoringInputCaptureService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringImguiRenderModule.cs" />
+    <Compile Include="Scenarios\ScenarioAuthoringLayoutService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringMenuService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringNguiRenderModule.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringPauseService.cs" />
+    <Compile Include="Scenarios\ScenarioAuthoringPresentationBuilder.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringPresentationService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringRuntimeDriver.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringRuntimeGuards.cs" />
+    <Compile Include="Scenarios\ScenarioAuthoringScrollFocusService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringSelectionMenuService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringSelectionService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringSession.cs" />
+    <Compile Include="Scenarios\ScenarioAuthoringSettingsService.cs" />
+    <Compile Include="Scenarios\ScenarioAuthoringShellImguiRenderModule.cs" />
+    <Compile Include="Scenarios\ScenarioAuthoringStoragePaths.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringUiDebugService.cs" />
+    <Compile Include="Scenarios\ScenarioAuthoringWindowRegistry.cs" />
     <Compile Include="Scenarios\ScenarioGridSnapService.cs" />
     <Compile Include="Scenarios\ScenarioPlaytestOrchestrator.cs" />
     <Compile Include="Scenarios\ScenarioRuntimeContracts.cs" />

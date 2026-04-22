@@ -115,6 +115,45 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<IScenarioPauseService>());
             });
 
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringWindowRegistry(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringSettingsService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioAuthoringLayoutService(
+                    resolver.Get<ScenarioAuthoringWindowRegistry>(),
+                    resolver.Get<ScenarioAuthoringSettingsService>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringScrollFocusService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioAuthoringInputCaptureService(resolver.Get<ScenarioAuthoringScrollFocusService>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioAuthoringCameraGuardService(resolver.Get<ScenarioAuthoringInputCaptureService>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringContextMenuService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioAuthoringCommandService(
+                    ScenarioAuthoringCaptureService.Instance,
+                    ScenarioSpriteSwapAuthoringService.Instance,
+                    ScenarioSceneSpritePlacementAuthoringService.Instance,
+                    resolver.Get<IScenarioEditorService>(),
+                    resolver.Get<ScenarioAuthoringSettingsService>(),
+                    resolver.Get<ScenarioAuthoringLayoutService>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioAuthoringPresentationBuilder(
+                    ScenarioAuthoringCaptureService.Instance,
+                    ScenarioSpriteSwapAuthoringService.Instance,
+                    ScenarioSceneSpritePlacementAuthoringService.Instance,
+                    resolver.Get<ScenarioAuthoringWindowRegistry>(),
+                    resolver.Get<ScenarioAuthoringSettingsService>(),
+                    resolver.Get<ScenarioAuthoringLayoutService>());
+            });
+
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioEditorController(
@@ -143,10 +182,12 @@ namespace ShelteredAPI.Scenarios
             {
                 return new ScenarioAuthoringBackendService(
                     new ScenarioAuthoringSelectionService(),
-                    ScenarioAuthoringCaptureService.Instance,
-                    ScenarioSpriteSwapAuthoringService.Instance,
-                    ScenarioSceneSpritePlacementAuthoringService.Instance,
-                    resolver.Get<IScenarioEditorService>());
+                    resolver.Get<IScenarioEditorService>(),
+                    resolver.Get<ScenarioAuthoringPresentationBuilder>(),
+                    resolver.Get<ScenarioAuthoringContextMenuService>(),
+                    resolver.Get<ScenarioAuthoringCommandService>(),
+                    resolver.Get<ScenarioAuthoringSettingsService>(),
+                    resolver.Get<ScenarioAuthoringLayoutService>());
             });
             services.AddSingleton<IScenarioAuthoringBackend>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioAuthoringBackendService>(); });
 
