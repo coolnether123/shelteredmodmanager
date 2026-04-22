@@ -378,8 +378,35 @@ namespace ModAPI.Scenarios
                         TargetPath = AttributeOrChild(swapElement, "targetPath", "TargetPath"),
                         SpriteId = AttributeOrChild(swapElement, "spriteId", "SpriteId"),
                         RelativePath = AttributeOrChild(swapElement, "path", "Path"),
+                        RuntimeSpriteKey = AttributeOrChild(swapElement, "runtimeSpriteKey", "RuntimeSpriteKey"),
                         Day = ReadNullableIntAttribute(swapElement, "day"),
                         TargetComponent = ReadEnumAttribute(swapElement, "targetComponent", ScenarioSpriteTargetComponentKind.Auto)
+                    });
+                }
+            }
+
+            XmlElement scenePlacements = Child(element, "SceneSpritePlacements");
+            if (scenePlacements != null)
+            {
+                XmlNodeList placementNodes = scenePlacements.GetElementsByTagName("Placement");
+                for (int i = 0; i < placementNodes.Count; i++)
+                {
+                    XmlElement placementElement = placementNodes[i] as XmlElement;
+                    if (placementElement == null)
+                        continue;
+
+                    result.SceneSpritePlacements.Add(new SceneSpritePlacement
+                    {
+                        Id = AttributeOrChild(placementElement, "id", "Id"),
+                        SpriteId = AttributeOrChild(placementElement, "spriteId", "SpriteId"),
+                        RelativePath = AttributeOrChild(placementElement, "path", "Path"),
+                        RuntimeSpriteKey = AttributeOrChild(placementElement, "runtimeSpriteKey", "RuntimeSpriteKey"),
+                        Position = ReadVector(Child(placementElement, "Position")),
+                        SnapToGrid = ReadBoolAttribute(placementElement, "snapToGrid", false),
+                        GridX = ReadNullableIntAttribute(placementElement, "gridX"),
+                        GridY = ReadNullableIntAttribute(placementElement, "gridY"),
+                        SortingLayerName = AttributeOrChild(placementElement, "sortingLayer", "SortingLayer"),
+                        SortingOrder = ReadIntAttribute(placementElement, "sortingOrder", 0)
                     });
                 }
             }
@@ -607,9 +634,34 @@ namespace ModAPI.Scenarios
                 WriteAttribute(writer, "targetPath", swap.TargetPath);
                 WriteAttribute(writer, "spriteId", swap.SpriteId);
                 WriteAttribute(writer, "path", swap.RelativePath);
+                WriteAttribute(writer, "runtimeSpriteKey", swap.RuntimeSpriteKey);
                 if (swap.Day.HasValue)
                     writer.WriteAttributeString("day", swap.Day.Value.ToString(CultureInfo.InvariantCulture));
                 writer.WriteAttributeString("targetComponent", swap.TargetComponent.ToString());
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+
+            writer.WriteStartElement("SceneSpritePlacements");
+            for (int i = 0; i < value.SceneSpritePlacements.Count; i++)
+            {
+                SceneSpritePlacement placement = value.SceneSpritePlacements[i];
+                if (placement == null)
+                    continue;
+
+                writer.WriteStartElement("Placement");
+                WriteAttribute(writer, "id", placement.Id);
+                WriteAttribute(writer, "spriteId", placement.SpriteId);
+                WriteAttribute(writer, "path", placement.RelativePath);
+                WriteAttribute(writer, "runtimeSpriteKey", placement.RuntimeSpriteKey);
+                writer.WriteAttributeString("snapToGrid", placement.SnapToGrid.ToString());
+                if (placement.GridX.HasValue)
+                    writer.WriteAttributeString("gridX", placement.GridX.Value.ToString(CultureInfo.InvariantCulture));
+                if (placement.GridY.HasValue)
+                    writer.WriteAttributeString("gridY", placement.GridY.Value.ToString(CultureInfo.InvariantCulture));
+                WriteAttribute(writer, "sortingLayer", placement.SortingLayerName);
+                writer.WriteAttributeString("sortingOrder", placement.SortingOrder.ToString(CultureInfo.InvariantCulture));
+                WriteVector(writer, "Position", placement.Position);
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
@@ -823,6 +875,15 @@ namespace ModAPI.Scenarios
         {
             int? parsed = ReadNullableIntAttribute(element, attributeName);
             return parsed.HasValue ? parsed.Value : fallback;
+        }
+
+        private static bool ReadBoolAttribute(XmlElement element, string attributeName, bool fallback)
+        {
+            if (element == null || !element.HasAttribute(attributeName))
+                return fallback;
+
+            bool parsed;
+            return bool.TryParse(element.GetAttribute(attributeName), out parsed) ? parsed : fallback;
         }
 
         private static int? ReadNullableIntAttribute(XmlElement element, string attributeName)

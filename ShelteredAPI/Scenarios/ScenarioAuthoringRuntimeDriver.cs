@@ -45,6 +45,7 @@ namespace ShelteredAPI.Scenarios
         {
             try
             {
+                ScenarioCompositionRoot.EnsureInitialized();
                 ScenarioAuthoringBootstrapService.Instance.Update();
                 ScenarioSpriteSwapService.Instance.Update();
             }

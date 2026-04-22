@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace ShelteredAPI.Scenarios
 {
@@ -15,15 +14,9 @@ namespace ShelteredAPI.Scenarios
             public Sprite Sprite;
         }
 
-        private sealed class RuntimeTarget
-        {
-            public ScenarioSpriteTargetComponentKind Kind;
-            public SpriteRenderer SpriteRenderer;
-            public UI2DSprite Ui2DSprite;
-        }
-
+        private readonly ScenarioSpriteRuntimeResolver _resolver = new ScenarioSpriteRuntimeResolver();
         private readonly Dictionary<string, BaselineState> _baselineByTarget = new Dictionary<string, BaselineState>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, RuntimeTarget> _targetCache = new Dictionary<string, RuntimeTarget>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ScenarioSpriteRuntimeResolver.ResolvedTarget> _targetCache = new Dictionary<string, ScenarioSpriteRuntimeResolver.ResolvedTarget>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _activeTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public int Apply(IList<ScenarioSpriteSwapPlanner.PlannedSwap> plan, string reason)
@@ -36,7 +29,7 @@ namespace ShelteredAPI.Scenarios
                 if (entry == null || entry.Sprite == null || string.IsNullOrEmpty(entry.TargetPath))
                     continue;
 
-                RuntimeTarget runtimeTarget;
+                ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget;
                 if (!TryResolveRuntimeTarget(entry.TargetPath, entry.TargetComponent, out runtimeTarget))
                     continue;
 
@@ -81,7 +74,7 @@ namespace ShelteredAPI.Scenarios
             if (!_baselineByTarget.TryGetValue(targetPath, out baseline) || baseline == null)
                 return;
 
-            RuntimeTarget runtimeTarget;
+            ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget;
             if (!TryResolveRuntimeTarget(targetPath, baseline.Kind, out runtimeTarget))
                 return;
 
@@ -91,25 +84,19 @@ namespace ShelteredAPI.Scenarios
                 runtimeTarget.Ui2DSprite.sprite2D = baseline.Sprite;
         }
 
-        private void CaptureBaseline(string targetPath, RuntimeTarget runtimeTarget)
+        private void CaptureBaseline(string targetPath, ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget)
         {
             if (_baselineByTarget.ContainsKey(targetPath) || runtimeTarget == null)
                 return;
 
-            Sprite baselineSprite = null;
-            if (runtimeTarget.Kind == ScenarioSpriteTargetComponentKind.SpriteRenderer && runtimeTarget.SpriteRenderer != null)
-                baselineSprite = runtimeTarget.SpriteRenderer.sprite;
-            else if (runtimeTarget.Kind == ScenarioSpriteTargetComponentKind.UI2DSprite && runtimeTarget.Ui2DSprite != null)
-                baselineSprite = runtimeTarget.Ui2DSprite.sprite2D;
-
             _baselineByTarget[targetPath] = new BaselineState
             {
                 Kind = runtimeTarget.Kind,
-                Sprite = baselineSprite
+                Sprite = runtimeTarget.CurrentSprite
             };
         }
 
-        private static bool ApplySprite(RuntimeTarget runtimeTarget, Sprite sprite)
+        private static bool ApplySprite(ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget, Sprite sprite)
         {
             if (runtimeTarget == null || sprite == null)
                 return false;
@@ -129,131 +116,23 @@ namespace ShelteredAPI.Scenarios
             return false;
         }
 
-        private bool TryResolveRuntimeTarget(string targetPath, ScenarioSpriteTargetComponentKind preferredKind, out RuntimeTarget runtimeTarget)
+        private bool TryResolveRuntimeTarget(string targetPath, ScenarioSpriteTargetComponentKind preferredKind, out ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget)
         {
             runtimeTarget = null;
             if (string.IsNullOrEmpty(targetPath))
                 return false;
 
-            if (_targetCache.TryGetValue(targetPath, out runtimeTarget) && IsTargetAlive(runtimeTarget))
+            if (_targetCache.TryGetValue(targetPath, out runtimeTarget) && ScenarioSpriteRuntimeResolver.IsAlive(runtimeTarget))
                 return true;
 
-            Transform target = FindTransformByPath(targetPath);
-            if (target == null)
+            if (!_resolver.TryResolve(targetPath, preferredKind, out runtimeTarget) || runtimeTarget == null)
             {
                 MMLog.WarnOnce("ScenarioSpriteSwapRenderer.Target." + targetPath, "Sprite swap target path was not found: " + targetPath);
                 return false;
             }
 
-            runtimeTarget = CreateRuntimeTarget(target, preferredKind);
-            if (runtimeTarget == null)
-            {
-                MMLog.WarnOnce("ScenarioSpriteSwapRenderer.Component." + targetPath, "Sprite swap target has no supported sprite component: " + targetPath);
-                return false;
-            }
-
             _targetCache[targetPath] = runtimeTarget;
             return true;
-        }
-
-        private static RuntimeTarget CreateRuntimeTarget(Transform target, ScenarioSpriteTargetComponentKind preferredKind)
-        {
-            if (target == null)
-                return null;
-
-            SpriteRenderer spriteRenderer = null;
-            UI2DSprite ui2DSprite = null;
-
-            if (preferredKind == ScenarioSpriteTargetComponentKind.Auto || preferredKind == ScenarioSpriteTargetComponentKind.SpriteRenderer)
-                spriteRenderer = target.GetComponent<SpriteRenderer>() ?? target.GetComponentInChildren<SpriteRenderer>(true);
-            if (preferredKind == ScenarioSpriteTargetComponentKind.Auto || preferredKind == ScenarioSpriteTargetComponentKind.UI2DSprite)
-                ui2DSprite = target.GetComponent<UI2DSprite>() ?? target.GetComponentInChildren<UI2DSprite>(true);
-
-            if (spriteRenderer != null)
-            {
-                return new RuntimeTarget
-                {
-                    Kind = ScenarioSpriteTargetComponentKind.SpriteRenderer,
-                    SpriteRenderer = spriteRenderer
-                };
-            }
-
-            if (ui2DSprite != null)
-            {
-                return new RuntimeTarget
-                {
-                    Kind = ScenarioSpriteTargetComponentKind.UI2DSprite,
-                    Ui2DSprite = ui2DSprite
-                };
-            }
-
-            return null;
-        }
-
-        private static bool IsTargetAlive(RuntimeTarget runtimeTarget)
-        {
-            if (runtimeTarget == null)
-                return false;
-
-            if (runtimeTarget.Kind == ScenarioSpriteTargetComponentKind.SpriteRenderer)
-                return runtimeTarget.SpriteRenderer != null;
-            if (runtimeTarget.Kind == ScenarioSpriteTargetComponentKind.UI2DSprite)
-                return runtimeTarget.Ui2DSprite != null;
-            return false;
-        }
-
-        private static Transform FindTransformByPath(string targetPath)
-        {
-            if (string.IsNullOrEmpty(targetPath))
-                return null;
-
-            string[] segments = targetPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-            if (segments.Length == 0)
-                return null;
-
-            Scene scene = SceneManager.GetActiveScene();
-            if (!scene.IsValid())
-                return null;
-
-            GameObject[] roots = scene.GetRootGameObjects();
-            for (int i = 0; i < roots.Length; i++)
-            {
-                GameObject root = roots[i];
-                if (root == null || !string.Equals(root.name, segments[0], StringComparison.Ordinal))
-                    continue;
-
-                Transform current = root.transform;
-                bool matched = true;
-                for (int segmentIndex = 1; segmentIndex < segments.Length; segmentIndex++)
-                {
-                    current = FindChildByName(current, segments[segmentIndex]);
-                    if (current == null)
-                    {
-                        matched = false;
-                        break;
-                    }
-                }
-
-                if (matched && current != null)
-                    return current;
-            }
-
-            return null;
-        }
-
-        private static Transform FindChildByName(Transform parent, string name)
-        {
-            if (parent == null || string.IsNullOrEmpty(name))
-                return null;
-
-            for (int i = 0; i < parent.childCount; i++)
-            {
-                Transform child = parent.GetChild(i);
-                if (child != null && string.Equals(child.name, name, StringComparison.Ordinal))
-                    return child;
-            }
-
-            return null;
         }
     }
 }

@@ -5,29 +5,24 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class ShelteredScenarioRuntimeBindingManager
+    public sealed class ShelteredScenarioRuntimeBindingManager : IScenarioRuntimeBindingService
     {
         private const string SaveGroupName = "CustomScenarioBinding";
         private const string HasLastEditorTickName = "HasLastEditorSaveTick";
-        private static readonly ShelteredScenarioRuntimeBindingManager _instance = new ShelteredScenarioRuntimeBindingManager();
+        private readonly IScenarioStateManager _stateManager;
         private readonly object _sync = new object();
-        private ScenarioRuntimeBinding _binding;
-        private int _bindingRevision;
         private bool _hooked;
 
         public static ShelteredScenarioRuntimeBindingManager Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ShelteredScenarioRuntimeBindingManager>(); }
         }
 
         public ScenarioRuntimeBinding CurrentBinding
         {
             get
             {
-                lock (_sync)
-                {
-                    return CloneBinding(_binding);
-                }
+                return _stateManager.GetRuntimeBinding();
             }
         }
 
@@ -35,15 +30,13 @@ namespace ShelteredAPI.Scenarios
         {
             get
             {
-                lock (_sync)
-                {
-                    return _bindingRevision;
-                }
+                return _stateManager.RuntimeBindingRevision;
             }
         }
 
-        private ShelteredScenarioRuntimeBindingManager()
+        internal ShelteredScenarioRuntimeBindingManager(IScenarioStateManager stateManager)
         {
+            _stateManager = stateManager;
         }
 
         public void EnsureHooked()
@@ -59,33 +52,20 @@ namespace ShelteredAPI.Scenarios
 
         public void SetBinding(ScenarioRuntimeBinding binding)
         {
-            lock (_sync)
-            {
-                _binding = CloneBinding(binding);
-                _bindingRevision++;
-            }
+            _stateManager.SetRuntimeBinding(binding, "runtime-binding", "Binding updated.");
         }
 
         public void ConvertToNormalSave()
         {
-            lock (_sync)
-            {
-                if (_binding == null)
-                    return;
-                _binding.IsActive = false;
-                _binding.IsConvertedToNormalSave = true;
-                _bindingRevision++;
-            }
+            _stateManager.ConvertRuntimeBindingToNormalSave("runtime-binding", "Converted to normal save.");
         }
 
         public ScenarioRuntimeBinding GetActiveBindingForStartup()
         {
-            lock (_sync)
-            {
-                if (_binding == null || _binding.IsConvertedToNormalSave)
-                    return null;
-                return CloneBinding(_binding);
-            }
+            ScenarioRuntimeBinding binding = _stateManager.GetRuntimeBinding();
+            if (binding == null || binding.IsConvertedToNormalSave)
+                return null;
+            return binding;
         }
 
         private void HandleBeforeSave(SaveData data)
@@ -189,20 +169,5 @@ namespace ShelteredAPI.Scenarios
             data.GroupEnd();
         }
 
-        private static ScenarioRuntimeBinding CloneBinding(ScenarioRuntimeBinding binding)
-        {
-            if (binding == null)
-                return null;
-
-            return new ScenarioRuntimeBinding
-            {
-                ScenarioId = binding.ScenarioId,
-                VersionApplied = binding.VersionApplied,
-                IsActive = binding.IsActive,
-                IsConvertedToNormalSave = binding.IsConvertedToNormalSave,
-                DayCreated = binding.DayCreated,
-                LastEditorSaveTick = binding.LastEditorSaveTick
-            };
-        }
     }
 }

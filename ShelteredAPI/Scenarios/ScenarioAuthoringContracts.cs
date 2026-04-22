@@ -23,8 +23,14 @@ namespace ShelteredAPI.Scenarios
         public const string ClearSelection = "sheltered.scenario_authoring.clear_selection";
         public const string SaveDraft = "sheltered.scenario_authoring.save_draft";
         public const string TogglePlaytest = "sheltered.scenario_authoring.toggle_playtest";
+        public const string UndoKey = "sheltered.scenario_authoring.undo";
+        public const string RedoKey = "sheltered.scenario_authoring.redo";
+        public const string CopyKey = "sheltered.scenario_authoring.copy";
+        public const string PasteKey = "sheltered.scenario_authoring.paste";
+        public const string RevertKey = "sheltered.scenario_authoring.revert";
 
         public const string ActionShellToggle = "shell.toggle";
+        public const string ActionShellShow = "shell.show";
         public const string ActionSave = "editor.save";
         public const string ActionPlaytest = "editor.playtest.toggle";
         public const string ActionCloseEditor = "editor.close";
@@ -35,10 +41,22 @@ namespace ShelteredAPI.Scenarios
         public const string ActionCaptureShelterObjects = "capture.shelter.objects";
         public const string ActionCaptureSelectedObject = "capture.shelter.selected_object";
         public const string ActionRemoveSelectedObjectPlacement = "capture.shelter.remove_selected_object";
+        public const string ActionSpriteSwapClear = "sprite_swap.clear";
+        public const string ActionSpriteSwapRevert = "sprite_swap.revert";
+        public const string ActionSpriteSwapCopy = "sprite_swap.copy";
+        public const string ActionSpriteSwapPaste = "sprite_swap.paste";
+        public const string ActionSpriteSwapApplyPrefix = "sprite_swap.apply.";
+        public const string ActionHistoryUndo = "history.undo";
+        public const string ActionHistoryRedo = "history.redo";
+        public const string ActionSceneSpritePlacementRemove = "scene_sprite.remove";
+        public const string ActionSceneSpritePlacementApplyPrefix = "scene_sprite.apply.";
+        public const string ActionAssetModeReplace = "asset.mode.replace";
+        public const string ActionAssetModePlace = "asset.mode.place";
         public const string ActionToolSelect = "tool.select";
         public const string ActionToolFamily = "tool.family";
         public const string ActionToolInventory = "tool.inventory";
         public const string ActionToolShelter = "tool.shelter";
+        public const string ActionToolAssets = "tool.assets";
         public const string ActionToolObjects = "tool.objects";
         public const string ActionToolWiring = "tool.wiring";
         public const string ActionToolPeople = "tool.people";
@@ -56,7 +74,14 @@ namespace ShelteredAPI.Scenarios
         Wiring = 5,
         People = 6,
         Vehicle = 7,
-        WinLoss = 8
+        WinLoss = 8,
+        Assets = 9
+    }
+
+    public enum ScenarioAssetAuthoringMode
+    {
+        ReplaceExisting = 0,
+        PlaceNew = 1
     }
 
     public enum ScenarioAuthoringTargetKind
@@ -70,7 +95,9 @@ namespace ShelteredAPI.Scenarios
         Light = 6,
         Vehicle = 7,
         Room = 8,
-        Tile = 9
+        Tile = 9,
+        Background = 10,
+        SceneSprite = 11
     }
 
     public sealed class ScenarioAuthoringTarget
@@ -82,8 +109,12 @@ namespace ShelteredAPI.Scenarios
         public string AdapterId { get; set; }
         public string GameObjectName { get; set; }
         public string TransformPath { get; set; }
+        public string ScenarioReferenceId { get; set; }
         public UnityEngine.Object RuntimeObject { get; set; }
+        public UnityEngine.Object HighlightObject { get; set; }
         public Vector3 WorldPosition { get; set; }
+        public int? GridX { get; set; }
+        public int? GridY { get; set; }
         public bool SupportsInspect { get; set; }
         public bool SupportsReplace { get; set; }
 
@@ -98,8 +129,12 @@ namespace ShelteredAPI.Scenarios
                 AdapterId = AdapterId,
                 GameObjectName = GameObjectName,
                 TransformPath = TransformPath,
+                ScenarioReferenceId = ScenarioReferenceId,
                 RuntimeObject = RuntimeObject,
+                HighlightObject = HighlightObject,
                 WorldPosition = WorldPosition,
+                GridX = GridX,
+                GridY = GridY,
                 SupportsInspect = SupportsInspect,
                 SupportsReplace = SupportsReplace
             };
@@ -112,6 +147,7 @@ namespace ShelteredAPI.Scenarios
         public bool ShellVisible { get; set; }
         public bool SelectionModeActive { get; set; }
         public ScenarioAuthoringTool ActiveTool { get; set; }
+        public ScenarioAssetAuthoringMode AssetMode { get; set; }
         public string ActiveDraftId { get; set; }
         public string ActiveScenarioFilePath { get; set; }
         public string StatusMessage { get; set; }
@@ -126,6 +162,7 @@ namespace ShelteredAPI.Scenarios
                 ShellVisible = ShellVisible,
                 SelectionModeActive = SelectionModeActive,
                 ActiveTool = ActiveTool,
+                AssetMode = AssetMode,
                 ActiveDraftId = ActiveDraftId,
                 ActiveScenarioFilePath = ActiveScenarioFilePath,
                 StatusMessage = StatusMessage,
@@ -148,8 +185,24 @@ namespace ShelteredAPI.Scenarios
         public string Id { get; set; }
         public string Label { get; set; }
         public string Hint { get; set; }
+        public string Detail { get; set; }
+        public string Badge { get; set; }
+        public string IconText { get; set; }
+        public Sprite PreviewSprite { get; set; }
         public bool Enabled { get; set; }
         public bool Emphasized { get; set; }
+    }
+
+    public enum ScenarioAuthoringInspectorSectionLayout
+    {
+        Default = 0,
+        MetricGrid = 1,
+        PropertyList = 2,
+        NoteList = 3,
+        ActionStrip = 4,
+        TabStrip = 5,
+        Summary = 6,
+        CandidateGrid = 7
     }
 
     public sealed class ScenarioAuthoringInspectorSection
@@ -157,6 +210,7 @@ namespace ShelteredAPI.Scenarios
         public string Id { get; set; }
         public string Title { get; set; }
         public bool Expanded { get; set; }
+        public ScenarioAuthoringInspectorSectionLayout Layout { get; set; }
         public ScenarioAuthoringInspectorItem[] Items { get; set; }
     }
 
@@ -172,6 +226,11 @@ namespace ShelteredAPI.Scenarios
         public ScenarioAuthoringInspectorItemKind Kind { get; set; }
         public string Label { get; set; }
         public string Value { get; set; }
+        public string Detail { get; set; }
+        public string Badge { get; set; }
+        public string IconText { get; set; }
+        public Sprite PreviewSprite { get; set; }
+        public bool Emphasized { get; set; }
         public ScenarioAuthoringInspectorAction Action { get; set; }
     }
 
@@ -182,6 +241,7 @@ namespace ShelteredAPI.Scenarios
         public RaycastHit Hit { get; set; }
         public Collider Collider { get; set; }
         public GameObject GameObject { get; set; }
+        public Vector3 WorldPoint { get; set; }
     }
 
     public interface IScenarioAuthoringTargetAdapter

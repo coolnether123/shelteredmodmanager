@@ -6,19 +6,22 @@ using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class ScenarioEditorController
+    public sealed class ScenarioEditorController : IScenarioEditorService
     {
-        private static readonly ScenarioEditorController _instance = new ScenarioEditorController();
         private readonly object _sync = new object();
-        private readonly ScenarioDefinitionSerializer _serializer = new ScenarioDefinitionSerializer();
-        private readonly ScenarioValidatorImpl _validator = new ScenarioValidatorImpl();
-        private readonly ScenarioApplier _applier = new ScenarioApplier();
+        private readonly IScenarioDefinitionSerializer _serializer;
+        private readonly IScenarioDefinitionValidator _validator;
+        private readonly IScenarioPlaytestOrchestrator _playtestOrchestrator;
+        private readonly IScenarioRuntimeBindingService _runtimeBindingService;
+        private readonly IScenarioPauseService _pauseService;
+        private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
+        private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
         private ScenarioEditorSession _session;
         private string _lastScenarioFilePath;
 
         public static ScenarioEditorController Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioEditorController>(); }
         }
 
         public ScenarioEditorSession CurrentSession
@@ -32,8 +35,22 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        private ScenarioEditorController()
+        internal ScenarioEditorController(
+            IScenarioDefinitionSerializer serializer,
+            IScenarioDefinitionValidator validator,
+            IScenarioPlaytestOrchestrator playtestOrchestrator,
+            IScenarioRuntimeBindingService runtimeBindingService,
+            IScenarioPauseService pauseService,
+            IScenarioSpriteSwapEngine spriteSwapEngine,
+            IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine)
         {
+            _serializer = serializer;
+            _validator = validator;
+            _playtestOrchestrator = playtestOrchestrator;
+            _runtimeBindingService = runtimeBindingService;
+            _pauseService = pauseService;
+            _spriteSwapEngine = spriteSwapEngine;
+            _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
         }
 
         public ScenarioEditorSession EnterEditMode(ScenarioBaseGameMode baseMode)
@@ -91,53 +108,40 @@ namespace ShelteredAPI.Scenarios
         public ScenarioApplyResult BeginPlaytest()
         {
             ScenarioEditorSession session = RequireSession();
-            if (session.PlaytestState == ScenarioPlaytestState.Playtesting)
-            {
-                ScenarioApplyResult alreadyRunning = new ScenarioApplyResult();
-                alreadyRunning.AddMessage("Playtest is already running.");
-                return alreadyRunning;
-            }
+            return _playtestOrchestrator.BeginPlaytest(session, _lastScenarioFilePath);
+        }
 
-            string blockingReason;
-            if (!ScenarioWorldReady.Evaluate(out blockingReason))
-            {
-                ScenarioApplyResult notReady = new ScenarioApplyResult();
-                notReady.AddMessage("World is not ready for scenario apply; playtest did not start. " + blockingReason);
-                return notReady;
-            }
+        public bool TryGetActiveWorkingDefinition(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath)
+        {
+            definition = null;
+            scenarioFilePath = null;
 
-            bool reusedLiveWorld = session.HasAppliedToCurrentWorld;
-            ScenarioApplyResult result;
-            if (!reusedLiveWorld)
+            lock (_sync)
             {
-                result = _applier.ApplyAll(session.WorkingDefinition, _lastScenarioFilePath);
-                session.HasAppliedToCurrentWorld = true;
-            }
-            else
-            {
-                result = new ScenarioApplyResult();
-                result.AddMessage("Playtest resumed without reapplying scenario changes; the current live shelter already matches the authoring draft.");
-            }
+                if (_session == null || _session.WorkingDefinition == null)
+                    return false;
 
-            EnsureRuntimeBinding(session);
-            session.PlaytestState = ScenarioPlaytestState.Playtesting;
-            ResumeFromEditor();
-            MMLog.WriteInfo("[ScenarioEditorController] Playtest started for scenario '" + session.WorkingDefinition.Id
-                + "'. Messages=" + result.Messages.Length + ", reusedLiveWorld=" + reusedLiveWorld + ".");
-            return result;
+                if (!string.IsNullOrEmpty(scenarioId)
+                    && !string.Equals(_session.WorkingDefinition.Id, scenarioId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                definition = ScenarioDefinitionCloner.Clone(_session.WorkingDefinition);
+                scenarioFilePath = _lastScenarioFilePath;
+                return definition != null;
+            }
         }
 
         public void EndPlaytest()
         {
             ScenarioEditorSession session = RequireSession();
-            PauseForEditor();
-            session.PlaytestState = ScenarioPlaytestState.Paused;
-            MMLog.WriteInfo("[ScenarioEditorController] Playtest ended; editor pause restored.");
+            _playtestOrchestrator.EndPlaytest(session);
         }
 
         public void ConvertToNormalSave()
         {
-            ShelteredScenarioRuntimeBindingManager.Instance.ConvertToNormalSave();
+            _runtimeBindingService.ConvertToNormalSave();
             MMLog.WriteInfo("[ScenarioEditorController] Scenario binding converted to a normal save.");
         }
 
@@ -157,7 +161,8 @@ namespace ShelteredAPI.Scenarios
                 _lastScenarioFilePath = null;
             }
 
-            ScenarioSpriteSwapService.Instance.Clear("Scenario editor closed.");
+            _spriteSwapEngine.Clear("Scenario editor closed.");
+            _sceneSpritePlacementEngine.Clear("Scenario editor closed.");
             ResumeFromEditor();
             MMLog.WriteInfo("[ScenarioEditorController] Editor session closed. resumeGame=" + resumeGame
                 + ", hadPreviousSession=" + (previous != null) + ".");
@@ -190,22 +195,6 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
-        private static void EnsureRuntimeBinding(ScenarioEditorSession session)
-        {
-            if (session == null || session.WorkingDefinition == null)
-                return;
-
-            ShelteredScenarioRuntimeBindingManager.Instance.SetBinding(new ScenarioRuntimeBinding
-            {
-                ScenarioId = session.WorkingDefinition.Id,
-                VersionApplied = session.WorkingDefinition.Version,
-                IsActive = true,
-                IsConvertedToNormalSave = false,
-                DayCreated = GameTime.Day,
-                LastEditorSaveTick = Environment.TickCount
-            });
-        }
-
         private static ScenarioDefinition CreateBlankDefinition(ScenarioBaseGameMode baseMode)
         {
             ScenarioDefinition definition = new ScenarioDefinition();
@@ -230,12 +219,12 @@ namespace ShelteredAPI.Scenarios
 
         private void PauseForEditor()
         {
-            ScenarioAuthoringPauseService.Instance.EnsurePaused("Scenario authoring active.");
+            _pauseService.EnsurePaused("Scenario authoring active.");
         }
 
         private void ResumeFromEditor()
         {
-            ScenarioAuthoringPauseService.Instance.ReleasePause("Scenario authoring released simulation.");
+            _pauseService.ReleasePause("Scenario authoring released simulation.");
         }
     }
 }

@@ -121,6 +121,7 @@ namespace ModAPI.Scenarios
             }
 
             ValidateSpriteSwaps(definition.AssetReferences, packRoot, result);
+            ValidateSceneSpritePlacements(definition.AssetReferences, packRoot, result);
         }
 
         private static void ValidateInventory(ScenarioDefinition definition, ScenarioValidationResult result)
@@ -176,8 +177,9 @@ namespace ModAPI.Scenarios
 
                 bool hasSpriteId = TrimToNull(swap.SpriteId) != null;
                 bool hasRelativePath = TrimToNull(swap.RelativePath) != null;
-                if (!hasSpriteId && !hasRelativePath)
-                    result.AddError("Sprite swap #" + i + " must specify spriteId or path.");
+                bool hasRuntimeSpriteKey = TrimToNull(swap.RuntimeSpriteKey) != null;
+                if (!hasSpriteId && !hasRelativePath && !hasRuntimeSpriteKey)
+                    result.AddError("Sprite swap #" + i + " must specify spriteId, path, or runtimeSpriteKey.");
 
                 if (swap.Day.HasValue && swap.Day.Value < 1)
                     result.AddError("Sprite swap #" + i + " has day less than 1.");
@@ -190,6 +192,46 @@ namespace ModAPI.Scenarios
 
                 if (hasRelativePath)
                     ValidateAssetPath(packRoot, swap.RelativePath, "sprite swap", result);
+            }
+        }
+
+        private static void ValidateSceneSpritePlacements(AssetReferencesDefinition assets, string packRoot, ScenarioValidationResult result)
+        {
+            if (assets == null || assets.SceneSpritePlacements == null)
+                return;
+
+            for (int i = 0; i < assets.SceneSpritePlacements.Count; i++)
+            {
+                SceneSpritePlacement placement = assets.SceneSpritePlacements[i];
+                if (placement == null)
+                {
+                    result.AddError("Scene sprite placement #" + i + " is null.");
+                    continue;
+                }
+
+                if (TrimToNull(placement.Id) == null)
+                    result.AddError("Scene sprite placement #" + i + " is missing id.");
+
+                bool hasSpriteId = TrimToNull(placement.SpriteId) != null;
+                bool hasRelativePath = TrimToNull(placement.RelativePath) != null;
+                bool hasRuntimeSpriteKey = TrimToNull(placement.RuntimeSpriteKey) != null;
+                if (!hasSpriteId && !hasRelativePath && !hasRuntimeSpriteKey)
+                    result.AddError("Scene sprite placement #" + i + " must specify spriteId, path, or runtimeSpriteKey.");
+
+                if (hasSpriteId && !HasSpriteReference(assets, placement.SpriteId))
+                    result.AddError("Scene sprite placement #" + i + " references unknown spriteId '" + placement.SpriteId + "'.");
+
+                if (hasRelativePath)
+                    ValidateAssetPath(packRoot, placement.RelativePath, "scene sprite placement", result);
+
+                if (placement.SnapToGrid && (!placement.GridX.HasValue || !placement.GridY.HasValue))
+                    result.AddError("Scene sprite placement #" + i + " is snapToGrid but missing gridX/gridY.");
+
+                if (placement.GridX.HasValue && placement.GridX.Value < 0)
+                    result.AddError("Scene sprite placement #" + i + " has negative gridX.");
+
+                if (placement.GridY.HasValue && placement.GridY.Value < 0)
+                    result.AddError("Scene sprite placement #" + i + " has negative gridY.");
             }
         }
 

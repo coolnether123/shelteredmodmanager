@@ -4,12 +4,11 @@ using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
 {
-    internal sealed class ScenarioSpriteSwapService
+    internal sealed class ScenarioSpriteSwapService : IScenarioSpriteSwapEngine
     {
-        private static readonly ScenarioSpriteSwapService _instance = new ScenarioSpriteSwapService();
         private readonly object _sync = new object();
-        private readonly ScenarioSpriteSwapPlanner _planner = new ScenarioSpriteSwapPlanner();
-        private readonly ScenarioSpriteSwapRenderer _renderer = new ScenarioSpriteSwapRenderer();
+        private readonly ScenarioSpriteSwapPlanner _planner;
+        private readonly ScenarioSpriteSwapRenderer _renderer;
         private ScenarioDefinition _definition;
         private string _scenarioFilePath;
         private string _scenarioId;
@@ -20,11 +19,13 @@ namespace ShelteredAPI.Scenarios
 
         public static ScenarioSpriteSwapService Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioSpriteSwapService>(); }
         }
 
-        private ScenarioSpriteSwapService()
+        internal ScenarioSpriteSwapService(ScenarioSpriteSwapPlanner planner, ScenarioSpriteSwapRenderer renderer)
         {
+            _planner = planner ?? new ScenarioSpriteSwapPlanner(new ScenarioSpriteAssetResolver());
+            _renderer = renderer ?? new ScenarioSpriteSwapRenderer();
         }
 
         public void Activate(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result)

@@ -226,11 +226,13 @@ namespace ModAPI.Scenarios
             CustomSprites = new List<SpriteRef>();
             CustomIcons = new List<IconRef>();
             SpriteSwaps = new List<SpriteSwapRule>();
+            SceneSpritePlacements = new List<SceneSpritePlacement>();
         }
 
         public List<SpriteRef> CustomSprites { get; private set; }
         public List<IconRef> CustomIcons { get; private set; }
         public List<SpriteSwapRule> SpriteSwaps { get; private set; }
+        public List<SceneSpritePlacement> SceneSpritePlacements { get; private set; }
     }
 
     public enum ScenarioSpriteTargetComponentKind
@@ -246,6 +248,7 @@ namespace ModAPI.Scenarios
         public string TargetPath { get; set; }
         public string SpriteId { get; set; }
         public string RelativePath { get; set; }
+        public string RuntimeSpriteKey { get; set; }
         public int? Day { get; set; }
         public ScenarioSpriteTargetComponentKind TargetComponent { get; set; }
     }
@@ -254,6 +257,25 @@ namespace ModAPI.Scenarios
     {
         public string Id { get; set; }
         public string RelativePath { get; set; }
+    }
+
+    public class SceneSpritePlacement
+    {
+        public SceneSpritePlacement()
+        {
+            Position = new ScenarioVector3();
+        }
+
+        public string Id { get; set; }
+        public string SpriteId { get; set; }
+        public string RelativePath { get; set; }
+        public string RuntimeSpriteKey { get; set; }
+        public ScenarioVector3 Position { get; set; }
+        public bool SnapToGrid { get; set; }
+        public int? GridX { get; set; }
+        public int? GridY { get; set; }
+        public string SortingLayerName { get; set; }
+        public int SortingOrder { get; set; }
     }
 
     public class IconRef
