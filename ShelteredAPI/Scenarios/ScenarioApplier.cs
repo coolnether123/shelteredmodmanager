@@ -414,6 +414,11 @@ namespace ShelteredAPI.Scenarios
                 result.AddMessage("Room placement #" + index + " could not resolve a shelter cell.");
                 return;
             }
+            if (!IsValidCell(grid, gridX, gridY))
+            {
+                result.AddMessage("Room placement #" + index + " is outside the shelter grid at " + gridX + "," + gridY + ".");
+                return;
+            }
 
             ShelterRoomGrid.GridCell cell = grid.GetCell(gridX, gridY);
             ShelterRoomGrid.CellType cellType = string.Equals(placement.DefinitionReference, ScenarioPlacementDefinitions.RoomTop, StringComparison.OrdinalIgnoreCase)
@@ -441,6 +446,11 @@ namespace ShelteredAPI.Scenarios
                 result.AddMessage("Ladder placement #" + index + " could not resolve a shelter cell.");
                 return;
             }
+            if (!IsValidCell(grid, gridX, gridY))
+            {
+                result.AddMessage("Ladder placement #" + index + " is outside the shelter grid at " + gridX + "," + gridY + ".");
+                return;
+            }
 
             if (grid.HasLadder(gridX, gridY))
                 return;
@@ -463,6 +473,11 @@ namespace ShelteredAPI.Scenarios
             if (!TryResolveGridCoordinates(grid, placement, out gridX, out gridY))
             {
                 result.AddMessage("Room light placement #" + index + " could not resolve a shelter cell.");
+                return;
+            }
+            if (!IsValidCell(grid, gridX, gridY))
+            {
+                result.AddMessage("Room light placement #" + index + " is outside the shelter grid at " + gridX + "," + gridY + ".");
                 return;
             }
 
@@ -492,6 +507,15 @@ namespace ShelteredAPI.Scenarios
                 placement != null && placement.Position != null ? placement.Position.Y : 0f,
                 placement != null && placement.Position != null ? placement.Position.Z : 0f);
             return grid != null && grid.WorldCoordsToCellCoords(worldPosition, out gridX, out gridY);
+        }
+
+        private static bool IsValidCell(ShelterRoomGrid grid, int gridX, int gridY)
+        {
+            return grid != null
+                && gridX >= 0
+                && gridX < grid.grid_width
+                && gridY >= 0
+                && gridY < grid.grid_height;
         }
 
         private static float ResolveHorizontalPosition(ShelterRoomGrid grid, ObjectPlacement placement, int gridX)
