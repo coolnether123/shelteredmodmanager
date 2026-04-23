@@ -9,7 +9,7 @@ namespace ShelteredAPI.Scenarios
         private const string RuntimeObjectName = "ShelteredAPI.ScenarioAuthoring.ShellImgui";
         private const float Margin = 14f;
         private const float Gutter = 12f;
-        private const float TopBarHeight = 92f;
+        private const float TopBarHeight = 114f;
         private const float StatusHeight = 30f;
 
         private ScenarioAuthoringShellRuntime _runtime;
@@ -38,6 +38,8 @@ namespace ShelteredAPI.Scenarios
         private Texture2D _viewportTexture;
         private float _styleOpacity = -1f;
         private bool _windowMenuOpen;
+        private readonly Dictionary<string, Vector2> _windowScrollPositions = new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
+        private Vector2 _settingsScrollPosition = Vector2.zero;
 
         public string ModuleId
         {
@@ -101,13 +103,12 @@ namespace ShelteredAPI.Scenarios
             if (!_visible || _snapshot == null || _snapshot.ShellViewModel == null)
                 return;
 
-            ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
-            inputCapture.BeginFrame();
-
             ScenarioAuthoringShellViewModel shell = _snapshot.ShellViewModel;
             float uiScale = _snapshot.State != null && _snapshot.State.Settings != null
                 ? _snapshot.State.Settings.GetFloat("shell.ui_scale", 1f)
                 : 1f;
+            ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+            inputCapture.BeginFrame(uiScale);
             float panelOpacity = _snapshot.State != null && _snapshot.State.Settings != null
                 ? Mathf.Clamp(_snapshot.State.Settings.GetFloat("shell.panel_opacity", 0.82f), 0.55f, 1f)
                 : 0.82f;
@@ -133,6 +134,14 @@ namespace ShelteredAPI.Scenarios
 
             Dictionary<string, Rect> windowRects = ResolveWindowRects(contentRect, shell.Windows);
 
+            string activeWorkspaceId = GetActiveWorkspaceId(shell.Windows);
+            Rect workspaceTabStripRect = Rect.zero;
+            Rect workspaceRect;
+            if (activeWorkspaceId != null && windowRects.TryGetValue(activeWorkspaceId, out workspaceRect))
+            {
+                workspaceTabStripRect = new Rect(workspaceRect.x, workspaceRect.y - 42f, workspaceRect.width, 36f);
+            }
+
             for (int i = 0; shell.Windows != null && i < shell.Windows.Length; i++)
             {
                 ScenarioAuthoringShellWindowViewModel window = shell.Windows[i];
@@ -140,9 +149,16 @@ namespace ShelteredAPI.Scenarios
                 if (window == null || !window.Visible || !windowRects.TryGetValue(window.Id, out rect))
                     continue;
 
-                DrawWindow(rect, window);
+                Rect scrollRect = DrawWindow(rect, window);
                 inputCapture.RegisterInteractiveRect(rect);
-                inputCapture.RegisterScrollRect(window.Id, rect);
+                if (scrollRect.width > 0f && scrollRect.height > 0f)
+                    inputCapture.RegisterScrollRect(window.Id, scrollRect);
+            }
+
+            if (activeWorkspaceId != null && workspaceTabStripRect.width > 0f)
+            {
+                DrawWorkspaceTabs(workspaceTabStripRect, activeWorkspaceId, shell.Windows);
+                inputCapture.RegisterInteractiveRect(workspaceTabStripRect);
             }
 
             Rect windowMenuRect = Rect.zero;
@@ -180,6 +196,20 @@ namespace ShelteredAPI.Scenarios
                 Event.current.Use();
             }
 
+            if (shell.SpritePickerDocument != null)
+            {
+                Rect pickerRect = new Rect(
+                    Math.Max(Margin, (scaledWidth - 980f) * 0.5f),
+                    Math.Max(topRect.yMax + Gutter, (scaledHeight - 680f) * 0.5f),
+                    Math.Min(980f, scaledWidth - (Margin * 2f)),
+                    Math.Min(680f, scaledHeight - topRect.height - StatusHeight - (Margin * 3f)));
+                Rect pickerScrollRect = DrawDocumentModal(pickerRect, shell.SpritePickerDocument, "sprite_picker");
+                inputCapture.RegisterInteractiveRect(pickerRect);
+                if (pickerScrollRect.width > 0f && pickerScrollRect.height > 0f)
+                    inputCapture.RegisterScrollRect("sprite_picker", pickerScrollRect);
+                inputCapture.SetPopupOpen(true);
+            }
+
             if (shell.Settings != null)
             {
                 Rect settingsRect = new Rect(
@@ -187,12 +217,20 @@ namespace ShelteredAPI.Scenarios
                     Math.Max(topRect.yMax + Gutter, (scaledHeight - 520f) * 0.5f),
                     Math.Min(720f, scaledWidth - (Margin * 2f)),
                     Math.Min(520f, scaledHeight - topRect.height - StatusHeight - (Margin * 3f)));
-                DrawSettingsWindow(settingsRect, shell.Settings);
+                Rect settingsScrollRect = DrawSettingsWindow(settingsRect, shell.Settings);
                 inputCapture.RegisterInteractiveRect(settingsRect);
+                if (settingsScrollRect.width > 0f && settingsScrollRect.height > 0f)
+                    inputCapture.RegisterScrollRect("settings", settingsScrollRect);
                 inputCapture.SetPopupOpen(true);
             }
 
-            inputCapture.SetKeyboardCaptured(shell.Settings != null || (shell.ContextMenu != null && shell.ContextMenu.Visible));
+            inputCapture.SetKeyboardCaptured(
+                shell.Settings != null
+                || shell.SpritePickerDocument != null
+                || (shell.ContextMenu != null && shell.ContextMenu.Visible));
+
+            DrawTooltipOverlay(scaledWidth, scaledHeight);
+
             inputCapture.CompleteFrame();
             GUI.matrix = oldMatrix;
         }
@@ -215,8 +253,6 @@ namespace ShelteredAPI.Scenarios
                 viewportRight -= rightWidth + Gutter;
             if (HasVisibleWindow(windows, ScenarioAuthoringWindowIds.BuildTools))
                 viewportBottom -= bottomPrimaryHeight + Gutter;
-            if (HasAnyVisibleBottomStrip(windows))
-                viewportBottom -= bottomSecondaryHeight + Gutter;
 
             float leftY = contentRect.y;
             float scenarioHeight = Mathf.Clamp(contentRect.height * 0.24f, 182f, 212f);
@@ -231,18 +267,20 @@ namespace ShelteredAPI.Scenarios
 
             Rect buildToolsRect = new Rect(
                 viewportLeft,
-                viewportBottom + (HasAnyVisibleBottomStrip(windows) ? bottomSecondaryHeight + Gutter : 0f),
+                viewportBottom,
                 Math.Max(480f, viewportRight - viewportLeft),
                 bottomPrimaryHeight);
             AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.BuildTools, buildToolsRect);
 
-            float bottomStripY = contentRect.yMax - bottomSecondaryHeight;
-            float bottomStripWidth = Math.Max(200f, viewportRight - viewportLeft);
-            float panelWidth = (bottomStripWidth - (Gutter * 3f)) / 4f;
-            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Triggers, new Rect(viewportLeft, bottomStripY, panelWidth, bottomSecondaryHeight));
-            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Survivors, new Rect(viewportLeft + panelWidth + Gutter, bottomStripY, panelWidth, bottomSecondaryHeight));
-            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Stockpile, new Rect(viewportLeft + ((panelWidth + Gutter) * 2f), bottomStripY, panelWidth, bottomSecondaryHeight));
-            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Quests, new Rect(viewportLeft + ((panelWidth + Gutter) * 3f), bottomStripY, panelWidth, bottomSecondaryHeight));
+            float workspaceWidth = Mathf.Clamp(contentRect.width * 0.58f, 640f, 980f);
+            float workspaceHeight = Mathf.Clamp(contentRect.height * 0.72f, 400f, 620f);
+            float workspaceX = contentRect.x + ((contentRect.width - workspaceWidth) * 0.5f);
+            float workspaceY = contentRect.y + ((contentRect.height - workspaceHeight) * 0.5f);
+            Rect workspaceRect = new Rect(workspaceX, workspaceY, workspaceWidth, workspaceHeight);
+            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Triggers, workspaceRect);
+            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Survivors, workspaceRect);
+            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Stockpile, workspaceRect);
+            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Quests, workspaceRect);
             return rects;
         }
 
@@ -250,55 +288,104 @@ namespace ShelteredAPI.Scenarios
         {
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);
             Rect windowMenuButtonRect = Rect.zero;
+            const float primaryRowY = 8f;
+            const float primaryRowHeight = 44f;
+            const float secondaryRowY = 64f;
+            const float secondaryRowHeight = 34f;
 
-            Rect brandRect = new Rect(rect.x + 10f, rect.y + 8f, 146f, rect.height - 16f);
-            GUI.Label(new Rect(brandRect.x, brandRect.y, brandRect.width, 26f), "SHELTERED", _titleStyle);
-            GUI.Label(new Rect(brandRect.x, brandRect.y + 26f, brandRect.width, 22f), "SCENARIO EDITOR", _smallTitleStyle);
+            Rect brandRect = new Rect(rect.x + 12f, rect.y + 10f, 196f, rect.height - 20f);
+            GUI.Label(new Rect(brandRect.x, brandRect.y - 1f, brandRect.width, 34f), "SHELTERED", _titleStyle);
+            GUI.Label(new Rect(brandRect.x, brandRect.y + 31f, brandRect.width, 24f), "SCENARIO EDITOR", _smallTitleStyle);
 
-            float tabX = brandRect.xMax + 8f;
+            float primaryRowLeft = brandRect.xMax + 10f;
+            float tabX = primaryRowLeft;
             for (int i = 0; shell.Tabs != null && i < shell.Tabs.Length; i++)
             {
                 ScenarioAuthoringInspectorAction tab = shell.Tabs[i];
-                float tabWidth = Mathf.Clamp(MeasureButtonWidth(tab, true, 26f), 78f, 104f);
-                Rect tabRect = new Rect(tabX, rect.y + 4f, tabWidth, 42f);
+                float tabWidth = Mathf.Clamp(MeasureButtonWidth(tab, true, 26f), 86f, 118f);
+                Rect tabRect = new Rect(tabX, rect.y + primaryRowY, tabWidth, primaryRowHeight);
                 DrawButton(tabRect, tab, true);
                 tabX = tabRect.xMax + 4f;
             }
 
-            Rect actionsRect = new Rect(rect.x + 8f, rect.y + 50f, rect.width - 420f, 32f);
+            Rect modeChipRect = new Rect(rect.xMax - 252f, rect.y + primaryRowY, 240f, 46f);
+            DrawModeChip(modeChipRect, shell);
+
+            float layoutsRight = modeChipRect.x - 8f;
+            float layoutsLeft = layoutsRight;
+            if (shell.LayoutActions != null)
+            {
+                for (int i = shell.LayoutActions.Length - 1; i >= 0; i--)
+                {
+                    ScenarioAuthoringInspectorAction action = shell.LayoutActions[i];
+                    if (action == null)
+                        continue;
+                    ScenarioAuthoringInspectorAction displayAction = IsWindowMenuAction(action) && _windowMenuOpen
+                        ? CloneEmphasized(action)
+                        : action;
+                    float width = Mathf.Clamp(MeasureButtonWidth(displayAction, false, 24f), 86f, 150f);
+                    Rect buttonRect = new Rect(layoutsLeft - (width + 16f), rect.y + secondaryRowY, width + 16f, secondaryRowHeight);
+                    DrawButton(buttonRect, displayAction, false);
+                    if (IsWindowMenuAction(action))
+                        windowMenuButtonRect = buttonRect;
+                    layoutsLeft = buttonRect.x - 6f;
+                }
+            }
+
+            float actionsRight = layoutsLeft - 8f;
+            Rect actionsRect = new Rect(
+                primaryRowLeft,
+                rect.y + secondaryRowY,
+                Math.Max(80f, actionsRight - primaryRowLeft),
+                secondaryRowHeight);
             float actionX = actionsRect.x;
             for (int i = 0; shell.ToolbarActions != null && i < shell.ToolbarActions.Length; i++)
             {
                 ScenarioAuthoringInspectorAction action = shell.ToolbarActions[i];
+                if (action == null)
+                    continue;
                 ScenarioAuthoringInspectorAction displayAction = IsWindowMenuAction(action) && _windowMenuOpen
-                    ? new ScenarioAuthoringInspectorAction
-                    {
-                        Id = action.Id,
-                        Label = action.Label,
-                        Hint = action.Hint,
-                        Detail = action.Detail,
-                        Badge = action.Badge,
-                        IconText = action.IconText,
-                        PreviewSprite = action.PreviewSprite,
-                        Enabled = action.Enabled,
-                        Emphasized = true
-                    }
+                    ? CloneEmphasized(action)
                     : action;
-                float width = Mathf.Clamp(MeasureButtonWidth(displayAction, false, 28f), 92f, 170f);
+                float width = Mathf.Clamp(MeasureButtonWidth(displayAction, false, 28f), 96f, 170f);
                 Rect buttonRect = new Rect(actionX, actionsRect.y, width + 20f, actionsRect.height);
+                if (buttonRect.xMax > actionsRect.xMax)
+                    break;
                 DrawButton(buttonRect, displayAction, false);
                 if (IsWindowMenuAction(action))
                     windowMenuButtonRect = buttonRect;
                 actionX = buttonRect.xMax + 6f;
             }
 
-            Rect infoRect = new Rect(rect.xMax - 382f, rect.y + 4f, 370f, 70f);
-            GUI.Box(infoRect, GUIContent.none, _sectionStyle);
-            GUI.Label(new Rect(infoRect.x + 12f, infoRect.y + 10f, 210f, 20f), "Draft: " + (shell.DraftLabel ?? string.Empty), _textStyle);
-            GUI.Label(new Rect(infoRect.x + 12f, infoRect.y + 34f, 120f, 18f), "Mode: " + (shell.ModeLabel ?? string.Empty), _mutedTextStyle);
-            GUI.Label(new Rect(infoRect.x + 260f, infoRect.y + 8f, 90f, 34f), shell.TimeLabel ?? "--:--", _titleStyle);
-            GUI.Label(new Rect(infoRect.x + 212f, infoRect.y + 12f, 42f, 18f), "Day 1", _textStyle);
             return windowMenuButtonRect;
+        }
+
+        private void DrawModeChip(Rect rect, ScenarioAuthoringShellViewModel shell)
+        {
+            GUI.Box(rect, GUIContent.none, _sectionStyle);
+            string mode = string.IsNullOrEmpty(shell.ModeLabel) ? "Editing Draft" : shell.ModeLabel;
+            string draft = string.IsNullOrEmpty(shell.DraftLabel) ? "Untitled" : shell.DraftLabel;
+            string time = string.IsNullOrEmpty(shell.TimeLabel) ? "--:--" : shell.TimeLabel;
+
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 5f, rect.width - 96f, 20f), mode, _sectionTitleStyle);
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 25f, rect.width - 96f, 18f), draft, _mutedTextStyle);
+            GUI.Label(new Rect(rect.xMax - 86f, rect.y + 7f, 74f, 32f), time, _titleStyle);
+        }
+
+        private static ScenarioAuthoringInspectorAction CloneEmphasized(ScenarioAuthoringInspectorAction action)
+        {
+            return new ScenarioAuthoringInspectorAction
+            {
+                Id = action.Id,
+                Label = action.Label,
+                Hint = action.Hint,
+                Detail = action.Detail,
+                Badge = action.Badge,
+                IconText = action.IconText,
+                PreviewSprite = action.PreviewSprite,
+                Enabled = action.Enabled,
+                Emphasized = true
+            };
         }
 
         private void DrawStatusBar(Rect rect, ScenarioAuthoringShellViewModel shell)
@@ -313,7 +400,7 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        private void DrawWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
+        private Rect DrawWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
@@ -352,17 +439,478 @@ namespace ShelteredAPI.Scenarios
             }
 
             if (window.Collapsed)
-                return;
+                return Rect.zero;
 
             Rect bodyRect = new Rect(rect.x + 10f, headerRect.yMax + 8f, rect.width - 20f, rect.height - headerRect.height - 18f);
             GUILayout.BeginArea(bodyRect);
+            Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
+            scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
             {
                 DrawSection(window.Sections[i]);
                 if (i < window.Sections.Length - 1)
                     GUILayout.Space(6f);
             }
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
+            SetWindowScrollPosition(window.Id, scrollPosition);
+            return bodyRect;
+        }
+
+        private Rect DrawDocumentModal(Rect rect, ScenarioAuthoringInspectorDocument document, string scrollId)
+        {
+            GUI.Box(rect, GUIContent.none, _rootPanelStyle);
+            Rect headerRect = new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, 46f);
+            GUI.Box(headerRect, GUIContent.none, _headerStyle);
+
+            string title = document != null && !string.IsNullOrEmpty(document.Title)
+                ? document.Title.ToUpperInvariant()
+                : "DOCUMENT";
+            GUI.Label(new Rect(headerRect.x + 10f, headerRect.y + 5f, headerRect.width - 20f, 18f), title, _sectionTitleStyle);
+            if (document != null && !string.IsNullOrEmpty(document.Subtitle))
+                GUI.Label(new Rect(headerRect.x + 10f, headerRect.y + 23f, headerRect.width - 20f, 16f), document.Subtitle, _mutedTextStyle);
+
+            Rect bodyRect = new Rect(rect.x + 10f, headerRect.yMax + 8f, rect.width - 20f, rect.height - headerRect.height - 18f);
+            GUILayout.BeginArea(bodyRect);
+            Vector2 scrollPosition = GetWindowScrollPosition(scrollId);
+            scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            for (int i = 0; document != null && document.Sections != null && i < document.Sections.Length; i++)
+            {
+                DrawSection(document.Sections[i]);
+                if (i < document.Sections.Length - 1)
+                    GUILayout.Space(6f);
+            }
+
+            if (string.Equals(scrollId, "sprite_picker", StringComparison.Ordinal))
+                DrawCustomSpriteEditor();
+
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+            SetWindowScrollPosition(scrollId, scrollPosition);
+            return bodyRect;
+        }
+
+        private void DrawCustomSpriteEditor()
+        {
+            ScenarioSpriteSwapAuthoringService.CustomEditorModel editor =
+                ScenarioSpriteSwapAuthoringService.Instance.GetCustomEditorModel(_snapshot != null ? _snapshot.State : null);
+            if (editor == null || !editor.Visible)
+                return;
+
+            GUILayout.Space(6f);
+            GUILayout.BeginVertical(_sectionStyle);
+            GUILayout.Label(editor.IsCharacterEditor ? "Character Pixel Editor" : "Pixel Editor", _sectionTitleStyle);
+            GUILayout.Label(
+                "Source: " + (editor.SourceLabel ?? "<sprite>") + (editor.Dirty ? " | Modified" : " | Unchanged"),
+                _mutedTextStyle);
+            GUILayout.BeginHorizontal();
+            GUILayout.BeginVertical(GUILayout.Width(308f));
+            if (editor.IsCharacterEditor)
+            {
+                DrawCharacterPartToolbar(editor);
+                GUILayout.Space(6f);
+            }
+            DrawCustomEditorToolbar(editor);
+            GUILayout.Space(6f);
+            DrawCustomClipboardToolbar(editor);
+            GUILayout.Space(6f);
+            DrawCustomZoomToolbar(editor);
+            GUILayout.Space(6f);
+            GUILayout.Label("Active Color", _smallTitleStyle);
+            Rect colorRect = GUILayoutUtility.GetRect(112f, 44f, GUILayout.Width(112f), GUILayout.Height(44f));
+            DrawColorPreview(colorRect, editor.ActiveColor);
+            GUILayout.Label("#" + (editor.ActiveColorHex ?? "000000FF"), _textStyle);
+            GUILayout.Label(BuildSelectionSummary(editor), _mutedTextStyle);
+            GUILayout.Label(BuildClipboardSummary(editor), _mutedTextStyle);
+            if (editor.IsCharacterEditor)
+                GUILayout.Label("Editing: " + (editor.CharacterPartLabel ?? "Part"), _mutedTextStyle);
+            GUILayout.Space(4f);
+
+            GUILayout.BeginHorizontal();
+            for (int i = 0; editor.BrushPalette != null && i < editor.BrushPalette.Length; i++)
+            {
+                Rect swatchRect = GUILayoutUtility.GetRect(24f, 24f, GUILayout.Width(24f), GUILayout.Height(24f));
+                DrawBrushSwatch(swatchRect, editor.BrushPalette[i], i == editor.ActiveBrushIndex, i);
+                GUILayout.Space(4f);
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Space(6f);
+
+            DrawColorSlider("R", editor, 0);
+            DrawColorSlider("G", editor, 1);
+            DrawColorSlider("B", editor, 2);
+            DrawColorSlider("A", editor, 3);
+            GUILayout.Space(6f);
+            GUILayout.Label(BuildToolHint(editor.ActiveTool), _mutedTextStyle);
+            GUILayout.EndVertical();
+
+            GUILayout.Space(10f);
+            GUILayout.BeginVertical();
+            float zoom = Mathf.Max(1f, editor.Zoom);
+            float width = Mathf.Max(1f, editor.Width * zoom);
+            float height = Mathf.Max(1f, editor.Height * zoom);
+            GUILayout.Label("Canvas " + editor.Width + "x" + editor.Height + " @ " + editor.Zoom + "x", _smallTitleStyle);
+            GUILayout.Label("Mouse wheel zooms. Right click always samples color.", _mutedTextStyle);
+            Rect canvasRect = GUILayoutUtility.GetRect(width, height, GUILayout.Width(width), GUILayout.Height(height));
+            DrawPixelCanvas(canvasRect, editor);
+            GUILayout.EndVertical();
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+        }
+
+        private void DrawCustomEditorToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        {
+            GUILayout.BeginHorizontal();
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolPaint,
+                "Paint",
+                editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Paint,
+                92f,
+                "Paint pixels using the active color.");
+            GUILayout.Space(4f);
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolPick,
+                "Pick",
+                editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Pick,
+                92f,
+                "Sample a pixel color from the canvas.");
+            GUILayout.Space(4f);
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolSelect,
+                "Select",
+                editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Select,
+                92f,
+                "Drag a rectangular pixel selection.");
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawCustomClipboardToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        {
+            GUILayout.BeginHorizontal();
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCustomCopy,
+                "Copy",
+                false,
+                92f,
+                "Copy the current selection. If nothing is selected, copy the whole sprite.",
+                true);
+            GUILayout.Space(4f);
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCustomPaste,
+                "Paste",
+                editor.HasClipboard,
+                92f,
+                editor.HasClipboard ? "Paste the pixel clipboard into the canvas." : "Pixel clipboard is empty.",
+                editor.HasClipboard);
+            GUILayout.Space(4f);
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCustomSelectionClear,
+                "Clear Sel",
+                editor.HasSelection,
+                92f,
+                editor.HasSelection ? "Clear the current pixel selection." : "There is no active selection.",
+                editor.HasSelection);
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawCustomZoomToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        {
+            GUILayout.BeginHorizontal();
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomOut,
+                "Zoom -",
+                false,
+                92f,
+                "Zoom out of the canvas.",
+                editor.Zoom > 1);
+            GUILayout.Space(4f);
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomReset,
+                editor.Zoom + "x",
+                false,
+                68f,
+                "Reset canvas zoom to 8x.");
+            GUILayout.Space(4f);
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomIn,
+                "Zoom +",
+                false,
+                92f,
+                "Zoom into the canvas.",
+                editor.Zoom < 48);
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawCharacterPartToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        {
+            GUILayout.BeginHorizontal();
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCharacterPartHead,
+                "Head",
+                editor.CharacterPart == ScenarioCharacterTexturePart.Head,
+                92f,
+                "Edit the head texture for this family member.");
+            GUILayout.Space(4f);
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCharacterPartTorso,
+                "Torso",
+                editor.CharacterPart == ScenarioCharacterTexturePart.Torso,
+                92f,
+                "Edit the torso texture for this family member.");
+            GUILayout.Space(4f);
+            DrawInlineAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCharacterPartLegs,
+                "Legs",
+                editor.CharacterPart == ScenarioCharacterTexturePart.Legs,
+                92f,
+                "Edit the legs texture for this family member.");
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawBrushSwatch(Rect rect, Color color, bool active, int brushIndex)
+        {
+            Color previous = GUI.color;
+            GUI.color = color.a <= 0.001f ? new Color(0f, 0f, 0f, 0.2f) : color;
+            GUI.Box(rect, GUIContent.none, active ? _activeButtonStyle : _fieldStyle);
+            GUI.color = previous;
+
+            if (color.a <= 0.001f)
+                GUI.Label(rect, "X", _mutedTextStyle);
+
+            if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(
+                    ScenarioSpriteSwapAuthoringService.BuildCustomPresetActionId(brushIndex));
+                if (Event.current != null)
+                    Event.current.Use();
+            }
+        }
+
+        private void DrawInlineAction(string actionId, string label, bool emphasized, float width, string hint, bool enabled = true)
+        {
+            Rect rect = GUILayoutUtility.GetRect(width, 28f, GUILayout.Width(width), GUILayout.Height(28f));
+            DrawButton(rect, new ScenarioAuthoringInspectorAction
+            {
+                Id = actionId,
+                Label = label,
+                Hint = hint,
+                Enabled = enabled,
+                Emphasized = emphasized
+            }, false);
+        }
+
+        private void DrawColorSlider(string label, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, int channel)
+        {
+            Color activeColor = editor.ActiveColor;
+            float currentValue = channel == 0
+                ? activeColor.r
+                : (channel == 1 ? activeColor.g : (channel == 2 ? activeColor.b : activeColor.a));
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(label, _textStyle, GUILayout.Width(18f));
+            float nextValue = GUILayout.HorizontalSlider(currentValue, 0f, 1f, GUILayout.Width(184f));
+            GUILayout.Label(Mathf.RoundToInt(nextValue * 255f).ToString(), _mutedTextStyle, GUILayout.Width(34f));
+            GUILayout.EndHorizontal();
+
+            if (Mathf.Abs(nextValue - currentValue) <= 0.0001f)
+                return;
+
+            Color updatedColor = activeColor;
+            if (channel == 0) updatedColor.r = nextValue;
+            else if (channel == 1) updatedColor.g = nextValue;
+            else if (channel == 2) updatedColor.b = nextValue;
+            else updatedColor.a = nextValue;
+
+            ScenarioAuthoringBackendService.Instance.ExecuteAction(
+                ScenarioSpriteSwapAuthoringService.BuildCustomColorActionId(updatedColor));
+            if (Event.current != null)
+                Event.current.Use();
+        }
+
+        private void DrawColorPreview(Rect rect, Color color)
+        {
+            GUI.Box(rect, GUIContent.none, _fieldStyle);
+            Rect fillRect = new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f);
+            DrawCheckerboard(fillRect, 6);
+            Color previous = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(fillRect, Texture2D.whiteTexture);
+            GUI.color = previous;
+        }
+
+        private void DrawPixelCanvas(Rect rect, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        {
+            GUI.Box(rect, GUIContent.none, _fieldStyle);
+            if (editor.PreviewSprite == null || editor.PreviewSprite.texture == null)
+            {
+                GUI.Label(rect, "No Sprite", _mutedTextStyle);
+                return;
+            }
+
+            if (editor.Checkerboard)
+                DrawCheckerboard(rect, editor.Zoom);
+
+            GUI.DrawTextureWithTexCoords(rect, editor.PreviewSprite.texture, new Rect(0f, 0f, 1f, 1f), true);
+            DrawPixelGrid(rect, editor);
+            DrawSelectionOverlay(rect, editor);
+
+            Event current = Event.current;
+            if (current != null && rect.Contains(current.mousePosition))
+            {
+                if (current.type == EventType.ScrollWheel)
+                {
+                    string zoomActionId = current.delta.y < 0f
+                        ? ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomIn
+                        : ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomOut;
+                    ScenarioAuthoringBackendService.Instance.ExecuteAction(zoomActionId);
+                    current.Use();
+                    return;
+                }
+
+                int pixelX;
+                int pixelY;
+                if (!TryGetCanvasPixel(rect, editor, current.mousePosition, out pixelX, out pixelY))
+                    return;
+
+                string actionId = null;
+                if (current.button == 1)
+                {
+                    if (current.type == EventType.MouseDown || current.type == EventType.MouseDrag)
+                        actionId = ScenarioSpriteSwapAuthoringService.BuildCustomPickActionId(pixelX, pixelY);
+                }
+                else if (editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Select)
+                {
+                    if (current.type == EventType.MouseDown)
+                        actionId = ScenarioSpriteSwapAuthoringService.BuildCustomSelectStartActionId(pixelX, pixelY);
+                    else if (current.type == EventType.MouseDrag)
+                        actionId = ScenarioSpriteSwapAuthoringService.BuildCustomSelectDragActionId(pixelX, pixelY);
+                    else if (current.type == EventType.MouseUp)
+                        actionId = ScenarioSpriteSwapAuthoringService.BuildCustomSelectEndActionId(pixelX, pixelY);
+                }
+                else if (current.type == EventType.MouseDown || current.type == EventType.MouseDrag)
+                {
+                    actionId = editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Pick
+                        ? ScenarioSpriteSwapAuthoringService.BuildCustomPickActionId(pixelX, pixelY)
+                        : ScenarioSpriteSwapAuthoringService.BuildCustomPaintActionId(pixelX, pixelY);
+                }
+
+                if (!string.IsNullOrEmpty(actionId))
+                {
+                    ScenarioAuthoringBackendService.Instance.ExecuteAction(actionId);
+                    current.Use();
+                }
+            }
+        }
+
+        private static bool TryGetCanvasPixel(
+            Rect rect,
+            ScenarioSpriteSwapAuthoringService.CustomEditorModel editor,
+            Vector2 pointer,
+            out int pixelX,
+            out int pixelY)
+        {
+            pixelX = Mathf.Clamp(
+                Mathf.FloorToInt((pointer.x - rect.x) / Mathf.Max(1f, editor.Zoom)),
+                0,
+                Mathf.Max(0, editor.Width - 1));
+            pixelY = Mathf.Clamp(
+                editor.Height - 1 - Mathf.FloorToInt((pointer.y - rect.y) / Mathf.Max(1f, editor.Zoom)),
+                0,
+                Mathf.Max(0, editor.Height - 1));
+            return editor.Width > 0 && editor.Height > 0;
+        }
+
+        private void DrawPixelGrid(Rect rect, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        {
+            if (editor.Zoom < 8 || editor.Width <= 0 || editor.Height <= 0)
+                return;
+
+            Color previous = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.18f);
+            for (int x = 1; x < editor.Width; x++)
+            {
+                float lineX = rect.x + (x * editor.Zoom);
+                GUI.DrawTexture(new Rect(lineX, rect.y, 1f, rect.height), Texture2D.whiteTexture);
+            }
+
+            for (int y = 1; y < editor.Height; y++)
+            {
+                float lineY = rect.y + (y * editor.Zoom);
+                GUI.DrawTexture(new Rect(rect.x, lineY, rect.width, 1f), Texture2D.whiteTexture);
+            }
+            GUI.color = previous;
+        }
+
+        private void DrawSelectionOverlay(Rect rect, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        {
+            if (!editor.HasSelection || editor.SelectionWidth <= 0 || editor.SelectionHeight <= 0)
+                return;
+
+            float zoom = Mathf.Max(1f, editor.Zoom);
+            Rect selectionRect = new Rect(
+                rect.x + (editor.SelectionX * zoom),
+                rect.y + ((editor.Height - (editor.SelectionY + editor.SelectionHeight)) * zoom),
+                editor.SelectionWidth * zoom,
+                editor.SelectionHeight * zoom);
+
+            Color previous = GUI.color;
+            GUI.color = new Color(1f, 0.83f, 0.23f, 0.18f);
+            GUI.DrawTexture(selectionRect, Texture2D.whiteTexture);
+            GUI.color = new Color(1f, 0.87f, 0.30f, 1f);
+            DrawRectBorder(selectionRect, 2f);
+            GUI.color = previous;
+        }
+
+        private static void DrawRectBorder(Rect rect, float thickness)
+        {
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, thickness), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), Texture2D.whiteTexture);
+        }
+
+        private static string BuildSelectionSummary(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        {
+            if (editor == null || !editor.HasSelection)
+                return "Selection: none";
+
+            return "Selection: " + editor.SelectionWidth + "x" + editor.SelectionHeight
+                + " at (" + editor.SelectionX + ", " + editor.SelectionY + ")";
+        }
+
+        private static string BuildClipboardSummary(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        {
+            if (editor == null || !editor.HasClipboard)
+                return "Clipboard: empty";
+
+            return "Clipboard: " + editor.ClipboardWidth + "x" + editor.ClipboardHeight;
+        }
+
+        private static string BuildToolHint(ScenarioSpriteSwapAuthoringService.CustomEditorTool tool)
+        {
+            if (tool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Pick)
+                return "Pick tool: click pixels to sample their exact RGBA color. Right click always samples.";
+            if (tool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Select)
+                return "Select tool: drag a rectangle, then use Copy and Paste to move pixel regions.";
+
+            return "Paint tool: drag to paint individual pixels. If a selection exists, painting is limited to it.";
+        }
+
+        private void DrawCheckerboard(Rect rect, int zoom)
+        {
+            int tile = Mathf.Max(4, zoom);
+            Color previous = GUI.color;
+            for (int y = 0; y < rect.height; y += tile)
+            {
+                for (int x = 0; x < rect.width; x += tile)
+                {
+                    bool dark = (((x / tile) + (y / tile)) % 2) == 0;
+                    GUI.color = dark
+                        ? new Color(0.22f, 0.20f, 0.18f, 1f)
+                        : new Color(0.33f, 0.30f, 0.27f, 1f);
+                    GUI.DrawTexture(new Rect(rect.x + x, rect.y + y, tile, tile), Texture2D.whiteTexture);
+                }
+            }
+            GUI.color = previous;
         }
 
         private void DrawSection(ScenarioAuthoringInspectorSection section)
@@ -581,7 +1129,7 @@ namespace ShelteredAPI.Scenarios
                 height);
         }
 
-        private void DrawSettingsWindow(Rect rect, ScenarioAuthoringSettingsViewModel settings)
+        private Rect DrawSettingsWindow(Rect rect, ScenarioAuthoringSettingsViewModel settings)
         {
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);
             Rect headerRect = new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, 30f);
@@ -598,6 +1146,7 @@ namespace ShelteredAPI.Scenarios
 
             Rect bodyRect = new Rect(rect.x + 10f, headerRect.yMax + 8f, rect.width - 20f, rect.height - headerRect.height - 16f);
             GUILayout.BeginArea(bodyRect);
+            _settingsScrollPosition = GUILayout.BeginScrollView(_settingsScrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.Label(settings.Subtitle ?? string.Empty, _mutedTextStyle);
             GUILayout.Space(8f);
             for (int i = 0; settings.Sections != null && i < settings.Sections.Length; i++)
@@ -615,7 +1164,29 @@ namespace ShelteredAPI.Scenarios
                 GUILayout.EndVertical();
                 GUILayout.Space(6f);
             }
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
+            return bodyRect;
+        }
+
+        private Vector2 GetWindowScrollPosition(string windowId)
+        {
+            if (string.IsNullOrEmpty(windowId))
+                return Vector2.zero;
+
+            Vector2 scrollPosition;
+            if (_windowScrollPositions.TryGetValue(windowId, out scrollPosition))
+                return scrollPosition;
+
+            return Vector2.zero;
+        }
+
+        private void SetWindowScrollPosition(string windowId, Vector2 scrollPosition)
+        {
+            if (string.IsNullOrEmpty(windowId))
+                return;
+
+            _windowScrollPositions[windowId] = scrollPosition;
         }
 
         private void DrawSettingItem(ScenarioAuthoringSettingsItemViewModel item)
@@ -736,13 +1307,15 @@ namespace ShelteredAPI.Scenarios
             if (action == null)
                 return;
 
+            GUIContent content = new GUIContent(action.Label ?? string.Empty, action.Hint ?? string.Empty);
+
             if (IsWindowMenuAction(action))
             {
                 GUI.enabled = action.Enabled;
                 GUIStyle menuStyle = tab
                     ? (action.Emphasized ? _activeTabStyle : _tabStyle)
                     : (action.Emphasized ? _activeButtonStyle : _buttonStyle);
-                if (GUI.Button(rect, action.Label ?? string.Empty, menuStyle) && action.Enabled)
+                if (GUI.Button(rect, content, menuStyle) && action.Enabled)
                 {
                     _windowMenuOpen = !_windowMenuOpen;
                     if (Event.current != null)
@@ -756,13 +1329,37 @@ namespace ShelteredAPI.Scenarios
             GUIStyle style = tab
                 ? (action.Emphasized ? _activeTabStyle : _tabStyle)
                 : (action.Emphasized ? _activeButtonStyle : _buttonStyle);
-            if (GUI.Button(rect, action.Label ?? string.Empty, style) && action.Enabled)
+            if (GUI.Button(rect, content, style) && action.Enabled)
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
                 if (Event.current != null)
                     Event.current.Use();
             }
             GUI.enabled = true;
+        }
+
+        private void DrawTooltipOverlay(float scaledWidth, float scaledHeight)
+        {
+            string tip = GUI.tooltip;
+            if (string.IsNullOrEmpty(tip))
+                return;
+
+            GUIStyle tipStyle = _mutedTextStyle;
+            if (tipStyle == null)
+                return;
+            tipStyle.wordWrap = true;
+            Vector2 mouse = Event.current != null ? Event.current.mousePosition : Vector2.zero;
+            float maxWidth = 320f;
+            Vector2 size = tipStyle.CalcSize(new GUIContent(tip));
+            float width = Math.Min(maxWidth, size.x + 18f);
+            float height = tipStyle.CalcHeight(new GUIContent(tip), width - 14f) + 10f;
+            float x = Math.Min(scaledWidth - width - 6f, mouse.x + 16f);
+            float y = Math.Min(scaledHeight - height - 6f, mouse.y + 20f);
+            if (x < 6f) x = 6f;
+            if (y < 6f) y = 6f;
+            Rect tipRect = new Rect(x, y, width, height);
+            GUI.Box(tipRect, GUIContent.none, _menuStyle);
+            GUI.Label(new Rect(tipRect.x + 7f, tipRect.y + 5f, tipRect.width - 14f, tipRect.height - 10f), tip, tipStyle);
         }
 
         private void EnsureStyles(float panelOpacity)
@@ -877,6 +1474,54 @@ namespace ShelteredAPI.Scenarios
                 || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Survivors)
                 || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Stockpile)
                 || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Quests);
+        }
+
+        private static readonly string[] _workspaceOrder = new[]
+        {
+            ScenarioAuthoringWindowIds.Triggers,
+            ScenarioAuthoringWindowIds.Survivors,
+            ScenarioAuthoringWindowIds.Stockpile,
+            ScenarioAuthoringWindowIds.Quests
+        };
+
+        private static readonly string[] _workspaceLabels = new[]
+        {
+            "Triggers",
+            "Survivors",
+            "Stockpile",
+            "Quests"
+        };
+
+        private static string GetActiveWorkspaceId(ScenarioAuthoringShellWindowViewModel[] windows)
+        {
+            if (windows == null)
+                return null;
+            for (int i = 0; i < _workspaceOrder.Length; i++)
+            {
+                if (HasVisibleWindow(windows, _workspaceOrder[i]))
+                    return _workspaceOrder[i];
+            }
+            return null;
+        }
+
+        private void DrawWorkspaceTabs(Rect rect, string activeId, ScenarioAuthoringShellWindowViewModel[] windows)
+        {
+            GUI.Box(rect, GUIContent.none, _headerStyle);
+            float tabWidth = (rect.width - 8f) / _workspaceOrder.Length;
+            for (int i = 0; i < _workspaceOrder.Length; i++)
+            {
+                Rect tabRect = new Rect(rect.x + 4f + (tabWidth * i), rect.y + 3f, tabWidth - 4f, rect.height - 6f);
+                bool isActive = string.Equals(_workspaceOrder[i], activeId, StringComparison.OrdinalIgnoreCase);
+                ScenarioAuthoringInspectorAction action = new ScenarioAuthoringInspectorAction
+                {
+                    Id = ScenarioAuthoringActionIds.ActionWindowTogglePrefix + _workspaceOrder[i],
+                    Label = _workspaceLabels[i],
+                    Hint = "Open the " + _workspaceLabels[i] + " workspace.",
+                    Enabled = true,
+                    Emphasized = isActive
+                };
+                DrawButton(tabRect, action, true);
+            }
         }
 
         private static void AppendStackRect(Dictionary<string, Rect> rects, ScenarioAuthoringShellWindowViewModel[] windows, string id, Rect rect)

@@ -74,10 +74,43 @@ namespace ShelteredAPI.Scenarios
         public const string ActionSpriteSwapCopy = "sprite_swap.copy";
         public const string ActionSpriteSwapPaste = "sprite_swap.paste";
         public const string ActionSpriteSwapApplyPrefix = "sprite_swap.apply.";
+        public const string ActionSpriteSwapPickerOpen = "sprite_swap.picker.open";
+        public const string ActionSpriteSwapPickerSave = "sprite_swap.picker.save";
+        public const string ActionSpriteSwapPickerCancel = "sprite_swap.picker.cancel";
+        public const string ActionSpriteSwapPreviewPrefix = "sprite_swap.preview.";
+        public const string ActionSpriteSwapCustomEditStart = "sprite_swap.custom.start";
+        public const string ActionSpriteSwapCustomEditDiscard = "sprite_swap.custom.discard";
+        public const string ActionSpriteSwapCustomBrushPrefix = "sprite_swap.custom.brush.";
+        public const string ActionSpriteSwapCustomPaintPrefix = "sprite_swap.custom.paint.";
+        public const string ActionSpriteSwapCustomPickPrefix = "sprite_swap.custom.pick.";
+        public const string ActionSpriteSwapCustomToolPaint = "sprite_swap.custom.tool.paint";
+        public const string ActionSpriteSwapCustomToolPick = "sprite_swap.custom.tool.pick";
+        public const string ActionSpriteSwapCustomToolSelect = "sprite_swap.custom.tool.select";
+        public const string ActionSpriteSwapCustomSelectionClear = "sprite_swap.custom.selection.clear";
+        public const string ActionSpriteSwapCustomCopy = "sprite_swap.custom.copy";
+        public const string ActionSpriteSwapCustomPaste = "sprite_swap.custom.paste";
+        public const string ActionSpriteSwapCustomPresetPrefix = "sprite_swap.custom.preset.";
+        public const string ActionSpriteSwapCustomColorPrefix = "sprite_swap.custom.color.";
+        public const string ActionSpriteSwapCustomZoomIn = "sprite_swap.custom.zoom_in";
+        public const string ActionSpriteSwapCustomZoomOut = "sprite_swap.custom.zoom_out";
+        public const string ActionSpriteSwapCustomZoomReset = "sprite_swap.custom.zoom_reset";
+        public const string ActionSpriteSwapCharacterPartHead = "sprite_swap.character.part.head";
+        public const string ActionSpriteSwapCharacterPartTorso = "sprite_swap.character.part.torso";
+        public const string ActionSpriteSwapCharacterPartLegs = "sprite_swap.character.part.legs";
+        public const string ActionSpriteSwapCustomSelectStartPrefix = "sprite_swap.custom.select.start.";
+        public const string ActionSpriteSwapCustomSelectDragPrefix = "sprite_swap.custom.select.drag.";
+        public const string ActionSpriteSwapCustomSelectEndPrefix = "sprite_swap.custom.select.end.";
         public const string ActionHistoryUndo = "history.undo";
         public const string ActionHistoryRedo = "history.redo";
         public const string ActionSceneSpritePlacementRemove = "scene_sprite.remove";
         public const string ActionSceneSpritePlacementApplyPrefix = "scene_sprite.apply.";
+        public const string ActionBuildPlacementCancel = "build.place.cancel";
+        public const string ActionBuildObjectPlacePrefix = "build.place.object.";
+        public const string ActionBuildStructureRoom = "build.place.room";
+        public const string ActionBuildStructureLadder = "build.place.ladder";
+        public const string ActionBuildStructureLight = "build.place.light";
+        public const string ActionBuildWallApplyPrefix = "build.wall.apply.";
+        public const string ActionBuildWireApplyPrefix = "build.wire.apply.";
         public const string ActionAssetModeReplace = "asset.mode.replace";
         public const string ActionAssetModePlace = "asset.mode.place";
         public const string ActionToolSelect = "tool.select";
@@ -242,6 +275,7 @@ namespace ShelteredAPI.Scenarios
         public string FilterText { get; set; }
         public string SearchText { get; set; }
         public bool SettingsWindowOpen { get; set; }
+        public ScenarioSpriteSwapPickerState SpriteSwapPicker { get; set; }
         public List<ScenarioAuthoringWindowState> WindowStates { get; private set; }
         public List<ScenarioAuthoringPanelScrollState> ScrollStates { get; private set; }
         public ScenarioAuthoringSettingsSnapshot Settings { get; set; }
@@ -269,6 +303,7 @@ namespace ShelteredAPI.Scenarios
                 FilterText = FilterText,
                 SearchText = SearchText,
                 SettingsWindowOpen = SettingsWindowOpen,
+                SpriteSwapPicker = SpriteSwapPicker != null ? SpriteSwapPicker.Copy() : null,
                 Settings = Settings != null ? Settings.Copy() : new ScenarioAuthoringSettingsSnapshot()
             };
 
@@ -294,6 +329,31 @@ namespace ShelteredAPI.Scenarios
             }
 
             return copy;
+        }
+    }
+
+    public sealed class ScenarioSpriteSwapPickerState
+    {
+        public bool IsOpen { get; set; }
+        public ScenarioAuthoringTarget Target { get; set; }
+        public string TargetPath { get; set; }
+        public string SavedCandidateToken { get; set; }
+        public string SavedCandidateLabel { get; set; }
+        public string PreviewCandidateToken { get; set; }
+        public string PreviewCandidateLabel { get; set; }
+
+        public ScenarioSpriteSwapPickerState Copy()
+        {
+            return new ScenarioSpriteSwapPickerState
+            {
+                IsOpen = IsOpen,
+                Target = Target != null ? Target.Copy() : null,
+                TargetPath = TargetPath,
+                SavedCandidateToken = SavedCandidateToken,
+                SavedCandidateLabel = SavedCandidateLabel,
+                PreviewCandidateToken = PreviewCandidateToken,
+                PreviewCandidateLabel = PreviewCandidateLabel
+            };
         }
     }
 
@@ -552,8 +612,10 @@ namespace ShelteredAPI.Scenarios
         public string TimeLabel { get; set; }
         public ScenarioAuthoringInspectorAction[] Tabs { get; set; }
         public ScenarioAuthoringInspectorAction[] ToolbarActions { get; set; }
+        public ScenarioAuthoringInspectorAction[] LayoutActions { get; set; }
         public ScenarioAuthoringInspectorAction[] WindowMenuActions { get; set; }
         public ScenarioAuthoringShellWindowViewModel[] Windows { get; set; }
+        public ScenarioAuthoringInspectorDocument SpritePickerDocument { get; set; }
         public ScenarioAuthoringSettingsViewModel Settings { get; set; }
         public ScenarioAuthoringContextMenuModel ContextMenu { get; set; }
         public string[] StatusEntries { get; set; }

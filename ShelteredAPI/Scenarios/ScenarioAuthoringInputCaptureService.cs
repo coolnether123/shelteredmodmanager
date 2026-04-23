@@ -7,6 +7,7 @@ namespace ShelteredAPI.Scenarios
     {
         private readonly List<Rect> _interactiveRects = new List<Rect>();
         private readonly ScenarioAuthoringScrollFocusService _scrollFocusService;
+        private float _coordinateScale = 1f;
 
         public ScenarioAuthoringInputCaptureService(ScenarioAuthoringScrollFocusService scrollFocusService)
         {
@@ -18,14 +19,20 @@ namespace ShelteredAPI.Scenarios
         public bool DraggingShellChrome { get; private set; }
         public bool KeyboardCaptured { get; private set; }
 
-        public void BeginFrame()
+        public void BeginFrame(float coordinateScale)
         {
             _interactiveRects.Clear();
             PointerOverAuthoringUi = false;
             PopupOpen = false;
             DraggingShellChrome = false;
             KeyboardCaptured = false;
+            _coordinateScale = coordinateScale > 0.001f ? coordinateScale : 1f;
             _scrollFocusService.BeginFrame();
+        }
+
+        public void BeginFrame()
+        {
+            BeginFrame(1f);
         }
 
         public void RegisterInteractiveRect(Rect rect)
@@ -59,7 +66,7 @@ namespace ShelteredAPI.Scenarios
 
         public void CompleteFrame()
         {
-            Vector2 pointer = GetPointerPosition();
+            Vector2 pointer = GetPointerPosition(_coordinateScale);
             PointerOverAuthoringUi = false;
             for (int i = 0; i < _interactiveRects.Count; i++)
             {
@@ -79,8 +86,14 @@ namespace ShelteredAPI.Scenarios
 
         private static Vector2 GetPointerPosition()
         {
+            return GetPointerPosition(1f);
+        }
+
+        private static Vector2 GetPointerPosition(float coordinateScale)
+        {
             Vector3 mouse = UnityEngine.Input.mousePosition;
-            return new Vector2(mouse.x, Screen.height - mouse.y);
+            float scale = coordinateScale > 0.001f ? coordinateScale : 1f;
+            return new Vector2(mouse.x / scale, (Screen.height - mouse.y) / scale);
         }
     }
 }

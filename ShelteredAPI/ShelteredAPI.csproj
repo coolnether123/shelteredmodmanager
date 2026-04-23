@@ -81,6 +81,9 @@
     <Compile Include="Scenarios\ScenarioAuthoringBootstrapPatches.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringBootstrapService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringBackendService.cs" />
+    <Compile Include="Scenarios\ScenarioBuildPlacementAuthoringService.cs" />
+    <Compile Include="Scenarios\ScenarioBunkerDraftService.cs" />
+    <Compile Include="Scenarios\ScenarioCharacterAppearanceService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringCaptureService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringCommandService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringContracts.cs" />
@@ -119,6 +122,7 @@
     <Compile Include="Scenarios\ScenarioSpriteCatalogService.cs" />
     <Compile Include="Scenarios\ScenarioSpriteAssetResolver.cs" />
     <Compile Include="Scenarios\ScenarioSpriteReferenceLibrary.cs" />
+    <Compile Include="Scenarios\ScenarioSpriteRuntimeMutationService.cs" />
     <Compile Include="Scenarios\ScenarioSpriteRuntimeResolver.cs" />
     <Compile Include="Scenarios\ScenarioSpriteSwapAuthoringService.cs" />
     <Compile Include="Scenarios\ScenarioSpriteSwapRuleEditor.cs" />

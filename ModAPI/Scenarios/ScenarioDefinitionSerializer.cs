@@ -182,6 +182,8 @@ namespace ModAPI.Scenarios
                     }
                 }
 
+                member.Appearance = ReadFamilyAppearance(Child(memberElement, "Appearance"));
+
                 setup.Members.Add(member);
             }
 
@@ -214,6 +216,40 @@ namespace ModAPI.Scenarios
             }
 
             return inventory;
+        }
+
+        private static FamilyMemberAppearanceConfig ReadFamilyAppearance(XmlElement element)
+        {
+            FamilyMemberAppearanceConfig appearance = new FamilyMemberAppearanceConfig();
+            if (element == null)
+                return appearance;
+
+            string textureId;
+            string texturePath;
+
+            ReadFamilyAppearancePart(Child(element, "Head"), out textureId, out texturePath);
+            appearance.HeadTextureId = textureId;
+            appearance.HeadTexturePath = texturePath;
+
+            ReadFamilyAppearancePart(Child(element, "Torso"), out textureId, out texturePath);
+            appearance.TorsoTextureId = textureId;
+            appearance.TorsoTexturePath = texturePath;
+
+            ReadFamilyAppearancePart(Child(element, "Legs"), out textureId, out texturePath);
+            appearance.LegTextureId = textureId;
+            appearance.LegTexturePath = texturePath;
+            return appearance;
+        }
+
+        private static void ReadFamilyAppearancePart(XmlElement element, out string textureId, out string texturePath)
+        {
+            textureId = null;
+            texturePath = null;
+            if (element == null)
+                return;
+
+            textureId = AttributeOrChild(element, "id", "Id");
+            texturePath = AttributeOrChild(element, "path", "Path");
         }
 
         private static BunkerEditsDefinition ReadBunkerEdits(XmlElement element)
@@ -494,6 +530,7 @@ namespace ModAPI.Scenarios
                     writer.WriteEndElement();
                 }
                 writer.WriteEndElement();
+                WriteFamilyAppearance(writer, member.Appearance);
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
@@ -516,6 +553,26 @@ namespace ModAPI.Scenarios
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
+            writer.WriteEndElement();
+        }
+
+        private static void WriteFamilyAppearance(XmlWriter writer, FamilyMemberAppearanceConfig appearance)
+        {
+            if (appearance == null)
+                appearance = new FamilyMemberAppearanceConfig();
+
+            writer.WriteStartElement("Appearance");
+            WriteFamilyAppearancePart(writer, "Head", appearance.HeadTextureId, appearance.HeadTexturePath);
+            WriteFamilyAppearancePart(writer, "Torso", appearance.TorsoTextureId, appearance.TorsoTexturePath);
+            WriteFamilyAppearancePart(writer, "Legs", appearance.LegTextureId, appearance.LegTexturePath);
+            writer.WriteEndElement();
+        }
+
+        private static void WriteFamilyAppearancePart(XmlWriter writer, string name, string textureId, string texturePath)
+        {
+            writer.WriteStartElement(name);
+            WriteAttribute(writer, "id", textureId);
+            WriteAttribute(writer, "path", texturePath);
             writer.WriteEndElement();
         }
 

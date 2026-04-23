@@ -34,7 +34,7 @@ namespace ShelteredAPI.Scenarios
                     continue;
 
                 CaptureBaseline(entry.TargetPath, runtimeTarget);
-                if (ApplySprite(runtimeTarget, entry.Sprite))
+                if (ScenarioSpriteRuntimeMutationService.TryApply(runtimeTarget, entry.Sprite))
                     appliedCount++;
 
                 nextTargets.Add(entry.TargetPath);
@@ -78,10 +78,7 @@ namespace ShelteredAPI.Scenarios
             if (!TryResolveRuntimeTarget(targetPath, baseline.Kind, out runtimeTarget))
                 return;
 
-            if (baseline.Kind == ScenarioSpriteTargetComponentKind.SpriteRenderer && runtimeTarget.SpriteRenderer != null)
-                runtimeTarget.SpriteRenderer.sprite = baseline.Sprite;
-            else if (baseline.Kind == ScenarioSpriteTargetComponentKind.UI2DSprite && runtimeTarget.Ui2DSprite != null)
-                runtimeTarget.Ui2DSprite.sprite2D = baseline.Sprite;
+            ScenarioSpriteRuntimeMutationService.TryApply(runtimeTarget, baseline.Sprite);
         }
 
         private void CaptureBaseline(string targetPath, ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget)
@@ -94,26 +91,6 @@ namespace ShelteredAPI.Scenarios
                 Kind = runtimeTarget.Kind,
                 Sprite = runtimeTarget.CurrentSprite
             };
-        }
-
-        private static bool ApplySprite(ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget, Sprite sprite)
-        {
-            if (runtimeTarget == null || sprite == null)
-                return false;
-
-            if (runtimeTarget.Kind == ScenarioSpriteTargetComponentKind.SpriteRenderer && runtimeTarget.SpriteRenderer != null)
-            {
-                runtimeTarget.SpriteRenderer.sprite = sprite;
-                return true;
-            }
-
-            if (runtimeTarget.Kind == ScenarioSpriteTargetComponentKind.UI2DSprite && runtimeTarget.Ui2DSprite != null)
-            {
-                runtimeTarget.Ui2DSprite.sprite2D = sprite;
-                return true;
-            }
-
-            return false;
         }
 
         private bool TryResolveRuntimeTarget(string targetPath, ScenarioSpriteTargetComponentKind preferredKind, out ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget)

@@ -82,6 +82,8 @@ namespace ShelteredAPI.Scenarios
 
             ScenarioAuthoringSelectionMenuService.Instance.Reset();
             _contextMenuService.Close();
+            ScenarioBuildPlacementAuthoringService.Instance.Reset();
+            ScenarioSpriteSwapAuthoringService.Instance.ResetTransientState(true);
             ScenarioSpriteSwapAuthoringService.Instance.Invalidate();
             ScenarioSceneSpritePlacementAuthoringService.Instance.Invalidate();
             ScenarioAuthoringHistoryService.Instance.BindSession(session.DraftId);
@@ -108,6 +110,8 @@ namespace ShelteredAPI.Scenarios
             ScenarioHoverVisualService.Instance.Clear();
             ScenarioAuthoringSelectionMenuService.Instance.Reset();
             _contextMenuService.Close();
+            ScenarioBuildPlacementAuthoringService.Instance.Reset();
+            ScenarioSpriteSwapAuthoringService.Instance.ResetTransientState(true);
             ScenarioSpriteSwapAuthoringService.Instance.Invalidate();
             ScenarioSceneSpritePlacementAuthoringService.Instance.Invalidate();
             ScenarioAuthoringHistoryService.Instance.Reset();
@@ -148,7 +152,22 @@ namespace ShelteredAPI.Scenarios
             if (ScenarioAuthoringInputActions.IsRevertDown())
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionSpriteSwapRevert);
 
+            string buildPlacementMessage;
+            if (ScenarioBuildPlacementAuthoringService.Instance.Update(snapshot, _editorService.CurrentSession, out buildPlacementMessage))
+            {
+                changed = true;
+                if (!string.IsNullOrEmpty(buildPlacementMessage))
+                    snapshot.StatusMessage = buildPlacementMessage;
+            }
+
             changed |= _selectionService.Update(snapshot);
+            string pickerMessage;
+            if (ScenarioSpriteSwapAuthoringService.Instance.SynchronizePicker(snapshot, out pickerMessage))
+            {
+                changed = true;
+                if (!string.IsNullOrEmpty(pickerMessage))
+                    snapshot.StatusMessage = pickerMessage;
+            }
 
             lock (_sync)
             {
@@ -182,6 +201,13 @@ namespace ShelteredAPI.Scenarios
                 return false;
 
             bool changed = _commandService.Execute(snapshot, actionId);
+            string pickerMessage;
+            if (ScenarioSpriteSwapAuthoringService.Instance.SynchronizePicker(snapshot, out pickerMessage))
+            {
+                changed = true;
+                if (!string.IsNullOrEmpty(pickerMessage))
+                    snapshot.StatusMessage = pickerMessage;
+            }
             lock (_sync)
             {
                 _state = snapshot;

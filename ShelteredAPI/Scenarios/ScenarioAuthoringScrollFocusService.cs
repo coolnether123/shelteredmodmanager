@@ -14,6 +14,7 @@ namespace ShelteredAPI.Scenarios
         public void BeginFrame()
         {
             _frameRegions.Clear();
+            FocusedOwnerId = null;
             PointerOverScrollableRegion = false;
         }
 
@@ -31,6 +32,7 @@ namespace ShelteredAPI.Scenarios
 
         public void CompleteFrame(Vector2 pointerPosition)
         {
+            FocusedOwnerId = null;
             PointerOverScrollableRegion = false;
             for (int i = 0; i < _frameRegions.Count; i++)
             {

@@ -100,6 +100,7 @@
     <Compile Include="Scenarios\ScenarioDependencyManifest.cs" />
     <Compile Include="Scenarios\ScenarioFrameworkVerification.cs" />
     <Compile Include="Scenarios\ScenarioLoader.cs" />
+    <Compile Include="Scenarios\ScenarioPlacementDefinitions.cs" />
     <Compile Include="Scenarios\ScenarioPipelineSmokeTest.cs" />
     <Compile Include="Scenarios\ScenarioRuntimeBinding.cs" />
     <Compile Include="Scenarios\ScenarioValidator.cs" />

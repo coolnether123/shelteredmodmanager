@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using ModAPI.Core;
 
@@ -60,6 +62,7 @@ namespace ModAPI.Scenarios
 
             ValidateDependencies(definition, result);
             ValidateAssets(definition, scenarioFilePath, result);
+            ValidateFamily(definition, scenarioFilePath, result);
             ValidateInventory(definition, result);
             ValidateBunker(definition, result);
             return result;
@@ -139,22 +142,105 @@ namespace ModAPI.Scenarios
             }
         }
 
-        private static void ValidateBunker(ScenarioDefinition definition, ScenarioValidationResult result)
+        private static void ValidateFamily(ScenarioDefinition definition, string scenarioFilePath, ScenarioValidationResult result)
         {
-            if (definition.BunkerEdits == null || definition.BunkerEdits.RoomChanges == null)
+            if (definition == null || definition.FamilySetup == null || definition.FamilySetup.Members == null)
                 return;
 
-            for (int i = 0; i < definition.BunkerEdits.RoomChanges.Count; i++)
+            string packRoot = !string.IsNullOrEmpty(scenarioFilePath) ? Path.GetDirectoryName(scenarioFilePath) : null;
+            for (int i = 0; i < definition.FamilySetup.Members.Count; i++)
             {
-                RoomEdit room = definition.BunkerEdits.RoomChanges[i];
-                if (room == null)
+                FamilyMemberConfig member = definition.FamilySetup.Members[i];
+                FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
+                if (appearance == null || string.IsNullOrEmpty(packRoot))
                     continue;
-                if (room.GridX < 0 || room.GridY < 0)
-                    result.AddError("Room edit #" + i + " has negative grid coordinates.");
-                if (room.WallSpriteIndex.HasValue && room.WallSpriteIndex.Value < 0)
-                    result.AddError("Room edit #" + i + " has negative wallSpriteIndex.");
-                if (room.WireSpriteIndex.HasValue && room.WireSpriteIndex.Value < 0)
-                    result.AddError("Room edit #" + i + " has negative wireSpriteIndex.");
+
+                if (TrimToNull(appearance.HeadTexturePath) != null)
+                    ValidateAssetPath(packRoot, appearance.HeadTexturePath, "family head texture", result);
+                if (TrimToNull(appearance.TorsoTexturePath) != null)
+                    ValidateAssetPath(packRoot, appearance.TorsoTexturePath, "family torso texture", result);
+                if (TrimToNull(appearance.LegTexturePath) != null)
+                    ValidateAssetPath(packRoot, appearance.LegTexturePath, "family leg texture", result);
+            }
+        }
+
+        private static void ValidateBunker(ScenarioDefinition definition, ScenarioValidationResult result)
+        {
+            if (definition == null || definition.BunkerEdits == null)
+                return;
+
+            if (definition.BunkerEdits.RoomChanges != null)
+            {
+                for (int i = 0; i < definition.BunkerEdits.RoomChanges.Count; i++)
+                {
+                    RoomEdit room = definition.BunkerEdits.RoomChanges[i];
+                    if (room == null)
+                        continue;
+                    if (room.GridX < 0 || room.GridY < 0)
+                        result.AddError("Room edit #" + i + " has negative grid coordinates.");
+                    if (room.WallSpriteIndex.HasValue && room.WallSpriteIndex.Value < 0)
+                        result.AddError("Room edit #" + i + " has negative wallSpriteIndex.");
+                    if (room.WireSpriteIndex.HasValue && room.WireSpriteIndex.Value < 0)
+                        result.AddError("Room edit #" + i + " has negative wireSpriteIndex.");
+                }
+            }
+
+            if (definition.BunkerEdits.ObjectPlacements == null)
+                return;
+
+            for (int i = 0; i < definition.BunkerEdits.ObjectPlacements.Count; i++)
+            {
+                ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
+                if (placement == null)
+                {
+                    result.AddError("Object placement #" + i + " is null.");
+                    continue;
+                }
+
+                if (TrimToNull(placement.PrefabReference) == null && TrimToNull(placement.DefinitionReference) == null)
+                    result.AddError("Object placement #" + i + " must define prefab or definition.");
+
+                ScenarioPlacementDefinitionKind kind;
+                if (ScenarioPlacementDefinitions.TryParseSpecialKind(placement.DefinitionReference, out kind))
+                    ValidateSpecialPlacement(placement, i, kind, result);
+            }
+        }
+
+        private static void ValidateSpecialPlacement(
+            ObjectPlacement placement,
+            int index,
+            ScenarioPlacementDefinitionKind kind,
+            ScenarioValidationResult result)
+        {
+            int gridX;
+            int gridY;
+            bool hasGrid = TryGetGridCoordinates(placement, out gridX, out gridY);
+            if (hasGrid && (gridX < 0 || gridY < 0))
+                result.AddError("Object placement #" + index + " has negative grid coordinates.");
+
+            switch (kind)
+            {
+                case ScenarioPlacementDefinitionKind.Room:
+                    if (!hasGrid && placement.Position == null)
+                        result.AddError("Room placement #" + index + " must include grid coordinates or a position.");
+                    break;
+
+                case ScenarioPlacementDefinitionKind.Ladder:
+                    if (!hasGrid && placement.Position == null)
+                        result.AddError("Ladder placement #" + index + " must include grid coordinates or a position.");
+
+                    float horizontalPos;
+                    if (TryGetFloatProperty(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyHorizontalPos, out horizontalPos)
+                        && (horizontalPos < 0f || horizontalPos > 1f))
+                    {
+                        result.AddError("Ladder placement #" + index + " has horizontalPos outside the 0..1 range.");
+                    }
+                    break;
+
+                case ScenarioPlacementDefinitionKind.RoomLight:
+                    if (!hasGrid && placement.Position == null)
+                        result.AddError("Room light placement #" + index + " must include grid coordinates or a position.");
+                    break;
             }
         }
 
@@ -269,6 +355,53 @@ namespace ModAPI.Scenarios
 
             if (!File.Exists(fullPath))
                 result.AddError("Scenario " + assetKind + " file does not exist: " + trimmed);
+        }
+
+        private static bool TryGetGridCoordinates(ObjectPlacement placement, out int gridX, out int gridY)
+        {
+            gridX = -1;
+            gridY = -1;
+            int parsedGridX;
+            int parsedGridY;
+            if (!TryGetIntProperty(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyGridX, out parsedGridX)
+                || !TryGetIntProperty(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyGridY, out parsedGridY))
+            {
+                return false;
+            }
+
+            gridX = parsedGridX;
+            gridY = parsedGridY;
+            return true;
+        }
+
+        private static bool TryGetIntProperty(List<ScenarioProperty> properties, string key, out int value)
+        {
+            value = 0;
+            string propertyValue = GetProperty(properties, key);
+            return !string.IsNullOrEmpty(propertyValue) && int.TryParse(propertyValue, out value);
+        }
+
+        private static bool TryGetFloatProperty(List<ScenarioProperty> properties, string key, out float value)
+        {
+            value = 0f;
+            string propertyValue = GetProperty(properties, key);
+            return !string.IsNullOrEmpty(propertyValue)
+                && float.TryParse(propertyValue, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        }
+
+        private static string GetProperty(List<ScenarioProperty> properties, string key)
+        {
+            if (properties == null || string.IsNullOrEmpty(key))
+                return null;
+
+            for (int i = 0; i < properties.Count; i++)
+            {
+                ScenarioProperty property = properties[i];
+                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
+                    return property.Value;
+            }
+
+            return null;
         }
 
         private static string EnsureTrailingDirectorySeparator(string path)

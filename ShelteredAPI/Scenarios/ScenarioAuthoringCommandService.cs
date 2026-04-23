@@ -56,6 +56,15 @@ namespace ShelteredAPI.Scenarios
                 return scenePlacementChanged || !string.IsNullOrEmpty(scenePlacementMessage);
             }
 
+            string buildPlacementMessage;
+            bool buildPlacementChanged = ScenarioBuildPlacementAuthoringService.Instance.TryHandleAction(state, actionId, out handled, out buildPlacementMessage);
+            if (handled)
+            {
+                if (!string.IsNullOrEmpty(buildPlacementMessage))
+                    state.StatusMessage = buildPlacementMessage;
+                return buildPlacementChanged || !string.IsNullOrEmpty(buildPlacementMessage);
+            }
+
             if (TryHandlePrefixedAction(state, actionId))
                 return true;
 
@@ -187,13 +196,13 @@ namespace ShelteredAPI.Scenarios
                 case ScenarioAuthoringActionIds.ActionToolInventory:
                     return SetTool(state, ScenarioAuthoringTool.Inventory, "Inventory capture tool active.");
                 case ScenarioAuthoringActionIds.ActionToolShelter:
-                    return SetTool(state, ScenarioAuthoringTool.Shelter, "Shelter object capture tool active.");
+                    return SetTool(state, ScenarioAuthoringTool.Shelter, "Structure placement tool active.");
                 case ScenarioAuthoringActionIds.ActionToolAssets:
                     return SetTool(state, ScenarioAuthoringTool.Assets, "Asset workflow active.");
                 case ScenarioAuthoringActionIds.ActionToolObjects:
-                    return SetTool(state, ScenarioAuthoringTool.Objects, "Shelter object capture tool active.");
+                    return SetTool(state, ScenarioAuthoringTool.Objects, "Shelter object placement tool active.");
                 case ScenarioAuthoringActionIds.ActionToolWiring:
-                    return SetTool(state, ScenarioAuthoringTool.Shelter, "Shelter object capture tool active.");
+                    return SetTool(state, ScenarioAuthoringTool.Wiring, "Wall and wiring tool active.");
                 case ScenarioAuthoringActionIds.ActionToolPeople:
                     return SetTool(state, ScenarioAuthoringTool.Family, "Family capture tool active.");
                 case ScenarioAuthoringActionIds.ActionToolVehicle:

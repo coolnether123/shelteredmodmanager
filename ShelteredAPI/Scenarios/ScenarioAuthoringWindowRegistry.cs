@@ -28,10 +28,10 @@ namespace ShelteredAPI.Scenarios
             Register(ScenarioAuthoringWindowIds.TilesPalette, "Tiles Palette", ScenarioAuthoringShellDock.Left, true, false, true, 2, 304f, 322f, 260f, 160f);
             Register(ScenarioAuthoringWindowIds.Inspector, "Inspector", ScenarioAuthoringShellDock.Right, true, false, true, 0, 332f, 640f, 280f, 200f);
             Register(ScenarioAuthoringWindowIds.BuildTools, "Build Tools", ScenarioAuthoringShellDock.Bottom, true, false, true, 0, 0f, 188f, 540f, 120f);
-            Register(ScenarioAuthoringWindowIds.Triggers, "Triggers / Events", ScenarioAuthoringShellDock.Bottom, true, true, true, 1, 0f, 112f, 220f, 86f);
-            Register(ScenarioAuthoringWindowIds.Survivors, "Survivors", ScenarioAuthoringShellDock.Bottom, true, true, true, 2, 0f, 112f, 220f, 86f);
-            Register(ScenarioAuthoringWindowIds.Stockpile, "Stockpile", ScenarioAuthoringShellDock.Bottom, true, true, true, 3, 0f, 112f, 220f, 86f);
-            Register(ScenarioAuthoringWindowIds.Quests, "Quests", ScenarioAuthoringShellDock.Bottom, true, true, true, 4, 0f, 112f, 220f, 86f);
+            Register(ScenarioAuthoringWindowIds.Triggers, "Triggers / Events", ScenarioAuthoringShellDock.Floating, false, false, false, 1, 880f, 520f, 560f, 360f);
+            Register(ScenarioAuthoringWindowIds.Survivors, "Survivors", ScenarioAuthoringShellDock.Floating, false, false, false, 2, 880f, 520f, 560f, 360f);
+            Register(ScenarioAuthoringWindowIds.Stockpile, "Stockpile", ScenarioAuthoringShellDock.Floating, false, false, false, 3, 880f, 520f, 560f, 360f);
+            Register(ScenarioAuthoringWindowIds.Quests, "Quests", ScenarioAuthoringShellDock.Floating, false, false, false, 4, 880f, 520f, 560f, 360f);
             Register(ScenarioAuthoringWindowIds.Settings, "Editor Settings", ScenarioAuthoringShellDock.Floating, false, false, true, 0, 720f, 520f, 620f, 420f);
         }
 

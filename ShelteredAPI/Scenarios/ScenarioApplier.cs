@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using ModAPI.Core;
@@ -72,7 +73,7 @@ namespace ShelteredAPI.Scenarios
 
             ModRandom.GetStream("scenario_" + (definition.Id ?? "unknown"));
             PreloadAssets(definition, scenarioFilePath, result);
-            FamilyApply(definition, result);
+            FamilyApply(definition, scenarioFilePath, result);
             InventoryApply(definition, result);
             BunkerVisualApply(definition, result);
             TriggerApply(definition, result);
@@ -128,7 +129,7 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        public void FamilyApply(ScenarioDefinition definition, ScenarioApplyResult result)
+        public void FamilyApply(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result)
         {
             if (definition == null || definition.FamilySetup == null || definition.FamilySetup.Members.Count == 0)
                 return;
@@ -170,6 +171,7 @@ namespace ShelteredAPI.Scenarios
                 ApplyStats(member, config, result);
                 ApplyTraits(member, config, result);
                 ApplySkills(member, config, result);
+                ApplyAppearance(definition, scenarioFilePath, member, config, result);
             }
 
             if (definition.FamilySetup.OverrideVanillaFamily && definition.FamilySetup.Members.Count > members.Count)
@@ -223,7 +225,12 @@ namespace ShelteredAPI.Scenarios
 
         public void BunkerVisualApply(ScenarioDefinition definition, ScenarioApplyResult result)
         {
-            if (definition == null || definition.BunkerEdits == null || definition.BunkerEdits.RoomChanges.Count == 0)
+            if (definition == null || definition.BunkerEdits == null)
+                return;
+
+            bool hasRoomChanges = definition.BunkerEdits.RoomChanges != null && definition.BunkerEdits.RoomChanges.Count > 0;
+            bool hasObjectPlacements = definition.BunkerEdits.ObjectPlacements != null && definition.BunkerEdits.ObjectPlacements.Count > 0;
+            if (!hasRoomChanges && !hasObjectPlacements)
                 return;
 
             ShelterRoomGrid grid = ShelterRoomGrid.Instance;
@@ -233,8 +240,10 @@ namespace ShelteredAPI.Scenarios
                 return;
             }
 
+            ObjectPlacementApply(definition, result);
+
             List<Sprite> wires = ShelterRoomGridWiresSpritesField != null ? ShelterRoomGridWiresSpritesField.GetValue(grid) as List<Sprite> : null;
-            for (int i = 0; i < definition.BunkerEdits.RoomChanges.Count; i++)
+            for (int i = 0; definition.BunkerEdits.RoomChanges != null && i < definition.BunkerEdits.RoomChanges.Count; i++)
             {
                 RoomEdit room = definition.BunkerEdits.RoomChanges[i];
                 if (room == null)
@@ -261,26 +270,94 @@ namespace ShelteredAPI.Scenarios
                     }
                 }
             }
-
-            ObjectPlacementApply(definition, result);
         }
 
         public void ObjectPlacementApply(ScenarioDefinition definition, ScenarioApplyResult result)
         {
-            if (definition == null || definition.BunkerEdits == null || definition.BunkerEdits.ObjectPlacements.Count == 0)
+            if (definition == null
+                || definition.BunkerEdits == null
+                || definition.BunkerEdits.ObjectPlacements == null
+                || definition.BunkerEdits.ObjectPlacements.Count == 0)
+            {
+                return;
+            }
+
+            ApplyStructurePlacements(definition.BunkerEdits.ObjectPlacements, ScenarioPlacementDefinitionKind.Room, result);
+            ApplyStructurePlacements(definition.BunkerEdits.ObjectPlacements, ScenarioPlacementDefinitionKind.Ladder, result);
+            ApplyStructurePlacements(definition.BunkerEdits.ObjectPlacements, ScenarioPlacementDefinitionKind.RoomLight, result);
+            ApplyObjectPlacements(definition.BunkerEdits.ObjectPlacements, result);
+        }
+
+        private void ApplyStructurePlacements(
+            List<ObjectPlacement> placements,
+            ScenarioPlacementDefinitionKind targetKind,
+            ScenarioApplyResult result)
+        {
+            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            if (grid == null || !grid.isInitialized || placements == null)
+                return;
+
+            for (int i = 0; i < placements.Count; i++)
+            {
+                ObjectPlacement placement = placements[i];
+                ScenarioPlacementDefinitionKind kind;
+                if (placement == null
+                    || !ScenarioPlacementDefinitions.TryParseSpecialKind(placement.DefinitionReference, out kind)
+                    || kind != targetKind)
+                {
+                    continue;
+                }
+
+                switch (kind)
+                {
+                    case ScenarioPlacementDefinitionKind.Room:
+                        ApplyRoomPlacement(grid, placement, i, result);
+                        break;
+
+                    case ScenarioPlacementDefinitionKind.Ladder:
+                        ApplyLadderPlacement(grid, placement, i, result);
+                        break;
+
+                    case ScenarioPlacementDefinitionKind.RoomLight:
+                        ApplyRoomLightPlacement(grid, placement, i, result);
+                        break;
+                }
+            }
+        }
+
+        private void ApplyObjectPlacements(List<ObjectPlacement> placements, ScenarioApplyResult result)
+        {
+            if (placements == null || placements.Count == 0)
+                return;
+
+            bool hasStandardPlacements = false;
+            for (int i = 0; i < placements.Count; i++)
+            {
+                ObjectPlacement placement = placements[i];
+                if (placement != null && !ScenarioPlacementDefinitions.IsSpecialDefinition(placement.DefinitionReference))
+                {
+                    hasStandardPlacements = true;
+                    break;
+                }
+            }
+
+            if (!hasStandardPlacements)
                 return;
 
             ObjectManager manager = ObjectManager.Instance;
             if (manager == null)
             {
-                result.AddMessage("ObjectManager is not ready; object placements skipped.");
+                result.AddMessage("ObjectManager is not ready; standard object placements skipped.");
                 return;
             }
 
-            for (int i = 0; i < definition.BunkerEdits.ObjectPlacements.Count; i++)
+            for (int i = 0; i < placements.Count; i++)
             {
-                ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
+                ObjectPlacement placement = placements[i];
                 if (placement == null)
+                    continue;
+
+                if (ScenarioPlacementDefinitions.IsSpecialDefinition(placement.DefinitionReference))
                     continue;
 
                 if (!string.IsNullOrEmpty(placement.PrefabReference))
@@ -322,6 +399,118 @@ namespace ShelteredAPI.Scenarios
 
                 result.BunkerChanges++;
             }
+        }
+
+        private static void ApplyRoomPlacement(
+            ShelterRoomGrid grid,
+            ObjectPlacement placement,
+            int index,
+            ScenarioApplyResult result)
+        {
+            int gridX;
+            int gridY;
+            if (!TryResolveGridCoordinates(grid, placement, out gridX, out gridY))
+            {
+                result.AddMessage("Room placement #" + index + " could not resolve a shelter cell.");
+                return;
+            }
+
+            ShelterRoomGrid.GridCell cell = grid.GetCell(gridX, gridY);
+            ShelterRoomGrid.CellType cellType = string.Equals(placement.DefinitionReference, ScenarioPlacementDefinitions.RoomTop, StringComparison.OrdinalIgnoreCase)
+                ? ShelterRoomGrid.CellType.RoomTop
+                : ShelterRoomGrid.CellType.Room;
+            if (cell != null && cell.type == cellType)
+                return;
+
+            if (grid.SetCellType(gridX, gridY, cellType))
+                result.BunkerChanges++;
+            else
+                result.AddMessage("Room placement #" + index + " failed at " + gridX + "," + gridY + ".");
+        }
+
+        private static void ApplyLadderPlacement(
+            ShelterRoomGrid grid,
+            ObjectPlacement placement,
+            int index,
+            ScenarioApplyResult result)
+        {
+            int gridX;
+            int gridY;
+            if (!TryResolveGridCoordinates(grid, placement, out gridX, out gridY))
+            {
+                result.AddMessage("Ladder placement #" + index + " could not resolve a shelter cell.");
+                return;
+            }
+
+            if (grid.HasLadder(gridX, gridY))
+                return;
+
+            float horizontalPos = ResolveHorizontalPosition(grid, placement, gridX);
+            if (grid.AddLadder(gridX, gridY, horizontalPos) != null)
+                result.BunkerChanges++;
+            else
+                result.AddMessage("Ladder placement #" + index + " failed at " + gridX + "," + gridY + ".");
+        }
+
+        private static void ApplyRoomLightPlacement(
+            ShelterRoomGrid grid,
+            ObjectPlacement placement,
+            int index,
+            ScenarioApplyResult result)
+        {
+            int gridX;
+            int gridY;
+            if (!TryResolveGridCoordinates(grid, placement, out gridX, out gridY))
+            {
+                result.AddMessage("Room light placement #" + index + " could not resolve a shelter cell.");
+                return;
+            }
+
+            ShelterRoomGrid.GridCell cell = grid.GetCell(gridX, gridY);
+            if (cell != null && (UnityEngine.Object)cell.lightObject != (UnityEngine.Object)null)
+                return;
+
+            if (grid.AddLight(gridX, gridY))
+                result.BunkerChanges++;
+            else
+                result.AddMessage("Room light placement #" + index + " failed at " + gridX + "," + gridY + ".");
+        }
+
+        private static bool TryResolveGridCoordinates(
+            ShelterRoomGrid grid,
+            ObjectPlacement placement,
+            out int gridX,
+            out int gridY)
+        {
+            gridX = GetIntProperty(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyGridX, int.MinValue);
+            gridY = GetIntProperty(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyGridY, int.MinValue);
+            if (gridX != int.MinValue && gridY != int.MinValue)
+                return true;
+
+            Vector3 worldPosition = new Vector3(
+                placement != null && placement.Position != null ? placement.Position.X : 0f,
+                placement != null && placement.Position != null ? placement.Position.Y : 0f,
+                placement != null && placement.Position != null ? placement.Position.Z : 0f);
+            return grid != null && grid.WorldCoordsToCellCoords(worldPosition, out gridX, out gridY);
+        }
+
+        private static float ResolveHorizontalPosition(ShelterRoomGrid grid, ObjectPlacement placement, int gridX)
+        {
+            string storedValue = GetProperty(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyHorizontalPos);
+            float parsedValue;
+            if (!string.IsNullOrEmpty(storedValue)
+                && float.TryParse(storedValue, NumberStyles.Float, CultureInfo.InvariantCulture, out parsedValue))
+            {
+                return Mathf.Clamp01(parsedValue);
+            }
+
+            float cellLeft = gridX * grid.grid_cell_width;
+            float cellRight = cellLeft + grid.grid_cell_width;
+            float width = cellRight - cellLeft;
+            if (width <= 0f || placement == null || placement.Position == null)
+                return 0.5f;
+
+            return Mathf.Clamp01((placement.Position.X - cellLeft) / width);
         }
 
         public void TriggerApply(ScenarioDefinition definition, ScenarioApplyResult result)
@@ -428,6 +617,23 @@ namespace ShelteredAPI.Scenarios
                     + " for '" + (config.Name ?? member.firstName)
                     + "' is deferred because Sheltered exposes no stable runtime skill/save API comparable to BaseStats or Traits.");
             }
+        }
+
+        private static void ApplyAppearance(
+            ScenarioDefinition definition,
+            string scenarioFilePath,
+            FamilyMember member,
+            FamilyMemberConfig config,
+            ScenarioApplyResult result)
+        {
+            if (member == null || config == null || config.Appearance == null)
+                return;
+
+            string message;
+            if (ScenarioCharacterAppearanceService.Instance.ApplyConfiguredAppearance(definition, scenarioFilePath, config, member, out message))
+                result.FamilyChanges++;
+            else if (!string.IsNullOrEmpty(message))
+                result.AddMessage(message);
         }
 
         private static void ApplyConditionList(List<ConditionDef> conditions, string outcome, ScenarioApplyResult result)
