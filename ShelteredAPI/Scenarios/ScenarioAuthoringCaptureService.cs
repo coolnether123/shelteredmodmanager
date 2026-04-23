@@ -8,7 +8,6 @@ namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScenarioAuthoringCaptureService
     {
-        private const float PlacementMatchTolerance = 0.15f;
         private static readonly ScenarioAuthoringCaptureService _instance = new ScenarioAuthoringCaptureService();
 
         public static ScenarioAuthoringCaptureService Instance
@@ -60,6 +59,7 @@ namespace ShelteredAPI.Scenarios
 
                 CaptureStats(member, config);
                 CaptureTraits(member, config);
+                ScenarioCharacterAppearanceService.CaptureAppearance(member, config);
 
                 familySetup.Members.Add(config);
                 captured++;
@@ -136,18 +136,26 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            BunkerEditsDefinition bunkerEdits = session.WorkingDefinition.BunkerEdits ?? new BunkerEditsDefinition();
+            BunkerEditsDefinition bunkerEdits = ScenarioBunkerDraftService.EnsureBunkerEdits(session);
+            List<ObjectPlacement> preserved = new List<ObjectPlacement>();
+            for (int i = 0; i < bunkerEdits.ObjectPlacements.Count; i++)
+            {
+                ObjectPlacement existing = bunkerEdits.ObjectPlacements[i];
+                if (ScenarioBunkerDraftService.ShouldPreserveDuringLiveCapture(existing))
+                    preserved.Add(existing);
+            }
+
             bunkerEdits.ObjectPlacements.Clear();
 
             List<Obj_Base> liveObjects = objectManager.GetAllObjects();
-            List<ObjectPlacement> captured = new List<ObjectPlacement>();
+            List<ObjectPlacement> captured = new List<ObjectPlacement>(preserved);
             for (int i = 0; liveObjects != null && i < liveObjects.Count; i++)
             {
                 Obj_Base obj = liveObjects[i];
                 if (!ShouldCaptureObject(obj))
                     continue;
 
-                captured.Add(CreatePlacement(obj));
+                captured.Add(ScenarioBunkerDraftService.CreatePlacement(obj));
             }
 
             captured.Sort(ComparePlacements);
@@ -155,9 +163,10 @@ namespace ShelteredAPI.Scenarios
                 bunkerEdits.ObjectPlacements.Add(captured[i]);
 
             session.WorkingDefinition.BunkerEdits = bunkerEdits;
-            MarkCaptured(session, ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
+            ScenarioBunkerDraftService.MarkBunkerDirty(session);
+            int liveCapturedCount = Math.Max(0, captured.Count - preserved.Count);
             message = captured.Count > 0
-                ? "Captured " + captured.Count + " live spawned shelter object placement(s)."
+                ? "Captured " + liveCapturedCount + " live spawned shelter object placement(s)."
                 : "No eligible spawned shelter objects were found; captured placement list cleared.";
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
@@ -174,9 +183,9 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            BunkerEditsDefinition bunkerEdits = EnsureBunkerEdits(session);
-            ObjectPlacement placement = CreatePlacement(obj);
-            int existingIndex = FindPlacementIndex(bunkerEdits.ObjectPlacements, obj);
+            BunkerEditsDefinition bunkerEdits = ScenarioBunkerDraftService.EnsureBunkerEdits(session);
+            ObjectPlacement placement = ScenarioBunkerDraftService.CreatePlacement(obj);
+            int existingIndex = ScenarioBunkerDraftService.FindPlacementIndex(bunkerEdits.ObjectPlacements, obj);
             if (existingIndex >= 0)
             {
                 bunkerEdits.ObjectPlacements[existingIndex] = placement;
@@ -189,7 +198,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             bunkerEdits.ObjectPlacements.Sort(ComparePlacements);
-            MarkCaptured(session, ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
+            ScenarioBunkerDraftService.MarkBunkerDirty(session);
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
         }
@@ -211,7 +220,7 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            int index = FindPlacementIndex(session.WorkingDefinition.BunkerEdits.ObjectPlacements, obj);
+            int index = ScenarioBunkerDraftService.FindPlacementIndex(session.WorkingDefinition.BunkerEdits.ObjectPlacements, obj);
             if (index < 0)
             {
                 message = "The selected object does not have a captured scenario placement.";
@@ -219,7 +228,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             session.WorkingDefinition.BunkerEdits.ObjectPlacements.RemoveAt(index);
-            MarkCaptured(session, ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
+            ScenarioBunkerDraftService.MarkBunkerDirty(session);
             message = "Removed captured placement for '" + SafeObjectName(obj) + "'.";
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
@@ -241,7 +250,7 @@ namespace ShelteredAPI.Scenarios
             if (!TryResolveCapturableObject(target, out obj, out ignored))
                 return false;
 
-            return FindPlacementIndex(session.WorkingDefinition.BunkerEdits.ObjectPlacements, obj) >= 0;
+            return ScenarioBunkerDraftService.FindPlacementIndex(session.WorkingDefinition.BunkerEdits.ObjectPlacements, obj) >= 0;
         }
 
         private static void CaptureStats(FamilyMember member, FamilyMemberConfig config)
@@ -276,29 +285,6 @@ namespace ShelteredAPI.Scenarios
             List<Traits.Weakness> weaknesses = member.traits.GetWeaknesses(false);
             for (int i = 0; weaknesses != null && i < weaknesses.Count; i++)
                 config.Traits.Add("Weakness:" + weaknesses[i]);
-        }
-
-        private static void MarkCaptured(ScenarioEditorSession session, ScenarioDirtySection section, ScenarioEditCategory category)
-        {
-            if (session == null)
-                return;
-
-            if (!session.DirtyFlags.Contains(section))
-                session.DirtyFlags.Add(section);
-
-            session.CurrentEditCategory = category;
-            session.HasAppliedToCurrentWorld = true;
-        }
-
-        private static BunkerEditsDefinition EnsureBunkerEdits(ScenarioEditorSession session)
-        {
-            if (session == null || session.WorkingDefinition == null)
-                throw new InvalidOperationException("No authoring session is active.");
-
-            if (session.WorkingDefinition.BunkerEdits == null)
-                session.WorkingDefinition.BunkerEdits = new BunkerEditsDefinition();
-
-            return session.WorkingDefinition.BunkerEdits;
         }
 
         private static bool TryResolveCapturableObject(ScenarioAuthoringTarget target, out Obj_Base obj, out string reason)
@@ -374,59 +360,19 @@ namespace ShelteredAPI.Scenarios
             return false;
         }
 
-        private static ObjectPlacement CreatePlacement(Obj_Base obj)
+        private static void MarkCaptured(
+            ScenarioEditorSession session,
+            ScenarioDirtySection dirtySection,
+            ScenarioEditCategory category)
         {
-            Transform transform = obj.transform;
-            ObjectPlacement placement = new ObjectPlacement();
-            placement.DefinitionReference = obj.GetObjectType().ToString();
-            placement.Position = new ScenarioVector3
-            {
-                X = transform.position.x,
-                Y = transform.position.y,
-                Z = transform.position.z
-            };
-            placement.Rotation = new ScenarioVector3
-            {
-                X = transform.eulerAngles.x,
-                Y = transform.eulerAngles.y,
-                Z = transform.eulerAngles.z
-            };
-            placement.CustomProperties.Add(new ScenarioProperty { Key = "level", Value = obj.objectLevel.ToString() });
-            placement.CustomProperties.Add(new ScenarioProperty { Key = "lockDeconstruct", Value = obj.lockDeconstructOption.ToString().ToLowerInvariant() });
-            placement.CustomProperties.Add(new ScenarioProperty { Key = "movable", Value = obj.movable.ToString().ToLowerInvariant() });
-            placement.CustomProperties.Add(new ScenarioProperty { Key = "sourceObjectId", Value = obj.objectId.ToString() });
-            placement.CustomProperties.Add(new ScenarioProperty { Key = "capturedName", Value = SafeObjectName(obj) });
-            return placement;
-        }
+            if (session == null)
+                return;
 
-        private static int FindPlacementIndex(List<ObjectPlacement> placements, Obj_Base obj)
-        {
-            if (placements == null || obj == null)
-                return -1;
+            if (!session.DirtyFlags.Contains(dirtySection))
+                session.DirtyFlags.Add(dirtySection);
 
-            string objectId = obj.objectId.ToString();
-            string definitionReference = obj.GetObjectType().ToString();
-            Vector3 position = obj.transform.position;
-
-            for (int i = 0; i < placements.Count; i++)
-            {
-                ObjectPlacement placement = placements[i];
-                if (placement == null)
-                    continue;
-
-                string sourceObjectId = GetProperty(placement.CustomProperties, "sourceObjectId");
-                if (!string.IsNullOrEmpty(sourceObjectId) && string.Equals(sourceObjectId, objectId, StringComparison.OrdinalIgnoreCase))
-                    return i;
-
-                if (!string.Equals(placement.DefinitionReference, definitionReference, StringComparison.OrdinalIgnoreCase) || placement.Position == null)
-                    continue;
-
-                Vector3 placementPosition = new Vector3(placement.Position.X, placement.Position.Y, placement.Position.Z);
-                if (Vector3.Distance(position, placementPosition) <= PlacementMatchTolerance)
-                    return i;
-            }
-
-            return -1;
+            session.CurrentEditCategory = category;
+            session.HasAppliedToCurrentWorld = true;
         }
 
         private static int ComparePlacements(ObjectPlacement left, ObjectPlacement right)
@@ -437,6 +383,11 @@ namespace ShelteredAPI.Scenarios
                 return 1;
             if (right == null)
                 return -1;
+
+            bool leftPreserved = ScenarioBunkerDraftService.ShouldPreserveDuringLiveCapture(left);
+            bool rightPreserved = ScenarioBunkerDraftService.ShouldPreserveDuringLiveCapture(right);
+            if (leftPreserved != rightPreserved)
+                return leftPreserved ? -1 : 1;
 
             int typeCompare = string.Compare(left.DefinitionReference ?? string.Empty, right.DefinitionReference ?? string.Empty, StringComparison.OrdinalIgnoreCase);
             if (typeCompare != 0)
@@ -464,34 +415,9 @@ namespace ShelteredAPI.Scenarios
             return string.Compare(left.ItemId ?? string.Empty, right.ItemId ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string GetProperty(List<ScenarioProperty> properties, string key)
-        {
-            if (properties == null || string.IsNullOrEmpty(key))
-                return null;
-
-            for (int i = 0; i < properties.Count; i++)
-            {
-                ScenarioProperty property = properties[i];
-                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-                    return property.Value;
-            }
-
-            return null;
-        }
-
         private static string SafeObjectName(Obj_Base obj)
         {
-            if (obj == null)
-                return "Unknown Object";
-
-            string name = obj.GetName();
-            if (!string.IsNullOrEmpty(name))
-                return name;
-
-            if (!string.IsNullOrEmpty(obj.name))
-                return obj.name;
-
-            return obj.GetObjectType().ToString();
+            return ScenarioBunkerDraftService.SafeObjectName(obj);
         }
     }
 }

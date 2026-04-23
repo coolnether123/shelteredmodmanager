@@ -463,7 +463,7 @@ namespace ShelteredAPI.Scenarios
                     GridX = ResolveGridX(context, transform),
                     GridY = ResolveGridY(context, transform),
                     SupportsInspect = true,
-                    SupportsReplace = SupportsReplace(kind)
+                    SupportsReplace = SupportsReplace(gameObject, kind)
                 };
 
                 return true;
@@ -665,10 +665,15 @@ namespace ShelteredAPI.Scenarios
                 return null;
             }
 
-            private static bool SupportsReplace(ScenarioAuthoringTargetKind kind)
+            private static bool SupportsReplace(GameObject gameObject, ScenarioAuthoringTargetKind kind)
             {
                 switch (kind)
                 {
+                    case ScenarioAuthoringTargetKind.Character:
+                        return ScenarioCharacterAppearanceService.Instance.CanEdit(new ScenarioAuthoringTarget
+                        {
+                            RuntimeObject = gameObject
+                        });
                     case ScenarioAuthoringTargetKind.PlaceableObject:
                     case ScenarioAuthoringTargetKind.Wall:
                     case ScenarioAuthoringTargetKind.Wire:

@@ -70,6 +70,7 @@ namespace ModAPI.Scenarios
             Stats = new List<StatOverride>();
             Traits = new List<string>();
             Skills = new List<SkillOverride>();
+            Appearance = new FamilyMemberAppearanceConfig();
         }
 
         public string Name { get; set; }
@@ -80,6 +81,17 @@ namespace ModAPI.Scenarios
         public List<StatOverride> Stats { get; private set; }
         public List<string> Traits { get; private set; }
         public List<SkillOverride> Skills { get; private set; }
+        public FamilyMemberAppearanceConfig Appearance { get; set; }
+    }
+
+    public class FamilyMemberAppearanceConfig
+    {
+        public string HeadTextureId { get; set; }
+        public string HeadTexturePath { get; set; }
+        public string TorsoTextureId { get; set; }
+        public string TorsoTexturePath { get; set; }
+        public string LegTextureId { get; set; }
+        public string LegTexturePath { get; set; }
     }
 
     public class StatOverride

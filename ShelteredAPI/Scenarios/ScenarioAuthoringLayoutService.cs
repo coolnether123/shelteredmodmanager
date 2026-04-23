@@ -49,6 +49,26 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
+        private static readonly string[] WorkspaceWindowIds = new[]
+        {
+            ScenarioAuthoringWindowIds.Triggers,
+            ScenarioAuthoringWindowIds.Survivors,
+            ScenarioAuthoringWindowIds.Stockpile,
+            ScenarioAuthoringWindowIds.Quests
+        };
+
+        private static bool IsWorkspaceWindow(string windowId)
+        {
+            if (string.IsNullOrEmpty(windowId))
+                return false;
+            for (int i = 0; i < WorkspaceWindowIds.Length; i++)
+            {
+                if (string.Equals(WorkspaceWindowIds[i], windowId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
         public bool ToggleWindowVisibility(ScenarioAuthoringState state, string windowId)
         {
             ScenarioAuthoringWindowState window = FindWindow(state, windowId);
@@ -60,6 +80,19 @@ namespace ShelteredAPI.Scenarios
                 window.Collapsed = false;
             else
                 window.Collapsed = false;
+
+            if (window.Visible && IsWorkspaceWindow(windowId))
+            {
+                for (int i = 0; i < state.WindowStates.Count; i++)
+                {
+                    ScenarioAuthoringWindowState other = state.WindowStates[i];
+                    if (other == null || string.Equals(other.Id, windowId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (IsWorkspaceWindow(other.Id))
+                        other.Visible = false;
+                }
+            }
+
             state.MinimalMode = false;
             state.FocusSelectionMode = false;
             PersistIfEnabled(state);

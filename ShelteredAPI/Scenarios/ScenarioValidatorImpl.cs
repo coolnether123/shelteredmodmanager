@@ -53,6 +53,24 @@ namespace ShelteredAPI.Scenarios
                 if (swap != null && !string.IsNullOrEmpty(swap.RelativePath))
                     ValidateSprite(packRoot, swap.RelativePath, "sprite swap", result);
             }
+
+            if (definition.FamilySetup != null && definition.FamilySetup.Members != null)
+            {
+                for (int i = 0; i < definition.FamilySetup.Members.Count; i++)
+                {
+                    FamilyMemberConfig member = definition.FamilySetup.Members[i];
+                    FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
+                    if (appearance == null)
+                        continue;
+
+                    if (!string.IsNullOrEmpty(appearance.HeadTexturePath))
+                        ValidateSprite(packRoot, appearance.HeadTexturePath, "family head texture", result);
+                    if (!string.IsNullOrEmpty(appearance.TorsoTexturePath))
+                        ValidateSprite(packRoot, appearance.TorsoTexturePath, "family torso texture", result);
+                    if (!string.IsNullOrEmpty(appearance.LegTexturePath))
+                        ValidateSprite(packRoot, appearance.LegTexturePath, "family leg texture", result);
+                }
+            }
         }
 
         private static void ValidateSprite(string packRoot, string relativePath, string kind, ScenarioValidationResult result)
