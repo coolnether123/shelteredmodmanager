@@ -8,11 +8,15 @@ namespace ShelteredAPI.Scenarios
     internal sealed class ScenarioAuthoringSelectionService
     {
         private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
+        private readonly ScenarioSelectionScopeService _scopeService;
         private readonly ScenarioAuthoringTargetAdapterRegistry _adapterRegistry = new ScenarioAuthoringTargetAdapterRegistry();
 
-        public ScenarioAuthoringSelectionService(ScenarioCharacterAppearanceService characterAppearanceService)
+        public ScenarioAuthoringSelectionService(
+            ScenarioCharacterAppearanceService characterAppearanceService,
+            ScenarioSelectionScopeService scopeService)
         {
             _characterAppearanceService = characterAppearanceService;
+            _scopeService = scopeService;
             _adapterRegistry.Register(new DefaultScenarioAuthoringTargetAdapter(_characterAppearanceService));
             _adapterRegistry.Register(new GridCellScenarioAuthoringTargetAdapter());
         }
@@ -31,6 +35,7 @@ namespace ShelteredAPI.Scenarios
                 && (ScenarioAuthoringInputActions.IsSelectionModifierHeld() || IsAddSelectionHeld());
             bool changed = state.SelectionModeActive != selectionMode;
             state.SelectionModeActive = selectionMode;
+            changed |= _scopeService.ClearSelectionIfOutOfScope(state);
 
             if (!selectionMode)
             {
@@ -42,7 +47,7 @@ namespace ShelteredAPI.Scenarios
             }
             else
             {
-                if (TryResolveHoveredTarget(out hovered))
+                if (TryResolveHoveredTarget(state, out hovered))
                 {
                     if (!AreSameTarget(state.HoveredTarget, hovered))
                     {
@@ -56,7 +61,9 @@ namespace ShelteredAPI.Scenarios
                     changed = true;
                 }
 
-                if (ScenarioAuthoringInputActions.IsConfirmSelectionDown() && hovered != null)
+                if (ScenarioAuthoringInputActions.IsConfirmSelectionDown()
+                    && hovered != null
+                    && _scopeService.CanSelectTargetForCurrentStage(state, hovered))
                 {
                     changed |= ApplySelection(state, hovered);
                 }
@@ -84,7 +91,7 @@ namespace ShelteredAPI.Scenarios
             return changed;
         }
 
-        private bool TryResolveHoveredTarget(out ScenarioAuthoringTarget target)
+        private bool TryResolveHoveredTarget(ScenarioAuthoringState state, out ScenarioAuthoringTarget target)
         {
             target = null;
             if (UICamera.hoveredObject != null)
@@ -131,13 +138,13 @@ namespace ShelteredAPI.Scenarios
                     if (!_adapterRegistry.TryCreateTarget(context, out candidate) || candidate == null)
                         continue;
 
-                    if (!IsBackgroundLike(candidate))
+                    if (_scopeService.CanSelectTargetForCurrentStage(state, candidate))
                     {
                         target = candidate;
                         return true;
                     }
 
-                    if (fallbackTarget == null)
+                    if (fallbackTarget == null && _scopeService.CanSelectTargetForCurrentStage(state, candidate))
                         fallbackTarget = candidate;
                 }
             }
@@ -165,13 +172,13 @@ namespace ShelteredAPI.Scenarios
                     if (!_adapterRegistry.TryCreateTarget(context, out candidate) || candidate == null)
                         continue;
 
-                    if (!IsBackgroundLike(candidate))
+                    if (_scopeService.CanSelectTargetForCurrentStage(state, candidate))
                     {
                         target = candidate;
                         return true;
                     }
 
-                    if (fallbackTarget == null)
+                    if (fallbackTarget == null && _scopeService.CanSelectTargetForCurrentStage(state, candidate))
                         fallbackTarget = candidate;
                 }
             }
@@ -183,7 +190,8 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringTargetContext spriteContext;
             if (TryResolveSpriteContext(camera, ray, worldPoint, out spriteContext)
                 && _adapterRegistry.TryCreateTarget(spriteContext, out target)
-                && target != null)
+                && target != null
+                && _scopeService.CanSelectTargetForCurrentStage(state, target))
             {
                 return true;
             }
@@ -200,7 +208,9 @@ namespace ShelteredAPI.Scenarios
                 Ray = ray,
                 WorldPoint = worldPoint
             };
-            return _adapterRegistry.TryCreateTarget(gridContext, out target) && target != null;
+            return _adapterRegistry.TryCreateTarget(gridContext, out target)
+                && target != null
+                && _scopeService.CanSelectTargetForCurrentStage(state, target);
         }
 
         private static bool ApplySelection(ScenarioAuthoringState state, ScenarioAuthoringTarget hovered)
@@ -304,15 +314,6 @@ namespace ShelteredAPI.Scenarios
                 WorldPoint = worldPoint
             };
             return true;
-        }
-
-        private static bool IsBackgroundLike(ScenarioAuthoringTarget target)
-        {
-            if (target == null)
-                return false;
-
-            return target.Kind == ScenarioAuthoringTargetKind.Background
-                || target.Kind == ScenarioAuthoringTargetKind.Tile;
         }
 
         private static int EstimateSelectionCategory(GameObject gameObject)

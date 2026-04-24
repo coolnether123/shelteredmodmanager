@@ -10,10 +10,12 @@ namespace ShelteredAPI.Scenarios
     internal sealed class SpriteCommandHandler : IScenarioCommandHandler
     {
         private readonly ScenarioSpriteSwapAuthoringService _service;
+        private readonly ScenarioSelectionScopeService _scopeService;
 
-        public SpriteCommandHandler(ScenarioSpriteSwapAuthoringService service)
+        public SpriteCommandHandler(ScenarioSpriteSwapAuthoringService service, ScenarioSelectionScopeService scopeService)
         {
             _service = service;
+            _scopeService = scopeService;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -30,17 +32,35 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
+            if (RequiresScopedTarget(actionId) && !_scopeService.CanSelectTargetForCurrentStage(state, state.SelectedTarget, out message))
+            {
+                handled = true;
+                return true;
+            }
+
             return _service.TryHandleAction(state, actionId, out handled, out message);
+        }
+
+        private static bool RequiresScopedTarget(string actionId)
+        {
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionHistoryUndo, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionHistoryRedo, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel, StringComparison.Ordinal))
+                return false;
+
+            return actionId.StartsWith("sprite_swap.", StringComparison.Ordinal);
         }
     }
 
     internal sealed class SceneSpriteCommandHandler : IScenarioCommandHandler
     {
         private readonly ScenarioSceneSpritePlacementAuthoringService _service;
+        private readonly ScenarioSelectionScopeService _scopeService;
 
-        public SceneSpriteCommandHandler(ScenarioSceneSpritePlacementAuthoringService service)
+        public SceneSpriteCommandHandler(ScenarioSceneSpritePlacementAuthoringService service, ScenarioSelectionScopeService scopeService)
         {
             _service = service;
+            _scopeService = scopeService;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -49,6 +69,12 @@ namespace ShelteredAPI.Scenarios
             message = null;
             if (_service == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith("scene_sprite.", StringComparison.Ordinal))
                 return false;
+
+            if (!_scopeService.CanSelectTargetForCurrentStage(state, state.SelectedTarget, out message))
+            {
+                handled = true;
+                return true;
+            }
 
             return _service.TryHandleAction(state, actionId, out handled, out message);
         }
@@ -418,11 +444,16 @@ namespace ShelteredAPI.Scenarios
     {
         private readonly ScenarioAuthoringCaptureService _captureService;
         private readonly IScenarioEditorService _editorService;
+        private readonly ScenarioSelectionScopeService _scopeService;
 
-        public CaptureCommandHandler(ScenarioAuthoringCaptureService captureService, IScenarioEditorService editorService)
+        public CaptureCommandHandler(
+            ScenarioAuthoringCaptureService captureService,
+            IScenarioEditorService editorService,
+            ScenarioSelectionScopeService scopeService)
         {
             _captureService = captureService;
             _editorService = editorService;
+            _scopeService = scopeService;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -439,14 +470,23 @@ namespace ShelteredAPI.Scenarios
                 case ScenarioAuthoringActionIds.ActionCaptureInventory:
                     return Capture(state, delegate(ScenarioEditorSession session, out string text) { return _captureService.CaptureCurrentInventory(session, out text); }, out message);
                 case ScenarioAuthoringActionIds.ActionCaptureShelterObjects:
+                    if (_scopeService.ResolveActiveScope(state) != ScenarioTargetScope.BunkerInside)
+                    {
+                        message = "Shelter object capture is available only in the Inside selection scope.";
+                        return true;
+                    }
                     return Capture(state, delegate(ScenarioEditorSession session, out string text) { return _captureService.CaptureCurrentShelterObjects(session, out text); }, out message);
                 case ScenarioAuthoringActionIds.ActionCaptureSelectedObject:
                     {
+                        if (!_scopeService.CanSelectTargetForCurrentStage(state, state.SelectedTarget, out message))
+                            return true;
                         bool captured = _captureService.CaptureSelectedObject(_editorService.CurrentSession, state.SelectedTarget, out message);
                         return captured || !string.IsNullOrEmpty(message);
                     }
                 case ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement:
                     {
+                        if (!_scopeService.CanSelectTargetForCurrentStage(state, state.SelectedTarget, out message))
+                            return true;
                         bool removed = _captureService.RemoveSelectedObjectPlacement(_editorService.CurrentSession, state.SelectedTarget, out message);
                         return removed || !string.IsNullOrEmpty(message);
                     }
@@ -697,8 +737,10 @@ namespace ShelteredAPI.Scenarios
             state.ActiveTool = tool;
             if (tool == ScenarioAuthoringTool.Wiring)
                 _layoutService.SelectStage(state, ScenarioStageKind.BunkerBackground);
-            else if (tool == ScenarioAuthoringTool.Objects || tool == ScenarioAuthoringTool.Assets)
+            else if (tool == ScenarioAuthoringTool.Objects)
                 _layoutService.SelectStage(state, ScenarioStageKind.BunkerInside);
+            else if (tool == ScenarioAuthoringTool.Assets)
+                _layoutService.SelectStage(state, IsBunkerStage(state.ActiveStage) ? state.ActiveStage : ScenarioStageKind.BunkerInside);
             else if (tool == ScenarioAuthoringTool.Shelter || tool == ScenarioAuthoringTool.Select)
                 _layoutService.SelectStage(state, ScenarioStageKind.BunkerSurface);
             else if (tool == ScenarioAuthoringTool.Family)
@@ -708,6 +750,14 @@ namespace ShelteredAPI.Scenarios
 
             message = statusMessage;
             return true;
+        }
+
+        private static bool IsBunkerStage(ScenarioStageKind stage)
+        {
+            return stage == ScenarioStageKind.BunkerBackground
+                || stage == ScenarioStageKind.BunkerSurface
+                || stage == ScenarioStageKind.BunkerInside
+                || stage == ScenarioStageKind.Bunker;
         }
     }
 }

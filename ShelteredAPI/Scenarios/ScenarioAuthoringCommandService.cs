@@ -17,7 +17,8 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringLayoutService layoutService,
             ScenarioStageCoordinator stageCoordinator,
             ScenarioTimelineBuilder timelineBuilder,
-            ScenarioTimelineNavigationService timelineNavigationService)
+            ScenarioTimelineNavigationService timelineNavigationService,
+            ScenarioSelectionScopeService selectionScopeService)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
@@ -29,7 +30,8 @@ namespace ShelteredAPI.Scenarios
                 settingsService,
                 layoutService,
                 timelineBuilder,
-                timelineNavigationService));
+                timelineNavigationService,
+                selectionScopeService));
         }
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
@@ -54,16 +56,17 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringSettingsService settingsService,
             ScenarioAuthoringLayoutService layoutService,
             ScenarioTimelineBuilder timelineBuilder,
-            ScenarioTimelineNavigationService timelineNavigationService)
+            ScenarioTimelineNavigationService timelineNavigationService,
+            ScenarioSelectionScopeService selectionScopeService)
         {
             return new IScenarioCommandHandler[]
             {
-                new SpriteCommandHandler(spriteSwapAuthoringService),
-                new SceneSpriteCommandHandler(sceneSpritePlacementAuthoringService),
+                new SpriteCommandHandler(spriteSwapAuthoringService, selectionScopeService),
+                new SceneSpriteCommandHandler(sceneSpritePlacementAuthoringService, selectionScopeService),
                 new BuildCommandHandler(buildPlacementAuthoringService),
                 new ShellCommandHandler(layoutService, settingsService),
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
-                new CaptureCommandHandler(captureService, editorService),
+                new CaptureCommandHandler(captureService, editorService, selectionScopeService),
                 new GameplayScheduleCommandHandler(gameplayScheduleAuthoringService, editorService),
                 new EditorLifecycleCommandHandler(editorService),
                 new SelectionCommandHandler(),
