@@ -108,6 +108,8 @@ namespace ModAPI.Scenarios
             definition.StartingInventory = ReadStartingInventory(Child(root, "StartingInventory"));
             definition.BunkerEdits = ReadBunkerEdits(Child(root, "BunkerEdits"));
             definition.TriggersAndEvents = ReadTriggersAndEvents(Child(root, "TriggersAndEvents"));
+            definition.Quests = ReadQuests(Child(root, "Quests"));
+            definition.Map = ReadMap(Child(root, "Map"));
             definition.WinLossConditions = ReadWinLossConditions(Child(root, "WinLossConditions"));
             definition.AssetReferences = ReadAssetReferences(Child(root, "AssetReferences"));
             return definition;
@@ -356,6 +358,58 @@ namespace ModAPI.Scenarios
             return result;
         }
 
+        private static QuestAuthoringDefinition ReadQuests(XmlElement element)
+        {
+            QuestAuthoringDefinition result = new QuestAuthoringDefinition();
+            if (element == null)
+                return result;
+
+            XmlNodeList questNodes = element.GetElementsByTagName("Quest");
+            for (int i = 0; i < questNodes.Count; i++)
+            {
+                XmlElement questElement = questNodes[i] as XmlElement;
+                if (questElement == null)
+                    continue;
+
+                QuestDefinition quest = new QuestDefinition();
+                quest.Id = AttributeOrChild(questElement, "id", "Id");
+                quest.Title = AttributeOrChild(questElement, "title", "Title");
+                quest.Description = ReadText(questElement, "Description");
+                quest.StartTriggerId = AttributeOrChild(questElement, "startTriggerId", "StartTriggerId");
+                quest.CompletionConditionId = AttributeOrChild(questElement, "completionConditionId", "CompletionConditionId");
+                ReadProperties(Child(questElement, "Properties"), quest.Properties);
+                result.Quests.Add(quest);
+            }
+
+            return result;
+        }
+
+        private static MapAuthoringDefinition ReadMap(XmlElement element)
+        {
+            MapAuthoringDefinition result = new MapAuthoringDefinition();
+            if (element == null)
+                return result;
+
+            result.StartLocationId = AttributeOrChild(element, "startLocationId", "StartLocationId");
+            XmlNodeList locationNodes = element.GetElementsByTagName("Location");
+            for (int i = 0; i < locationNodes.Count; i++)
+            {
+                XmlElement locationElement = locationNodes[i] as XmlElement;
+                if (locationElement == null)
+                    continue;
+
+                MapLocationDefinition location = new MapLocationDefinition();
+                location.Id = AttributeOrChild(locationElement, "id", "Id");
+                location.DisplayName = AttributeOrChild(locationElement, "displayName", "DisplayName");
+                location.X = ReadFloatAttribute(locationElement, "x", 0f);
+                location.Y = ReadFloatAttribute(locationElement, "y", 0f);
+                ReadProperties(Child(locationElement, "Properties"), location.Properties);
+                result.Locations.Add(location);
+            }
+
+            return result;
+        }
+
         private static AssetReferencesDefinition ReadAssetReferences(XmlElement element)
         {
             AssetReferencesDefinition result = new AssetReferencesDefinition();
@@ -374,7 +428,8 @@ namespace ModAPI.Scenarios
                         result.CustomSprites.Add(new SpriteRef
                         {
                             Id = AttributeOrChild(spriteElement, "id", "Id"),
-                            RelativePath = AttributeOrChild(spriteElement, "path", "Path")
+                            RelativePath = AttributeOrChild(spriteElement, "path", "Path"),
+                            PatchId = AttributeOrChild(spriteElement, "patchId", "PatchId")
                         });
                     }
                 }
@@ -395,6 +450,23 @@ namespace ModAPI.Scenarios
                             RelativePath = AttributeOrChild(iconElement, "path", "Path")
                         });
                     }
+                }
+            }
+
+            XmlElement spritePatches = Child(element, "SpritePatches");
+            if (spritePatches != null)
+            {
+                XmlNodeList patchNodes = spritePatches.GetElementsByTagName("Patch");
+                for (int i = 0; i < patchNodes.Count; i++)
+                {
+                    XmlElement patchElement = patchNodes[i] as XmlElement;
+                    SpritePatchDefinition patch = SpritePatchSerializer.ReadPatch(
+                        patchElement,
+                        AttributeOrChild,
+                        Child,
+                        ReadIntAttribute);
+                    if (patch != null)
+                        result.SpritePatches.Add(patch);
                 }
             }
 
@@ -479,6 +551,8 @@ namespace ModAPI.Scenarios
             WriteStartingInventory(writer, definition.StartingInventory);
             WriteBunkerEdits(writer, definition.BunkerEdits);
             WriteTriggersAndEvents(writer, definition.TriggersAndEvents);
+            WriteQuests(writer, definition.Quests);
+            WriteMap(writer, definition.Map);
             WriteWinLossConditions(writer, definition.WinLossConditions);
             WriteAssetReferences(writer, definition.AssetReferences);
 
@@ -656,6 +730,54 @@ namespace ModAPI.Scenarios
             writer.WriteEndElement();
         }
 
+        private static void WriteQuests(XmlWriter writer, QuestAuthoringDefinition value)
+        {
+            if (value == null)
+                value = new QuestAuthoringDefinition();
+
+            writer.WriteStartElement("Quests");
+            for (int i = 0; i < value.Quests.Count; i++)
+            {
+                QuestDefinition quest = value.Quests[i];
+                if (quest == null)
+                    continue;
+
+                writer.WriteStartElement("Quest");
+                WriteAttribute(writer, "id", quest.Id);
+                WriteAttribute(writer, "title", quest.Title);
+                WriteAttribute(writer, "startTriggerId", quest.StartTriggerId);
+                WriteAttribute(writer, "completionConditionId", quest.CompletionConditionId);
+                WriteElement(writer, "Description", quest.Description);
+                WriteProperties(writer, "Properties", quest.Properties);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteMap(XmlWriter writer, MapAuthoringDefinition value)
+        {
+            if (value == null)
+                value = new MapAuthoringDefinition();
+
+            writer.WriteStartElement("Map");
+            WriteAttribute(writer, "startLocationId", value.StartLocationId);
+            for (int i = 0; i < value.Locations.Count; i++)
+            {
+                MapLocationDefinition location = value.Locations[i];
+                if (location == null)
+                    continue;
+
+                writer.WriteStartElement("Location");
+                WriteAttribute(writer, "id", location.Id);
+                WriteAttribute(writer, "displayName", location.DisplayName);
+                writer.WriteAttributeString("x", location.X.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("y", location.Y.ToString(CultureInfo.InvariantCulture));
+                WriteProperties(writer, "Properties", location.Properties);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
         private static void WriteAssetReferences(XmlWriter writer, AssetReferencesDefinition value)
         {
             if (value == null)
@@ -668,6 +790,7 @@ namespace ModAPI.Scenarios
                 writer.WriteStartElement("Sprite");
                 WriteAttribute(writer, "id", value.CustomSprites[i].Id);
                 WriteAttribute(writer, "path", value.CustomSprites[i].RelativePath);
+                WriteAttribute(writer, "patchId", value.CustomSprites[i].PatchId);
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
@@ -680,6 +803,11 @@ namespace ModAPI.Scenarios
                 WriteAttribute(writer, "path", value.CustomIcons[i].RelativePath);
                 writer.WriteEndElement();
             }
+            writer.WriteEndElement();
+
+            writer.WriteStartElement("SpritePatches");
+            for (int i = 0; i < value.SpritePatches.Count; i++)
+                SpritePatchSerializer.WritePatch(writer, value.SpritePatches[i]);
             writer.WriteEndElement();
 
             writer.WriteStartElement("SpriteSwaps");

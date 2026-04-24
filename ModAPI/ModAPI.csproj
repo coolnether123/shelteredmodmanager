@@ -95,6 +95,16 @@
     <Compile Include="Scenarios\CustomScenarioContracts.cs" />
     <Compile Include="Scenarios\ICustomScenarioService.cs" />
     <Compile Include="Scenarios\ScenarioCatalog.cs" />
+    <Compile Include="Scenarios\Domain\Assets\SpritePatchDefinition.cs" />
+    <Compile Include="Scenarios\Domain\Assets\SpritePatchDeltaRun.cs" />
+    <Compile Include="Scenarios\Domain\Assets\SpritePatchOperation.cs" />
+    <Compile Include="Scenarios\Domain\Stages\ScenarioStageDefinition.cs" />
+    <Compile Include="Scenarios\Domain\Stages\ScenarioStageKind.cs" />
+    <Compile Include="Scenarios\Domain\Stages\ScenarioStageRegistry.cs" />
+    <Compile Include="Scenarios\Domain\Validation\IScenarioValidationRule.cs" />
+    <Compile Include="Scenarios\Domain\Validation\ScenarioValidationPipeline.cs" />
+    <Compile Include="Scenarios\Domain\Validation\ValidationIssue.cs" />
+    <Compile Include="Scenarios\Domain\Validation\ValidationSummary.cs" />
     <Compile Include="Scenarios\ScenarioDefinition.cs" />
     <Compile Include="Scenarios\ScenarioDefinitionSerializer.cs" />
     <Compile Include="Scenarios\ScenarioDependencyManifest.cs" />
@@ -104,6 +114,7 @@
     <Compile Include="Scenarios\ScenarioPipelineSmokeTest.cs" />
     <Compile Include="Scenarios\ScenarioRuntimeBinding.cs" />
     <Compile Include="Scenarios\ScenarioValidator.cs" />
+    <Compile Include="Scenarios\Serialization\SpritePatchSerializer.cs" />
     <Compile Include="Scenarios\ValidationResult.cs" />
     <Compile Include="Input\InputBinding.cs" />
     <Compile Include="Input\ModInputAction.cs" />

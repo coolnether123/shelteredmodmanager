@@ -8,14 +8,12 @@ namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScenarioAuthoringCaptureService
     {
-        private static readonly ScenarioAuthoringCaptureService _instance = new ScenarioAuthoringCaptureService();
-
         public static ScenarioAuthoringCaptureService Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCaptureService>(); }
         }
 
-        private ScenarioAuthoringCaptureService()
+        internal ScenarioAuthoringCaptureService()
         {
         }
 

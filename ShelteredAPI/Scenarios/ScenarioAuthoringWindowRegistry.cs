@@ -14,6 +14,8 @@ namespace ShelteredAPI.Scenarios
         public const string Survivors = "survivors";
         public const string Stockpile = "stockpile";
         public const string Quests = "quests";
+        public const string Map = "map";
+        public const string Publish = "publish";
         public const string Settings = "editor_settings";
     }
 
@@ -32,6 +34,8 @@ namespace ShelteredAPI.Scenarios
             Register(ScenarioAuthoringWindowIds.Survivors, "Survivors", ScenarioAuthoringShellDock.Floating, false, false, false, 2, 880f, 520f, 560f, 360f);
             Register(ScenarioAuthoringWindowIds.Stockpile, "Stockpile", ScenarioAuthoringShellDock.Floating, false, false, false, 3, 880f, 520f, 560f, 360f);
             Register(ScenarioAuthoringWindowIds.Quests, "Quests", ScenarioAuthoringShellDock.Floating, false, false, false, 4, 880f, 520f, 560f, 360f);
+            Register(ScenarioAuthoringWindowIds.Map, "Map", ScenarioAuthoringShellDock.Floating, false, false, false, 5, 880f, 520f, 560f, 360f);
+            Register(ScenarioAuthoringWindowIds.Publish, "Publish", ScenarioAuthoringShellDock.Floating, false, false, false, 6, 880f, 520f, 560f, 360f);
             Register(ScenarioAuthoringWindowIds.Settings, "Editor Settings", ScenarioAuthoringShellDock.Floating, false, false, true, 0, 720f, 520f, 620f, 420f);
         }
 

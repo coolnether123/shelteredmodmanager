@@ -31,6 +31,8 @@ namespace ModAPI.Scenarios
             StartingInventory = new StartingInventoryDefinition();
             BunkerEdits = new BunkerEditsDefinition();
             TriggersAndEvents = new TriggersAndEventsDefinition();
+            Quests = new QuestAuthoringDefinition();
+            Map = new MapAuthoringDefinition();
             WinLossConditions = new WinLossConditionsDefinition();
             AssetReferences = new AssetReferencesDefinition();
         }
@@ -47,6 +49,8 @@ namespace ModAPI.Scenarios
         public StartingInventoryDefinition StartingInventory { get; set; }
         public BunkerEditsDefinition BunkerEdits { get; set; }
         public TriggersAndEventsDefinition TriggersAndEvents { get; set; }
+        public QuestAuthoringDefinition Quests { get; set; }
+        public MapAuthoringDefinition Map { get; set; }
         public WinLossConditionsDefinition WinLossConditions { get; set; }
         public AssetReferencesDefinition AssetReferences { get; set; }
     }
@@ -219,6 +223,56 @@ namespace ModAPI.Scenarios
         public List<ConditionDef> LossConditions { get; private set; }
     }
 
+    public class QuestAuthoringDefinition
+    {
+        public QuestAuthoringDefinition()
+        {
+            Quests = new List<QuestDefinition>();
+        }
+
+        public List<QuestDefinition> Quests { get; private set; }
+    }
+
+    public class QuestDefinition
+    {
+        public QuestDefinition()
+        {
+            Properties = new List<ScenarioProperty>();
+        }
+
+        public string Id { get; set; }
+        public string Title { get; set; }
+        public string Description { get; set; }
+        public string StartTriggerId { get; set; }
+        public string CompletionConditionId { get; set; }
+        public List<ScenarioProperty> Properties { get; private set; }
+    }
+
+    public class MapAuthoringDefinition
+    {
+        public MapAuthoringDefinition()
+        {
+            Locations = new List<MapLocationDefinition>();
+        }
+
+        public string StartLocationId { get; set; }
+        public List<MapLocationDefinition> Locations { get; private set; }
+    }
+
+    public class MapLocationDefinition
+    {
+        public MapLocationDefinition()
+        {
+            Properties = new List<ScenarioProperty>();
+        }
+
+        public string Id { get; set; }
+        public string DisplayName { get; set; }
+        public float X { get; set; }
+        public float Y { get; set; }
+        public List<ScenarioProperty> Properties { get; private set; }
+    }
+
     public class ConditionDef
     {
         public ConditionDef()
@@ -237,12 +291,14 @@ namespace ModAPI.Scenarios
         {
             CustomSprites = new List<SpriteRef>();
             CustomIcons = new List<IconRef>();
+            SpritePatches = new List<SpritePatchDefinition>();
             SpriteSwaps = new List<SpriteSwapRule>();
             SceneSpritePlacements = new List<SceneSpritePlacement>();
         }
 
         public List<SpriteRef> CustomSprites { get; private set; }
         public List<IconRef> CustomIcons { get; private set; }
+        public List<SpritePatchDefinition> SpritePatches { get; private set; }
         public List<SpriteSwapRule> SpriteSwaps { get; private set; }
         public List<SceneSpritePlacement> SceneSpritePlacements { get; private set; }
     }
@@ -269,6 +325,7 @@ namespace ModAPI.Scenarios
     {
         public string Id { get; set; }
         public string RelativePath { get; set; }
+        public string PatchId { get; set; }
     }
 
     public class SceneSpritePlacement

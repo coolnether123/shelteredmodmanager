@@ -13,8 +13,13 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioAuthoringPresentationBuilder _presentationBuilder;
         private readonly ScenarioAuthoringContextMenuService _contextMenuService;
         private readonly ScenarioAuthoringCommandService _commandService;
+        private readonly ScenarioAuthoringHistoryService _historyService;
+        private readonly ScenarioBuildPlacementAuthoringService _buildPlacementService;
+        private readonly ScenarioSpriteSwapAuthoringService _spriteSwapAuthoringService;
+        private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacementAuthoringService;
         private readonly ScenarioAuthoringSettingsService _settingsService;
         private readonly ScenarioAuthoringLayoutService _layoutService;
+        private readonly ScenarioStageCoordinator _stageCoordinator;
         private ScenarioAuthoringState _state = new ScenarioAuthoringState();
         private ScenarioAuthoringSession _activeSession;
 
@@ -42,16 +47,26 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringPresentationBuilder presentationBuilder,
             ScenarioAuthoringContextMenuService contextMenuService,
             ScenarioAuthoringCommandService commandService,
+            ScenarioAuthoringHistoryService historyService,
+            ScenarioBuildPlacementAuthoringService buildPlacementService,
+            ScenarioSpriteSwapAuthoringService spriteSwapAuthoringService,
+            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementAuthoringService,
             ScenarioAuthoringSettingsService settingsService,
-            ScenarioAuthoringLayoutService layoutService)
+            ScenarioAuthoringLayoutService layoutService,
+            ScenarioStageCoordinator stageCoordinator)
         {
-            _selectionService = selectionService ?? new ScenarioAuthoringSelectionService();
+            _selectionService = selectionService;
             _editorService = editorService;
             _presentationBuilder = presentationBuilder;
             _contextMenuService = contextMenuService;
             _commandService = commandService;
-            _settingsService = settingsService ?? new ScenarioAuthoringSettingsService();
+            _historyService = historyService;
+            _buildPlacementService = buildPlacementService;
+            _spriteSwapAuthoringService = spriteSwapAuthoringService;
+            _sceneSpritePlacementAuthoringService = sceneSpritePlacementAuthoringService;
+            _settingsService = settingsService;
             _layoutService = layoutService;
+            _stageCoordinator = stageCoordinator;
         }
 
         internal void SetActiveSession(ScenarioAuthoringSession session)
@@ -67,7 +82,9 @@ namespace ShelteredAPI.Scenarios
                     IsActive = true,
                     ShellVisible = true,
                     SelectionModeActive = false,
-                    ActiveTool = ScenarioAuthoringTool.Shelter,
+                    ActiveStage = ScenarioStageKind.BunkerInside,
+                    ActiveBunkerStage = ScenarioStageKind.BunkerInside,
+                    ActiveTool = ScenarioAuthoringTool.Objects,
                     ActiveShellTab = ScenarioAuthoringShellTab.Build,
                     AssetMode = ScenarioAssetAuthoringMode.ReplaceExisting,
                     ActiveLayoutPreset = "default",
@@ -80,15 +97,13 @@ namespace ShelteredAPI.Scenarios
                 _layoutService.InitializeState(_state);
             }
 
-            ScenarioAuthoringSelectionMenuService.Instance.Reset();
-            _contextMenuService.Close();
-            ScenarioBuildPlacementAuthoringService.Instance.Reset();
-            ScenarioSpriteSwapAuthoringService.Instance.ResetTransientState(true);
-            ScenarioSpriteSwapAuthoringService.Instance.Invalidate();
-            ScenarioSceneSpritePlacementAuthoringService.Instance.Invalidate();
-            ScenarioAuthoringHistoryService.Instance.BindSession(session.DraftId);
+            ResetInteractiveSubsystems();
+            RefreshAuthoringArtifacts();
+            _historyService.BindSession(session.DraftId);
             ScenarioSpriteSwapClipboard.Clear();
             ScenarioHoverVisualService.Instance.ClearSecondary();
+            _layoutService.ApplyStageWorkspace(_state);
+            _stageCoordinator.Synchronize(CurrentState, _editorService.CurrentSession, session);
             MMLog.WriteInfo("[ScenarioAuthoringBackend] Active session set. DraftId=" + session.DraftId
                 + ", ScenarioFile=" + session.ScenarioFilePath + ".");
             RaiseStateChanged();
@@ -108,13 +123,9 @@ namespace ShelteredAPI.Scenarios
             }
 
             ScenarioHoverVisualService.Instance.Clear();
-            ScenarioAuthoringSelectionMenuService.Instance.Reset();
-            _contextMenuService.Close();
-            ScenarioBuildPlacementAuthoringService.Instance.Reset();
-            ScenarioSpriteSwapAuthoringService.Instance.ResetTransientState(true);
-            ScenarioSpriteSwapAuthoringService.Instance.Invalidate();
-            ScenarioSceneSpritePlacementAuthoringService.Instance.Invalidate();
-            ScenarioAuthoringHistoryService.Instance.Reset();
+            ResetInteractiveSubsystems();
+            RefreshAuthoringArtifacts();
+            _historyService.Reset();
             ScenarioSpriteSwapClipboard.Clear();
             MMLog.WriteInfo("[ScenarioAuthoringBackend] Active session cleared. Reason=" + (reason ?? "unspecified") + ".");
             RaiseStateChanged();
@@ -153,7 +164,7 @@ namespace ShelteredAPI.Scenarios
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionSpriteSwapRevert);
 
             string buildPlacementMessage;
-            if (ScenarioBuildPlacementAuthoringService.Instance.Update(snapshot, _editorService.CurrentSession, out buildPlacementMessage))
+            if (_buildPlacementService.Update(snapshot, _editorService.CurrentSession, out buildPlacementMessage))
             {
                 changed = true;
                 if (!string.IsNullOrEmpty(buildPlacementMessage))
@@ -162,12 +173,14 @@ namespace ShelteredAPI.Scenarios
 
             changed |= _selectionService.Update(snapshot);
             string pickerMessage;
-            if (ScenarioSpriteSwapAuthoringService.Instance.SynchronizePicker(snapshot, out pickerMessage))
+            if (_spriteSwapAuthoringService.SynchronizePicker(snapshot, out pickerMessage))
             {
                 changed = true;
                 if (!string.IsNullOrEmpty(pickerMessage))
                     snapshot.StatusMessage = pickerMessage;
             }
+
+            _stageCoordinator.Synchronize(snapshot, _editorService.CurrentSession, GetActiveSession());
 
             lock (_sync)
             {
@@ -202,12 +215,13 @@ namespace ShelteredAPI.Scenarios
 
             bool changed = _commandService.Execute(snapshot, actionId);
             string pickerMessage;
-            if (ScenarioSpriteSwapAuthoringService.Instance.SynchronizePicker(snapshot, out pickerMessage))
+            if (_spriteSwapAuthoringService.SynchronizePicker(snapshot, out pickerMessage))
             {
                 changed = true;
                 if (!string.IsNullOrEmpty(pickerMessage))
                     snapshot.StatusMessage = pickerMessage;
             }
+            _stageCoordinator.Synchronize(snapshot, _editorService.CurrentSession, GetActiveSession());
             lock (_sync)
             {
                 _state = snapshot;
@@ -270,6 +284,20 @@ namespace ShelteredAPI.Scenarios
             {
                 return _activeSession;
             }
+        }
+
+        private void ResetInteractiveSubsystems()
+        {
+            ScenarioAuthoringSelectionMenuService.Instance.Reset();
+            _contextMenuService.Close();
+            _buildPlacementService.Reset();
+            _spriteSwapAuthoringService.ResetTransientState(true);
+        }
+
+        private void RefreshAuthoringArtifacts()
+        {
+            _spriteSwapAuthoringService.Invalidate();
+            _sceneSpritePlacementAuthoringService.Invalidate();
         }
     }
 }
