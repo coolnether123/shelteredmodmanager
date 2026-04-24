@@ -26,6 +26,7 @@ namespace ModAPI.Scenarios
         public ScenarioDefinition()
         {
             Dependencies = new List<string>();
+            ModDependencies = new List<ScenarioModDependencyDefinition>();
             BaseGameMode = ScenarioBaseGameMode.Survival;
             FamilySetup = new FamilySetupDefinition();
             StartingInventory = new StartingInventoryDefinition();
@@ -35,6 +36,9 @@ namespace ModAPI.Scenarios
             Map = new MapAuthoringDefinition();
             WinLossConditions = new WinLossConditionsDefinition();
             AssetReferences = new AssetReferencesDefinition();
+            BunkerGrid = new ScenarioBunkerGridDefinition();
+            Gates = new List<ScenarioGateDefinition>();
+            ScheduledActions = new List<ScenarioScheduledActionDefinition>();
         }
 
         public string Id { get; set; }
@@ -43,6 +47,7 @@ namespace ModAPI.Scenarios
         public string Author { get; set; }
         public string Version { get; set; }
         public List<string> Dependencies { get; private set; }
+        public List<ScenarioModDependencyDefinition> ModDependencies { get; private set; }
         public ScenarioBaseGameMode BaseGameMode { get; set; }
         public long? SeedOverride { get; set; }
         public FamilySetupDefinition FamilySetup { get; set; }
@@ -53,6 +58,9 @@ namespace ModAPI.Scenarios
         public MapAuthoringDefinition Map { get; set; }
         public WinLossConditionsDefinition WinLossConditions { get; set; }
         public AssetReferencesDefinition AssetReferences { get; set; }
+        public ScenarioBunkerGridDefinition BunkerGrid { get; set; }
+        public List<ScenarioGateDefinition> Gates { get; private set; }
+        public List<ScenarioScheduledActionDefinition> ScheduledActions { get; private set; }
     }
 
     public class FamilySetupDefinition
@@ -60,10 +68,12 @@ namespace ModAPI.Scenarios
         public FamilySetupDefinition()
         {
             Members = new List<FamilyMemberConfig>();
+            FutureSurvivors = new List<FutureSurvivorDefinition>();
         }
 
         public bool OverrideVanillaFamily { get; set; }
         public List<FamilyMemberConfig> Members { get; private set; }
+        public List<FutureSurvivorDefinition> FutureSurvivors { get; private set; }
     }
 
     public class FamilyMemberConfig
@@ -115,16 +125,56 @@ namespace ModAPI.Scenarios
         public StartingInventoryDefinition()
         {
             Items = new List<ItemEntry>();
+            ScheduledChanges = new List<TimedInventoryChangeDefinition>();
         }
 
         public bool OverrideRandomStart { get; set; }
         public List<ItemEntry> Items { get; private set; }
+        public List<TimedInventoryChangeDefinition> ScheduledChanges { get; private set; }
     }
 
     public class ItemEntry
     {
         public string ItemId { get; set; }
         public int Quantity { get; set; }
+    }
+
+    public enum ScenarioInventoryChangeKind
+    {
+        Add = 0,
+        Remove = 1
+    }
+
+    public class FutureSurvivorDefinition
+    {
+        public FutureSurvivorDefinition()
+        {
+            Id = string.Empty;
+            Arrival = new ScenarioScheduleTime();
+            Survivor = new FamilyMemberConfig();
+            AskToJoin = true;
+        }
+
+        public string Id { get; set; }
+        public ScenarioScheduleTime Arrival { get; set; }
+        public bool AskToJoin { get; set; }
+        public FamilyMemberConfig Survivor { get; set; }
+    }
+
+    public class TimedInventoryChangeDefinition
+    {
+        public TimedInventoryChangeDefinition()
+        {
+            Id = string.Empty;
+            When = new ScenarioScheduleTime();
+            Kind = ScenarioInventoryChangeKind.Add;
+        }
+
+        public string Id { get; set; }
+        public string ItemId { get; set; }
+        public int Quantity { get; set; }
+        public ScenarioInventoryChangeKind Kind { get; set; }
+        public ScenarioScheduleTime When { get; set; }
     }
 
     public class BunkerEditsDefinition
@@ -154,12 +204,24 @@ namespace ModAPI.Scenarios
             Position = new ScenarioVector3();
             Rotation = new ScenarioVector3();
             CustomProperties = new List<ScenarioProperty>();
+            Tags = new List<string>();
+            StartState = ScenarioObjectStartState.StartsEnabled;
+            PlacementPhase = "Start";
         }
 
+        public string ScenarioObjectId { get; set; }
+        public string RuntimeBindingKey { get; set; }
         public string PrefabReference { get; set; }
         public string DefinitionReference { get; set; }
         public ScenarioVector3 Position { get; set; }
         public ScenarioVector3 Rotation { get; set; }
+        public ScenarioObjectStartState StartState { get; set; }
+        public string PlacementPhase { get; set; }
+        public string RequiredFoundationId { get; set; }
+        public string RequiredBunkerExpansionId { get; set; }
+        public string UnlockGateId { get; set; }
+        public string ScheduledActivationId { get; set; }
+        public List<string> Tags { get; private set; }
         public List<ScenarioProperty> CustomProperties { get; private set; }
     }
 
@@ -182,10 +244,12 @@ namespace ModAPI.Scenarios
         {
             Triggers = new List<TriggerDef>();
             DialogueChains = new List<DialogueChain>();
+            WeatherEvents = new List<WeatherEventDefinition>();
         }
 
         public List<TriggerDef> Triggers { get; private set; }
         public List<DialogueChain> DialogueChains { get; private set; }
+        public List<WeatherEventDefinition> WeatherEvents { get; private set; }
     }
 
     public class TriggerDef
@@ -238,6 +302,7 @@ namespace ModAPI.Scenarios
         public QuestDefinition()
         {
             Properties = new List<ScenarioProperty>();
+            ScheduledStart = new ScenarioScheduleTime();
         }
 
         public string Id { get; set; }
@@ -245,7 +310,23 @@ namespace ModAPI.Scenarios
         public string Description { get; set; }
         public string StartTriggerId { get; set; }
         public string CompletionConditionId { get; set; }
+        public ScenarioScheduleTime ScheduledStart { get; set; }
         public List<ScenarioProperty> Properties { get; private set; }
+    }
+
+    public class WeatherEventDefinition
+    {
+        public WeatherEventDefinition()
+        {
+            Id = string.Empty;
+            WeatherState = "None";
+            When = new ScenarioScheduleTime();
+        }
+
+        public string Id { get; set; }
+        public string WeatherState { get; set; }
+        public ScenarioScheduleTime When { get; set; }
+        public int DurationHours { get; set; }
     }
 
     public class MapAuthoringDefinition
@@ -333,9 +414,14 @@ namespace ModAPI.Scenarios
         public SceneSpritePlacement()
         {
             Position = new ScenarioVector3();
+            Tags = new List<string>();
+            StartState = ScenarioObjectStartState.StartsEnabled;
+            PlacementPhase = "Start";
         }
 
         public string Id { get; set; }
+        public string ScenarioObjectId { get; set; }
+        public string RuntimeBindingKey { get; set; }
         public string SpriteId { get; set; }
         public string RelativePath { get; set; }
         public string RuntimeSpriteKey { get; set; }
@@ -343,6 +429,13 @@ namespace ModAPI.Scenarios
         public bool SnapToGrid { get; set; }
         public int? GridX { get; set; }
         public int? GridY { get; set; }
+        public ScenarioObjectStartState StartState { get; set; }
+        public string PlacementPhase { get; set; }
+        public string RequiredFoundationId { get; set; }
+        public string RequiredBunkerExpansionId { get; set; }
+        public string UnlockGateId { get; set; }
+        public string ScheduledActivationId { get; set; }
+        public List<string> Tags { get; private set; }
         public string SortingLayerName { get; set; }
         public int SortingOrder { get; set; }
     }

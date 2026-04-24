@@ -22,6 +22,10 @@ namespace ShelteredAPI.Scenarios
         private readonly StageNavigationViewModelBuilder _stageNavigationBuilder;
         private readonly InspectorViewModelBuilder _inspectorViewModelBuilder;
         private readonly StatusBarViewModelBuilder _statusBarViewModelBuilder;
+        private readonly ScenarioTimelineBuilder _timelineBuilder;
+        private readonly ScenarioTimelineViewModelBuilder _timelineViewModelBuilder;
+        private readonly ScenarioModDependencyDetector _modDependencyDetector;
+        private readonly ScenarioModCompatibilityViewModelBuilder _modCompatibilityViewModelBuilder;
 
         public ScenarioAuthoringPresentationBuilder(
             ScenarioAuthoringCaptureService captureService,
@@ -36,7 +40,11 @@ namespace ShelteredAPI.Scenarios
             ShellChromeViewModelBuilder shellChromeBuilder,
             StageNavigationViewModelBuilder stageNavigationBuilder,
             InspectorViewModelBuilder inspectorViewModelBuilder,
-            StatusBarViewModelBuilder statusBarViewModelBuilder)
+            StatusBarViewModelBuilder statusBarViewModelBuilder,
+            ScenarioTimelineBuilder timelineBuilder,
+            ScenarioTimelineViewModelBuilder timelineViewModelBuilder,
+            ScenarioModDependencyDetector modDependencyDetector,
+            ScenarioModCompatibilityViewModelBuilder modCompatibilityViewModelBuilder)
         {
             _captureService = captureService;
             _spriteSwapAuthoringService = spriteSwapAuthoringService;
@@ -51,6 +59,10 @@ namespace ShelteredAPI.Scenarios
             _stageNavigationBuilder = stageNavigationBuilder;
             _inspectorViewModelBuilder = inspectorViewModelBuilder;
             _statusBarViewModelBuilder = statusBarViewModelBuilder;
+            _timelineBuilder = timelineBuilder;
+            _timelineViewModelBuilder = timelineViewModelBuilder;
+            _modDependencyDetector = modDependencyDetector;
+            _modCompatibilityViewModelBuilder = modCompatibilityViewModelBuilder;
         }
 
         public ScenarioAuthoringShellViewModel BuildShellViewModel(
@@ -732,6 +744,8 @@ namespace ShelteredAPI.Scenarios
             switch (windowId)
             {
                 case ScenarioAuthoringWindowIds.Scenario:
+                    if (state != null && state.ActiveStage == ScenarioStageKind.Test)
+                        return BuildTestWindowSections(definition);
                     return BuildScenarioWindowSections(state, editorSession, session);
                 case ScenarioAuthoringWindowIds.Layers:
                     return BuildLayerWindowSections();
@@ -753,6 +767,8 @@ namespace ShelteredAPI.Scenarios
                     return BuildMapWindowSections(definition);
                 case ScenarioAuthoringWindowIds.Publish:
                     return BuildPublishWindowSections(editorSession, definition);
+                case ScenarioAuthoringWindowIds.Calendar:
+                    return BuildCalendarWindowSections(state, definition);
                 default:
                     return new[]
                     {
@@ -903,8 +919,11 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
-        private static ScenarioAuthoringInspectorSection[] BuildPublishWindowSections(ScenarioEditorSession editorSession, ScenarioDefinition definition)
+        private ScenarioAuthoringInspectorSection[] BuildPublishWindowSections(ScenarioEditorSession editorSession, ScenarioDefinition definition)
         {
+            List<ScenarioAuthoringInspectorItem> dependencyItems = BuildPublishDependencyItems(definition);
+            List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition));
+            List<ScenarioAuthoringInspectorItem> timelineItems = BuildTimelineItems(definition, GetRuntimeState(), _timelineBuilder);
             return new[]
             {
                 new ScenarioAuthoringInspectorSection
@@ -919,8 +938,131 @@ namespace ShelteredAPI.Scenarios
                         Property("Dirty Sections", CountDirtyFlags(editorSession).ToString()),
                         Property("Version", Safe(definition != null ? definition.Version : null))
                     }
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "publish_dependencies",
+                    Title = "Dependency Summary",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = dependencyItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "publish_mod_compatibility",
+                    Title = "Mod Compatibility",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = compatibilityItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "publish_timeline",
+                    Title = "Schedule Timeline",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = timelineItems.ToArray()
                 }
             };
+        }
+
+        private ScenarioAuthoringInspectorSection[] BuildTestWindowSections(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> journalItems = BuildRuntimeJournalItems();
+            List<ScenarioAuthoringInspectorItem> pendingItems = BuildTimelineItems(definition, GetRuntimeState(), _timelineBuilder);
+            List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition));
+            return new[]
+            {
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "runtime_journal",
+                    Title = "Runtime Journal",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = journalItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "runtime_pending",
+                    Title = "Pending / Blocked Actions",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = pendingItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "runtime_mod_compatibility",
+                    Title = "Mod Compatibility",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = compatibilityItems.ToArray()
+                }
+            };
+        }
+
+        private ScenarioAuthoringInspectorSection[] BuildCalendarWindowSections(ScenarioAuthoringState state, ScenarioDefinition definition)
+        {
+            ScenarioRuntimeState runtimeState = GetRuntimeState();
+            ScenarioTimelineViewModel model = _timelineViewModelBuilder.Build(_timelineBuilder.BuildDays(definition, runtimeState));
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+
+            List<ScenarioAuthoringInspectorItem> dayItems = new List<ScenarioAuthoringInspectorItem>();
+            for (int i = 0; model != null && model.Days != null && i < model.Days.Length; i++)
+            {
+                ScenarioTimelineDayViewModel day = model.Days[i];
+                dayItems.Add(ActionItem(Action(
+                    ScenarioAuthoringActionIds.ActionTimelineDayPrefix + day.Day.ToString(CultureInfo.InvariantCulture),
+                    "Day " + day.Day.ToString(CultureInfo.InvariantCulture),
+                    day.Count.ToString(CultureInfo.InvariantCulture) + " scheduled item(s).",
+                    true,
+                    false,
+                    day.Badge,
+                    day.Categories)));
+            }
+            if (dayItems.Count == 0)
+                dayItems.Add(Text("No scheduled scenario events are currently authored."));
+
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "calendar_days",
+                Title = "Calendar",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Items = dayItems.ToArray()
+            });
+
+            string selected = state != null ? state.TimelineSelectionId : null;
+            for (int i = 0; model != null && model.Days != null && i < model.Days.Length; i++)
+            {
+                ScenarioTimelineDayViewModel day = model.Days[i];
+                if (selected != null && !string.Equals(selected, day.Day.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                List<ScenarioAuthoringInspectorItem> entries = new List<ScenarioAuthoringInspectorItem>();
+                for (int e = 0; day.Entries != null && e < day.Entries.Length; e++)
+                {
+                    ScenarioTimelineEntryViewModel entry = day.Entries[e];
+                    entries.Add(ActionItem(Action(
+                        entry.ActionId,
+                        entry.Time + " " + entry.Title,
+                        entry.Type + " / " + entry.OwnerStage + " / " + entry.Status,
+                        true,
+                        entry.Status == "Blocked" || entry.Status == "Failed",
+                        StatusBadge(entry.Status),
+                        string.IsNullOrEmpty(entry.Warning) ? entry.OwnerStage : entry.Warning)));
+                }
+
+                sections.Add(new ScenarioAuthoringInspectorSection
+                {
+                    Id = "calendar_day_" + day.Day.ToString(CultureInfo.InvariantCulture),
+                    Title = "Day " + day.Day.ToString(CultureInfo.InvariantCulture),
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = entries.ToArray()
+                });
+            }
+
+            return sections.ToArray();
         }
 
         private static ScenarioAuthoringInspectorSection BuildPlacementStatusSection(ScenarioBuildPlacementAuthoringService.StatusModel model)
@@ -1073,23 +1215,36 @@ namespace ShelteredAPI.Scenarios
                     Property("Scroll", state.Settings != null ? state.Settings.GetFloat("input.scroll_speed", 1f).ToString("0.00", CultureInfo.InvariantCulture) + "x" : "1.00x")
                 }
             });
+            sections.Add(BuildBunkerRuntimeSection(definition, state));
             return sections.ToArray();
         }
 
         private static ScenarioAuthoringInspectorSection[] BuildTriggerWindowSections(ScenarioDefinition definition)
         {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            List<ScenarioAuthoringInspectorItem> triggerItems = new List<ScenarioAuthoringInspectorItem>();
             if (definition != null && definition.TriggersAndEvents != null)
             {
-                for (int i = 0; i < definition.TriggersAndEvents.Triggers.Count && i < 5; i++)
+                for (int i = 0; i < definition.TriggersAndEvents.Triggers.Count; i++)
                 {
                     TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
-                    items.Add(Property(string.IsNullOrEmpty(trigger.Id) ? ("Trigger " + (i + 1)) : trigger.Id, trigger != null ? trigger.Type : "Unknown"));
+                    triggerItems.Add(Property(string.IsNullOrEmpty(trigger.Id) ? ("Trigger " + (i + 1)) : trigger.Id, trigger != null ? trigger.Type : "Unknown"));
                 }
             }
 
-            if (items.Count == 0)
-                items.Add(Text("No authored triggers or scheduled events are in this draft yet."));
+            if (triggerItems.Count == 0)
+                triggerItems.Add(Text("No authored triggers are in this draft yet."));
+
+            List<ScenarioAuthoringInspectorItem> weatherItems = new List<ScenarioAuthoringInspectorItem>();
+            weatherItems.Add(Property("Current Weather", GetCurrentWeatherSummary()));
+            weatherItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleAdd, "Add Weather Event", "Schedule a weather state for a specific day and hour.", true, true, "WE")));
+            if (definition != null && definition.TriggersAndEvents != null)
+            {
+                for (int i = 0; i < definition.TriggersAndEvents.WeatherEvents.Count; i++)
+                    AddWeatherEventItems(weatherItems, definition.TriggersAndEvents.WeatherEvents[i], i);
+            }
+
+            List<ScenarioAuthoringInspectorItem> actionItems = BuildScheduledActionItems(definition);
+            List<ScenarioAuthoringInspectorItem> gateItems = BuildGateItems(definition);
 
             return new[]
             {
@@ -1099,46 +1254,102 @@ namespace ShelteredAPI.Scenarios
                     Title = "Triggers / Events",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = items.ToArray()
+                    Items = triggerItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "weather_events",
+                    Title = "Weather Events",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = weatherItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "scheduled_actions",
+                    Title = "Scheduled Actions",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = actionItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "scenario_gates",
+                    Title = "Scenario Gates / Flags",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = gateItems.ToArray()
                 }
             };
         }
 
         private static ScenarioAuthoringInspectorSection[] BuildSurvivorWindowSections(ScenarioDefinition definition)
         {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            List<ScenarioAuthoringInspectorItem> currentItems = BuildLiveSurvivorItems();
+            currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureFamily, "Capture Current Survivors", "Snapshot every current live family member into the starting survivor list.", true, true, "FM")));
+
+            List<ScenarioAuthoringInspectorItem> startingItems = new List<ScenarioAuthoringInspectorItem>();
             if (definition != null && definition.FamilySetup != null)
             {
-                for (int i = 0; i < definition.FamilySetup.Members.Count && i < 5; i++)
+                for (int i = 0; i < definition.FamilySetup.Members.Count; i++)
                 {
                     FamilyMemberConfig member = definition.FamilySetup.Members[i];
                     string role = member != null && member.Traits != null && member.Traits.Count > 0 ? member.Traits[0] : "Survivor";
-                    items.Add(Property(Safe(member != null ? member.Name : "Unknown"), role));
+                    startingItems.Add(Property(Safe(member != null ? member.Name : "Unknown"), role));
                 }
             }
 
-            if (items.Count == 0)
-                items.Add(Text("No custom survivors have been captured into this draft."));
+            if (startingItems.Count == 0)
+                startingItems.Add(Text("No starting survivors have been captured into this draft."));
+
+            List<ScenarioAuthoringInspectorItem> futureItems = new List<ScenarioAuthoringInspectorItem>();
+            futureItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, "Add Future Survivor", "Create a survivor who arrives or asks to join at a scheduled day and hour.", true, true, "FS")));
+            if (definition != null && definition.FamilySetup != null)
+            {
+                for (int i = 0; i < definition.FamilySetup.FutureSurvivors.Count; i++)
+                    AddFutureSurvivorItems(futureItems, definition.FamilySetup.FutureSurvivors[i], i);
+            }
+            if (futureItems.Count == 1)
+                futureItems.Add(Text("No future survivor arrivals have been authored yet."));
 
             return new[]
             {
                 new ScenarioAuthoringInspectorSection
                 {
-                    Id = "survivors",
-                    Title = "Survivors",
+                    Id = "current_survivors",
+                    Title = "Current Survivors",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = items.ToArray()
+                    Items = currentItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "starting_survivors",
+                    Title = "Starting Survivors",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = startingItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "future_survivors",
+                    Title = "Future Survivors",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = futureItems.ToArray()
                 }
             };
         }
 
         private static ScenarioAuthoringInspectorSection[] BuildStockpileWindowSections(ScenarioDefinition definition)
         {
+            List<ScenarioAuthoringInspectorItem> liveItems = BuildLiveInventoryItems();
+            liveItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureInventory, "Capture Current Stockpile", "Snapshot every current shelter item stack into the starting stockpile.", true, true, "IV")));
+
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             if (definition != null && definition.StartingInventory != null)
             {
-                for (int i = 0; i < definition.StartingInventory.Items.Count && i < 6; i++)
+                for (int i = 0; i < definition.StartingInventory.Items.Count; i++)
                 {
                     ItemEntry entry = definition.StartingInventory.Items[i];
                     items.Add(Property(Safe(entry != null ? entry.ItemId : "Item"), entry != null ? entry.Quantity.ToString() : "0"));
@@ -1148,43 +1359,357 @@ namespace ShelteredAPI.Scenarios
             if (items.Count == 0)
                 items.Add(Text("No starting stockpile has been captured into this draft."));
 
+            List<ScenarioAuthoringInspectorItem> scheduledItems = new List<ScenarioAuthoringInspectorItem>();
+            scheduledItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleAdd, "Schedule Add", "Add an item stack at a specific day and hour.", true, true, "A+")));
+            scheduledItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleRemove, "Schedule Remove", "Remove an item stack at a specific day and hour.", true, false, "R-")));
+            if (definition != null && definition.StartingInventory != null)
+            {
+                for (int i = 0; i < definition.StartingInventory.ScheduledChanges.Count; i++)
+                    AddInventoryChangeItems(scheduledItems, definition.StartingInventory.ScheduledChanges[i], i);
+            }
+            if (scheduledItems.Count == 2)
+                scheduledItems.Add(Text("No timed stockpile changes have been authored yet."));
+
             return new[]
             {
                 new ScenarioAuthoringInspectorSection
                 {
-                    Id = "stockpile",
-                    Title = "Stockpile",
+                    Id = "current_stockpile",
+                    Title = "Current Shelter Items",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = liveItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "starting_stockpile",
+                    Title = "Starting Items",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = items.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "scheduled_stockpile",
+                    Title = "Timed Item Changes",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = scheduledItems.ToArray()
                 }
             };
         }
 
         private static ScenarioAuthoringInspectorSection[] BuildQuestWindowSections(ScenarioDefinition definition)
         {
-            int wins = definition != null && definition.WinLossConditions != null ? definition.WinLossConditions.WinConditions.Count : 0;
-            int losses = definition != null && definition.WinLossConditions != null ? definition.WinLossConditions.LossConditions.Count : 0;
-            int dialogueChains = definition != null && definition.TriggersAndEvents != null ? definition.TriggersAndEvents.DialogueChains.Count : 0;
+            List<ScenarioAuthoringInspectorItem> liveItems = BuildLiveQuestItems();
+            List<ScenarioAuthoringInspectorItem> authoredItems = new List<ScenarioAuthoringInspectorItem>();
+            authoredItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionQuestCaptureActive, "Capture Active Quests", "Persist every current active QuestManager quest into this draft.", true, true, "QC")));
+            authoredItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionQuestScheduleAdd, "Add Scheduled Quest", "Create a quest entry that starts on a specific day and hour.", true, true, "QS")));
+            if (definition != null && definition.Quests != null)
+            {
+                for (int i = 0; i < definition.Quests.Quests.Count; i++)
+                    AddQuestItems(authoredItems, definition.Quests.Quests[i], i);
+            }
+            if (authoredItems.Count == 2)
+                authoredItems.Add(Text("No authored quest entries are in this draft yet."));
+
             return new[]
             {
                 new ScenarioAuthoringInspectorSection
                 {
-                    Id = "quests",
-                    Title = "Quests",
+                    Id = "live_quests",
+                    Title = "Current Active Quests",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = new[]
-                    {
-                        Property("Win Conditions", wins.ToString()),
-                        Property("Loss Conditions", losses.ToString()),
-                        Property("Dialogue Chains", dialogueChains.ToString()),
-                        Text(wins + losses + dialogueChains > 0
-                            ? "Quest and outcome definitions are stored in the current scenario draft."
-                            : "No quest or outcome authoring has been captured into this draft yet.")
-                    }
+                    Items = liveItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "authored_quests",
+                    Title = "Authored Quest Schedule",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = authoredItems.ToArray()
                 }
             };
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildLiveSurvivorItems()
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            FamilyManager manager = FamilyManager.Instance;
+            List<FamilyMember> members = manager != null ? manager.GetAllFamilyMembers() : null;
+            for (int i = 0; members != null && i < members.Count; i++)
+            {
+                FamilyMember member = members[i];
+                if (member == null)
+                    continue;
+
+                string status = member.isDead ? "Dead" : member.isAway ? "Away" : member.IsUnconscious ? "Unconscious" : member.isCatatonic ? "Catatonic" : "Active";
+                items.Add(Property(Safe(member.firstName), status));
+            }
+
+            if (items.Count == 0)
+                items.Add(Text("No live survivors are available from FamilyManager."));
+            return items;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildLiveInventoryItems()
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            InventoryManager manager = InventoryManager.Instance;
+            List<ItemStack> stacks = manager != null ? manager.GetItems() : null;
+            int total = 0;
+            for (int i = 0; stacks != null && i < stacks.Count; i++)
+            {
+                ItemStack stack = stacks[i];
+                if (stack == null || stack.m_type == ItemManager.ItemType.Undefined || stack.m_count <= 0)
+                    continue;
+
+                items.Add(Property(stack.m_type.ToString(), stack.m_count.ToString()));
+                total += stack.m_count;
+            }
+
+            items.Insert(0, Property("Total Items", total.ToString()));
+            if (items.Count == 1)
+                items.Add(Text("No current shelter inventory items are available from InventoryManager."));
+            return items;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildLiveQuestItems()
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            QuestManager manager = QuestManager.instance;
+            List<QuestInstance> quests = manager != null ? manager.GetCurrentQuests(true, true, true) : null;
+            for (int i = 0; quests != null && i < quests.Count; i++)
+            {
+                QuestInstance quest = quests[i];
+                if (quest == null || quest.definition == null)
+                    continue;
+
+                string state = quest.state.ToString();
+                if (quest.definition.IsScenario() && quest.stage != null)
+                    state += " / " + quest.stage.id;
+                items.Add(Property(Safe(quest.definition.id), state));
+            }
+
+            if (items.Count == 0)
+                items.Add(Text("No current quest or scenario instances are active in QuestManager."));
+            return items;
+        }
+
+        private static void AddFutureSurvivorItems(List<ScenarioAuthoringInspectorItem> items, FutureSurvivorDefinition survivor, int index)
+        {
+            if (items == null || survivor == null)
+                return;
+
+            string name = survivor.Survivor != null ? survivor.Survivor.Name : survivor.Id;
+            items.Add(Property(Safe(name), (survivor.AskToJoin ? "Ask to join (runtime unsupported)" : "Auto join") + " - " + FormatSchedule(survivor.Arrival)));
+            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionFutureSurvivorDayPrefix, ScenarioAuthoringActionIds.ActionFutureSurvivorHourPrefix, index);
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorToggleAskPrefix + index.ToString(), "Toggle Join Mode", "Auto join is the only runtime-supported arrival mode in this pass.", true, survivor.AskToJoin, "AJ")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix + index.ToString(), "Remove Future Survivor", "Remove this future survivor arrival.", true, false, "RM")));
+        }
+
+        private static void AddInventoryChangeItems(List<ScenarioAuthoringInspectorItem> items, TimedInventoryChangeDefinition change, int index)
+        {
+            if (items == null || change == null)
+                return;
+
+            items.Add(Property(change.Kind.ToString() + " " + Safe(change.ItemId), "x" + change.Quantity + " - " + FormatSchedule(change.When)));
+            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionInventoryScheduleDayPrefix, ScenarioAuthoringActionIds.ActionInventoryScheduleHourPrefix, index);
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleDeletePrefix + index.ToString(), "Remove Timed Item Change", "Remove this timed stockpile change.", true, false, "RM")));
+        }
+
+        private static void AddWeatherEventItems(List<ScenarioAuthoringInspectorItem> items, WeatherEventDefinition weather, int index)
+        {
+            if (items == null || weather == null)
+                return;
+
+            items.Add(Property(Safe(weather.WeatherState), FormatSchedule(weather.When)));
+            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionWeatherScheduleDayPrefix, ScenarioAuthoringActionIds.ActionWeatherScheduleHourPrefix, index);
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDeletePrefix + index.ToString(), "Remove Weather Event", "Remove this scheduled weather event.", true, false, "RM")));
+        }
+
+        private static void AddQuestItems(List<ScenarioAuthoringInspectorItem> items, QuestDefinition quest, int index)
+        {
+            if (items == null || quest == null)
+                return;
+
+            string title = !string.IsNullOrEmpty(quest.Title) ? quest.Title : quest.Id;
+            string trigger = !string.IsNullOrEmpty(quest.StartTriggerId) ? "trigger " + quest.StartTriggerId : FormatSchedule(quest.ScheduledStart);
+            items.Add(Property(Safe(title), trigger));
+            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionQuestScheduleDayPrefix, ScenarioAuthoringActionIds.ActionQuestScheduleHourPrefix, index);
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionQuestScheduleDeletePrefix + index.ToString(), "Remove Quest", "Remove this authored quest entry.", true, false, "RM")));
+        }
+
+        private static void AddScheduleActions(List<ScenarioAuthoringInspectorItem> items, string dayPrefix, string hourPrefix, int index)
+        {
+            items.Add(ActionItem(Action(dayPrefix + index.ToString() + ".1", "Day +", "Move this scheduled entry one day later.", true, false, "D+")));
+            items.Add(ActionItem(Action(dayPrefix + index.ToString() + ".-1", "Day -", "Move this scheduled entry one day earlier.", true, false, "D-")));
+            items.Add(ActionItem(Action(hourPrefix + index.ToString() + ".1", "Hour +", "Move this scheduled entry one hour later.", true, false, "H+")));
+            items.Add(ActionItem(Action(hourPrefix + index.ToString() + ".-1", "Hour -", "Move this scheduled entry one hour earlier.", true, false, "H-")));
+        }
+
+        private static string GetCurrentWeatherSummary()
+        {
+            WeatherManager manager = WeatherManager.Instance;
+            if (manager == null)
+                return "WeatherManager unavailable";
+            return manager.currentState + " / day " + manager.currentDay;
+        }
+
+        private static string FormatSchedule(ScenarioScheduleTime time)
+        {
+            if (time == null)
+                return "unscheduled";
+            return "day " + time.Day + " " + time.Hour.ToString("D2") + ":" + time.Minute.ToString("D2");
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildBunkerRuntimeSection(ScenarioDefinition definition, ScenarioAuthoringState state)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            ScenarioBunkerGridDefinition grid = definition != null ? definition.BunkerGrid : null;
+            items.Add(Property("Foundations", grid != null && grid.Foundations != null ? grid.Foundations.Count.ToString() : "0"));
+            items.Add(Property("Cells", grid != null && grid.Cells != null ? grid.Cells.Count.ToString() : "0"));
+            items.Add(Property("Expansions", grid != null && grid.Expansions != null ? grid.Expansions.Count.ToString() : "0"));
+            items.Add(Property("Boundaries", grid != null && grid.Boundaries != null ? grid.Boundaries.Count.ToString() : "0"));
+            if (state != null && state.SelectedTarget != null)
+                items.Add(Property("Selected Object", Safe(state.SelectedTarget.DisplayName)));
+
+            for (int i = 0; definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null && i < definition.BunkerEdits.ObjectPlacements.Count && i < 6; i++)
+            {
+                ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
+                if (placement == null)
+                    continue;
+                string id = !string.IsNullOrEmpty(placement.ScenarioObjectId) ? placement.ScenarioObjectId : "object_" + (i + 1).ToString();
+                string dependency = !string.IsNullOrEmpty(placement.RequiredFoundationId) ? "foundation " + placement.RequiredFoundationId : !string.IsNullOrEmpty(placement.RequiredBunkerExpansionId) ? "expansion " + placement.RequiredBunkerExpansionId : "no support id";
+                items.Add(Property(id, placement.StartState + " / " + dependency));
+            }
+
+            if (items.Count == 4)
+                items.Add(Text("No authored object support dependencies have been captured yet."));
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "bunker_runtime_model",
+                Title = "Bunker Runtime Model",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = items.ToArray()
+            };
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildGateItems(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            for (int i = 0; definition != null && definition.Gates != null && i < definition.Gates.Count; i++)
+            {
+                ScenarioGateDefinition gate = definition.Gates[i];
+                if (gate == null)
+                    continue;
+                items.Add(Property(Safe(gate.Id), CountConditions(gate.Conditions).ToString() + " condition(s)"));
+            }
+            if (items.Count == 0)
+                items.Add(Text("No shared gates or scenario flags have been authored yet."));
+            return items;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildScheduledActionItems(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            for (int i = 0; definition != null && definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
+                if (action == null)
+                    continue;
+                items.Add(Property(Safe(action.Id), Safe(action.ActionType) + " / " + FormatSchedule(action.DueTime)));
+            }
+            if (items.Count == 0)
+                items.Add(Text("No shared scheduled actions have been authored yet. Legacy schedules are converted at runtime."));
+            return items;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildRuntimeJournalItems()
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            ScenarioRuntimeState state = GetRuntimeState();
+
+            items.Add(Property("Scenario", Safe(state != null ? state.ScenarioId : null)));
+            items.Add(Property("Binding", Safe(state != null ? state.RuntimeBindingId : null)));
+            items.Add(Property("Last Processed", state != null ? "day " + state.LastProcessedDay + " " + state.LastProcessedHour.ToString("D2") + ":" + state.LastProcessedMinute.ToString("D2") : "None"));
+            int count = state != null && state.ExecutedActions != null ? state.ExecutedActions.Count : 0;
+            items.Add(Property("Executed Actions", count.ToString()));
+            for (int i = 0; state != null && state.ExecutedActions != null && i < state.ExecutedActions.Count && i < 8; i++)
+            {
+                ScenarioExecutedActionRecord record = state.ExecutedActions[i];
+                if (record != null)
+                    items.Add(Property(Safe(record.ActionKey), record.Status + " / day " + record.FiredDay + " " + record.FiredHour.ToString("D2") + ":" + record.FiredMinute.ToString("D2")));
+            }
+            return items;
+        }
+
+        private static ScenarioRuntimeState GetRuntimeState()
+        {
+            try
+            {
+                ScenarioRuntimeStateService service = ScenarioCompositionRoot.Resolve<ScenarioRuntimeStateService>();
+                return service != null ? service.State : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildPublishDependencyItems(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            int objectCount = definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null ? definition.BunkerEdits.ObjectPlacements.Count : 0;
+            int foundationCount = definition != null && definition.BunkerGrid != null && definition.BunkerGrid.Foundations != null ? definition.BunkerGrid.Foundations.Count : 0;
+            int expansionCount = definition != null && definition.BunkerGrid != null && definition.BunkerGrid.Expansions != null ? definition.BunkerGrid.Expansions.Count : 0;
+            int gateCount = definition != null && definition.Gates != null ? definition.Gates.Count : 0;
+            items.Add(Property("Objects", objectCount.ToString()));
+            items.Add(Property("Foundations", foundationCount.ToString()));
+            items.Add(Property("Expansions", expansionCount.ToString()));
+            items.Add(Property("Gates", gateCount.ToString()));
+            items.Add(Property("Runtime Compatibility", "Shared schedule journal required"));
+            return items;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildTimelineItems(ScenarioDefinition definition, ScenarioRuntimeState runtimeState, ScenarioTimelineBuilder timelineBuilder)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            List<ScenarioTimelineEntry> entries = timelineBuilder != null ? timelineBuilder.BuildEntries(definition, runtimeState) : new List<ScenarioTimelineEntry>();
+            for (int i = 0; entries != null && i < entries.Count && i < 12; i++)
+            {
+                ScenarioTimelineEntry entry = entries[i];
+                if (entry != null)
+                    items.Add(Property("Day " + entry.When.Day + " " + Safe(entry.Title), FormatSchedule(entry.When) + " / " + entry.Kind + " / " + entry.Status));
+            }
+            if (items.Count == 0)
+                items.Add(Text("No scheduled timeline entries are authored yet."));
+            return items;
+        }
+
+        private static string StatusBadge(string status)
+        {
+            if (string.Equals(status, "Fired", StringComparison.OrdinalIgnoreCase))
+                return "OK";
+            if (string.Equals(status, "Blocked", StringComparison.OrdinalIgnoreCase))
+                return "BL";
+            if (string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase))
+                return "ER";
+            return "PN";
+        }
+
+        private static int CountConditions(ScenarioConditionGroup group)
+        {
+            int count = 0;
+            if (group != null && group.Conditions != null)
+                count += group.Conditions.Count;
+            for (int i = 0; group != null && group.Groups != null && i < group.Groups.Count; i++)
+                count += CountConditions(group.Groups[i]);
+            return count;
         }
 
         private ScenarioAuthoringInspectorAction[] BuildWindowHeaderActions(

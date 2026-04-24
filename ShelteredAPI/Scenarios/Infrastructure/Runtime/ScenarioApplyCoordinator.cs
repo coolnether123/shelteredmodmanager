@@ -9,19 +9,25 @@ namespace ShelteredAPI.Scenarios
         private readonly BunkerApplyService _bunkerApplyService;
         private readonly AssetApplyService _assetApplyService;
         private readonly TriggerRuntimeAdapter _triggerRuntimeAdapter;
+        private readonly ScenarioObjectStartStateApplyService _objectStartStateApplyService;
+        private readonly ScenarioSceneSpriteStartStateApplyService _sceneSpriteStartStateApplyService;
 
         public ScenarioApplyCoordinator(
             FamilyApplyService familyApplyService,
             InventoryApplyService inventoryApplyService,
             BunkerApplyService bunkerApplyService,
             AssetApplyService assetApplyService,
-            TriggerRuntimeAdapter triggerRuntimeAdapter)
+            TriggerRuntimeAdapter triggerRuntimeAdapter,
+            ScenarioObjectStartStateApplyService objectStartStateApplyService,
+            ScenarioSceneSpriteStartStateApplyService sceneSpriteStartStateApplyService)
         {
             _familyApplyService = familyApplyService;
             _inventoryApplyService = inventoryApplyService;
             _bunkerApplyService = bunkerApplyService;
             _assetApplyService = assetApplyService;
             _triggerRuntimeAdapter = triggerRuntimeAdapter;
+            _objectStartStateApplyService = objectStartStateApplyService;
+            _sceneSpriteStartStateApplyService = sceneSpriteStartStateApplyService;
         }
 
         public ScenarioApplyResult ApplyAll(ScenarioDefinition definition, string scenarioFilePath)
@@ -41,8 +47,12 @@ namespace ShelteredAPI.Scenarios
                 _bunkerApplyService.Apply(definition, result);
             if (_triggerRuntimeAdapter != null)
                 _triggerRuntimeAdapter.Apply(definition, result);
+            if (_objectStartStateApplyService != null)
+                _objectStartStateApplyService.Apply(definition, result);
             if (_assetApplyService != null)
                 _assetApplyService.Apply(definition, scenarioFilePath, result);
+            if (_sceneSpriteStartStateApplyService != null)
+                _sceneSpriteStartStateApplyService.Apply(definition, result);
             return result;
         }
 

@@ -16,6 +16,7 @@ namespace ShelteredAPI.Scenarios
         private readonly IScenarioPauseService _pauseService;
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
+        private readonly ScenarioObjectIdentityAssignmentService _identityAssignmentService;
         private ScenarioEditorSession _session;
         private string _lastScenarioFilePath;
 
@@ -42,7 +43,8 @@ namespace ShelteredAPI.Scenarios
             IScenarioRuntimeBindingService runtimeBindingService,
             IScenarioPauseService pauseService,
             IScenarioSpriteSwapEngine spriteSwapEngine,
-            IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine)
+            IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
+            ScenarioObjectIdentityAssignmentService identityAssignmentService)
         {
             _serializer = serializer;
             _validator = validator;
@@ -51,6 +53,7 @@ namespace ShelteredAPI.Scenarios
             _pauseService = pauseService;
             _spriteSwapEngine = spriteSwapEngine;
             _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
+            _identityAssignmentService = identityAssignmentService;
         }
 
         public ScenarioEditorSession EnterEditMode(ScenarioBaseGameMode baseMode)
@@ -71,6 +74,7 @@ namespace ShelteredAPI.Scenarios
         {
             ScenarioDefinition definition = _serializer.Load(scenarioFilePath);
             ScenarioEditorSession session = CreateSession(definition);
+            ScenarioObjectIdentityAssignmentSummary migration = _identityAssignmentService.AssignMissingIds(session);
             lock (_sync)
             {
                 _session = session;
@@ -78,6 +82,8 @@ namespace ShelteredAPI.Scenarios
             }
 
             PauseForEditor();
+            if (migration.AssignedCount > 0)
+                MMLog.WriteInfo("[ScenarioEditorController] Assigned " + migration.AssignedCount + " missing scenario object id(s) while loading old scenario XML.");
             MMLog.WriteInfo("[ScenarioEditorController] Loaded scenario edit session from " + scenarioFilePath + ".");
             return session;
         }
