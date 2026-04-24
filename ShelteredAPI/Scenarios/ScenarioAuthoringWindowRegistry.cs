@@ -25,11 +25,11 @@ namespace ShelteredAPI.Scenarios
 
         public ScenarioAuthoringWindowRegistry()
         {
-            Register(ScenarioAuthoringWindowIds.Scenario, "Scenario", ScenarioAuthoringShellDock.Left, true, false, true, 0, 304f, 232f, 260f, 120f);
-            Register(ScenarioAuthoringWindowIds.Layers, "Layers", ScenarioAuthoringShellDock.Left, true, false, true, 1, 304f, 188f, 260f, 120f);
-            Register(ScenarioAuthoringWindowIds.TilesPalette, "Tiles Palette", ScenarioAuthoringShellDock.Left, true, false, true, 2, 304f, 322f, 260f, 160f);
-            Register(ScenarioAuthoringWindowIds.Inspector, "Inspector", ScenarioAuthoringShellDock.Right, true, false, true, 0, 332f, 640f, 280f, 200f);
-            Register(ScenarioAuthoringWindowIds.BuildTools, "Build Tools", ScenarioAuthoringShellDock.Bottom, true, false, true, 0, 0f, 188f, 540f, 120f);
+            Register(ScenarioAuthoringWindowIds.Scenario, "Scenario", ScenarioAuthoringShellDock.Left, false, false, false, 0, 304f, 232f, 260f, 120f);
+            Register(ScenarioAuthoringWindowIds.Layers, "Layers", ScenarioAuthoringShellDock.Left, false, false, false, 1, 304f, 188f, 260f, 120f);
+            Register(ScenarioAuthoringWindowIds.TilesPalette, "Tiles Palette", ScenarioAuthoringShellDock.Left, false, false, false, 2, 304f, 322f, 260f, 160f);
+            Register(ScenarioAuthoringWindowIds.Inspector, "Inspector", ScenarioAuthoringShellDock.Right, true, false, true, 0, 292f, 520f, 260f, 220f);
+            Register(ScenarioAuthoringWindowIds.BuildTools, "Asset Picker", ScenarioAuthoringShellDock.Bottom, true, false, true, 0, 940f, 272f, 540f, 180f);
             Register(ScenarioAuthoringWindowIds.Triggers, "Triggers / Events", ScenarioAuthoringShellDock.Floating, false, false, false, 1, 880f, 520f, 560f, 360f);
             Register(ScenarioAuthoringWindowIds.Survivors, "Survivors", ScenarioAuthoringShellDock.Floating, false, false, false, 2, 880f, 520f, 560f, 360f);
             Register(ScenarioAuthoringWindowIds.Stockpile, "Stockpile", ScenarioAuthoringShellDock.Floating, false, false, false, 3, 880f, 520f, 560f, 360f);

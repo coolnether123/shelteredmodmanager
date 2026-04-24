@@ -48,7 +48,6 @@ namespace ShelteredAPI.Scenarios
             return new[]
             {
                 CreateAction(ScenarioAuthoringActionIds.ActionSave, "Save", "SV", true, true, "Validate and save the current draft."),
-                CreateAction(ScenarioAuthoringActionIds.ActionPlaytest, "Playtest", "PT", true, state != null && ScenarioAuthoringRuntimeGuards.IsPlaytesting(), "Apply the current draft into the live world."),
                 CreateAction(ScenarioAuthoringActionIds.ActionShellOpenSettings, "Settings", "ST", true, false, "Open authoring settings.")
             };
         }
@@ -59,7 +58,8 @@ namespace ShelteredAPI.Scenarios
             {
                 CreateAction(ScenarioAuthoringActionIds.ActionShellToggle, "Shell", "SH", true, state != null && state.ShellVisible, "Toggle the authoring shell."),
                 CreateAction(ScenarioAuthoringActionIds.ActionShellFocusSelection, "Focus", "FC", true, state != null && state.FocusSelectionMode, "Focus the layout on the active stage and selection."),
-                CreateAction(ScenarioAuthoringActionIds.ActionShellResetLayout, "Reset", "RS", true, false, "Reset the authoring layout.")
+                CreateAction(ScenarioAuthoringActionIds.ActionShellResetLayout, "Reset", "RS", true, false, "Reset the authoring layout."),
+                CreateAction(ScenarioAuthoringActionIds.ActionShellToggleWindowMenu, "Windows", "WN", true, false, "Choose visible editor panels.")
             };
         }
 
@@ -71,6 +71,8 @@ namespace ShelteredAPI.Scenarios
             {
                 ScenarioAuthoringWindowDefinition definition = definitions[i];
                 if (definition == null)
+                    continue;
+                if (IsLegacyDockWindow(definition.Id))
                     continue;
 
                 bool emphasized = HasWindowVisible(state, definition.Id);
@@ -84,6 +86,13 @@ namespace ShelteredAPI.Scenarios
             }
 
             return actions.ToArray();
+        }
+
+        private static bool IsLegacyDockWindow(string windowId)
+        {
+            return string.Equals(windowId, ScenarioAuthoringWindowIds.Scenario, System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(windowId, ScenarioAuthoringWindowIds.Layers, System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(windowId, ScenarioAuthoringWindowIds.TilesPalette, System.StringComparison.OrdinalIgnoreCase);
         }
 
         public string BuildStageLabel(ScenarioAuthoringState state)
