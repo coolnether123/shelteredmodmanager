@@ -156,6 +156,11 @@ namespace ShelteredAPI.Scenarios
                         return false;
                     message = "Editor settings opened.";
                     return true;
+                case ScenarioAuthoringActionIds.ActionShellOpenCalendar:
+                    if (!_layoutService.ToggleWindowVisibility(state, ScenarioAuthoringWindowIds.Calendar))
+                        return false;
+                    message = "Calendar panel opened.";
+                    return true;
                 case ScenarioAuthoringActionIds.ActionShellCloseSettings:
                     if (!_layoutService.SetSettingsWindowOpen(state, false))
                         return false;
@@ -339,6 +344,76 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
+    internal sealed class TimelineCommandHandler : IScenarioCommandHandler
+    {
+        private readonly IScenarioEditorService _editorService;
+        private readonly ScenarioTimelineBuilder _timelineBuilder;
+        private readonly ScenarioTimelineNavigationService _navigationService;
+
+        public TimelineCommandHandler(
+            IScenarioEditorService editorService,
+            ScenarioTimelineBuilder timelineBuilder,
+            ScenarioTimelineNavigationService navigationService)
+        {
+            _editorService = editorService;
+            _timelineBuilder = timelineBuilder;
+            _navigationService = navigationService;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = false;
+            message = null;
+            if (state == null || string.IsNullOrEmpty(actionId))
+                return false;
+
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionTimelineDayPrefix, StringComparison.Ordinal))
+            {
+                handled = true;
+                state.TimelineSelectionId = actionId.Substring(ScenarioAuthoringActionIds.ActionTimelineDayPrefix.Length);
+                message = "Calendar day " + state.TimelineSelectionId + " selected.";
+                return true;
+            }
+
+            if (!actionId.StartsWith(ScenarioAuthoringActionIds.ActionTimelineEntryPrefix, StringComparison.Ordinal))
+                return false;
+
+            handled = true;
+            string entryId = actionId.Substring(ScenarioAuthoringActionIds.ActionTimelineEntryPrefix.Length);
+            ScenarioTimelineEntry entry = FindEntry(entryId);
+            if (entry == null)
+            {
+                message = "Timeline entry target is missing: " + entryId + ".";
+                return true;
+            }
+
+            return _navigationService.Navigate(state, entry, out message);
+        }
+
+        private ScenarioTimelineEntry FindEntry(string entryId)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            ScenarioRuntimeState runtimeState = null;
+            try
+            {
+                ScenarioRuntimeStateService runtimeStateService = ScenarioCompositionRoot.Resolve<ScenarioRuntimeStateService>();
+                runtimeState = runtimeStateService != null ? runtimeStateService.State : null;
+            }
+            catch
+            {
+            }
+
+            List<ScenarioTimelineEntry> entries = _timelineBuilder.BuildEntries(definition, runtimeState);
+            for (int i = 0; entries != null && i < entries.Count; i++)
+            {
+                if (entries[i] != null && string.Equals(entries[i].Id, entryId, StringComparison.OrdinalIgnoreCase))
+                    return entries[i];
+            }
+            return null;
+        }
+    }
+
     internal sealed class CaptureCommandHandler : IScenarioCommandHandler
     {
         private readonly ScenarioAuthoringCaptureService _captureService;
@@ -390,6 +465,30 @@ namespace ShelteredAPI.Scenarios
         }
 
         private delegate bool CaptureAction(ScenarioEditorSession session, out string message);
+    }
+
+    internal sealed class GameplayScheduleCommandHandler : IScenarioCommandHandler
+    {
+        private readonly ScenarioGameplayScheduleAuthoringService _service;
+        private readonly IScenarioEditorService _editorService;
+
+        public GameplayScheduleCommandHandler(
+            ScenarioGameplayScheduleAuthoringService service,
+            IScenarioEditorService editorService)
+        {
+            _service = service;
+            _editorService = editorService;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = actionId != null && actionId.StartsWith("scenario.", StringComparison.Ordinal);
+            message = null;
+            if (!handled || _service == null)
+                return false;
+
+            return _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
+        }
     }
 
     internal sealed class EditorLifecycleCommandHandler : IScenarioCommandHandler

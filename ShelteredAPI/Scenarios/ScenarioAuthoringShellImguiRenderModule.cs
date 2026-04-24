@@ -262,8 +262,9 @@ namespace ShelteredAPI.Scenarios
 
             bool showBottomTray = _snapshot != null
                 && _snapshot.State != null
-                && _snapshot.State.ActiveTool == ScenarioAuthoringTool.Assets
-                && HasVisibleWindow(windows, ScenarioAuthoringWindowIds.BuildTools);
+                && (( _snapshot.State.ActiveTool == ScenarioAuthoringTool.Assets
+                    && HasVisibleWindow(windows, ScenarioAuthoringWindowIds.BuildTools))
+                    || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Calendar));
 
             if (showBottomTray)
                 viewportBottom -= BottomTrayHeight + Gutter;
@@ -281,6 +282,7 @@ namespace ShelteredAPI.Scenarios
                 BottomTrayHeight);
             if (showBottomTray)
                 AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.BuildTools, buildToolsRect);
+            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Calendar, buildToolsRect);
 
             float workspaceWidth = Mathf.Clamp(contentRect.width * 0.58f, 640f, 980f);
             float workspaceHeight = Mathf.Clamp(contentRect.height * 0.72f, 400f, 620f);
@@ -1731,7 +1733,8 @@ namespace ShelteredAPI.Scenarios
                 || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Stockpile)
                 || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Quests)
                 || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Map)
-                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Publish);
+                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Publish)
+                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Calendar);
         }
 
         private static readonly string[] _workspaceOrder = new[]
@@ -1741,7 +1744,8 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringWindowIds.Stockpile,
             ScenarioAuthoringWindowIds.Quests,
             ScenarioAuthoringWindowIds.Map,
-            ScenarioAuthoringWindowIds.Publish
+            ScenarioAuthoringWindowIds.Publish,
+            ScenarioAuthoringWindowIds.Calendar
         };
 
         private static readonly string[] _workspaceLabels = new[]
@@ -1751,7 +1755,8 @@ namespace ShelteredAPI.Scenarios
             "Stockpile",
             "Quests",
             "Map",
-            "Publish"
+            "Publish",
+            "Calendar"
         };
 
         private static string GetActiveWorkspaceId(ScenarioAuthoringShellWindowViewModel[] windows)

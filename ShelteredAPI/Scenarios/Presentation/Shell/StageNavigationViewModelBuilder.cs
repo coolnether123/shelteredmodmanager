@@ -48,6 +48,7 @@ namespace ShelteredAPI.Scenarios
             return new[]
             {
                 CreateAction(ScenarioAuthoringActionIds.ActionSave, "Save", "SV", true, true, "Validate and save the current draft."),
+                CreateAction(ScenarioAuthoringActionIds.ActionShellOpenCalendar, "Calendar", "CL", true, HasWindowVisible(state, ScenarioAuthoringWindowIds.Calendar), "Open the scheduled event calendar."),
                 CreateAction(ScenarioAuthoringActionIds.ActionShellOpenSettings, "Settings", "ST", true, false, "Open authoring settings.")
             };
         }

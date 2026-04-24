@@ -51,7 +51,11 @@ namespace ModAPI.Scenarios
                 new FamilyValidationRule(),
                 new InventoryValidationRule(),
                 new BunkerValidationRule(),
-                new QuestMapValidationRule()
+                new QuestMapValidationRule(),
+                new SchedulingValidationRule(),
+                new ObjectStartStateValidationRule(),
+                new BunkerDependencyValidationRule(),
+                new GateConditionValidationRule()
             });
         }
 
@@ -63,7 +67,10 @@ namespace ModAPI.Scenarios
         private void ValidateDependencies(ScenarioDefinition definition, ScenarioValidationResult result)
         {
             if (definition.Dependencies == null || _dependencyResolver == null)
+            {
+                ValidateExplicitModDependencies(definition, result);
                 return;
+            }
 
             for (int i = 0; i < definition.Dependencies.Count; i++)
             {
@@ -85,6 +92,86 @@ namespace ModAPI.Scenarios
                             + " requires " + dependency.version + " but active version is " + (activeVersion ?? "<unknown>") + ".");
                 }
             }
+
+            ValidateExplicitModDependencies(definition, result);
+            ValidateAutoDetectedModReferences(definition, result);
+        }
+
+        private void ValidateExplicitModDependencies(ScenarioDefinition definition, ScenarioValidationResult result)
+        {
+            if (definition == null || definition.ModDependencies == null || _dependencyResolver == null)
+                return;
+
+            for (int i = 0; i < definition.ModDependencies.Count; i++)
+            {
+                ScenarioModDependencyDefinition dependency = definition.ModDependencies[i];
+                if (dependency == null || string.IsNullOrEmpty(dependency.ModId))
+                {
+                    result.AddError("Manual scenario mod dependency #" + i + " is missing mod id.");
+                    continue;
+                }
+
+                if (dependency.Kind == ScenarioModDependencyKind.Required && !_dependencyResolver.IsLoaded(dependency.ModId))
+                {
+                    result.AddError("Required scenario mod dependency is not loaded: " + dependency.ModId);
+                    continue;
+                }
+
+                if (dependency.Kind == ScenarioModDependencyKind.Required && !string.IsNullOrEmpty(dependency.Version))
+                {
+                    string activeVersion = GetLoadedVersion(dependency.ModId);
+                    if (!string.Equals(activeVersion ?? string.Empty, dependency.Version, StringComparison.OrdinalIgnoreCase))
+                        result.AddError("Required scenario mod dependency version mismatch: " + dependency.ModId
+                            + " requires " + dependency.Version + " but active version is " + (activeVersion ?? "<unknown>") + ".");
+                }
+            }
+        }
+
+        private void ValidateAutoDetectedModReferences(ScenarioDefinition definition, ScenarioValidationResult result)
+        {
+            if (definition == null || _dependencyResolver == null)
+                return;
+
+            ValidateContentOwner(definition, result, definition.StartingInventory != null ? definition.StartingInventory.Items : null);
+            for (int i = 0; definition.StartingInventory != null && definition.StartingInventory.ScheduledChanges != null && i < definition.StartingInventory.ScheduledChanges.Count; i++)
+                ValidateModOwnedContent(result, definition.StartingInventory.ScheduledChanges[i] != null ? definition.StartingInventory.ScheduledChanges[i].ItemId : null, "scheduled inventory");
+            for (int i = 0; definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null && i < definition.BunkerEdits.ObjectPlacements.Count; i++)
+            {
+                ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
+                ValidateModOwnedContent(result, placement != null ? placement.PrefabReference : null, "bunker object prefab");
+                ValidateModOwnedContent(result, placement != null ? placement.DefinitionReference : null, "bunker object definition");
+            }
+            for (int i = 0; definition.AssetReferences != null && definition.AssetReferences.CustomSprites != null && i < definition.AssetReferences.CustomSprites.Count; i++)
+                ValidateModOwnedContent(result, definition.AssetReferences.CustomSprites[i] != null ? definition.AssetReferences.CustomSprites[i].Id : null, "sprite asset");
+            for (int i = 0; definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
+                for (int e = 0; action != null && action.Effects != null && e < action.Effects.Count; e++)
+                    ValidateModOwnedContent(result, action.Effects[e] != null ? action.Effects[e].ItemId : null, "scheduled effect");
+            }
+        }
+
+        private void ValidateContentOwner(ScenarioDefinition definition, ScenarioValidationResult result, System.Collections.Generic.List<ItemEntry> items)
+        {
+            for (int i = 0; items != null && i < items.Count; i++)
+                ValidateModOwnedContent(result, items[i] != null ? items[i].ItemId : null, "starting inventory");
+        }
+
+        private void ValidateModOwnedContent(ScenarioValidationResult result, string contentId, string scope)
+        {
+            string modId = ExtractOwnerPrefix(contentId);
+            if (modId == null)
+                return;
+            if (!_dependencyResolver.IsLoaded(modId))
+                result.AddError("Referenced mod content is unavailable: " + scope + " '" + contentId + "' requires missing mod '" + modId + "'.");
+        }
+
+        private static string ExtractOwnerPrefix(string contentId)
+        {
+            if (string.IsNullOrEmpty(contentId))
+                return null;
+            int separator = contentId.IndexOf(':');
+            return separator > 0 ? contentId.Substring(0, separator) : null;
         }
 
         private string GetLoadedVersion(string modId)
