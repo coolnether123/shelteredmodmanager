@@ -14,10 +14,15 @@ namespace ShelteredAPI.Scenarios
             public Sprite Sprite;
         }
 
-        private readonly ScenarioSpriteRuntimeResolver _resolver = new ScenarioSpriteRuntimeResolver();
+        private readonly ScenarioSpriteRuntimeResolver _resolver;
         private readonly Dictionary<string, BaselineState> _baselineByTarget = new Dictionary<string, BaselineState>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, ScenarioSpriteRuntimeResolver.ResolvedTarget> _targetCache = new Dictionary<string, ScenarioSpriteRuntimeResolver.ResolvedTarget>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _activeTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        internal ScenarioSpriteSwapRenderer(ScenarioSpriteRuntimeResolver resolver)
+        {
+            _resolver = resolver;
+        }
 
         public int Apply(IList<ScenarioSpriteSwapPlanner.PlannedSwap> plan, string reason)
         {

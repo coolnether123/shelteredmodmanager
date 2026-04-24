@@ -7,6 +7,9 @@ namespace ShelteredAPI.Scenarios
 {
     internal static class ScenarioSpriteReferenceLibrary
     {
+        private static readonly object GeneratedSync = new object();
+        private static readonly Dictionary<string, Sprite> GeneratedSprites = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+
         internal sealed class LoadedSpriteReference
         {
             public string RuntimeSpriteKey;
@@ -29,11 +32,28 @@ namespace ShelteredAPI.Scenarios
                 + Mathf.RoundToInt(rect.width) + "," + Mathf.RoundToInt(rect.height);
         }
 
+        public static void RegisterGeneratedSprite(string runtimeSpriteKey, Sprite sprite)
+        {
+            if (string.IsNullOrEmpty(runtimeSpriteKey) || sprite == null)
+                return;
+
+            lock (GeneratedSync)
+            {
+                GeneratedSprites[runtimeSpriteKey] = sprite;
+            }
+        }
+
         public static bool TryFindLoadedSprite(string runtimeSpriteKey, out Sprite sprite)
         {
             sprite = null;
             if (string.IsNullOrEmpty(runtimeSpriteKey))
                 return false;
+
+            lock (GeneratedSync)
+            {
+                if (GeneratedSprites.TryGetValue(runtimeSpriteKey, out sprite) && sprite != null)
+                    return true;
+            }
 
             List<LoadedSpriteReference> loaded = GetLoadedSprites();
             for (int i = 0; i < loaded.Count; i++)
@@ -54,6 +74,23 @@ namespace ShelteredAPI.Scenarios
         public static List<LoadedSpriteReference> GetLoadedSprites()
         {
             Dictionary<string, LoadedSpriteReference> byKey = new Dictionary<string, LoadedSpriteReference>(StringComparer.OrdinalIgnoreCase);
+            lock (GeneratedSync)
+            {
+                foreach (KeyValuePair<string, Sprite> generated in GeneratedSprites)
+                {
+                    if (generated.Value == null || string.IsNullOrEmpty(generated.Key))
+                        continue;
+
+                    byKey[generated.Key] = new LoadedSpriteReference
+                    {
+                        RuntimeSpriteKey = generated.Key,
+                        SpriteName = string.IsNullOrEmpty(generated.Value.name) ? "<generated>" : generated.Value.name,
+                        TextureName = generated.Value.texture != null && !string.IsNullOrEmpty(generated.Value.texture.name) ? generated.Value.texture.name : "<generated>",
+                        Sprite = generated.Value
+                    };
+                }
+            }
+
             Sprite[] loadedSprites = Resources.FindObjectsOfTypeAll<Sprite>();
             for (int i = 0; loadedSprites != null && i < loadedSprites.Length; i++)
             {

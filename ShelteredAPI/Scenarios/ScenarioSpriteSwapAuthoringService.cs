@@ -77,6 +77,7 @@ namespace ShelteredAPI.Scenarios
         {
             public string TargetPath;
             public string SourceLabel;
+            public Texture2D BaselineTexture;
             public Texture2D Texture;
             public Sprite PreviewSprite;
             public Color ActiveColor;
@@ -84,7 +85,9 @@ namespace ShelteredAPI.Scenarios
             public CustomEditorTool ActiveTool;
             public bool Dirty;
             public string CustomSpriteId;
-            public string RelativePath;
+            public string BaseSpriteId;
+            public string BaseRelativePath;
+            public string BaseRuntimeSpriteKey;
             public bool HasSelection;
             public int SelectionX;
             public int SelectionY;
@@ -100,7 +103,6 @@ namespace ShelteredAPI.Scenarios
             public int CharacterFamilyIndex;
         }
 
-        private static readonly ScenarioSpriteSwapAuthoringService _instance = new ScenarioSpriteSwapAuthoringService();
         private static readonly Color[] _brushPalette = new Color[]
         {
             new Color32(0, 0, 0, 255),
@@ -113,9 +115,14 @@ namespace ShelteredAPI.Scenarios
             new Color32(92, 199, 209, 255),
             new Color32(0, 0, 0, 0)
         };
-        private readonly ScenarioSpriteCatalogService _catalogService = new ScenarioSpriteCatalogService();
-        private readonly ScenarioCharacterAppearanceService _characterAppearanceService = ScenarioCharacterAppearanceService.Instance;
-        private readonly ScenarioSpriteRuntimeResolver _runtimeResolver = new ScenarioSpriteRuntimeResolver();
+        private readonly ScenarioSpriteCatalogService _catalogService;
+        private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
+        private readonly ScenarioSpriteRuntimeResolver _runtimeResolver;
+        private readonly SpritePatchBuilder _spritePatchBuilder;
+        private readonly ScenarioAuthoringHistoryService _historyService;
+        private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
+        private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
+        private readonly IScenarioEditorService _editorService;
         private PreviewSession _previewSession;
         private ScenarioCharacterAppearanceService.PreviewSession _characterPreviewSession;
         private CustomEditorSession _customEditorSession;
@@ -125,11 +132,27 @@ namespace ShelteredAPI.Scenarios
 
         public static ScenarioSpriteSwapAuthoringService Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioSpriteSwapAuthoringService>(); }
         }
 
-        private ScenarioSpriteSwapAuthoringService()
+        internal ScenarioSpriteSwapAuthoringService(
+            ScenarioSpriteCatalogService catalogService,
+            ScenarioCharacterAppearanceService characterAppearanceService,
+            ScenarioSpriteRuntimeResolver runtimeResolver,
+            SpritePatchBuilder spritePatchBuilder,
+            ScenarioAuthoringHistoryService historyService,
+            IScenarioSpriteSwapEngine spriteSwapEngine,
+            IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
+            IScenarioEditorService editorService)
         {
+            _catalogService = catalogService;
+            _characterAppearanceService = characterAppearanceService;
+            _runtimeResolver = runtimeResolver;
+            _spritePatchBuilder = spritePatchBuilder;
+            _historyService = historyService;
+            _spriteSwapEngine = spriteSwapEngine;
+            _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
+            _editorService = editorService;
         }
 
         public SpritePickerModel GetPickerModel(ScenarioEditorSession session, ScenarioAuthoringTarget target, string scenarioFilePath)
@@ -589,7 +612,7 @@ namespace ShelteredAPI.Scenarios
         private bool OpenPicker(ScenarioAuthoringState state, out string message)
         {
             message = null;
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = _editorService.CurrentSession;
             if (session == null || session.WorkingDefinition == null)
             {
                 message = "No active authoring session is available.";
@@ -707,10 +730,12 @@ namespace ShelteredAPI.Scenarios
             Sprite previewSprite = CreatePreviewSprite(editableTexture, sourceSprite);
             string customSpriteId = BuildCustomSpriteId(model.Target.TargetPath);
             Color initialColor = FindInitialBrushColor(editableTexture);
+            Texture2D baselineTexture = CreateEditableTexture(sourceSprite);
             _customEditorSession = new CustomEditorSession
             {
                 TargetPath = model.Target.TargetPath,
                 SourceLabel = sourceLabel,
+                BaselineTexture = baselineTexture,
                 Texture = editableTexture,
                 PreviewSprite = previewSprite,
                 ActiveColor = initialColor,
@@ -718,7 +743,9 @@ namespace ShelteredAPI.Scenarios
                 ActiveTool = CustomEditorTool.Paint,
                 Dirty = false,
                 CustomSpriteId = customSpriteId,
-                RelativePath = BuildCustomSpriteRelativePath(customSpriteId),
+                BaseSpriteId = sourceCandidate != null ? sourceCandidate.SpriteId : null,
+                BaseRelativePath = sourceCandidate != null ? sourceCandidate.RelativePath : null,
+                BaseRuntimeSpriteKey = sourceCandidate != null ? sourceCandidate.RuntimeSpriteKey : null,
                 LastInteractionX = 0,
                 LastInteractionY = 0
             };
@@ -761,6 +788,7 @@ namespace ShelteredAPI.Scenarios
             {
                 TargetPath = state.SpriteSwapPicker != null ? state.SpriteSwapPicker.TargetPath : target.TargetPath,
                 SourceLabel = sourceLabel + " (" + (sourceId ?? "default") + ")",
+                BaselineTexture = ScenarioCharacterAppearanceService.CopyTexture(editableTexture),
                 Texture = editableTexture,
                 PreviewSprite = previewSprite,
                 ActiveColor = initialColor,
@@ -768,7 +796,7 @@ namespace ShelteredAPI.Scenarios
                 ActiveTool = CustomEditorTool.Paint,
                 Dirty = false,
                 CustomSpriteId = customTextureId,
-                RelativePath = BuildCustomSpriteRelativePath(customTextureId),
+                BaseSpriteId = sourceId,
                 LastInteractionX = 0,
                 LastInteractionY = 0,
                 IsCharacterEditor = true,
@@ -820,7 +848,7 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = _editorService.CurrentSession;
             ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
             if (definition == null)
             {
@@ -851,24 +879,23 @@ namespace ShelteredAPI.Scenarios
             try
             {
                 string customTextureId = _customEditorSession.CustomSpriteId;
-                string relativePath = _customEditorSession.RelativePath;
-                string fullPath = Path.Combine(packRoot, relativePath);
-                string directory = Path.GetDirectoryName(fullPath);
-                if (!string.IsNullOrEmpty(directory))
-                    Directory.CreateDirectory(directory);
-
-                File.WriteAllBytes(fullPath, _customEditorSession.Texture.EncodeToPNG());
-                ScenarioAuthoringHistoryService.Instance.RecordSpriteSwapChange(
+                _historyService.RecordVisualChange(
                     definition,
                     "Apply character " + ScenarioCharacterAppearanceService.BuildPartLabel(_customEditorSession.CharacterPart).ToLowerInvariant()
                     + " texture to " + SafeLabel(target.DisplayName));
 
+                string patchId = UpsertPatchSpriteAsset(definition, packRoot, customTextureId, _customEditorSession.SourceLabel);
+                if (string.IsNullOrEmpty(patchId))
+                {
+                    message = "Character texture patch could not be generated.";
+                    return false;
+                }
                 FamilyMemberConfig memberConfig = EnsureFamilyMemberConfig(definition, target);
                 ScenarioCharacterAppearanceService.UpsertAppearance(
                     memberConfig,
                     _customEditorSession.CharacterPart,
                     customTextureId,
-                    relativePath);
+                    null);
 
                 string applyMessage;
                 _characterAppearanceService.ApplyConfiguredAppearance(
@@ -881,7 +908,7 @@ namespace ShelteredAPI.Scenarios
                 MarkFamilyDirty(session);
                 ClosePickerState(state, false);
                 message = "Saved character " + ScenarioCharacterAppearanceService.BuildPartLabel(_customEditorSession.CharacterPart).ToLowerInvariant()
-                    + " texture onto '" + SafeLabel(target.DisplayName) + "'.";
+                    + " patch '" + patchId + "' onto '" + SafeLabel(target.DisplayName) + "'.";
                 MMLog.WriteInfo("[ScenarioSpriteSwapAuthoring] " + message);
                 return true;
             }
@@ -1310,11 +1337,11 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            ScenarioAuthoringHistoryService.Instance.RecordSpriteSwapChange(definition, "Apply sprite to " + SafeLabel(targetDisplay));
+            _historyService.RecordVisualChange(definition, "Apply sprite to " + SafeLabel(targetDisplay));
             ScenarioSpriteSwapRuleEditor.ApplyCandidate(definition, model.Target, candidate, GetCurrentDay());
 
             MarkAssetsDirty(session);
-            ScenarioSpriteSwapService.Instance.Activate(definition, state.ActiveScenarioFilePath, null);
+            _spriteSwapEngine.Activate(definition, state.ActiveScenarioFilePath, null);
             ClosePickerState(state, false);
             Invalidate();
 
@@ -1355,29 +1382,24 @@ namespace ShelteredAPI.Scenarios
                     ? state.SpriteSwapPicker.Target.DisplayName
                     : model.Target.TargetPath;
                 string customSpriteId = _customEditorSession.CustomSpriteId;
-                string relativePath = _customEditorSession.RelativePath;
-                string fullPath = Path.Combine(packRoot, relativePath);
-                string directory = Path.GetDirectoryName(fullPath);
-                if (!string.IsNullOrEmpty(directory))
-                    Directory.CreateDirectory(directory);
-
-                byte[] png = _customEditorSession.Texture.EncodeToPNG();
-                File.WriteAllBytes(fullPath, png);
-
-                ScenarioSpriteSwapRuleEditor.EnsureAssetReferences(definition);
-                UpsertCustomSpriteReference(definition, customSpriteId, relativePath);
-                ScenarioAuthoringHistoryService.Instance.RecordSpriteSwapChange(
+                _historyService.RecordVisualChange(
                     definition,
                     "Apply custom sprite to " + SafeLabel(state.SpriteSwapPicker.Target.DisplayName));
 
-                ApplyCustomSpriteRule(definition, model.Target, customSpriteId, relativePath);
+                string patchId = UpsertPatchSpriteAsset(definition, packRoot, customSpriteId, _customEditorSession.SourceLabel);
+                if (string.IsNullOrEmpty(patchId))
+                {
+                    message = "Custom sprite patch could not be generated.";
+                    return false;
+                }
+                ApplyCustomSpriteRule(definition, model.Target, customSpriteId, null);
 
                 MarkAssetsDirty(session);
-                ScenarioSpriteSwapService.Instance.Activate(definition, state.ActiveScenarioFilePath, null);
+                _spriteSwapEngine.Activate(definition, state.ActiveScenarioFilePath, null);
                 ClosePickerState(state, false);
                 Invalidate();
 
-                message = "Saved custom sprite '" + customSpriteId + "' onto '" + SafeLabel(targetDisplay) + "'.";
+                message = "Saved custom sprite patch '" + patchId + "' onto '" + SafeLabel(targetDisplay) + "'.";
                 MMLog.WriteInfo("[ScenarioSpriteSwapAuthoring] " + message);
                 return true;
             }
@@ -1410,7 +1432,7 @@ namespace ShelteredAPI.Scenarios
             message = null;
             ClosePickerState(state, true);
 
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = _editorService.CurrentSession;
             SpritePickerModel model = GetPickerModel(session, state.SelectedTarget, state.ActiveScenarioFilePath);
             ScenarioSpriteCatalogService.SpriteCandidate candidate = FindCandidate(model, token);
             if (candidate == null || model == null || model.Target == null)
@@ -1429,7 +1451,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             string targetDisplay = state.SelectedTarget != null ? state.SelectedTarget.DisplayName : model.Target.TargetPath;
-            ScenarioAuthoringHistoryService.Instance.RecordSpriteSwapChange(definition, "Apply sprite to " + SafeLabel(targetDisplay));
+            _historyService.RecordVisualChange(definition, "Apply sprite to " + SafeLabel(targetDisplay));
             ScenarioSpriteSwapRuleEditor.ApplyCandidate(definition, model.Target, candidate, GetCurrentDay());
 
             string kindLabel = candidate.SourceKind == ScenarioSpriteCatalogService.SpriteCandidateSourceKind.VanillaRuntime
@@ -1438,7 +1460,7 @@ namespace ShelteredAPI.Scenarios
             message = "Applied " + kindLabel + " '" + SafeLabel(candidate.Label) + "' to '" + SafeLabel(targetDisplay) + "'.";
 
             MarkAssetsDirty(session);
-            ScenarioSpriteSwapService.Instance.Activate(definition, state.ActiveScenarioFilePath, null);
+            _spriteSwapEngine.Activate(definition, state.ActiveScenarioFilePath, null);
             Invalidate();
             MMLog.WriteInfo("[ScenarioSpriteSwapAuthoring] " + message);
             return true;
@@ -1449,7 +1471,7 @@ namespace ShelteredAPI.Scenarios
             message = null;
             ClosePickerState(state, true);
 
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = _editorService.CurrentSession;
             ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
             if (definition == null || state.SelectedTarget == null)
             {
@@ -1461,17 +1483,17 @@ namespace ShelteredAPI.Scenarios
             string targetPath = model != null && model.Target != null ? model.Target.TargetPath : state.SelectedTarget.TransformPath;
             string targetDisplay = state.SelectedTarget.DisplayName;
 
-            ScenarioAuthoringHistoryService.Instance.RecordSpriteSwapChange(definition, "Revert sprite on " + SafeLabel(targetDisplay));
+            _historyService.RecordVisualChange(definition, "Revert sprite on " + SafeLabel(targetDisplay));
             if (!ScenarioSpriteSwapRuleEditor.ClearActiveRule(definition, targetPath, GetCurrentDay()))
             {
                 message = "The selected target does not have an active sprite swap.";
                 string ignored;
-                ScenarioAuthoringHistoryService.Instance.Undo(definition, out ignored);
+                _historyService.Undo(definition, out ignored);
                 return false;
             }
 
             MarkAssetsDirty(session);
-            ScenarioSpriteSwapService.Instance.Activate(definition, state.ActiveScenarioFilePath, null);
+            _spriteSwapEngine.Activate(definition, state.ActiveScenarioFilePath, null);
             Invalidate();
             message = "Reverted the active sprite swap on '" + SafeLabel(targetDisplay) + "'.";
             MMLog.WriteInfo("[ScenarioSpriteSwapAuthoring] " + message);
@@ -1481,7 +1503,7 @@ namespace ShelteredAPI.Scenarios
         private bool CopyActiveSwap(ScenarioAuthoringState state, out string message)
         {
             message = null;
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = _editorService.CurrentSession;
             ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
             if (definition == null || state.SelectedTarget == null)
             {
@@ -1516,7 +1538,7 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = _editorService.CurrentSession;
             ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
             if (definition == null || state.SelectedTarget == null)
             {
@@ -1538,7 +1560,7 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            ScenarioAuthoringHistoryService.Instance.RecordSpriteSwapChange(definition, "Paste sprite to " + SafeLabel(state.SelectedTarget.DisplayName));
+            _historyService.RecordVisualChange(definition, "Paste sprite to " + SafeLabel(state.SelectedTarget.DisplayName));
 
             int currentDay = GetCurrentDay();
             ScenarioSpriteSwapRuleEditor.EnsureAssetReferences(definition);
@@ -1560,7 +1582,7 @@ namespace ShelteredAPI.Scenarios
             rule.RuntimeSpriteKey = clipRule.RuntimeSpriteKey;
 
             MarkAssetsDirty(session);
-            ScenarioSpriteSwapService.Instance.Activate(definition, state.ActiveScenarioFilePath, null);
+            _spriteSwapEngine.Activate(definition, state.ActiveScenarioFilePath, null);
             Invalidate();
             message = "Pasted sprite swap '" + ScenarioSpriteSwapRuleEditor.DescribeRuleShort(rule)
                 + "' onto '" + SafeLabel(state.SelectedTarget.DisplayName) + "'.";
@@ -1573,7 +1595,7 @@ namespace ShelteredAPI.Scenarios
             message = null;
             ClosePickerState(state, true);
 
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = _editorService.CurrentSession;
             ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
             if (definition == null)
             {
@@ -1582,14 +1604,14 @@ namespace ShelteredAPI.Scenarios
             }
 
             string description;
-            if (!ScenarioAuthoringHistoryService.Instance.Undo(definition, out description))
+            if (!_historyService.Undo(definition, out description))
             {
                 message = "Nothing to undo.";
                 return false;
             }
 
             MarkAssetsDirty(session);
-            ScenarioSpriteSwapService.Instance.Activate(definition, state.ActiveScenarioFilePath, null);
+            ReapplyVisualState(definition, state.ActiveScenarioFilePath);
             Invalidate();
             message = "Undid: " + (description ?? "last change") + ".";
             MMLog.WriteInfo("[ScenarioSpriteSwapAuthoring] " + message);
@@ -1601,7 +1623,7 @@ namespace ShelteredAPI.Scenarios
             message = null;
             ClosePickerState(state, true);
 
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = _editorService.CurrentSession;
             ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
             if (definition == null)
             {
@@ -1610,14 +1632,14 @@ namespace ShelteredAPI.Scenarios
             }
 
             string description;
-            if (!ScenarioAuthoringHistoryService.Instance.Redo(definition, out description))
+            if (!_historyService.Redo(definition, out description))
             {
                 message = "Nothing to redo.";
                 return false;
             }
 
             MarkAssetsDirty(session);
-            ScenarioSpriteSwapService.Instance.Activate(definition, state.ActiveScenarioFilePath, null);
+            ReapplyVisualState(definition, state.ActiveScenarioFilePath);
             Invalidate();
             message = "Redid: " + (description ?? "change") + ".";
             MMLog.WriteInfo("[ScenarioSpriteSwapAuthoring] " + message);
@@ -1630,7 +1652,7 @@ namespace ShelteredAPI.Scenarios
             out SpritePickerModel model,
             out string message)
         {
-            session = ScenarioEditorController.Instance.CurrentSession;
+            session = _editorService.CurrentSession;
             model = null;
             message = null;
 
@@ -1715,6 +1737,8 @@ namespace ShelteredAPI.Scenarios
             {
                 if (_customEditorSession.PreviewSprite != null)
                     UnityEngine.Object.Destroy(_customEditorSession.PreviewSprite);
+                if (_customEditorSession.BaselineTexture != null)
+                    UnityEngine.Object.Destroy(_customEditorSession.BaselineTexture);
                 if (_customEditorSession.Texture != null)
                     UnityEngine.Object.Destroy(_customEditorSession.Texture);
             }
@@ -2157,12 +2181,53 @@ namespace ShelteredAPI.Scenarios
             return "character_" + safe.ToLowerInvariant() + "_" + part.ToString().ToLowerInvariant() + "_" + DateTime.UtcNow.Ticks;
         }
 
-        private static string BuildCustomSpriteRelativePath(string spriteId)
+        private static string BuildPatchBaseRelativePath(string spriteId)
         {
-            return Path.Combine(Path.Combine("Sprites", "Authoring"), spriteId + ".png").Replace('\\', '/');
+            return Path.Combine(Path.Combine(Path.Combine("Sprites", "Authoring"), "bases"), spriteId + ".png").Replace('\\', '/');
         }
 
-        private static void UpsertCustomSpriteReference(ScenarioDefinition definition, string spriteId, string relativePath)
+        private string UpsertPatchSpriteAsset(ScenarioDefinition definition, string packRoot, string spriteId, string displayName)
+        {
+            if (definition == null || definition.AssetReferences == null || _customEditorSession == null || string.IsNullOrEmpty(spriteId))
+                return null;
+
+            string patchId = spriteId + ".patch";
+            string baseSpriteId = _customEditorSession.BaseSpriteId;
+            string baseRelativePath = _customEditorSession.BaseRelativePath;
+            string baseRuntimeSpriteKey = _customEditorSession.BaseRuntimeSpriteKey;
+
+            if (string.IsNullOrEmpty(baseSpriteId)
+                && string.IsNullOrEmpty(baseRelativePath)
+                && string.IsNullOrEmpty(baseRuntimeSpriteKey)
+                && !string.IsNullOrEmpty(packRoot)
+                && _customEditorSession.BaselineTexture != null)
+            {
+                baseRelativePath = BuildPatchBaseRelativePath(spriteId);
+                string fullPath = Path.Combine(packRoot, baseRelativePath);
+                string directory = Path.GetDirectoryName(fullPath);
+                if (!string.IsNullOrEmpty(directory))
+                    Directory.CreateDirectory(directory);
+
+                File.WriteAllBytes(fullPath, _customEditorSession.BaselineTexture.EncodeToPNG());
+            }
+
+            SpritePatchDefinition patch = _spritePatchBuilder.Build(
+                patchId,
+                string.IsNullOrEmpty(displayName) ? spriteId : displayName,
+                baseSpriteId,
+                baseRelativePath,
+                baseRuntimeSpriteKey,
+                _customEditorSession.BaselineTexture,
+                _customEditorSession.Texture);
+            if (patch == null)
+                return null;
+
+            UpsertPatchDefinition(definition, patch);
+            UpsertCustomSpriteReference(definition, spriteId, patchId);
+            return patchId;
+        }
+
+        private static void UpsertCustomSpriteReference(ScenarioDefinition definition, string spriteId, string patchId)
         {
             if (definition == null || definition.AssetReferences == null || string.IsNullOrEmpty(spriteId))
                 return;
@@ -2172,7 +2237,8 @@ namespace ShelteredAPI.Scenarios
                 SpriteRef sprite = definition.AssetReferences.CustomSprites[i];
                 if (sprite != null && string.Equals(sprite.Id, spriteId, StringComparison.OrdinalIgnoreCase))
                 {
-                    sprite.RelativePath = relativePath;
+                    sprite.RelativePath = null;
+                    sprite.PatchId = patchId;
                     return;
                 }
             }
@@ -2180,8 +2246,26 @@ namespace ShelteredAPI.Scenarios
             definition.AssetReferences.CustomSprites.Add(new SpriteRef
             {
                 Id = spriteId,
-                RelativePath = relativePath
+                PatchId = patchId
             });
+        }
+
+        private static void UpsertPatchDefinition(ScenarioDefinition definition, SpritePatchDefinition patch)
+        {
+            if (definition == null || definition.AssetReferences == null || patch == null)
+                return;
+
+            for (int i = 0; i < definition.AssetReferences.SpritePatches.Count; i++)
+            {
+                SpritePatchDefinition existing = definition.AssetReferences.SpritePatches[i];
+                if (existing != null && string.Equals(existing.Id, patch.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    definition.AssetReferences.SpritePatches[i] = patch;
+                    return;
+                }
+            }
+
+            definition.AssetReferences.SpritePatches.Add(patch);
         }
 
         private static void ApplyCustomSpriteRule(
@@ -2211,6 +2295,22 @@ namespace ShelteredAPI.Scenarios
             rule.RuntimeSpriteKey = null;
             rule.SpriteId = spriteId;
             rule.RelativePath = relativePath;
+        }
+
+        private void ReapplyVisualState(ScenarioDefinition definition, string scenarioFilePath)
+        {
+            _spriteSwapEngine.Activate(definition, scenarioFilePath, null);
+            _sceneSpritePlacementEngine.Activate(definition, scenarioFilePath, null);
+
+            List<FamilyMember> family = FamilyManager.Instance != null ? FamilyManager.Instance.GetAllFamilyMembers() : null;
+            for (int i = 0; definition != null && definition.FamilySetup != null && family != null && i < definition.FamilySetup.Members.Count && i < family.Count; i++)
+            {
+                FamilyMemberConfig config = definition.FamilySetup.Members[i];
+                FamilyMember member = family[i];
+                string ignored;
+                if (config != null && member != null)
+                    _characterAppearanceService.ApplyConfiguredAppearance(definition, scenarioFilePath, config, member, out ignored);
+            }
         }
 
         private static void MarkAssetsDirty(ScenarioEditorSession session)

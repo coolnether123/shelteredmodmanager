@@ -15,18 +15,16 @@ namespace ShelteredAPI.Scenarios
     {
         private const int MaxDepth = 64;
 
-        private static readonly ScenarioAuthoringHistoryService _instance = new ScenarioAuthoringHistoryService();
-
-        private readonly Stack<SpriteSwapSnapshot> _undo = new Stack<SpriteSwapSnapshot>();
-        private readonly Stack<SpriteSwapSnapshot> _redo = new Stack<SpriteSwapSnapshot>();
+        private readonly Stack<DefinitionSnapshot> _undo = new Stack<DefinitionSnapshot>();
+        private readonly Stack<DefinitionSnapshot> _redo = new Stack<DefinitionSnapshot>();
         private string _boundDraftId;
 
         public static ScenarioAuthoringHistoryService Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioAuthoringHistoryService>(); }
         }
 
-        private ScenarioAuthoringHistoryService()
+        internal ScenarioAuthoringHistoryService()
         {
         }
 
@@ -70,15 +68,15 @@ namespace ShelteredAPI.Scenarios
         }
 
         // Capture before mutating. A new user action invalidates the redo stack.
-        public void RecordSpriteSwapChange(ScenarioDefinition definition, string description)
+        public void RecordVisualChange(ScenarioDefinition definition, string description)
         {
             if (definition == null)
                 return;
 
-            SpriteSwapSnapshot snapshot = new SpriteSwapSnapshot
+            DefinitionSnapshot snapshot = new DefinitionSnapshot
             {
                 Description = description,
-                Rules = ScenarioSpriteSwapRuleEditor.SnapshotRules(definition)
+                Definition = ScenarioDefinitionCloner.Clone(definition)
             };
             PushUndo(snapshot);
             _redo.Clear();
@@ -90,14 +88,14 @@ namespace ShelteredAPI.Scenarios
             if (definition == null || _undo.Count == 0)
                 return false;
 
-            SpriteSwapSnapshot redoPoint = new SpriteSwapSnapshot
+            DefinitionSnapshot redoPoint = new DefinitionSnapshot
             {
                 Description = "Redo",
-                Rules = ScenarioSpriteSwapRuleEditor.SnapshotRules(definition)
+                Definition = ScenarioDefinitionCloner.Clone(definition)
             };
 
-            SpriteSwapSnapshot snapshot = _undo.Pop();
-            ScenarioSpriteSwapRuleEditor.RestoreRules(definition, snapshot.Rules);
+            DefinitionSnapshot snapshot = _undo.Pop();
+            RestoreDefinition(definition, snapshot.Definition);
             _redo.Push(redoPoint);
             description = snapshot.Description;
             MMLog.WriteInfo("[ScenarioAuthoringHistory] Undo: " + (description ?? "<unnamed>")
@@ -111,14 +109,14 @@ namespace ShelteredAPI.Scenarios
             if (definition == null || _redo.Count == 0)
                 return false;
 
-            SpriteSwapSnapshot undoPoint = new SpriteSwapSnapshot
+            DefinitionSnapshot undoPoint = new DefinitionSnapshot
             {
                 Description = "Undo",
-                Rules = ScenarioSpriteSwapRuleEditor.SnapshotRules(definition)
+                Definition = ScenarioDefinitionCloner.Clone(definition)
             };
 
-            SpriteSwapSnapshot snapshot = _redo.Pop();
-            ScenarioSpriteSwapRuleEditor.RestoreRules(definition, snapshot.Rules);
+            DefinitionSnapshot snapshot = _redo.Pop();
+            RestoreDefinition(definition, snapshot.Definition);
             PushUndo(undoPoint);
             description = snapshot.Description;
             MMLog.WriteInfo("[ScenarioAuthoringHistory] Redo: " + (description ?? "<unnamed>")
@@ -126,23 +124,54 @@ namespace ShelteredAPI.Scenarios
             return true;
         }
 
-        private void PushUndo(SpriteSwapSnapshot snapshot)
+        private void PushUndo(DefinitionSnapshot snapshot)
         {
             _undo.Push(snapshot);
             if (_undo.Count <= MaxDepth)
                 return;
 
-            // Trim the oldest entry. Stack<T> has no Dequeue; rebuild.
-            SpriteSwapSnapshot[] keep = _undo.ToArray(); // top-first
+            DefinitionSnapshot[] keep = _undo.ToArray();
             _undo.Clear();
             for (int i = keep.Length - 2; i >= 0; i--)
                 _undo.Push(keep[i]);
         }
 
-        private sealed class SpriteSwapSnapshot
+        private static void RestoreDefinition(ScenarioDefinition destination, ScenarioDefinition snapshot)
+        {
+            if (destination == null || snapshot == null)
+                return;
+
+            ScenarioDefinition restored = ScenarioDefinitionCloner.Clone(snapshot);
+            if (restored == null)
+                return;
+
+            destination.Id = restored.Id;
+            destination.DisplayName = restored.DisplayName;
+            destination.Description = restored.Description;
+            destination.Author = restored.Author;
+            destination.Version = restored.Version;
+            destination.BaseGameMode = restored.BaseGameMode;
+            destination.SeedOverride = restored.SeedOverride;
+            destination.Dependencies.Clear();
+            if (restored.Dependencies != null)
+            {
+                for (int i = 0; i < restored.Dependencies.Count; i++)
+                    destination.Dependencies.Add(restored.Dependencies[i]);
+            }
+            destination.FamilySetup = restored.FamilySetup;
+            destination.StartingInventory = restored.StartingInventory;
+            destination.BunkerEdits = restored.BunkerEdits;
+            destination.TriggersAndEvents = restored.TriggersAndEvents;
+            destination.Quests = restored.Quests;
+            destination.Map = restored.Map;
+            destination.WinLossConditions = restored.WinLossConditions;
+            destination.AssetReferences = restored.AssetReferences;
+        }
+
+        private sealed class DefinitionSnapshot
         {
             public string Description;
-            public List<SpriteSwapRule> Rules;
+            public ScenarioDefinition Definition;
         }
     }
 }
