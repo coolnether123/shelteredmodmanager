@@ -11,19 +11,25 @@ namespace ShelteredAPI.Scenarios
             ScenarioSpriteSwapAuthoringService spriteSwapAuthoringService,
             ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementAuthoringService,
             ScenarioBuildPlacementAuthoringService buildPlacementAuthoringService,
+            ScenarioGameplayScheduleAuthoringService gameplayScheduleAuthoringService,
             IScenarioEditorService editorService,
             ScenarioAuthoringSettingsService settingsService,
             ScenarioAuthoringLayoutService layoutService,
-            ScenarioStageCoordinator stageCoordinator)
+            ScenarioStageCoordinator stageCoordinator,
+            ScenarioTimelineBuilder timelineBuilder,
+            ScenarioTimelineNavigationService timelineNavigationService)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
                 spriteSwapAuthoringService,
                 sceneSpritePlacementAuthoringService,
                 buildPlacementAuthoringService,
+                gameplayScheduleAuthoringService,
                 editorService,
                 settingsService,
-                layoutService));
+                layoutService,
+                timelineBuilder,
+                timelineNavigationService));
         }
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
@@ -43,9 +49,12 @@ namespace ShelteredAPI.Scenarios
             ScenarioSpriteSwapAuthoringService spriteSwapAuthoringService,
             ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementAuthoringService,
             ScenarioBuildPlacementAuthoringService buildPlacementAuthoringService,
+            ScenarioGameplayScheduleAuthoringService gameplayScheduleAuthoringService,
             IScenarioEditorService editorService,
             ScenarioAuthoringSettingsService settingsService,
-            ScenarioAuthoringLayoutService layoutService)
+            ScenarioAuthoringLayoutService layoutService,
+            ScenarioTimelineBuilder timelineBuilder,
+            ScenarioTimelineNavigationService timelineNavigationService)
         {
             return new IScenarioCommandHandler[]
             {
@@ -53,7 +62,9 @@ namespace ShelteredAPI.Scenarios
                 new SceneSpriteCommandHandler(sceneSpritePlacementAuthoringService),
                 new BuildCommandHandler(buildPlacementAuthoringService),
                 new ShellCommandHandler(layoutService, settingsService),
+                new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
                 new CaptureCommandHandler(captureService, editorService),
+                new GameplayScheduleCommandHandler(gameplayScheduleAuthoringService, editorService),
                 new EditorLifecycleCommandHandler(editorService),
                 new SelectionCommandHandler(),
                 new AssetModeCommandHandler(),

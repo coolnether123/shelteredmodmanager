@@ -16,6 +16,7 @@ namespace ShelteredAPI.Scenarios
         public const string Quests = "quests";
         public const string Map = "map";
         public const string Publish = "publish";
+        public const string Calendar = "calendar";
         public const string Settings = "editor_settings";
     }
 
@@ -36,6 +37,7 @@ namespace ShelteredAPI.Scenarios
             Register(ScenarioAuthoringWindowIds.Quests, "Quests", ScenarioAuthoringShellDock.Floating, false, false, false, 4, 880f, 520f, 560f, 360f);
             Register(ScenarioAuthoringWindowIds.Map, "Map", ScenarioAuthoringShellDock.Floating, false, false, false, 5, 880f, 520f, 560f, 360f);
             Register(ScenarioAuthoringWindowIds.Publish, "Publish", ScenarioAuthoringShellDock.Floating, false, false, false, 6, 880f, 520f, 560f, 360f);
+            Register(ScenarioAuthoringWindowIds.Calendar, "Calendar", ScenarioAuthoringShellDock.Bottom, false, false, false, 7, 940f, 272f, 540f, 180f);
             Register(ScenarioAuthoringWindowIds.Settings, "Editor Settings", ScenarioAuthoringShellDock.Floating, false, false, true, 0, 720f, 520f, 620f, 420f);
         }
 
