@@ -4,6 +4,7 @@ using System.IO;
 using System.Security;
 using System.Text;
 using System.Xml;
+using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
@@ -11,13 +12,16 @@ namespace ShelteredAPI.Scenarios
     {
         private readonly ScenarioAuthoringWindowRegistry _windowRegistry;
         private readonly ScenarioAuthoringSettingsService _settingsService;
+        private readonly ScenarioStageCoordinator _stageCoordinator;
 
         public ScenarioAuthoringLayoutService(
             ScenarioAuthoringWindowRegistry windowRegistry,
-            ScenarioAuthoringSettingsService settingsService)
+            ScenarioAuthoringSettingsService settingsService,
+            ScenarioStageCoordinator stageCoordinator)
         {
             _windowRegistry = windowRegistry;
             _settingsService = settingsService;
+            _stageCoordinator = stageCoordinator;
         }
 
         public void InitializeState(ScenarioAuthoringState state)
@@ -26,11 +30,13 @@ namespace ShelteredAPI.Scenarios
                 return;
 
             state.ActiveLayoutPreset = string.IsNullOrEmpty(state.ActiveLayoutPreset) ? "default" : state.ActiveLayoutPreset;
-            state.ActiveShellTab = state.ActiveShellTab;
+            if (state.ActiveBunkerStage == ScenarioStageKind.None)
+                state.ActiveBunkerStage = ScenarioStageKind.BunkerInside;
             state.Settings = state.Settings != null ? state.Settings.Copy() : _settingsService.Load();
             _settingsService.ApplyDefinitionDefaults(state.Settings);
             EnsureWindowStates(state);
             LoadLayout(state);
+            ApplyStageWorkspace(state);
         }
 
         public void EnsureWindowStates(ScenarioAuthoringState state)
@@ -47,6 +53,8 @@ namespace ShelteredAPI.Scenarios
 
                 state.WindowStates.Add(CreateState(definition));
             }
+
+            ApplyStageWorkspace(state);
         }
 
         private static readonly string[] WorkspaceWindowIds = new[]
@@ -54,7 +62,9 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringWindowIds.Triggers,
             ScenarioAuthoringWindowIds.Survivors,
             ScenarioAuthoringWindowIds.Stockpile,
-            ScenarioAuthoringWindowIds.Quests
+            ScenarioAuthoringWindowIds.Quests,
+            ScenarioAuthoringWindowIds.Map,
+            ScenarioAuthoringWindowIds.Publish
         };
 
         private static bool IsWorkspaceWindow(string windowId)
@@ -75,23 +85,25 @@ namespace ShelteredAPI.Scenarios
             if (window == null)
                 return false;
 
+            if (IsWorkspaceWindow(windowId))
+            {
+                ScenarioStageKind workspaceStage = ResolveWorkspaceStage(windowId);
+                if (workspaceStage == ScenarioStageKind.None)
+                    return false;
+
+                _stageCoordinator.SelectStage(state, workspaceStage);
+                ApplyStageWorkspace(state);
+                state.MinimalMode = false;
+                state.FocusSelectionMode = false;
+                PersistIfEnabled(state);
+                return true;
+            }
+
             window.Visible = !window.Visible;
             if (window.Visible)
                 window.Collapsed = false;
             else
                 window.Collapsed = false;
-
-            if (window.Visible && IsWorkspaceWindow(windowId))
-            {
-                for (int i = 0; i < state.WindowStates.Count; i++)
-                {
-                    ScenarioAuthoringWindowState other = state.WindowStates[i];
-                    if (other == null || string.Equals(other.Id, windowId, StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    if (IsWorkspaceWindow(other.Id))
-                        other.Visible = false;
-                }
-            }
 
             state.MinimalMode = false;
             state.FocusSelectionMode = false;
@@ -125,6 +137,7 @@ namespace ShelteredAPI.Scenarios
             state.MinimalMode = false;
             state.FocusSelectionMode = false;
             state.SettingsWindowOpen = false;
+            ApplyStageWorkspace(state);
             PersistIfEnabled(state);
             return true;
         }
@@ -168,8 +181,62 @@ namespace ShelteredAPI.Scenarios
 
             state.MinimalMode = false;
             state.FocusSelectionMode = true;
+            ApplyStageWorkspace(state);
             PersistIfEnabled(state);
             return true;
+        }
+
+        public bool SelectStage(ScenarioAuthoringState state, ScenarioStageKind stageKind)
+        {
+            if (state == null)
+                return false;
+
+            _stageCoordinator.SelectStage(state, stageKind);
+            state.MinimalMode = false;
+            state.FocusSelectionMode = false;
+            ApplyStageWorkspace(state);
+            PersistIfEnabled(state);
+            return true;
+        }
+
+        public void ApplyStageWorkspace(ScenarioAuthoringState state)
+        {
+            if (state == null || state.WindowStates == null)
+                return;
+
+            ScenarioStageKind activeStage = state.ActiveStage != ScenarioStageKind.None
+                ? state.ActiveStage
+                : _stageCoordinator.Resolve(state) != null ? _stageCoordinator.Resolve(state).Kind : ScenarioStageKind.None;
+
+            bool showBuild = activeStage == ScenarioStageKind.BunkerBackground
+                || activeStage == ScenarioStageKind.BunkerSurface
+                || activeStage == ScenarioStageKind.BunkerInside;
+            bool showPalette = showBuild;
+            bool showLayers = showBuild;
+
+            for (int i = 0; i < state.WindowStates.Count; i++)
+            {
+                ScenarioAuthoringWindowState window = state.WindowStates[i];
+                if (window == null)
+                    continue;
+
+                if (IsWorkspaceWindow(window.Id))
+                {
+                    window.Visible = string.Equals(window.Id, ResolveWorkspaceWindowId(activeStage), StringComparison.OrdinalIgnoreCase);
+                    window.Collapsed = !window.Visible && window.Collapsed;
+                    continue;
+                }
+
+                if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
+                    window.Visible = showBuild;
+                else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.TilesPalette, StringComparison.OrdinalIgnoreCase))
+                    window.Visible = showPalette;
+                else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Layers, StringComparison.OrdinalIgnoreCase))
+                    window.Visible = showLayers;
+
+                if (window.Visible)
+                    window.Collapsed = false;
+            }
         }
 
         public bool SetSettingsWindowOpen(ScenarioAuthoringState state, bool open)
@@ -252,10 +319,50 @@ namespace ShelteredAPI.Scenarios
                     window.Pinned = ReadBool(element, "pinned", window.Pinned);
                     NormalizeWindowState(window);
                 }
+
+                ApplyStageWorkspace(state);
             }
             catch (Exception ex)
             {
                 ModAPI.Core.MMLog.WriteWarning("[ScenarioAuthoringLayout] Failed to load layout: " + ex.Message);
+            }
+        }
+
+        private static ScenarioStageKind ResolveWorkspaceStage(string windowId)
+        {
+            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Survivors, StringComparison.OrdinalIgnoreCase))
+                return ScenarioStageKind.People;
+            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Stockpile, StringComparison.OrdinalIgnoreCase))
+                return ScenarioStageKind.InventoryStorage;
+            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Triggers, StringComparison.OrdinalIgnoreCase))
+                return ScenarioStageKind.Events;
+            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Quests, StringComparison.OrdinalIgnoreCase))
+                return ScenarioStageKind.Quests;
+            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Map, StringComparison.OrdinalIgnoreCase))
+                return ScenarioStageKind.Map;
+            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Publish, StringComparison.OrdinalIgnoreCase))
+                return ScenarioStageKind.Publish;
+            return ScenarioStageKind.None;
+        }
+
+        private static string ResolveWorkspaceWindowId(ScenarioStageKind stageKind)
+        {
+            switch (stageKind)
+            {
+                case ScenarioStageKind.InventoryStorage:
+                    return ScenarioAuthoringWindowIds.Stockpile;
+                case ScenarioStageKind.People:
+                    return ScenarioAuthoringWindowIds.Survivors;
+                case ScenarioStageKind.Events:
+                    return ScenarioAuthoringWindowIds.Triggers;
+                case ScenarioStageKind.Quests:
+                    return ScenarioAuthoringWindowIds.Quests;
+                case ScenarioStageKind.Map:
+                    return ScenarioAuthoringWindowIds.Map;
+                case ScenarioStageKind.Publish:
+                    return ScenarioAuthoringWindowIds.Publish;
+                default:
+                    return null;
             }
         }
 

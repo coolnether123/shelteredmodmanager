@@ -33,10 +33,10 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringPresentationService presentation,
             IScenarioEditorService editorService)
         {
-            _backend = backend ?? ScenarioAuthoringBackendService.Instance;
-            _draftRepository = draftRepository ?? ScenarioAuthoringDraftRepository.Instance;
-            _menuService = menuService ?? ScenarioAuthoringMenuService.Instance;
-            _presentation = presentation ?? ScenarioAuthoringPresentationService.Instance;
+            _backend = backend;
+            _draftRepository = draftRepository;
+            _menuService = menuService;
+            _presentation = presentation;
             _editorService = editorService;
             try { GameEvents.OnAfterLoad += HandleAfterLoad; }
             catch { }

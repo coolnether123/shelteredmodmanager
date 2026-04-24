@@ -24,8 +24,8 @@ namespace ShelteredAPI.Scenarios
 
         internal ScenarioSpriteSwapService(ScenarioSpriteSwapPlanner planner, ScenarioSpriteSwapRenderer renderer)
         {
-            _planner = planner ?? new ScenarioSpriteSwapPlanner(new ScenarioSpriteAssetResolver());
-            _renderer = renderer ?? new ScenarioSpriteSwapRenderer();
+            _planner = planner;
+            _renderer = renderer;
         }
 
         public void Activate(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result)

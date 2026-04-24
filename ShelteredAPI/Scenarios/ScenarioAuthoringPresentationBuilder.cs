@@ -12,24 +12,45 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioAuthoringCaptureService _captureService;
         private readonly ScenarioSpriteSwapAuthoringService _spriteSwapAuthoringService;
         private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacementAuthoringService;
+        private readonly ScenarioBuildPlacementAuthoringService _buildPlacementAuthoringService;
         private readonly ScenarioAuthoringWindowRegistry _windowRegistry;
         private readonly ScenarioAuthoringSettingsService _settingsService;
         private readonly ScenarioAuthoringLayoutService _layoutService;
+        private readonly IScenarioEditorService _editorService;
+        private readonly ScenarioSpriteRuntimeResolver _runtimeResolver;
+        private readonly ShellChromeViewModelBuilder _shellChromeBuilder;
+        private readonly StageNavigationViewModelBuilder _stageNavigationBuilder;
+        private readonly InspectorViewModelBuilder _inspectorViewModelBuilder;
+        private readonly StatusBarViewModelBuilder _statusBarViewModelBuilder;
 
         public ScenarioAuthoringPresentationBuilder(
             ScenarioAuthoringCaptureService captureService,
             ScenarioSpriteSwapAuthoringService spriteSwapAuthoringService,
             ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementAuthoringService,
+            ScenarioBuildPlacementAuthoringService buildPlacementAuthoringService,
             ScenarioAuthoringWindowRegistry windowRegistry,
             ScenarioAuthoringSettingsService settingsService,
-            ScenarioAuthoringLayoutService layoutService)
+            ScenarioAuthoringLayoutService layoutService,
+            IScenarioEditorService editorService,
+            ScenarioSpriteRuntimeResolver runtimeResolver,
+            ShellChromeViewModelBuilder shellChromeBuilder,
+            StageNavigationViewModelBuilder stageNavigationBuilder,
+            InspectorViewModelBuilder inspectorViewModelBuilder,
+            StatusBarViewModelBuilder statusBarViewModelBuilder)
         {
-            _captureService = captureService ?? ScenarioAuthoringCaptureService.Instance;
-            _spriteSwapAuthoringService = spriteSwapAuthoringService ?? ScenarioSpriteSwapAuthoringService.Instance;
-            _sceneSpritePlacementAuthoringService = sceneSpritePlacementAuthoringService ?? ScenarioSceneSpritePlacementAuthoringService.Instance;
-            _windowRegistry = windowRegistry ?? new ScenarioAuthoringWindowRegistry();
-            _settingsService = settingsService ?? new ScenarioAuthoringSettingsService();
+            _captureService = captureService;
+            _spriteSwapAuthoringService = spriteSwapAuthoringService;
+            _sceneSpritePlacementAuthoringService = sceneSpritePlacementAuthoringService;
+            _buildPlacementAuthoringService = buildPlacementAuthoringService;
+            _windowRegistry = windowRegistry;
+            _settingsService = settingsService;
             _layoutService = layoutService;
+            _editorService = editorService;
+            _runtimeResolver = runtimeResolver;
+            _shellChromeBuilder = shellChromeBuilder;
+            _stageNavigationBuilder = stageNavigationBuilder;
+            _inspectorViewModelBuilder = inspectorViewModelBuilder;
+            _statusBarViewModelBuilder = statusBarViewModelBuilder;
         }
 
         public ScenarioAuthoringShellViewModel BuildShellViewModel(
@@ -42,23 +63,20 @@ namespace ShelteredAPI.Scenarios
             List<ScenarioAuthoringShellWindowViewModel> windows = new List<ScenarioAuthoringShellWindowViewModel>();
             AppendShellWindowViewModels(windows, state, editorSession, session, definition);
 
-            return new ScenarioAuthoringShellViewModel
+            ScenarioAuthoringShellViewModel viewModel = new ScenarioAuthoringShellViewModel
             {
-                Title = "Sheltered Scenario Editor",
-                Subtitle = definition != null ? Safe(definition.DisplayName) : "No active scenario",
-                DraftLabel = FormatDraftDisplay(state.ActiveDraftId),
-                ModeLabel = BuildEditorModeLabel(editorSession, state),
-                TimeLabel = FormatClockTime(),
-                Tabs = BuildShellTabs(state.ActiveShellTab),
-                ToolbarActions = BuildShellToolbarActions(editorSession, state),
-                LayoutActions = BuildShellLayoutActions(state),
-                WindowMenuActions = BuildWindowMenuActions(state),
+                Tabs = _stageNavigationBuilder.BuildTabs(state),
+                ToolbarActions = _stageNavigationBuilder.BuildToolbarActions(state),
+                LayoutActions = _stageNavigationBuilder.BuildLayoutActions(state),
+                WindowMenuActions = _stageNavigationBuilder.BuildWindowMenuActions(state, _windowRegistry),
                 Windows = windows.ToArray(),
                 SpritePickerDocument = BuildSpritePickerDocument(state, editorSession),
                 Settings = state.SettingsWindowOpen ? BuildSettingsViewModel(state) : null,
                 ContextMenu = contextMenu,
-                StatusEntries = BuildStatusEntries(state, editorSession, session)
+                StatusEntries = _statusBarViewModelBuilder.BuildEntries(state, editorSession, session, _stageNavigationBuilder.BuildStageLabel(state))
             };
+            _shellChromeBuilder.ApplyShellChrome(viewModel, state, editorSession, session);
+            return viewModel;
         }
 
         private static string FormatDraftDisplay(string draftId)
@@ -102,28 +120,7 @@ namespace ShelteredAPI.Scenarios
             bool canCaptureSelectedObject = _captureService.CanCaptureTarget(state.SelectedTarget, out selectedObjectStatus);
             bool hasCapturedSelectedObject = _captureService.HasCapturedPlacementForTarget(editorSession, state.SelectedTarget);
 
-            sections.Add(new ScenarioAuthoringInspectorSection
-            {
-                Id = "session",
-                Title = "Session",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.MetricGrid,
-                Items = new[]
-                {
-                    Property("Draft", Safe(state.ActiveDraftId)),
-                    Property("Base Mode", session != null ? session.BaseMode.ToString() : "Unknown"),
-                    Property("Draft Save", FormatDraftStorage(state.ActiveScenarioFilePath)),
-                    Property("Scenario File", FormatScenarioFileName(state.ActiveScenarioFilePath)),
-                    Property("Tool", state.ActiveTool.ToString()),
-                    Property("Asset Mode", state.AssetMode.ToString()),
-                    Property("Playtest", editorSession != null ? editorSession.PlaytestState.ToString() : "Unavailable"),
-                    Property("Simulation", ScenarioAuthoringRuntimeGuards.IsPlaytesting() ? "Running (playtest)" : "Frozen (authoring pause)"),
-                    Property("Applied To World", editorSession != null && editorSession.HasAppliedToCurrentWorld ? "Yes" : "No"),
-                    Property("Dirty Sections", CountDirtyFlags(editorSession).ToString()),
-                    Property("Sprite Swaps", CountSpriteSwaps(editorSession).ToString()),
-                    Property("Placed Sprites", CountSceneSpritePlacements(editorSession).ToString())
-                }
-            });
+            sections.Add(_inspectorViewModelBuilder.BuildSessionSection(state, editorSession, session, _stageNavigationBuilder.BuildStageLabel(state)));
 
             sections.Add(BuildWorkflowSection(editorSession));
             sections.Add(BuildHistorySection());
@@ -140,14 +137,7 @@ namespace ShelteredAPI.Scenarios
 
             if (!string.IsNullOrEmpty(state.StatusMessage))
             {
-                sections.Add(new ScenarioAuthoringInspectorSection
-                {
-                    Id = "status",
-                    Title = "Status",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
-                    Items = new[] { Text(state.StatusMessage) }
-                });
+                sections.Add(_inspectorViewModelBuilder.BuildStatusSection(state.StatusMessage));
             }
 
             sections.Add(new ScenarioAuthoringInspectorSection
@@ -759,6 +749,10 @@ namespace ShelteredAPI.Scenarios
                     return BuildStockpileWindowSections(definition);
                 case ScenarioAuthoringWindowIds.Quests:
                     return BuildQuestWindowSections(definition);
+                case ScenarioAuthoringWindowIds.Map:
+                    return BuildMapWindowSections(definition);
+                case ScenarioAuthoringWindowIds.Publish:
+                    return BuildPublishWindowSections(editorSession, definition);
                 default:
                     return new[]
                     {
@@ -839,7 +833,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringState state,
             ScenarioDefinition definition)
         {
-            if (state.ActiveShellTab == ScenarioAuthoringShellTab.Art || state.ActiveTool == ScenarioAuthoringTool.Assets)
+            if (state.ActiveStage == ScenarioStageKind.BunkerInside && state.ActiveTool == ScenarioAuthoringTool.Assets)
             {
                 ScenarioAuthoringInspectorSection section = BuildToolSection(
                     state,
@@ -852,18 +846,21 @@ namespace ShelteredAPI.Scenarios
                 return new[] { section };
             }
 
-            if (state.ActiveTool == ScenarioAuthoringTool.Objects
+            if (state.ActiveStage == ScenarioStageKind.BunkerBackground
+                || state.ActiveStage == ScenarioStageKind.BunkerSurface
+                || state.ActiveStage == ScenarioStageKind.BunkerInside
+                || state.ActiveTool == ScenarioAuthoringTool.Objects
                 || state.ActiveTool == ScenarioAuthoringTool.Select
                 || state.ActiveTool == ScenarioAuthoringTool.Shelter
                 || state.ActiveTool == ScenarioAuthoringTool.Wiring)
             {
                 List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-                ScenarioBuildPlacementAuthoringService.StatusModel status = ScenarioBuildPlacementAuthoringService.Instance.GetStatusModel(state, ScenarioEditorController.Instance.CurrentSession);
+                ScenarioBuildPlacementAuthoringService.StatusModel status = _buildPlacementAuthoringService.GetStatusModel(state, _editorService.CurrentSession);
                 sections.Add(BuildPlacementStatusSection(status));
 
-                List<ScenarioBuildPlacementAuthoringService.PaletteSectionModel> paletteSections = ScenarioBuildPlacementAuthoringService.Instance.GetPaletteSections(
+                List<ScenarioBuildPlacementAuthoringService.PaletteSectionModel> paletteSections = _buildPlacementAuthoringService.GetPaletteSections(
                     state,
-                    ScenarioEditorController.Instance.CurrentSession);
+                    _editorService.CurrentSession);
                 for (int i = 0; paletteSections != null && i < paletteSections.Count; i++)
                     sections.Add(BuildPlacementPaletteSection(paletteSections[i]));
 
@@ -881,6 +878,46 @@ namespace ShelteredAPI.Scenarios
                     Items = new[]
                     {
                         Text("Pick a build tool to see its palette here.")
+                    }
+                }
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection[] BuildMapWindowSections(ScenarioDefinition definition)
+        {
+            return new[]
+            {
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "map_stage",
+                    Title = "Map",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
+                    Items = new[]
+                    {
+                        Text("Map stage is active."),
+                        Text("This stage keeps expedition-facing scenario seams separate from bunker authoring."),
+                        Text("Current scenario: " + Safe(definition != null ? definition.DisplayName : null))
+                    }
+                }
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection[] BuildPublishWindowSections(ScenarioEditorSession editorSession, ScenarioDefinition definition)
+        {
+            return new[]
+            {
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "publish_stage",
+                    Title = "Publish",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = new[]
+                    {
+                        Property("Scenario", Safe(definition != null ? definition.DisplayName : null)),
+                        Property("Dirty Sections", CountDirtyFlags(editorSession).ToString()),
+                        Property("Version", Safe(definition != null ? definition.Version : null))
                     }
                 }
             };
@@ -1145,73 +1182,6 @@ namespace ShelteredAPI.Scenarios
             return actions.ToArray();
         }
 
-        private static ScenarioAuthoringInspectorAction[] BuildShellTabs(ScenarioAuthoringShellTab activeTab)
-        {
-            return new[]
-            {
-                BuildShellTabAction(ScenarioAuthoringActionIds.ActionShellTabShelter, "Shelter", activeTab == ScenarioAuthoringShellTab.Shelter),
-                BuildShellTabAction(ScenarioAuthoringActionIds.ActionShellTabBuild, "Build", activeTab == ScenarioAuthoringShellTab.Build),
-                BuildShellTabAction(ScenarioAuthoringActionIds.ActionShellTabSurvivors, "Survivors", activeTab == ScenarioAuthoringShellTab.Survivors),
-                BuildShellTabAction(ScenarioAuthoringActionIds.ActionShellTabStockpile, "Stockpile", activeTab == ScenarioAuthoringShellTab.Stockpile),
-                BuildShellTabAction(ScenarioAuthoringActionIds.ActionShellTabTriggers, "Triggers", activeTab == ScenarioAuthoringShellTab.Triggers),
-                BuildShellTabAction(ScenarioAuthoringActionIds.ActionShellTabQuests, "Quests", activeTab == ScenarioAuthoringShellTab.Quests),
-                BuildShellTabAction(ScenarioAuthoringActionIds.ActionShellTabArt, "Art", activeTab == ScenarioAuthoringShellTab.Art),
-                BuildShellTabAction(ScenarioAuthoringActionIds.ActionShellTabTest, "Test", activeTab == ScenarioAuthoringShellTab.Test),
-                BuildShellTabAction(ScenarioAuthoringActionIds.ActionShellTabShell, "Shell", activeTab == ScenarioAuthoringShellTab.Shell)
-            };
-        }
-
-        private static ScenarioAuthoringInspectorAction BuildShellTabAction(string id, string label, bool active)
-        {
-            return Action(id, label, "Switch authoring shell tab.", true, active, null, null);
-        }
-
-        private static ScenarioAuthoringInspectorAction[] BuildShellToolbarActions(ScenarioEditorSession editorSession, ScenarioAuthoringState state)
-        {
-            bool isPlaytesting = editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting;
-            return new[]
-            {
-                Action(ScenarioAuthoringActionIds.ActionSave, "Save",
-                    "Save the current scenario draft (F5).", true, true, "SV",
-                    "Write the draft to disk."),
-                Action("editor.save_as.stub", "Save As",
-                    "Duplicate this draft into a new authoring draft.", false, false, "SA",
-                    "Clone the draft under a new name."),
-                Action("editor.revert.stub", "Revert",
-                    "Reload the saved draft and discard unsaved changes.", false, false, "RV",
-                    "Discard edits since the last save."),
-                Action(ScenarioAuthoringActionIds.ActionPlaytest,
-                    isPlaytesting ? "Stop Playtest" : "Playtest",
-                    isPlaytesting
-                        ? "End playtest and return to authoring (F7)."
-                        : "Start a live playtest of the current draft (F7).",
-                    true, isPlaytesting, "PL",
-                    isPlaytesting ? "Return to frozen authoring." : "Run the draft live.")
-            };
-        }
-
-        private static ScenarioAuthoringInspectorAction[] BuildShellLayoutActions(ScenarioAuthoringState state)
-        {
-            return new[]
-            {
-                Action(ScenarioAuthoringActionIds.ActionShellMinimalMode,
-                    state.MinimalMode ? "Show Panels" : "Hide Panels",
-                    state.MinimalMode
-                        ? "Bring the authoring panels back."
-                        : "Hide every panel so only the top bar shows.",
-                    true, state.MinimalMode, "HD",
-                    state.MinimalMode ? "Restore panel layout." : "Maximize the canvas."),
-                Action(ScenarioAuthoringActionIds.ActionShellToggleWindowMenu, "Panels",
-                    "Show or hide individual authoring panels.", true, false, "WN",
-                    "Open the panel visibility list."),
-                Action(ScenarioAuthoringActionIds.ActionShellResetLayout, "Reset",
-                    "Restore the default shell layout.", true, false, "RS",
-                    "Reset panels to default positions."),
-                Action(ScenarioAuthoringActionIds.ActionShellOpenSettings, "Settings",
-                    "Open editor settings.", true, state.SettingsWindowOpen, "ST",
-                    "Shell, input, and visuals preferences.")
-            };
-        }
 
         private ScenarioAuthoringInspectorAction[] BuildWindowMenuActions(ScenarioAuthoringState state)
         {
@@ -1634,14 +1604,13 @@ namespace ShelteredAPI.Scenarios
                 && value.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private static Sprite ResolvePreviewSprite(ScenarioAuthoringTarget target)
+        private Sprite ResolvePreviewSprite(ScenarioAuthoringTarget target)
         {
             if (target == null)
                 return null;
 
-            ScenarioSpriteRuntimeResolver resolver = new ScenarioSpriteRuntimeResolver();
             ScenarioSpriteRuntimeResolver.ResolvedTarget resolvedTarget;
-            return resolver.TryResolve(target, out resolvedTarget) && resolvedTarget != null
+            return _runtimeResolver.TryResolve(target, out resolvedTarget) && resolvedTarget != null
                 ? resolvedTarget.CurrentSprite
                 : null;
         }
@@ -2200,7 +2169,7 @@ namespace ShelteredAPI.Scenarios
                 || activeTool == ScenarioAuthoringTool.Objects
                 || activeTool == ScenarioAuthoringTool.Wiring
                 || activeTool == ScenarioAuthoringTool.Select
-                    ? ScenarioBuildPlacementAuthoringService.Instance.GetStatusModel(state, ScenarioEditorController.Instance.CurrentSession)
+                    ? _buildPlacementAuthoringService.GetStatusModel(state, _editorService.CurrentSession)
                     : null;
             string title;
             switch (activeTool)

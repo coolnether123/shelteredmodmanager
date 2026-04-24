@@ -59,7 +59,7 @@ namespace ShelteredAPI.Scenarios
             _definitionSerializer = definitionSerializer;
             _definitionCatalog = definitionCatalog;
             _definitionValidator = definitionValidator;
-            _draftRepository = draftRepository ?? ScenarioAuthoringDraftRepository.Instance;
+            _draftRepository = draftRepository;
             _stateManager = stateManager;
             _runtimeBindingService = runtimeBindingService;
         }

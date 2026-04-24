@@ -7,11 +7,13 @@ namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScenarioAuthoringSelectionService
     {
+        private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
         private readonly ScenarioAuthoringTargetAdapterRegistry _adapterRegistry = new ScenarioAuthoringTargetAdapterRegistry();
 
-        public ScenarioAuthoringSelectionService()
+        public ScenarioAuthoringSelectionService(ScenarioCharacterAppearanceService characterAppearanceService)
         {
-            _adapterRegistry.Register(new DefaultScenarioAuthoringTargetAdapter());
+            _characterAppearanceService = characterAppearanceService;
+            _adapterRegistry.Register(new DefaultScenarioAuthoringTargetAdapter(_characterAppearanceService));
             _adapterRegistry.Register(new GridCellScenarioAuthoringTargetAdapter());
         }
 
@@ -418,6 +420,13 @@ namespace ShelteredAPI.Scenarios
 
         private sealed class DefaultScenarioAuthoringTargetAdapter : IScenarioAuthoringTargetAdapter
         {
+            private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
+
+            public DefaultScenarioAuthoringTargetAdapter(ScenarioCharacterAppearanceService characterAppearanceService)
+            {
+                _characterAppearanceService = characterAppearanceService;
+            }
+
             public string AdapterId
             {
                 get { return "ShelteredAPI.DefaultWorldObject"; }
@@ -665,12 +674,12 @@ namespace ShelteredAPI.Scenarios
                 return null;
             }
 
-            private static bool SupportsReplace(GameObject gameObject, ScenarioAuthoringTargetKind kind)
+            private bool SupportsReplace(GameObject gameObject, ScenarioAuthoringTargetKind kind)
             {
                 switch (kind)
                 {
                     case ScenarioAuthoringTargetKind.Character:
-                        return ScenarioCharacterAppearanceService.Instance.CanEdit(new ScenarioAuthoringTarget
+                        return _characterAppearanceService.CanEdit(new ScenarioAuthoringTarget
                         {
                             RuntimeObject = gameObject
                         });

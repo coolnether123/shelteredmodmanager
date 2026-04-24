@@ -33,6 +33,7 @@ namespace ModAPI.Scenarios
     public sealed class ScenarioValidator
     {
         private readonly IScenarioDependencyResolver _dependencyResolver;
+        private readonly ScenarioValidationPipeline _pipeline;
 
         public ScenarioValidator()
             : this(new ModRegistryScenarioDependencyResolver())
@@ -42,30 +43,21 @@ namespace ModAPI.Scenarios
         public ScenarioValidator(IScenarioDependencyResolver dependencyResolver)
         {
             _dependencyResolver = dependencyResolver;
+            _pipeline = new ScenarioValidationPipeline(new IScenarioValidationRule[]
+            {
+                new CoreScenarioRule(),
+                new DependencyValidationRule(this),
+                new AssetValidationRule(),
+                new FamilyValidationRule(),
+                new InventoryValidationRule(),
+                new BunkerValidationRule(),
+                new QuestMapValidationRule()
+            });
         }
 
         public ScenarioValidationResult Validate(ScenarioDefinition definition, string scenarioFilePath)
         {
-            ScenarioValidationResult result = new ScenarioValidationResult();
-            if (definition == null)
-            {
-                result.AddError("Scenario definition is null.");
-                return result;
-            }
-
-            if (TrimToNull(definition.Id) == null)
-                result.AddError("Scenario Id is required.");
-            if (TrimToNull(definition.DisplayName) == null)
-                result.AddError("Scenario DisplayName is required.");
-            if (!Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
-                result.AddError("Scenario BaseMode is invalid: " + definition.BaseGameMode);
-
-            ValidateDependencies(definition, result);
-            ValidateAssets(definition, scenarioFilePath, result);
-            ValidateFamily(definition, scenarioFilePath, result);
-            ValidateInventory(definition, result);
-            ValidateBunker(definition, result);
-            return result;
+            return _pipeline.ValidateLegacy(definition, scenarioFilePath);
         }
 
         private void ValidateDependencies(ScenarioDefinition definition, ScenarioValidationResult result)
@@ -114,7 +106,15 @@ namespace ModAPI.Scenarios
             for (int i = 0; i < definition.AssetReferences.CustomSprites.Count; i++)
             {
                 SpriteRef sprite = definition.AssetReferences.CustomSprites[i];
-                ValidateAssetPath(packRoot, sprite != null ? sprite.RelativePath : null, "sprite", result);
+                if (sprite == null)
+                    continue;
+
+                if (TrimToNull(sprite.RelativePath) != null)
+                    ValidateAssetPath(packRoot, sprite.RelativePath, "sprite", result);
+
+                if (TrimToNull(sprite.PatchId) != null && !HasSpritePatch(definition.AssetReferences, sprite.PatchId))
+                    result.AddError("Custom sprite '" + (sprite.Id ?? ("#" + i.ToString(CultureInfo.InvariantCulture)))
+                        + "' references unknown patchId '" + sprite.PatchId + "'.");
             }
 
             for (int i = 0; i < definition.AssetReferences.CustomIcons.Count; i++)
@@ -122,6 +122,8 @@ namespace ModAPI.Scenarios
                 IconRef icon = definition.AssetReferences.CustomIcons[i];
                 ValidateAssetPath(packRoot, icon != null ? icon.RelativePath : null, "icon", result);
             }
+
+            ValidateSpritePatches(definition.AssetReferences, packRoot, result);
 
             ValidateSpriteSwaps(definition.AssetReferences, packRoot, result);
             ValidateSceneSpritePlacements(definition.AssetReferences, packRoot, result);
@@ -206,6 +208,95 @@ namespace ModAPI.Scenarios
             }
         }
 
+        private static void ValidateQuestsAndMap(ScenarioDefinition definition, ScenarioValidationResult result)
+        {
+            if (definition == null)
+                return;
+
+            Dictionary<string, bool> questIds = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            if (definition.Quests != null && definition.Quests.Quests != null)
+            {
+                for (int i = 0; i < definition.Quests.Quests.Count; i++)
+                {
+                    QuestDefinition quest = definition.Quests.Quests[i];
+                    string id = TrimToNull(quest != null ? quest.Id : null);
+                    if (id == null)
+                    {
+                        result.AddError("Quest #" + i.ToString(CultureInfo.InvariantCulture) + " is missing id.");
+                        continue;
+                    }
+
+                    if (questIds.ContainsKey(id))
+                        result.AddError("Duplicate quest id: " + id);
+                    else
+                        questIds[id] = true;
+
+                    string startTriggerId = TrimToNull(quest.StartTriggerId);
+                    if (startTriggerId != null && !HasTrigger(definition.TriggersAndEvents, startTriggerId))
+                        result.AddError("Quest '" + id + "' references unknown startTriggerId '" + startTriggerId + "'.");
+
+                    string completionConditionId = TrimToNull(quest.CompletionConditionId);
+                    if (completionConditionId != null && !HasCondition(definition.WinLossConditions, completionConditionId))
+                        result.AddError("Quest '" + id + "' references unknown completionConditionId '" + completionConditionId + "'.");
+                }
+            }
+
+            Dictionary<string, bool> locationIds = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            if (definition.Map != null && definition.Map.Locations != null)
+            {
+                for (int i = 0; i < definition.Map.Locations.Count; i++)
+                {
+                    MapLocationDefinition location = definition.Map.Locations[i];
+                    string id = TrimToNull(location != null ? location.Id : null);
+                    if (id == null)
+                    {
+                        result.AddError("Map location #" + i.ToString(CultureInfo.InvariantCulture) + " is missing id.");
+                        continue;
+                    }
+
+                    if (locationIds.ContainsKey(id))
+                        result.AddError("Duplicate map location id: " + id);
+                    else
+                        locationIds[id] = true;
+                }
+
+                string startLocationId = TrimToNull(definition.Map.StartLocationId);
+                if (startLocationId != null && !locationIds.ContainsKey(startLocationId))
+                    result.AddError("Map references unknown startLocationId '" + startLocationId + "'.");
+            }
+        }
+
+        private static bool HasTrigger(TriggersAndEventsDefinition triggersAndEvents, string triggerId)
+        {
+            for (int i = 0; triggersAndEvents != null && triggersAndEvents.Triggers != null && i < triggersAndEvents.Triggers.Count; i++)
+            {
+                TriggerDef trigger = triggersAndEvents.Triggers[i];
+                if (trigger != null && string.Equals(trigger.Id, triggerId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasCondition(WinLossConditionsDefinition conditions, string conditionId)
+        {
+            for (int i = 0; conditions != null && conditions.WinConditions != null && i < conditions.WinConditions.Count; i++)
+            {
+                ConditionDef condition = conditions.WinConditions[i];
+                if (condition != null && string.Equals(condition.Id, conditionId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            for (int i = 0; conditions != null && conditions.LossConditions != null && i < conditions.LossConditions.Count; i++)
+            {
+                ConditionDef condition = conditions.LossConditions[i];
+                if (condition != null && string.Equals(condition.Id, conditionId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
         private static void ValidateSpecialPlacement(
             ObjectPlacement placement,
             int index,
@@ -281,6 +372,54 @@ namespace ModAPI.Scenarios
             }
         }
 
+        private static void ValidateSpritePatches(AssetReferencesDefinition assets, string packRoot, ScenarioValidationResult result)
+        {
+            if (assets == null || assets.SpritePatches == null)
+                return;
+
+            for (int i = 0; i < assets.SpritePatches.Count; i++)
+            {
+                SpritePatchDefinition patch = assets.SpritePatches[i];
+                if (patch == null)
+                {
+                    result.AddError("Sprite patch #" + i + " is null.");
+                    continue;
+                }
+
+                if (TrimToNull(patch.Id) == null)
+                    result.AddError("Sprite patch #" + i + " is missing id.");
+
+                bool hasBaseSpriteId = TrimToNull(patch.BaseSpriteId) != null;
+                bool hasBaseRelativePath = TrimToNull(patch.BaseRelativePath) != null;
+                bool hasRuntimeSpriteKey = TrimToNull(patch.BaseRuntimeSpriteKey) != null;
+                if (!hasBaseSpriteId && !hasBaseRelativePath && !hasRuntimeSpriteKey)
+                    result.AddError("Sprite patch #" + i + " must define a base sprite reference.");
+
+                if (hasBaseRelativePath)
+                    ValidateAssetPath(packRoot, patch.BaseRelativePath, "sprite patch base", result);
+
+                for (int operationIndex = 0; operationIndex < patch.Operations.Count; operationIndex++)
+                {
+                    SpritePatchOperation operation = patch.Operations[operationIndex];
+                    if (operation == null)
+                    {
+                        result.AddError("Sprite patch '" + (patch.Id ?? ("#" + i)) + "' has a null operation.");
+                        continue;
+                    }
+
+                    if (operation.Kind == SpritePatchOperationKind.Pixels && (operation.Runs == null || operation.Runs.Count == 0))
+                        result.AddError("Sprite patch '" + (patch.Id ?? ("#" + i)) + "' has a pixel operation with no runs.");
+
+                    for (int runIndex = 0; operation.Runs != null && runIndex < operation.Runs.Count; runIndex++)
+                    {
+                        SpritePatchDeltaRun run = operation.Runs[runIndex];
+                        if (run == null || !run.IsValid())
+                            result.AddError("Sprite patch '" + (patch.Id ?? ("#" + i)) + "' has an invalid delta run #" + runIndex + ".");
+                    }
+                }
+            }
+        }
+
         private static void ValidateSceneSpritePlacements(AssetReferencesDefinition assets, string packRoot, ScenarioValidationResult result)
         {
             if (assets == null || assets.SceneSpritePlacements == null)
@@ -330,6 +469,21 @@ namespace ModAPI.Scenarios
             {
                 SpriteRef sprite = assets.CustomSprites[i];
                 if (sprite != null && string.Equals(sprite.Id, spriteId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasSpritePatch(AssetReferencesDefinition assets, string patchId)
+        {
+            if (assets == null || assets.SpritePatches == null || string.IsNullOrEmpty(patchId))
+                return false;
+
+            for (int i = 0; i < assets.SpritePatches.Count; i++)
+            {
+                SpritePatchDefinition patch = assets.SpritePatches[i];
+                if (patch != null && string.Equals(patch.Id, patchId, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
 
@@ -414,6 +568,114 @@ namespace ModAPI.Scenarios
                 return path;
 
             return path + Path.DirectorySeparatorChar;
+        }
+
+        private sealed class CoreScenarioRule : IScenarioValidationRule
+        {
+            public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
+            {
+                if (summary == null)
+                    return;
+
+                if (definition == null)
+                {
+                    summary.AddError("core.definition.null", "Scenario definition is null.");
+                    return;
+                }
+
+                if (TrimToNull(definition.Id) == null)
+                    summary.AddError("core.meta.id_required", "Scenario Id is required.");
+                if (TrimToNull(definition.DisplayName) == null)
+                    summary.AddError("core.meta.display_name_required", "Scenario DisplayName is required.");
+                if (!Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
+                    summary.AddError("core.meta.invalid_base_mode", "Scenario BaseMode is invalid: " + definition.BaseGameMode);
+            }
+        }
+
+        private sealed class DependencyValidationRule : IScenarioValidationRule
+        {
+            private readonly ScenarioValidator _owner;
+
+            public DependencyValidationRule(ScenarioValidator owner)
+            {
+                _owner = owner;
+            }
+
+            public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
+            {
+                ScenarioValidationResult legacy = new ScenarioValidationResult();
+                _owner.ValidateDependencies(definition, legacy);
+                CopyIssues(legacy, summary);
+            }
+        }
+
+        private sealed class AssetValidationRule : IScenarioValidationRule
+        {
+            public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
+            {
+                ScenarioValidationResult legacy = new ScenarioValidationResult();
+                ValidateAssets(definition, scenarioFilePath, legacy);
+                CopyIssues(legacy, summary);
+            }
+        }
+
+        private sealed class FamilyValidationRule : IScenarioValidationRule
+        {
+            public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
+            {
+                ScenarioValidationResult legacy = new ScenarioValidationResult();
+                ValidateFamily(definition, scenarioFilePath, legacy);
+                CopyIssues(legacy, summary);
+            }
+        }
+
+        private sealed class InventoryValidationRule : IScenarioValidationRule
+        {
+            public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
+            {
+                ScenarioValidationResult legacy = new ScenarioValidationResult();
+                ValidateInventory(definition, legacy);
+                CopyIssues(legacy, summary);
+            }
+        }
+
+        private sealed class BunkerValidationRule : IScenarioValidationRule
+        {
+            public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
+            {
+                ScenarioValidationResult legacy = new ScenarioValidationResult();
+                ValidateBunker(definition, legacy);
+                CopyIssues(legacy, summary);
+            }
+        }
+
+        private sealed class QuestMapValidationRule : IScenarioValidationRule
+        {
+            public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
+            {
+                ScenarioValidationResult legacy = new ScenarioValidationResult();
+                ValidateQuestsAndMap(definition, legacy);
+                CopyIssues(legacy, summary);
+            }
+        }
+
+        private static void CopyIssues(ScenarioValidationResult source, ValidationSummary target)
+        {
+            if (source == null || target == null)
+                return;
+
+            ScenarioValidationIssue[] issues = source.Issues;
+            for (int i = 0; i < issues.Length; i++)
+            {
+                ScenarioValidationIssue issue = issues[i];
+                if (issue == null)
+                    continue;
+
+                if (issue.Severity == ScenarioIssueSeverity.Error)
+                    target.AddError("legacy.error", issue.Message);
+                else
+                    target.AddWarning("legacy.warning", issue.Message);
+            }
         }
 
         private static string TrimToNull(string value)

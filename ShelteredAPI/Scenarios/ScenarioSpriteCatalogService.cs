@@ -49,7 +49,7 @@ namespace ShelteredAPI.Scenarios
             public string XmlPathHint;
         }
 
-        private readonly ScenarioSpriteRuntimeResolver _resolver = new ScenarioSpriteRuntimeResolver();
+        private readonly ScenarioSpriteRuntimeResolver _resolver;
         private readonly ScenarioSpriteFamilyMatcher _familyMatcher = new ScenarioSpriteFamilyMatcher();
         private string _cachedTargetPath;
         private string _cachedCurrentSpriteKey;
@@ -61,6 +61,11 @@ namespace ShelteredAPI.Scenarios
         private string _cachedPlacementScenarioFilePath;
         private int _cachedPlacementFrame = -1;
         private PlacementCatalog _cachedPlacementCatalog;
+
+        internal ScenarioSpriteCatalogService(ScenarioSpriteRuntimeResolver resolver)
+        {
+            _resolver = resolver;
+        }
 
         public SpriteCatalog GetCatalog(ScenarioEditorSession session, ScenarioAuthoringTarget target, string scenarioFilePath)
         {

@@ -40,6 +40,7 @@ namespace ShelteredAPI.Scenarios
         private readonly IScenarioSpriteAssetResolver _assetResolver;
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
+        private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
 
         private static readonly FieldInfo BaseCharacterFirstNameField = typeof(BaseCharacter).GetField("m_firstName", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterMaleField = typeof(BaseCharacter).GetField("m_male", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -50,11 +51,13 @@ namespace ShelteredAPI.Scenarios
         internal ScenarioApplier(
             IScenarioSpriteAssetResolver assetResolver,
             IScenarioSpriteSwapEngine spriteSwapEngine,
-            IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine)
+            IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
+            ScenarioCharacterAppearanceService characterAppearanceService)
         {
             _assetResolver = assetResolver;
             _spriteSwapEngine = spriteSwapEngine;
             _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
+            _characterAppearanceService = characterAppearanceService;
         }
 
         public ScenarioApplyResult ApplyAll(ScenarioDefinition definition)
@@ -643,7 +646,7 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        private static void ApplyAppearance(
+        private void ApplyAppearance(
             ScenarioDefinition definition,
             string scenarioFilePath,
             FamilyMember member,
@@ -654,7 +657,7 @@ namespace ShelteredAPI.Scenarios
                 return;
 
             string message;
-            if (ScenarioCharacterAppearanceService.Instance.ApplyConfiguredAppearance(definition, scenarioFilePath, config, member, out message))
+            if (_characterAppearanceService.ApplyConfiguredAppearance(definition, scenarioFilePath, config, member, out message))
                 result.FamilyChanges++;
             else if (!string.IsNullOrEmpty(message))
                 result.AddMessage(message);
