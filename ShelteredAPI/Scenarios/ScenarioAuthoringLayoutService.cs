@@ -211,8 +211,6 @@ namespace ShelteredAPI.Scenarios
             bool showBuild = activeStage == ScenarioStageKind.BunkerBackground
                 || activeStage == ScenarioStageKind.BunkerSurface
                 || activeStage == ScenarioStageKind.BunkerInside;
-            bool showPalette = showBuild;
-            bool showLayers = showBuild;
 
             for (int i = 0; i < state.WindowStates.Count; i++)
             {
@@ -230,9 +228,11 @@ namespace ShelteredAPI.Scenarios
                 if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
                     window.Visible = showBuild;
                 else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.TilesPalette, StringComparison.OrdinalIgnoreCase))
-                    window.Visible = showPalette;
+                    window.Visible = false;
                 else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Layers, StringComparison.OrdinalIgnoreCase))
-                    window.Visible = showLayers;
+                    window.Visible = false;
+                else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase))
+                    window.Visible = false;
 
                 if (window.Visible)
                     window.Collapsed = false;
