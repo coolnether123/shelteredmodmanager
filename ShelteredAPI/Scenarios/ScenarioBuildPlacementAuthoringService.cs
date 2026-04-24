@@ -59,7 +59,6 @@ namespace ShelteredAPI.Scenarios
             public float ColliderWidth;
         }
 
-        private static readonly ScenarioBuildPlacementAuthoringService _instance = new ScenarioBuildPlacementAuthoringService();
         private static readonly FieldInfo WiresSpritesField = typeof(ShelterRoomGrid).GetField("wiresSprites", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly string[] ObjectSectionOrder = new[]
         {
@@ -69,11 +68,17 @@ namespace ShelteredAPI.Scenarios
             "Furniture & Misc"
         };
 
+        private readonly StructurePlacementService _structurePlacementService;
+        private readonly ObjectPlacementService _objectPlacementService;
+        private readonly WallWiringEditService _wallWiringEditService;
+        private readonly PlacementPaletteService _placementPaletteService;
+        private readonly PlacementGhostSessionService _placementGhostSessionService;
+        private readonly IScenarioEditorService _editorService;
         private ActivePlacementSession _activePlacement;
 
         public static ScenarioBuildPlacementAuthoringService Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioBuildPlacementAuthoringService>(); }
         }
 
         public bool HasActivePlacement
@@ -81,8 +86,20 @@ namespace ShelteredAPI.Scenarios
             get { return _activePlacement != null && _activePlacement.Ghost != null; }
         }
 
-        private ScenarioBuildPlacementAuthoringService()
+        internal ScenarioBuildPlacementAuthoringService(
+            StructurePlacementService structurePlacementService,
+            ObjectPlacementService objectPlacementService,
+            WallWiringEditService wallWiringEditService,
+            PlacementPaletteService placementPaletteService,
+            PlacementGhostSessionService placementGhostSessionService,
+            IScenarioEditorService editorService)
         {
+            _structurePlacementService = structurePlacementService;
+            _objectPlacementService = objectPlacementService;
+            _wallWiringEditService = wallWiringEditService;
+            _placementPaletteService = placementPaletteService;
+            _placementGhostSessionService = placementGhostSessionService;
+            _editorService = editorService;
         }
 
         public void Reset()
@@ -130,24 +147,18 @@ namespace ShelteredAPI.Scenarios
 
         public List<PaletteSectionModel> GetPaletteSections(ScenarioAuthoringState state, ScenarioEditorSession session)
         {
-            List<PaletteSectionModel> sections = new List<PaletteSectionModel>();
             ScenarioAuthoringTool tool = state != null ? state.ActiveTool : ScenarioAuthoringTool.Select;
             switch (tool)
             {
                 case ScenarioAuthoringTool.Shelter:
-                    sections.Add(BuildStructureSection());
-                    break;
+                    return new List<PaletteSectionModel> { BuildStructureSection() };
 
                 case ScenarioAuthoringTool.Wiring:
-                    AppendRoomVisualSections(sections, state != null ? state.SelectedTarget : null);
-                    break;
+                    return BuildRoomVisualSections(state != null ? state.SelectedTarget : null);
 
                 default:
-                    AppendObjectSections(sections);
-                    break;
+                    return BuildObjectSections();
             }
-
-            return sections;
         }
 
         public bool TryHandleAction(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -269,6 +280,16 @@ namespace ShelteredAPI.Scenarios
             return ScenarioAuthoringActionIds.ActionBuildObjectPlacePrefix + EncodeActionToken(payload);
         }
 
+        private static bool TryParseObjectAction(string actionId, out ObjectManager.ObjectType objectType, out int level)
+        {
+            objectType = ObjectManager.ObjectType.Undefined;
+            level = 1;
+            if (string.IsNullOrEmpty(actionId) || !actionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildObjectPlacePrefix, StringComparison.Ordinal))
+                return false;
+
+            return TryParseObjectPayload(DecodeActionToken(actionId.Substring(ScenarioAuthoringActionIds.ActionBuildObjectPlacePrefix.Length)), out objectType, out level);
+        }
+
         private static string BuildRoomIdentity(int gridX, int gridY)
         {
             return "room:" + gridX + ":" + gridY;
@@ -323,6 +344,7 @@ namespace ShelteredAPI.Scenarios
             BoxCollider2D collider = prefabComponent.GetComponent<BoxCollider2D>();
             session.ColliderWidth = collider != null ? collider.size.x : 0f;
             _activePlacement = session;
+            _placementGhostSessionService.Start(session.Label, objectType.ToString(), session.Ghost);
             message = "Placing " + session.Label + ". Left-click to place, right-click or Escape to cancel.";
             return true;
         }
@@ -335,6 +357,7 @@ namespace ShelteredAPI.Scenarios
 
             session.DefinitionReference = ScenarioPlacementDefinitions.Room;
             _activePlacement = session;
+            _placementGhostSessionService.Start(session.Label, session.DefinitionReference, session.Ghost);
             message = "Placing a room tile. Left-click to place, right-click or Escape to cancel.";
             return true;
         }
@@ -347,6 +370,7 @@ namespace ShelteredAPI.Scenarios
 
             session.DefinitionReference = ScenarioPlacementDefinitions.Ladder;
             _activePlacement = session;
+            _placementGhostSessionService.Start(session.Label, session.DefinitionReference, session.Ghost);
             message = "Placing a ladder. Left-click to place, right-click or Escape to cancel.";
             return true;
         }
@@ -359,6 +383,7 @@ namespace ShelteredAPI.Scenarios
 
             session.DefinitionReference = ScenarioPlacementDefinitions.RoomLight;
             _activePlacement = session;
+            _placementGhostSessionService.Start(session.Label, session.DefinitionReference, session.Ghost);
             message = "Placing a room light. Left-click to place, right-click or Escape to cancel.";
             return true;
         }
@@ -449,13 +474,14 @@ namespace ShelteredAPI.Scenarios
             ObjectManager.Instance.RemoveObject(ghost);
             Obj_Base spawned = ObjectManager.Instance.SpawnObject(_activePlacement.ObjectType, _activePlacement.Level, new Vector2(position.x, position.y));
             _activePlacement = null;
+            _placementGhostSessionService.Clear();
             if (spawned == null)
             {
                 message = "The final object could not be spawned after placement.";
                 return true;
             }
 
-            ScenarioBunkerDraftService.UpsertPlacement(session, ScenarioBunkerDraftService.CreatePlacement(spawned));
+            _objectPlacementService.UpsertPlacement(session, _objectPlacementService.CapturePlacement(spawned));
             message = "Placed " + ScenarioBunkerDraftService.SafeObjectName(spawned) + " and recorded it in the scenario draft.";
             return true;
         }
@@ -480,6 +506,7 @@ namespace ShelteredAPI.Scenarios
             ghost.OnPlacementFinished();
             bool applied = CraftingManager.FinishCraft_Room(null, null, ghost);
             _activePlacement = null;
+            _placementGhostSessionService.Clear();
             if (!applied)
             {
                 message = "The room could not be committed after the preview confirmed placement.";
@@ -490,14 +517,13 @@ namespace ShelteredAPI.Scenarios
             string definitionReference = cell != null && cell.type == ShelterRoomGrid.CellType.RoomTop
                 ? ScenarioPlacementDefinitions.RoomTop
                 : ScenarioPlacementDefinitions.Room;
-            ObjectPlacement placement = ScenarioBunkerDraftService.CreatePlacement(
-                definitionReference,
-                ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY),
-                Vector3.zero,
-                Property(ScenarioPlacementDefinitions.PropertyGridX, gridX.ToString()),
-                Property(ScenarioPlacementDefinitions.PropertyGridY, gridY.ToString()),
-                Property(ScenarioPlacementDefinitions.PropertyAuthoringIdentity, BuildRoomIdentity(gridX, gridY)));
-            ScenarioBunkerDraftService.UpsertPlacement(session, placement);
+            _objectPlacementService.UpsertPlacement(
+                session,
+                _structurePlacementService.CreateRoomPlacement(
+                    gridX,
+                    gridY,
+                    ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY),
+                    BuildRoomIdentity(gridX, gridY)));
             message = "Placed a room tile at " + gridX + "," + gridY + " and stored it in the draft.";
             return true;
         }
@@ -524,21 +550,21 @@ namespace ShelteredAPI.Scenarios
             ghost.OnPlacementFinished();
             bool applied = CraftingManager.FinishCraft_Ladder(null, null, ghost);
             _activePlacement = null;
+            _placementGhostSessionService.Clear();
             if (!applied)
             {
                 message = "The ladder could not be committed after the preview confirmed placement.";
                 return true;
             }
 
-            ObjectPlacement placement = ScenarioBunkerDraftService.CreatePlacement(
-                ScenarioPlacementDefinitions.Ladder,
-                ladderPosition,
-                Vector3.zero,
-                Property(ScenarioPlacementDefinitions.PropertyGridX, gridX.ToString()),
-                Property(ScenarioPlacementDefinitions.PropertyGridY, gridY.ToString()),
-                Property(ScenarioPlacementDefinitions.PropertyHorizontalPos, horizontalPos.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)),
-                Property(ScenarioPlacementDefinitions.PropertyAuthoringIdentity, BuildLadderIdentity(gridX, gridY)));
-            ScenarioBunkerDraftService.UpsertPlacement(session, placement);
+            _objectPlacementService.UpsertPlacement(
+                session,
+                _structurePlacementService.CreateLadderPlacement(
+                    gridX,
+                    gridY,
+                    ladderPosition,
+                    BuildLadderIdentity(gridX, gridY),
+                    horizontalPos));
             message = "Placed a ladder for room " + gridX + "," + gridY + " and stored it in the draft.";
             return true;
         }
@@ -563,20 +589,20 @@ namespace ShelteredAPI.Scenarios
             ghost.OnPlacementFinished();
             bool applied = CraftingManager.FinishCraft_Light(null, null, ghost);
             _activePlacement = null;
+            _placementGhostSessionService.Clear();
             if (!applied)
             {
                 message = "The room light could not be committed after the preview confirmed placement.";
                 return true;
             }
 
-            ObjectPlacement placement = ScenarioBunkerDraftService.CreatePlacement(
-                ScenarioPlacementDefinitions.RoomLight,
-                ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY),
-                Vector3.zero,
-                Property(ScenarioPlacementDefinitions.PropertyGridX, gridX.ToString()),
-                Property(ScenarioPlacementDefinitions.PropertyGridY, gridY.ToString()),
-                Property(ScenarioPlacementDefinitions.PropertyAuthoringIdentity, BuildLightIdentity(gridX, gridY)));
-            ScenarioBunkerDraftService.UpsertPlacement(session, placement);
+            _objectPlacementService.UpsertPlacement(
+                session,
+                _structurePlacementService.CreateRoomLightPlacement(
+                    gridX,
+                    gridY,
+                    ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY),
+                    BuildLightIdentity(gridX, gridY)));
             message = "Placed a room light at " + gridX + "," + gridY + " and stored it in the draft.";
             return true;
         }
@@ -606,14 +632,9 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            ScenarioEditorSession editorSession = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession editorSession = _editorService.CurrentSession;
             if (editorSession != null)
-            {
-                ScenarioBunkerDraftService.UpsertRoomEdit(editorSession, gridX, gridY, delegate(RoomEdit edit)
-                {
-                    edit.WallSpriteIndex = wallIndex;
-                });
-            }
+                _wallWiringEditService.ApplyWall(editorSession, gridX, gridY, wallIndex);
 
             message = "Applied wall sprite " + wallIndex + " to room " + gridX + "," + gridY + ".";
             return true;
@@ -645,14 +666,9 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            ScenarioEditorSession editorSession = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession editorSession = _editorService.CurrentSession;
             if (editorSession != null)
-            {
-                ScenarioBunkerDraftService.UpsertRoomEdit(editorSession, gridX, gridY, delegate(RoomEdit edit)
-                {
-                    edit.WireSpriteIndex = wireIndex;
-                });
-            }
+                _wallWiringEditService.ApplyWire(editorSession, gridX, gridY, wireIndex);
 
             message = "Applied wiring sprite " + wireIndex + " to room " + gridX + "," + gridY + ".";
             return true;
@@ -754,13 +770,15 @@ namespace ShelteredAPI.Scenarios
 
             Obj_GhostBase ghost = _activePlacement.Ghost;
             _activePlacement = null;
+            _placementGhostSessionService.Clear();
             if (ghost != null)
                 ObjectManager.Instance.RemoveObject(ghost);
             return true;
         }
 
-        private static void AppendObjectSections(List<PaletteSectionModel> sections)
+        private List<PaletteSectionModel> BuildObjectSections()
         {
+            List<PaletteSectionModel> sections = new List<PaletteSectionModel>();
             ObjectManager manager = ObjectManager.Instance;
             if (manager == null)
             {
@@ -771,12 +789,12 @@ namespace ShelteredAPI.Scenarios
                     EmptyMessage = "ObjectManager is not ready, so the object palette is unavailable.",
                     Entries = new List<PaletteEntryModel>()
                 });
-                return;
+                return sections;
             }
 
-            Dictionary<string, List<PaletteEntryModel>> grouped = new Dictionary<string, List<PaletteEntryModel>>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, List<PlacementPaletteService.PaletteEntry>> grouped = new Dictionary<string, List<PlacementPaletteService.PaletteEntry>>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < ObjectSectionOrder.Length; i++)
-                grouped[ObjectSectionOrder[i]] = new List<PaletteEntryModel>();
+                grouped[ObjectSectionOrder[i]] = new List<PlacementPaletteService.PaletteEntry>();
 
             int maxValue = (int)ObjectManager.ObjectType.Max;
             for (int raw = 0; raw < maxValue; raw++)
@@ -791,40 +809,33 @@ namespace ShelteredAPI.Scenarios
                     continue;
 
                 string sectionTitle = ResolveObjectSectionTitle(objectType);
-                grouped[sectionTitle].Add(new PaletteEntryModel
-                {
-                    ActionId = BuildObjectActionId(objectType, component.objectLevel > 0 ? component.objectLevel : 1),
-                    Label = BuildObjectLabel(component, objectType),
-                    Hint = "Uses Sheltered's crafting ghost preview, then places the final object instantly into the scenario draft.",
-                    Source = objectType.ToString(),
-                    Badge = "OBJ",
-                    Preview = ResolvePreviewSprite(prefab),
-                    Enabled = true,
-                    Active = Instance._activePlacement != null
-                        && Instance._activePlacement.Kind == PlacementSessionKind.Object
-                        && Instance._activePlacement.ObjectType == objectType
-                });
+                grouped[sectionTitle].Add(_placementPaletteService.CreateEntry(
+                    sectionTitle,
+                    BuildObjectActionId(objectType, component.objectLevel > 0 ? component.objectLevel : 1),
+                    BuildObjectLabel(component, objectType),
+                    "Uses Sheltered's crafting ghost preview, then places the final object instantly into the scenario draft."));
             }
 
             for (int i = 0; i < ObjectSectionOrder.Length; i++)
             {
                 string title = ObjectSectionOrder[i];
-                List<PaletteEntryModel> entries;
+                List<PlacementPaletteService.PaletteEntry> entries;
                 if (!grouped.TryGetValue(title, out entries))
-                    entries = new List<PaletteEntryModel>();
+                    entries = new List<PlacementPaletteService.PaletteEntry>();
 
-                entries.Sort(ComparePaletteEntries);
                 sections.Add(new PaletteSectionModel
                 {
                     Id = "objects_" + title.Replace(" ", "_").ToLowerInvariant(),
                     Title = title,
                     EmptyMessage = "No compatible prefabs are currently loaded for this category.",
-                    Entries = entries
+                    Entries = BuildObjectEntries(entries, manager)
                 });
             }
+
+            return sections;
         }
 
-        private static PaletteSectionModel BuildStructureSection()
+        private PaletteSectionModel BuildStructureSection()
         {
             List<PaletteEntryModel> entries = new List<PaletteEntryModel>();
             entries.Add(new PaletteEntryModel
@@ -836,7 +847,7 @@ namespace ShelteredAPI.Scenarios
                 Badge = "RM",
                 Preview = ResolveGhostPreview(ObjectManager.ObjectType.RoomGhost),
                 Enabled = true,
-                Active = Instance._activePlacement != null && Instance._activePlacement.Kind == PlacementSessionKind.Room
+                Active = _activePlacement != null && _activePlacement.Kind == PlacementSessionKind.Room
             });
             entries.Add(new PaletteEntryModel
             {
@@ -847,7 +858,7 @@ namespace ShelteredAPI.Scenarios
                 Badge = "LD",
                 Preview = ResolveGhostPreview(ObjectManager.ObjectType.LadderGhost),
                 Enabled = true,
-                Active = Instance._activePlacement != null && Instance._activePlacement.Kind == PlacementSessionKind.Ladder
+                Active = _activePlacement != null && _activePlacement.Kind == PlacementSessionKind.Ladder
             });
             entries.Add(new PaletteEntryModel
             {
@@ -858,7 +869,7 @@ namespace ShelteredAPI.Scenarios
                 Badge = "LG",
                 Preview = ResolveGhostPreview(ObjectManager.ObjectType.RoomLightGhost),
                 Enabled = true,
-                Active = Instance._activePlacement != null && Instance._activePlacement.Kind == PlacementSessionKind.RoomLight
+                Active = _activePlacement != null && _activePlacement.Kind == PlacementSessionKind.RoomLight
             });
 
             entries.Sort(ComparePaletteEntries);
@@ -871,8 +882,9 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
-        private static void AppendRoomVisualSections(List<PaletteSectionModel> sections, ScenarioAuthoringTarget target)
+        private List<PaletteSectionModel> BuildRoomVisualSections(ScenarioAuthoringTarget target)
         {
+            List<PaletteSectionModel> sections = new List<PaletteSectionModel>();
             ShelterRoom room;
             int gridX;
             int gridY;
@@ -885,7 +897,7 @@ namespace ShelteredAPI.Scenarios
                     EmptyMessage = "Select a shelter room tile to browse wall and wiring sprites.",
                     Entries = new List<PaletteEntryModel>()
                 });
-                return;
+                return sections;
             }
 
             int activeWallIndex = room.GetWallSprite();
@@ -941,6 +953,43 @@ namespace ShelteredAPI.Scenarios
                 EmptyMessage = "No wiring sprites are available for the selected shelter.",
                 Entries = wireEntries
             });
+            return sections;
+        }
+
+        private List<PaletteEntryModel> BuildObjectEntries(IEnumerable<PlacementPaletteService.PaletteEntry> entries, ObjectManager manager)
+        {
+            List<PaletteEntryModel> models = new List<PaletteEntryModel>();
+            if (entries == null || manager == null)
+                return models;
+
+            foreach (PlacementPaletteService.PaletteEntry entry in entries)
+            {
+                if (entry == null || string.IsNullOrEmpty(entry.ActionId))
+                    continue;
+
+                ObjectManager.ObjectType objectType;
+                int level;
+                if (!TryParseObjectAction(entry.ActionId, out objectType, out level))
+                    continue;
+
+                GameObject prefab = manager.GetPrefab(objectType, level);
+                models.Add(new PaletteEntryModel
+                {
+                    ActionId = entry.ActionId,
+                    Label = entry.Label,
+                    Hint = entry.Hint,
+                    Source = objectType.ToString(),
+                    Badge = "OBJ",
+                    Preview = ResolvePreviewSprite(prefab),
+                    Enabled = true,
+                    Active = _activePlacement != null
+                        && _activePlacement.Kind == PlacementSessionKind.Object
+                        && _activePlacement.ObjectType == objectType
+                });
+            }
+
+            models.Sort(ComparePaletteEntries);
+            return models;
         }
 
         private static bool TryResolveRoomTarget(ScenarioAuthoringTarget target, out ShelterRoom room, out int gridX, out int gridY)

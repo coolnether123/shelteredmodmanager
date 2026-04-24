@@ -19,16 +19,15 @@ namespace ShelteredAPI.Scenarios
 
         internal const string DraftOwnerId = "smm.authoring";
         internal const string DraftStorageScenarioId = "ScenarioAuthoringDrafts";
-        private static readonly ScenarioAuthoringDraftRepository _instance = new ScenarioAuthoringDraftRepository();
         private readonly object _sync = new object();
         private readonly ScenarioDefinitionSerializer _serializer = new ScenarioDefinitionSerializer();
 
         public static ScenarioAuthoringDraftRepository Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioAuthoringDraftRepository>(); }
         }
 
-        private ScenarioAuthoringDraftRepository()
+        internal ScenarioAuthoringDraftRepository()
         {
             ScenarioRegistry.RegisterScenario(new ScenarioDescriptor
             {

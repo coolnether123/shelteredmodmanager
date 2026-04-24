@@ -36,20 +36,22 @@ namespace ShelteredAPI.Scenarios
             public Sprite AvatarSprite;
         }
 
-        private static readonly ScenarioCharacterAppearanceService _instance = new ScenarioCharacterAppearanceService();
         private static readonly FieldInfo BaseCharacterMeshField = typeof(BaseCharacter).GetField("m_mesh", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterHeadTextureField = typeof(BaseCharacter).GetField("m_headTexture", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterTorsoTextureField = typeof(BaseCharacter).GetField("m_torsoTexture", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterLegTextureField = typeof(BaseCharacter).GetField("m_legTexture", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterAvatarSpriteField = typeof(BaseCharacter).GetField("m_avatarSprite", BindingFlags.NonPublic | BindingFlags.Instance);
 
+        private readonly IScenarioSpriteAssetResolver _assetResolver;
+
         public static ScenarioCharacterAppearanceService Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioCharacterAppearanceService>(); }
         }
 
-        private ScenarioCharacterAppearanceService()
+        internal ScenarioCharacterAppearanceService(IScenarioSpriteAssetResolver assetResolver)
         {
+            _assetResolver = assetResolver;
         }
 
         public bool CanEdit(ScenarioAuthoringTarget target)
@@ -308,12 +310,11 @@ namespace ShelteredAPI.Scenarios
                 return;
 
             string message;
-            if (!string.IsNullOrEmpty(configuredPath))
+            Texture2D texture;
+            Sprite avatarSprite;
+            if (TryLoadConfiguredTexture(definition, scenarioFilePath, target, part, configuredId, configuredPath, out texture, out avatarSprite))
             {
-                Texture2D texture;
-                Sprite avatarSprite;
-                if (TryLoadConfiguredTexture(definition, scenarioFilePath, target, part, configuredId, configuredPath, out texture, out avatarSprite))
-                    ApplyTextureId(target, part, configuredId, avatarSprite, out message);
+                ApplyTextureId(target, part, configuredId, avatarSprite, out message);
                 return;
             }
 
@@ -332,7 +333,7 @@ namespace ShelteredAPI.Scenarios
         {
             texture = null;
             avatarSprite = null;
-            if (definition == null || string.IsNullOrEmpty(scenarioFilePath) || target == null || string.IsNullOrEmpty(configuredPath))
+            if (definition == null || string.IsNullOrEmpty(scenarioFilePath) || target == null)
                 return false;
 
             string packRoot = System.IO.Path.GetDirectoryName(scenarioFilePath);
@@ -342,7 +343,13 @@ namespace ShelteredAPI.Scenarios
             Sprite sprite = null;
             try
             {
-                sprite = AssetLoader.LoadSprite(packRoot, configuredPath, 100f);
+                sprite = _assetResolver.ResolveSprite(
+                    definition,
+                    packRoot,
+                    configuredId,
+                    configuredPath,
+                    null,
+                    "character appearance '" + configuredId + "'");
             }
             catch
             {
@@ -479,7 +486,7 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        private static Texture2D CopyTexture(Texture2D source)
+        internal static Texture2D CopyTexture(Texture2D source)
         {
             if (source == null)
                 return null;

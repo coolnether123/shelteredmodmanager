@@ -5,23 +5,25 @@ namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScenarioAuthoringPresentationService
     {
-        private static readonly ScenarioAuthoringPresentationService _instance = new ScenarioAuthoringPresentationService();
         private readonly object _sync = new object();
         private readonly List<IScenarioAuthoringRenderModule> _modules = new List<IScenarioAuthoringRenderModule>();
+        private readonly IScenarioAuthoringBackend _backend;
         private IScenarioAuthoringRenderModule _activeModule;
         private string _lastResolvedModuleId;
         private bool _missingModuleLogged;
 
         public static ScenarioAuthoringPresentationService Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioAuthoringPresentationService>(); }
         }
 
-        private ScenarioAuthoringPresentationService()
+        internal ScenarioAuthoringPresentationService(
+            IScenarioAuthoringBackend backend,
+            IEnumerable<IScenarioAuthoringRenderModule> modules)
         {
-            Register(new ScenarioAuthoringShellImguiRenderModule());
-            Register(new ScenarioAuthoringImguiRenderModule());
-            Register(new ScenarioAuthoringNguiRenderModule());
+            _backend = backend;
+            foreach (IScenarioAuthoringRenderModule module in modules ?? new IScenarioAuthoringRenderModule[0])
+                Register(module);
         }
 
         public void Register(IScenarioAuthoringRenderModule module)
@@ -41,8 +43,7 @@ namespace ShelteredAPI.Scenarios
 
         public void Update()
         {
-            ScenarioAuthoringBackendService backend = ScenarioAuthoringBackendService.Instance;
-            ScenarioAuthoringState state = backend.CurrentState;
+            ScenarioAuthoringState state = _backend.CurrentState;
             if (state == null || !state.IsActive)
             {
                 HideActiveModule();
@@ -81,10 +82,10 @@ namespace ShelteredAPI.Scenarios
             module.Render(new ScenarioAuthoringPresentationSnapshot
             {
                 State = state,
-                ShellViewModel = backend.GetShellViewModel(),
-                ShellDocument = backend.GetShellDocument(),
-                InspectorDocument = backend.GetInspectorDocument(),
-                HoverDocument = backend.GetHoverDocument()
+                ShellViewModel = _backend.GetShellViewModel(),
+                ShellDocument = _backend.GetShellDocument(),
+                InspectorDocument = _backend.GetInspectorDocument(),
+                HoverDocument = _backend.GetHoverDocument()
             });
         }
 

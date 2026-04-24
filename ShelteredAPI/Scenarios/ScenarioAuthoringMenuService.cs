@@ -7,14 +7,13 @@ namespace ShelteredAPI.Scenarios
     internal sealed class ScenarioAuthoringMenuService
     {
         private const KeyCode ReopenShortcut = KeyCode.F6;
-        private static readonly ScenarioAuthoringMenuService _instance = new ScenarioAuthoringMenuService();
 
         public static ScenarioAuthoringMenuService Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioAuthoringMenuService>(); }
         }
 
-        private ScenarioAuthoringMenuService()
+        internal ScenarioAuthoringMenuService()
         {
         }
 

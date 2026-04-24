@@ -21,16 +21,26 @@ namespace ShelteredAPI.Scenarios
             public string XmlPathHint;
         }
 
-        private static readonly ScenarioSceneSpritePlacementAuthoringService _instance = new ScenarioSceneSpritePlacementAuthoringService();
-        private readonly ScenarioSpriteCatalogService _catalogService = new ScenarioSpriteCatalogService();
+        private readonly ScenarioSpriteCatalogService _catalogService;
+        private readonly ScenarioAuthoringHistoryService _historyService;
+        private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
+        private readonly IScenarioEditorService _editorService;
 
         public static ScenarioSceneSpritePlacementAuthoringService Instance
         {
-            get { return _instance; }
+            get { return ScenarioCompositionRoot.Resolve<ScenarioSceneSpritePlacementAuthoringService>(); }
         }
 
-        private ScenarioSceneSpritePlacementAuthoringService()
+        internal ScenarioSceneSpritePlacementAuthoringService(
+            ScenarioSpriteCatalogService catalogService,
+            ScenarioAuthoringHistoryService historyService,
+            IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
+            IScenarioEditorService editorService)
         {
+            _catalogService = catalogService;
+            _historyService = historyService;
+            _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
+            _editorService = editorService;
         }
 
         public PlacementPickerModel GetPickerModel(ScenarioEditorSession session, ScenarioAuthoringTarget target, string scenarioFilePath)
@@ -104,7 +114,7 @@ namespace ShelteredAPI.Scenarios
         private bool ApplyPlacement(ScenarioAuthoringState state, string token, out string message)
         {
             message = null;
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = _editorService.CurrentSession;
             if (session == null || session.WorkingDefinition == null || state.SelectedTarget == null)
             {
                 message = "Select a world target before placing a sprite.";
@@ -122,6 +132,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             EnsureAssetReferences(session.WorkingDefinition);
+            _historyService.RecordVisualChange(session.WorkingDefinition, "Apply scene sprite placement");
             SceneSpritePlacement placement = model.ActivePlacement ?? CreatePlacement(state.SelectedTarget);
             if (model.ActivePlacement == null)
                 session.WorkingDefinition.AssetReferences.SceneSpritePlacements.Add(placement);
@@ -131,7 +142,7 @@ namespace ShelteredAPI.Scenarios
             ApplyTargetSorting(placement, state.SelectedTarget);
 
             MarkAssetsDirty(session);
-            ScenarioSceneSpritePlacementService.Instance.Activate(session.WorkingDefinition, state.ActiveScenarioFilePath, null);
+            _sceneSpritePlacementEngine.Activate(session.WorkingDefinition, state.ActiveScenarioFilePath, null);
             Invalidate();
 
             message = model.ActivePlacement != null
@@ -144,7 +155,7 @@ namespace ShelteredAPI.Scenarios
         private bool RemovePlacement(ScenarioAuthoringState state, out string message)
         {
             message = null;
-            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            ScenarioEditorSession session = _editorService.CurrentSession;
             if (session == null || session.WorkingDefinition == null || state.SelectedTarget == null)
             {
                 message = "No scene sprite placement is selected.";
@@ -158,9 +169,10 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
+            _historyService.RecordVisualChange(session.WorkingDefinition, "Remove scene sprite placement");
             session.WorkingDefinition.AssetReferences.SceneSpritePlacements.Remove(placement);
             MarkAssetsDirty(session);
-            ScenarioSceneSpritePlacementService.Instance.Activate(session.WorkingDefinition, state.ActiveScenarioFilePath, null);
+            _sceneSpritePlacementEngine.Activate(session.WorkingDefinition, state.ActiveScenarioFilePath, null);
             Invalidate();
             message = "Removed scene sprite placement '" + SafeLabel(placement.Id) + "'.";
             MMLog.WriteInfo("[ScenarioSceneSpritePlacementAuthoring] " + message);

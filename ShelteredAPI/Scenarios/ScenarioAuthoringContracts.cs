@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ModAPI.Scenarios;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
@@ -49,6 +50,7 @@ namespace ShelteredAPI.Scenarios
         public const string ActionSettingDecreasePrefix = "shell.setting.decrease.";
         public const string ActionSettingSelectPrefix = "shell.setting.select.";
         public const string ActionInspectorTabPrefix = "inspector.tab.";
+        public const string ActionStageSelectPrefix = "stage.select.";
         public const string ActionShellTabShelter = "shell.tab.shelter";
         public const string ActionShellTabBuild = "shell.tab.build";
         public const string ActionShellTabSurvivors = "shell.tab.survivors";
@@ -57,7 +59,9 @@ namespace ShelteredAPI.Scenarios
         public const string ActionShellTabJobs = "shell.tab.jobs";
         public const string ActionShellTabQuests = "shell.tab.quests";
         public const string ActionShellTabArt = "shell.tab.art";
+        public const string ActionShellTabMap = "shell.tab.map";
         public const string ActionShellTabTest = "shell.tab.test";
+        public const string ActionShellTabPublish = "shell.tab.publish";
         public const string ActionShellTabShell = "shell.tab.shell";
         public const string ActionSave = "editor.save";
         public const string ActionPlaytest = "editor.playtest.toggle";
@@ -155,8 +159,10 @@ namespace ShelteredAPI.Scenarios
         Jobs = 5,
         Quests = 6,
         Art = 7,
-        Test = 8,
-        Shell = 9
+        Map = 8,
+        Test = 9,
+        Publish = 10,
+        Shell = 11
     }
 
     public enum ScenarioAuthoringInspectorTab
@@ -258,6 +264,8 @@ namespace ShelteredAPI.Scenarios
         public bool IsActive { get; set; }
         public bool ShellVisible { get; set; }
         public bool SelectionModeActive { get; set; }
+        public ScenarioStageKind ActiveStage { get; set; }
+        public ScenarioStageKind ActiveBunkerStage { get; set; }
         public ScenarioAuthoringTool ActiveTool { get; set; }
         public ScenarioAuthoringShellTab ActiveShellTab { get; set; }
         public ScenarioAssetAuthoringMode AssetMode { get; set; }
@@ -287,6 +295,8 @@ namespace ShelteredAPI.Scenarios
                 IsActive = IsActive,
                 ShellVisible = ShellVisible,
                 SelectionModeActive = SelectionModeActive,
+                ActiveStage = ActiveStage,
+                ActiveBunkerStage = ActiveBunkerStage,
                 ActiveTool = ActiveTool,
                 ActiveShellTab = ActiveShellTab,
                 AssetMode = AssetMode,

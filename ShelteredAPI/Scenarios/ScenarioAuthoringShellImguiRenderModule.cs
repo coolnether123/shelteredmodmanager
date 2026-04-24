@@ -40,6 +40,12 @@ namespace ShelteredAPI.Scenarios
         private bool _windowMenuOpen;
         private readonly Dictionary<string, Vector2> _windowScrollPositions = new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
         private Vector2 _settingsScrollPosition = Vector2.zero;
+        private readonly ScenarioSpriteSwapAuthoringService _spriteSwapAuthoringService;
+
+        internal ScenarioAuthoringShellImguiRenderModule(ScenarioSpriteSwapAuthoringService spriteSwapAuthoringService)
+        {
+            _spriteSwapAuthoringService = spriteSwapAuthoringService;
+        }
 
         public string ModuleId
         {
@@ -281,6 +287,8 @@ namespace ShelteredAPI.Scenarios
             AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Survivors, workspaceRect);
             AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Stockpile, workspaceRect);
             AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Quests, workspaceRect);
+            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Map, workspaceRect);
+            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Publish, workspaceRect);
             return rects;
         }
 
@@ -493,7 +501,7 @@ namespace ShelteredAPI.Scenarios
         private void DrawCustomSpriteEditor()
         {
             ScenarioSpriteSwapAuthoringService.CustomEditorModel editor =
-                ScenarioSpriteSwapAuthoringService.Instance.GetCustomEditorModel(_snapshot != null ? _snapshot.State : null);
+                _spriteSwapAuthoringService.GetCustomEditorModel(_snapshot != null ? _snapshot.State : null);
             if (editor == null || !editor.Visible)
                 return;
 
@@ -1473,7 +1481,9 @@ namespace ShelteredAPI.Scenarios
             return HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Triggers)
                 || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Survivors)
                 || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Stockpile)
-                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Quests);
+                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Quests)
+                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Map)
+                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Publish);
         }
 
         private static readonly string[] _workspaceOrder = new[]
@@ -1481,7 +1491,9 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringWindowIds.Triggers,
             ScenarioAuthoringWindowIds.Survivors,
             ScenarioAuthoringWindowIds.Stockpile,
-            ScenarioAuthoringWindowIds.Quests
+            ScenarioAuthoringWindowIds.Quests,
+            ScenarioAuthoringWindowIds.Map,
+            ScenarioAuthoringWindowIds.Publish
         };
 
         private static readonly string[] _workspaceLabels = new[]
@@ -1489,7 +1501,9 @@ namespace ShelteredAPI.Scenarios
             "Triggers",
             "Survivors",
             "Stockpile",
-            "Quests"
+            "Quests",
+            "Map",
+            "Publish"
         };
 
         private static string GetActiveWorkspaceId(ScenarioAuthoringShellWindowViewModel[] windows)
