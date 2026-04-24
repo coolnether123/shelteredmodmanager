@@ -31,7 +31,7 @@ namespace ShelteredAPI.Scenarios
             if (!state.Settings.GetBool("input.block_vanilla_camera", true))
                 return false;
 
-            return ShouldCaptureGameplayInput(state, playtesting);
+            return _inputCaptureService.ShouldBlockGameCameraInput();
         }
 
         public bool ShouldConsumeScroll(ScenarioAuthoringState state, bool playtesting)

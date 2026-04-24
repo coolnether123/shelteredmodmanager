@@ -129,7 +129,9 @@ namespace ShelteredAPI.Scenarios
                 badge,
                 true,
                 IsActiveStage(definition, activeStageKind),
-                "Switch to the " + definition.DisplayName + " stage."));
+                child
+                    ? "Switch scope. Only " + definition.DisplayName.ToLowerInvariant() + " objects can be selected."
+                    : "Switch to the " + definition.DisplayName + " stage."));
         }
 
         private static bool IsActiveStage(ScenarioStageDefinition definition, ScenarioStageKind activeStageKind)

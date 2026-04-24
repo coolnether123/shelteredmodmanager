@@ -18,5 +18,49 @@ namespace ShelteredAPI.Scenarios
         {
             ScenarioAuthoringBootstrapService.Instance.CancelPendingDraft("Slot selection was cancelled.");
         }
+
+        [HarmonyPatch(typeof(CursorBase), "GetCameraFollowPosition")]
+        [HarmonyPostfix]
+        private static void CursorBaseFollowPostfix(ref Vector3 __result)
+        {
+            SuppressCameraFollowOverAuthoringUi(ref __result);
+        }
+
+        [HarmonyPatch(typeof(CursorPlacement), "GetCameraFollowPosition")]
+        [HarmonyPostfix]
+        private static void CursorPlacementFollowPostfix(ref Vector3 __result)
+        {
+            SuppressCameraFollowOverAuthoringUi(ref __result);
+        }
+
+        [HarmonyPatch(typeof(CursorPlacementRoom), "GetCameraFollowPosition")]
+        [HarmonyPostfix]
+        private static void CursorPlacementRoomFollowPostfix(ref Vector3 __result)
+        {
+            SuppressCameraFollowOverAuthoringUi(ref __result);
+        }
+
+        [HarmonyPatch(typeof(CursorUpgrade), "GetCameraFollowPosition")]
+        [HarmonyPostfix]
+        private static void CursorUpgradeFollowPostfix(ref Vector3 __result)
+        {
+            SuppressCameraFollowOverAuthoringUi(ref __result);
+        }
+
+        private static void SuppressCameraFollowOverAuthoringUi(ref Vector3 followPosition)
+        {
+            if (!ScenarioAuthoringRuntimeGuards.IsAuthoringActive())
+                return;
+
+            ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+            if (inputCapture == null || !inputCapture.ShouldBlockGameCameraInput())
+                return;
+
+            Camera camera = Camera.main;
+            if (camera == null)
+                return;
+
+            followPosition = camera.transform.position;
+        }
     }
 }
