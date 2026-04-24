@@ -19,7 +19,7 @@ namespace ShelteredAPI.Scenarios
             viewModel.Subtitle = definition != null ? Safe(definition.DisplayName) : "No active scenario";
             viewModel.DraftLabel = FormatDraftDisplay(state != null ? state.ActiveDraftId : null);
             viewModel.ModeLabel = BuildEditorModeLabel(editorSession, state);
-            viewModel.TimeLabel = DateTime.Now.ToString("HH:mm");
+            viewModel.TimeLabel = null;
         }
 
         private static string FormatDraftDisplay(string draftId)

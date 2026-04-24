@@ -20,6 +20,7 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioAuthoringSettingsService _settingsService;
         private readonly ScenarioAuthoringLayoutService _layoutService;
         private readonly ScenarioStageCoordinator _stageCoordinator;
+        private readonly ScenarioSelectionScopeService _selectionScopeService;
         private ScenarioAuthoringState _state = new ScenarioAuthoringState();
         private ScenarioAuthoringSession _activeSession;
 
@@ -53,7 +54,8 @@ namespace ShelteredAPI.Scenarios
             ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementAuthoringService,
             ScenarioAuthoringSettingsService settingsService,
             ScenarioAuthoringLayoutService layoutService,
-            ScenarioStageCoordinator stageCoordinator)
+            ScenarioStageCoordinator stageCoordinator,
+            ScenarioSelectionScopeService selectionScopeService)
         {
             _selectionService = selectionService;
             _editorService = editorService;
@@ -67,6 +69,7 @@ namespace ShelteredAPI.Scenarios
             _settingsService = settingsService;
             _layoutService = layoutService;
             _stageCoordinator = stageCoordinator;
+            _selectionScopeService = selectionScopeService;
         }
 
         internal void SetActiveSession(ScenarioAuthoringSession session)
@@ -181,6 +184,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             _stageCoordinator.Synchronize(snapshot, _editorService.CurrentSession, GetActiveSession());
+            changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);
 
             lock (_sync)
             {
@@ -222,6 +226,7 @@ namespace ShelteredAPI.Scenarios
                     snapshot.StatusMessage = pickerMessage;
             }
             _stageCoordinator.Synchronize(snapshot, _editorService.CurrentSession, GetActiveSession());
+            changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);
             lock (_sync)
             {
                 _state = snapshot;

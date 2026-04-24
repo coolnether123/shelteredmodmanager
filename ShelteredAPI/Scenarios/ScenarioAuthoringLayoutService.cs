@@ -208,9 +208,12 @@ namespace ShelteredAPI.Scenarios
                 ? state.ActiveStage
                 : _stageCoordinator.Resolve(state) != null ? _stageCoordinator.Resolve(state).Kind : ScenarioStageKind.None;
 
-            bool showBuild = activeStage == ScenarioStageKind.BunkerBackground
+            bool bunkerStage = activeStage == ScenarioStageKind.BunkerBackground
                 || activeStage == ScenarioStageKind.BunkerSurface
                 || activeStage == ScenarioStageKind.BunkerInside;
+            bool showBuild = bunkerStage
+                && (state.ActiveTool == ScenarioAuthoringTool.Assets
+                    || (state.SpriteSwapPicker != null && state.SpriteSwapPicker.IsOpen));
 
             for (int i = 0; i < state.WindowStates.Count; i++)
             {

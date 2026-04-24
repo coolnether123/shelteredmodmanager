@@ -135,6 +135,11 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledSurvivorRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledWeatherRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\TriggerRuntimeAdapter.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioSelectionScopeService.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioTargetClassification.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioTargetClassifier.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioTargetScopeTextMatcher.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioTargetScope.cs" />
     <Compile Include="Scenarios\Presentation\Inspector\InspectorViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Compatibility\ScenarioModCompatibilityViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Shell\ShellChromeViewModelBuilder.cs" />

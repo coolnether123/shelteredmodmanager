@@ -43,14 +43,13 @@ namespace ShelteredAPI.Scenarios
 
         public static bool ShouldBlockGameplayAxis(PlatformInput.InputAxis axis)
         {
-            if (!ShouldCaptureGameplayInput())
-                return false;
-
             switch (axis)
             {
                 case PlatformInput.InputAxis.CameraHorizontal:
                 case PlatformInput.InputAxis.CameraVertical:
-                    return true;
+                    ScenarioAuthoringState state = GetState();
+                    return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCameraGuardService>()
+                        .ShouldBlockCameraInput(state, IsPlaytesting());
                 default:
                     return false;
             }
