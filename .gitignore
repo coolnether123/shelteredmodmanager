@@ -391,3 +391,6 @@ ASALocalRun/
 
 /decompiled/
 /Doxygen/
+
+# Local generated project-history video
+/smm-gource.mp4

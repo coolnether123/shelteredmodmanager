@@ -325,7 +325,8 @@ namespace ShelteredAPI.Scenarios
                 tabX = tabRect.xMax + 2f;
             }
 
-            Rect modeChipRect = new Rect(rect.xMax - 286f, rect.y + 18f, 264f, 54f);
+            float chipX = Mathf.Min(tabX + 12f, rect.xMax - 680f);
+            Rect modeChipRect = new Rect(Mathf.Max(primaryRowLeft, chipX), rect.y + 18f, 248f, 54f);
             DrawModeChip(modeChipRect, shell);
 
             Rect childTabsRect = new Rect(
@@ -350,7 +351,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             windowMenuButtonRect = DrawTopBarQuickActions(
-                new Rect(modeChipRect.x, rect.y + 78f, modeChipRect.width, 24f),
+                new Rect(modeChipRect.xMax + 12f, rect.y + 74f, Math.Max(390f, rect.xMax - modeChipRect.xMax - 300f), 30f),
                 shell);
 
             return windowMenuButtonRect;
@@ -366,7 +367,7 @@ namespace ShelteredAPI.Scenarios
                 if (action == null)
                     continue;
 
-                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 16f), 64f, 84f);
+                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 24f), 96f, 126f);
                 Rect actionRect = new Rect(x, rect.y, width, rect.height);
                 if (actionRect.xMax > rect.xMax)
                     break;
@@ -381,7 +382,7 @@ namespace ShelteredAPI.Scenarios
                     continue;
 
                 ScenarioAuthoringInspectorAction displayAction = _windowMenuOpen ? CloneEmphasized(action) : action;
-                Rect actionRect = new Rect(Mathf.Min(x, rect.xMax - 72f), rect.y, 72f, rect.height);
+                Rect actionRect = new Rect(Mathf.Min(x, rect.xMax - 106f), rect.y, 106f, rect.height);
                 DrawButton(actionRect, displayAction, false);
                 menuButtonRect = actionRect;
                 break;
@@ -395,11 +396,9 @@ namespace ShelteredAPI.Scenarios
             GUI.Box(rect, GUIContent.none, _sectionStyle);
             string mode = string.IsNullOrEmpty(shell.ModeLabel) ? "Editing Draft" : shell.ModeLabel;
             string draft = string.IsNullOrEmpty(shell.DraftLabel) ? "Untitled" : shell.DraftLabel;
-            string time = string.IsNullOrEmpty(shell.TimeLabel) ? "--:--" : shell.TimeLabel;
 
-            GUI.Label(new Rect(rect.x + 12f, rect.y + 5f, rect.width - 96f, 20f), mode, _sectionTitleStyle);
-            GUI.Label(new Rect(rect.x + 12f, rect.y + 25f, rect.width - 96f, 18f), draft, _mutedTextStyle);
-            GUI.Label(new Rect(rect.xMax - 86f, rect.y + 7f, 74f, 32f), time, _titleStyle);
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 5f, rect.width - 24f, 20f), mode, _sectionTitleStyle);
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 25f, rect.width - 24f, 18f), draft, _mutedTextStyle);
         }
 
         private Rect DrawToolRail(Rect contentRect, ScenarioAuthoringState state)

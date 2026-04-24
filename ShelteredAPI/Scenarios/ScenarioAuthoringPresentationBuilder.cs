@@ -26,6 +26,8 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioTimelineViewModelBuilder _timelineViewModelBuilder;
         private readonly ScenarioModDependencyDetector _modDependencyDetector;
         private readonly ScenarioModCompatibilityViewModelBuilder _modCompatibilityViewModelBuilder;
+        private readonly ScenarioSelectionScopeService _selectionScopeService;
+        private readonly ScenarioTargetClassifier _targetClassifier;
 
         public ScenarioAuthoringPresentationBuilder(
             ScenarioAuthoringCaptureService captureService,
@@ -44,7 +46,9 @@ namespace ShelteredAPI.Scenarios
             ScenarioTimelineBuilder timelineBuilder,
             ScenarioTimelineViewModelBuilder timelineViewModelBuilder,
             ScenarioModDependencyDetector modDependencyDetector,
-            ScenarioModCompatibilityViewModelBuilder modCompatibilityViewModelBuilder)
+            ScenarioModCompatibilityViewModelBuilder modCompatibilityViewModelBuilder,
+            ScenarioSelectionScopeService selectionScopeService,
+            ScenarioTargetClassifier targetClassifier)
         {
             _captureService = captureService;
             _spriteSwapAuthoringService = spriteSwapAuthoringService;
@@ -63,6 +67,8 @@ namespace ShelteredAPI.Scenarios
             _timelineViewModelBuilder = timelineViewModelBuilder;
             _modDependencyDetector = modDependencyDetector;
             _modCompatibilityViewModelBuilder = modCompatibilityViewModelBuilder;
+            _selectionScopeService = selectionScopeService;
+            _targetClassifier = targetClassifier;
         }
 
         public ScenarioAuthoringShellViewModel BuildShellViewModel(
@@ -210,97 +216,22 @@ namespace ShelteredAPI.Scenarios
                 };
             }
 
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            string friendlyKind = FriendlyKindLabel(target.Kind);
-            items.Add(Text(
-                Safe(target.DisplayName),
-                friendlyKind,
-                friendlyKind,
-                "TG",
-                ResolvePreviewSprite(target),
-                true));
-            items.Add(Property("Name", Safe(target.DisplayName)));
-            items.Add(Property("Type", friendlyKind));
-            items.Add(Property("Position", FormatVector(target.WorldPosition)));
-            items.Add(Property("Replaceable", target.SupportsReplace ? "Yes" : "No"));
-            if (!string.IsNullOrEmpty(target.Description))
-                items.Add(Text(target.Description));
+            ScenarioDefinition definition = editorSession != null ? editorSession.WorkingDefinition : null;
+            ScenarioTargetClassification classification = _targetClassifier.Classify(target);
+            ObjectPlacement objectPlacement = FindObjectPlacement(definition, target);
+            int linkedTimelineEntries = CountLikelyTriggerReferences(definition, target);
+            bool scopeAllowed = _selectionScopeService.CanSelectTargetForCurrentStage(state, target);
 
-            List<ScenarioAuthoringInspectorItem> actionItems = new List<ScenarioAuthoringInspectorItem>();
             string captureReason;
             bool canCaptureTarget = _captureService.CanCaptureTarget(target, out captureReason);
             bool hasCapturedPlacement = _captureService.HasCapturedPlacementForTarget(editorSession, target);
-            if (canCaptureTarget)
-            {
-                actionItems.Add(ActionItem(
-                    Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject,
-                    "Capture Selected Object",
-                    "Store this live spawned shelter object as a scenario object placement.",
-                    true,
-                    true,
-                    "CP",
-                    "Persist this spawned object into the draft.")));
-            }
-            else if (!string.IsNullOrEmpty(captureReason))
-            {
-                actionItems.Add(Text(captureReason));
-            }
-
-            if (hasCapturedPlacement)
-            {
-                actionItems.Add(ActionItem(
-                    Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement,
-                    "Remove Captured Placement",
-                    "Remove this object's captured placement from the scenario draft.",
-                    true,
-                    false,
-                    "RM",
-                    "Delete this stored object capture.")));
-            }
-
-            if (target.SupportsReplace)
-            {
-                actionItems.Add(ActionItem(
-                    Action(ScenarioAuthoringActionIds.ActionToolObjects,
-                    "Switch To Objects Tool",
-                    "Open the shelter object capture workflow.",
-                    true,
-                    false,
-                    "OB",
-                    "Open shelter object capture tools.")));
-
-                actionItems.Add(ActionItem(
-                    Action(ScenarioAuthoringActionIds.ActionToolAssets,
-                    "Switch To Assets Tool",
-                    "Open the asset replacement and placement workflow for this target.",
-                    true,
-                    false,
-                    "AS",
-                    "Open the visual replacement workflow.")));
-            }
+            bool replacementAllowed = scopeAllowed && target.SupportsReplace;
 
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            sections.Add(new ScenarioAuthoringInspectorSection
-            {
-                Id = "target",
-                Title = "Target",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
-                Items = items.ToArray()
-            });
-            sections.Add(new ScenarioAuthoringInspectorSection
-            {
-                Id = "actions",
-                Title = "Actions",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
-                Items = actionItems.Count > 0 ? actionItems.ToArray() : new[] { Text("This target does not have a scenario capture action yet.") }
-            });
-            sections.Add(BuildRuntimeAttachmentSection(target, editorSession, editorSession != null ? editorSession.WorkingDefinition : null));
-
-            List<ScenarioAuthoringInspectorSection> assetSections = BuildAssetSections(state, editorSession, target);
-            for (int i = 0; i < assetSections.Count; i++)
-                sections.Add(assetSections[i]);
+            sections.Add(BuildObjectSummarySection(target, classification, objectPlacement, hasCapturedPlacement));
+            sections.Add(BuildScenarioBehaviorSection(target, objectPlacement, linkedTimelineEntries));
+            sections.Add(BuildPrimaryActionsSection(scopeAllowed, canCaptureTarget, hasCapturedPlacement, replacementAllowed));
+            sections.Add(BuildWarningsSection(scopeAllowed, target, objectPlacement, definition, captureReason));
 
             sections.Add(BuildAdvancedDebugSection(target));
 
@@ -313,6 +244,153 @@ namespace ShelteredAPI.Scenarios
                     Action(ScenarioAuthoringActionIds.ActionSelectionClear, "Clear Selection", "Clear the current scenario target selection.", true, false)
                 },
                 Sections = sections.ToArray()
+            };
+        }
+
+        private ScenarioAuthoringInspectorSection BuildObjectSummarySection(
+            ScenarioAuthoringTarget target,
+            ScenarioTargetClassification classification,
+            ObjectPlacement objectPlacement,
+            bool hasCapturedPlacement)
+        {
+            string friendlyKind = FriendlyKindLabel(target.Kind);
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Text(
+                Safe(target.DisplayName),
+                friendlyKind,
+                _targetClassifier.FormatScopeLabel(classification),
+                "TG",
+                ResolvePreviewSprite(target),
+                true));
+            items.Add(Property("Display Name", Safe(target.DisplayName)));
+            items.Add(Property("Type", friendlyKind));
+            items.Add(Property("Selection Scope", _targetClassifier.FormatScopeLabel(classification)));
+            items.Add(Property("Scenario Object Id", Safe(ResolveScenarioObjectId(target, objectPlacement, hasCapturedPlacement))));
+            items.Add(Property("Draft Status", ResolveDraftStatus(target, objectPlacement, hasCapturedPlacement)));
+            items.Add(Property("Start State", FormatStartState(objectPlacement)));
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "object_summary",
+                Title = "Object Summary",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildScenarioBehaviorSection(
+            ScenarioAuthoringTarget target,
+            ObjectPlacement objectPlacement,
+            int linkedTimelineEntries)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Property("Foundation", Safe(objectPlacement != null ? objectPlacement.RequiredFoundationId : null)));
+            items.Add(Property("Bunker Expansion", Safe(objectPlacement != null ? objectPlacement.RequiredBunkerExpansionId : null)));
+            items.Add(Property("Unlock Gate", Safe(objectPlacement != null ? objectPlacement.UnlockGateId : null)));
+            items.Add(Property("Scheduled Activation", Safe(objectPlacement != null ? objectPlacement.ScheduledActivationId : null)));
+            items.Add(Property("Timeline Entries", linkedTimelineEntries.ToString(CultureInfo.InvariantCulture)));
+            items.Add(Property("Dependency / Mod", target != null && !string.IsNullOrEmpty(target.ScenarioReferenceId) ? "Scenario authored" : "Vanilla or live object"));
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "scenario_behavior",
+                Title = "Scenario Behavior",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildPrimaryActionsSection(
+            bool scopeAllowed,
+            bool canCaptureTarget,
+            bool hasCapturedPlacement,
+            bool replacementAllowed)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(ActionItem(Action(
+                ScenarioAuthoringActionIds.ActionCaptureSelectedObject,
+                "Capture to Scenario",
+                "Store this live spawned shelter object as a scenario object placement.",
+                scopeAllowed && canCaptureTarget,
+                scopeAllowed && canCaptureTarget,
+                "CP")));
+            items.Add(ActionItem(Action(
+                ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement,
+                "Remove from Draft",
+                "Remove this object's captured placement from the scenario draft.",
+                scopeAllowed && hasCapturedPlacement,
+                false,
+                "RM")));
+            items.Add(ActionItem(Action(
+                ScenarioAuthoringActionIds.ActionToolAssets,
+                "Open Asset Picker",
+                "Open the focused visual replacement and placement tray.",
+                replacementAllowed,
+                false,
+                "AS")));
+            items.Add(ActionItem(Action(
+                ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen,
+                "Replace Visual",
+                "Open the sprite picker for this visual target.",
+                replacementAllowed,
+                false,
+                "RV")));
+            items.Add(ActionItem(Action(
+                ScenarioAuthoringActionIds.ActionSelectionClear,
+                "Clear Selection",
+                "Clear the current scenario target selection.",
+                true,
+                false,
+                "CL")));
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "primary_actions",
+                Title = "Primary Actions",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildWarningsSection(
+            bool scopeAllowed,
+            ScenarioAuthoringTarget target,
+            ObjectPlacement objectPlacement,
+            ScenarioDefinition definition,
+            string captureReason)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            if (!scopeAllowed)
+                items.Add(Text("Target is filtered by the active selection scope."));
+            if (objectPlacement != null && string.IsNullOrEmpty(objectPlacement.ScenarioObjectId))
+                items.Add(Text("Missing scenario object id."));
+            if (objectPlacement != null
+                && string.IsNullOrEmpty(objectPlacement.RequiredFoundationId)
+                && string.IsNullOrEmpty(objectPlacement.RequiredBunkerExpansionId))
+                items.Add(Text("Missing foundation or expansion support."));
+            if (objectPlacement != null
+                && objectPlacement.StartState == ScenarioObjectStartState.StartsEnabled
+                && !HasSupport(definition, objectPlacement))
+                items.Add(Text("Object starts active but its support is not present in the draft."));
+            if (objectPlacement != null
+                && objectPlacement.StartState == ScenarioObjectStartState.StartsEnabled
+                && !string.IsNullOrEmpty(objectPlacement.RequiredBunkerExpansionId)
+                && !HasExpansion(definition, objectPlacement.RequiredBunkerExpansionId))
+                items.Add(Text("Object is inside a locked or missing expansion but starts enabled."));
+            if (target != null && target.SupportsReplace && string.IsNullOrEmpty(target.ScenarioReferenceId) && objectPlacement == null)
+                items.Add(Text("Visual replacement may need an asset or object capture before it is portable."));
+            if (!string.IsNullOrEmpty(captureReason))
+                items.Add(Text(captureReason));
+            if (items.Count == 0)
+                items.Add(Text("No warnings for this target."));
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "warnings",
+                Title = "Warnings",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
+                Items = items.ToArray()
             };
         }
 
@@ -449,14 +527,14 @@ namespace ShelteredAPI.Scenarios
             sections.Add(BuildSpriteCandidateSection(
                 "sprite_picker_vanilla",
                 "Vanilla Sprites",
-                picker.VanillaCandidates,
+                _selectionScopeService.FilterCandidatesForScope(picker.VanillaCandidates, state),
                 "No verified vanilla/runtime sprites are currently available for this target family.",
                 savedToken,
                 previewToken));
             sections.Add(BuildSpriteCandidateSection(
                 "sprite_picker_modded",
                 "Modded Sprites",
-                picker.ModdedCandidates,
+                _selectionScopeService.FilterCandidatesForScope(picker.ModdedCandidates, state),
                 "Custom sprite overrides are hidden in strict replacement mode.",
                 savedToken,
                 previewToken));
@@ -550,33 +628,6 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildRuntimeAttachmentSection(
-            ScenarioAuthoringTarget target,
-            ScenarioEditorSession editorSession,
-            ScenarioDefinition definition)
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            int triggerLinks = CountLikelyTriggerReferences(definition, target);
-            bool saved = target != null && !string.IsNullOrEmpty(target.ScenarioReferenceId);
-
-            items.Add(Property("Saved To Draft", saved ? "Yes" : "No"));
-            items.Add(Property("Trigger Links", triggerLinks > 0 ? triggerLinks.ToString() : "None"));
-            items.Add(Property("Playtest", editorSession != null ? FriendlyPlaytestLabel(editorSession.PlaytestState) : "Unavailable"));
-            if (triggerLinks > 0)
-                items.Add(Text("Triggers or events in this draft reference this object."));
-            else
-                items.Add(Text("No triggers or events reference this object yet."));
-
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "runtime",
-                Title = "Scenario Links",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
-                Items = items.ToArray()
-            };
-        }
-
         private static ScenarioAuthoringInspectorSection BuildAdvancedDebugSection(ScenarioAuthoringTarget target)
         {
             if (target == null)
@@ -605,6 +656,110 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
+        private static ObjectPlacement FindObjectPlacement(ScenarioDefinition definition, ScenarioAuthoringTarget target)
+        {
+            if (definition == null || definition.BunkerEdits == null || definition.BunkerEdits.ObjectPlacements == null || target == null)
+                return null;
+
+            GameObject gameObject = ResolveGameObject(target);
+            Obj_Base obj = gameObject != null ? gameObject.GetComponent<Obj_Base>() : null;
+            int objIndex = ScenarioBunkerDraftService.FindPlacementIndex(definition.BunkerEdits.ObjectPlacements, obj);
+            if (objIndex >= 0 && objIndex < definition.BunkerEdits.ObjectPlacements.Count)
+                return definition.BunkerEdits.ObjectPlacements[objIndex];
+
+            string reference = target.ScenarioReferenceId;
+            for (int i = 0; i < definition.BunkerEdits.ObjectPlacements.Count; i++)
+            {
+                ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
+                if (placement == null)
+                    continue;
+
+                if (!string.IsNullOrEmpty(reference)
+                    && (string.Equals(placement.ScenarioObjectId, reference, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(placement.RuntimeBindingKey, reference, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return placement;
+                }
+            }
+
+            return null;
+        }
+
+        private static string ResolveScenarioObjectId(ScenarioAuthoringTarget target, ObjectPlacement placement, bool hasCapturedPlacement)
+        {
+            if (placement != null && !string.IsNullOrEmpty(placement.ScenarioObjectId))
+                return placement.ScenarioObjectId;
+            if (target != null && !string.IsNullOrEmpty(target.ScenarioReferenceId))
+                return target.ScenarioReferenceId;
+            return hasCapturedPlacement ? "Captured" : "Not captured";
+        }
+
+        private static string ResolveDraftStatus(ScenarioAuthoringTarget target, ObjectPlacement placement, bool hasCapturedPlacement)
+        {
+            if (placement != null)
+                return "Authored placement";
+            if (hasCapturedPlacement)
+                return "Captured";
+            if (target != null && !string.IsNullOrEmpty(target.ScenarioReferenceId))
+                return "Runtime generated";
+            return "Live only";
+        }
+
+        private static string FormatStartState(ObjectPlacement placement)
+        {
+            if (placement == null)
+                return "Starts Enabled";
+
+            switch (placement.StartState)
+            {
+                case ScenarioObjectStartState.StartsDisabled: return "Starts Disabled";
+                case ScenarioObjectStartState.StartsHidden: return "Starts Hidden";
+                case ScenarioObjectStartState.StartsLocked: return "Starts Locked";
+                case ScenarioObjectStartState.AppearsLater: return "Appears Later";
+                case ScenarioObjectStartState.RemovedAtStart: return "Removed At Start";
+                default: return "Starts Enabled";
+            }
+        }
+
+        private static bool HasSupport(ScenarioDefinition definition, ObjectPlacement placement)
+        {
+            if (placement == null)
+                return false;
+            if (string.IsNullOrEmpty(placement.RequiredFoundationId) && string.IsNullOrEmpty(placement.RequiredBunkerExpansionId))
+                return false;
+            return HasFoundation(definition, placement.RequiredFoundationId) || HasExpansion(definition, placement.RequiredBunkerExpansionId);
+        }
+
+        private static bool HasFoundation(ScenarioDefinition definition, string foundationId)
+        {
+            if (string.IsNullOrEmpty(foundationId) || definition == null || definition.BunkerGrid == null || definition.BunkerGrid.Foundations == null)
+                return false;
+
+            for (int i = 0; i < definition.BunkerGrid.Foundations.Count; i++)
+            {
+                ScenarioFoundationDefinition foundation = definition.BunkerGrid.Foundations[i];
+                if (foundation != null && string.Equals(foundation.Id, foundationId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasExpansion(ScenarioDefinition definition, string expansionId)
+        {
+            if (string.IsNullOrEmpty(expansionId) || definition == null || definition.BunkerGrid == null || definition.BunkerGrid.Expansions == null)
+                return false;
+
+            for (int i = 0; i < definition.BunkerGrid.Expansions.Count; i++)
+            {
+                ScenarioBunkerExpansionDefinition expansion = definition.BunkerGrid.Expansions[i];
+                if (expansion != null && string.Equals(expansion.Id, expansionId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
         private static string FriendlyKindLabel(ScenarioAuthoringTargetKind kind)
         {
             switch (kind)
@@ -621,16 +776,6 @@ namespace ShelteredAPI.Scenarios
                 case ScenarioAuthoringTargetKind.SceneSprite: return "Scene Sprite";
                 case ScenarioAuthoringTargetKind.Unknown: return "Unknown";
                 default: return "Object";
-            }
-        }
-
-        private static string FriendlyPlaytestLabel(ScenarioPlaytestState playtestState)
-        {
-            switch (playtestState)
-            {
-                case ScenarioPlaytestState.Playtesting: return "Running";
-                case ScenarioPlaytestState.Idle: return "Stopped";
-                default: return playtestState.ToString();
             }
         }
 
@@ -679,6 +824,14 @@ namespace ShelteredAPI.Scenarios
 
             if (state == null || target == null)
             {
+                contextMenuService.Close();
+                return;
+            }
+
+            string scopeReason;
+            if (!_selectionScopeService.CanSelectTargetForCurrentStage(state, target, out scopeReason))
+            {
+                state.StatusMessage = scopeReason;
                 contextMenuService.Close();
                 return;
             }
@@ -1853,29 +2006,29 @@ namespace ShelteredAPI.Scenarios
                 return new ScenarioAuthoringInspectorAction[0];
 
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            bool scopeAllowed = _selectionScopeService.CanSelectTargetForCurrentStage(state, target);
             actions.Add(Action(ScenarioAuthoringActionIds.ActionShellShow, "Inspect Placement", "Open the inspector for the selected target.", true, false));
 
             if (target.SupportsReplace)
             {
-                actions.Add(Action(ScenarioAuthoringActionIds.ActionToolAssets, "Replace Look...", "Switch to art workflow for the selected target.", true, false));
-                actions.Add(Action(ScenarioAuthoringActionIds.ActionToolShelter, "Apply Feature", "Switch to build workflow for the selected target.", true, false));
+                actions.Add(Action(ScenarioAuthoringActionIds.ActionToolAssets, "Replace Look...", "Switch to art workflow for the selected target.", scopeAllowed, false));
+                actions.Add(Action(ScenarioAuthoringActionIds.ActionToolShelter, "Apply Feature", "Switch to build workflow for the selected target.", scopeAllowed, false));
             }
 
             string captureReason;
-            if (_captureService.CanCaptureTarget(target, out captureReason))
+            if (scopeAllowed && _captureService.CanCaptureTarget(target, out captureReason))
                 actions.Add(Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject, "Mark Placement", "Capture the selected live placement into the scenario.", true, false));
 
             if (!string.IsNullOrEmpty(target.ScenarioReferenceId))
             {
-                actions.Add(Action(ScenarioAuthoringActionIds.ActionSceneSpritePlacementRemove, "Remove Placement", "Remove the authored placement reference.", true, false));
-                actions.Add(Action(ScenarioAuthoringActionIds.ActionSpriteSwapCopy, "Duplicate Placement", "Copy the selected target's sprite swap or placement.", true, false));
+                actions.Add(Action(ScenarioAuthoringActionIds.ActionSceneSpritePlacementRemove, "Remove Placement", "Remove the authored placement reference.", scopeAllowed, false));
+                actions.Add(Action(ScenarioAuthoringActionIds.ActionSpriteSwapCopy, "Duplicate Placement", "Copy the selected target's sprite swap or placement.", scopeAllowed, false));
             }
 
             if (target.SupportsReplace)
-                actions.Add(Action(ScenarioAuthoringActionIds.ActionSpriteSwapCopy, "Copy Tile", "Copy the selected target's current authored look.", true, false));
+                actions.Add(Action(ScenarioAuthoringActionIds.ActionSpriteSwapCopy, "Copy Tile", "Copy the selected target's current authored look.", scopeAllowed, false));
 
             actions.Add(Action(ScenarioAuthoringActionIds.ActionSelectionClear, "Clear Selection", "Clear the current authoring selection.", true, false));
-            actions.Add(Action("context.help.stub", "Help", "Show multi-select and context menu help.", false, false));
             return actions.ToArray();
         }
 
@@ -2033,11 +2186,6 @@ namespace ShelteredAPI.Scenarios
         private static string FormatTarget(ScenarioAuthoringTarget target)
         {
             return target == null ? "<none>" : (target.DisplayName + " [" + target.Kind + "]");
-        }
-
-        private static string FormatVector(Vector3 value)
-        {
-            return "(" + value.x.ToString("0.##") + ", " + value.y.ToString("0.##") + ", " + value.z.ToString("0.##") + ")";
         }
 
         private static GameObject ResolveGameObject(ScenarioAuthoringTarget target)
@@ -2368,6 +2516,20 @@ namespace ShelteredAPI.Scenarios
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             sections.Add(BuildAssetModeSection(state));
 
+            string scopeReason;
+            if (target != null && !_selectionScopeService.CanSelectTargetForCurrentStage(state, target, out scopeReason))
+            {
+                sections.Add(new ScenarioAuthoringInspectorSection
+                {
+                    Id = "asset_scope_blocked",
+                    Title = "Scope",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
+                    Items = new[] { Text(scopeReason) }
+                });
+                return sections;
+            }
+
             if (state != null && state.AssetMode == ScenarioAssetAuthoringMode.PlaceNew)
             {
                 List<ScenarioAuthoringInspectorSection> placementSections = BuildSceneSpritePlacementSections(state, editorSession, target);
@@ -2390,7 +2552,7 @@ namespace ShelteredAPI.Scenarios
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "asset_mode",
-                Title = "Asset Workflow",
+                Title = "Asset Picker",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = new[]
@@ -2506,8 +2668,8 @@ namespace ShelteredAPI.Scenarios
                 Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
                 Items = summaryItems.ToArray()
             });
-            sections.Add(BuildPlacementCandidateSection("scene_sprite_vanilla", "Vanilla Sprites", picker.VanillaCandidates, "No loaded vanilla/runtime sprites are currently available for placement."));
-            sections.Add(BuildPlacementCandidateSection("scene_sprite_modded", "Modded Sprites", picker.ModdedCandidates, "Custom sprite placements are hidden in strict placement mode."));
+            sections.Add(BuildPlacementCandidateSection("scene_sprite_vanilla", "Vanilla Sprites", _selectionScopeService.FilterCandidatesForScope(picker.VanillaCandidates, state), "No loaded vanilla/runtime sprites match this selection scope."));
+            sections.Add(BuildPlacementCandidateSection("scene_sprite_modded", "Modded Sprites", _selectionScopeService.FilterCandidatesForScope(picker.ModdedCandidates, state), "No modded sprites match this selection scope."));
             return sections;
         }
 
@@ -2606,8 +2768,9 @@ namespace ShelteredAPI.Scenarios
             return candidates != null ? candidates.Count : 0;
         }
 
-        private static ScenarioAuthoringInspectorSection BuildSelectionSection(ScenarioAuthoringState state)
+        private ScenarioAuthoringInspectorSection BuildSelectionSection(ScenarioAuthoringState state)
         {
+            ScenarioTargetScope activeScope = _selectionScopeService.ResolveActiveScope(state);
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "selection",
@@ -2616,6 +2779,7 @@ namespace ShelteredAPI.Scenarios
                 Layout = ScenarioAuthoringInspectorSectionLayout.MetricGrid,
                 Items = new[]
                 {
+                    Property("Scope", ScenarioTargetClassifier.FormatScopeLabel(activeScope)),
                     Property("Selection Mode", state.SelectionModeActive ? "Active" : "Inactive"),
                     Property("Hovered", FormatTarget(state.HoveredTarget)),
                     Property("Selected", FormatTarget(state.SelectedTarget))

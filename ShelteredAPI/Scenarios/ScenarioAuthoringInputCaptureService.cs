@@ -8,6 +8,7 @@ namespace ShelteredAPI.Scenarios
         private readonly List<Rect> _interactiveRects = new List<Rect>();
         private readonly ScenarioAuthoringScrollFocusService _scrollFocusService;
         private float _coordinateScale = 1f;
+        private const float RectPadding = 6f;
 
         public ScenarioAuthoringInputCaptureService(ScenarioAuthoringScrollFocusService scrollFocusService)
         {
@@ -15,12 +16,16 @@ namespace ShelteredAPI.Scenarios
         }
 
         public bool PointerOverAuthoringUi { get; private set; }
+        public bool PointerOverAuthoringUiLastFrame { get; private set; }
         public bool PopupOpen { get; private set; }
+        public bool PopupOpenLastFrame { get; private set; }
         public bool DraggingShellChrome { get; private set; }
         public bool KeyboardCaptured { get; private set; }
 
         public void BeginFrame(float coordinateScale)
         {
+            PointerOverAuthoringUiLastFrame = PointerOverAuthoringUi;
+            PopupOpenLastFrame = PopupOpen;
             _interactiveRects.Clear();
             PointerOverAuthoringUi = false;
             PopupOpen = false;
@@ -40,7 +45,7 @@ namespace ShelteredAPI.Scenarios
             if (rect.width <= 0f || rect.height <= 0f)
                 return;
 
-            _interactiveRects.Add(rect);
+            _interactiveRects.Add(Expand(rect, RectPadding));
         }
 
         public void RegisterScrollRect(string ownerId, Rect rect)
@@ -82,6 +87,30 @@ namespace ShelteredAPI.Scenarios
                 PointerOverAuthoringUi = true;
             if (PopupOpen)
                 PointerOverAuthoringUi = true;
+        }
+
+        public bool ShouldSuppressWorldInput()
+        {
+            return PointerOverAuthoringUi
+                || PointerOverAuthoringUiLastFrame
+                || PopupOpen
+                || PopupOpenLastFrame
+                || DraggingShellChrome
+                || KeyboardCaptured;
+        }
+
+        public bool ShouldBlockGameCameraInput()
+        {
+            return ShouldSuppressWorldInput();
+        }
+
+        private static Rect Expand(Rect rect, float padding)
+        {
+            return new Rect(
+                rect.x - padding,
+                rect.y - padding,
+                rect.width + (padding * 2f),
+                rect.height + (padding * 2f));
         }
 
         private static Vector2 GetPointerPosition()
