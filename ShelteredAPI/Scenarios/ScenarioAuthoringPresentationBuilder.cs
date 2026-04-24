@@ -1032,6 +1032,25 @@ namespace ShelteredAPI.Scenarios
         private ScenarioAuthoringInspectorSection[] BuildBuildToolsWindowSections(ScenarioAuthoringState state, ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            if (state != null && state.ActiveTool == ScenarioAuthoringTool.Assets)
+            {
+                sections.Add(BuildToolSection(
+                    state,
+                    state.ActiveTool,
+                    definition,
+                    state.SelectedTarget,
+                    false,
+                    false,
+                    null));
+
+                ScenarioAuthoringTarget target = state.SelectedTarget ?? state.HoveredTarget;
+                List<ScenarioAuthoringInspectorSection> assetSections = BuildAssetSections(state, _editorService.CurrentSession, target);
+                for (int i = 0; i < assetSections.Count; i++)
+                    sections.Add(assetSections[i]);
+
+                return sections.ToArray();
+            }
+
             sections.Add(BuildToolPickerSection(state.ActiveTool));
             sections.Add(BuildToolSection(
                 state,
