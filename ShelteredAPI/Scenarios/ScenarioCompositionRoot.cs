@@ -41,6 +41,7 @@ namespace ShelteredAPI.Scenarios
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringDraftRepository(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringHistoryService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringCaptureService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioGameplayScheduleAuthoringService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpriteRuntimeResolver(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpriteCatalogService(resolver.Get<ScenarioSpriteRuntimeResolver>()); });
 
@@ -153,10 +154,13 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ScenarioSpriteSwapAuthoringService>(),
                     resolver.Get<ScenarioSceneSpritePlacementAuthoringService>(),
                     resolver.Get<ScenarioBuildPlacementAuthoringService>(),
+                    resolver.Get<ScenarioGameplayScheduleAuthoringService>(),
                     resolver.Get<IScenarioEditorService>(),
                     resolver.Get<ScenarioAuthoringSettingsService>(),
                     resolver.Get<ScenarioAuthoringLayoutService>(),
-                    resolver.Get<ScenarioStageCoordinator>());
+                    resolver.Get<ScenarioStageCoordinator>(),
+                    resolver.Get<ScenarioTimelineBuilder>(),
+                    resolver.Get<ScenarioTimelineNavigationService>());
             });
             services.AddScenarioPresentation();
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringShellImguiRenderModule(resolver.Get<ScenarioSpriteSwapAuthoringService>()); });
@@ -177,7 +181,11 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ShellChromeViewModelBuilder>(),
                     resolver.Get<StageNavigationViewModelBuilder>(),
                     resolver.Get<InspectorViewModelBuilder>(),
-                    resolver.Get<StatusBarViewModelBuilder>());
+                    resolver.Get<StatusBarViewModelBuilder>(),
+                    resolver.Get<ScenarioTimelineBuilder>(),
+                    resolver.Get<ScenarioTimelineViewModelBuilder>(),
+                    resolver.Get<ScenarioModDependencyDetector>(),
+                    resolver.Get<ScenarioModCompatibilityViewModelBuilder>());
             });
 
             services.AddSingleton(delegate(IServiceResolver resolver)
@@ -189,7 +197,8 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<IScenarioRuntimeBindingService>(),
                     resolver.Get<IScenarioPauseService>(),
                     resolver.Get<IScenarioSpriteSwapEngine>(),
-                    resolver.Get<IScenarioSceneSpritePlacementEngine>());
+                    resolver.Get<IScenarioSceneSpritePlacementEngine>(),
+                    resolver.Get<ScenarioObjectIdentityAssignmentService>());
             });
             services.AddSingleton<IScenarioEditorService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioEditorController>(); });
             services.AddScenarioRuntime();
