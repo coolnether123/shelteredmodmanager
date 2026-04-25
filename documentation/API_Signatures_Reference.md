@@ -392,6 +392,89 @@ public static bool IsAPIRegistered(string apiName);
 public static bool UnregisterAPI(string apiName, string providerModId = null);
 public static List<string> GetRegisteredAPIs();
 
+// ModAPI.Scenarios.ICustomScenarioService
+public static class GameRuntimeApiIds
+{
+    public const string CustomScenarios = "GameRuntime.CustomScenarios";
+}
+
+public interface ICustomScenarioService
+{
+    event Action<CustomScenarioEventArgs> ScenarioRegistered;
+    event Action<CustomScenarioEventArgs> ScenarioUnregistered;
+    event Action<CustomScenarioEventArgs> ScenarioSelected;
+    event Action<CustomScenarioEventArgs> ScenarioSpawned;
+    event Action<CustomScenarioEventArgs> StateChanged;
+
+    CustomScenarioState CurrentState { get; }
+    CustomScenarioRegistrationResult Register(CustomScenarioRegistration registration);
+    bool Unregister(string scenarioId);
+    bool TryGet(string scenarioId, out CustomScenarioInfo scenario);
+    CustomScenarioInfo[] List();
+    bool TryCreateDefinition(string scenarioId, CustomScenarioBuildContext context, out object definition, out string errorMessage);
+}
+
+public class CustomScenarioRegistration
+{
+    public string Id { get; set; }
+    public string DisplayName { get; set; }
+    public string Description { get; set; }
+    public string Version { get; set; }
+    public int Order { get; set; }
+    public string OwnerModId { get; set; }
+    public Assembly OwnerAssembly { get; set; }
+    public LoadedModInfo[] RequiredMods { get; set; }
+    public object Definition { get; set; }
+    public CustomScenarioDefinitionFactory DefinitionFactory { get; set; }
+    public Action<CustomScenarioEventArgs> OnSelected { get; set; }
+    public Action<CustomScenarioEventArgs> OnSpawned { get; set; }
+    public object UserData { get; set; }
+}
+
+public interface IScenarioDependencyResolver
+{
+    bool IsLoaded(string modId);
+}
+
+public interface IScenarioDependencyVersionResolver : IScenarioDependencyResolver
+{
+    string GetLoadedVersion(string modId);
+}
+
+public static class ScenarioFrameworkVerification
+{
+    public static ScenarioValidationResult Run();
+}
+
+// ShelteredAPI.Scenarios class-based authoring helper
+public interface IShelteredCustomScenario
+{
+    string Id { get; }
+    string DisplayName { get; }
+    string Description { get; }
+    string Version { get; }
+    int Order { get; }
+    object UserData { get; }
+    ScenarioDef BuildDefinition(CustomScenarioBuildContext context);
+    void OnSelected(CustomScenarioEventArgs args);
+    void OnSpawned(CustomScenarioEventArgs args);
+}
+
+public abstract class ShelteredCustomScenarioBase : IShelteredCustomScenario
+{
+    public abstract string Id { get; }
+    public abstract string DisplayName { get; }
+    public virtual string Description { get; }
+    public virtual string Version { get; }
+    public virtual int Order { get; }
+    public virtual object UserData { get; }
+    public abstract ScenarioDef BuildDefinition(CustomScenarioBuildContext context);
+    public virtual void OnSelected(CustomScenarioEventArgs args);
+    public virtual void OnSpawned(CustomScenarioEventArgs args);
+    public CustomScenarioRegistration ToRegistration();
+    public CustomScenarioRegistrationResult Register();
+}
+
 // ModAPI.Core.ModRegistry
 public static bool Find(string modId);
 public static ModEntry GetMod(string modId);

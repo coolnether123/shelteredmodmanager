@@ -18,6 +18,28 @@ namespace ModAPI.Hooks.Paging
     {
         private static GameObject _instance;
         private static Texture2D _whiteTexture;
+
+        public sealed class VerificationWindowOptions
+        {
+            public string Title = "MOD VERIFICATION";
+            public string Subtitle;
+            public string SavedColumnHeader = "SAVE FILE";
+            public string MatchLoadButtonText = "LOAD SAVE";
+            public string MismatchLoadButtonText = "LOAD ANYWAY";
+            public string BlockedLoadButtonText = "LOAD BLOCKED";
+            public string UnknownLoadButtonText = "LOAD BLOCKED";
+            public string MatchLoadHint = "(Mods match)";
+            public string MismatchLoadHint = "(Override warnings)";
+            public string BlockedLoadHint = "(Resolve required mod issues)";
+            public string UnknownBlockedHint = "(Metadata unavailable)";
+            public string MatchStatusText = "Mods match - safe to play";
+            public string UnknownBlockedStatusText = "Save metadata missing - load blocked";
+            public string UnknownRecoverStatusText = "Save metadata missing - you can regenerate it from the current mods";
+            public bool IncludeExtraMods = true;
+            public bool AllowMismatchLoad = true;
+            public bool AllowUnknownRecovery = true;
+            public bool AllowAutoLoad = true;
+        }
         
         // Colors for status indicators
         private static readonly Color COLOR_MATCH = new Color(0.3f, 0.9f, 0.3f);
@@ -34,6 +56,43 @@ namespace ModAPI.Hooks.Paging
         private const int ROW_HEIGHT = 42;
         
         public static void Show(SaveEntry entry, SlotManifest manifest, SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway = null, Action onCancel = null)
+        {
+            Show(entry, manifest, state, isAttemptingLoad, onLoadAnyway, onCancel, null);
+        }
+
+        public static void ShowScenario(string scenarioName, SlotManifest manifest, SaveVerification.VerificationState state, Action onStart, Action onCancel = null)
+        {
+            VerificationWindowOptions options = new VerificationWindowOptions
+            {
+                Title = "SCENARIO MOD VERIFICATION",
+                Subtitle = "Scenario: \"" + (scenarioName ?? "Unknown") + "\"",
+                SavedColumnHeader = "REQUIRED BY SCENARIO",
+                MatchLoadButtonText = "START SCENARIO",
+                MismatchLoadButtonText = "START BLOCKED",
+                BlockedLoadButtonText = "START BLOCKED",
+                UnknownLoadButtonText = "START BLOCKED",
+                MatchLoadHint = "(Required mods match)",
+                MismatchLoadHint = "(Required mods must match)",
+                BlockedLoadHint = "(Install or enable required mods)",
+                UnknownBlockedHint = "(Scenario dependency metadata unavailable)",
+                MatchStatusText = "Required mods match - scenario can start",
+                UnknownBlockedStatusText = "Scenario dependency metadata missing - start blocked",
+                IncludeExtraMods = false,
+                AllowMismatchLoad = false,
+                AllowUnknownRecovery = false,
+                AllowAutoLoad = false
+            };
+
+            SaveEntry entry = new SaveEntry
+            {
+                name = scenarioName ?? "Custom Scenario",
+                saveInfo = new SaveInfo { familyName = scenarioName ?? "Custom Scenario" }
+            };
+
+            Show(entry, manifest, state, true, onStart, onCancel, options);
+        }
+
+        private static void Show(SaveEntry entry, SlotManifest manifest, SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway, Action onCancel, VerificationWindowOptions options)
         {
             if (_instance != null) Destroy(_instance);
 
@@ -76,12 +135,12 @@ namespace ModAPI.Hooks.Paging
 
             // Create the window
             var win = root.AddComponent<SaveDetailsWindow>();
-            win.BuildFullUI(root.transform, entry, manifest, state, isAttemptingLoad, onLoadAnyway, onCancel, uiFont, ttfFont);
+            win.BuildFullUI(root.transform, entry, manifest, state, isAttemptingLoad, onLoadAnyway, onCancel, uiFont, ttfFont, options ?? new VerificationWindowOptions());
         }
 
         private void BuildFullUI(Transform root, SaveEntry entry, SlotManifest manifest, 
             SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway, Action onCancel,
-            UIFont uiFont, Font ttfFont)
+            UIFont uiFont, Font ttfFont, VerificationWindowOptions options)
         {
             _onCancel = onCancel;
 
@@ -103,15 +162,20 @@ namespace ModAPI.Hooks.Paging
             Color titleColor = COLOR_HEADER;
             
             // === HEADER ===
-            var titleLabel = CreateLabel(root, "Title", "MOD VERIFICATION",
+            var titleLabel = CreateLabel(root, "Title", options.Title ?? "MOD VERIFICATION",
                 new Vector3(0, WINDOW_HEIGHT/2 - 70, 0), 32, titleColor, uiFont, ttfFont, 100);
             titleLabel.alignment = NGUIText.Alignment.Center;
             
             // Subtitle with family name and days
-            string familyName = entry?.saveInfo?.familyName;
-            if (string.IsNullOrEmpty(familyName)) familyName = "Unknown";
-            int days = entry?.saveInfo?.daysSurvived ?? 0;
-            var subtitleLabel = CreateLabel(root, "Subtitle", $"Family: \"{familyName}\" - Day {days}",
+            string subtitleText = options.Subtitle;
+            if (string.IsNullOrEmpty(subtitleText))
+            {
+                string familyName = entry?.saveInfo?.familyName;
+                if (string.IsNullOrEmpty(familyName)) familyName = "Unknown";
+                int days = entry?.saveInfo?.daysSurvived ?? 0;
+                subtitleText = $"Family: \"{familyName}\" - Day {days}";
+            }
+            var subtitleLabel = CreateLabel(root, "Subtitle", subtitleText,
                 new Vector3(0, WINDOW_HEIGHT/2 - 105, 0), 22, secondaryTextColor, uiFont, ttfFont, 100);
             subtitleLabel.alignment = NGUIText.Alignment.Center;
             
@@ -128,7 +192,7 @@ namespace ModAPI.Hooks.Paging
             var activeMods = PluginManager.LoadedMods;
             var savedMods = manifest?.lastLoadedMods ?? new LoadedModInfo[0];
             var discovered = ModDiscovery.DiscoverAllMods();
-            var comparison = BuildModComparison(activeMods, savedMods);
+            var comparison = SaveVerification.BuildModComparison(activeMods, savedMods, options.IncludeExtraMods);
             
             // === COLUMN HEADERS ===
             int headerY = WINDOW_HEIGHT/2 - 160;
@@ -137,7 +201,7 @@ namespace ModAPI.Hooks.Paging
                 new Vector3(-WINDOW_WIDTH/4, headerY, 0), 24, titleColor, uiFont, ttfFont, 100)
                 .alignment = NGUIText.Alignment.Center;
             
-            CreateLabel(root, "SavedHeader", "SAVE FILE",
+            CreateLabel(root, "SavedHeader", options.SavedColumnHeader ?? "SAVE FILE",
                 new Vector3(WINDOW_WIDTH/4, headerY, 0), 24, titleColor, uiFont, ttfFont, 100)
                 .alignment = NGUIText.Alignment.Center;
             
@@ -167,7 +231,7 @@ namespace ModAPI.Hooks.Paging
             {
                 int y = listStartY - (rowIndex * ROW_HEIGHT);
                 var status = comparison.Find(c => c.activeId == mod.Id);
-                ModCompareStatus compareStatus = status?.status ?? ModCompareStatus.Match;
+                SaveVerification.ModCompareStatus compareStatus = status?.status ?? SaveVerification.ModCompareStatus.Match;
                 Color color = GetStatusColor(compareStatus);
                 
                 string iconPrefix = "✓";
@@ -175,8 +239,8 @@ namespace ModAPI.Hooks.Paging
                 
                 switch (compareStatus)
                 {
-                    case ModCompareStatus.Extra: iconPrefix = "~"; suffix = " [NEW]"; break;
-                    case ModCompareStatus.VersionDiff: iconPrefix = "~"; break; 
+                    case SaveVerification.ModCompareStatus.Extra: iconPrefix = "~"; suffix = " [NEW]"; break;
+                    case SaveVerification.ModCompareStatus.VersionDiff: iconPrefix = "~"; break;
                 }
                 
                 // Create a row container to group name and version labels
@@ -206,7 +270,7 @@ namespace ModAPI.Hooks.Paging
                 int y = listStartY - (rowIndex * ROW_HEIGHT);
                 // LoadedModInfo has .modId, .version (camelCase)
                 var status = comparison.Find(c => c.savedId == saved.modId);
-                ModCompareStatus compareStatus = status?.status ?? ModCompareStatus.Match;
+                SaveVerification.ModCompareStatus compareStatus = status?.status ?? SaveVerification.ModCompareStatus.Match;
                 Color color = GetStatusColor(compareStatus);
                 
                 string icon = "✓";
@@ -214,11 +278,11 @@ namespace ModAPI.Hooks.Paging
                 
                 switch (compareStatus)
                 {
-                    case ModCompareStatus.Missing: 
+                    case SaveVerification.ModCompareStatus.Missing:
                         icon = "✗"; 
                         suffix = " [MISSING]";
                         break;
-                    case ModCompareStatus.VersionDiff: icon = "~"; suffix = " [VER DIFF]"; break;
+                    case SaveVerification.ModCompareStatus.VersionDiff: icon = "~"; suffix = " [VER DIFF]"; break;
                 }
                 
                 var diskMod = discovered.Find(d => d.Id.Equals(saved.modId, StringComparison.OrdinalIgnoreCase));
@@ -235,7 +299,7 @@ namespace ModAPI.Hooks.Paging
                 savedName.alignment = NGUIText.Alignment.Center;
                 
                 // Collect warnings from missing mods using the display name
-                if (compareStatus == ModCompareStatus.Missing && saved.warnings != null && saved.warnings.Length > 0)
+                if (compareStatus == SaveVerification.ModCompareStatus.Missing && saved.warnings != null && saved.warnings.Length > 0)
                 {
                     foreach (var w in saved.warnings)
                     {
@@ -243,9 +307,9 @@ namespace ModAPI.Hooks.Paging
                     }
                 }
                 
-                string verText = compareStatus == ModCompareStatus.VersionDiff && status != null
-                    ? $"   (save: v{saved.version}, active: v{status.activeVersion})"
-                    : $"   v{saved.version}";
+                string verText = compareStatus == SaveVerification.ModCompareStatus.VersionDiff && status != null
+                    ? $"   (required: v{saved.version}, active: v{status.activeVersion})"
+                    : (string.IsNullOrEmpty(saved.version) ? "   any version" : $"   v{saved.version}");
                 var savedVer = CreateLabel(rowGO.transform, $"Version", verText,
                     new Vector3(0, -18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
                 savedVer.alignment = NGUIText.Alignment.Center;
@@ -312,16 +376,16 @@ namespace ModAPI.Hooks.Paging
             int buttonY = -WINDOW_HEIGHT/2 + 100;
             
             // Determine button states
-            bool hasMissing = comparison.Any(c => c.status == ModCompareStatus.Missing);
-            bool hasVersionDiff = comparison.Any(c => c.status == ModCompareStatus.VersionDiff);
-            bool hasExtra = comparison.Any(c => c.status == ModCompareStatus.Extra);
+            bool hasMissing = comparison.Any(c => c.status == SaveVerification.ModCompareStatus.Missing);
+            bool hasVersionDiff = comparison.Any(c => c.status == SaveVerification.ModCompareStatus.VersionDiff);
+            bool hasExtra = comparison.Any(c => c.status == SaveVerification.ModCompareStatus.Extra);
             bool hasUnknownState = state == SaveVerification.VerificationState.Unknown;
-            bool allMatch = !hasMissing && !hasVersionDiff && !hasExtra;
+            bool allMatch = !hasMissing && !hasVersionDiff && !hasExtra && !hasUnknownState;
             
-            bool canReload = !allMatch && !hasUnknownState;
+            bool canReload = options.AllowAutoLoad && !allMatch && !hasUnknownState;
             if (canReload && hasMissing)
             {
-                var missingEntries = comparison.Where(c => c.status == ModCompareStatus.Missing);
+                var missingEntries = comparison.Where(c => c.status == SaveVerification.ModCompareStatus.Missing);
                 bool allMissingAvailable = true;
                 foreach(var m in missingEntries)
                 {
@@ -337,7 +401,7 @@ namespace ModAPI.Hooks.Paging
             // RELOAD WITH SAVE MODS button
             Color requestedBrown = new Color(113f/255f, 82f/255f, 62f/255f);
             int absoluteSlot = entry?.absoluteSlot ?? 0; 
-            bool canRecoverUnknown = hasUnknownState && onLoadAnyway != null && absoluteSlot > 0;
+            bool canRecoverUnknown = options.AllowUnknownRecovery && hasUnknownState && onLoadAnyway != null && absoluteSlot > 0;
              
             var reloadBtn = CreateButton(root, "ReloadBtn", "AUTO-LOAD MODS",
                 new Vector3(-WINDOW_WIDTH/4, buttonY, 0), 18, Color.white, uiFont, ttfFont, 240, 45,
@@ -349,7 +413,7 @@ namespace ModAPI.Hooks.Paging
 
             if (!canReload)
             {
-                string reason = hasUnknownState ? "(Save metadata missing)" :
+                string reason = hasUnknownState ? options.UnknownBlockedHint :
                                 allMatch ? "(Already matching)" : 
                                 (hasVersionDiff || hasExtra) && !hasMissing ? "(Minor differences)" :
                                 "(Some mods missing)";
@@ -363,6 +427,7 @@ namespace ModAPI.Hooks.Paging
             // - "LOAD SAVE" when mods match (not an "anyway" situation)
             // - "LOAD ANYWAY" when mods differ (user is overriding warnings)
             Action loadButtonAction = null;
+            bool mismatchBlocked = !options.AllowMismatchLoad && (hasMissing || hasVersionDiff || hasExtra);
             if (hasUnknownState)
             {
                 if (canRecoverUnknown)
@@ -377,7 +442,7 @@ namespace ModAPI.Hooks.Paging
                     };
                 }
             }
-            else if (onLoadAnyway != null)
+            else if (onLoadAnyway != null && !mismatchBlocked)
             {
                 loadButtonAction = () =>
                 {
@@ -387,15 +452,19 @@ namespace ModAPI.Hooks.Paging
             }
 
             bool canLoad = loadButtonAction != null;
-            string loadButtonText = hasUnknownState ? (canRecoverUnknown ? "RECOVER & LOAD" : "LOAD BLOCKED") : (allMatch ? "LOAD SAVE" : "LOAD ANYWAY");
-            string loadHintText = hasUnknownState ? (canRecoverUnknown ? "(Rebuild manifest from current mods)" : "(Metadata unavailable)") : (allMatch ? "(Mods match)" : "(Override warnings)");
+            string loadButtonText = hasUnknownState
+                ? (canRecoverUnknown ? "RECOVER & LOAD" : options.UnknownLoadButtonText)
+                : (allMatch ? options.MatchLoadButtonText : (mismatchBlocked ? options.BlockedLoadButtonText : options.MismatchLoadButtonText));
+            string loadHintText = hasUnknownState
+                ? (canRecoverUnknown ? "(Rebuild manifest from current mods)" : options.UnknownBlockedHint)
+                : (allMatch ? options.MatchLoadHint : (mismatchBlocked ? options.BlockedLoadHint : options.MismatchLoadHint));
              
             var loadBtn = CreateButton(root, "LoadBtn", loadButtonText,
                 new Vector3(WINDOW_WIDTH/4, buttonY, 0), 18, Color.white, uiFont, ttfFont, 200, 45,
                 loadButtonAction);
 
             var loadTex = loadBtn.GetComponent<UITexture>();
-            if (loadTex != null) loadTex.color = requestedBrown;
+            if (loadTex != null) loadTex.color = canLoad ? requestedBrown : new Color(0.25f, 0.2f, 0.15f, 1f);
             
             CreateLabel(root, "LoadHint", loadHintText,
                 new Vector3(WINDOW_WIDTH/4, buttonY - 30, 0), 12, secondaryTextColor, uiFont, ttfFont, 100)
@@ -403,10 +472,10 @@ namespace ModAPI.Hooks.Paging
             
             // === STATUS LINE ===
             string statusText = allMatch ? "✓ Mods match - safe to play" :
-                               hasMissing && hasVersionDiff ? $"⚠ {comparison.Count(c => c.status == ModCompareStatus.Missing)} missing, {comparison.Count(c => c.status == ModCompareStatus.VersionDiff)} version diff" :
-                               hasMissing ? $"⚠ {comparison.Count(c => c.status == ModCompareStatus.Missing)} mod(s) missing" :
-                               hasExtra && !hasMissing ? $"⚠ {comparison.Count(c => c.status == ModCompareStatus.Extra)} extra mod(s) active" :
-                               $"~ {comparison.Count(c => c.status == ModCompareStatus.VersionDiff)} version difference(s)";
+                               hasMissing && hasVersionDiff ? $"⚠ {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.Missing)} missing, {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.VersionDiff)} version diff" :
+                               hasMissing ? $"⚠ {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.Missing)} mod(s) missing" :
+                               hasExtra && !hasMissing ? $"⚠ {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.Extra)} extra mod(s) active" :
+                               $"~ {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.VersionDiff)} version difference(s)";
             
             if (hasUnknownState)
             {
@@ -414,66 +483,18 @@ namespace ModAPI.Hooks.Paging
                     ? "? Save metadata missing - you can regenerate it from the current mods"
                     : "? Save metadata missing - load blocked";
             }
+            if (allMatch)
+                statusText = options.MatchStatusText;
+            if (hasUnknownState)
+                statusText = canRecoverUnknown ? "? " + options.UnknownRecoverStatusText : "? " + options.UnknownBlockedStatusText;
+            if (mismatchBlocked && !hasUnknownState)
+                statusText = "Scenario cannot start: " + statusText;
 
             Color statusColor = hasUnknownState ? COLOR_MISSING : (allMatch ? COLOR_MATCH : (hasMissing ? COLOR_MISSING : COLOR_VERSION_DIFF));
             var statusLabel = CreateLabel(root, "Status", statusText,
                 new Vector3(0, -WINDOW_HEIGHT/2 + 20, 0), 16, statusColor, uiFont, ttfFont, 100);
             statusLabel.alignment = NGUIText.Alignment.Center;
         }
-        
-        // === COMPARISON LOGIC ===
-        
-        private enum ModCompareStatus { Match, VersionDiff, Extra, Missing }
-        
-        private class ModCompareEntry
-        {
-            public string activeId;
-            public string activeVersion;
-            public string savedId;
-            public string savedVersion;
-            public ModCompareStatus status;
-        }
-        
-        private List<ModCompareEntry> BuildModComparison(List<ModEntry> active, LoadedModInfo[] saved)
-        {
-            var result = new List<ModCompareEntry>();
-            
-            // 1. Check saved mods against active (Missing/Match/VersionDiff)
-            foreach (var s in saved)
-            {
-                var entry = new ModCompareEntry { savedId = s.modId, savedVersion = s.version };
-                var match = active.Find(a => a.Id.Equals(s.modId, StringComparison.OrdinalIgnoreCase));
-                
-                if (match == null)
-                {
-                    entry.status = ModCompareStatus.Missing;
-                }
-                else
-                {
-                    entry.activeId = match.Id;
-                    entry.activeVersion = match.Version;
-                    entry.status = match.Version == s.version ? ModCompareStatus.Match : ModCompareStatus.VersionDiff;
-                }
-                
-                result.Add(entry);
-            }
-
-            // 2. Check active mods for extras
-            foreach (var a in active)
-            {
-                if (!saved.Any(s => string.Equals(s.modId, a.Id, StringComparison.OrdinalIgnoreCase)))
-                {
-                    result.Add(new ModCompareEntry {
-                        activeId = a.Id,
-                        activeVersion = a.Version,
-                        status = ModCompareStatus.Extra
-                    });
-                }
-            }
-            
-            return result;
-        }
-        
         private Action _onCancel;
 
         private void SetOnCancel(Action onCancel)
@@ -493,14 +514,14 @@ namespace ModAPI.Hooks.Paging
             }
         }
         
-        private Color GetStatusColor(ModCompareStatus status)
+        private Color GetStatusColor(SaveVerification.ModCompareStatus status)
         {
             switch (status)
             {
-                case ModCompareStatus.Match: return new Color(0.2f, 0.6f, 0.2f); // Darker green for paper
-                case ModCompareStatus.VersionDiff: return new Color(0.6f, 0.5f, 0f); // Darker yellow/brown
-                case ModCompareStatus.Extra: return new Color(0.6f, 0.5f, 0f);
-                case ModCompareStatus.Missing: return new Color(0.7f, 0.2f, 0.2f); // Darker red
+                case SaveVerification.ModCompareStatus.Match: return new Color(0.2f, 0.6f, 0.2f); // Darker green for paper
+                case SaveVerification.ModCompareStatus.VersionDiff: return new Color(0.6f, 0.5f, 0f); // Darker yellow/brown
+                case SaveVerification.ModCompareStatus.Extra: return new Color(0.6f, 0.5f, 0f);
+                case SaveVerification.ModCompareStatus.Missing: return new Color(0.7f, 0.2f, 0.2f); // Darker red
                 default: return Color.black;
             }
         }

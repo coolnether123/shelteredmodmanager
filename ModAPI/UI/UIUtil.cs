@@ -42,16 +42,14 @@ namespace ModAPI.UI
             if (cloneGO == null) return null;
 
             cloneGO.name = templateGO.name + "_Clone";
+            cloneGO.SetActive(false);
             cloneGO.transform.parent = parent;
             cloneGO.transform.localPosition = templateGO.transform.localPosition;
             cloneGO.transform.localRotation = templateGO.transform.localRotation;
             cloneGO.transform.localScale = templateGO.transform.localScale;
             cloneGO.layer = parent.gameObject.layer;
 
-            // --- Robust Mod-Safe Cleanup ---
-            foreach (var loc in cloneGO.GetComponentsInChildren<UILocalize>(true)) UnityEngine.Object.Destroy(loc);
-            foreach (var msg in cloneGO.GetComponentsInChildren<UIButtonMessage>(true)) UnityEngine.Object.Destroy(msg);
-            foreach (var anchor in cloneGO.GetComponentsInChildren<UIAnchor>(true)) UnityEngine.Object.Destroy(anchor);
+            StripClonedButtonBehaviors(cloneGO);
 
             var btn = cloneGO.GetComponent<UIButton>();
             if (btn != null && btn.onClick != null) btn.onClick.Clear();
@@ -67,6 +65,7 @@ namespace ModAPI.UI
             }
 
             SetAllLabels(cloneGO, text);
+            cloneGO.SetActive(templateGO.activeSelf);
             return btn;
         }
 
@@ -126,6 +125,15 @@ namespace ModAPI.UI
             if (go != null) UnityEngine.Object.Destroy(go);
         }
 
+        public static void ClearClickBlockers()
+        {
+            while (_clickBlockers.Count > 0)
+            {
+                var go = _clickBlockers.Pop();
+                if (go != null) UnityEngine.Object.Destroy(go);
+            }
+        }
+
         public static GameObject CloneAndReposition(GameObject template, Vector3 localOffset, Transform parent = null)
         {
             if (template == null) return null;
@@ -141,14 +149,12 @@ namespace ModAPI.UI
             }
 
             clone.name = template.name + "_Clone";
+            clone.SetActive(false);
             clone.transform.localScale = template.transform.localScale;
             clone.transform.localRotation = template.transform.localRotation;
             clone.transform.localPosition = template.transform.localPosition + localOffset;
 
-            // --- Robust Mod-Safe Cleanup ---
-            foreach (var loc in clone.GetComponentsInChildren<UILocalize>(true)) UnityEngine.Object.Destroy(loc);
-            foreach (var msg in clone.GetComponentsInChildren<UIButtonMessage>(true)) UnityEngine.Object.Destroy(msg);
-            foreach (var anchor in clone.GetComponentsInChildren<UIAnchor>(true)) UnityEngine.Object.Destroy(anchor);
+            StripClonedButtonBehaviors(clone);
 
             foreach (var w in clone.GetComponentsInChildren<UIWidget>(true))
             {
@@ -156,7 +162,83 @@ namespace ModAPI.UI
                 w.enabled = true;
             }
 
+            clone.SetActive(template.activeSelf);
             return clone;
+        }
+
+        private static void StripClonedButtonBehaviors(GameObject cloneGO)
+        {
+            if (cloneGO == null)
+                return;
+
+            // Sheltered UI prefabs often hide behavior in NGUI helper components attached to
+            // the button hierarchy. When we clone a scenario button we want the visuals only.
+            // Leaving inherited tween/listener components in place can fire the original
+            // vanilla startup flow even after the mod assigns its own click handler.
+            foreach (var loc in cloneGO.GetComponentsInChildren<UILocalize>(true)) UnityEngine.Object.Destroy(loc);
+            foreach (var msg in cloneGO.GetComponentsInChildren<UIButtonMessage>(true)) UnityEngine.Object.Destroy(msg);
+            foreach (var anchor in cloneGO.GetComponentsInChildren<UIAnchor>(true)) UnityEngine.Object.Destroy(anchor);
+            foreach (var tween in cloneGO.GetComponentsInChildren<UIPlayTween>(true)) UnityEngine.Object.Destroy(tween);
+            foreach (var anim in cloneGO.GetComponentsInChildren<UIPlayAnimation>(true)) UnityEngine.Object.Destroy(anim);
+            foreach (var listener in cloneGO.GetComponentsInChildren<UIEventListener>(true))
+            {
+                if (listener == null) continue;
+                listener.onSubmit = null;
+                listener.onClick = null;
+                listener.onDoubleClick = null;
+                listener.onHover = null;
+                listener.onPress = null;
+                listener.onSelect = null;
+                listener.onScroll = null;
+                listener.onDrag = null;
+                listener.onDrop = null;
+                listener.onKey = null;
+                listener.enabled = false;
+                UnityEngine.Object.Destroy(listener);
+            }
+            foreach (var navigation in cloneGO.GetComponentsInChildren<UIKeyNavigation>(true)) UnityEngine.Object.Destroy(navigation);
+
+            MonoBehaviour[] behaviours = cloneGO.GetComponentsInChildren<MonoBehaviour>(true);
+            for (int i = 0; i < behaviours.Length; i++)
+            {
+                MonoBehaviour behaviour = behaviours[i];
+                if (behaviour == null)
+                    continue;
+
+                if (behaviour is UIButton || behaviour is UIWidget || behaviour is UIPanel)
+                    continue;
+
+                behaviour.enabled = false;
+                UnityEngine.Object.Destroy(behaviour);
+            }
+
+            Collider[] colliders = cloneGO.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                Collider collider = colliders[i];
+                if (collider == null)
+                    continue;
+
+                if (collider.gameObject == cloneGO)
+                    continue;
+
+                collider.enabled = false;
+                UnityEngine.Object.Destroy(collider);
+            }
+
+            Collider2D[] colliders2D = cloneGO.GetComponentsInChildren<Collider2D>(true);
+            for (int i = 0; i < colliders2D.Length; i++)
+            {
+                Collider2D collider = colliders2D[i];
+                if (collider == null)
+                    continue;
+
+                if (collider.gameObject == cloneGO)
+                    continue;
+
+                collider.enabled = false;
+                UnityEngine.Object.Destroy(collider);
+            }
         }
 
         public static T CloneAndReposition<T>(T template, Vector3 localOffset, Transform parent = null) where T : Component
