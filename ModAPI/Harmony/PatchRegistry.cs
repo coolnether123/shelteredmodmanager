@@ -22,7 +22,8 @@ namespace ModAPI.Harmony
         Events,
         Interactions,
         Characters,
-        World
+        World,
+        Scenarios
     }
 
     /// <summary>

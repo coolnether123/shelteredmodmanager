@@ -168,6 +168,13 @@ namespace ModAPI.Core
             internal static bool _forceLoad = false; // Internal so OnSlotChosen can set it
             private static bool _loadingScreenAlreadyManaged = false; // Track if we've handled the loading screen
 
+            private struct LoadManifestContext
+            {
+                public bool IsCustom;
+                public string ScenarioId;
+                public int AbsoluteSlot;
+            }
+
             /// <summary>
             /// Validates loaded mod manifest before continuing load flow.
             /// Returns false to pause load when user confirmation is required.
@@ -207,7 +214,7 @@ namespace ModAPI.Core
                     MMLog.WriteDebug($"[LoadGamePatch] Checking mod data for slot {type}.");
 
                     List<ModManifestData.ModInfo> savedMods = null;
-                    bool isCustomLoadContext = SaveRuntimeState.HasActiveCustomSave;
+                    LoadManifestContext context = ResolveLoadManifestContext(type);
 
                     // 1. Try reading from SaveData (internal save file)
                     string modDataJson = null;
@@ -227,35 +234,18 @@ namespace ModAPI.Core
                     {
                         try
                         {
-                            // Use the actual custom slot if active, or if a load is pending redirect, otherwise fallback to vanilla type
-                            int absoluteSlot = SaveRuntimeState.HasActiveCustomSave ? SaveRuntimeState.ActiveCustomSave.absoluteSlot : (int)type;
-                            
-                            // Check for pending redirects
-                            ModAPI.Hooks.PlatformSaveProxy.Target pending;
-                            if (SaveRuntimeState.TryGetPendingLoad(type, out pending) && pending != null)
-                            {
-                                isCustomLoadContext = true;
-                                var pendingEntry = pending.scenarioId == "Standard" 
-                                    ? ModAPI.Saves.ExpandedVanillaSaves.Get(pending.saveId)
-                                    : ModAPI.Saves.ScenarioSaves.Get(pending.scenarioId, pending.saveId);
-                                    
-                                if (pendingEntry != null)
-                                {
-                                    absoluteSlot = pendingEntry.absoluteSlot;
-                                    MMLog.WriteDebug(string.Format("[LoadGamePatch] Pending load redirect found for {0} -> custom slot {1}", type, absoluteSlot));
-                                }
-                            }
+                            MMLog.WriteDebug(string.Format("[LoadGamePatch] Checking manifest for scenario '{0}' slot {1} (vanilla type={2}, custom={3})",
+                                context.ScenarioId, context.AbsoluteSlot, type, context.IsCustom));
 
-                            MMLog.WriteDebug(string.Format("[LoadGamePatch] Checking manifest for slot {0} (vanilla type={1})", absoluteSlot, type));
-
-                            var manifest = ModAPI.Saves.SaveRegistryCore.ReadSlotManifest("Standard", absoluteSlot);
+                            var manifest = ModAPI.Saves.SaveRegistryCore.ReadSlotManifest(context.ScenarioId, context.AbsoluteSlot);
                             if (manifest != null && manifest.lastLoadedMods != null)
                             {
                                 savedMods = new List<ModManifestData.ModInfo>();
                                 foreach (var m in manifest.lastLoadedMods)
                                     savedMods.Add(new ModManifestData.ModInfo { id = m.modId, version = m.version });
 
-                                MMLog.WriteDebug(string.Format("[LoadGamePatch] Found external manifest data for slot {0}. Count: {1}", absoluteSlot, savedMods.Count));
+                                MMLog.WriteDebug(string.Format("[LoadGamePatch] Found external manifest data for scenario '{0}' slot {1}. Count: {2}",
+                                    context.ScenarioId, context.AbsoluteSlot, savedMods.Count));
                             }
                         }
                         catch (Exception ex)
@@ -267,10 +257,11 @@ namespace ModAPI.Core
                     // If still no data, imply unmodded save.
                     if (savedMods == null)
                     {
-                        if (isCustomLoadContext)
+                        if (context.IsCustom)
                         {
-                            MMLog.WriteWarning("[LoadGamePatch] No trusted mod data found for custom save. Blocking load.");
-                            ShowBlockedLoadDetails(data, type, SaveVerification.VerificationState.Unknown);
+                            MMLog.WriteWarning("[LoadGamePatch] No trusted mod data found for custom save. Blocking load. scenario="
+                                + context.ScenarioId + " absoluteSlot=" + context.AbsoluteSlot + " proxySlot=" + type + ".");
+                            ShowBlockedLoadDetails(data, context, SaveVerification.VerificationState.Unknown);
                             return false;
                         }
 
@@ -289,7 +280,8 @@ namespace ModAPI.Core
 
                     if (currentState != SaveVerification.VerificationState.Match)
                     {
-                        MMLog.WriteWarning(string.Format("[LoadGamePatch] Mismatch detected ({0}) for slot {1}. Pausing load to show UI.", currentState, type));
+                        MMLog.WriteWarning(string.Format("[LoadGamePatch] Mismatch detected ({0}) for scenario '{1}' slot {2} (proxySlot={3}). Pausing load to show UI.",
+                            currentState, context.ScenarioId, context.AbsoluteSlot, type));
                         
                         _isWaitingForUser = true;
                         _loadingScreenAlreadyManaged = true; // We're taking control of the loading screen
@@ -301,7 +293,8 @@ namespace ModAPI.Core
                         var entry = new ModAPI.Saves.SaveEntry
                         {
                             id = "temp_load_entry",
-                            absoluteSlot = SaveRuntimeState.ActiveCustomSave != null ? SaveRuntimeState.ActiveCustomSave.absoluteSlot : (int)type,
+                            absoluteSlot = context.AbsoluteSlot,
+                            scenarioId = context.ScenarioId,
                             saveInfo = new ModAPI.Saves.SaveInfo 
                             { 
                                 familyName = data.info != null ? data.info.m_familyName : "Unknown",
@@ -335,7 +328,7 @@ namespace ModAPI.Core
                 return true; // Continue with original method
             }
 
-            private static void ShowBlockedLoadDetails(SaveData data, SaveManager.SaveType type, SaveVerification.VerificationState state)
+            private static void ShowBlockedLoadDetails(SaveData data, LoadManifestContext context, SaveVerification.VerificationState state)
             {
                 _isWaitingForUser = true;
                 _loadingScreenAlreadyManaged = true;
@@ -349,7 +342,8 @@ namespace ModAPI.Core
                 var entry = new ModAPI.Saves.SaveEntry
                 {
                     id = "temp_blocked_entry",
-                    absoluteSlot = SaveRuntimeState.ActiveCustomSave != null ? SaveRuntimeState.ActiveCustomSave.absoluteSlot : (int)type,
+                    absoluteSlot = context.AbsoluteSlot,
+                    scenarioId = context.ScenarioId,
                     saveInfo = new ModAPI.Saves.SaveInfo
                     {
                         familyName = data.info != null ? data.info.m_familyName : "Unknown",
@@ -370,10 +364,59 @@ namespace ModAPI.Core
                 });
             }
 
+            private static LoadManifestContext ResolveLoadManifestContext(SaveManager.SaveType type)
+            {
+                LoadManifestContext context = new LoadManifestContext
+                {
+                    IsCustom = false,
+                    ScenarioId = "Standard",
+                    AbsoluteSlot = (int)type
+                };
+
+                if (SaveRuntimeState.HasActiveCustomSave && SaveRuntimeState.ActiveCustomSave != null)
+                {
+                    context.IsCustom = true;
+                    context.ScenarioId = string.IsNullOrEmpty(SaveRuntimeState.ActiveCustomSave.scenarioId)
+                        ? "Standard"
+                        : SaveRuntimeState.ActiveCustomSave.scenarioId;
+                    context.AbsoluteSlot = SaveRuntimeState.ActiveCustomSave.absoluteSlot;
+                }
+
+                ModAPI.Hooks.PlatformSaveProxy.Target pending;
+                if (!SaveRuntimeState.TryGetPendingLoad(type, out pending) || pending == null)
+                    return context;
+
+                context.IsCustom = true;
+                context.ScenarioId = string.IsNullOrEmpty(pending.scenarioId) ? "Standard" : pending.scenarioId;
+                var pendingEntry = string.Equals(context.ScenarioId, "Standard", StringComparison.OrdinalIgnoreCase)
+                    ? ModAPI.Saves.ExpandedVanillaSaves.Get(pending.saveId)
+                    : ModAPI.Saves.ScenarioSaves.Get(context.ScenarioId, pending.saveId);
+                if (pendingEntry != null)
+                {
+                    context.AbsoluteSlot = pendingEntry.absoluteSlot;
+                    MMLog.WriteDebug(string.Format("[LoadGamePatch] Pending load redirect found for {0} -> scenario '{1}' slot {2}",
+                        type, context.ScenarioId, context.AbsoluteSlot));
+                }
+
+                return context;
+            }
+
             private static void CancelInterruptedLoad()
             {
                 MMLog.WriteDebug("[LoadGamePatch] User cancelled load.");
                 _isWaitingForUser = false;
+                _forceLoad = false;
+
+                try
+                {
+                    if (SaveManager.instance != null)
+                    {
+                        SaveManager.SaveType currentType = (SaveManager.SaveType)AccessTools.Field(typeof(SaveManager), "m_currentType").GetValue(SaveManager.instance);
+                        SaveRuntimeState.ClearPendingLoad(currentType);
+                        MMLog.WriteDebug("[LoadGamePatch] Cleared pending load redirect for " + currentType + ".");
+                    }
+                }
+                catch (Exception ex) { MMLog.WriteError("Error clearing pending load redirect: " + ex); }
                 
                 try 
                 {
