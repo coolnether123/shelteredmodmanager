@@ -672,7 +672,6 @@ namespace ShelteredAPI.Input
 
         private static void EnsureActionsRegistered()
         {
-            ShelteredInputActions.EnsureRegistered();
             ShelteredVanillaInputActions.EnsureRegistered();
         }
 

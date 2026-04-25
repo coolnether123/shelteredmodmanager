@@ -92,16 +92,30 @@ namespace ModAPI.Hooks
                         SaveExitTracker.Mark("PlatformSave.Redirect", "saveId=" + target.saveId);
                     }
 
-                    // FORCE SYNC: ExpandedVanillaSaves.Instance.Overwrite uses File.WriteAllBytes (blocking).
-                    // This ensures the file is flushed to disk before we return.
-                    var entry = ExpandedVanillaSaves.Instance.Overwrite(target.saveId, new SaveOverwriteOptions(), data);
+                    // Route the save through the owning scenario registry instead of assuming
+                    // everything belongs to Standard. Custom scenario starts deliberately reuse
+                    // Sheltered's virtual slot types (Slot1/2/3) as transport, but the actual
+                    // file target must stay in the scenario-specific save tree.
+                    string scenarioId = string.IsNullOrEmpty(target.scenarioId) ? "Standard" : target.scenarioId;
+                    bool isStandardScenario = string.Equals(scenarioId, "Standard", StringComparison.OrdinalIgnoreCase);
+                    ISaveApi saveApi = isStandardScenario
+                        ? ExpandedVanillaSaves.Instance
+                        : ScenarioSaves.GetRegistry(scenarioId);
+
+                    // FORCE SYNC: the registry overwrite path uses blocking file writes so the
+                    // redirect is durable before the vanilla caller continues.
+                    var entry = saveApi.Overwrite(target.saveId, new SaveOverwriteOptions(), data);
+                    if (entry == null)
+                    {
+                        MMLog.WriteError($"PlatformSaveProxy.PlatformSave: redirected save failed. proxySlot={slotName}, scenario={scenarioId}, saveId={target.saveId}");
+                        return false;
+                    }
 
                     // Create Manifest immediately for new saves
-                    if (entry != null)
-                    {
-                        var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
-                        registry.UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
-                    }
+                    SaveRegistryCore registry = isStandardScenario
+                        ? (SaveRegistryCore)ExpandedVanillaSaves.Instance
+                        : ScenarioSaves.GetRegistry(scenarioId);
+                    registry.UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
 
                     // Set this as the active save for the rest of the session
                     SaveRuntimeState.SetActiveCustomSession(type, entry);
@@ -109,8 +123,7 @@ namespace ModAPI.Hooks
                     // Clear the "Next" target so we don't get stuck
                     SaveRuntimeState.ClearPendingSave(type);
 
-                    if (entry != null)
-                        MMLog.WriteDebug($"Saved custom slot: {entry.id}");
+                    MMLog.WriteDebug($"Saved custom slot: {entry.id} (scenario={entry.scenarioId}, absoluteSlot={entry.absoluteSlot})");
                     if (PluginRunner.IsQuitting)
                     {
                         SaveExitTracker.Mark("PlatformSave.Redirect.Done", entry != null ? ("entry=" + entry.id) : "entry=null");
@@ -119,7 +132,7 @@ namespace ModAPI.Hooks
                     if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
 
                     // Regular log: Save complete
-                    MMLog.WriteInfo($"Save finished {slotName} (custom slot: {entry?.id ?? "unknown"})");
+                    MMLog.WriteInfo($"Save finished {slotName} (custom slot: {entry?.id ?? "unknown"}, scenario: {entry?.scenarioId ?? target.scenarioId ?? "unknown"})");
                     return true; // We handled it
                 }
 
@@ -127,14 +140,21 @@ namespace ModAPI.Hooks
                 if (SaveRuntimeState.HasActiveCustomSave)
                 {
                     // Update the file and metadata
-                    // FORCE SYNC: Uses File.WriteAllBytes
                     var active = SaveRuntimeState.ActiveCustomSave;
-                    var result = ExpandedVanillaSaves.Instance.Overwrite(active.id, new SaveOverwriteOptions(), data);
-                    
-                    if (result != null)
+                    bool isStandardScenario = string.Equals(active.scenarioId, "Standard", StringComparison.OrdinalIgnoreCase);
+                    ISaveApi saveApi = isStandardScenario
+                        ? ExpandedVanillaSaves.Instance
+                        : ScenarioSaves.GetRegistry(active.scenarioId);
+
+                    // FORCE SYNC: Uses blocking file writes through the owning registry.
+                    var result = saveApi.Overwrite(active.id, new SaveOverwriteOptions(), data);
+                    if (result == null)
                     {
-                        SaveRuntimeState.SetActiveCustomSession(type, result);
+                        MMLog.WriteError($"PlatformSaveProxy.PlatformSave: active custom save overwrite failed. proxySlot={slotName}, scenario={active.scenarioId}, saveId={active.id}");
+                        return false;
                     }
+                    
+                    SaveRuntimeState.SetActiveCustomSession(type, result);
                     if (PluginRunner.IsQuitting)
                     {
                         SaveExitTracker.Mark("PlatformSave.ActiveCustom.Done", result != null ? ("entry=" + result.id) : "result=null");
@@ -143,7 +163,7 @@ namespace ModAPI.Hooks
                     if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
                     
                     // Regular log: Save complete
-                    MMLog.WriteInfo($"Save finished {slotName} (custom slot: {SaveRuntimeState.ActiveCustomSave.id})");
+                    MMLog.WriteInfo($"Save finished {slotName} (custom slot: {result.id}, scenario: {result.scenarioId}, absoluteSlot: {result.absoluteSlot})");
                     return true; // We handled it
                 }
 
@@ -179,7 +199,7 @@ namespace ModAPI.Hooks
             {
                 try
                 {
-                    var scenarioId = nextLoadTarget.scenarioId;
+                    var scenarioId = string.IsNullOrEmpty(nextLoadTarget.scenarioId) ? "Standard" : nextLoadTarget.scenarioId;
                     var saveId = nextLoadTarget.saveId;
 
                     ISaveApi saveApi = ExpandedVanillaSaves.IsStandardScenario(scenarioId)
@@ -209,6 +229,7 @@ namespace ModAPI.Hooks
                     _customLoadedXml = File.ReadAllText(path);
                     SaveRuntimeState.SetActiveCustomSession(type, entry);
                     SaveRuntimeState.ClearPendingLoad(type);
+                    MMLog.WriteInfo($"[PlatformLoad] Loaded redirected save. proxySlot={type}, scenario={scenarioId}, saveId={saveId}, absoluteSlot={entry.absoluteSlot}");
                     return true;
                 }
                 catch (Exception ex)
@@ -253,6 +274,22 @@ namespace ModAPI.Hooks
         {
             SaveRuntimeState.SetPendingSave(type, scenarioId, saveId);
         }
+
+        public static bool TryGetNextSave(SaveManager.SaveType type, out Target target)
+        {
+            return SaveRuntimeState.TryGetPendingSave(type, out target);
+        }
+
+        public static bool ClearNextSave(SaveManager.SaveType type)
+        {
+            return SaveRuntimeState.ClearPendingSave(type);
+        }
+
+        public static bool ClearNextLoad(SaveManager.SaveType type)
+        {
+            return SaveRuntimeState.ClearPendingLoad(type);
+        }
+
         public static void ResetStatus()
         {
             _quitSaveCompleted = false;

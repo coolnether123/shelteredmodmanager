@@ -1,7 +1,9 @@
 using ModAPI.Core;
 using ModAPI.Actors;
 using ModAPI.InputServices;
+using ModAPI.Scenarios;
 using ShelteredAPI.Input;
+using ShelteredAPI.Scenarios;
 using UnityEngine;
 
 namespace ShelteredAPI.Core
@@ -23,7 +25,9 @@ namespace ShelteredAPI.Core
             {
                 if (_initialized) return;
 
-                ShelteredInputActions.EnsureRegistered();
+                ScenarioCompositionRoot.EnsureInitialized();
+                ScenarioAuthoringInputActions.EnsureRegistered();
+                ScenarioAuthoringRuntimeDriver.EnsureCreated();
                 ShelteredVanillaInputActions.EnsureRegistered();
                 ShelteredKeybindsProvider.Instance.EnsureLoaded();
                 ScrollInputService.RegisterSource(UnityScrollInputSource.Instance);
@@ -78,6 +82,15 @@ namespace ShelteredAPI.Core
             RegisterApi("ShelteredAPI.ActorEvents", (IActorEvents)actors);
             RegisterApi(GameRuntimeApiIds.ActorSerialization, (IActorSerializationService)actors);
             RegisterApi("ShelteredAPI.ActorSerialization", (IActorSerializationService)actors);
+
+            ICustomScenarioService customScenarios = ScenarioCompositionRoot.Resolve<ICustomScenarioService>();
+            IScenarioAuthoringBackend scenarioAuthoring = ScenarioCompositionRoot.Resolve<IScenarioAuthoringBackend>();
+            ScenarioCompositionRoot.Resolve<IScenarioRuntimeBindingService>().EnsureHooked();
+            ScenarioCompositionRoot.Resolve<IShelteredCustomScenarioService>().RefreshDefinitionCatalog();
+            RegisterApi(GameRuntimeApiIds.CustomScenarios, customScenarios);
+            RegisterApi("ShelteredAPI.CustomScenarios", customScenarios);
+            RegisterApi(GameRuntimeApiIds.ScenarioAuthoring, scenarioAuthoring);
+            RegisterApi("ShelteredAPI.ScenarioAuthoring", scenarioAuthoring);
         }
 
         private static void RegisterApi<T>(string apiId, T implementation) where T : class
