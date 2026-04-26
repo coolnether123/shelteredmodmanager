@@ -28,6 +28,13 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioModCompatibilityViewModelBuilder _modCompatibilityViewModelBuilder;
         private readonly ScenarioSelectionScopeService _selectionScopeService;
         private readonly ScenarioTargetClassifier _targetClassifier;
+        private readonly Dictionary<ScenarioAuthoringWindowContentKind, WindowSectionsBuilder> _windowSectionBuilders;
+
+        private delegate ScenarioAuthoringInspectorSection[] WindowSectionsBuilder(
+            ScenarioAuthoringState state,
+            ScenarioEditorSession editorSession,
+            ScenarioAuthoringSession session,
+            ScenarioDefinition definition);
 
         public ScenarioAuthoringPresentationBuilder(
             ScenarioAuthoringCaptureService captureService,
@@ -69,6 +76,7 @@ namespace ShelteredAPI.Scenarios
             _modCompatibilityViewModelBuilder = modCompatibilityViewModelBuilder;
             _selectionScopeService = selectionScopeService;
             _targetClassifier = targetClassifier;
+            _windowSectionBuilders = CreateWindowSectionBuilders();
         }
 
         public ScenarioAuthoringShellViewModel BuildShellViewModel(
@@ -876,65 +884,70 @@ namespace ShelteredAPI.Scenarios
                     Id = definitionEntry.Id,
                     Title = definitionEntry.Title,
                     Dock = definitionEntry.Dock,
+                    WorkspaceStage = definitionEntry.WorkspaceStage,
+                    RendererKind = definitionEntry.RendererKind,
+                    WorkspaceTabVisible = definitionEntry.WorkspaceTabVisible,
                     Visible = windowState.Visible,
                     Collapsed = windowState.Collapsed,
                     Width = windowState.Width,
                     Height = windowState.Height,
                     HeaderActions = BuildWindowHeaderActions(definitionEntry.Id, windowState, state)
                 };
-                window.Sections = BuildWindowSections(definitionEntry.Id, state, editorSession, session, definition);
+                window.Sections = BuildWindowSections(definitionEntry, state, editorSession, session, definition);
                 windows.Add(window);
             }
         }
 
         private ScenarioAuthoringInspectorSection[] BuildWindowSections(
-            string windowId,
+            ScenarioAuthoringWindowDefinition windowDefinition,
             ScenarioAuthoringState state,
             ScenarioEditorSession editorSession,
             ScenarioAuthoringSession session,
             ScenarioDefinition definition)
         {
-            switch (windowId)
+            WindowSectionsBuilder builder;
+            return windowDefinition != null
+                && _windowSectionBuilders.TryGetValue(windowDefinition.ContentKind, out builder)
+                ? builder(state, editorSession, session, definition)
+                : BuildEmptyWindowSections();
+        }
+
+        private Dictionary<ScenarioAuthoringWindowContentKind, WindowSectionsBuilder> CreateWindowSectionBuilders()
+        {
+            Dictionary<ScenarioAuthoringWindowContentKind, WindowSectionsBuilder> builders = new Dictionary<ScenarioAuthoringWindowContentKind, WindowSectionsBuilder>();
+            builders[ScenarioAuthoringWindowContentKind.Scenario] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition)
             {
-                case ScenarioAuthoringWindowIds.Scenario:
-                    if (state != null && state.ActiveStage == ScenarioStageKind.Test)
-                        return BuildTestWindowSections(definition);
-                    return BuildScenarioWindowSections(state, editorSession, session);
-                case ScenarioAuthoringWindowIds.Layers:
-                    return BuildLayerWindowSections();
-                case ScenarioAuthoringWindowIds.TilesPalette:
-                    return BuildPaletteWindowSections(state, definition);
-                case ScenarioAuthoringWindowIds.Inspector:
-                    return BuildInspectorShellSections(state, editorSession, definition);
-                case ScenarioAuthoringWindowIds.BuildTools:
-                    return BuildBuildToolsWindowSections(state, definition);
-                case ScenarioAuthoringWindowIds.Triggers:
-                    return BuildTriggerWindowSections(definition);
-                case ScenarioAuthoringWindowIds.Survivors:
-                    return BuildSurvivorWindowSections(definition);
-                case ScenarioAuthoringWindowIds.Stockpile:
-                    return BuildStockpileWindowSections(definition);
-                case ScenarioAuthoringWindowIds.Quests:
-                    return BuildQuestWindowSections(definition);
-                case ScenarioAuthoringWindowIds.Map:
-                    return BuildMapWindowSections(definition);
-                case ScenarioAuthoringWindowIds.Publish:
-                    return BuildPublishWindowSections(editorSession, definition);
-                case ScenarioAuthoringWindowIds.Calendar:
-                    return BuildCalendarWindowSections(state, definition);
-                default:
-                    return new[]
-                    {
-                        new ScenarioAuthoringInspectorSection
-                        {
-                            Id = "empty",
-                            Title = string.Empty,
-                            Expanded = true,
-                            Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
-                            Items = new[] { Text("Window content is not available.") }
-                        }
-                    };
-            }
+                return state != null && state.ActiveStage == ScenarioStageKind.Test
+                    ? BuildTestWindowSections(definition)
+                    : BuildScenarioWindowSections(state, editorSession, session);
+            };
+            builders[ScenarioAuthoringWindowContentKind.Layers] = delegate { return BuildLayerWindowSections(); };
+            builders[ScenarioAuthoringWindowContentKind.TilesPalette] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildPaletteWindowSections(state, definition); };
+            builders[ScenarioAuthoringWindowContentKind.Inspector] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildInspectorShellSections(state, editorSession, definition); };
+            builders[ScenarioAuthoringWindowContentKind.BuildTools] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildBuildToolsWindowSections(state, definition); };
+            builders[ScenarioAuthoringWindowContentKind.Triggers] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildTriggerWindowSections(definition); };
+            builders[ScenarioAuthoringWindowContentKind.Survivors] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildSurvivorWindowSections(definition); };
+            builders[ScenarioAuthoringWindowContentKind.Stockpile] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildStockpileWindowSections(definition); };
+            builders[ScenarioAuthoringWindowContentKind.Quests] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildQuestWindowSections(definition); };
+            builders[ScenarioAuthoringWindowContentKind.Map] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildMapWindowSections(definition); };
+            builders[ScenarioAuthoringWindowContentKind.Publish] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildPublishWindowSections(editorSession, definition); };
+            builders[ScenarioAuthoringWindowContentKind.Calendar] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildCalendarWindowSections(state, definition); };
+            return builders;
+        }
+
+        private ScenarioAuthoringInspectorSection[] BuildEmptyWindowSections()
+        {
+            return new[]
+            {
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "empty",
+                    Title = string.Empty,
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
+                    Items = new[] { Text("Window content is not available.") }
+                }
+            };
         }
 
         private ScenarioAuthoringInspectorSection[] BuildScenarioWindowSections(
@@ -1879,29 +1892,6 @@ namespace ShelteredAPI.Scenarios
             return actions.ToArray();
         }
 
-
-        private ScenarioAuthoringInspectorAction[] BuildWindowMenuActions(ScenarioAuthoringState state)
-        {
-            List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
-            ScenarioAuthoringWindowDefinition[] definitions = _windowRegistry.GetDefinitions();
-            for (int i = 0; i < definitions.Length; i++)
-            {
-                ScenarioAuthoringWindowDefinition definition = definitions[i];
-                if (definition == null || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Settings, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                ScenarioAuthoringWindowState windowState = _layoutService.FindWindow(state, definition.Id);
-                bool open = IsWindowOpen(windowState);
-                actions.Add(Action(
-                    ScenarioAuthoringActionIds.ActionWindowTogglePrefix + definition.Id,
-                    (open ? "✓ " : "  ") + definition.Title,
-                    (open ? "Hide " : "Show ") + definition.Title + ".",
-                    true,
-                    open));
-            }
-
-            return actions.ToArray();
-        }
 
         private ScenarioAuthoringSettingsViewModel BuildSettingsViewModel(ScenarioAuthoringState state)
         {

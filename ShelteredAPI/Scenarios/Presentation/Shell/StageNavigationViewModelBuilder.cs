@@ -73,7 +73,7 @@ namespace ShelteredAPI.Scenarios
                 ScenarioAuthoringWindowDefinition definition = definitions[i];
                 if (definition == null)
                     continue;
-                if (IsLegacyDockWindow(definition.Id))
+                if (!definition.MenuVisible)
                     continue;
 
                 bool emphasized = HasWindowVisible(state, definition.Id);
@@ -87,13 +87,6 @@ namespace ShelteredAPI.Scenarios
             }
 
             return actions.ToArray();
-        }
-
-        private static bool IsLegacyDockWindow(string windowId)
-        {
-            return string.Equals(windowId, ScenarioAuthoringWindowIds.Scenario, System.StringComparison.OrdinalIgnoreCase)
-                || string.Equals(windowId, ScenarioAuthoringWindowIds.Layers, System.StringComparison.OrdinalIgnoreCase)
-                || string.Equals(windowId, ScenarioAuthoringWindowIds.TilesPalette, System.StringComparison.OrdinalIgnoreCase);
         }
 
         public string BuildStageLabel(ScenarioAuthoringState state)

@@ -57,37 +57,16 @@ namespace ShelteredAPI.Scenarios
             ApplyStageWorkspace(state);
         }
 
-        private static readonly string[] WorkspaceWindowIds = new[]
-        {
-            ScenarioAuthoringWindowIds.Triggers,
-            ScenarioAuthoringWindowIds.Survivors,
-            ScenarioAuthoringWindowIds.Stockpile,
-            ScenarioAuthoringWindowIds.Quests,
-            ScenarioAuthoringWindowIds.Map,
-            ScenarioAuthoringWindowIds.Publish
-        };
-
-        private static bool IsWorkspaceWindow(string windowId)
-        {
-            if (string.IsNullOrEmpty(windowId))
-                return false;
-            for (int i = 0; i < WorkspaceWindowIds.Length; i++)
-            {
-                if (string.Equals(WorkspaceWindowIds[i], windowId, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-            return false;
-        }
-
         public bool ToggleWindowVisibility(ScenarioAuthoringState state, string windowId)
         {
             ScenarioAuthoringWindowState window = FindWindow(state, windowId);
             if (window == null)
                 return false;
 
-            if (IsWorkspaceWindow(windowId))
+            ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(windowId);
+            if (definition != null && definition.IsWorkspaceStageWindow)
             {
-                ScenarioStageKind workspaceStage = ResolveWorkspaceStage(windowId);
+                ScenarioStageKind workspaceStage = definition.WorkspaceStage;
                 if (workspaceStage == ScenarioStageKind.None)
                     return false;
 
@@ -221,9 +200,10 @@ namespace ShelteredAPI.Scenarios
                 if (window == null)
                     continue;
 
-                if (IsWorkspaceWindow(window.Id))
+                ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(window.Id);
+                if (definition != null && definition.IsWorkspaceStageWindow)
                 {
-                    window.Visible = string.Equals(window.Id, ResolveWorkspaceWindowId(activeStage), StringComparison.OrdinalIgnoreCase);
+                    window.Visible = definition.WorkspaceStage == activeStage;
                     window.Collapsed = !window.Visible && window.Collapsed;
                     continue;
                 }
@@ -328,44 +308,6 @@ namespace ShelteredAPI.Scenarios
             catch (Exception ex)
             {
                 ModAPI.Core.MMLog.WriteWarning("[ScenarioAuthoringLayout] Failed to load layout: " + ex.Message);
-            }
-        }
-
-        private static ScenarioStageKind ResolveWorkspaceStage(string windowId)
-        {
-            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Survivors, StringComparison.OrdinalIgnoreCase))
-                return ScenarioStageKind.People;
-            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Stockpile, StringComparison.OrdinalIgnoreCase))
-                return ScenarioStageKind.InventoryStorage;
-            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Triggers, StringComparison.OrdinalIgnoreCase))
-                return ScenarioStageKind.Events;
-            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Quests, StringComparison.OrdinalIgnoreCase))
-                return ScenarioStageKind.Quests;
-            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Map, StringComparison.OrdinalIgnoreCase))
-                return ScenarioStageKind.Map;
-            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Publish, StringComparison.OrdinalIgnoreCase))
-                return ScenarioStageKind.Publish;
-            return ScenarioStageKind.None;
-        }
-
-        private static string ResolveWorkspaceWindowId(ScenarioStageKind stageKind)
-        {
-            switch (stageKind)
-            {
-                case ScenarioStageKind.InventoryStorage:
-                    return ScenarioAuthoringWindowIds.Stockpile;
-                case ScenarioStageKind.People:
-                    return ScenarioAuthoringWindowIds.Survivors;
-                case ScenarioStageKind.Events:
-                    return ScenarioAuthoringWindowIds.Triggers;
-                case ScenarioStageKind.Quests:
-                    return ScenarioAuthoringWindowIds.Quests;
-                case ScenarioStageKind.Map:
-                    return ScenarioAuthoringWindowIds.Map;
-                case ScenarioStageKind.Publish:
-                    return ScenarioAuthoringWindowIds.Publish;
-                default:
-                    return null;
             }
         }
 

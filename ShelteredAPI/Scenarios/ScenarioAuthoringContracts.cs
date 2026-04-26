@@ -207,6 +207,30 @@ namespace ShelteredAPI.Scenarios
         Status = 6
     }
 
+    public enum ScenarioAuthoringShellRendererKind
+    {
+        Standard = 0,
+        Inspector = 1,
+        BottomTray = 2
+    }
+
+    public enum ScenarioAuthoringWindowContentKind
+    {
+        Empty = 0,
+        Scenario = 1,
+        Layers = 2,
+        TilesPalette = 3,
+        Inspector = 4,
+        BuildTools = 5,
+        Triggers = 6,
+        Survivors = 7,
+        Stockpile = 8,
+        Quests = 9,
+        Map = 10,
+        Publish = 11,
+        Calendar = 12
+    }
+
     public enum ScenarioAuthoringSettingKind
     {
         Toggle = 0,
@@ -394,6 +418,11 @@ namespace ShelteredAPI.Scenarios
         public string Id { get; set; }
         public string Title { get; set; }
         public ScenarioAuthoringShellDock Dock { get; set; }
+        public ScenarioStageKind WorkspaceStage { get; set; }
+        public ScenarioAuthoringShellRendererKind RendererKind { get; set; }
+        public ScenarioAuthoringWindowContentKind ContentKind { get; set; }
+        public bool MenuVisible { get; set; }
+        public bool WorkspaceTabVisible { get; set; }
         public bool DefaultVisible { get; set; }
         public bool DefaultCollapsed { get; set; }
         public bool DefaultPinned { get; set; }
@@ -402,6 +431,11 @@ namespace ShelteredAPI.Scenarios
         public float DefaultHeight { get; set; }
         public float MinWidth { get; set; }
         public float MinHeight { get; set; }
+
+        public bool IsWorkspaceStageWindow
+        {
+            get { return WorkspaceStage != ScenarioStageKind.None; }
+        }
     }
 
     public sealed class ScenarioAuthoringWindowState
@@ -566,6 +600,9 @@ namespace ShelteredAPI.Scenarios
         public string Title { get; set; }
         public string Subtitle { get; set; }
         public ScenarioAuthoringShellDock Dock { get; set; }
+        public ScenarioStageKind WorkspaceStage { get; set; }
+        public ScenarioAuthoringShellRendererKind RendererKind { get; set; }
+        public bool WorkspaceTabVisible { get; set; }
         public bool Visible { get; set; }
         public bool Collapsed { get; set; }
         public float Width { get; set; }

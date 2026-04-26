@@ -15,6 +15,7 @@ namespace ShelteredAPI.Scenarios
         private static Rect[] _interactiveRects = new Rect[0];
 
         private readonly Dictionary<string, int> _sectionPages = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _inspectorNotes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly ScenarioAuthoringUiDebugService _uiDebug = ScenarioAuthoringUiDebugService.Instance;
 
         private ScenarioAuthoringImguiRuntime _runtime;
@@ -287,43 +288,191 @@ namespace ShelteredAPI.Scenarios
         private void DrawInspector(Rect inner)
         {
             ScenarioAuthoringInspectorDocument inspector = _snapshot != null ? _snapshot.InspectorDocument : null;
-            ScenarioAuthoringInspectorSection targetSection = FindSection(inspector, "target");
-            ScenarioAuthoringInspectorSection actionsSection = FindSection(inspector, "actions");
-            ScenarioAuthoringInspectorSection selectionSection = FindSection(_snapshot != null ? _snapshot.ShellDocument : null, "selection");
-            ScenarioAuthoringInspectorSection assetModeSection = FindSection(inspector, "asset_mode");
-            ScenarioAuthoringInspectorSection summarySection = FindPrimaryAssetSummarySection(inspector);
+            ScenarioAuthoringInspectorSection objectSummarySection = FindSection(inspector, "object_summary");
+            ScenarioAuthoringInspectorSection scenarioBehaviorSection = FindSection(inspector, "scenario_behavior");
+            ScenarioAuthoringInspectorSection warningsSection = FindSection(inspector, "warnings");
+            ScenarioAuthoringInspectorSection fallbackSummarySection = FindPrimaryAssetSummarySection(inspector);
+            ScenarioAuthoringTarget target = _snapshot != null && _snapshot.State != null
+                ? _snapshot.State.SelectedTarget ?? _snapshot.State.HoveredTarget
+                : null;
 
             _inspectorScroll = GUILayout.BeginScrollView(_inspectorScroll, false, true);
-            DrawSectionHeader(inspector != null ? inspector.Title ?? "Inspector" : "Inspector");
-            if (targetSection != null)
-                DrawSummarySection(targetSection, 6, 0, true);
+            DrawInspectorTitleBar(inspector != null ? inspector.Title : null);
+
+            if (objectSummarySection != null)
+            {
+                DrawInspectorObjectSummaryCard(objectSummarySection);
+            }
+            else if (fallbackSummarySection != null)
+            {
+                DrawInspectorCard(fallbackSummarySection.Title ?? "Object Summary", delegate
+                {
+                    DrawSummarySection(fallbackSummarySection, 6, 1, true);
+                });
+            }
             else
-                GUILayout.Label("Hold Ctrl and click a target to inspect it.", _runtime.NoteStyle);
-
-            if (actionsSection != null)
             {
-                DrawSectionHeader("Actions");
-                DrawActionStripSection(actionsSection, 1);
+                DrawInspectorEmptyState(inspector);
             }
 
-            if (assetModeSection != null)
-            {
-                DrawSectionHeader("Asset Workflow");
-                DrawActionStripSection(assetModeSection, 2);
-            }
+            if (scenarioBehaviorSection != null)
+                DrawInspectorScenarioBehaviorCard(scenarioBehaviorSection, target);
 
-            if (summarySection != null)
-            {
-                DrawSectionHeader(summarySection.Title ?? "Summary");
-                DrawSummarySection(summarySection, 4, 2, true);
-            }
+            if (warningsSection != null && HasVisibleText(warningsSection))
+                DrawInspectorCard(warningsSection.Title ?? "Warnings", delegate
+                {
+                    string warnings = JoinTexts(warningsSection, 4);
+                    if (!string.IsNullOrEmpty(warnings))
+                        GUILayout.Label(warnings, _runtime.NoteStyle);
+                });
 
-            if (selectionSection != null)
-            {
-                DrawSectionHeader("Selection");
-                DrawMetricSection(selectionSection, 1);
-            }
+            DrawInspectorNotesCard(target);
             GUILayout.EndScrollView();
+        }
+
+        private void DrawInspectorTitleBar(string title)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(string.IsNullOrEmpty(title) ? "INSPECTOR" : title.ToUpperInvariant(), _runtime.SectionTitleStyle, GUILayout.Height(28f));
+            GUILayout.FlexibleSpace();
+            GUILayout.Label("PIN", _runtime.BadgeStyle, GUILayout.Width(36f), GUILayout.Height(24f));
+            GUILayout.EndHorizontal();
+            GUILayout.Space(10f);
+        }
+
+        private void DrawInspectorEmptyState(ScenarioAuthoringInspectorDocument inspector)
+        {
+            DrawInspectorCard("Object Summary", delegate
+            {
+                string message = "Select an object to view and edit its properties.";
+                if (inspector != null)
+                {
+                    ScenarioAuthoringInspectorSection empty = FindSection(inspector, "empty");
+                    string text = JoinTexts(empty, 1);
+                    if (!string.IsNullOrEmpty(text))
+                        message = text;
+                }
+
+                GUILayout.Label(message, _runtime.NoteStyle);
+            });
+        }
+
+        private void DrawInspectorObjectSummaryCard(ScenarioAuthoringInspectorSection section)
+        {
+            DrawInspectorCard(section != null ? section.Title ?? "Object Summary" : "Object Summary", delegate
+            {
+                ScenarioAuthoringInspectorItem previewItem = FindPreviewItem(section);
+                List<ScenarioAuthoringInspectorItem> properties = GetProperties(section);
+
+                GUILayout.BeginHorizontal();
+                Rect previewRect = GUILayoutUtility.GetRect(88f, 88f, GUILayout.Width(88f), GUILayout.Height(88f));
+                DrawSpritePreview(previewRect, previewItem != null ? previewItem.PreviewSprite : null, true);
+
+                GUILayout.Space(12f);
+                GUILayout.BeginVertical(GUILayout.MinHeight(88f));
+                GUILayout.Space(4f);
+                GUILayout.Label(previewItem != null ? previewItem.Value ?? string.Empty : ReadProperty(properties, "Display Name"), _runtime.CardTitleStyle);
+                GUILayout.Label(previewItem != null && !string.IsNullOrEmpty(previewItem.Detail) ? previewItem.Detail : ReadProperty(properties, "Type"), _runtime.CardDetailStyle);
+                string badge = previewItem != null ? previewItem.Badge : ReadProperty(properties, "Selection Scope");
+                if (!string.IsNullOrEmpty(badge))
+                    GUILayout.Label(badge, _runtime.BadgeBoxStyle, GUILayout.Width(Mathf.Clamp(badge.Length * 9f + 20f, 58f, 130f)), GUILayout.Height(24f));
+                GUILayout.EndVertical();
+                GUILayout.EndHorizontal();
+
+                GUILayout.Space(12f);
+                DrawInspectorPropertyRows(properties, 6);
+            });
+        }
+
+        private void DrawInspectorScenarioBehaviorCard(ScenarioAuthoringInspectorSection section, ScenarioAuthoringTarget target)
+        {
+            DrawInspectorCard(section != null ? section.Title ?? "Scenario Behavior" : "Scenario Behavior", delegate
+            {
+                List<ScenarioAuthoringInspectorItem> properties = GetProperties(section);
+                int count = Mathf.Min(3, properties.Count);
+                for (int i = 0; i < count; i++)
+                {
+                    ScenarioAuthoringInspectorItem item = properties[i];
+                    Rect rowRect = GUILayoutUtility.GetRect(0f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f));
+                    float editWidth = 34f;
+                    DrawInspectorPropertyRow(
+                        new Rect(rowRect.x, rowRect.y, rowRect.width - editWidth - 6f, rowRect.height),
+                        item != null ? item.Label : string.Empty,
+                        item != null ? item.Value : string.Empty);
+
+                    GUI.enabled = target != null;
+                    if (GUI.Button(new Rect(rowRect.xMax - editWidth, rowRect.y + 2f, editWidth, 24f), "...", _runtime.MiniButtonStyle))
+                        OpenInspectorTargetMenu(target);
+                    GUI.enabled = true;
+                }
+            });
+        }
+
+        private void OpenInspectorTargetMenu(ScenarioAuthoringTarget target)
+        {
+            if (target == null || _snapshot == null || _snapshot.State == null)
+                return;
+
+            ScenarioAuthoringBackendService.Instance.OpenContextMenu(_snapshot.State, target);
+            ScenarioAuthoringBackendService.Instance.Refresh();
+        }
+
+        private void DrawInspectorNotesCard(ScenarioAuthoringTarget target)
+        {
+            DrawInspectorCard("Notes", delegate
+            {
+                string key = BuildInspectorNoteKey(target);
+                string notes;
+                if (!_inspectorNotes.TryGetValue(key, out notes))
+                    notes = string.Empty;
+
+                GUIStyle textAreaStyle = new GUIStyle(GUI.skin.textArea);
+                textAreaStyle.normal.textColor = new Color(0.90f, 0.86f, 0.78f, 1f);
+                textAreaStyle.focused.textColor = textAreaStyle.normal.textColor;
+                textAreaStyle.hover.textColor = textAreaStyle.normal.textColor;
+                textAreaStyle.active.textColor = textAreaStyle.normal.textColor;
+                textAreaStyle.wordWrap = true;
+                textAreaStyle.fontSize = 12;
+
+                string edited = GUILayout.TextArea(notes, textAreaStyle, GUILayout.MinHeight(82f), GUILayout.ExpandWidth(true));
+                if (edited != null && edited.Length > 250)
+                    edited = edited.Substring(0, 250);
+                _inspectorNotes[key] = edited ?? string.Empty;
+
+                GUILayout.BeginHorizontal();
+                GUILayout.FlexibleSpace();
+                GUILayout.Label((_inspectorNotes[key].Length.ToString()) + " / 250", _runtime.CaptionStyle);
+                GUILayout.EndHorizontal();
+            });
+        }
+
+        private void DrawInspectorCard(string title, Action drawContents)
+        {
+            GUILayout.BeginVertical(_runtime.SectionSurfaceStyle);
+            GUILayout.Label((title ?? string.Empty).ToUpperInvariant(), _runtime.SectionTitleStyle);
+            GUILayout.Space(8f);
+            if (drawContents != null)
+                drawContents();
+            GUILayout.EndVertical();
+            GUILayout.Space(10f);
+        }
+
+        private void DrawInspectorPropertyRows(List<ScenarioAuthoringInspectorItem> properties, int maxProperties)
+        {
+            int total = Mathf.Min(maxProperties, properties != null ? properties.Count : 0);
+            for (int i = 0; i < total; i++)
+            {
+                ScenarioAuthoringInspectorItem item = properties[i];
+                Rect rowRect = GUILayoutUtility.GetRect(0f, 25f, GUILayout.ExpandWidth(true), GUILayout.Height(25f));
+                DrawInspectorPropertyRow(rowRect, item != null ? item.Label : string.Empty, item != null ? item.Value : string.Empty);
+            }
+        }
+
+        private void DrawInspectorPropertyRow(Rect rowRect, string label, string value)
+        {
+            float keyWidth = Mathf.Clamp(rowRect.width * 0.50f, 112f, 166f);
+            GUI.Label(new Rect(rowRect.x, rowRect.y, keyWidth, rowRect.height), label ?? string.Empty, _runtime.PropertyKeyStyle);
+            GUI.Label(new Rect(rowRect.x + keyWidth + 8f, rowRect.y, rowRect.width - keyWidth - 8f, rowRect.height), Shorten(value, 42), _runtime.PropertyValueStyle);
         }
 
         private void DrawBrowser(Rect inner)
@@ -870,6 +1019,54 @@ namespace ShelteredAPI.Scenarios
             }
 
             return properties;
+        }
+
+        private static bool HasVisibleText(ScenarioAuthoringInspectorSection section)
+        {
+            if (section == null || section.Items == null)
+                return false;
+
+            for (int i = 0; i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item != null
+                    && item.Kind == ScenarioAuthoringInspectorItemKind.Text
+                    && !string.IsNullOrEmpty(item.Value))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string ReadProperty(List<ScenarioAuthoringInspectorItem> properties, string label)
+        {
+            if (properties == null || string.IsNullOrEmpty(label))
+                return string.Empty;
+
+            for (int i = 0; i < properties.Count; i++)
+            {
+                ScenarioAuthoringInspectorItem item = properties[i];
+                if (item != null && string.Equals(item.Label, label, StringComparison.OrdinalIgnoreCase))
+                    return item.Value ?? string.Empty;
+            }
+
+            return string.Empty;
+        }
+
+        private static string BuildInspectorNoteKey(ScenarioAuthoringTarget target)
+        {
+            if (target == null)
+                return "<none>";
+            if (!string.IsNullOrEmpty(target.Id))
+                return target.Id;
+            if (!string.IsNullOrEmpty(target.ScenarioReferenceId))
+                return target.ScenarioReferenceId;
+            if (!string.IsNullOrEmpty(target.TransformPath))
+                return target.TransformPath;
+
+            return target.DisplayName ?? "<target>";
         }
 
         private static string JoinTexts(ScenarioAuthoringInspectorSection section, int maxTexts)

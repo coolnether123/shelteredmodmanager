@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ModAPI.Scenarios;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
@@ -260,11 +261,7 @@ namespace ShelteredAPI.Scenarios
             float viewportRight = contentRect.xMax - InspectorWidth - Gutter;
             float viewportBottom = contentRect.yMax;
 
-            bool showBottomTray = _snapshot != null
-                && _snapshot.State != null
-                && (( _snapshot.State.ActiveTool == ScenarioAuthoringTool.Assets
-                    && HasVisibleWindow(windows, ScenarioAuthoringWindowIds.BuildTools))
-                    || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Calendar));
+            bool showBottomTray = HasVisibleRenderer(windows, ScenarioAuthoringShellRendererKind.BottomTray);
 
             if (showBottomTray)
                 viewportBottom -= BottomTrayHeight + Gutter;
@@ -281,20 +278,14 @@ namespace ShelteredAPI.Scenarios
                 Math.Min(940f, Math.Max(520f, viewportRight - viewportLeft)),
                 BottomTrayHeight);
             if (showBottomTray)
-                AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.BuildTools, buildToolsRect);
-            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Calendar, buildToolsRect);
+                AppendRendererRects(rects, windows, ScenarioAuthoringShellRendererKind.BottomTray, buildToolsRect);
 
             float workspaceWidth = Mathf.Clamp(contentRect.width * 0.58f, 640f, 980f);
             float workspaceHeight = Mathf.Clamp(contentRect.height * 0.72f, 400f, 620f);
             float workspaceX = contentRect.x + ((contentRect.width - workspaceWidth) * 0.5f);
             float workspaceY = contentRect.y + ((contentRect.height - workspaceHeight) * 0.5f);
             Rect workspaceRect = new Rect(workspaceX, workspaceY, workspaceWidth, workspaceHeight);
-            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Triggers, workspaceRect);
-            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Survivors, workspaceRect);
-            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Stockpile, workspaceRect);
-            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Quests, workspaceRect);
-            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Map, workspaceRect);
-            AppendStackRect(rects, windows, ScenarioAuthoringWindowIds.Publish, workspaceRect);
+            AppendWorkspaceRects(rects, windows, workspaceRect);
             return rects;
         }
 
@@ -570,11 +561,14 @@ namespace ShelteredAPI.Scenarios
 
         private Rect DrawWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
-            if (window != null && string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase))
-                return DrawInspectorWindow(rect, window);
+            if (window != null)
+            {
+                if (window.RendererKind == ScenarioAuthoringShellRendererKind.Inspector)
+                    return DrawInspectorWindow(rect, window);
 
-            if (window != null && string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
-                return DrawBottomTrayWindow(rect, window);
+                if (window.RendererKind == ScenarioAuthoringShellRendererKind.BottomTray)
+                    return DrawBottomTrayWindow(rect, window);
+            }
 
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
@@ -1725,47 +1719,27 @@ namespace ShelteredAPI.Scenarios
             return false;
         }
 
-        private static bool HasAnyVisibleBottomStrip(ScenarioAuthoringShellWindowViewModel[] windows)
+        private static bool HasVisibleRenderer(ScenarioAuthoringShellWindowViewModel[] windows, ScenarioAuthoringShellRendererKind rendererKind)
         {
-            return HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Triggers)
-                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Survivors)
-                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Stockpile)
-                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Quests)
-                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Map)
-                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Publish)
-                || HasVisibleWindow(windows, ScenarioAuthoringWindowIds.Calendar);
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                if (window != null && window.Visible && window.RendererKind == rendererKind)
+                    return true;
+            }
+
+            return false;
         }
-
-        private static readonly string[] _workspaceOrder = new[]
-        {
-            ScenarioAuthoringWindowIds.Triggers,
-            ScenarioAuthoringWindowIds.Survivors,
-            ScenarioAuthoringWindowIds.Stockpile,
-            ScenarioAuthoringWindowIds.Quests,
-            ScenarioAuthoringWindowIds.Map,
-            ScenarioAuthoringWindowIds.Publish,
-            ScenarioAuthoringWindowIds.Calendar
-        };
-
-        private static readonly string[] _workspaceLabels = new[]
-        {
-            "Triggers",
-            "Survivors",
-            "Stockpile",
-            "Quests",
-            "Map",
-            "Publish",
-            "Calendar"
-        };
 
         private static string GetActiveWorkspaceId(ScenarioAuthoringShellWindowViewModel[] windows)
         {
             if (windows == null)
                 return null;
-            for (int i = 0; i < _workspaceOrder.Length; i++)
+            for (int i = 0; i < windows.Length; i++)
             {
-                if (HasVisibleWindow(windows, _workspaceOrder[i]))
-                    return _workspaceOrder[i];
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                if (window != null && window.WorkspaceTabVisible && window.Visible)
+                    return window.Id;
             }
             return null;
         }
@@ -1773,20 +1747,62 @@ namespace ShelteredAPI.Scenarios
         private void DrawWorkspaceTabs(Rect rect, string activeId, ScenarioAuthoringShellWindowViewModel[] windows)
         {
             GUI.Box(rect, GUIContent.none, _headerStyle);
-            float tabWidth = (rect.width - 8f) / _workspaceOrder.Length;
-            for (int i = 0; i < _workspaceOrder.Length; i++)
+            ScenarioAuthoringShellWindowViewModel[] tabWindows = GetWorkspaceTabWindows(windows);
+            if (tabWindows.Length == 0)
+                return;
+
+            float tabWidth = (rect.width - 8f) / tabWindows.Length;
+            for (int i = 0; i < tabWindows.Length; i++)
             {
+                ScenarioAuthoringShellWindowViewModel window = tabWindows[i];
                 Rect tabRect = new Rect(rect.x + 4f + (tabWidth * i), rect.y + 3f, tabWidth - 4f, rect.height - 6f);
-                bool isActive = string.Equals(_workspaceOrder[i], activeId, StringComparison.OrdinalIgnoreCase);
+                bool isActive = string.Equals(window.Id, activeId, StringComparison.OrdinalIgnoreCase);
                 ScenarioAuthoringInspectorAction action = new ScenarioAuthoringInspectorAction
                 {
-                    Id = ScenarioAuthoringActionIds.ActionWindowTogglePrefix + _workspaceOrder[i],
-                    Label = _workspaceLabels[i],
-                    Hint = "Open the " + _workspaceLabels[i] + " workspace.",
+                    Id = ScenarioAuthoringActionIds.ActionWindowTogglePrefix + window.Id,
+                    Label = window.Title,
+                    Hint = "Open the " + window.Title + " workspace.",
                     Enabled = true,
                     Emphasized = isActive
                 };
                 DrawButton(tabRect, action, true);
+            }
+        }
+
+        private static ScenarioAuthoringShellWindowViewModel[] GetWorkspaceTabWindows(ScenarioAuthoringShellWindowViewModel[] windows)
+        {
+            List<ScenarioAuthoringShellWindowViewModel> tabWindows = new List<ScenarioAuthoringShellWindowViewModel>();
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                if (window != null && window.WorkspaceTabVisible)
+                    tabWindows.Add(window);
+            }
+
+            return tabWindows.ToArray();
+        }
+
+        private static void AppendWorkspaceRects(Dictionary<string, Rect> rects, ScenarioAuthoringShellWindowViewModel[] windows, Rect rect)
+        {
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                if (window != null && window.WorkspaceStage != ScenarioStageKind.None && window.Visible)
+                    rects[window.Id] = rect;
+            }
+        }
+
+        private static void AppendRendererRects(
+            Dictionary<string, Rect> rects,
+            ScenarioAuthoringShellWindowViewModel[] windows,
+            ScenarioAuthoringShellRendererKind rendererKind,
+            Rect rect)
+        {
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                if (window != null && window.Visible && window.RendererKind == rendererKind)
+                    rects[window.Id] = rect;
             }
         }
 
