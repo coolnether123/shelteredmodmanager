@@ -8,10 +8,7 @@ namespace ShelteredAPI.Scenarios
 
         public ScenarioAuthoringCommandService(
             ScenarioAuthoringCaptureService captureService,
-            ScenarioSpriteSwapAuthoringService spriteSwapAuthoringService,
-            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementAuthoringService,
-            ScenarioBuildPlacementAuthoringService buildPlacementAuthoringService,
-            ScenarioGameplayScheduleAuthoringService gameplayScheduleAuthoringService,
+            IScenarioAuthoringSectionHub sectionHub,
             IScenarioEditorService editorService,
             ScenarioAuthoringSettingsService settingsService,
             ScenarioAuthoringLayoutService layoutService,
@@ -22,10 +19,7 @@ namespace ShelteredAPI.Scenarios
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
-                spriteSwapAuthoringService,
-                sceneSpritePlacementAuthoringService,
-                buildPlacementAuthoringService,
-                gameplayScheduleAuthoringService,
+                sectionHub,
                 editorService,
                 settingsService,
                 layoutService,
@@ -48,10 +42,7 @@ namespace ShelteredAPI.Scenarios
 
         private static IEnumerable<IScenarioCommandHandler> CreateHandlers(
             ScenarioAuthoringCaptureService captureService,
-            ScenarioSpriteSwapAuthoringService spriteSwapAuthoringService,
-            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementAuthoringService,
-            ScenarioBuildPlacementAuthoringService buildPlacementAuthoringService,
-            ScenarioGameplayScheduleAuthoringService gameplayScheduleAuthoringService,
+            IScenarioAuthoringSectionHub sectionHub,
             IScenarioEditorService editorService,
             ScenarioAuthoringSettingsService settingsService,
             ScenarioAuthoringLayoutService layoutService,
@@ -61,13 +52,13 @@ namespace ShelteredAPI.Scenarios
         {
             return new IScenarioCommandHandler[]
             {
-                new SpriteCommandHandler(spriteSwapAuthoringService, selectionScopeService),
-                new SceneSpriteCommandHandler(sceneSpritePlacementAuthoringService, selectionScopeService),
-                new BuildCommandHandler(buildPlacementAuthoringService),
+                new SpriteCommandHandler(sectionHub.SpriteSwap, selectionScopeService),
+                new SceneSpriteCommandHandler(sectionHub.SceneSpritePlacement, selectionScopeService),
+                new BuildCommandHandler(sectionHub.BuildPlacement),
                 new ShellCommandHandler(layoutService, settingsService),
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),
-                new GameplayScheduleCommandHandler(gameplayScheduleAuthoringService, editorService),
+                new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
                 new EditorLifecycleCommandHandler(editorService),
                 new SelectionCommandHandler(),
                 new AssetModeCommandHandler(),

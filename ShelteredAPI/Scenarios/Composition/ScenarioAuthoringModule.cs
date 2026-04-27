@@ -40,6 +40,14 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<PlacementGhostSessionService>(),
                     resolver.Get<IScenarioEditorService>());
             });
+            services.AddSingleton<IScenarioAuthoringSectionHub>(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioAuthoringSectionHub(
+                    resolver.Get<ScenarioSpriteSwapAuthoringService>(),
+                    resolver.Get<ScenarioSceneSpritePlacementAuthoringService>(),
+                    resolver.Get<ScenarioBuildPlacementAuthoringService>(),
+                    resolver.Get<ScenarioGameplayScheduleAuthoringService>());
+            });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringWindowRegistry(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringSettingsService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTargetClassifier(); });
@@ -75,10 +83,7 @@ namespace ShelteredAPI.Scenarios
             {
                 return new ScenarioAuthoringCommandService(
                     resolver.Get<ScenarioAuthoringCaptureService>(),
-                    resolver.Get<ScenarioSpriteSwapAuthoringService>(),
-                    resolver.Get<ScenarioSceneSpritePlacementAuthoringService>(),
-                    resolver.Get<ScenarioBuildPlacementAuthoringService>(),
-                    resolver.Get<ScenarioGameplayScheduleAuthoringService>(),
+                    resolver.Get<IScenarioAuthoringSectionHub>(),
                     resolver.Get<IScenarioEditorService>(),
                     resolver.Get<ScenarioAuthoringSettingsService>(),
                     resolver.Get<ScenarioAuthoringLayoutService>(),
@@ -109,9 +114,7 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ScenarioAuthoringContextMenuService>(),
                     resolver.Get<ScenarioAuthoringCommandService>(),
                     resolver.Get<ScenarioAuthoringHistoryService>(),
-                    resolver.Get<ScenarioBuildPlacementAuthoringService>(),
-                    resolver.Get<ScenarioSpriteSwapAuthoringService>(),
-                    resolver.Get<ScenarioSceneSpritePlacementAuthoringService>(),
+                    resolver.Get<IScenarioAuthoringSectionHub>(),
                     resolver.Get<ScenarioAuthoringSettingsService>(),
                     resolver.Get<ScenarioAuthoringLayoutService>(),
                     resolver.Get<ScenarioStageCoordinator>(),

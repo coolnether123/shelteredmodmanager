@@ -10,9 +10,7 @@ namespace ShelteredAPI.Scenarios
     internal sealed class ScenarioAuthoringPresentationBuilder
     {
         private readonly ScenarioAuthoringCaptureService _captureService;
-        private readonly ScenarioSpriteSwapAuthoringService _spriteSwapAuthoringService;
-        private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacementAuthoringService;
-        private readonly ScenarioBuildPlacementAuthoringService _buildPlacementAuthoringService;
+        private readonly IScenarioAuthoringSectionHub _sectionHub;
         private readonly ScenarioAuthoringWindowRegistry _windowRegistry;
         private readonly ScenarioAuthoringSettingsService _settingsService;
         private readonly ScenarioAuthoringLayoutService _layoutService;
@@ -38,9 +36,7 @@ namespace ShelteredAPI.Scenarios
 
         public ScenarioAuthoringPresentationBuilder(
             ScenarioAuthoringCaptureService captureService,
-            ScenarioSpriteSwapAuthoringService spriteSwapAuthoringService,
-            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementAuthoringService,
-            ScenarioBuildPlacementAuthoringService buildPlacementAuthoringService,
+            IScenarioAuthoringSectionHub sectionHub,
             ScenarioAuthoringWindowRegistry windowRegistry,
             ScenarioAuthoringSettingsService settingsService,
             ScenarioAuthoringLayoutService layoutService,
@@ -58,9 +54,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioTargetClassifier targetClassifier)
         {
             _captureService = captureService;
-            _spriteSwapAuthoringService = spriteSwapAuthoringService;
-            _sceneSpritePlacementAuthoringService = sceneSpritePlacementAuthoringService;
-            _buildPlacementAuthoringService = buildPlacementAuthoringService;
+            _sectionHub = sectionHub;
             _windowRegistry = windowRegistry;
             _settingsService = settingsService;
             _layoutService = layoutService;
@@ -414,11 +408,11 @@ namespace ShelteredAPI.Scenarios
                 return null;
             }
 
-            ScenarioSpriteSwapAuthoringService.CustomEditorModel customEditor = _spriteSwapAuthoringService.GetCustomEditorModel(state);
+            ScenarioSpriteSwapAuthoringService.CustomEditorModel customEditor = _sectionHub.SpriteSwap.GetCustomEditorModel(state);
             if (customEditor != null && customEditor.IsCharacterEditor)
                 return BuildCharacterSpritePickerDocument(state, customEditor);
 
-            ScenarioSpriteSwapAuthoringService.SpritePickerModel picker = _spriteSwapAuthoringService.GetPickerModel(
+            ScenarioSpriteSwapAuthoringService.SpritePickerModel picker = _sectionHub.SpriteSwap.GetPickerModel(
                 editorSession,
                 state.SpriteSwapPicker.Target,
                 state.ActiveScenarioFilePath);
@@ -1037,10 +1031,10 @@ namespace ShelteredAPI.Scenarios
                 || state.ActiveTool == ScenarioAuthoringTool.Wiring)
             {
                 List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-                ScenarioBuildPlacementAuthoringService.StatusModel status = _buildPlacementAuthoringService.GetStatusModel(state, _editorService.CurrentSession);
+                ScenarioBuildPlacementAuthoringService.StatusModel status = _sectionHub.BuildPlacement.GetStatusModel(state, _editorService.CurrentSession);
                 sections.Add(BuildPlacementStatusSection(status));
 
-                List<ScenarioBuildPlacementAuthoringService.PaletteSectionModel> paletteSections = _buildPlacementAuthoringService.GetPaletteSections(
+                List<ScenarioBuildPlacementAuthoringService.PaletteSectionModel> paletteSections = _sectionHub.BuildPlacement.GetPaletteSections(
                     state,
                     _editorService.CurrentSession);
                 for (int i = 0; paletteSections != null && i < paletteSections.Count; i++)
@@ -2560,7 +2554,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringTarget target)
         {
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            ScenarioSpriteSwapAuthoringService.SpritePickerModel picker = _spriteSwapAuthoringService.GetPickerModel(
+            ScenarioSpriteSwapAuthoringService.SpritePickerModel picker = _sectionHub.SpriteSwap.GetPickerModel(
                 editorSession,
                 target,
                 state != null ? state.ActiveScenarioFilePath : null);
@@ -2618,7 +2612,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringTarget target)
         {
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            ScenarioSceneSpritePlacementAuthoringService.PlacementPickerModel picker = _sceneSpritePlacementAuthoringService.GetPickerModel(
+            ScenarioSceneSpritePlacementAuthoringService.PlacementPickerModel picker = _sectionHub.SceneSpritePlacement.GetPickerModel(
                 editorSession,
                 target,
                 state != null ? state.ActiveScenarioFilePath : null);
@@ -2867,7 +2861,7 @@ namespace ShelteredAPI.Scenarios
                 || activeTool == ScenarioAuthoringTool.Objects
                 || activeTool == ScenarioAuthoringTool.Wiring
                 || activeTool == ScenarioAuthoringTool.Select
-                    ? _buildPlacementAuthoringService.GetStatusModel(state, _editorService.CurrentSession)
+                    ? _sectionHub.BuildPlacement.GetStatusModel(state, _editorService.CurrentSession)
                     : null;
             string title;
             switch (activeTool)
@@ -2995,3 +2989,4 @@ namespace ShelteredAPI.Scenarios
         }
     }
 }
+

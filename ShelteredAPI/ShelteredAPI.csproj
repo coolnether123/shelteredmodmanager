@@ -110,6 +110,7 @@
     <Compile Include="Scenarios\Application\Timeline\ScenarioTimelineNavigationService.cs" />
     <Compile Include="Scenarios\Application\Objects\ScenarioObjectIdentityAssignmentService.cs" />
     <Compile Include="Scenarios\Application\Validation\PublishValidationSummaryBuilder.cs" />
+    <Compile Include="Scenarios\Authoring\ScenarioAuthoringSectionHub.cs" />
     <Compile Include="Scenarios\Composition\ServiceCollectionExtensions.cs" />
     <Compile Include="Scenarios\Composition\ScenarioAuthoringModule.cs" />
     <Compile Include="Scenarios\Composition\ScenarioDefinitionModule.cs" />

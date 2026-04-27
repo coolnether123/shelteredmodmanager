@@ -7,16 +7,14 @@ namespace ShelteredAPI.Scenarios
         public static void AddScenarioPresentationModule(this ServiceCollection services)
         {
             services.AddScenarioPresentation();
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringShellImguiRenderModule(resolver.Get<ScenarioSpriteSwapAuthoringService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringShellImguiRenderModule(resolver.Get<IScenarioAuthoringSectionHub>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringImguiRenderModule(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringNguiRenderModule(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioAuthoringPresentationBuilder(
                     resolver.Get<ScenarioAuthoringCaptureService>(),
-                    resolver.Get<ScenarioSpriteSwapAuthoringService>(),
-                    resolver.Get<ScenarioSceneSpritePlacementAuthoringService>(),
-                    resolver.Get<ScenarioBuildPlacementAuthoringService>(),
+                    resolver.Get<IScenarioAuthoringSectionHub>(),
                     resolver.Get<ScenarioAuthoringWindowRegistry>(),
                     resolver.Get<ScenarioAuthoringSettingsService>(),
                     resolver.Get<ScenarioAuthoringLayoutService>(),

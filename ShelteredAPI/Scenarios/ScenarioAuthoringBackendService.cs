@@ -14,9 +14,7 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioAuthoringContextMenuService _contextMenuService;
         private readonly ScenarioAuthoringCommandService _commandService;
         private readonly ScenarioAuthoringHistoryService _historyService;
-        private readonly ScenarioBuildPlacementAuthoringService _buildPlacementService;
-        private readonly ScenarioSpriteSwapAuthoringService _spriteSwapAuthoringService;
-        private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacementAuthoringService;
+        private readonly IScenarioAuthoringSectionHub _sectionHub;
         private readonly ScenarioAuthoringSettingsService _settingsService;
         private readonly ScenarioAuthoringLayoutService _layoutService;
         private readonly ScenarioStageCoordinator _stageCoordinator;
@@ -49,9 +47,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringContextMenuService contextMenuService,
             ScenarioAuthoringCommandService commandService,
             ScenarioAuthoringHistoryService historyService,
-            ScenarioBuildPlacementAuthoringService buildPlacementService,
-            ScenarioSpriteSwapAuthoringService spriteSwapAuthoringService,
-            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementAuthoringService,
+            IScenarioAuthoringSectionHub sectionHub,
             ScenarioAuthoringSettingsService settingsService,
             ScenarioAuthoringLayoutService layoutService,
             ScenarioStageCoordinator stageCoordinator,
@@ -63,9 +59,7 @@ namespace ShelteredAPI.Scenarios
             _contextMenuService = contextMenuService;
             _commandService = commandService;
             _historyService = historyService;
-            _buildPlacementService = buildPlacementService;
-            _spriteSwapAuthoringService = spriteSwapAuthoringService;
-            _sceneSpritePlacementAuthoringService = sceneSpritePlacementAuthoringService;
+            _sectionHub = sectionHub;
             _settingsService = settingsService;
             _layoutService = layoutService;
             _stageCoordinator = stageCoordinator;
@@ -166,22 +160,15 @@ namespace ShelteredAPI.Scenarios
             if (ScenarioAuthoringInputActions.IsRevertDown())
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionSpriteSwapRevert);
 
-            string buildPlacementMessage;
-            if (_buildPlacementService.Update(snapshot, _editorService.CurrentSession, out buildPlacementMessage))
+            string sectionMessage;
+            if (_sectionHub.Update(snapshot, _editorService.CurrentSession, out sectionMessage))
             {
                 changed = true;
-                if (!string.IsNullOrEmpty(buildPlacementMessage))
-                    snapshot.StatusMessage = buildPlacementMessage;
+                if (!string.IsNullOrEmpty(sectionMessage))
+                    snapshot.StatusMessage = sectionMessage;
             }
 
             changed |= _selectionService.Update(snapshot);
-            string pickerMessage;
-            if (_spriteSwapAuthoringService.SynchronizePicker(snapshot, out pickerMessage))
-            {
-                changed = true;
-                if (!string.IsNullOrEmpty(pickerMessage))
-                    snapshot.StatusMessage = pickerMessage;
-            }
 
             _stageCoordinator.Synchronize(snapshot, _editorService.CurrentSession, GetActiveSession());
             changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);
@@ -219,12 +206,12 @@ namespace ShelteredAPI.Scenarios
                 return false;
 
             bool changed = _commandService.Execute(snapshot, actionId);
-            string pickerMessage;
-            if (_spriteSwapAuthoringService.SynchronizePicker(snapshot, out pickerMessage))
+            string sectionMessage;
+            if (_sectionHub.SynchronizeAfterAction(snapshot, out sectionMessage))
             {
                 changed = true;
-                if (!string.IsNullOrEmpty(pickerMessage))
-                    snapshot.StatusMessage = pickerMessage;
+                if (!string.IsNullOrEmpty(sectionMessage))
+                    snapshot.StatusMessage = sectionMessage;
             }
             _stageCoordinator.Synchronize(snapshot, _editorService.CurrentSession, GetActiveSession());
             changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);
@@ -296,14 +283,12 @@ namespace ShelteredAPI.Scenarios
         {
             ScenarioAuthoringSelectionMenuService.Instance.Reset();
             _contextMenuService.Close();
-            _buildPlacementService.Reset();
-            _spriteSwapAuthoringService.ResetTransientState(true);
+            _sectionHub.ResetInteractiveSubsystems();
         }
 
         private void RefreshAuthoringArtifacts()
         {
-            _spriteSwapAuthoringService.Invalidate();
-            _sceneSpritePlacementAuthoringService.Invalidate();
+            _sectionHub.RefreshAuthoringArtifacts();
         }
     }
 }
