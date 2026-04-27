@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using ModAPI.Saves;
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
@@ -26,6 +27,8 @@ namespace ShelteredAPI.Scenarios
             if (scenario == null)
                 return null;
 
+            IShelteredCustomScenarioDependencies dependencySource = scenario as IShelteredCustomScenarioDependencies;
+
             return new CustomScenarioRegistration
             {
                 Id = scenario.Id,
@@ -33,6 +36,9 @@ namespace ShelteredAPI.Scenarios
                 Description = scenario.Description,
                 Version = scenario.Version,
                 Order = scenario.Order,
+                RequiredMods = dependencySource != null
+                    ? ScenarioDependencyManifest.CloneRequiredMods(dependencySource.RequiredMods)
+                    : null,
                 DefinitionFactory = new CustomScenarioDefinitionFactory(
                     delegate(CustomScenarioBuildContext context) { return scenario.BuildDefinition(context); }),
                 OnSelected = scenario.OnSelected,

@@ -46,7 +46,7 @@ namespace ShelteredAPI.Scenarios
 
             CustomScenarioEventArgs args = _events.CreateArgs(CustomScenarioEventType.Selected, record.Info);
             InvokeRegistrationCallback(record.Registration.OnSelected, args, record.Info.Id, "OnSelected");
-            _events.RaiseSelected(record.Info);
+            _events.RaiseSelected(args);
             _events.RaiseStateChanged(args);
             return true;
         }
@@ -66,7 +66,7 @@ namespace ShelteredAPI.Scenarios
             _runtimeBindingService.SetBinding(CreateRuntimeBinding(record.Info));
             CustomScenarioEventArgs args = _events.CreateArgs(CustomScenarioEventType.Spawned, record.Info);
             InvokeRegistrationCallback(record.Registration.OnSpawned, args, record.Info.Id, "OnSpawned");
-            _events.RaiseSpawned(record.Info);
+            _events.RaiseSpawned(args);
             _events.RaiseStateChanged(args);
             return true;
         }

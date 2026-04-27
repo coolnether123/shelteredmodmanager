@@ -41,16 +41,27 @@ public sealed class LongRoadScenario : ShelteredCustomScenarioBase
 {
     public override string Id { get { return "com.example.scenario.longroad"; } }
     public override string DisplayName { get { return "The Long Road"; } }
+    public override string DisplayNameKey { get { return "scenario.example.longroad.name"; } }
     public override string Description { get { return "Survive with a reduced start and a long objective chain."; } }
+    public override string DescriptionKey { get { return "scenario.example.longroad.desc"; } }
     public override string Version { get { return "1.0.0"; } }
+
+    public override LoadedModInfo[] RequiredMods
+    {
+        get
+        {
+            return new[]
+            {
+                new LoadedModInfo { modId = "com.example.content", version = "1.2.0" }
+            };
+        }
+    }
 
     public override ScenarioDef BuildDefinition(CustomScenarioBuildContext context)
     {
         return CreateDefinition()
-            .SetId(Id)
-            .SetNameKey(DisplayName)
-            .SetDescriptionKey(Description)
             .UseInModes(true, false, false)
+            .OnceOnly(false)
             .AddSimpleStage("longroad_intro")
             .Build();
     }
@@ -58,6 +69,9 @@ public sealed class LongRoadScenario : ShelteredCustomScenarioBase
 ```
 
 `ShelteredCustomScenarioBase.ToRegistration()` maps `Id`, `DisplayName`, `Description`, `Version`, `Order`, `UserData`, `BuildDefinition`, `OnSelected`, and `OnSpawned` into `CustomScenarioRegistration`.
+`DisplayName` and `Description` are the registration/browser text. `DisplayNameKey` and `DescriptionKey` are the localization keys written into the in-game `ScenarioDef`; they default to the display text for backward compatibility. Class-based scenarios can expose required mod metadata by overriding `ShelteredCustomScenarioBase.RequiredMods` or by implementing `IShelteredCustomScenarioDependencies` directly. The registration helper clones that array before storing it.
+
+`ScenarioRegistered` fires for both new registrations and replacements. `ScenarioUnregistered` does not fire when a registration is replaced. Event listeners cannot distinguish add vs. replace from the event alone; only the direct `Register` caller receives `CustomScenarioRegistrationResult.ReplacedExisting`.
 
 ## XML Scenario Packs
 
@@ -202,6 +216,8 @@ The framework targets .NET Framework 3.5 and uses `System.Xml` for XML parsing. 
 
 Asset paths must be relative to the scenario pack folder. Paths that escape the pack folder, including sibling-prefix attempts such as `../Pack2/file.png`, are rejected even if the target file exists.
 
+`ShelteredScenarioDefBuilder` uses reflection to write Sheltered's private `ScenarioDef` fields. Missing critical fields now throw `InvalidOperationException` instead of returning a partial definition. Use `ShelteredScenarioDefBuilder.CheckCompatibility()` when diagnosing game-version mismatches; `DescribeFailures()` reports missing reflected fields. Selection-related fields are only required after calling `UseInModes` or `OnceOnly`.
+
 Run the built-in harness from a debug mod or immediate window when validating the framework:
 
 ```csharp
@@ -209,3 +225,13 @@ ScenarioValidationResult result = ScenarioFrameworkVerification.Run();
 ```
 
 `result.IsValid` is `false` if round-trip serialization, dependency verification, catalog discovery, or asset escape validation fails.
+
+Manual refactor verification covered:
+
+- registration validation for null, missing id, missing display name, missing definition/factory, and non-`ScenarioDef` definitions
+- replacement result and event semantics
+- `List()` ordering by order, display name, then id
+- dependency manifest merge from registration and XML definitions
+- pending spawn dependency failure clearing state
+- definition factory wrong-type and thrown-exception error messages
+- builder compatibility failure paths for missing stages and selection fields

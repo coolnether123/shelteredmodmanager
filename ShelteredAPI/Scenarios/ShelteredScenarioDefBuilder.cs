@@ -5,6 +5,40 @@ using System.Reflection;
 
 namespace ShelteredAPI.Scenarios
 {
+    public sealed class ShelteredScenarioDefBuilderCompatibility
+    {
+        public bool HasQuestIdField { get; set; }
+        public bool HasNameKeyField { get; set; }
+        public bool HasDescriptionKeyField { get; set; }
+        public bool HasSelectionField { get; set; }
+        public bool HasStagesField { get; set; }
+        public bool HasStageIdField { get; set; }
+
+        public bool IsUsable
+        {
+            get
+            {
+                return HasQuestIdField
+                    && HasNameKeyField
+                    && HasDescriptionKeyField
+                    && HasStagesField
+                    && HasStageIdField;
+            }
+        }
+
+        public string DescribeFailures()
+        {
+            List<string> failures = new List<string>();
+            if (!HasQuestIdField) failures.Add("missing QuestDefBase.m_id");
+            if (!HasNameKeyField) failures.Add("missing QuestDefBase.m_nameKey");
+            if (!HasDescriptionKeyField) failures.Add("missing QuestDefBase.m_descriptionKey");
+            if (!HasSelectionField) failures.Add("missing QuestDefBase.m_selectionProperties");
+            if (!HasStagesField) failures.Add("missing ScenarioDef.m_stages");
+            if (!HasStageIdField) failures.Add("missing ScenarioStage.m_id");
+            return failures.Count == 0 ? "compatible" : string.Join("; ", failures.ToArray());
+        }
+    }
+
     /// <summary>
     /// Helper for constructing Sheltered ScenarioDef and ScenarioStage objects whose serialized fields are private.
     /// </summary>
@@ -25,42 +59,56 @@ namespace ShelteredAPI.Scenarios
 
         private readonly ScenarioDef _definition = new ScenarioDef();
         private readonly List<ScenarioStage> _stages = new List<ScenarioStage>();
+        private bool _selectionRequested;
+        private bool _onceOnlyRequested;
+
+        public static ShelteredScenarioDefBuilderCompatibility CheckCompatibility()
+        {
+            return new ShelteredScenarioDefBuilderCompatibility
+            {
+                HasQuestIdField = QuestIdField != null,
+                HasNameKeyField = QuestNameKeyField != null,
+                HasDescriptionKeyField = QuestDescriptionKeyField != null,
+                HasSelectionField = QuestSelectionField != null,
+                HasStagesField = ScenarioStagesField != null,
+                HasStageIdField = StageIdField != null
+            };
+        }
 
         public ShelteredScenarioDefBuilder SetId(string id)
         {
-            SetStringField(_definition, QuestIdField, id);
+            SetStringFieldRequired(_definition, QuestIdField, id, "QuestDefBase.m_id");
             return this;
         }
 
         public ShelteredScenarioDefBuilder SetNameKey(string nameKey)
         {
-            SetStringField(_definition, QuestNameKeyField, nameKey);
+            SetStringFieldRequired(_definition, QuestNameKeyField, nameKey, "QuestDefBase.m_nameKey");
             return this;
         }
 
         public ShelteredScenarioDefBuilder SetDescriptionKey(string descriptionKey)
         {
-            SetStringField(_definition, QuestDescriptionKeyField, descriptionKey);
+            SetStringFieldRequired(_definition, QuestDescriptionKeyField, descriptionKey, "QuestDefBase.m_descriptionKey");
             return this;
         }
 
         public ShelteredScenarioDefBuilder UseInModes(bool survival, bool surrounded, bool stasis)
         {
-            object selection = GetSelection();
-            if (selection == null)
-                return this;
+            _selectionRequested = true;
+            object selection = GetRequiredSelection("UseInModes");
 
-            SetBoolField(selection, SelectionUseSurvivalField, survival);
-            SetBoolField(selection, SelectionUseSurroundedField, surrounded);
-            SetBoolField(selection, SelectionUseStasisField, stasis);
+            SetBoolFieldRequired(selection, SelectionUseSurvivalField, survival, "QuestSelection.m_useInSurvival");
+            SetBoolFieldRequired(selection, SelectionUseSurroundedField, surrounded, "QuestSelection.m_useInSurrounded");
+            SetBoolFieldRequired(selection, SelectionUseStasisField, stasis, "QuestSelection.m_useInStasis");
             return this;
         }
 
         public ShelteredScenarioDefBuilder OnceOnly(bool onceOnly)
         {
-            object selection = GetSelection();
-            if (selection != null)
-                SetBoolField(selection, SelectionOnceOnlyField, onceOnly);
+            _onceOnlyRequested = true;
+            object selection = GetRequiredSelection("OnceOnly");
+            SetBoolFieldRequired(selection, SelectionOnceOnlyField, onceOnly, "QuestSelection.m_onceOnly");
             return this;
         }
 
@@ -81,12 +129,27 @@ namespace ShelteredAPI.Scenarios
 
         public ScenarioDef Build()
         {
-            IList runtimeStages = ScenarioStagesField != null ? ScenarioStagesField.GetValue(_definition) as IList : null;
-            if (runtimeStages != null)
+            if (ScenarioStagesField == null)
+                throw new InvalidOperationException("Cannot build ScenarioDef because ScenarioDef.m_stages was not found.");
+
+            if (_selectionRequested)
+                EnsureSelectionFieldsForModes();
+            if (_onceOnlyRequested)
+                EnsureSelectionField(SelectionOnceOnlyField, "QuestSelection.m_onceOnly");
+
+            IList runtimeStages = ScenarioStagesField.GetValue(_definition) as IList;
+            if (runtimeStages == null)
+                throw new InvalidOperationException("Cannot build ScenarioDef because ScenarioDef.m_stages is not an IList.");
+
+            try
             {
                 runtimeStages.Clear();
                 for (int i = 0; i < _stages.Count; i++)
                     runtimeStages.Add(_stages[i]);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("Cannot build ScenarioDef because ScenarioDef.m_stages could not be written: " + ex.Message, ex);
             }
 
             return _definition;
@@ -94,24 +157,34 @@ namespace ShelteredAPI.Scenarios
 
         public static ScenarioStage CreateStage(string stageId)
         {
-            try
-            {
-                ScenarioStage stage = new ScenarioStage();
-                SetStringField(stage, StageIdField, stageId);
-                return stage;
-            }
-            catch
-            {
-                return null;
-            }
+            ScenarioStage stage = new ScenarioStage();
+            SetStringFieldRequired(stage, StageIdField, stageId, "ScenarioStage.m_id");
+            return stage;
         }
 
-        private object GetSelection()
+        private object GetRequiredSelection(string operation)
         {
             if (QuestSelectionField == null)
-                return null;
+                throw new InvalidOperationException("Cannot apply " + operation + " because QuestDefBase.m_selectionProperties was not found.");
 
-            return QuestSelectionField.GetValue(_definition);
+            object selection = QuestSelectionField.GetValue(_definition);
+            if (selection == null)
+                throw new InvalidOperationException("Cannot apply " + operation + " because QuestDefBase.m_selectionProperties was null.");
+
+            return selection;
+        }
+
+        private static void EnsureSelectionFieldsForModes()
+        {
+            EnsureSelectionField(SelectionUseSurvivalField, "QuestSelection.m_useInSurvival");
+            EnsureSelectionField(SelectionUseSurroundedField, "QuestSelection.m_useInSurrounded");
+            EnsureSelectionField(SelectionUseStasisField, "QuestSelection.m_useInStasis");
+        }
+
+        private static void EnsureSelectionField(FieldInfo field, string fieldName)
+        {
+            if (field == null)
+                throw new InvalidOperationException("Cannot build ScenarioDef because " + fieldName + " was not found.");
         }
 
         private static FieldInfo GetSelectionField(string fieldName)
@@ -119,16 +192,24 @@ namespace ShelteredAPI.Scenarios
             return QuestSelectionType != null ? QuestSelectionType.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance) : null;
         }
 
-        private static void SetStringField(object target, FieldInfo field, string value)
+        private static void SetStringFieldRequired(object target, FieldInfo field, string value, string fieldName)
         {
-            if (target != null && field != null)
-                field.SetValue(target, value ?? string.Empty);
+            if (target == null)
+                throw new InvalidOperationException("Cannot set " + fieldName + " because the target object was null.");
+            if (field == null)
+                throw new InvalidOperationException("Cannot set " + fieldName + " because the field was not found.");
+
+            field.SetValue(target, value ?? string.Empty);
         }
 
-        private static void SetBoolField(object target, FieldInfo field, bool value)
+        private static void SetBoolFieldRequired(object target, FieldInfo field, bool value, string fieldName)
         {
-            if (target != null && field != null)
-                field.SetValue(target, value);
+            if (target == null)
+                throw new InvalidOperationException("Cannot set " + fieldName + " because the target object was null.");
+            if (field == null)
+                throw new InvalidOperationException("Cannot set " + fieldName + " because the field was not found.");
+
+            field.SetValue(target, value);
         }
     }
 }

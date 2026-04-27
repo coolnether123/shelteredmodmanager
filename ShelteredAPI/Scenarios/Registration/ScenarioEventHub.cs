@@ -34,9 +34,19 @@ namespace ShelteredAPI.Scenarios
             Raise(ScenarioSelected, CustomScenarioEventType.Selected, info);
         }
 
+        public void RaiseSelected(CustomScenarioEventArgs args)
+        {
+            Raise(ScenarioSelected, args);
+        }
+
         public void RaiseSpawned(CustomScenarioInfo info)
         {
             Raise(ScenarioSpawned, CustomScenarioEventType.Spawned, info);
+        }
+
+        public void RaiseSpawned(CustomScenarioEventArgs args)
+        {
+            Raise(ScenarioSpawned, args);
         }
 
         public void RaiseCleared(CustomScenarioInfo info)

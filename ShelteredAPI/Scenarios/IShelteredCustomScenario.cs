@@ -1,3 +1,4 @@
+using ModAPI.Saves;
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
@@ -20,10 +21,18 @@ namespace ShelteredAPI.Scenarios
     }
 
     /// <summary>
+    /// Optional dependency metadata for class-based custom scenarios.
+    /// </summary>
+    public interface IShelteredCustomScenarioDependencies
+    {
+        LoadedModInfo[] RequiredMods { get; }
+    }
+
+    /// <summary>
     /// Default overridable implementation for custom Sheltered scenarios.
     /// Override only the members your scenario needs.
     /// </summary>
-    public abstract class ShelteredCustomScenarioBase : IShelteredCustomScenario
+    public abstract class ShelteredCustomScenarioBase : IShelteredCustomScenario, IShelteredCustomScenarioDependencies
     {
         public abstract string Id { get; }
         public abstract string DisplayName { get; }
@@ -31,6 +40,22 @@ namespace ShelteredAPI.Scenarios
         public virtual string Description
         {
             get { return string.Empty; }
+        }
+
+        /// <summary>
+        /// Localization key used by the in-game ScenarioDef. Defaults to DisplayName for backward compatibility.
+        /// </summary>
+        public virtual string DisplayNameKey
+        {
+            get { return DisplayName; }
+        }
+
+        /// <summary>
+        /// Localization key used by the in-game ScenarioDef. Defaults to Description for backward compatibility.
+        /// </summary>
+        public virtual string DescriptionKey
+        {
+            get { return Description; }
         }
 
         public virtual string Version
@@ -46,6 +71,11 @@ namespace ShelteredAPI.Scenarios
         public virtual object UserData
         {
             get { return null; }
+        }
+
+        public virtual LoadedModInfo[] RequiredMods
+        {
+            get { return new LoadedModInfo[0]; }
         }
 
         public abstract ScenarioDef BuildDefinition(CustomScenarioBuildContext context);
@@ -72,8 +102,8 @@ namespace ShelteredAPI.Scenarios
         {
             return new ShelteredScenarioDefBuilder()
                 .SetId(Id)
-                .SetNameKey(DisplayName)
-                .SetDescriptionKey(Description);
+                .SetNameKey(DisplayNameKey)
+                .SetDescriptionKey(DescriptionKey);
         }
     }
 }
