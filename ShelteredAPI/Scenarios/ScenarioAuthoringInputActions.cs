@@ -66,6 +66,11 @@ namespace ShelteredAPI.Scenarios
             return InputActionRegistry.IsDown(ScenarioAuthoringActionIds.ClearSelection);
         }
 
+        public static bool IsStackCycleDown()
+        {
+            return UnityEngine.Input.GetKeyDown(KeyCode.Tab);
+        }
+
         private static void Register(string id, string label, string category, KeyCode primary, KeyCode secondary, string description)
         {
             InputActionRegistry.Register(new ModInputAction(

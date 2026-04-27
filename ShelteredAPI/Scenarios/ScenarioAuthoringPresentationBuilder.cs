@@ -916,6 +916,8 @@ namespace ShelteredAPI.Scenarios
                     : BuildScenarioWindowSections(state, editorSession, session);
             };
             builders[ScenarioAuthoringWindowContentKind.Layers] = delegate { return BuildLayerWindowSections(); };
+            builders[ScenarioAuthoringWindowContentKind.Hierarchy] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildHierarchyWindowSections(state, definition); };
+            builders[ScenarioAuthoringWindowContentKind.SelectionStack] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildSelectionStackWindowSections(state); };
             builders[ScenarioAuthoringWindowContentKind.TilesPalette] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildPaletteWindowSections(state, definition); };
             builders[ScenarioAuthoringWindowContentKind.Inspector] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildInspectorShellSections(state, editorSession, definition); };
             builders[ScenarioAuthoringWindowContentKind.BuildTools] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildBuildToolsWindowSections(state, definition); };
@@ -924,7 +926,7 @@ namespace ShelteredAPI.Scenarios
             builders[ScenarioAuthoringWindowContentKind.Stockpile] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildStockpileWindowSections(definition); };
             builders[ScenarioAuthoringWindowContentKind.Quests] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildQuestWindowSections(definition); };
             builders[ScenarioAuthoringWindowContentKind.Map] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildMapWindowSections(definition); };
-            builders[ScenarioAuthoringWindowContentKind.Publish] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildPublishWindowSections(editorSession, definition); };
+            builders[ScenarioAuthoringWindowContentKind.Publish] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildPublishWindowSections(state, editorSession, definition); };
             builders[ScenarioAuthoringWindowContentKind.Calendar] = delegate(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session, ScenarioDefinition definition) { return BuildCalendarWindowSections(state, definition); };
             return builders;
         }
@@ -1005,6 +1007,265 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
+        private static ScenarioAuthoringInspectorSection[] BuildHierarchyWindowSections(ScenarioAuthoringState state, ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            sections.Add(BuildHierarchySummarySection(state, definition));
+            sections.Add(BuildHierarchyBunkerSection(definition));
+            sections.Add(BuildHierarchyLiveObjectsSection());
+            sections.Add(BuildHierarchyCharactersSection(definition));
+            sections.Add(BuildHierarchyEventSection(definition));
+            sections.Add(BuildHierarchyAssetSection(definition));
+            return sections.ToArray();
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildHierarchySummarySection(ScenarioAuthoringState state, ScenarioDefinition definition)
+        {
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "hierarchy_summary",
+                Title = "Scene Hierarchy",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = new[]
+                {
+                    Property("Stage", state != null ? state.ActiveStage.ToString() : "Unknown"),
+                    Property("Tool", state != null ? state.ActiveTool.ToString() : "Unknown"),
+                    Property("Scenario", Safe(definition != null ? definition.DisplayName : null)),
+                    Property("Selection", FormatTarget(state != null ? state.SelectedTarget : null))
+                }
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildHierarchyBunkerSection(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            int roomChanges = definition != null && definition.BunkerEdits != null && definition.BunkerEdits.RoomChanges != null ? definition.BunkerEdits.RoomChanges.Count : 0;
+            int placements = definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null ? definition.BunkerEdits.ObjectPlacements.Count : 0;
+            items.Add(Property("Authored Room Edits", roomChanges.ToString(CultureInfo.InvariantCulture)));
+            items.Add(Property("Authored Object Placements", placements.ToString(CultureInfo.InvariantCulture)));
+            for (int i = 0; definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null && i < definition.BunkerEdits.ObjectPlacements.Count && i < 8; i++)
+            {
+                ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
+                if (placement == null)
+                    continue;
+
+                string label = !string.IsNullOrEmpty(placement.DefinitionReference) ? placement.DefinitionReference : (!string.IsNullOrEmpty(placement.PrefabReference) ? placement.PrefabReference : placement.ScenarioObjectId);
+                items.Add(Property(Safe(label), FormatVector(placement.Position) + " / " + placement.StartState));
+            }
+
+            if (items.Count == 2)
+                items.Add(Text("No authored bunker placements are in this draft yet."));
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "hierarchy_bunker",
+                Title = "Bunker / Rooms / Props",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildHierarchyLiveObjectsSection()
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            Obj_Base[] objects = UnityEngine.Object.FindObjectsOfType<Obj_Base>();
+            int count = 0;
+            for (int i = 0; objects != null && i < objects.Length; i++)
+            {
+                Obj_Base obj = objects[i];
+                if (obj == null || obj.gameObject == null)
+                    continue;
+
+                count++;
+                if (items.Count < 10)
+                    items.Add(ActionItem(BuildHierarchyTargetAction(obj.gameObject, ScenarioAuthoringTargetKind.PlaceableObject, "OB")));
+            }
+
+            items.Insert(0, Property("Live Shelter Objects", count.ToString(CultureInfo.InvariantCulture)));
+            if (items.Count == 1)
+                items.Add(Text("No live shelter objects are currently discoverable."));
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "hierarchy_live_objects",
+                Title = "Live Objects",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildHierarchyCharactersSection(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            int authored = definition != null && definition.FamilySetup != null && definition.FamilySetup.Members != null ? definition.FamilySetup.Members.Count : 0;
+            int future = definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null ? definition.FamilySetup.FutureSurvivors.Count : 0;
+            items.Add(Property("Authored Starting Survivors", authored.ToString(CultureInfo.InvariantCulture)));
+            items.Add(Property("Future Survivors", future.ToString(CultureInfo.InvariantCulture)));
+
+            FamilyManager manager = FamilyManager.Instance;
+            List<FamilyMember> members = manager != null ? manager.GetAllFamilyMembers() : null;
+            for (int i = 0; members != null && i < members.Count && i < 8; i++)
+            {
+                FamilyMember member = members[i];
+                if (member != null && member.gameObject != null)
+                    items.Add(ActionItem(BuildHierarchyTargetAction(member.gameObject, ScenarioAuthoringTargetKind.Character, "PP")));
+            }
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "hierarchy_characters",
+                Title = "Characters",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildHierarchyEventSection(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Property("Triggers", definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null ? definition.TriggersAndEvents.Triggers.Count.ToString(CultureInfo.InvariantCulture) : "0"));
+            items.Add(Property("Weather Events", definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.WeatherEvents != null ? definition.TriggersAndEvents.WeatherEvents.Count.ToString(CultureInfo.InvariantCulture) : "0"));
+            items.Add(Property("Scheduled Actions", definition != null && definition.ScheduledActions != null ? definition.ScheduledActions.Count.ToString(CultureInfo.InvariantCulture) : "0"));
+            items.Add(Property("Gates", definition != null && definition.Gates != null ? definition.Gates.Count.ToString(CultureInfo.InvariantCulture) : "0"));
+            items.Add(Property("Quests", definition != null && definition.Quests != null && definition.Quests.Quests != null ? definition.Quests.Quests.Count.ToString(CultureInfo.InvariantCulture) : "0"));
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "hierarchy_events",
+                Title = "Triggers / Events / Quests",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildHierarchyAssetSection(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Property("Sprite Swaps", CountSpriteSwaps(definition).ToString(CultureInfo.InvariantCulture)));
+            items.Add(Property("Scene Sprite Placements", CountSceneSpritePlacements(definition).ToString(CultureInfo.InvariantCulture)));
+            items.Add(Property("Custom Sprites", definition != null && definition.AssetReferences != null && definition.AssetReferences.CustomSprites != null ? definition.AssetReferences.CustomSprites.Count.ToString(CultureInfo.InvariantCulture) : "0"));
+            items.Add(Property("Sprite Patches", definition != null && definition.AssetReferences != null && definition.AssetReferences.SpritePatches != null ? definition.AssetReferences.SpritePatches.Count.ToString(CultureInfo.InvariantCulture) : "0"));
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "hierarchy_assets",
+                Title = "Surface / Background / FX",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection[] BuildSelectionStackWindowSections(ScenarioAuthoringState state)
+        {
+            List<ScenarioAuthoringInspectorItem> summary = new List<ScenarioAuthoringInspectorItem>();
+            int count = state != null && state.SelectionStack != null ? state.SelectionStack.Count : 0;
+            summary.Add(Property("Candidates", count.ToString(CultureInfo.InvariantCulture)));
+            summary.Add(Property("Active Row", count > 0 ? (Mathf.Clamp(state.ActiveSelectionStackIndex, 0, count - 1) + 1).ToString(CultureInfo.InvariantCulture) : "<none>"));
+            summary.Add(Property("Hovered", FormatTarget(state != null ? state.HoveredTarget : null)));
+            summary.Add(Property("Selected", FormatTarget(state != null ? state.SelectedTarget : null)));
+
+            List<ScenarioAuthoringInspectorItem> rows = new List<ScenarioAuthoringInspectorItem>();
+            if (count == 0)
+            {
+                rows.Add(Text("Hold Ctrl and hover the bunker view to collect every selectable object under the cursor."));
+            }
+            else
+            {
+                for (int i = 0; i < state.SelectionStack.Count; i++)
+                {
+                    ScenarioAuthoringTarget target = state.SelectionStack[i];
+                    if (target == null)
+                        continue;
+
+                    bool active = i == state.ActiveSelectionStackIndex;
+                    rows.Add(ActionItem(Action(
+                        ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix + i.ToString(CultureInfo.InvariantCulture),
+                        (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + Safe(target.DisplayName),
+                        target.Kind + " / " + Safe(target.TransformPath),
+                        true,
+                        active,
+                        active ? "ON" : "ST",
+                        FormatGrid(target))));
+                }
+            }
+
+            return new[]
+            {
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "selection_stack_summary",
+                    Title = "Selection Stack",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = summary.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "selection_stack_rows",
+                    Title = "Candidates Under Cursor",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = rows.ToArray()
+                }
+            };
+        }
+
+        private static ScenarioAuthoringInspectorAction BuildHierarchyTargetAction(GameObject gameObject, ScenarioAuthoringTargetKind kind, string badge)
+        {
+            string label = gameObject != null && !string.IsNullOrEmpty(gameObject.name) ? gameObject.name : kind.ToString();
+            string id = kind + ":" + (gameObject != null && gameObject.transform != null ? gameObject.transform.GetInstanceID().ToString(CultureInfo.InvariantCulture) : "0");
+            return Action(
+                ScenarioAuthoringActionIds.ActionHierarchySelectPrefix + id,
+                label,
+                gameObject != null ? BuildHierarchyPath(gameObject.transform) : "Missing runtime object",
+                gameObject != null,
+                false,
+                badge);
+        }
+
+        private static string BuildHierarchyPath(Transform transform)
+        {
+            if (transform == null)
+                return string.Empty;
+
+            List<string> names = new List<string>();
+            Transform current = transform;
+            while (current != null)
+            {
+                names.Add(current.name);
+                current = current.parent;
+            }
+
+            names.Reverse();
+            return string.Join("/", names.ToArray());
+        }
+
+        private static string FormatVector(ScenarioVector3 value)
+        {
+            if (value == null)
+                return "<none>";
+
+            return value.X.ToString("0.##", CultureInfo.InvariantCulture)
+                + ","
+                + value.Y.ToString("0.##", CultureInfo.InvariantCulture)
+                + ","
+                + value.Z.ToString("0.##", CultureInfo.InvariantCulture);
+        }
+
+        private static string FormatGrid(ScenarioAuthoringTarget target)
+        {
+            if (target == null || !target.GridX.HasValue || !target.GridY.HasValue)
+                return target != null ? target.Kind.ToString() : string.Empty;
+
+            return "Grid " + target.GridX.Value.ToString(CultureInfo.InvariantCulture)
+                + ","
+                + target.GridY.Value.ToString(CultureInfo.InvariantCulture);
+        }
+
         private ScenarioAuthoringInspectorSection[] BuildPaletteWindowSections(
             ScenarioAuthoringState state,
             ScenarioDefinition definition)
@@ -1079,11 +1340,12 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
-        private ScenarioAuthoringInspectorSection[] BuildPublishWindowSections(ScenarioEditorSession editorSession, ScenarioDefinition definition)
+        private ScenarioAuthoringInspectorSection[] BuildPublishWindowSections(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorItem> dependencyItems = BuildPublishDependencyItems(definition);
             List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition));
             List<ScenarioAuthoringInspectorItem> timelineItems = BuildTimelineItems(definition, GetRuntimeState(), _timelineBuilder);
+            List<ScenarioAuthoringInspectorItem> validationItems = BuildPublishValidationItems(state, definition);
             return new[]
             {
                 new ScenarioAuthoringInspectorSection
@@ -1098,6 +1360,14 @@ namespace ShelteredAPI.Scenarios
                         Property("Dirty Sections", CountDirtyFlags(editorSession).ToString()),
                         Property("Version", Safe(definition != null ? definition.Version : null))
                     }
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "publish_validation",
+                    Title = "Validation Summary",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = validationItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
                 {
@@ -1158,6 +1428,62 @@ namespace ShelteredAPI.Scenarios
                     Items = compatibilityItems.ToArray()
                 }
             };
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildPublishValidationItems(ScenarioAuthoringState state, ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            if (definition == null)
+            {
+                items.Add(Property("Status", "No active scenario definition."));
+                return items;
+            }
+
+            ScenarioValidationResult validation = null;
+            try
+            {
+                IScenarioDefinitionValidator validator = ScenarioCompositionRoot.Resolve<IScenarioDefinitionValidator>();
+                validation = validator != null ? validator.Validate(definition, state != null ? state.ActiveScenarioFilePath : null) : null;
+            }
+            catch (Exception ex)
+            {
+                items.Add(Property("Validation", "Unavailable"));
+                items.Add(Text("Validation could not run: " + ex.Message));
+                return items;
+            }
+
+            ScenarioValidationIssue[] issues = validation != null ? validation.Issues : new ScenarioValidationIssue[0];
+            int errors = 0;
+            int warnings = 0;
+            for (int i = 0; i < issues.Length; i++)
+            {
+                if (issues[i] == null)
+                    continue;
+                if (issues[i].Severity == ScenarioIssueSeverity.Error)
+                    errors++;
+                else
+                    warnings++;
+            }
+
+            items.Add(Property("Status", validation != null && validation.IsValid ? "Ready to publish" : "Blocked"));
+            items.Add(Property("Errors", errors.ToString(CultureInfo.InvariantCulture)));
+            items.Add(Property("Warnings", warnings.ToString(CultureInfo.InvariantCulture)));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save if the draft has no blocking errors.", true, errors == 0, "SV")));
+
+            if (issues.Length == 0)
+            {
+                items.Add(Text("Validation passed with no issues."));
+                return items;
+            }
+
+            for (int i = 0; i < issues.Length && i < 16; i++)
+            {
+                ScenarioValidationIssue issue = issues[i];
+                if (issue != null)
+                    items.Add(Property(issue.Severity.ToString(), issue.Message));
+            }
+
+            return items;
         }
 
         private ScenarioAuthoringInspectorSection[] BuildCalendarWindowSections(ScenarioAuthoringState state, ScenarioDefinition definition)
@@ -1405,9 +1731,18 @@ namespace ShelteredAPI.Scenarios
 
             List<ScenarioAuthoringInspectorItem> actionItems = BuildScheduledActionItems(definition);
             List<ScenarioAuthoringInspectorItem> gateItems = BuildGateItems(definition);
+            List<ScenarioAuthoringInspectorItem> graphItems = BuildEventGraphItems(definition);
 
             return new[]
             {
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "event_graph",
+                    Title = "Event Graph / Quest Events",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = graphItems.ToArray()
+                },
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "triggers",
@@ -1441,6 +1776,236 @@ namespace ShelteredAPI.Scenarios
                     Items = gateItems.ToArray()
                 }
             };
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildEventGraphItems(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringGraphNodeViewModel> nodes = new List<ScenarioAuthoringGraphNodeViewModel>();
+            List<ScenarioAuthoringGraphEdgeViewModel> edges = new List<ScenarioAuthoringGraphEdgeViewModel>();
+
+            for (int i = 0; definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
+            {
+                TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
+                string id = "trigger:" + Safe(trigger != null ? trigger.Id : null);
+                nodes.Add(GraphNode(id, Safe(trigger != null ? trigger.Id : null), "Trigger", trigger != null ? trigger.Type : "Unknown", "OK", null));
+            }
+
+            for (int i = 0; definition != null && definition.Gates != null && i < definition.Gates.Count; i++)
+            {
+                ScenarioGateDefinition gate = definition.Gates[i];
+                string id = "gate:" + Safe(gate != null ? gate.Id : null);
+                nodes.Add(GraphNode(id, !string.IsNullOrEmpty(gate != null ? gate.DisplayName : null) ? gate.DisplayName : Safe(gate != null ? gate.Id : null), "Gate", CountGraphConditions(gate != null ? gate.Conditions : null).ToString(CultureInfo.InvariantCulture) + " condition(s)", "OK", null));
+                AppendConditionEdges(edges, id, gate != null ? gate.Conditions : null);
+            }
+
+            for (int i = 0; definition != null && definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
+                string actionId = !string.IsNullOrEmpty(action != null ? action.Id : null) ? action.Id : ("scheduled_" + i.ToString(CultureInfo.InvariantCulture));
+                string nodeId = "scheduled:" + actionId;
+                string status = action != null && !string.IsNullOrEmpty(action.GateId) && !HasGate(definition, action.GateId) ? "Broken gate" : "OK";
+                nodes.Add(GraphNode(
+                    nodeId,
+                    actionId,
+                    "Scheduled Action",
+                    (action != null ? action.ActionType : "Unknown") + " / " + FormatSchedule(action != null ? action.DueTime : null),
+                    status,
+                    Action(ScenarioAuthoringActionIds.ActionTimelineEntryPrefix + actionId, "Focus", "Focus this scheduled action on the timeline.", true, status != "OK", "EV")));
+
+                if (action != null && !string.IsNullOrEmpty(action.GateId))
+                    edges.Add(GraphEdge("gate:" + action.GateId, nodeId, "allows", HasGate(definition, action.GateId) ? "OK" : "Broken"));
+
+                for (int c = 0; action != null && action.ConditionRefs != null && c < action.ConditionRefs.Count; c++)
+                {
+                    ScenarioConditionRef condition = action.ConditionRefs[c];
+                    string conditionId = "condition:" + Safe(condition != null ? condition.Id : null);
+                    nodes.Add(GraphNode(conditionId, Safe(condition != null ? condition.Id : null), "Condition", condition != null ? condition.Kind.ToString() : "Unknown", "Inline", null));
+                    edges.Add(GraphEdge(conditionId, nodeId, "required", "OK"));
+                }
+
+                for (int e = 0; action != null && action.Effects != null && e < action.Effects.Count; e++)
+                {
+                    ScenarioEffectDefinition effect = action.Effects[e];
+                    string effectId = "effect:" + actionId + ":" + e.ToString(CultureInfo.InvariantCulture);
+                    nodes.Add(GraphNode(effectId, effect != null ? effect.Kind.ToString() : "Effect", "Effect", FormatEffectTarget(effect), IsEffectBroken(definition, effect) ? "Broken reference" : "OK", null));
+                    edges.Add(GraphEdge(nodeId, effectId, "fires", IsEffectBroken(definition, effect) ? "Broken" : "OK"));
+                }
+            }
+
+            for (int i = 0; definition != null && definition.Quests != null && definition.Quests.Quests != null && i < definition.Quests.Quests.Count; i++)
+            {
+                QuestDefinition quest = definition.Quests.Quests[i];
+                string questId = !string.IsNullOrEmpty(quest != null ? quest.Id : null) ? quest.Id : ("quest_" + i.ToString(CultureInfo.InvariantCulture));
+                string nodeId = "quest:" + questId;
+                string status = quest != null && !string.IsNullOrEmpty(quest.StartTriggerId) && !HasTrigger(definition, quest.StartTriggerId) ? "Broken trigger" : "OK";
+                nodes.Add(GraphNode(nodeId, !string.IsNullOrEmpty(quest != null ? quest.Title : null) ? quest.Title : questId, "Quest", FormatSchedule(quest != null ? quest.ScheduledStart : null), status, null));
+                if (quest != null && !string.IsNullOrEmpty(quest.StartTriggerId))
+                    edges.Add(GraphEdge("trigger:" + quest.StartTriggerId, nodeId, "starts", HasTrigger(definition, quest.StartTriggerId) ? "OK" : "Broken"));
+            }
+
+            AddWinLossGraphNodes(definition, nodes, edges);
+
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Property("Nodes", nodes.Count.ToString(CultureInfo.InvariantCulture)));
+            items.Add(Property("Edges", edges.Count.ToString(CultureInfo.InvariantCulture)));
+            for (int i = 0; i < nodes.Count && i < 16; i++)
+            {
+                ScenarioAuthoringGraphNodeViewModel node = nodes[i];
+                if (node == null)
+                    continue;
+
+                if (node.PrimaryAction != null)
+                    items.Add(ActionItem(node.PrimaryAction));
+                items.Add(Property(node.Kind + ": " + node.Label, node.Detail + " / " + node.Status));
+            }
+
+            for (int i = 0; i < edges.Count && i < 16; i++)
+            {
+                ScenarioAuthoringGraphEdgeViewModel edge = edges[i];
+                if (edge != null)
+                    items.Add(Property("Edge " + edge.Label, edge.FromNodeId + " -> " + edge.ToNodeId + " / " + edge.Status));
+            }
+
+            if (nodes.Count == 0 && edges.Count == 0)
+                items.Add(Text("No trigger, gate, scheduled action, quest, or win/loss graph data is authored yet."));
+
+            return items;
+        }
+
+        private static ScenarioAuthoringGraphNodeViewModel GraphNode(string id, string label, string kind, string detail, string status, ScenarioAuthoringInspectorAction action)
+        {
+            return new ScenarioAuthoringGraphNodeViewModel
+            {
+                Id = id,
+                Label = label,
+                Kind = kind,
+                Detail = detail,
+                Status = status,
+                PrimaryAction = action
+            };
+        }
+
+        private static ScenarioAuthoringGraphEdgeViewModel GraphEdge(string from, string to, string label, string status)
+        {
+            return new ScenarioAuthoringGraphEdgeViewModel
+            {
+                FromNodeId = from,
+                ToNodeId = to,
+                Label = label,
+                Status = status
+            };
+        }
+
+        private static void AppendConditionEdges(List<ScenarioAuthoringGraphEdgeViewModel> edges, string gateNodeId, ScenarioConditionGroup group)
+        {
+            if (edges == null || group == null)
+                return;
+
+            for (int i = 0; group.Conditions != null && i < group.Conditions.Count; i++)
+            {
+                ScenarioConditionRef condition = group.Conditions[i];
+                if (condition != null && !string.IsNullOrEmpty(condition.Id))
+                    edges.Add(GraphEdge("condition:" + condition.Id, gateNodeId, group.Mode.ToString(), "OK"));
+            }
+
+            for (int i = 0; group.Groups != null && i < group.Groups.Count; i++)
+                AppendConditionEdges(edges, gateNodeId, group.Groups[i]);
+        }
+
+        private static int CountGraphConditions(ScenarioConditionGroup group)
+        {
+            if (group == null)
+                return 0;
+
+            int count = group.Conditions != null ? group.Conditions.Count : 0;
+            for (int i = 0; group.Groups != null && i < group.Groups.Count; i++)
+                count += CountGraphConditions(group.Groups[i]);
+            return count;
+        }
+
+        private static void AddWinLossGraphNodes(ScenarioDefinition definition, List<ScenarioAuthoringGraphNodeViewModel> nodes, List<ScenarioAuthoringGraphEdgeViewModel> edges)
+        {
+            for (int i = 0; definition != null && definition.WinLossConditions != null && definition.WinLossConditions.WinConditions != null && i < definition.WinLossConditions.WinConditions.Count; i++)
+            {
+                ConditionDef condition = definition.WinLossConditions.WinConditions[i];
+                nodes.Add(GraphNode("win:" + Safe(condition != null ? condition.Id : null), Safe(condition != null ? condition.Id : null), "Win Condition", condition != null ? condition.Type : "Unknown", "OK", null));
+            }
+
+            for (int i = 0; definition != null && definition.WinLossConditions != null && definition.WinLossConditions.LossConditions != null && i < definition.WinLossConditions.LossConditions.Count; i++)
+            {
+                ConditionDef condition = definition.WinLossConditions.LossConditions[i];
+                nodes.Add(GraphNode("loss:" + Safe(condition != null ? condition.Id : null), Safe(condition != null ? condition.Id : null), "Loss Condition", condition != null ? condition.Type : "Unknown", "OK", null));
+            }
+        }
+
+        private static bool HasGate(ScenarioDefinition definition, string gateId)
+        {
+            for (int i = 0; definition != null && definition.Gates != null && i < definition.Gates.Count; i++)
+            {
+                ScenarioGateDefinition gate = definition.Gates[i];
+                if (gate != null && string.Equals(gate.Id, gateId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasTrigger(ScenarioDefinition definition, string triggerId)
+        {
+            for (int i = 0; definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
+            {
+                TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
+                if (trigger != null && string.Equals(trigger.Id, triggerId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasQuest(ScenarioDefinition definition, string questId)
+        {
+            for (int i = 0; definition != null && definition.Quests != null && definition.Quests.Quests != null && i < definition.Quests.Quests.Count; i++)
+            {
+                QuestDefinition quest = definition.Quests.Quests[i];
+                if (quest != null && string.Equals(quest.Id, questId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsEffectBroken(ScenarioDefinition definition, ScenarioEffectDefinition effect)
+        {
+            if (effect == null)
+                return true;
+
+            if (!string.IsNullOrEmpty(effect.QuestId) && !HasQuest(definition, effect.QuestId))
+                return true;
+
+            return false;
+        }
+
+        private static string FormatEffectTarget(ScenarioEffectDefinition effect)
+        {
+            if (effect == null)
+                return "missing effect";
+            if (!string.IsNullOrEmpty(effect.QuestId))
+                return "quest " + effect.QuestId;
+            if (!string.IsNullOrEmpty(effect.ObjectId))
+                return "object " + effect.ObjectId;
+            if (!string.IsNullOrEmpty(effect.ItemId))
+                return "item " + effect.ItemId + " x" + effect.Quantity.ToString(CultureInfo.InvariantCulture);
+            if (!string.IsNullOrEmpty(effect.WeatherState))
+                return "weather " + effect.WeatherState;
+            if (!string.IsNullOrEmpty(effect.FlagId))
+                return "flag " + effect.FlagId + "=" + effect.FlagValue;
+            if (!string.IsNullOrEmpty(effect.SurvivorId))
+                return "survivor " + effect.SurvivorId;
+            if (!string.IsNullOrEmpty(effect.BunkerExpansionId))
+                return "bunker " + effect.BunkerExpansionId;
+            if (!string.IsNullOrEmpty(effect.TargetId))
+                return "target " + effect.TargetId;
+            return effect.Kind.ToString();
         }
 
         private static ScenarioAuthoringInspectorSection[] BuildSurvivorWindowSections(ScenarioDefinition definition)

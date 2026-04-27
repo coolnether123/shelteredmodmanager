@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using ModAPI.Core;
+using ModAPI.Scenarios;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
@@ -31,6 +33,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             ScenarioAuthoringTarget hovered = null;
+            List<ScenarioAuthoringTarget> stack = null;
             bool selectionMode = ScenarioAuthoringRuntimeGuards.ShouldResolveSelection()
                 && (ScenarioAuthoringInputActions.IsSelectionModifierHeld() || IsAddSelectionHeld());
             bool changed = state.SelectionModeActive != selectionMode;
@@ -47,24 +50,52 @@ namespace ShelteredAPI.Scenarios
             }
             else
             {
-                if (TryResolveHoveredTarget(state, out hovered))
+                if (TryResolveCandidateStack(state, out stack))
                 {
+                    changed |= SynchronizeSelectionStack(state, stack);
+                    if (state.SelectionStack != null && state.SelectionStack.Count > 0)
+                        hovered = state.SelectionStack[Mathf.Clamp(state.ActiveSelectionStackIndex, 0, state.SelectionStack.Count - 1)];
+
+                    if (ScenarioAuthoringInputActions.IsStackCycleDown())
+                    {
+                        changed |= CycleSelectionStack(state, 1);
+                        if (state.SelectionStack != null && state.SelectionStack.Count > 0)
+                            hovered = state.SelectionStack[Mathf.Clamp(state.ActiveSelectionStackIndex, 0, state.SelectionStack.Count - 1)];
+                    }
+
                     if (!AreSameTarget(state.HoveredTarget, hovered))
                     {
-                        state.HoveredTarget = hovered;
+                        state.HoveredTarget = hovered != null ? hovered.Copy() : null;
                         changed = true;
                     }
                 }
-                else if (state.HoveredTarget != null)
+                else
                 {
-                    state.HoveredTarget = null;
-                    changed = true;
+                    if (state.HoveredTarget != null)
+                    {
+                        state.HoveredTarget = null;
+                        changed = true;
+                    }
+
+                    if (state.SelectionStack != null && state.SelectionStack.Count > 0)
+                    {
+                        ClearSelectionStack(state);
+                        changed = true;
+                    }
                 }
 
                 if (ScenarioAuthoringInputActions.IsConfirmSelectionDown()
                     && hovered != null
                     && _scopeService.CanSelectTargetForCurrentStage(state, hovered))
                 {
+                    if (state.SelectionStack != null
+                        && state.SelectionStack.Count > 1
+                        && AreSameTarget(state.SelectedTarget, hovered))
+                    {
+                        changed |= CycleSelectionStack(state, 1);
+                        hovered = state.SelectionStack[Mathf.Clamp(state.ActiveSelectionStackIndex, 0, state.SelectionStack.Count - 1)];
+                    }
+
                     changed |= ApplySelection(state, hovered);
                 }
             }
@@ -75,6 +106,8 @@ namespace ShelteredAPI.Scenarios
                 if (selectionMode && menuTarget != null)
                 {
                     ScenarioAuthoringSelectionMenuService.Instance.OpenMenu(state, menuTarget);
+                    if (state.SelectionStack != null && state.SelectionStack.Count > 1)
+                        state.StatusMessage = "Selection stack opened with " + state.SelectionStack.Count + " candidates.";
                     changed = true;
                 }
                 else if (state.SelectedTarget != null)
@@ -91,9 +124,9 @@ namespace ShelteredAPI.Scenarios
             return changed;
         }
 
-        private bool TryResolveHoveredTarget(ScenarioAuthoringState state, out ScenarioAuthoringTarget target)
+        private bool TryResolveCandidateStack(ScenarioAuthoringState state, out List<ScenarioAuthoringTarget> targets)
         {
-            target = null;
+            targets = null;
             if (UICamera.hoveredObject != null)
                 return false;
             if (ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>().PointerOverAuthoringUi)
@@ -112,7 +145,7 @@ namespace ShelteredAPI.Scenarios
             Ray ray = camera.ScreenPointToRay(UnityEngine.Input.mousePosition);
             Vector3 worldPoint = ResolveMouseWorldPoint(camera);
             RaycastHit[] hits = Physics.RaycastAll(ray, 1000f);
-            ScenarioAuthoringTarget fallbackTarget = null;
+            List<SelectionCandidate> candidates = new List<SelectionCandidate>();
             if (hits != null && hits.Length > 0)
             {
                 Array.Sort(hits, CompareRaycastHit);
@@ -134,18 +167,7 @@ namespace ShelteredAPI.Scenarios
                         WorldPoint = hit.point
                     };
 
-                    ScenarioAuthoringTarget candidate;
-                    if (!_adapterRegistry.TryCreateTarget(context, out candidate) || candidate == null)
-                        continue;
-
-                    if (_scopeService.CanSelectTargetForCurrentStage(state, candidate))
-                    {
-                        target = candidate;
-                        return true;
-                    }
-
-                    if (fallbackTarget == null && _scopeService.CanSelectTargetForCurrentStage(state, candidate))
-                        fallbackTarget = candidate;
+                    AddCandidate(state, candidates, context, 300, hit.distance, null);
                 }
             }
 
@@ -168,18 +190,7 @@ namespace ShelteredAPI.Scenarios
                         WorldPoint = worldPoint
                     };
 
-                    ScenarioAuthoringTarget candidate;
-                    if (!_adapterRegistry.TryCreateTarget(context, out candidate) || candidate == null)
-                        continue;
-
-                    if (_scopeService.CanSelectTargetForCurrentStage(state, candidate))
-                    {
-                        target = candidate;
-                        return true;
-                    }
-
-                    if (fallbackTarget == null && _scopeService.CanSelectTargetForCurrentStage(state, candidate))
-                        fallbackTarget = candidate;
+                    AddCandidate(state, candidates, context, 260, 0f, null);
                 }
             }
             catch (Exception ex)
@@ -187,20 +198,7 @@ namespace ShelteredAPI.Scenarios
                 MMLog.WriteDebug("[ScenarioAuthoringSelection] 2D overlap check failed: " + ex.Message);
             }
 
-            ScenarioAuthoringTargetContext spriteContext;
-            if (TryResolveSpriteContext(camera, ray, worldPoint, out spriteContext)
-                && _adapterRegistry.TryCreateTarget(spriteContext, out target)
-                && target != null
-                && _scopeService.CanSelectTargetForCurrentStage(state, target))
-            {
-                return true;
-            }
-
-            if (fallbackTarget != null)
-            {
-                target = fallbackTarget;
-                return true;
-            }
+            AddSpriteRendererCandidates(state, candidates, camera, ray, worldPoint);
 
             ScenarioAuthoringTargetContext gridContext = new ScenarioAuthoringTargetContext
             {
@@ -208,9 +206,296 @@ namespace ShelteredAPI.Scenarios
                 Ray = ray,
                 WorldPoint = worldPoint
             };
-            return _adapterRegistry.TryCreateTarget(gridContext, out target)
-                && target != null
-                && _scopeService.CanSelectTargetForCurrentStage(state, target);
+            AddCandidate(state, candidates, gridContext, 0, 0f, null);
+
+            targets = BuildSortedTargets(state, candidates);
+            return targets != null && targets.Count > 0;
+        }
+
+        private void AddCandidate(
+            ScenarioAuthoringState state,
+            List<SelectionCandidate> candidates,
+            ScenarioAuthoringTargetContext context,
+            int sourceRank,
+            float distance,
+            SpriteRenderer spriteRenderer)
+        {
+            ScenarioAuthoringTarget target;
+            if (!_adapterRegistry.TryCreateTarget(context, out target) || target == null)
+                return;
+            if (!_scopeService.CanSelectTargetForCurrentStage(state, target))
+                return;
+
+            candidates.Add(new SelectionCandidate
+            {
+                Target = target,
+                SourceRank = sourceRank,
+                Distance = distance,
+                ToolScore = ScoreToolRelevance(state, target),
+                StageScore = ScoreStageRelevance(state, target),
+                KindScore = ScoreKind(target.Kind),
+                SortingLayer = spriteRenderer != null ? SortingLayer.GetLayerValueFromID(spriteRenderer.sortingLayerID) : ResolveSortingLayer(target),
+                SortingOrder = spriteRenderer != null ? spriteRenderer.sortingOrder : ResolveSortingOrder(target),
+                Z = target.WorldPosition.z,
+                Area = spriteRenderer != null ? ResolveArea(spriteRenderer.bounds) : ResolveArea(target)
+            });
+        }
+
+        private void AddSpriteRendererCandidates(
+            ScenarioAuthoringState state,
+            List<SelectionCandidate> candidates,
+            Camera camera,
+            Ray ray,
+            Vector3 worldPoint)
+        {
+            SpriteRenderer[] spriteRenderers = UnityEngine.Object.FindObjectsOfType<SpriteRenderer>();
+            for (int i = 0; spriteRenderers != null && i < spriteRenderers.Length; i++)
+            {
+                SpriteRenderer spriteRenderer = spriteRenderers[i];
+                if (spriteRenderer == null
+                    || spriteRenderer.sprite == null
+                    || !spriteRenderer.enabled
+                    || spriteRenderer.gameObject == null
+                    || !spriteRenderer.gameObject.activeInHierarchy
+                    || !spriteRenderer.bounds.Contains(worldPoint))
+                {
+                    continue;
+                }
+
+                ScenarioAuthoringTargetContext context = new ScenarioAuthoringTargetContext
+                {
+                    Camera = camera,
+                    Ray = ray,
+                    GameObject = spriteRenderer.gameObject,
+                    WorldPoint = worldPoint
+                };
+                AddCandidate(state, candidates, context, 220, 0f, spriteRenderer);
+            }
+        }
+
+        private static List<ScenarioAuthoringTarget> BuildSortedTargets(ScenarioAuthoringState state, List<SelectionCandidate> candidates)
+        {
+            if (candidates == null || candidates.Count == 0)
+                return new List<ScenarioAuthoringTarget>();
+
+            Dictionary<string, SelectionCandidate> byId = new Dictionary<string, SelectionCandidate>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                SelectionCandidate candidate = candidates[i];
+                if (candidate == null || candidate.Target == null || string.IsNullOrEmpty(candidate.Target.Id))
+                    continue;
+
+                SelectionCandidate existing;
+                if (byId.TryGetValue(candidate.Target.Id, out existing) && CompareCandidates(candidate, existing) >= 0)
+                    continue;
+
+                byId[candidate.Target.Id] = candidate;
+            }
+
+            List<SelectionCandidate> sorted = new List<SelectionCandidate>(byId.Values);
+            sorted.Sort(CompareCandidates);
+            List<ScenarioAuthoringTarget> result = new List<ScenarioAuthoringTarget>();
+            for (int i = 0; i < sorted.Count; i++)
+                result.Add(sorted[i].Target);
+            return result;
+        }
+
+        private static int CompareCandidates(SelectionCandidate left, SelectionCandidate right)
+        {
+            if (ReferenceEquals(left, right)) return 0;
+            if (left == null) return 1;
+            if (right == null) return -1;
+
+            int leftScore = left.TotalScore;
+            int rightScore = right.TotalScore;
+            if (leftScore != rightScore)
+                return rightScore.CompareTo(leftScore);
+            if (left.SortingLayer != right.SortingLayer)
+                return right.SortingLayer.CompareTo(left.SortingLayer);
+            if (left.SortingOrder != right.SortingOrder)
+                return right.SortingOrder.CompareTo(left.SortingOrder);
+            int distance = left.Distance.CompareTo(right.Distance);
+            if (distance != 0)
+                return distance;
+            int z = right.Z.CompareTo(left.Z);
+            if (z != 0)
+                return z;
+            return left.Area.CompareTo(right.Area);
+        }
+
+        private static int ScoreToolRelevance(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
+        {
+            if (state == null || target == null)
+                return 0;
+
+            switch (state.ActiveTool)
+            {
+                case ScenarioAuthoringTool.Objects:
+                    return target.Kind == ScenarioAuthoringTargetKind.PlaceableObject ? 80 : target.Kind == ScenarioAuthoringTargetKind.SceneSprite ? 30 : 0;
+                case ScenarioAuthoringTool.Shelter:
+                    return target.Kind == ScenarioAuthoringTargetKind.Room || target.Kind == ScenarioAuthoringTargetKind.Tile || target.Kind == ScenarioAuthoringTargetKind.Light ? 80 : 0;
+                case ScenarioAuthoringTool.Wiring:
+                    return target.Kind == ScenarioAuthoringTargetKind.Wall || target.Kind == ScenarioAuthoringTargetKind.Wire || target.Kind == ScenarioAuthoringTargetKind.Light ? 80 : 0;
+                case ScenarioAuthoringTool.Assets:
+                    return target.SupportsReplace ? 80 : 0;
+                case ScenarioAuthoringTool.Family:
+                case ScenarioAuthoringTool.People:
+                    return target.Kind == ScenarioAuthoringTargetKind.Character ? 80 : 0;
+                default:
+                    return 20;
+            }
+        }
+
+        private static int ScoreStageRelevance(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
+        {
+            if (state == null || target == null)
+                return 0;
+
+            if (state.ActiveStage == ScenarioStageKind.BunkerInside
+                && (target.Kind == ScenarioAuthoringTargetKind.PlaceableObject || target.Kind == ScenarioAuthoringTargetKind.Character || target.Kind == ScenarioAuthoringTargetKind.SceneSprite))
+                return 40;
+            if (state.ActiveStage == ScenarioStageKind.BunkerSurface
+                && (target.Kind == ScenarioAuthoringTargetKind.Room || target.Kind == ScenarioAuthoringTargetKind.Tile || target.Kind == ScenarioAuthoringTargetKind.Light))
+                return 40;
+            if (state.ActiveStage == ScenarioStageKind.BunkerBackground
+                && (target.Kind == ScenarioAuthoringTargetKind.Background || target.Kind == ScenarioAuthoringTargetKind.Wall || target.Kind == ScenarioAuthoringTargetKind.Wire))
+                return 40;
+            return 0;
+        }
+
+        private static int ScoreKind(ScenarioAuthoringTargetKind kind)
+        {
+            switch (kind)
+            {
+                case ScenarioAuthoringTargetKind.Character:
+                    return 70;
+                case ScenarioAuthoringTargetKind.PlaceableObject:
+                    return 65;
+                case ScenarioAuthoringTargetKind.SceneSprite:
+                    return 60;
+                case ScenarioAuthoringTargetKind.Wire:
+                case ScenarioAuthoringTargetKind.Light:
+                case ScenarioAuthoringTargetKind.Wall:
+                    return 55;
+                case ScenarioAuthoringTargetKind.Room:
+                    return 40;
+                case ScenarioAuthoringTargetKind.Tile:
+                    return 20;
+                case ScenarioAuthoringTargetKind.Background:
+                    return 10;
+                default:
+                    return 30;
+            }
+        }
+
+        private static int ResolveSortingLayer(ScenarioAuthoringTarget target)
+        {
+            SpriteRenderer spriteRenderer = ResolveSpriteRenderer(target);
+            return spriteRenderer != null ? SortingLayer.GetLayerValueFromID(spriteRenderer.sortingLayerID) : 0;
+        }
+
+        private static int ResolveSortingOrder(ScenarioAuthoringTarget target)
+        {
+            SpriteRenderer spriteRenderer = ResolveSpriteRenderer(target);
+            return spriteRenderer != null ? spriteRenderer.sortingOrder : 0;
+        }
+
+        private static SpriteRenderer ResolveSpriteRenderer(ScenarioAuthoringTarget target)
+        {
+            GameObject gameObject = target != null ? target.RuntimeObject as GameObject : null;
+            return gameObject != null ? (gameObject.GetComponent<SpriteRenderer>() ?? gameObject.GetComponentInChildren<SpriteRenderer>(true)) : null;
+        }
+
+        private static float ResolveArea(ScenarioAuthoringTarget target)
+        {
+            SpriteRenderer spriteRenderer = ResolveSpriteRenderer(target);
+            return spriteRenderer != null ? ResolveArea(spriteRenderer.bounds) : 999999f;
+        }
+
+        private static float ResolveArea(Bounds bounds)
+        {
+            return Mathf.Abs(bounds.size.x * bounds.size.y);
+        }
+
+        private static bool SynchronizeSelectionStack(ScenarioAuthoringState state, List<ScenarioAuthoringTarget> targets)
+        {
+            string signature = BuildStackSignature(targets);
+            bool changed = !string.Equals(state.SelectionStackSignature, signature, StringComparison.Ordinal);
+            if (changed)
+            {
+                state.SelectionStack.Clear();
+                for (int i = 0; targets != null && i < targets.Count; i++)
+                {
+                    if (targets[i] != null)
+                        state.SelectionStack.Add(targets[i].Copy());
+                }
+
+                state.SelectionStackSignature = signature;
+                state.ActiveSelectionStackIndex = 0;
+                return true;
+            }
+
+            if (state.SelectionStack.Count != (targets != null ? targets.Count : 0))
+            {
+                state.SelectionStack.Clear();
+                for (int i = 0; targets != null && i < targets.Count; i++)
+                {
+                    if (targets[i] != null)
+                        state.SelectionStack.Add(targets[i].Copy());
+                }
+                return true;
+            }
+
+            state.ActiveSelectionStackIndex = Mathf.Clamp(state.ActiveSelectionStackIndex, 0, Math.Max(0, state.SelectionStack.Count - 1));
+            return false;
+        }
+
+        private static void ClearSelectionStack(ScenarioAuthoringState state)
+        {
+            if (state == null)
+                return;
+            state.SelectionStack.Clear();
+            state.ActiveSelectionStackIndex = 0;
+            state.SelectionStackSignature = null;
+        }
+
+        private static bool CycleSelectionStack(ScenarioAuthoringState state, int delta)
+        {
+            if (state == null || state.SelectionStack == null || state.SelectionStack.Count <= 1)
+                return false;
+
+            int count = state.SelectionStack.Count;
+            int next = state.ActiveSelectionStackIndex + delta;
+            while (next < 0)
+                next += count;
+            next = next % count;
+            if (next == state.ActiveSelectionStackIndex)
+                return false;
+
+            state.ActiveSelectionStackIndex = next;
+            ScenarioAuthoringTarget active = state.SelectionStack[next];
+            state.StatusMessage = "Selection stack " + (next + 1) + "/" + count + ": " + (active != null ? active.DisplayName : "Unknown") + ".";
+            return true;
+        }
+
+        private static string BuildStackSignature(List<ScenarioAuthoringTarget> targets)
+        {
+            if (targets == null || targets.Count == 0)
+                return string.Empty;
+
+            StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < targets.Count; i++)
+            {
+                ScenarioAuthoringTarget target = targets[i];
+                if (target == null)
+                    continue;
+
+                if (builder.Length > 0)
+                    builder.Append("|");
+                builder.Append(target.Id);
+            }
+
+            return builder.ToString();
         }
 
         private static bool ApplySelection(ScenarioAuthoringState state, ScenarioAuthoringTarget hovered)
@@ -383,6 +668,25 @@ namespace ShelteredAPI.Scenarios
             if (left == null || right == null)
                 return false;
             return string.Equals(left.Id, right.Id, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private sealed class SelectionCandidate
+        {
+            public ScenarioAuthoringTarget Target;
+            public int SourceRank;
+            public int ToolScore;
+            public int StageScore;
+            public int KindScore;
+            public int SortingLayer;
+            public int SortingOrder;
+            public float Distance;
+            public float Z;
+            public float Area;
+
+            public int TotalScore
+            {
+                get { return SourceRank + ToolScore + StageScore + KindScore; }
+            }
         }
 
         private sealed class ScenarioAuthoringTargetAdapterRegistry

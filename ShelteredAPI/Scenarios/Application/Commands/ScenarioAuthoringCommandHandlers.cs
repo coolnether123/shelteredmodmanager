@@ -267,6 +267,9 @@ namespace ShelteredAPI.Scenarios
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSettingDecreasePrefix, StringComparison.Ordinal))
                 return StepSetting(state, actionId.Substring(ScenarioAuthoringActionIds.ActionSettingDecreasePrefix.Length), -1f);
 
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSettingSelectPrefix, StringComparison.Ordinal))
+                return SelectSetting(state, actionId.Substring(ScenarioAuthoringActionIds.ActionSettingSelectPrefix.Length));
+
             return false;
         }
 
@@ -376,6 +379,44 @@ namespace ShelteredAPI.Scenarios
             _settingsService.Save(state.Settings);
             _layoutService.PersistIfEnabled(state);
             state.StatusMessage = definition.Label + " updated.";
+            return true;
+        }
+
+        private bool SelectSetting(ScenarioAuthoringState state, string token)
+        {
+            if (string.IsNullOrEmpty(token))
+                return false;
+
+            int separator = token.LastIndexOf('.');
+            if (separator <= 0 || separator >= token.Length - 1)
+                return false;
+
+            string settingId = token.Substring(0, separator);
+            string selectedValue = token.Substring(separator + 1);
+            ScenarioAuthoringSettingDefinition definition = _settingsService.FindDefinition(settingId);
+            if (definition == null || definition.Kind != ScenarioAuthoringSettingKind.Choice || state.Settings == null)
+                return false;
+
+            bool allowed = false;
+            for (int i = 0; definition.ChoiceValues != null && i < definition.ChoiceValues.Length; i++)
+            {
+                if (string.Equals(definition.ChoiceValues[i], selectedValue, StringComparison.OrdinalIgnoreCase))
+                {
+                    allowed = true;
+                    selectedValue = definition.ChoiceValues[i];
+                    break;
+                }
+            }
+
+            if (!allowed)
+                return false;
+            if (string.Equals(state.Settings.Get(settingId, definition.DefaultValue), selectedValue, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            state.Settings.Set(settingId, selectedValue);
+            _settingsService.Save(state.Settings);
+            _layoutService.PersistIfEnabled(state);
+            state.StatusMessage = definition.Label + " set to " + selectedValue + ".";
             return true;
         }
     }
@@ -652,15 +693,202 @@ namespace ShelteredAPI.Scenarios
     {
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
         {
-            handled = string.Equals(actionId, ScenarioAuthoringActionIds.ActionSelectionClear, StringComparison.Ordinal);
             message = null;
-            if (!handled || state.SelectedTarget == null)
+            handled = false;
+            if (state == null || string.IsNullOrEmpty(actionId))
                 return false;
 
-            state.SelectedTarget = null;
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSelectionClear, StringComparison.Ordinal))
+            {
+                handled = true;
+                if (state.SelectedTarget == null && (state.MultiSelection == null || state.MultiSelection.Count == 0))
+                {
+                    message = "Selection is already clear.";
+                    return true;
+                }
+
+                state.SelectedTarget = null;
+                state.MultiSelection.Clear();
+                message = "Selection cleared.";
+                return true;
+            }
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSelectionStackCycle, StringComparison.Ordinal))
+            {
+                handled = true;
+                return CycleSelectionStack(state, out message);
+            }
+
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix, StringComparison.Ordinal))
+            {
+                handled = true;
+                string token = actionId.Substring(ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix.Length);
+                int index;
+                if (!int.TryParse(token, out index))
+                {
+                    message = "Selection stack row is invalid.";
+                    return true;
+                }
+
+                return SelectStackIndex(state, index, out message);
+            }
+
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionHierarchySelectPrefix, StringComparison.Ordinal))
+            {
+                handled = true;
+                string targetId = actionId.Substring(ScenarioAuthoringActionIds.ActionHierarchySelectPrefix.Length);
+                return SelectHierarchyTarget(state, targetId, out message);
+            }
+
+            return false;
+        }
+
+        private static bool CycleSelectionStack(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (state == null || state.SelectionStack == null || state.SelectionStack.Count == 0)
+            {
+                message = "No selection stack candidates are available.";
+                return true;
+            }
+
+            int count = state.SelectionStack.Count;
+            int next = (state.ActiveSelectionStackIndex + 1) % count;
+            return SelectStackIndex(state, next, out message);
+        }
+
+        private static bool SelectStackIndex(ScenarioAuthoringState state, int index, out string message)
+        {
+            message = null;
+            if (state == null || state.SelectionStack == null || state.SelectionStack.Count == 0)
+            {
+                message = "No selection stack candidates are available.";
+                return true;
+            }
+
+            if (index < 0 || index >= state.SelectionStack.Count)
+            {
+                message = "Selection stack row is out of range.";
+                return true;
+            }
+
+            state.ActiveSelectionStackIndex = index;
+            ScenarioAuthoringTarget target = state.SelectionStack[index];
+            if (target == null)
+            {
+                message = "Selection stack target is missing.";
+                return true;
+            }
+
+            state.SelectedTarget = target.Copy();
+            state.HoveredTarget = target.Copy();
             state.MultiSelection.Clear();
-            message = "Selection cleared.";
+            state.MultiSelection.Add(target.Copy());
+            message = "Selected " + target.DisplayName + " from the stack.";
             return true;
+        }
+
+        private static bool SelectHierarchyTarget(ScenarioAuthoringState state, string targetId, out string message)
+        {
+            message = null;
+            if (string.IsNullOrEmpty(targetId))
+            {
+                message = "Hierarchy target is missing.";
+                return true;
+            }
+
+            ScenarioAuthoringTarget target = FindStackTarget(state, targetId) ?? BuildTargetFromScene(targetId);
+            if (target == null)
+            {
+                message = "Hierarchy target is not live in the current scene: " + targetId + ".";
+                return true;
+            }
+
+            state.SelectedTarget = target.Copy();
+            state.HoveredTarget = target.Copy();
+            state.MultiSelection.Clear();
+            state.MultiSelection.Add(target.Copy());
+            message = "Selected " + target.DisplayName + " from hierarchy.";
+            return true;
+        }
+
+        private static ScenarioAuthoringTarget FindStackTarget(ScenarioAuthoringState state, string targetId)
+        {
+            for (int i = 0; state != null && state.SelectionStack != null && i < state.SelectionStack.Count; i++)
+            {
+                ScenarioAuthoringTarget target = state.SelectionStack[i];
+                if (target != null && string.Equals(target.Id, targetId, StringComparison.OrdinalIgnoreCase))
+                    return target;
+            }
+
+            return null;
+        }
+
+        private static ScenarioAuthoringTarget BuildTargetFromScene(string targetId)
+        {
+            int separator = targetId != null ? targetId.LastIndexOf(':') : -1;
+            if (separator <= 0 || separator >= targetId.Length - 1)
+                return null;
+
+            int instanceId;
+            if (!int.TryParse(targetId.Substring(separator + 1), out instanceId))
+                return null;
+
+            ScenarioAuthoringTargetKind kind = ScenarioAuthoringTargetKind.Unknown;
+            try
+            {
+                object parsed = Enum.Parse(typeof(ScenarioAuthoringTargetKind), targetId.Substring(0, separator), true);
+                if (parsed != null && Enum.IsDefined(typeof(ScenarioAuthoringTargetKind), parsed))
+                    kind = (ScenarioAuthoringTargetKind)parsed;
+            }
+            catch
+            {
+            }
+
+            GameObject[] objects = UnityEngine.Object.FindObjectsOfType<GameObject>();
+            for (int i = 0; objects != null && i < objects.Length; i++)
+            {
+                GameObject gameObject = objects[i];
+                if (gameObject == null || gameObject.transform == null || gameObject.transform.GetInstanceID() != instanceId)
+                    continue;
+
+                ScenarioSceneSpritePlacementMarker marker = gameObject.GetComponentInParent<ScenarioSceneSpritePlacementMarker>();
+                return new ScenarioAuthoringTarget
+                {
+                    Id = targetId,
+                    Kind = kind,
+                    DisplayName = string.IsNullOrEmpty(gameObject.name) ? kind.ToString() : gameObject.name,
+                    Description = kind + " at " + BuildTransformPath(gameObject.transform),
+                    AdapterId = "ShelteredAPI.Hierarchy",
+                    GameObjectName = gameObject.name,
+                    TransformPath = BuildTransformPath(gameObject.transform),
+                    ScenarioReferenceId = marker != null ? marker.PlacementId : null,
+                    RuntimeObject = gameObject,
+                    HighlightObject = gameObject,
+                    WorldPosition = gameObject.transform.position,
+                    SupportsInspect = true,
+                    SupportsReplace = true
+                };
+            }
+
+            return null;
+        }
+
+        private static string BuildTransformPath(Transform transform)
+        {
+            if (transform == null)
+                return string.Empty;
+
+            List<string> names = new List<string>();
+            Transform current = transform;
+            while (current != null)
+            {
+                names.Add(current.name);
+                current = current.parent;
+            }
+
+            names.Reverse();
+            return string.Join("/", names.ToArray());
         }
     }
 

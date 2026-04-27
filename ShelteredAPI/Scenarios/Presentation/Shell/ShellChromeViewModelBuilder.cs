@@ -15,7 +15,7 @@ namespace ShelteredAPI.Scenarios
                 return;
 
             ScenarioDefinition definition = editorSession != null ? editorSession.WorkingDefinition : null;
-            viewModel.Title = "Sheltered Scenario Editor";
+            viewModel.Title = "SHELTERED / SCENARIO EDITOR";
             viewModel.Subtitle = definition != null ? Safe(definition.DisplayName) : "No active scenario";
             viewModel.DraftLabel = FormatDraftDisplay(state != null ? state.ActiveDraftId : null);
             viewModel.ModeLabel = BuildEditorModeLabel(editorSession, state);

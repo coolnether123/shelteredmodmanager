@@ -69,6 +69,9 @@ namespace ShelteredAPI.Scenarios
         public const string ActionCloseEditor = "editor.close";
         public const string ActionConvertToNormal = "editor.convert_to_normal";
         public const string ActionSelectionClear = "selection.clear";
+        public const string ActionSelectionStackCycle = "selection.stack.cycle";
+        public const string ActionSelectionStackSelectPrefix = "selection.stack.select.";
+        public const string ActionHierarchySelectPrefix = "hierarchy.select.";
         public const string ActionCaptureFamily = "capture.family.current";
         public const string ActionCaptureInventory = "capture.inventory.current";
         public const string ActionCaptureShelterObjects = "capture.shelter.objects";
@@ -228,7 +231,9 @@ namespace ShelteredAPI.Scenarios
         Quests = 9,
         Map = 10,
         Publish = 11,
-        Calendar = 12
+        Calendar = 12,
+        Hierarchy = 13,
+        SelectionStack = 14
     }
 
     public enum ScenarioAuthoringSettingKind
@@ -303,6 +308,7 @@ namespace ShelteredAPI.Scenarios
         {
             WindowStates = new List<ScenarioAuthoringWindowState>();
             MultiSelection = new List<ScenarioAuthoringTarget>();
+            SelectionStack = new List<ScenarioAuthoringTarget>();
             ScrollStates = new List<ScenarioAuthoringPanelScrollState>();
             Settings = new ScenarioAuthoringSettingsSnapshot();
         }
@@ -324,6 +330,9 @@ namespace ShelteredAPI.Scenarios
         public ScenarioAuthoringTarget HoveredTarget { get; set; }
         public ScenarioAuthoringTarget SelectedTarget { get; set; }
         public List<ScenarioAuthoringTarget> MultiSelection { get; private set; }
+        public List<ScenarioAuthoringTarget> SelectionStack { get; private set; }
+        public int ActiveSelectionStackIndex { get; set; }
+        public string SelectionStackSignature { get; set; }
         public string TimelineSelectionId { get; set; }
         public ScenarioAuthoringInspectorTab InspectorTab { get; set; }
         public string FilterText { get; set; }
@@ -354,6 +363,8 @@ namespace ShelteredAPI.Scenarios
                 StatusMessage = StatusMessage,
                 HoveredTarget = HoveredTarget != null ? HoveredTarget.Copy() : null,
                 SelectedTarget = SelectedTarget != null ? SelectedTarget.Copy() : null,
+                ActiveSelectionStackIndex = ActiveSelectionStackIndex,
+                SelectionStackSignature = SelectionStackSignature,
                 TimelineSelectionId = TimelineSelectionId,
                 InspectorTab = InspectorTab,
                 FilterText = FilterText,
@@ -368,6 +379,13 @@ namespace ShelteredAPI.Scenarios
                 ScenarioAuthoringTarget target = MultiSelection[i];
                 if (target != null)
                     copy.MultiSelection.Add(target.Copy());
+            }
+
+            for (int i = 0; SelectionStack != null && i < SelectionStack.Count; i++)
+            {
+                ScenarioAuthoringTarget target = SelectionStack[i];
+                if (target != null)
+                    copy.SelectionStack.Add(target.Copy());
             }
 
             for (int i = 0; WindowStates != null && i < WindowStates.Count; i++)
@@ -640,6 +658,24 @@ namespace ShelteredAPI.Scenarios
         public string Subtitle { get; set; }
         public ScenarioAuthoringInspectorAction[] HeaderActions { get; set; }
         public ScenarioAuthoringSettingsSectionViewModel[] Sections { get; set; }
+    }
+
+    public sealed class ScenarioAuthoringGraphNodeViewModel
+    {
+        public string Id { get; set; }
+        public string Label { get; set; }
+        public string Kind { get; set; }
+        public string Detail { get; set; }
+        public string Status { get; set; }
+        public ScenarioAuthoringInspectorAction PrimaryAction { get; set; }
+    }
+
+    public sealed class ScenarioAuthoringGraphEdgeViewModel
+    {
+        public string FromNodeId { get; set; }
+        public string ToNodeId { get; set; }
+        public string Label { get; set; }
+        public string Status { get; set; }
     }
 
     public sealed class ScenarioAuthoringContextMenuModel

@@ -26,7 +26,15 @@ namespace ShelteredAPI.Scenarios
             RegisterToggle("input.marquee_selection", "Input", "Marquee Selection", "Enable marquee selection where a tool supports it.", "false");
             RegisterToggle("visuals.show_grid", "Visuals", "Show Grid", "Show the shelter grid while authoring.", "true");
             RegisterToggle("visuals.snap_to_grid", "Visuals", "Snap To Grid", "Snap authored placements and previews to shelter cells.", "true");
+            RegisterFloat("visuals.grid_size", "Visuals", "Grid Size", "Authoring grid size in shelter pixels.", "32.00", 8f, 96f, 4f);
             RegisterToggle("visuals.stronger_hover", "Visuals", "Stronger Hover Outlines", "Use stronger hover and focus outlines.", "true");
+            RegisterToggle("visuals.show_hover_inspector", "Visuals", "Show Hover Inspector", "Show target details near the pointer while selecting.", "true");
+            RegisterToggle("visuals.show_selection_stack", "Visuals", "Show Selection Stack", "Show all selectable targets under the pointer.", "true");
+            RegisterToggle("visuals.show_hidden_objects", "Visuals", "Show Hidden Objects", "Include inactive or hidden targets where authoring can resolve them.", "false");
+            RegisterToggle("layers.lock_background", "Layers", "Lock Background Layer", "Prevent accidental background selection.", "false");
+            RegisterToggle("layers.lock_surface", "Layers", "Lock Surface Layer", "Prevent accidental surface selection.", "false");
+            RegisterToggle("layers.lock_inside", "Layers", "Lock Inside Layer", "Prevent accidental bunker-inside selection.", "false");
+            RegisterChoice("shell.renderer_mode", "Shell", "Renderer Mode", "Preferred scenario editor renderer.", "ngui", new[] { "ngui", "imgui" }, new[] { "NGUI", "IMGUI Fallback" });
             RegisterToggle("input.playtest_auto_pause", "Input", "Playtest Auto-Pause On Open", "Pause the scenario when the shell reopens during playtest.", "false");
             RegisterToggle("input.block_vanilla_camera", "Input", "Block Vanilla Camera Input While Shell Focused", "Suppress vanilla camera pan and zoom while the shell owns pointer focus.", "true");
             RegisterFloat("input.scroll_speed", "Input", "Scroll Speed", "Scroll speed for lists and event timelines.", "1.00", 0.50f, 3f, 0.10f);
@@ -271,6 +279,21 @@ namespace ShelteredAPI.Scenarios
                 MinValue = min,
                 MaxValue = max,
                 Step = step
+            });
+        }
+
+        private void RegisterChoice(string id, string section, string label, string description, string defaultValue, string[] values, string[] labels)
+        {
+            _definitions.Add(new ScenarioAuthoringSettingDefinition
+            {
+                Id = id,
+                Section = section,
+                Label = label,
+                Description = description,
+                Kind = ScenarioAuthoringSettingKind.Choice,
+                DefaultValue = defaultValue,
+                ChoiceValues = values ?? new string[0],
+                ChoiceLabels = labels ?? new string[0]
             });
         }
 
