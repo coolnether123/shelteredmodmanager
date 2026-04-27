@@ -876,7 +876,7 @@ namespace ShelteredAPI.Scenarios
                 if (windowState == null)
                     continue;
 
-                if (!IsWindowOpen(windowState) && !string.Equals(definitionEntry.Id, ScenarioAuthoringWindowIds.Settings, StringComparison.OrdinalIgnoreCase))
+                if (!IsWindowInShell(windowState) && !string.Equals(definitionEntry.Id, ScenarioAuthoringWindowIds.Settings, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 ScenarioAuthoringShellWindowViewModel window = new ScenarioAuthoringShellWindowViewModel
@@ -1985,9 +1985,9 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
-        private static bool IsWindowOpen(ScenarioAuthoringWindowState windowState)
+        private static bool IsWindowInShell(ScenarioAuthoringWindowState windowState)
         {
-            return windowState != null && windowState.Visible && !windowState.Collapsed;
+            return windowState != null && (windowState.Visible || windowState.Collapsed);
         }
 
         private ScenarioAuthoringInspectorAction[] BuildContextMenuActions(ScenarioAuthoringState state, ScenarioAuthoringTarget target)

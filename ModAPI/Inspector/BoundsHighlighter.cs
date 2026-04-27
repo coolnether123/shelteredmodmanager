@@ -109,6 +109,9 @@ namespace ModAPI.Inspector
             if (target == null)
                 return false;
 
+            if (TryDrawDirectSpriteOutline(target))
+                return true;
+
             bool drew = false;
 
             SpriteRenderer[] spriteRenderers = target.GetComponentsInChildren<SpriteRenderer>(true);
@@ -130,6 +133,21 @@ namespace ModAPI.Inspector
 
                 drew |= DrawSpriteOutline(ui2DSprite.transform, ui2DSprite.sprite2D, false, false);
             }
+
+            return drew;
+        }
+
+        private static bool TryDrawDirectSpriteOutline(Transform target)
+        {
+            bool drew = false;
+
+            SpriteRenderer spriteRenderer = target.GetComponent<SpriteRenderer>();
+            if (spriteRenderer != null && spriteRenderer.sprite != null && spriteRenderer.enabled)
+                drew |= DrawSpriteOutline(spriteRenderer.transform, spriteRenderer.sprite, spriteRenderer.flipX, spriteRenderer.flipY);
+
+            UI2DSprite ui2DSprite = target.GetComponent<UI2DSprite>();
+            if (ui2DSprite != null && ui2DSprite.sprite2D != null && ui2DSprite.enabled)
+                drew |= DrawSpriteOutline(ui2DSprite.transform, ui2DSprite.sprite2D, false, false);
 
             return drew;
         }

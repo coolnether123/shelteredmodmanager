@@ -6,7 +6,7 @@ namespace ShelteredAPI.Scenarios
     {
         private static readonly string[] BackgroundTokens = new[]
         {
-            "background", "backdrop", "sky", "sun", "moon", "weather", "cloud", "wall", "wallpaper", "wire", "pipe", "decal", "grime", "panel", "scenery", "farback"
+            "background", "backdrop", "sky", "sun", "moon", "weather", "cloud", "wallpaper", "scenery", "farback"
         };
 
         private static readonly string[] SurfaceTokens = new[]
@@ -16,7 +16,8 @@ namespace ShelteredAPI.Scenarios
 
         private static readonly string[] InteriorTokens = new[]
         {
-            "room", "foundation", "ladder", "shelter", "bunker", "interior", "inside", "furniture", "storage", "object", "tile", "floor"
+            "room", "foundation", "ladder", "shelter", "bunker", "interior", "inside", "furniture", "storage", "object", "tile", "floor",
+            "wall", "wire", "wiring", "cable", "power", "pipe", "decal", "grime", "panel", "light", "lamp"
         };
 
         public static bool ContainsBackgroundToken(string value)
@@ -32,6 +33,12 @@ namespace ShelteredAPI.Scenarios
         public static bool ContainsInteriorToken(string value)
         {
             return ContainsAny(value, InteriorTokens);
+        }
+
+        public static bool ContainsWallWiringToken(string value)
+        {
+            return ContainsAny(value, new[] { "wire", "wiring", "cable", "power", "pipe", "panel", "light", "lamp", "wall" })
+                && (string.IsNullOrEmpty(value) || value.IndexOf("wallpaper", StringComparison.OrdinalIgnoreCase) < 0);
         }
 
         public static ScenarioTargetScope MatchBunkerScope(string value)
@@ -54,7 +61,7 @@ namespace ShelteredAPI.Scenarios
                 case ScenarioTargetScope.BunkerSurface:
                     return ContainsSurfaceToken(value);
                 case ScenarioTargetScope.BunkerInside:
-                    return !ContainsBackgroundToken(value) && !ContainsSurfaceToken(value);
+                    return ContainsWallWiringToken(value) || (!ContainsBackgroundToken(value) && !ContainsSurfaceToken(value));
                 default:
                     return true;
             }

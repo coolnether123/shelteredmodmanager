@@ -34,7 +34,7 @@ namespace ShelteredAPI.Scenarios
             RegisterToggle("sprite.checkerboard", "Sprite Tools", "Sprite Editor Checkerboard", "Show a checkerboard behind transparent pixels.", "true");
             RegisterToggle("sprite.confirm_overwrite", "Sprite Tools", "Save PNG Overwrite Confirmation", "Confirm before overwriting an existing authored PNG.", "true");
             RegisterReadOnly("sprite.asset_root", "Sprite Tools", "Asset Root Path", "Preview of the mod-owned sprite output path.", ScenarioAuthoringStoragePaths.GetAssetsRootPath());
-            RegisterToggle("debug.overlays", "Debug", "Debug Overlays", "Draw shell layout and capture diagnostics.", "false");
+            RegisterToggle("debug.overlays", "Debug", "Debug Overlays", "Draw shell layout and dump scene classification diagnostics.", "false");
         }
 
         public ScenarioAuthoringSettingDefinition[] GetDefinitions()

@@ -185,6 +185,7 @@ namespace ShelteredAPI.Scenarios
 
             _stageCoordinator.Synchronize(snapshot, _editorService.CurrentSession, GetActiveSession());
             changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);
+            ScenarioAuthoringUiDebugService.Instance.DumpSceneEntities(snapshot);
 
             lock (_sync)
             {

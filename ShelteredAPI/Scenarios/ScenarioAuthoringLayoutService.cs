@@ -90,17 +90,62 @@ namespace ShelteredAPI.Scenarios
             return true;
         }
 
+        public bool SetWindowOpen(ScenarioAuthoringState state, string windowId, bool open)
+        {
+            ScenarioAuthoringWindowState window = FindWindow(state, windowId);
+            if (window == null)
+                return false;
+
+            ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(windowId);
+            if (definition != null && definition.IsWorkspaceStageWindow)
+            {
+                if (!open)
+                    return false;
+
+                _stageCoordinator.SelectStage(state, definition.WorkspaceStage);
+                ApplyStageWorkspace(state);
+                state.MinimalMode = false;
+                state.FocusSelectionMode = false;
+                PersistIfEnabled(state);
+                return true;
+            }
+
+            bool changed = window.Visible != open || (open && window.Collapsed);
+            window.Visible = open;
+            if (open)
+                window.Collapsed = false;
+
+            state.MinimalMode = false;
+            state.FocusSelectionMode = false;
+            PersistIfEnabled(state);
+            return changed;
+        }
+
         public bool ToggleWindowCollapsed(ScenarioAuthoringState state, string windowId)
         {
             ScenarioAuthoringWindowState window = FindWindow(state, windowId);
             if (window == null)
                 return false;
 
-            bool shouldOpen = window.Collapsed || !window.Visible;
-            window.Collapsed = !shouldOpen;
-            window.Visible = shouldOpen;
+            bool shouldCollapse = window.Visible && !window.Collapsed;
+            window.Collapsed = shouldCollapse;
+            window.Visible = !shouldCollapse;
             PersistIfEnabled(state);
             return true;
+        }
+
+        public bool RestoreWindow(ScenarioAuthoringState state, string windowId)
+        {
+            ScenarioAuthoringWindowState window = FindWindow(state, windowId);
+            if (window == null)
+                return false;
+
+            bool changed = !window.Visible || window.Collapsed;
+            window.Visible = true;
+            window.Collapsed = false;
+            state.MinimalMode = false;
+            PersistIfEnabled(state);
+            return changed;
         }
 
         public bool ResetLayout(ScenarioAuthoringState state)
@@ -209,7 +254,7 @@ namespace ShelteredAPI.Scenarios
                 }
 
                 if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
-                    window.Visible = showBuild;
+                    window.Visible = showBuild && !window.Collapsed;
                 else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.TilesPalette, StringComparison.OrdinalIgnoreCase))
                     window.Visible = false;
                 else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Layers, StringComparison.OrdinalIgnoreCase))

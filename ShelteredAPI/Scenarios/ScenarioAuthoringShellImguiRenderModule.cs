@@ -8,14 +8,17 @@ namespace ShelteredAPI.Scenarios
     internal sealed class ScenarioAuthoringShellImguiRenderModule : IScenarioAuthoringRenderModule
     {
         private const string RuntimeObjectName = "ShelteredAPI.ScenarioAuthoring.ShellImgui";
-        private const float Margin = 16f;
-        private const float Gutter = 12f;
-        private const float TopBarHeight = 108f;
-        private const float StatusHeight = 46f;
-        private const float ToolRailWidth = 74f;
-        private const float InspectorWidth = 292f;
-        private const float BottomTrayHeight = 272f;
-        private const float CommandDockHeight = 48f;
+
+        // Layout constants live in ScenarioAuthoringShellLayout. These aliases keep
+        // the render code readable without re-declaring the values.
+        private const float Margin = ScenarioAuthoringShellLayout.Margin;
+        private const float Gutter = ScenarioAuthoringShellLayout.Gutter;
+        private const float TopBarHeight = ScenarioAuthoringShellLayout.TopBarHeight;
+        private const float StatusHeight = ScenarioAuthoringShellLayout.StatusHeight;
+        private const float ToolRailWidth = ScenarioAuthoringShellLayout.ToolRailWidth;
+        private const float InspectorWidth = ScenarioAuthoringShellLayout.InspectorWidth;
+        private const float BottomTrayHeight = ScenarioAuthoringShellLayout.BottomTrayHeight;
+        private const float CommandDockHeight = ScenarioAuthoringShellLayout.CommandDockHeight;
 
         private ScenarioAuthoringShellRuntime _runtime;
         private ScenarioAuthoringPresentationSnapshot _snapshot;
@@ -130,18 +133,18 @@ namespace ShelteredAPI.Scenarios
 
             float scaledWidth = Screen.width / uiScale;
             float scaledHeight = Screen.height / uiScale;
-            Rect topRect = new Rect(0f, 0f, scaledWidth, TopBarHeight);
-            Rect statusRect = new Rect(0f, scaledHeight - StatusHeight, scaledWidth, StatusHeight);
+            Rect hudReserveRect = ScenarioAuthoringShellLayout.BuildHudReserveRect(scaledWidth);
+            Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(scaledWidth, hudReserveRect);
+            Rect statusRect = ScenarioAuthoringShellLayout.BuildStatusRect(scaledWidth, scaledHeight);
             Rect windowMenuButtonRect = DrawTopBar(topRect, shell);
+            Rect collapsedStripRect = DrawCollapsedWindowStrip(statusRect, shell.Windows);
             DrawStatusBar(statusRect, shell);
             inputCapture.RegisterInteractiveRect(topRect);
             inputCapture.RegisterInteractiveRect(statusRect);
+            if (collapsedStripRect.width > 0f && collapsedStripRect.height > 0f)
+                inputCapture.RegisterInteractiveRect(collapsedStripRect);
 
-            Rect contentRect = new Rect(
-                Margin,
-                topRect.yMax + Gutter,
-                scaledWidth - (Margin * 2f),
-                statusRect.y - (topRect.yMax + Gutter));
+            Rect contentRect = ScenarioAuthoringShellLayout.BuildContentRect(scaledWidth, topRect, statusRect);
 
             Dictionary<string, Rect> windowRects = ResolveWindowRects(contentRect, shell.Windows);
 
@@ -161,18 +164,7 @@ namespace ShelteredAPI.Scenarios
                 workspaceTabStripRect = new Rect(workspaceRect.x, workspaceRect.y - 42f, workspaceRect.width, 36f);
             }
 
-            for (int i = 0; shell.Windows != null && i < shell.Windows.Length; i++)
-            {
-                ScenarioAuthoringShellWindowViewModel window = shell.Windows[i];
-                Rect rect;
-                if (window == null || !window.Visible || !windowRects.TryGetValue(window.Id, out rect))
-                    continue;
-
-                Rect scrollRect = DrawWindow(rect, window);
-                inputCapture.RegisterInteractiveRect(rect);
-                if (scrollRect.width > 0f && scrollRect.height > 0f)
-                    inputCapture.RegisterScrollRect(window.Id, scrollRect);
-            }
+            DrawWindowSet(shell.Windows, windowRects, false, inputCapture);
 
             if (activeWorkspaceId != null && workspaceTabStripRect.width > 0f)
             {
@@ -180,10 +172,12 @@ namespace ShelteredAPI.Scenarios
                 inputCapture.RegisterInteractiveRect(workspaceTabStripRect);
             }
 
+            DrawWindowSet(shell.Windows, windowRects, true, inputCapture);
+
             Rect windowMenuRect = Rect.zero;
             if (_windowMenuOpen && shell.WindowMenuActions != null && shell.WindowMenuActions.Length > 0)
             {
-                windowMenuRect = BuildWindowMenuRect(windowMenuButtonRect, shell.WindowMenuActions, scaledWidth, scaledHeight);
+                windowMenuRect = BuildWindowMenuRect(windowMenuButtonRect, shell.WindowMenuActions, scaledWidth, scaledHeight, hudReserveRect);
                 DrawWindowMenu(windowMenuRect, shell.WindowMenuActions);
                 inputCapture.RegisterInteractiveRect(windowMenuRect);
                 inputCapture.SetPopupOpen(true);
@@ -192,7 +186,7 @@ namespace ShelteredAPI.Scenarios
             Rect popupRect = Rect.zero;
             if (shell.ContextMenu != null && shell.ContextMenu.Visible)
             {
-                popupRect = BuildPopupRect(shell.ContextMenu, scaledWidth, scaledHeight);
+                popupRect = BuildPopupRect(shell.ContextMenu, scaledWidth, scaledHeight, hudReserveRect);
                 DrawContextMenu(popupRect, shell.ContextMenu);
                 inputCapture.RegisterInteractiveRect(popupRect);
                 inputCapture.SetPopupOpen(true);
@@ -248,7 +242,7 @@ namespace ShelteredAPI.Scenarios
                 || shell.SpritePickerDocument != null
                 || (shell.ContextMenu != null && shell.ContextMenu.Visible));
 
-            DrawTooltipOverlay(scaledWidth, scaledHeight);
+            DrawTooltipOverlay(scaledWidth, scaledHeight, hudReserveRect);
 
             inputCapture.CompleteFrame();
             GUI.matrix = oldMatrix;
@@ -259,50 +253,78 @@ namespace ShelteredAPI.Scenarios
             Dictionary<string, Rect> rects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
             float viewportLeft = contentRect.x + ToolRailWidth + Gutter;
             float viewportRight = contentRect.xMax - InspectorWidth - Gutter;
-            float viewportBottom = contentRect.yMax;
 
             bool showBottomTray = HasVisibleRenderer(windows, ScenarioAuthoringShellRendererKind.BottomTray);
-
-            if (showBottomTray)
-                viewportBottom -= BottomTrayHeight + Gutter;
 
             AppendStackRect(
                 rects,
                 windows,
                 ScenarioAuthoringWindowIds.Inspector,
-                new Rect(contentRect.xMax - InspectorWidth, contentRect.y + 20f, InspectorWidth, Mathf.Min(520f, contentRect.height - 44f)));
+                ScenarioAuthoringShellLayout.BuildInspectorRect(contentRect));
 
-            Rect buildToolsRect = new Rect(
-                viewportLeft,
-                Math.Max(contentRect.y + 220f, contentRect.yMax - BottomTrayHeight),
-                Math.Min(940f, Math.Max(520f, viewportRight - viewportLeft)),
-                BottomTrayHeight);
             if (showBottomTray)
+            {
+                Rect buildToolsRect = ScenarioAuthoringShellLayout.BuildBottomTrayRect(contentRect, viewportLeft, viewportRight);
                 AppendRendererRects(rects, windows, ScenarioAuthoringShellRendererKind.BottomTray, buildToolsRect);
+            }
 
-            float workspaceWidth = Mathf.Clamp(contentRect.width * 0.58f, 640f, 980f);
-            float workspaceHeight = Mathf.Clamp(contentRect.height * 0.72f, 400f, 620f);
-            float workspaceX = contentRect.x + ((contentRect.width - workspaceWidth) * 0.5f);
-            float workspaceY = contentRect.y + ((contentRect.height - workspaceHeight) * 0.5f);
-            Rect workspaceRect = new Rect(workspaceX, workspaceY, workspaceWidth, workspaceHeight);
+            Rect workspaceRect = ScenarioAuthoringShellLayout.BuildWorkspaceRect(contentRect);
             AppendWorkspaceRects(rects, windows, workspaceRect);
+            AppendFloatingRects(rects, windows, contentRect);
             return rects;
+        }
+
+        private void DrawWindowSet(
+            ScenarioAuthoringShellWindowViewModel[] windows,
+            Dictionary<string, Rect> windowRects,
+            bool floating,
+            ScenarioAuthoringInputCaptureService inputCapture)
+        {
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                Rect rect;
+                if (window == null
+                    || !window.Visible
+                    || window.Collapsed
+                    || (window.Dock == ScenarioAuthoringShellDock.Floating) != floating
+                    || !windowRects.TryGetValue(window.Id, out rect))
+                {
+                    continue;
+                }
+
+                Rect scrollRect = DrawWindow(rect, window);
+                inputCapture.RegisterInteractiveRect(rect);
+                if (scrollRect.width > 0f && scrollRect.height > 0f)
+                    inputCapture.RegisterScrollRect(window.Id, scrollRect);
+            }
         }
 
         private Rect DrawTopBar(Rect rect, ScenarioAuthoringShellViewModel shell)
         {
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);
             Rect windowMenuButtonRect = Rect.zero;
-            const float primaryRowY = 20f;
-            const float primaryRowHeight = 40f;
-            const float secondaryRowY = 68f;
-            const float secondaryRowHeight = 34f;
+            const float primaryRowY = 10f;
+            const float primaryRowHeight = 36f;
+            const float secondaryRowY = 54f;
+            const float secondaryRowHeight = 30f;
+            const float quickActionsWidth = 410f;
+            const float chipGutter = 14f;
 
-            Rect brandRect = new Rect(rect.x + 22f, rect.y + 17f, 196f, rect.height - 20f);
-            GUI.Label(new Rect(brandRect.x, brandRect.y - 1f, brandRect.width, 34f), "SHELTERED", _titleStyle);
-            GUI.Label(new Rect(brandRect.x, brandRect.y + 31f, brandRect.width, 24f), "SCENARIO EDITOR", _smallTitleStyle);
+            Rect brandRect = new Rect(rect.x + 18f, rect.y + 10f, 190f, rect.height - 18f);
+            GUI.Label(new Rect(brandRect.x, brandRect.y - 1f, brandRect.width, 30f), "SHELTERED", _titleStyle);
+            GUI.Label(new Rect(brandRect.x, brandRect.y + 27f, brandRect.width, 22f), "SCENARIO EDITOR", _smallTitleStyle);
 
+            // Reserve chip + quick-action area on the right of the primary row so primary
+            // tabs cannot grow into it. Chip is right-aligned against the quick-action band.
+            float chipWidth = ScenarioAuthoringShellLayout.ModeChipWidth;
+            float chipHeight = ScenarioAuthoringShellLayout.ModeChipHeight;
+            float chipX = rect.xMax - quickActionsWidth - chipWidth - chipGutter;
             float primaryRowLeft = brandRect.xMax + 20f;
+            chipX = Math.Max(primaryRowLeft + 8f, chipX);
+            Rect modeChipRect = new Rect(chipX, rect.y + ((primaryRowHeight + 14f - chipHeight) * 0.5f) + 4f, chipWidth, chipHeight);
+
+            float primaryTabsRight = modeChipRect.x - chipGutter;
             float tabX = primaryRowLeft;
             for (int i = 0; shell.Tabs != null && i < shell.Tabs.Length; i++)
             {
@@ -311,19 +333,19 @@ namespace ShelteredAPI.Scenarios
                     continue;
 
                 float tabWidth = Mathf.Clamp(MeasureButtonWidth(tab, true, 30f), 92f, 170f);
+                if (tabX + tabWidth > primaryTabsRight)
+                    break;
                 Rect tabRect = new Rect(tabX, rect.y + primaryRowY, tabWidth, primaryRowHeight);
                 DrawButton(tabRect, tab, true);
                 tabX = tabRect.xMax + 2f;
             }
 
-            float chipX = Mathf.Min(tabX + 12f, rect.xMax - 680f);
-            Rect modeChipRect = new Rect(Mathf.Max(primaryRowLeft, chipX), rect.y + 18f, 248f, 54f);
             DrawModeChip(modeChipRect, shell);
 
             Rect childTabsRect = new Rect(
                 primaryRowLeft,
                 rect.y + secondaryRowY,
-                Math.Max(80f, modeChipRect.x - primaryRowLeft - 14f),
+                Math.Max(80f, modeChipRect.x - primaryRowLeft - chipGutter),
                 secondaryRowHeight);
             float childX = childTabsRect.x;
             for (int i = 0; shell.Tabs != null && i < shell.Tabs.Length; i++)
@@ -341,8 +363,11 @@ namespace ShelteredAPI.Scenarios
                 childX = tabRect.xMax + 2f;
             }
 
+            // Quick-actions band sits right of the chip on the secondary row.
+            float quickActionsX = modeChipRect.xMax + chipGutter;
+            float quickActionsBandWidth = Math.Max(160f, rect.xMax - quickActionsX - 8f);
             windowMenuButtonRect = DrawTopBarQuickActions(
-                new Rect(modeChipRect.xMax + 12f, rect.y + 74f, Math.Max(390f, rect.xMax - modeChipRect.xMax - 300f), 30f),
+                new Rect(quickActionsX, rect.y + secondaryRowY, quickActionsBandWidth, secondaryRowHeight),
                 shell);
 
             return windowMenuButtonRect;
@@ -386,10 +411,12 @@ namespace ShelteredAPI.Scenarios
         {
             GUI.Box(rect, GUIContent.none, _sectionStyle);
             string mode = string.IsNullOrEmpty(shell.ModeLabel) ? "Editing Draft" : shell.ModeLabel;
-            string draft = string.IsNullOrEmpty(shell.DraftLabel) ? "Untitled" : shell.DraftLabel;
+            string draft = ScenarioAuthoringShellLayout.TruncateDraftLabel(shell.DraftLabel);
 
-            GUI.Label(new Rect(rect.x + 12f, rect.y + 5f, rect.width - 24f, 20f), mode, _sectionTitleStyle);
-            GUI.Label(new Rect(rect.x + 12f, rect.y + 25f, rect.width - 24f, 18f), draft, _mutedTextStyle);
+            float innerWidth = rect.width - 24f;
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 5f, innerWidth, 19f), mode, _sectionTitleStyle);
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 24f, innerWidth, 17f),
+                new GUIContent(draft, shell.DraftLabel ?? string.Empty), _mutedTextStyle);
         }
 
         private Rect DrawToolRail(Rect contentRect, ScenarioAuthoringState state)
@@ -534,17 +561,24 @@ namespace ShelteredAPI.Scenarios
         private void DrawStatusBar(Rect rect, ScenarioAuthoringShellViewModel shell)
         {
             GUI.Box(rect, GUIContent.none, _statusStyle);
+            const float rightControlsWidth = 382f;
+            float rightControlsX = Math.Max(rect.x + 220f, rect.xMax - rightControlsWidth);
+            float statusRight = rightControlsX - 18f;
             float x = rect.x + 26f;
             for (int i = 0; shell.StatusEntries != null && i < shell.StatusEntries.Length; i++)
             {
                 string value = shell.StatusEntries[i] ?? string.Empty;
-                float width = Math.Min(250f, value.Length * 7.5f + 30f);
-                GUI.Label(new Rect(x, rect.y + 14f, width, 20f), value, _mutedTextStyle);
+                float available = statusRight - x;
+                if (available < 48f)
+                    break;
+
+                float width = Math.Min(Math.Min(250f, value.Length * 7.5f + 30f), available);
+                GUI.Label(new Rect(x, rect.y + 14f, width, 20f), ShortenToFit(value, width, _mutedTextStyle), _mutedTextStyle);
                 x += width + 18f;
             }
 
             bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
-            Rect playtestRect = new Rect(rect.xMax - 408f, rect.y + 9f, 120f, 28f);
+            Rect playtestRect = new Rect(rightControlsX, rect.y + 9f, 120f, 28f);
             DrawButton(playtestRect, new ScenarioAuthoringInspectorAction
             {
                 Id = ScenarioAuthoringActionIds.ActionPlaytest,
@@ -554,9 +588,54 @@ namespace ShelteredAPI.Scenarios
                 Emphasized = isPlaytesting
             }, false);
 
-            GUI.Label(new Rect(rect.xMax - 252f, rect.y + 14f, 18f, 18f), "-", _mutedTextStyle);
-            GUI.Box(new Rect(rect.xMax - 224f, rect.y + 20f, 112f, 4f), GUIContent.none, _fieldStyle);
-            GUI.Label(new Rect(rect.xMax - 98f, rect.y + 14f, 48f, 18f), "100%", _textStyle);
+            GUI.Label(new Rect(rightControlsX + 156f, rect.y + 14f, 18f, 18f), "-", _mutedTextStyle);
+            GUI.Box(new Rect(rightControlsX + 184f, rect.y + 20f, 112f, 4f), GUIContent.none, _fieldStyle);
+            GUI.Label(new Rect(rightControlsX + 310f, rect.y + 14f, 48f, 18f), "100%", _textStyle);
+        }
+
+        private Rect DrawCollapsedWindowStrip(Rect statusRect, ScenarioAuthoringShellWindowViewModel[] windows)
+        {
+            int count = 0;
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                if (window != null && window.Collapsed)
+                    count++;
+            }
+
+            if (count == 0)
+                return Rect.zero;
+
+            float width = Math.Min(620f, Math.Max(220f, count * 132f + 18f));
+            Rect stripRect = new Rect(
+                statusRect.x + 14f,
+                statusRect.y - 36f,
+                width,
+                30f);
+            GUI.Box(stripRect, GUIContent.none, _statusStyle);
+
+            float x = stripRect.x + 6f;
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                if (window == null || !window.Collapsed)
+                    continue;
+
+                float buttonWidth = Math.Min(126f, stripRect.xMax - x - 6f);
+                if (buttonWidth < 56f)
+                    break;
+
+                DrawButton(new Rect(x, stripRect.y + 4f, buttonWidth, 22f), new ScenarioAuthoringInspectorAction
+                {
+                    Id = ScenarioAuthoringActionIds.ActionWindowRestorePrefix + window.Id,
+                    Label = Shorten(window.Title, 16),
+                    Hint = "Restore the " + window.Title + " window.",
+                    Enabled = true
+                }, false);
+                x += buttonWidth + 6f;
+            }
+
+            return stripRect;
         }
 
         private Rect DrawWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
@@ -632,21 +711,29 @@ namespace ShelteredAPI.Scenarios
             GUI.Label(new Rect(headerRect.x, headerRect.y + 4f, headerRect.width - 26f, 22f), "INSPECTOR", _sectionTitleStyle);
 
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
-            if (chromeActions.Length > 0)
-                DrawButton(new Rect(headerRect.xMax - 24f, headerRect.y + 4f, 22f, 22f), chromeActions[0], false);
+            float actionX = headerRect.xMax - 24f;
+            for (int i = chromeActions.Length - 1; i >= 0; i--)
+            {
+                DrawButton(new Rect(actionX, headerRect.y + 4f, 22f, 22f), chromeActions[i], false);
+                actionX -= 24f;
+            }
 
             Rect bodyRect = new Rect(rect.x + 14f, headerRect.yMax + 10f, rect.width - 28f, rect.height - 62f);
             GUILayout.BeginArea(bodyRect);
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
+            scrollPosition.x = 0f;
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            GUILayout.BeginVertical(GUILayout.Width(Mathf.Max(120f, bodyRect.width - 18f)));
             for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
             {
-                DrawSection(window.Sections[i]);
+                DrawSection(window.Sections[i], true);
                 if (i < window.Sections.Length - 1)
                     GUILayout.Space(6f);
             }
+            GUILayout.EndVertical();
             GUILayout.EndScrollView();
             GUILayout.EndArea();
+            scrollPosition.x = 0f;
             SetWindowScrollPosition(window.Id, scrollPosition);
             return bodyRect;
         }
@@ -657,12 +744,28 @@ namespace ShelteredAPI.Scenarios
                 return Rect.zero;
 
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);
-            Rect headerRect = new Rect(rect.x + 14f, rect.y + 12f, rect.width - 28f, 28f);
-            GUI.Label(headerRect, "ASSET PICKER", _sectionTitleStyle);
+            ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
+            Rect headerRect = new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, 34f);
+            GUI.Box(headerRect, GUIContent.none, _headerStyle);
+            float actionX = headerRect.xMax - 28f;
+            for (int i = chromeActions.Length - 1; i >= 0; i--)
+            {
+                ScenarioAuthoringInspectorAction action = chromeActions[i];
+                Rect actionRect = new Rect(actionX, headerRect.y + 6f, 22f, 22f);
+                DrawButton(actionRect, action, false);
+                actionX -= 24f;
+            }
+            GUI.Label(new Rect(headerRect.x + 10f, headerRect.y + 7f, Math.Max(80f, actionX - headerRect.x - 10f), 20f), "ASSET PICKER", _sectionTitleStyle);
 
             Rect bodyRect = new Rect(rect.x + 14f, headerRect.yMax + 8f, rect.width - 28f, rect.height - 54f);
-            Rect pickerRect = new Rect(bodyRect.x, bodyRect.y, Mathf.Max(420f, bodyRect.width * 0.62f), bodyRect.height);
-            Rect detailsRect = new Rect(pickerRect.xMax + 16f, bodyRect.y, bodyRect.xMax - pickerRect.xMax - 16f, bodyRect.height);
+            bool showDetailsPane = bodyRect.width >= 720f;
+            float pickerWidth = showDetailsPane
+                ? Mathf.Clamp(bodyRect.width * 0.62f, 420f, bodyRect.width - 256f)
+                : bodyRect.width;
+            Rect pickerRect = new Rect(bodyRect.x, bodyRect.y, pickerWidth, bodyRect.height);
+            Rect detailsRect = showDetailsPane
+                ? new Rect(pickerRect.xMax + 16f, bodyRect.y, bodyRect.xMax - pickerRect.xMax - 16f, bodyRect.height)
+                : Rect.zero;
 
             GUI.Box(new Rect(pickerRect.x, pickerRect.y, pickerRect.width, 28f), "  Search assets...", _fieldStyle);
 
@@ -678,33 +781,50 @@ namespace ShelteredAPI.Scenarios
                     || section.Layout != ScenarioAuthoringInspectorSectionLayout.CandidateGrid)
                     continue;
 
-                DrawSection(section);
+                DrawSection(section, !showDetailsPane);
                 GUILayout.Space(6f);
                 drewCandidateGrid = true;
             }
             if (!drewCandidateGrid)
                 GUILayout.Label("Switch to Place New Snapped to browse sprite assets here, or select a replaceable target and open the sprite picker.", _mutedTextStyle);
+            if (!showDetailsPane)
+            {
+                for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
+                {
+                    ScenarioAuthoringInspectorSection section = window.Sections[i];
+                    if (section == null
+                        || string.Equals(section.Id, "tools", StringComparison.OrdinalIgnoreCase)
+                        || section.Layout == ScenarioAuthoringInspectorSectionLayout.CandidateGrid)
+                        continue;
+
+                    DrawSection(section);
+                    GUILayout.Space(6f);
+                }
+            }
             GUILayout.EndScrollView();
             GUILayout.EndArea();
             SetWindowScrollPosition(window.Id, scrollPosition);
 
-            GUILayout.BeginArea(detailsRect);
-            Vector2 detailsScroll = GetWindowScrollPosition(window.Id + ".details");
-            detailsScroll = GUILayout.BeginScrollView(detailsScroll, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-            for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
+            if (showDetailsPane)
             {
-                ScenarioAuthoringInspectorSection section = window.Sections[i];
-                if (section == null
-                    || string.Equals(section.Id, "tools", StringComparison.OrdinalIgnoreCase)
-                    || section.Layout == ScenarioAuthoringInspectorSectionLayout.CandidateGrid)
-                    continue;
+                GUILayout.BeginArea(detailsRect);
+                Vector2 detailsScroll = GetWindowScrollPosition(window.Id + ".details");
+                detailsScroll = GUILayout.BeginScrollView(detailsScroll, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+                for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
+                {
+                    ScenarioAuthoringInspectorSection section = window.Sections[i];
+                    if (section == null
+                        || string.Equals(section.Id, "tools", StringComparison.OrdinalIgnoreCase)
+                        || section.Layout == ScenarioAuthoringInspectorSectionLayout.CandidateGrid)
+                        continue;
 
-                DrawSection(section);
-                GUILayout.Space(6f);
+                    DrawSection(section);
+                    GUILayout.Space(6f);
+                }
+                GUILayout.EndScrollView();
+                GUILayout.EndArea();
+                SetWindowScrollPosition(window.Id + ".details", detailsScroll);
             }
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-            SetWindowScrollPosition(window.Id + ".details", detailsScroll);
             return bodyRect;
         }
 
@@ -1166,6 +1286,11 @@ namespace ShelteredAPI.Scenarios
 
         private void DrawSection(ScenarioAuthoringInspectorSection section)
         {
+            DrawSection(section, false);
+        }
+
+        private void DrawSection(ScenarioAuthoringInspectorSection section, bool compactInspector)
+        {
             if (section == null)
                 return;
 
@@ -1199,7 +1324,7 @@ namespace ShelteredAPI.Scenarios
                     if (item == null || item.Action != null)
                         continue;
 
-                    DrawItem(item);
+                    DrawItem(item, compactInspector);
                 }
             }
             else if (section.Layout == ScenarioAuthoringInspectorSectionLayout.CandidateGrid)
@@ -1210,10 +1335,11 @@ namespace ShelteredAPI.Scenarios
                     if (item == null || item.Action != null)
                         continue;
 
-                    DrawItem(item);
+                    DrawItem(item, compactInspector);
                 }
 
-                int columns = 3;
+                int columns = compactInspector ? 2 : 3;
+                float cardWidth = compactInspector ? 160f : 176f;
                 int count = 0;
                 GUILayout.BeginHorizontal();
                 for (int i = 0; section.Items != null && i < section.Items.Length; i++)
@@ -1222,7 +1348,7 @@ namespace ShelteredAPI.Scenarios
                     if (item == null || item.Action == null)
                         continue;
 
-                    Rect rect = GUILayoutUtility.GetRect(176f, 84f, GUILayout.Width(176f), GUILayout.Height(84f));
+                    Rect rect = GUILayoutUtility.GetRect(cardWidth, 84f, GUILayout.Width(cardWidth), GUILayout.Height(84f));
                     DrawCandidateCard(rect, item.Action);
                     count++;
                     if (count % columns == 0 && i < section.Items.Length - 1)
@@ -1240,12 +1366,17 @@ namespace ShelteredAPI.Scenarios
             else
             {
                 for (int i = 0; section.Items != null && i < section.Items.Length; i++)
-                    DrawItem(section.Items[i]);
+                    DrawItem(section.Items[i], compactInspector);
             }
             GUILayout.EndVertical();
         }
 
         private void DrawItem(ScenarioAuthoringInspectorItem item)
+        {
+            DrawItem(item, false);
+        }
+
+        private void DrawItem(ScenarioAuthoringInspectorItem item, bool compactInspector)
         {
             if (item == null)
                 return;
@@ -1259,10 +1390,23 @@ namespace ShelteredAPI.Scenarios
             switch (item.Kind)
             {
                 case ScenarioAuthoringInspectorItemKind.Property:
-                    GUILayout.BeginHorizontal();
-                    GUILayout.Label(item.Label ?? string.Empty, _mutedTextStyle, GUILayout.Width(116f));
-                    GUILayout.Label(item.Value ?? string.Empty, _textStyle);
-                    GUILayout.EndHorizontal();
+                    if (compactInspector)
+                    {
+                        Rect rowRect = GUILayoutUtility.GetRect(0f, 24f, GUILayout.ExpandWidth(true), GUILayout.Height(24f));
+                        float labelWidth = Mathf.Clamp(rowRect.width * 0.48f, 106f, 144f);
+                        GUI.Label(new Rect(rowRect.x, rowRect.y, labelWidth, rowRect.height), item.Label ?? string.Empty, _mutedTextStyle);
+                        GUI.Label(
+                            new Rect(rowRect.x + labelWidth + 8f, rowRect.y, rowRect.width - labelWidth - 8f, rowRect.height),
+                            Shorten(item.Value, 34),
+                            _textStyle);
+                    }
+                    else
+                    {
+                        GUILayout.BeginHorizontal();
+                        GUILayout.Label(item.Label ?? string.Empty, _mutedTextStyle, GUILayout.Width(116f));
+                        GUILayout.Label(item.Value ?? string.Empty, _textStyle);
+                        GUILayout.EndHorizontal();
+                    }
                     break;
                 case ScenarioAuthoringInspectorItemKind.Action:
                     if (item.Action != null)
@@ -1362,6 +1506,42 @@ namespace ShelteredAPI.Scenarios
             if (string.IsNullOrEmpty(secondary))
                 return primary;
             return primary + " | " + secondary;
+        }
+
+        private static string Shorten(string value, int maxLength)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+                return value ?? string.Empty;
+
+            return value.Substring(0, Math.Max(0, maxLength - 3)) + "...";
+        }
+
+        private static string ShortenToFit(string value, float maxWidth, GUIStyle style)
+        {
+            if (string.IsNullOrEmpty(value) || style == null)
+                return value ?? string.Empty;
+
+            if (style.CalcSize(new GUIContent(value)).x <= maxWidth)
+                return value;
+
+            const string ellipsis = "...";
+            float ellipsisWidth = style.CalcSize(new GUIContent(ellipsis)).x;
+            if (ellipsisWidth >= maxWidth)
+                return string.Empty;
+
+            int low = 0;
+            int high = value.Length;
+            while (low < high)
+            {
+                int mid = (low + high + 1) / 2;
+                string candidate = value.Substring(0, mid) + ellipsis;
+                if (style.CalcSize(new GUIContent(candidate)).x <= maxWidth)
+                    low = mid;
+                else
+                    high = mid - 1;
+            }
+
+            return value.Substring(0, low) + ellipsis;
         }
 
         private static Rect FitRect(Rect rect, float sourceWidth, float sourceHeight, float padding)
@@ -1511,18 +1691,19 @@ namespace ShelteredAPI.Scenarios
             GUILayout.EndArea();
         }
 
-        private Rect BuildPopupRect(ScenarioAuthoringContextMenuModel menu, float width, float height)
+        private Rect BuildPopupRect(ScenarioAuthoringContextMenuModel menu, float width, float height, Rect hudReserveRect)
         {
             float rectWidth = 220f;
             float rectHeight = 54f + ((menu.Actions != null ? menu.Actions.Length : 0) * 28f);
-            return new Rect(
+            Rect rect = new Rect(
                 Mathf.Clamp(menu.AnchorX + 16f, Margin, width - rectWidth - Margin),
                 Mathf.Clamp(menu.AnchorY + 16f, Margin, height - rectHeight - Margin),
                 rectWidth,
                 rectHeight);
+            return ClampAwayFromHud(rect, width, height, hudReserveRect);
         }
 
-        private Rect BuildWindowMenuRect(Rect buttonRect, ScenarioAuthoringInspectorAction[] actions, float width, float height)
+        private Rect BuildWindowMenuRect(Rect buttonRect, ScenarioAuthoringInspectorAction[] actions, float width, float height, Rect hudReserveRect)
         {
             float rectWidth = 220f;
             for (int i = 0; actions != null && i < actions.Length; i++)
@@ -1530,11 +1711,12 @@ namespace ShelteredAPI.Scenarios
 
             rectWidth = Mathf.Clamp(rectWidth, 220f, 320f);
             float rectHeight = 16f + ((actions != null ? actions.Length : 0) * 28f);
-            return new Rect(
+            Rect rect = new Rect(
                 Mathf.Clamp(buttonRect.x, Margin, width - rectWidth - Margin),
                 Mathf.Clamp(buttonRect.yMax + 4f, Margin, height - rectHeight - Margin),
                 rectWidth,
                 rectHeight);
+            return ClampAwayFromHud(rect, width, height, hudReserveRect);
         }
 
         private void DrawWindowMenu(Rect rect, ScenarioAuthoringInspectorAction[] actions)
@@ -1589,7 +1771,7 @@ namespace ShelteredAPI.Scenarios
             GUI.enabled = true;
         }
 
-        private void DrawTooltipOverlay(float scaledWidth, float scaledHeight)
+        private void DrawTooltipOverlay(float scaledWidth, float scaledHeight, Rect hudReserveRect)
         {
             string tip = GUI.tooltip;
             if (string.IsNullOrEmpty(tip))
@@ -1608,9 +1790,14 @@ namespace ShelteredAPI.Scenarios
             float y = Math.Min(scaledHeight - height - 6f, mouse.y + 20f);
             if (x < 6f) x = 6f;
             if (y < 6f) y = 6f;
-            Rect tipRect = new Rect(x, y, width, height);
+            Rect tipRect = ClampAwayFromHud(new Rect(x, y, width, height), scaledWidth, scaledHeight, hudReserveRect);
             GUI.Box(tipRect, GUIContent.none, _menuStyle);
             GUI.Label(new Rect(tipRect.x + 7f, tipRect.y + 5f, tipRect.width - 14f, tipRect.height - 10f), tip, tipStyle);
+        }
+
+        private static Rect ClampAwayFromHud(Rect rect, float width, float height, Rect hudReserveRect)
+        {
+            return ScenarioAuthoringShellLayout.ClampAwayFromHud(rect, width, height, hudReserveRect);
         }
 
         private void EnsureStyles(float panelOpacity)
@@ -1789,6 +1976,32 @@ namespace ShelteredAPI.Scenarios
                 ScenarioAuthoringShellWindowViewModel window = windows[i];
                 if (window != null && window.WorkspaceStage != ScenarioStageKind.None && window.Visible)
                     rects[window.Id] = rect;
+            }
+        }
+
+        private static void AppendFloatingRects(Dictionary<string, Rect> rects, ScenarioAuthoringShellWindowViewModel[] windows, Rect contentRect)
+        {
+            int visibleIndex = 0;
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                if (window == null
+                    || !window.Visible
+                    || window.Collapsed
+                    || window.Dock != ScenarioAuthoringShellDock.Floating)
+                {
+                    continue;
+                }
+
+                float width = Mathf.Clamp(window.Width, Math.Max(320f, contentRect.width * 0.35f), Math.Max(320f, contentRect.width - (Margin * 2f)));
+                float height = Mathf.Clamp(window.Height, Math.Max(220f, contentRect.height * 0.35f), Math.Max(220f, contentRect.height - (Margin * 2f)));
+                float offset = visibleIndex * 24f;
+                float x = contentRect.x + ((contentRect.width - width) * 0.5f) + offset;
+                float y = contentRect.y + ((contentRect.height - height) * 0.5f) + offset;
+                x = Mathf.Clamp(x, contentRect.x + Margin, Math.Max(contentRect.x + Margin, contentRect.xMax - width - Margin));
+                y = Mathf.Clamp(y, contentRect.y + Margin, Math.Max(contentRect.y + Margin, contentRect.yMax - height - Margin));
+                rects[window.Id] = new Rect(x, y, width, height);
+                visibleIndex++;
             }
         }
 

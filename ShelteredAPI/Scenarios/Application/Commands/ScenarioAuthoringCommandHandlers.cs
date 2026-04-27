@@ -183,9 +183,9 @@ namespace ShelteredAPI.Scenarios
                     message = "Editor settings opened.";
                     return true;
                 case ScenarioAuthoringActionIds.ActionShellOpenCalendar:
-                    if (!_layoutService.ToggleWindowVisibility(state, ScenarioAuthoringWindowIds.Calendar))
+                    if (!_layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.Calendar, true))
                         return false;
-                    message = "Calendar panel opened.";
+                    message = "Calendar opened.";
                     return true;
                 case ScenarioAuthoringActionIds.ActionShellCloseSettings:
                     if (!_layoutService.SetSettingsWindowOpen(state, false))
@@ -208,6 +208,7 @@ namespace ShelteredAPI.Scenarios
             return actionId.StartsWith(ScenarioAuthoringActionIds.ActionStageSelectPrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionWindowTogglePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionWindowRestorePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInspectorTabPrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionSettingTogglePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionSettingIncreasePrefix, StringComparison.Ordinal)
@@ -243,6 +244,15 @@ namespace ShelteredAPI.Scenarios
                 if (toggled)
                     state.StatusMessage = "Updated panel '" + windowId + "'.";
                 return toggled;
+            }
+
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionWindowRestorePrefix, StringComparison.Ordinal))
+            {
+                string windowId = actionId.Substring(ScenarioAuthoringActionIds.ActionWindowRestorePrefix.Length);
+                bool restored = _layoutService.RestoreWindow(state, windowId);
+                if (restored)
+                    state.StatusMessage = "Restored panel '" + windowId + "'.";
+                return restored;
             }
 
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionInspectorTabPrefix, StringComparison.Ordinal))

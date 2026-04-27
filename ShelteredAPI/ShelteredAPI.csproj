@@ -142,6 +142,7 @@
     <Compile Include="Scenarios\Application\Selection\ScenarioTargetScope.cs" />
     <Compile Include="Scenarios\Presentation\Inspector\InspectorViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Compatibility\ScenarioModCompatibilityViewModelBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Shell\ScenarioAuthoringShellLayout.cs" />
     <Compile Include="Scenarios\Presentation\Shell\ShellChromeViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Shell\StageNavigationViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Shell\StatusBarViewModelBuilder.cs" />

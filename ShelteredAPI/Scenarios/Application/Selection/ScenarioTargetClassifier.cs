@@ -142,9 +142,7 @@ namespace ShelteredAPI.Scenarios
                 case ScenarioAuthoringTargetKind.Wall:
                 case ScenarioAuthoringTargetKind.Wire:
                 case ScenarioAuthoringTargetKind.Light:
-                    if (ScenarioTargetScopeTextMatcher.ContainsBackgroundToken(combined))
-                        return Create(ScenarioTargetScope.BunkerBackground, 0.76f, "Non-interactive wall visual path.", "object kind");
-                    return Create(ScenarioTargetScope.BunkerInside, 0.72f, "Interior wall/wiring/light target.", "object kind");
+                    return Create(ScenarioTargetScope.BunkerInside, 0.8f, "Interior wall/wiring/light target.", "object kind");
                 case ScenarioAuthoringTargetKind.Vehicle:
                     return Create(ScenarioTargetScope.BunkerSurface, 0.72f, "Vehicle/exterior object kind.", "object kind", ScenarioTargetScope.BunkerInside);
                 case ScenarioAuthoringTargetKind.Background:

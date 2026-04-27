@@ -41,6 +41,17 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
+        public ScenarioTargetScope ResolveSelectionScope(ScenarioAuthoringState state)
+        {
+            if (state == null)
+                return ScenarioTargetScope.Unknown;
+
+            if (state.ActiveTool == ScenarioAuthoringTool.Wiring)
+                return ScenarioTargetScope.BunkerInside;
+
+            return ResolveActiveScope(state);
+        }
+
         public bool CanSelectTargetForCurrentStage(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
         {
             string reason;
@@ -53,7 +64,7 @@ namespace ShelteredAPI.Scenarios
             if (state == null || target == null)
                 return false;
 
-            ScenarioTargetScope activeScope = ResolveActiveScope(state);
+            ScenarioTargetScope activeScope = ResolveSelectionScope(state);
             ScenarioTargetClassification classification = _classifier.Classify(target);
             if (classification != null && classification.Matches(activeScope))
                 return true;
@@ -103,7 +114,7 @@ namespace ShelteredAPI.Scenarios
             List<ScenarioSpriteCatalogService.SpriteCandidate> candidates,
             ScenarioAuthoringState state)
         {
-            return FilterCandidatesForScope(candidates, ResolveActiveScope(state));
+            return FilterCandidatesForScope(candidates, ResolveSelectionScope(state));
         }
 
         public List<ScenarioSpriteCatalogService.SpriteCandidate> FilterCandidatesForScope(
@@ -126,11 +137,20 @@ namespace ShelteredAPI.Scenarios
             if (candidate == null)
                 return false;
 
+            if (scope == ScenarioTargetScope.BunkerInside && IsWallWiringCandidate(candidate))
+                return true;
+
             string text = ((candidate.Label ?? string.Empty) + " "
                 + (candidate.SourceName ?? string.Empty) + " "
                 + (candidate.Hint ?? string.Empty)).ToLowerInvariant();
 
             return ScenarioTargetScopeTextMatcher.CandidateMatchesScope(text, scope);
+        }
+
+        private static bool IsWallWiringCandidate(ScenarioSpriteCatalogService.SpriteCandidate candidate)
+        {
+            string labelAndHint = ((candidate.Label ?? string.Empty) + " " + (candidate.Hint ?? string.Empty)).ToLowerInvariant();
+            return ScenarioTargetScopeTextMatcher.ContainsWallWiringToken(labelAndHint);
         }
     }
 }

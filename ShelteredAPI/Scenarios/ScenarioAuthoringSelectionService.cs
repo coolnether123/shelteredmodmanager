@@ -582,14 +582,14 @@ namespace ShelteredAPI.Scenarios
 
                 string path = BuildTransformPath(gameObject.transform).ToLowerInvariant();
                 SpriteRenderer spriteRenderer = gameObject.GetComponent<SpriteRenderer>() ?? gameObject.GetComponentInChildren<SpriteRenderer>(true);
-                if (spriteRenderer != null && (spriteRenderer.sortingOrder < 0 || ContainsAny(path, "background", "scenery", "sky", "terrain", "backdrop")))
-                    return ScenarioAuthoringTargetKind.Background;
                 if (ContainsAny(path, "wire", "cable", "power"))
                     return ScenarioAuthoringTargetKind.Wire;
                 if (ContainsAny(path, "wall", "barricade"))
                     return ScenarioAuthoringTargetKind.Wall;
                 if (ContainsAny(path, "light", "lamp"))
                     return ScenarioAuthoringTargetKind.Light;
+                if (spriteRenderer != null && (spriteRenderer.sortingOrder < 0 || ContainsAny(path, "background", "scenery", "sky", "terrain", "backdrop")))
+                    return ScenarioAuthoringTargetKind.Background;
                 if (ContainsAny(path, "van", "vehicle", "rv"))
                     return ScenarioAuthoringTargetKind.Vehicle;
                 if (ContainsAny(path, "room"))

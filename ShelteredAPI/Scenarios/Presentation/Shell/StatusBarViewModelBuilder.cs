@@ -19,7 +19,7 @@ namespace ShelteredAPI.Scenarios
         {
             List<string> entries = new List<string>();
             entries.Add("Stage: " + (string.IsNullOrEmpty(stageLabel) ? "Shell" : stageLabel));
-            entries.Add("Scope: " + ScenarioTargetClassifier.FormatScopeLabel(_selectionScopeService.ResolveActiveScope(state)));
+            entries.Add("Scope: " + ScenarioTargetClassifier.FormatScopeLabel(_selectionScopeService.ResolveSelectionScope(state)));
             entries.Add("Tool: " + (state != null ? state.ActiveTool.ToString() : "Unknown"));
             entries.Add("Grid: " + (state != null && state.Settings != null && state.Settings.GetBool("visuals.show_grid", true) ? "ON (32px)" : "OFF"));
             if (!string.IsNullOrEmpty(state != null ? state.StatusMessage : null))
