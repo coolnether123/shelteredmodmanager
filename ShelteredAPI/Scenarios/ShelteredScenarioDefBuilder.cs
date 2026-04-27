@@ -32,9 +32,9 @@ namespace ShelteredAPI.Scenarios
             if (!HasQuestIdField) failures.Add("missing QuestDefBase.m_id");
             if (!HasNameKeyField) failures.Add("missing QuestDefBase.m_nameKey");
             if (!HasDescriptionKeyField) failures.Add("missing QuestDefBase.m_descriptionKey");
-            if (!HasSelectionField) failures.Add("missing QuestDefBase.m_selectionProperties");
             if (!HasStagesField) failures.Add("missing ScenarioDef.m_stages");
             if (!HasStageIdField) failures.Add("missing ScenarioStage.m_id");
+            if (!HasSelectionField) failures.Add("optional selection field missing: QuestDefBase.m_selectionProperties");
             return failures.Count == 0 ? "compatible" : string.Join("; ", failures.ToArray());
         }
     }

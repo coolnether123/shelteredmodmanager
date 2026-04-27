@@ -85,13 +85,13 @@ namespace ShelteredAPI.Scenarios
             catch (InvalidOperationException ex)
             {
                 errorMessage = "Definition factory for '" + record.Info.Id + "' failed: " + ex.Message;
-                MMLog.WriteError("[ShelteredCustomScenarioService] " + errorMessage);
+                MMLog.WriteError("[ScenarioDefinitionService] " + errorMessage);
                 return false;
             }
             catch (Exception ex)
             {
                 errorMessage = "Definition factory for '" + record.Info.Id + "' failed: " + ex.Message;
-                MMLog.WriteError("[ShelteredCustomScenarioService] " + errorMessage);
+                MMLog.WriteError("[ScenarioDefinitionService] " + errorMessage);
                 return false;
             }
         }

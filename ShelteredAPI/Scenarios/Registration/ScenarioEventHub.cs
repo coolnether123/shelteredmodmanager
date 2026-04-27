@@ -80,7 +80,7 @@ namespace ShelteredAPI.Scenarios
             }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("ShelteredCustomScenarioService.Event." + args.EventType, ex.Message);
+                MMLog.WarnOnce("ScenarioEventHub.Event." + args.EventType, ex.Message);
             }
         }
     }

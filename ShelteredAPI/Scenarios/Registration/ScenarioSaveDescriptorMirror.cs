@@ -24,7 +24,7 @@ namespace ShelteredAPI.Scenarios
             }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("ShelteredCustomScenarioService.MirrorSaveScenarioDescriptor." + info.Id, ex.Message);
+                MMLog.WarnOnce("ScenarioSaveDescriptorMirror.MirrorSaveScenarioDescriptor." + info.Id, ex.Message);
             }
         }
     }

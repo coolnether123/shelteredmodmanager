@@ -34,7 +34,7 @@ namespace ShelteredAPI.Scenarios
 
             if (_dependencyService.VerifyDependencies(record.Info) != ScenarioDependencyVerificationState.Match)
             {
-                MMLog.WriteWarning("[ShelteredCustomScenarioService] Custom scenario dependencies are not satisfied: " + scenarioId);
+                MMLog.WriteWarning("[ScenarioLifecycleService] Custom scenario dependencies are not satisfied: " + scenarioId);
                 return false;
             }
 
@@ -122,7 +122,7 @@ namespace ShelteredAPI.Scenarios
             }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("ShelteredCustomScenarioService." + callbackName + "." + scenarioId, ex.Message);
+                MMLog.WarnOnce("ScenarioLifecycleService." + callbackName + "." + scenarioId, ex.Message);
             }
         }
     }

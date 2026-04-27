@@ -55,7 +55,7 @@ namespace ShelteredAPI.Scenarios
             }
             catch (Exception ex)
             {
-                MMLog.WriteWarning("[ShelteredCustomScenarioService] Failed to load dependency manifest for '" + scenarioId + "': " + ex.Message);
+                MMLog.WriteWarning("[ScenarioDependencyService] Failed to load dependency manifest for '" + scenarioId + "': " + ex.Message);
                 return new LoadedModInfo[0];
             }
         }

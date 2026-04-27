@@ -33,12 +33,9 @@ namespace ShelteredAPI.Scenarios
         /// caller receives CustomScenarioRegistrationResult.ReplacedExisting. Event listeners cannot
         /// distinguish add vs. replace from this event.
         /// </summary>
-        public CustomScenarioRegistrationResult Register(CustomScenarioRegistration registration)
+        public CustomScenarioRegistrationResult Register(CustomScenarioRegistration registration, Assembly callerAssembly)
         {
             string error;
-            Assembly callerAssembly = null;
-            try { callerAssembly = Assembly.GetCallingAssembly(); } catch { }
-
             CustomScenarioRegistration normalized = _validator.Normalize(registration, callerAssembly, out error);
             if (normalized == null)
                 return CustomScenarioRegistrationResult.Failed(error);

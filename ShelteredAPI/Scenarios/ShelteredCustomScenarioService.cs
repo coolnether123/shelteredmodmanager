@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using ModAPI.Hooks.Paging;
 using ModAPI.Saves;
 using ModAPI.Scenarios;
@@ -101,7 +102,9 @@ namespace ShelteredAPI.Scenarios
 
         public CustomScenarioRegistrationResult Register(CustomScenarioRegistration registration)
         {
-            return _registrationService.Register(registration);
+            Assembly callerAssembly = null;
+            try { callerAssembly = Assembly.GetCallingAssembly(); } catch { }
+            return _registrationService.Register(registration, callerAssembly);
         }
 
         public bool Unregister(string scenarioId)
