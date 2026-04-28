@@ -18,9 +18,10 @@ namespace ModAPI.Core
         int GetInventoryCount(string itemId);
 
         /// <summary>
-        /// Try to find a player by their character ID.
+        /// Try to find a game-owned character by its mod-facing ID.
+        /// The returned handle is opaque to ModAPI; game-specific APIs own typed adapters.
         /// </summary>
-        FamilyMember FindMember(string characterId);
+        object FindCharacter(string characterId);
     }
 
     /// <summary>

@@ -30,20 +30,21 @@ High-level flow:
 - resolving `GameRoot` and `ModsRoot`
 - creating or reusing `ModAPI.Loader`
 - ensuring `PluginRunner` exists
-- applying Harmony bootstrap and save-protection patches
-- wiring save/session lifecycle hooks
-- registering built-in APIs exposed by the current runtime
-- leaving Sheltered-specific content runtime ownership to `ShelteredAPI`
+- resolving shared runtime assemblies from the SMM runtime folders
+- applying `ModAPI` Harmony bootstrap plus patches from runtime assemblies that expose `IGameRuntimeBootstrap`
+- initializing game runtime bootstraps
+- wiring save/session lifecycle hooks through neutral `GameRuntime.*` registry IDs
+- leaving Sheltered-specific content, save, UI, input, actor, and scenario ownership to `ShelteredAPI`
 
-That last step includes actor API registration when `ShelteredAPI` is present:
-- `ShelteredAPI.Actors`
-- `ShelteredAPI.ActorRegistry`
-- `ShelteredAPI.ActorComponents`
-- `ShelteredAPI.ActorBindings`
-- `ShelteredAPI.ActorAdapters`
-- `ShelteredAPI.ActorSimulation`
-- `ShelteredAPI.ActorEvents`
-- `ShelteredAPI.ActorSerialization`
+ShelteredAPI registers both neutral runtime IDs and 1.3 migration aliases when it is present. Neutral IDs used by `ModAPI` include:
+- `GameRuntime.Actors`
+- `GameRuntime.ActorRegistry`
+- `GameRuntime.ActorComponents`
+- `GameRuntime.ActorBindings`
+- `GameRuntime.ActorAdapters`
+- `GameRuntime.ActorSimulation`
+- `GameRuntime.ActorEvents`
+- `GameRuntime.ActorSerialization`
 
 ## 3. Discovery and Load Order
 

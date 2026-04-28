@@ -81,7 +81,12 @@ namespace ModAPI.Core
             catch { return 0; }
         }
 
-        public FamilyMember FindMember(string characterId)
+        public object FindCharacter(string characterId)
+        {
+            return FindFamilyMember(characterId);
+        }
+
+        internal FamilyMember FindFamilyMember(string characterId)
         {
             if (string.IsNullOrEmpty(characterId)) return null;
             try

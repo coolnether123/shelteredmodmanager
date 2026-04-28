@@ -13,31 +13,31 @@ namespace ModAPI.Core
         void RaiseButtonClicked(object button, string buttonName);
     }
 
-    internal static class UiLifecycleEventSinks
+    public static class UiLifecycleEventSinks
     {
         private static readonly IUiLifecycleEventSink NullSink = new NullUiLifecycleEventSink();
 
-        internal static void RaisePanelOpened(object panel)
+        public static void RaisePanelOpened(object panel)
         {
             Current.RaisePanelOpened(panel);
         }
 
-        internal static void RaisePanelClosed(object panel)
+        public static void RaisePanelClosed(object panel)
         {
             Current.RaisePanelClosed(panel);
         }
 
-        internal static void RaisePanelResumed(object panel)
+        public static void RaisePanelResumed(object panel)
         {
             Current.RaisePanelResumed(panel);
         }
 
-        internal static void RaisePanelPaused(object panel)
+        public static void RaisePanelPaused(object panel)
         {
             Current.RaisePanelPaused(panel);
         }
 
-        internal static void RaiseButtonClicked(object button, string buttonName)
+        public static void RaiseButtonClicked(object button, string buttonName)
         {
             Current.RaiseButtonClicked(button, buttonName);
         }

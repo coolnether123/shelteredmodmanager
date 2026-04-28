@@ -5,7 +5,7 @@ namespace ModAPI.Core
         /// <summary>
         /// Called immediately after Loading. 
         /// SAFE: Math checks, null checks.
-        /// UNSAFE: Accessing Game Managers (GameModeManager.Instance is null here).
+        /// UNSAFE: Accessing game-owned runtime singletons may fail here.
         /// </summary>
         void Validate();        
 

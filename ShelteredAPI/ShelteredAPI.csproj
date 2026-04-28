@@ -386,6 +386,7 @@
     <Compile Include="Content\ModAPICompat\InventoryHelper.cs" />
     <Compile Include="Content\ModAPICompat\ShelteredItemContentBridge.cs" />
     <Compile Include="UI\ModAPICompat\UIHooks.cs" />
+    <Compile Include="UI\ModAPICompat\WorldHooks.cs" />
     <Compile Include="Debugging\CrashCorridorMapDiagnostics.cs" />
     <Compile Include="UI\ModAPICompat\UIFontCache.cs" />
     <Compile Include="UI\ModAPICompat\UIUtil.cs" />

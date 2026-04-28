@@ -19,6 +19,14 @@ namespace ShelteredAPI.Adapters
         }
 
         /// <summary>
+        /// Finds a Sheltered family member by the mod-facing character ID.
+        /// </summary>
+        public static FamilyMember FindFamilyMember(this IGameHelper helper, string characterId)
+        {
+            return helper != null ? helper.FindCharacter(characterId) as FamilyMember : null;
+        }
+
+        /// <summary>
         /// Returns true if the provided family member is currently in any active exploration party.
         /// </summary>
         public static bool IsAwayOnExpedition(this IGameHelper helper, FamilyMember member)

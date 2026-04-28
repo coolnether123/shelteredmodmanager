@@ -34,6 +34,8 @@ Add assembly references:
 
 If you only use neutral `IPluginContext` contracts, the public types come from `ModAPI.dll`; Sheltered runtime implementations are still supplied by `ShelteredAPI`.
 
+`ModAPI.dll` no longer references `Assembly-CSharp` or `Manager`. ShelteredAPI owns those game/runtime references and registers its implementations through the neutral `GameRuntime.*` registry IDs plus 1.3 migration aliases.
+
 Common imports:
 
 ```csharp
@@ -68,6 +70,7 @@ public class MyPlugin : IModPlugin
     {
         int ownedWater = ctx.Game.GetTotalOwned(ItemManager.ItemType.Water);
         ctx.Log.Info("Owned water: " + ownedWater);
+        FamilyMember firstMember = ctx.Game.FindFamilyMember("Alice");
 
         var actor = ctx.Actors.Ensure(new ActorCreateRequest
         {

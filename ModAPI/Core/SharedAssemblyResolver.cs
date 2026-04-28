@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using UnityEngine;
@@ -7,11 +8,10 @@ namespace ModAPI.Core
 {
     internal static class SharedAssemblyResolver
     {
-        private static readonly string[] SharedRuntimeAssemblyNames = new[]
+        private static readonly string[] AlwaysSharedRuntimeAssemblyNames = new[]
         {
             "ModAPI",
             "ModAPI.Core",
-            "ShelteredAPI",
             "0Harmony"
         };
 
@@ -20,13 +20,13 @@ namespace ModAPI.Core
             if (string.IsNullOrEmpty(simpleName))
                 return false;
 
-            for (int i = 0; i < SharedRuntimeAssemblyNames.Length; i++)
+            for (int i = 0; i < AlwaysSharedRuntimeAssemblyNames.Length; i++)
             {
-                if (string.Equals(SharedRuntimeAssemblyNames[i], simpleName, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(AlwaysSharedRuntimeAssemblyNames[i], simpleName, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
 
-            return false;
+            return GetCanonicalAssemblyPath(simpleName) != null;
         }
 
         internal static bool ShouldSkipModAssembly(string assemblyPath)
@@ -39,6 +39,46 @@ namespace ModAPI.Core
             catch { return false; }
 
             return IsSharedRuntimeAssemblyName(simpleName);
+        }
+
+        internal static Assembly[] LoadAvailableSharedRuntimeAssemblies()
+        {
+            var result = new List<Assembly>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string[] directories = GetSharedRuntimeDirectories();
+
+            for (int i = 0; i < directories.Length; i++)
+            {
+                string directory = directories[i];
+                if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
+                    continue;
+
+                string[] files;
+                try { files = Directory.GetFiles(directory, "*.dll", SearchOption.TopDirectoryOnly); }
+                catch { continue; }
+
+                for (int j = 0; j < files.Length; j++)
+                {
+                    string simpleName = null;
+                    try { simpleName = Path.GetFileNameWithoutExtension(files[j]); }
+                    catch { continue; }
+
+                    if (string.IsNullOrEmpty(simpleName) || !seen.Add(simpleName))
+                        continue;
+
+                    if (string.Equals(simpleName, "ModAPI", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(simpleName, "ModAPI.Core", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    Assembly assembly = ResolveSharedAssembly(simpleName);
+                    if (assembly != null)
+                        result.Add(assembly);
+                }
+            }
+
+            return result.ToArray();
         }
 
         internal static Assembly ResolveSharedAssembly(string simpleName)
@@ -81,15 +121,15 @@ namespace ModAPI.Core
 
             try
             {
-                string gameRoot = Directory.GetParent(Application.dataPath).FullName;
-                string smmDir = Path.Combine(gameRoot, "SMM");
-                string[] candidates = new[]
+                string[] directories = GetSharedRuntimeDirectories();
+                var candidates = new List<string>();
+                for (int i = 0; i < directories.Length; i++)
                 {
-                    Path.Combine(Path.Combine(smmDir, "bin"), simpleName + ".dll"),
-                    Path.Combine(smmDir, simpleName + ".dll")
-                };
+                    if (!string.IsNullOrEmpty(directories[i]))
+                        candidates.Add(Path.Combine(directories[i], simpleName + ".dll"));
+                }
 
-                for (int i = 0; i < candidates.Length; i++)
+                for (int i = 0; i < candidates.Count; i++)
                 {
                     if (File.Exists(candidates[i]))
                         return candidates[i];
@@ -98,6 +138,24 @@ namespace ModAPI.Core
             catch { }
 
             return null;
+        }
+
+        private static string[] GetSharedRuntimeDirectories()
+        {
+            try
+            {
+                string gameRoot = Directory.GetParent(Application.dataPath).FullName;
+                string smmDir = Path.Combine(gameRoot, "SMM");
+                return new[]
+                {
+                    Path.Combine(smmDir, "bin"),
+                    smmDir
+                };
+            }
+            catch
+            {
+                return new string[0];
+            }
         }
 
         private static Assembly FindLoadedAssembly(string simpleName, string preferredPath)

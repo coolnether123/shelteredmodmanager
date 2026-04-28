@@ -15,7 +15,7 @@ namespace ModAPI.Inspector
     {
         private Rect _window = new Rect(20, 50, 900, 600);
         private bool _visible = false; // F10
-        private string _typeFilter = "Assembly-CSharp"; 
+        private string _typeFilter = "ModAPI";
         private string _methodFilter = "";
         
         private Vector2 _scrollMethods;
@@ -141,8 +141,7 @@ namespace ModAPI.Inspector
 
                 if (asm == null)
                 {
-                    // Assume Assembly-CSharp if mostly matching type name?
-                    // Or try to load by name
+                    // Try to load by assembly name when the filter is not a loaded assembly.
                     try { asm = Assembly.Load(_typeFilter); } catch {}
                 }
 
@@ -157,8 +156,7 @@ namespace ModAPI.Inspector
                          // Let's assume _typeFilter is primarily for Type Name if assembly matches default.
                          
                          bool typeMatch = t.Name.IndexOf(_typeFilter, StringComparison.OrdinalIgnoreCase) >= 0 || t.FullName.IndexOf(_typeFilter, StringComparison.OrdinalIgnoreCase) >= 0;
-                         // If user typed 'Assembly-CSharp', they match everything?
-                         if (_typeFilter == "Assembly-CSharp" || typeMatch) 
+                         if (string.IsNullOrEmpty(_typeFilter) || typeMatch)
                          {
                             var methods = t.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
                             foreach (var m in methods) 
@@ -179,7 +177,7 @@ namespace ModAPI.Inspector
                 }
                 else
                 {
-                     _statusMessage = "Assembly/Type not found. Try 'Assembly-CSharp' or specific type name.";
+                     _statusMessage = "Assembly/Type not found. Try an assembly or specific type name.";
                 }
             } 
             catch (Exception ex) 

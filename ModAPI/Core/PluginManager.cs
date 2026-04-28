@@ -185,7 +185,7 @@ namespace ModAPI.Core
             // Because plugins are loaded via bytes (no file lock), they live in an anonymous context.
             // This resolver ensures they link back to the ALREADY LOADED ModAPI instance,
             // preventing duplicate assembly loads and fixing IsAssignableFrom failures.
-            // It also keeps ShelteredAPI resolution deterministic when mods reference both APIs.
+            // It also keeps shared runtime assemblies deterministic when mods reference the framework.
             AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
             {
                 string name = new AssemblyName(args.Name).Name;
@@ -203,7 +203,7 @@ namespace ModAPI.Core
             var runner = _loaderRoot.GetComponent<PluginRunner>() ?? _loaderRoot.AddComponent<PluginRunner>();
             runner.Manager = this;
 
-            SharedAssemblyResolver.ResolveSharedAssembly("ShelteredAPI");
+            SharedAssemblyResolver.LoadAvailableSharedRuntimeAssemblies();
             HarmonyBootstrap.EnsurePatched();
 
             try
@@ -233,7 +233,21 @@ namespace ModAPI.Core
 
             failures += LogAssembly("ModAPI", Assembly.GetExecutingAssembly());
             failures += LogAssembly("0Harmony", ResolveAssemblyByType("HarmonyLib.Harmony, 0Harmony"));
-            failures += LogAssembly("ShelteredAPI", SharedAssemblyResolver.ResolveSharedAssembly("ShelteredAPI"));
+
+            Assembly[] sharedRuntimeAssemblies = SharedAssemblyResolver.LoadAvailableSharedRuntimeAssemblies();
+            MMLog.WriteDebug("Assembly Resolution: Shared runtime assemblies: " + sharedRuntimeAssemblies.Length);
+            for (int i = 0; i < sharedRuntimeAssemblies.Length; i++)
+            {
+                var assembly = sharedRuntimeAssemblies[i];
+                if (assembly == null)
+                    continue;
+
+                string name = null;
+                try { name = assembly.GetName().Name; }
+                catch { name = "<unknown>"; }
+
+                MMLog.WriteDebug("shared runtime " + name + ".dll: " + SafeAssemblyPath(assembly));
+            }
 
             MMLog.WriteDebug($"Assembly Resolution: Failed Assemblies: {failures}");
         }
@@ -970,9 +984,6 @@ namespace ModAPI.Core
             if (ModAPIRegistry.IsAPIRegistered(GameRuntimeApiIds.GameHelper))
                 return ModAPIRegistry.GetAPI<IGameHelper>(GameRuntimeApiIds.GameHelper);
 
-            if (ModAPIRegistry.IsAPIRegistered("ShelteredAPI.GameHelper"))
-                return ModAPIRegistry.GetAPI<IGameHelper>("ShelteredAPI.GameHelper");
-
             return null;
         }
 
@@ -980,9 +991,6 @@ namespace ModAPI.Core
         {
             if (ModAPIRegistry.IsAPIRegistered(GameRuntimeApiIds.Actors))
                 return ModAPIRegistry.GetAPI<IActorSystem>(GameRuntimeApiIds.Actors);
-
-            if (ModAPIRegistry.IsAPIRegistered("ShelteredAPI.Actors"))
-                return ModAPIRegistry.GetAPI<IActorSystem>("ShelteredAPI.Actors");
 
             return null;
         }

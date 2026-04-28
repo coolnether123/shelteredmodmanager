@@ -1,16 +1,1 @@
 # Rule	Path	Symbol	AllowedCount
-ngui-symbol	ModAPI/Examples/SpineHarmonyShowcase.cs	UILabel	1
-project-reference	ModAPI/ModAPI.csproj	Assembly-CSharp	1
-project-reference	ModAPI/ModAPI.csproj	Manager	1
-sheltered-filename	ModAPI/Harmony/Transpilers/ShelteredPatterns.cs	Sheltered	1
-source-symbol	ModAPI/Core/IGameHelper.cs	FamilyMember	1
-source-symbol	ModAPI/Core/PluginContextImpl.cs	FamilyMember	1
-source-symbol	ModAPI/Core/PluginManager.cs	ShelteredAPI	8
-source-symbol	ModAPI/Core/SharedAssemblyResolver.cs	ShelteredAPI	1
-source-symbol	ModAPI/Harmony/HarmonyBootstrap.cs	ShelteredAPI	9
-source-symbol	ModAPI/Harmony/HarmonyBootstrap.cs	UIPanelManager	2
-source-symbol	ModAPI/Harmony/HarmonyUtil.cs	ExplorationParty	1
-source-symbol	ModAPI/Harmony/HarmonyUtil.cs	FamilyMember	1
-source-symbol	ModAPI/Harmony/HarmonyUtil.cs	SaveManager	2
-source-symbol	ModAPI/Harmony/Transpilers/ShelteredPatterns.cs	InventoryManager	1
-source-symbol	ModAPI/Properties/AssemblyInfo.cs	ShelteredAPI	1

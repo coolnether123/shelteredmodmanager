@@ -77,7 +77,7 @@ public interface IGameHelper
 {
     int GetTotalOwned(string itemId);
     int GetInventoryCount(string itemId);
-    FamilyMember FindMember(string characterId);
+    object FindCharacter(string characterId);
 }
 
 public interface ISaveSystem
@@ -247,15 +247,17 @@ public interface IActorSerializationService
 }
 ```
 
-Built-in actor API registration names:
-- `ShelteredAPI.Actors`
-- `ShelteredAPI.ActorRegistry`
-- `ShelteredAPI.ActorComponents`
-- `ShelteredAPI.ActorBindings`
-- `ShelteredAPI.ActorAdapters`
-- `ShelteredAPI.ActorSimulation`
-- `ShelteredAPI.ActorEvents`
-- `ShelteredAPI.ActorSerialization`
+Built-in actor API registration names used by `ModAPI`:
+- `GameRuntime.Actors`
+- `GameRuntime.ActorRegistry`
+- `GameRuntime.ActorComponents`
+- `GameRuntime.ActorBindings`
+- `GameRuntime.ActorAdapters`
+- `GameRuntime.ActorSimulation`
+- `GameRuntime.ActorEvents`
+- `GameRuntime.ActorSerialization`
+
+ShelteredAPI also registers `ShelteredAPI.*` aliases for 1.3 source migration.
 
 ## Spine Settings (`ModAPI.Spine`, `ModAPI.Attributes`)
 
@@ -661,6 +663,8 @@ public static class GameTimeTriggerHelper
 public static class GameHelperExtensions
 {
     public static int GetTotalOwned(this IGameHelper helper, ItemManager.ItemType itemType);
+    public static FamilyMember FindFamilyMember(this IGameHelper helper, string characterId);
+    public static bool IsAwayOnExpedition(this IGameHelper helper, FamilyMember member);
 }
 ```
 

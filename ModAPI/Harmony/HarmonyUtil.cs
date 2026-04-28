@@ -39,11 +39,7 @@ namespace ModAPI.Harmony
             public Action<object, string> OnResult;
         }
 
-        private static readonly HashSet<string> SensitiveDeny = new HashSet<string>(StringComparer.Ordinal)
-        {
-            "ExplorationParty.PopState",
-            "FamilyMember.OnDestroy"
-        };
+        private static readonly HashSet<string> SensitiveDeny = new HashSet<string>(StringComparer.Ordinal);
 
         public static void PatchAll(HarmonyLib.Harmony h, Assembly asm, PatchOptions options)
         {
@@ -298,12 +294,9 @@ namespace ModAPI.Harmony
             try
             {
                 var mgr = GetSingletonInstance(typeof(TManager)) as UnityEngine.Object;
-                if (mgr == null) return false;
-                if (SaveManager.instance == null) return false;
-                var saveable = mgr as ISaveable;
-                return saveable != null ? SaveManager.instance.HasBeenLoaded(saveable) : true;
+                return mgr != null;
             }
-            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.IsLoaded", "Error checking if manager is loaded: " + ex.Message); return false; }
+            catch (Exception ex) { MMLog.WarnOnce("HarmonyUtil.IsLoaded", "Error checking if Unity singleton is loaded: " + ex.Message); return false; }
         }
 
         public static void PatchWhenLoaded<TManager>(HarmonyLib.Harmony h, Action applyPatches) where TManager : UnityEngine.Object

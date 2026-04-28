@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using ModAPI.Core;
 
@@ -124,14 +125,10 @@ namespace ModAPI.Inspector
                 drew |= DrawSpriteOutline(spriteRenderer.transform, spriteRenderer.sprite, spriteRenderer.flipX, spriteRenderer.flipY);
             }
 
-            UI2DSprite[] ui2DSprites = target.GetComponentsInChildren<UI2DSprite>(true);
-            for (int i = 0; ui2DSprites != null && i < ui2DSprites.Length; i++)
+            Component[] components = target.GetComponentsInChildren<Component>(true);
+            for (int i = 0; components != null && i < components.Length; i++)
             {
-                UI2DSprite ui2DSprite = ui2DSprites[i];
-                if (ui2DSprite == null || ui2DSprite.sprite2D == null || !ui2DSprite.enabled)
-                    continue;
-
-                drew |= DrawSpriteOutline(ui2DSprite.transform, ui2DSprite.sprite2D, false, false);
+                drew |= TryDrawReflectedSpriteOutline(components[i]);
             }
 
             return drew;
@@ -145,11 +142,71 @@ namespace ModAPI.Inspector
             if (spriteRenderer != null && spriteRenderer.sprite != null && spriteRenderer.enabled)
                 drew |= DrawSpriteOutline(spriteRenderer.transform, spriteRenderer.sprite, spriteRenderer.flipX, spriteRenderer.flipY);
 
-            UI2DSprite ui2DSprite = target.GetComponent<UI2DSprite>();
-            if (ui2DSprite != null && ui2DSprite.sprite2D != null && ui2DSprite.enabled)
-                drew |= DrawSpriteOutline(ui2DSprite.transform, ui2DSprite.sprite2D, false, false);
+            Component[] components = target.GetComponents<Component>();
+            for (int i = 0; components != null && i < components.Length; i++)
+            {
+                drew |= TryDrawReflectedSpriteOutline(components[i]);
+            }
 
             return drew;
+        }
+
+        private static bool TryDrawReflectedSpriteOutline(Component component)
+        {
+            if (component == null || !IsReflectedComponentEnabled(component))
+                return false;
+
+            Sprite sprite;
+            if (!TryGetReflectedSprite(component, out sprite))
+                return false;
+
+            return DrawSpriteOutline(component.transform, sprite, false, false);
+        }
+
+        private static bool TryGetReflectedSprite(Component component, out Sprite sprite)
+        {
+            sprite = null;
+            if (component == null)
+                return false;
+
+            try
+            {
+                PropertyInfo property = component.GetType().GetProperty(
+                    "sprite2D",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+                if (property == null || !typeof(Sprite).IsAssignableFrom(property.PropertyType))
+                    return false;
+
+                sprite = property.GetValue(component, null) as Sprite;
+                return sprite != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsReflectedComponentEnabled(Component component)
+        {
+            Behaviour behaviour = component as Behaviour;
+            if (behaviour != null)
+                return behaviour.enabled;
+
+            try
+            {
+                PropertyInfo property = component.GetType().GetProperty(
+                    "enabled",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+                if (property != null && property.PropertyType == typeof(bool))
+                    return (bool)property.GetValue(component, null);
+            }
+            catch
+            {
+            }
+
+            return true;
         }
 
         private static bool DrawSpriteOutline(Transform transform, Sprite sprite, bool flipX, bool flipY)

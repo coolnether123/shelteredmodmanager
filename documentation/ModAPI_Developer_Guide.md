@@ -13,6 +13,8 @@
 
 Exact signatures: `documentation/API_Signatures_Reference.md`.
 
+`ModAPI.dll` is now the neutral framework assembly. It no longer references Sheltered `Assembly-CSharp` or the manager application; Sheltered runtime behavior is provided by `ShelteredAPI.dll` through neutral `GameRuntime.*` services and documented migration aliases.
+
 ## 1. Start Here
 
 - Plugin lifecycle and context usage: `documentation/how to develop a plugin.md`

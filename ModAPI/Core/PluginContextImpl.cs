@@ -27,11 +27,6 @@ namespace ModAPI.Core
         /// </summary>
         public Action<Action> Scheduler;
 
-        public FamilyMember FindMember(string characterId)
-        {
-            return Game != null ? Game.FindMember(characterId) : null;
-        }
-
         /// <summary>
         /// Convenience wrapper for deferred main-thread execution.
         /// </summary>
