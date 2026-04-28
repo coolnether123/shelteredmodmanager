@@ -7,6 +7,8 @@ Custom scenarios can be authored in two ways:
 
 Both paths appear under the in-game `Custom Scenarios` scenario-selection hub. Missing or version-mismatched required mods are shown as locked entries and cannot be started until the dependency state matches. The hub is always available from the scenario book, even when there are no existing custom scenarios, so authors can use `Add New Scenario`.
 
+`ModAPI.Scenarios` is the neutral registration and lifecycle surface: custom scenario registrations, opaque definition factories, lifecycle state/events, portable catalog metadata, dependency manifest conversion, and validation result containers. `ShelteredAPI.Scenarios` is the Sheltered scenario authoring/runtime pack: Sheltered XML definitions, family/survivor/bunker/inventory/quest/weather sections, serializers, validators, runtime binding, `ScenarioDef` helpers, and in-game apply services.
+
 ## Code-Driven Registration
 
 Reference `ModAPI.dll` and `ShelteredAPI.dll`, then register during plugin startup.
@@ -212,7 +214,7 @@ Deferred categories are reported through `ScenarioApplyResult.Messages`.
 
 ## Compatibility Notes
 
-The framework targets .NET Framework 3.5 and uses `System.Xml` for XML parsing. Keep scenario ids stable across versions. Version changes should be reflected in `CustomScenarioRegistration.Version` or `<Version>` so new saves record the applied scenario version. Required mod version checks are exact, case-insensitive string comparisons.
+The Sheltered scenario pack targets .NET Framework 3.5 and uses `System.Xml` for XML parsing. Keep scenario ids stable across versions. Version changes should be reflected in `CustomScenarioRegistration.Version` or `<Version>` so new saves record the applied scenario version. Required mod version checks are exact, case-insensitive string comparisons.
 
 Asset paths must be relative to the scenario pack folder. Paths that escape the pack folder, including sibling-prefix attempts such as `../Pack2/file.png`, are rejected even if the target file exists.
 

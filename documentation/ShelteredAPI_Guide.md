@@ -23,7 +23,7 @@ Custom scenario authoring guidance: `documentation/Custom_Scenarios_Guide.md`.
   - `ShelteredAPI.ActorSerialization`
 - Sheltered-specific UI and input helpers under `ShelteredAPI.*`
 - Sheltered-specific content registration and runtime injection under `ShelteredAPI.Content`
-- Sheltered-specific custom scenario authoring and runtime hooks under `ShelteredAPI.Scenarios`
+- Sheltered-specific custom scenario XML definitions, serializers, validators, authoring helpers, runtime binding, apply services, and runtime hooks under `ShelteredAPI.Scenarios`
 
 ## 2. Referencing It
 
@@ -114,7 +114,8 @@ public sealed class LongRoadScenario : ShelteredCustomScenarioBase
 - scheduler/events compatibility surfaces such as `GameEvents` and `GameTimeTriggerHelper` are hosted in `ModAPI.dll` in the 1.3 line
 - actor contracts live in `ModAPI.Actors`; `ShelteredAPI` provides the default runtime implementation
 - item, recipe, loot, asset, and content-localization APIs live in `ShelteredAPI.Content`
-- custom scenario contracts live in `ModAPI.Scenarios`; Sheltered `ScenarioDef` creation and in-game hooks live in `ShelteredAPI.Scenarios`
+- custom scenario registration contracts, lifecycle state/events, opaque definition factories, catalog metadata, dependency manifest conversion, and validation result containers live in `ModAPI.Scenarios`
+- Sheltered scenario definitions, XML serializers, validators, runtime binding, `ScenarioDef` creation, and in-game hooks live in `ShelteredAPI.Scenarios`
 - the content injector is manager-scoped and will rebind when a new family/session recreates Sheltered runtime managers
 - register triggers and runtime behavior in `Start(...)`, not constructors
 - use unique IDs for triggers, actor bindings, components, and adapters

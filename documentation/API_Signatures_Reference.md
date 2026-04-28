@@ -403,7 +403,7 @@ public static bool IsAPIRegistered(string apiName);
 public static bool UnregisterAPI(string apiName, string providerModId = null);
 public static List<string> GetRegisteredAPIs();
 
-// ModAPI.Scenarios.ICustomScenarioService
+// ModAPI.Scenarios neutral scenario registration/lifecycle contracts
 public static class GameRuntimeApiIds
 {
     public const string CustomScenarios = "GameRuntime.CustomScenarios";
@@ -442,22 +442,34 @@ public class CustomScenarioRegistration
     public object UserData { get; set; }
 }
 
-public interface IScenarioDependencyResolver
+public sealed class ScenarioInfo
 {
-    bool IsLoaded(string modId);
+    public string Id { get; }
+    public string DisplayName { get; }
+    public string Author { get; }
+    public string Version { get; }
+    public string FilePath { get; }
+    public string OwnerModId { get; }
 }
 
-public interface IScenarioDependencyVersionResolver : IScenarioDependencyResolver
+public static class ScenarioDependencyManifest
 {
-    string GetLoadedVersion(string modId);
+    public static SlotManifest Create(string scenarioName, LoadedModInfo[] requiredMods);
+    public static LoadedModInfo[] FromDependencyStrings(IList<string> dependencies);
+    public static LoadedModInfo ParseDependency(string dependency);
+    public static LoadedModInfo[] Merge(LoadedModInfo[] first, LoadedModInfo[] second);
+    public static LoadedModInfo[] CloneRequiredMods(LoadedModInfo[] requiredMods);
 }
 
-public static class ScenarioFrameworkVerification
+public sealed class ScenarioValidationResult
 {
-    public static ScenarioValidationResult Run();
+    public bool IsValid { get; }
+    public ScenarioValidationIssue[] Issues { get; }
+    public void AddError(string message);
+    public void AddWarning(string message);
 }
 
-// ShelteredAPI.Scenarios class-based authoring helper
+// ShelteredAPI.Scenarios Sheltered scenario authoring/runtime pack
 public interface IShelteredCustomScenario
 {
     string Id { get; }
@@ -484,6 +496,50 @@ public abstract class ShelteredCustomScenarioBase : IShelteredCustomScenario
     public virtual void OnSpawned(CustomScenarioEventArgs args);
     public CustomScenarioRegistration ToRegistration();
     public CustomScenarioRegistrationResult Register();
+}
+
+public class ScenarioDefinition
+{
+    public string Id { get; set; }
+    public string DisplayName { get; set; }
+    public string Author { get; set; }
+    public string Version { get; set; }
+    public FamilySetupDefinition FamilySetup { get; set; }
+    public StartingInventoryDefinition StartingInventory { get; set; }
+    public BunkerEditsDefinition BunkerEdits { get; set; }
+    public AssetReferencesDefinition AssetReferences { get; set; }
+}
+
+public class ScenarioDefinitionSerializer
+{
+    public const string DefaultFileName = "scenario.xml";
+    public ScenarioDefinition Load(string filePath);
+    public ScenarioDefinition FromXml(string xml);
+    public void Save(ScenarioDefinition definition, string filePath);
+    public string ToXml(ScenarioDefinition definition);
+    public ScenarioInfo LoadInfo(string filePath, string ownerModId);
+}
+
+public sealed class ScenarioValidator
+{
+    public ScenarioValidator();
+    public ScenarioValidator(IScenarioDependencyResolver dependencyResolver);
+    public ScenarioValidationResult Validate(ScenarioDefinition definition, string scenarioFilePath);
+}
+
+public interface IScenarioDependencyResolver
+{
+    bool IsLoaded(string modId);
+}
+
+public interface IScenarioDependencyVersionResolver : IScenarioDependencyResolver
+{
+    string GetLoadedVersion(string modId);
+}
+
+public static class ScenarioFrameworkVerification
+{
+    public static ScenarioValidationResult Run();
 }
 
 // ModAPI.Core.ModRegistry

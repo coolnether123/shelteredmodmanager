@@ -187,8 +187,6 @@ sheltered-filename	ModAPI/Custom Saves/SaveManager_SaveToCurrentSlot_Patch.cs	Sa
 sheltered-filename	ModAPI/Custom Saves/saves/SaveManager_SaveGlobalData_Patch.cs	SaveManager	1
 sheltered-filename	ModAPI/Custom Saves/saves/SaveManagerInspector.cs	SaveManager	1
 sheltered-filename	ModAPI/Harmony/Transpilers/ShelteredPatterns.cs	Sheltered	1
-sheltered-filename	ModAPI/Scenarios/ScenarioDefinition.cs	ScenarioDef	1
-sheltered-filename	ModAPI/Scenarios/ScenarioDefinitionSerializer.cs	ScenarioDef	1
 sheltered-filename	ModAPI/UI/NGUIHelper.cs	NGUI	1
 sheltered-filename	ModAPI/UI/NGUIScrollHelper.cs	NGUI	1
 source-symbol	ModAPI/Characters/Abstractions/ICharacterEffectSystem.cs	EncounterCharacter	2
@@ -255,7 +253,6 @@ source-symbol	ModAPI/Items/InventoryHelper.cs	InventoryManager	2
 source-symbol	ModAPI/Items/InventoryHelper.cs	ItemManager	1
 source-symbol	ModAPI/Persistence/ModPersistence.cs	SaveManager	8
 source-symbol	ModAPI/Properties/AssemblyInfo.cs	ShelteredAPI	1
-source-symbol	ModAPI/Scenarios/Domain/Validation/SchedulingValidationRule.cs	ItemManager	1
 source-symbol	ModAPI/UI/ModManagerPanel.cs	UIPanelManager	1
 source-symbol	ModAPI/UI/ModSettingsPanel.cs	ShelteredAPI	1
 source-symbol	ModAPI/UI/Runtime/UIItemPanelRuntimeService.cs	InventoryManager	8

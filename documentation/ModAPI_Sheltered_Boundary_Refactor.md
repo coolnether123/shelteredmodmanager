@@ -28,7 +28,7 @@ These surfaces are intended to remain in `ModAPI` after Sheltered references are
 | `Events/ModEventBus` | Game-neutral event bus. |
 | `Harmony` fluent transpiler, cooperative patcher, safety policy, and diagnostics | General patching framework, excluding Sheltered pattern helpers and game-menu patches. |
 | `Reflection`, neutral inspector helpers, and reusable debugger infrastructure | Framework diagnostics, provided they do not patch or name Sheltered runtime types. |
-| Scenario registration contracts, serializer infrastructure, and pure schema tooling where the schema is kept game-neutral | Candidate framework layer only after Sheltered-specific schema vocabulary is separated. |
+| Scenario registration contracts, lifecycle state/event contracts, catalog metadata, mod-folder source contracts, dependency manifest conversion, and neutral validation result containers | Framework behavior that describes custom scenario registration and metadata without Sheltered gameplay vocabulary. |
 
 ### Split Between ModAPI And ShelteredAPI
 
@@ -43,7 +43,7 @@ These surfaces need neutral contracts or framework pieces in `ModAPI`, with Shel
 | UI hooks | Neutral hook registration contracts and lifecycle abstractions | NGUI widgets, `BasePanel`, `UIPanelManager`, mod-manager panels, settings panels, and injection runtime. |
 | Input | Neutral binding/action contracts | Sheltered vanilla actions, Unity legacy/touchpad readers, keybind persistence, and conflict UI. |
 | Content | `IContentResolutionService` for resolving mod-facing IDs to opaque host runtime keys; future neutral content extension point contracts if needed | Sheltered item, recipe, loot, localization, asset, inventory integrations, and host key resolution. |
-| Scenarios | Neutral registration service contracts and portable scenario metadata where possible | `ScenarioDef`, bunker/family/inventory/quest/weather/runtime apply services, authoring UI, and in-game lifecycle patches. |
+| Scenarios | Neutral registration service contracts, lifecycle state/event args, opaque definition factory boundaries, portable catalog metadata, mod-folder source contracts, dependency manifest conversion, and neutral validation result containers | Sheltered scenario definitions, XML serializers, validators, runtime catalog/loader, runtime binding, `ScenarioDef` creation, bunker/family/inventory/quest/weather/runtime apply services, authoring UI, and in-game lifecycle patches. |
 | Events | Neutral event bus | Sheltered day/session/combat/party/UI/faction/time-trigger hooks. |
 | Runtime bootstrap | Game-neutral plugin loader sequence | Sheltered startup bootstrap and runtime API registrations. |
 
@@ -65,7 +65,7 @@ These current `ModAPI` surfaces encode Sheltered runtime concepts and should mov
 | NGUI/UI implementation files under `UI/**` | NGUI widgets, panel injection, settings panel, mod-manager panel, and UI patch runtime. |
 | `Harmony/MainMenuPatches.cs` and `Harmony/Transpilers/ShelteredPatterns.cs` | Sheltered menu/runtime patch targets and Sheltered-specific IL helpers. |
 | `Debugging/CrashCorridorMapDiagnostics.cs` | Sheltered map/panel diagnostics and manager patches. |
-| Scenario bunker/family/inventory/quest/weather/runtime application and authoring UI vocabulary currently under `Scenarios/**` | Sheltered scenario domain and runtime integration. |
+| Remaining scenario runtime application and authoring UI vocabulary outside the neutral `ModAPI.Scenarios` contracts | Sheltered scenario domain and runtime integration. Prompt 3 moved the scenario XML/domain schema, serializers, validation pipeline, catalog/loader implementation, and runtime binding to `ShelteredAPI.Scenarios`. |
 
 ### Delete Or Replace After 1.3 Compatibility
 
@@ -123,6 +123,20 @@ Boundary baseline shrink from Prompt 2:
 
 - removed `source-symbol ModAPI/Core/ShelteredContentBridge.cs ShelteredAPI`,
 - reduced `source-symbol ModAPI/Core/ShelteredContentBridge.cs ItemManager` from `13` to `12`.
+
+## Prompt 3 Scenario Ownership Split
+
+Prompt 3 separated the generic scenario framework from the Sheltered scenario authoring/runtime pack:
+
+- `ModAPI.Scenarios` keeps `ICustomScenarioService`, `CustomScenarioRegistration`, lifecycle state and event args, `CustomScenarioDefinitionFactory`, `ScenarioInfo`, `ScenarioModFolder`, `IScenarioModFolderSource`, `ModRegistryScenarioModFolderSource`, `ScenarioDependencyManifest`, and `ScenarioValidationResult`.
+- `ShelteredAPI.Scenarios` owns `ScenarioDefinition`, Sheltered scenario domain types, XML section serializers, validation rules, `ScenarioValidator`, `ScenarioCatalog`, `ScenarioLoader`, `ScenarioFrameworkVerification`, `ScenarioPipelineSmokeTest`, placement definitions, and `ScenarioRuntimeBinding`.
+- `ShelteredAPI` continues to register the scenario runtime through `ShelteredApiRuntimeBootstrap` and the scenario composition root.
+
+Boundary baseline shrink from Prompt 3:
+
+- removed `sheltered-filename ModAPI/Scenarios/ScenarioDefinition.cs ScenarioDef`,
+- removed `sheltered-filename ModAPI/Scenarios/ScenarioDefinitionSerializer.cs ScenarioDef`,
+- removed `source-symbol ModAPI/Scenarios/Domain/Validation/SchedulingValidationRule.cs ItemManager`.
 
 ## Prompt 1 Scope Lock
 
