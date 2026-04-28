@@ -59,6 +59,7 @@ namespace ShelteredAPI.Scenarios
             public bool IsCustomMode;
             public int BaseButtonCount;
             public int Page;
+            public int LastSelectedCustomVisibleIndex = -1;
             public int LastLoggedVanillaSelectedScenario = int.MinValue;
             public int LastLoggedCustomSelectedScenario = int.MinValue;
             public int LastLoggedPagingPage = -1;
@@ -227,6 +228,7 @@ namespace ShelteredAPI.Scenarios
             }
             if (selectedScenario >= 0 && selectedScenario < entries.Length)
             {
+                state.LastSelectedCustomVisibleIndex = selectedScenario;
                 CustomScenarioInfo scenario = scenarios[entries[selectedScenario].ScenarioIndex];
                 if (customSelectionChanged)
                 {
@@ -406,6 +408,7 @@ namespace ShelteredAPI.Scenarios
 
             DestroyButtons(state.CustomButtons);
             state.CustomButtons.Clear();
+            state.LastSelectedCustomVisibleIndex = -1;
 
             for (int i = 0; i < state.OriginalButtons.Count; i++)
             {
@@ -505,8 +508,139 @@ namespace ShelteredAPI.Scenarios
             UIFlowGuard.BlockSlotClicksToggle(false);
             SetPagingUiVisible(state, false);
             Traverse.Create(panel).Field("m_selectedScenario").SetValue(-1);
+            state.LastSelectedCustomVisibleIndex = -1;
             state.LastLoggedCustomSelectedScenario = int.MinValue;
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Exited custom mode. panel=" + panel.GetInstanceID() + ".");
+        }
+
+        public bool TryPromptDeleteScenarioSaveSlot(ScenarioSelectionPanel panel, SlotSelectionPanel selectionPanel, int selectedSlotIndex)
+        {
+            BrowserPanelState state = GetExistingState(panel);
+            if (state == null || !state.IsCustomMode)
+                return false;
+
+            if (selectionPanel == null)
+                return true;
+
+            if (SaveManager.instance != null && SaveManager.instance.isDeleting)
+                return true;
+
+            int visibleScenarioIndex = ResolveVisibleScenarioIndex(panel, state);
+            if (visibleScenarioIndex < 0)
+            {
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Scenario save delete ignored; no custom scenario is selected.");
+                return true;
+            }
+
+            if (selectedSlotIndex < 0)
+            {
+                try { selectedSlotIndex = Traverse.Create(selectionPanel).Field("m_selectedSlot").GetValue<int>(); }
+                catch { selectedSlotIndex = -1; }
+            }
+
+            if (selectedSlotIndex < 0)
+            {
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Scenario save delete ignored; no save slot is selected.");
+                return true;
+            }
+
+            RefreshDefinitionCatalogSafely();
+            CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
+            ScenarioListEntry[] entries = BuildVisibleEntries(state, scenarios);
+            if (visibleScenarioIndex >= entries.Length)
+            {
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Scenario save delete ignored; selected scenario index is out of range.");
+                return true;
+            }
+
+            CustomScenarioInfo scenario = scenarios[entries[visibleScenarioIndex].ScenarioIndex];
+            if (scenario == null || string.IsNullOrEmpty(scenario.Id))
+            {
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Scenario save delete ignored; selected custom scenario is invalid.");
+                return true;
+            }
+
+            int absoluteSlot = selectedSlotIndex + 1;
+            SaveEntry entry = null;
+            try
+            {
+                entry = ScenarioSaves.GetRegistry(scenario.Id).GetSaveBySlot(absoluteSlot);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ShelteredCustomScenarioSelection] Failed to resolve scenario save for delete prompt. scenarioId="
+                    + (scenario != null ? scenario.Id : "<null>") + " slot=" + absoluteSlot + " error=" + ex.Message);
+            }
+
+            if (entry == null)
+            {
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Scenario save delete ignored; no save exists for selected scenario slot.");
+                return true;
+            }
+
+            MessageBox.Show(MessageBoxButtons.YesNo_Buttons, "Text.UI.DeleteSave", new MessageBoxResponse(delegate(int response)
+            {
+                OnScenarioSaveDeleteMessageBox(selectionPanel, scenario, entry, response);
+            }));
+            MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Delete prompt shown for scenario save. scenarioId="
+                + scenario.Id + " saveId=" + entry.id + " slot=" + entry.absoluteSlot + ".");
+            return true;
+        }
+
+        public bool TryPromptDeleteScenarioSaveSlot(SaveSlotButton button)
+        {
+            if (button == null)
+                return false;
+
+            ScenarioSelectionPanel panel = UnityEngine.Object.FindObjectOfType<ScenarioSelectionPanel>();
+            BrowserPanelState state = GetExistingState(panel);
+            if (state == null || !state.IsCustomMode)
+                return false;
+
+            SlotSelectionPanel selectionPanel = null;
+            try { selectionPanel = Traverse.Create(button).Field("m_slotSelectionPanel").GetValue<SlotSelectionPanel>(); }
+            catch { }
+            if (selectionPanel == null && panel != null)
+                selectionPanel = panel.selectionPanel;
+
+            return TryPromptDeleteScenarioSaveSlot(panel, selectionPanel, button.slotNumber);
+        }
+
+        private int ResolveVisibleScenarioIndex(ScenarioSelectionPanel panel, BrowserPanelState state)
+        {
+            int selectedScenario = -1;
+            if (panel != null)
+            {
+                try { selectedScenario = Traverse.Create(panel).Field("m_selectedScenario").GetValue<int>(); }
+                catch { selectedScenario = -1; }
+            }
+
+            if (selectedScenario >= 0)
+                return selectedScenario;
+
+            return state != null ? state.LastSelectedCustomVisibleIndex : -1;
+        }
+
+        private static void OnScenarioSaveDeleteMessageBox(SlotSelectionPanel selectionPanel, CustomScenarioInfo scenario, SaveEntry entry, int response)
+        {
+            if (response != 1 || scenario == null || entry == null)
+                return;
+
+            bool deleted = false;
+            try
+            {
+                deleted = ScenarioSaves.Delete(scenario.Id, entry.id);
+                if (deleted && selectionPanel != null)
+                    Traverse.Create(selectionPanel).Field("m_infoNeedsRefresh").SetValue(true);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ShelteredCustomScenarioSelection] Scenario save delete failed. scenarioId="
+                    + scenario.Id + " saveId=" + entry.id + " error=" + ex.Message);
+            }
+
+            MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Scenario save delete confirmed. scenarioId="
+                + scenario.Id + " saveId=" + entry.id + " slot=" + entry.absoluteSlot + " deleted=" + deleted + ".");
         }
 
         private bool StartCustomScenario(ScenarioSelectionPanel panel, BrowserPanelState state, List<UIButton> scenarioButtons, CustomScenarioInfo scenario)
@@ -1021,6 +1155,8 @@ namespace ShelteredAPI.Scenarios
 
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Page changed. from=" + (currentPage + 1)
                 + " to=" + (state.Page + 1) + " totalPages=" + GetTotalPages(state, scenarios.Length) + ".");
+            state.LastSelectedCustomVisibleIndex = -1;
+            state.LastLoggedCustomSelectedScenario = int.MinValue;
             List<UIButton> scenarioButtons = Traverse.Create(panel).Field("m_scenarioButtons").GetValue<List<UIButton>>();
             EnterCustomMode(panel, state, scenarioButtons);
             return true;

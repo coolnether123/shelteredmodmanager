@@ -142,6 +142,17 @@ namespace ShelteredAPI.Scenarios
             return Controller.HandleCancel(__instance, ___m_scenarioButtons);
         }
 
+        [HarmonyPrefix]
+        [HarmonyPatch("OnExtra1")]
+        private static bool OnExtra1Prefix(ScenarioSelectionPanel __instance)
+        {
+            SlotSelectionPanel selectionPanel = __instance != null ? __instance.selectionPanel : null;
+            if (Controller.TryPromptDeleteScenarioSaveSlot(__instance, selectionPanel, -1))
+                return false;
+
+            return true;
+        }
+
         [HarmonyPostfix]
         [HarmonyPatch("OnDestroy")]
         private static void OnDestroyPostfix(ScenarioSelectionPanel __instance)
@@ -376,6 +387,12 @@ namespace ShelteredAPI.Scenarios
         [HarmonyPrefix]
         private static bool SaveSlotButtonClickPrefix(SaveSlotButton __instance)
         {
+            if (UICamera.currentTouchID == -2 && ShelteredScenarioSelectionBrowserController.Instance.TryPromptDeleteScenarioSaveSlot(__instance))
+            {
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Handled custom scenario save-slot right-click.");
+                return false;
+            }
+
             bool allowed = !ShelteredCustomScenarioRuntimeState.ShouldBlockSlotInteraction(__instance);
             if (!allowed)
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Blocked SaveSlotButton.OnClick during guarded UI click.");
