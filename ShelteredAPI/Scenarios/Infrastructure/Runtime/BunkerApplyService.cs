@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
+using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
 
@@ -24,7 +25,7 @@ namespace ShelteredAPI.Scenarios
             ShelterRoomGrid grid = ShelterRoomGrid.Instance;
             if (grid == null || !grid.isInitialized)
             {
-                result.AddMessage("ShelterRoomGrid is not ready; bunker changes skipped.");
+                AddBunkerMessage(result, "ShelterRoomGrid is not ready; bunker changes skipped.");
                 return;
             }
 
@@ -39,24 +40,38 @@ namespace ShelteredAPI.Scenarios
 
                 if (room.WallSpriteIndex.HasValue)
                 {
-                    if (grid.SetWall(room.GridX, room.GridY, room.WallSpriteIndex.Value))
-                        result.BunkerChanges++;
-                    else
-                        result.AddMessage("Failed to set wall sprite at " + room.GridX + "," + room.GridY + ".");
+                    try
+                    {
+                        if (grid.SetWall(room.GridX, room.GridY, room.WallSpriteIndex.Value))
+                            result.BunkerChanges++;
+                        else
+                            AddBunkerMessage(result, "Failed to set wall sprite at " + room.GridX + "," + room.GridY + ".");
+                    }
+                    catch (Exception ex)
+                    {
+                        AddBunkerMessage(result, "Failed to set wall sprite at " + room.GridX + "," + room.GridY + ": " + ex.Message);
+                    }
                 }
 
                 if (room.WireSpriteIndex.HasValue)
                 {
-                    if (wires != null
-                        && room.WireSpriteIndex.Value >= 0
-                        && room.WireSpriteIndex.Value < wires.Count
-                        && grid.SetWiring(room.GridX, room.GridY, wires[room.WireSpriteIndex.Value]))
+                    try
                     {
-                        result.BunkerChanges++;
+                        if (wires != null
+                            && room.WireSpriteIndex.Value >= 0
+                            && room.WireSpriteIndex.Value < wires.Count
+                            && grid.SetWiring(room.GridX, room.GridY, wires[room.WireSpriteIndex.Value]))
+                        {
+                            result.BunkerChanges++;
+                        }
+                        else
+                        {
+                            AddBunkerMessage(result, "Failed to set wiring sprite at " + room.GridX + "," + room.GridY + ".");
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        result.AddMessage("Failed to set wiring sprite at " + room.GridX + "," + room.GridY + ".");
+                        AddBunkerMessage(result, "Failed to set wiring sprite at " + room.GridX + "," + room.GridY + ": " + ex.Message);
                     }
                 }
             }
@@ -93,17 +108,24 @@ namespace ShelteredAPI.Scenarios
                     continue;
                 }
 
-                switch (kind)
+                try
                 {
-                    case ScenarioPlacementDefinitionKind.Room:
-                        ApplyRoomPlacement(grid, placement, i, result);
-                        break;
-                    case ScenarioPlacementDefinitionKind.Ladder:
-                        ApplyLadderPlacement(grid, placement, i, result);
-                        break;
-                    case ScenarioPlacementDefinitionKind.RoomLight:
-                        ApplyRoomLightPlacement(grid, placement, i, result);
-                        break;
+                    switch (kind)
+                    {
+                        case ScenarioPlacementDefinitionKind.Room:
+                            ApplyRoomPlacement(grid, placement, i, result);
+                            break;
+                        case ScenarioPlacementDefinitionKind.Ladder:
+                            ApplyLadderPlacement(grid, placement, i, result);
+                            break;
+                        case ScenarioPlacementDefinitionKind.RoomLight:
+                            ApplyRoomLightPlacement(grid, placement, i, result);
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AddBunkerMessage(result, "Structure placement #" + i + " failed during apply: " + ex.Message);
                 }
             }
         }
@@ -113,7 +135,7 @@ namespace ShelteredAPI.Scenarios
             ObjectManager manager = ObjectManager.Instance;
             if (manager == null)
             {
-                result.AddMessage("ObjectManager is not ready; standard object placements skipped.");
+                AddBunkerMessage(result, "ObjectManager is not ready; standard object placements skipped.");
                 return;
             }
 
@@ -125,7 +147,7 @@ namespace ShelteredAPI.Scenarios
 
                 if (!string.IsNullOrEmpty(placement.PrefabReference))
                 {
-                    result.AddMessage("Object placement #" + i + " uses PrefabReference '" + placement.PrefabReference
+                    AddBunkerMessage(result, "Object placement #" + i + " uses PrefabReference '" + placement.PrefabReference
                         + "' and is deferred because direct prefab-path instantiation is not safe for live saves.");
                     continue;
                 }
@@ -133,13 +155,13 @@ namespace ShelteredAPI.Scenarios
                 ObjectManager.ObjectType objectType;
                 if (!TryParseObjectType(placement.DefinitionReference, out objectType))
                 {
-                    result.AddMessage("Object placement #" + i + " has unknown DefinitionReference: " + (placement.DefinitionReference ?? string.Empty));
+                    AddBunkerMessage(result, "Object placement #" + i + " has unknown DefinitionReference: " + (placement.DefinitionReference ?? string.Empty));
                     continue;
                 }
 
                 if (!manager.HasPrefab(objectType))
                 {
-                    result.AddMessage("Object placement #" + i + " skipped because ObjectManager has no prefab for " + objectType + ".");
+                    AddBunkerMessage(result, "Object placement #" + i + " skipped because ObjectManager has no prefab for " + objectType + ".");
                     continue;
                 }
 
@@ -150,10 +172,20 @@ namespace ShelteredAPI.Scenarios
                     placement.Position != null ? placement.Position.X : 0f,
                     placement.Position != null ? placement.Position.Y : 0f);
 
-                Obj_Base spawned = manager.SpawnObject(objectType, level, position, lockDeconstruct, movable);
+                Obj_Base spawned;
+                try
+                {
+                    spawned = manager.SpawnObject(objectType, level, position, lockDeconstruct, movable);
+                }
+                catch (Exception ex)
+                {
+                    AddBunkerMessage(result, "Object placement #" + i + " failed to spawn " + objectType + ": " + ex.Message);
+                    continue;
+                }
+
                 if (spawned == null)
                 {
-                    result.AddMessage("Object placement #" + i + " failed to spawn " + objectType + " at " + position.x + "," + position.y + ".");
+                    AddBunkerMessage(result, "Object placement #" + i + " failed to spawn " + objectType + " at " + position.x + "," + position.y + ".");
                     continue;
                 }
 
@@ -170,13 +202,13 @@ namespace ShelteredAPI.Scenarios
             int gridY;
             if (!TryResolveGridCoordinates(grid, placement, out gridX, out gridY))
             {
-                result.AddMessage("Room placement #" + index + " could not resolve a shelter cell.");
+                AddBunkerMessage(result, "Room placement #" + index + " could not resolve a shelter cell.");
                 return;
             }
 
             if (!IsValidCell(grid, gridX, gridY))
             {
-                result.AddMessage("Room placement #" + index + " is outside the shelter grid at " + gridX + "," + gridY + ".");
+                AddBunkerMessage(result, "Room placement #" + index + " is outside the shelter grid at " + gridX + "," + gridY + ".");
                 return;
             }
 
@@ -190,7 +222,7 @@ namespace ShelteredAPI.Scenarios
             if (grid.SetCellType(gridX, gridY, cellType))
                 result.BunkerChanges++;
             else
-                result.AddMessage("Room placement #" + index + " failed at " + gridX + "," + gridY + ".");
+                AddBunkerMessage(result, "Room placement #" + index + " failed at " + gridX + "," + gridY + ".");
         }
 
         private static void ApplyLadderPlacement(ShelterRoomGrid grid, ObjectPlacement placement, int index, ScenarioApplyResult result)
@@ -199,13 +231,13 @@ namespace ShelteredAPI.Scenarios
             int gridY;
             if (!TryResolveGridCoordinates(grid, placement, out gridX, out gridY))
             {
-                result.AddMessage("Ladder placement #" + index + " could not resolve a shelter cell.");
+                AddBunkerMessage(result, "Ladder placement #" + index + " could not resolve a shelter cell.");
                 return;
             }
 
             if (!IsValidCell(grid, gridX, gridY))
             {
-                result.AddMessage("Ladder placement #" + index + " is outside the shelter grid at " + gridX + "," + gridY + ".");
+                AddBunkerMessage(result, "Ladder placement #" + index + " is outside the shelter grid at " + gridX + "," + gridY + ".");
                 return;
             }
 
@@ -216,7 +248,7 @@ namespace ShelteredAPI.Scenarios
             if (grid.AddLadder(gridX, gridY, horizontalPos) != null)
                 result.BunkerChanges++;
             else
-                result.AddMessage("Ladder placement #" + index + " failed at " + gridX + "," + gridY + ".");
+                AddBunkerMessage(result, "Ladder placement #" + index + " failed at " + gridX + "," + gridY + ".");
         }
 
         private static void ApplyRoomLightPlacement(ShelterRoomGrid grid, ObjectPlacement placement, int index, ScenarioApplyResult result)
@@ -225,13 +257,13 @@ namespace ShelteredAPI.Scenarios
             int gridY;
             if (!TryResolveGridCoordinates(grid, placement, out gridX, out gridY))
             {
-                result.AddMessage("Room light placement #" + index + " could not resolve a shelter cell.");
+                AddBunkerMessage(result, "Room light placement #" + index + " could not resolve a shelter cell.");
                 return;
             }
 
             if (!IsValidCell(grid, gridX, gridY))
             {
-                result.AddMessage("Room light placement #" + index + " is outside the shelter grid at " + gridX + "," + gridY + ".");
+                AddBunkerMessage(result, "Room light placement #" + index + " is outside the shelter grid at " + gridX + "," + gridY + ".");
                 return;
             }
 
@@ -242,7 +274,15 @@ namespace ShelteredAPI.Scenarios
             if (grid.AddLight(gridX, gridY))
                 result.BunkerChanges++;
             else
-                result.AddMessage("Room light placement #" + index + " failed at " + gridX + "," + gridY + ".");
+                AddBunkerMessage(result, "Room light placement #" + index + " failed at " + gridX + "," + gridY + ".");
+        }
+
+        private static void AddBunkerMessage(ScenarioApplyResult result, string message)
+        {
+            if (result != null)
+                result.AddMessage(message);
+            if (!string.IsNullOrEmpty(message))
+                MMLog.WriteWarning("[BunkerApplyService] " + message);
         }
 
         private static bool TryResolveGridCoordinates(ShelterRoomGrid grid, ObjectPlacement placement, out int gridX, out int gridY)

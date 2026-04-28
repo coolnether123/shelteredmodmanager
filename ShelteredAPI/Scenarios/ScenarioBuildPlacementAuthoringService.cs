@@ -251,7 +251,9 @@ namespace ShelteredAPI.Scenarios
             if (_activePlacement.Ghost == null)
             {
                 _activePlacement = null;
+                _placementGhostSessionService.Clear();
                 message = "The active placement preview was lost and has been reset.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Active placement preview was lost and reset.");
                 return true;
             }
 
@@ -275,6 +277,11 @@ namespace ShelteredAPI.Scenarios
         {
             string payload = objectType + "|" + level;
             return ScenarioAuthoringActionIds.ActionBuildObjectPlacePrefix + EncodeActionToken(payload);
+        }
+
+        public bool CancelForPlaytest(out string message)
+        {
+            return CancelActivePlacement("Placement cancelled before playtest started.", out message);
         }
 
         private static bool TryParseObjectAction(string actionId, out ObjectManager.ObjectType objectType, out int level)
@@ -305,6 +312,10 @@ namespace ShelteredAPI.Scenarios
         private bool StartObjectPlacement(ObjectManager.ObjectType objectType, int level, out string message)
         {
             message = null;
+            ShelterRoomGrid grid;
+            if (!CanStartPlacement(out grid, out message))
+                return false;
+
             ObjectManager manager = ObjectManager.Instance;
             if (manager == null)
             {
@@ -343,11 +354,16 @@ namespace ShelteredAPI.Scenarios
             _activePlacement = session;
             _placementGhostSessionService.Start(session.Label, objectType.ToString(), session.Ghost);
             message = "Placing " + session.Label + ". Left-click to place, right-click or Escape to cancel.";
+            LogPlacementInfo("Placement session started: " + session.Label + " (" + objectType + ").");
             return true;
         }
 
         private bool StartRoomPlacement(out string message)
         {
+            ShelterRoomGrid grid;
+            if (!CanStartPlacement(out grid, out message))
+                return false;
+
             ActivePlacementSession session = CreateGhostSession(ObjectManager.ObjectType.RoomGhost, PlacementSessionKind.Room, "Room Tile", out message);
             if (session == null)
                 return false;
@@ -356,11 +372,16 @@ namespace ShelteredAPI.Scenarios
             _activePlacement = session;
             _placementGhostSessionService.Start(session.Label, session.DefinitionReference, session.Ghost);
             message = "Placing a room tile. Left-click to place, right-click or Escape to cancel.";
+            LogPlacementInfo("Placement session started: Room Tile.");
             return true;
         }
 
         private bool StartLadderPlacement(out string message)
         {
+            ShelterRoomGrid grid;
+            if (!CanStartPlacement(out grid, out message))
+                return false;
+
             ActivePlacementSession session = CreateGhostSession(ObjectManager.ObjectType.LadderGhost, PlacementSessionKind.Ladder, "Ladder", out message);
             if (session == null)
                 return false;
@@ -369,11 +390,16 @@ namespace ShelteredAPI.Scenarios
             _activePlacement = session;
             _placementGhostSessionService.Start(session.Label, session.DefinitionReference, session.Ghost);
             message = "Placing a ladder. Left-click to place, right-click or Escape to cancel.";
+            LogPlacementInfo("Placement session started: Ladder.");
             return true;
         }
 
         private bool StartRoomLightPlacement(out string message)
         {
+            ShelterRoomGrid grid;
+            if (!CanStartPlacement(out grid, out message))
+                return false;
+
             ActivePlacementSession session = CreateGhostSession(ObjectManager.ObjectType.RoomLightGhost, PlacementSessionKind.RoomLight, "Room Light", out message);
             if (session == null)
                 return false;
@@ -382,6 +408,7 @@ namespace ShelteredAPI.Scenarios
             _activePlacement = session;
             _placementGhostSessionService.Start(session.Label, session.DefinitionReference, session.Ghost);
             message = "Placing a room light. Left-click to place, right-click or Escape to cancel.";
+            LogPlacementInfo("Placement session started: Room Light.");
             return true;
         }
 
@@ -401,17 +428,40 @@ namespace ShelteredAPI.Scenarios
                 return null;
             }
 
-            Obj_Base ghostBase = manager.SpawnObject(ghostType, Vector2.zero);
+            Obj_Base ghostBase;
+            try
+            {
+                ghostBase = manager.SpawnObject(ghostType, Vector2.zero);
+            }
+            catch (Exception ex)
+            {
+                message = "The required ghost prefab could not be spawned for placement.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Failed to spawn ghost " + ghostType + ": " + ex.Message);
+                return null;
+            }
+
             Obj_GhostBase ghost = ghostBase as Obj_GhostBase;
             if (ghost == null)
             {
                 if (ghostBase != null)
                     manager.RemoveObject(ghostBase);
                 message = "The required ghost prefab was not available for placement.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Ghost spawn returned no usable Obj_GhostBase for " + ghostType + ".");
                 return null;
             }
 
-            ghost.SetUpGhost(null, null);
+            try
+            {
+                ghost.SetUpGhost(null, null);
+            }
+            catch (Exception ex)
+            {
+                RemoveGhostSafely(ghost);
+                message = "The placement preview could not be initialized.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Failed to initialize ghost " + ghostType + ": " + ex.Message);
+                return null;
+            }
+
             ghost.transform.position = Vector3.zero;
             return new ActivePlacementSession
             {
@@ -432,9 +482,22 @@ namespace ShelteredAPI.Scenarios
             }
 
             Obj_GhostBase ghost = _activePlacement.Ghost;
-            if (!ghost.OnTryPlacement())
+            bool canPlace;
+            try
+            {
+                canPlace = ghost.OnTryPlacement();
+            }
+            catch (Exception ex)
+            {
+                message = "The placement preview failed its placement check: " + ex.Message;
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement blocked by OnTryPlacement exception: " + ex.Message);
+                return true;
+            }
+
+            if (!canPlace)
             {
                 message = "That placement is blocked by the current shelter layout or collisions.";
+                LogPlacementInfo("Placement blocked by OnTryPlacement for " + SafeActivePlacementLabel() + ".");
                 return true;
             }
 
@@ -469,25 +532,50 @@ namespace ShelteredAPI.Scenarios
             if (!_objectPlacementService.CanRecordPlacement(out message))
                 return CancelActivePlacement(message, out message);
 
+            ObjectManager manager = ObjectManager.Instance;
+            if (manager == null)
+                return CancelActivePlacement("ObjectManager is not ready; object placement was cancelled before committing.", out message);
+
             Vector3 position = ghost.transform.position;
-            ghost.OnPlacementFinished();
-            ObjectManager.Instance.RemoveObject(ghost);
-            Obj_Base spawned = ObjectManager.Instance.SpawnObject(_activePlacement.ObjectType, _activePlacement.Level, new Vector2(position.x, position.y));
+            ObjectManager.ObjectType objectType = _activePlacement.ObjectType;
+            int level = _activePlacement.Level;
+            string label = _activePlacement.Label;
+            Obj_Base spawned;
+            try
+            {
+                ghost.OnPlacementFinished();
+                RemoveGhostSafely(ghost);
+                spawned = manager.SpawnObject(objectType, level, new Vector2(position.x, position.y));
+            }
+            catch (Exception ex)
+            {
+                _activePlacement = null;
+                _placementGhostSessionService.Clear();
+                RemoveGhostSafely(ghost);
+                message = "Object placement failed while committing the final object: " + ex.Message;
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement commit failed for " + label + ": " + ex.Message);
+                return true;
+            }
+
             _activePlacement = null;
             _placementGhostSessionService.Clear();
             if (spawned == null)
             {
                 message = "The final object could not be spawned after placement.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement commit failed; final object spawn returned null for " + label + ".");
                 return true;
             }
 
+            LogPlacementInfo("Placement committed to world: " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ".");
             if (!_objectPlacementService.UpsertPlacement(_objectPlacementService.CapturePlacement(spawned)))
             {
                 message = "Placed " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ", but the scenario draft became unavailable before the placement could be recorded.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement could not record to draft: " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ".");
                 return true;
             }
 
             message = "Placed " + ScenarioBunkerDraftService.SafeObjectName(spawned) + " and recorded it in the scenario draft.";
+            LogPlacementInfo("Placement recorded to draft: " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ".");
             return true;
         }
 
@@ -500,27 +588,45 @@ namespace ShelteredAPI.Scenarios
                 return CancelActivePlacement(null);
             }
 
-            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            ShelterRoomGrid grid;
             int gridX;
             int gridY;
-            if (grid == null || !grid.WorldCoordsToCellCoords(ghost.transform.position, out gridX, out gridY))
+            if (!TryGetReadyShelterGrid(out grid, out message) || !grid.WorldCoordsToCellCoords(ghost.transform.position, out gridX, out gridY))
             {
-                return CancelActivePlacement("Room placement could not resolve a shelter cell.", out message);
+                return CancelActivePlacement(message ?? "Room placement could not resolve a shelter cell.", out message);
             }
 
             if (!_objectPlacementService.CanRecordPlacement(out message))
                 return CancelActivePlacement(message, out message);
 
-            ghost.OnPlacementFinished();
-            bool applied = CraftingManager.FinishCraft_Room(null, null, ghost);
+            string label = _activePlacement.Label;
+            bool applied;
+            try
+            {
+                ghost.OnPlacementFinished();
+                applied = CraftingManager.FinishCraft_Room(null, null, ghost);
+            }
+            catch (Exception ex)
+            {
+                _activePlacement = null;
+                _placementGhostSessionService.Clear();
+                RemoveGhostSafely(ghost);
+                message = "The room placement failed while committing: " + ex.Message;
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement commit failed for " + label + ": " + ex.Message);
+                return true;
+            }
+
             _activePlacement = null;
             _placementGhostSessionService.Clear();
             if (!applied)
             {
+                RemoveGhostSafely(ghost);
                 message = "The room could not be committed after the preview confirmed placement.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement commit failed: " + message);
                 return true;
             }
 
+            LogPlacementInfo("Placement committed to world: " + label + " at " + gridX + "," + gridY + ".");
             ShelterRoomGrid.GridCell cell = grid.GetCell(gridX, gridY);
             string definitionReference = cell != null && cell.type == ShelterRoomGrid.CellType.RoomTop
                 ? ScenarioPlacementDefinitions.RoomTop
@@ -533,10 +639,12 @@ namespace ShelteredAPI.Scenarios
                     definitionReference)))
             {
                 message = "Placed a room tile at " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement could not record to draft: Room Tile at " + gridX + "," + gridY + ".");
                 return true;
             }
 
             message = "Placed a room tile at " + gridX + "," + gridY + " and stored it in the draft.";
+            LogPlacementInfo("Placement recorded to draft: " + definitionReference + " at " + gridX + "," + gridY + ".");
             return true;
         }
 
@@ -549,12 +657,12 @@ namespace ShelteredAPI.Scenarios
                 return CancelActivePlacement(null);
             }
 
-            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            ShelterRoomGrid grid;
             int gridX;
             int gridY;
-            if (grid == null || !grid.WorldCoordsToCellCoords(ghost.transform.position, out gridX, out gridY))
+            if (!TryGetReadyShelterGrid(out grid, out message) || !grid.WorldCoordsToCellCoords(ghost.transform.position, out gridX, out gridY))
             {
-                return CancelActivePlacement("Ladder placement could not resolve a shelter cell.", out message);
+                return CancelActivePlacement(message ?? "Ladder placement could not resolve a shelter cell.", out message);
             }
 
             float horizontalPos = ComputeHorizontalPosition(grid, ghost.transform.position, gridX);
@@ -562,16 +670,34 @@ namespace ShelteredAPI.Scenarios
             if (!_objectPlacementService.CanRecordPlacement(out message))
                 return CancelActivePlacement(message, out message);
 
-            ghost.OnPlacementFinished();
-            bool applied = CraftingManager.FinishCraft_Ladder(null, null, ghost);
+            string label = _activePlacement.Label;
+            bool applied;
+            try
+            {
+                ghost.OnPlacementFinished();
+                applied = CraftingManager.FinishCraft_Ladder(null, null, ghost);
+            }
+            catch (Exception ex)
+            {
+                _activePlacement = null;
+                _placementGhostSessionService.Clear();
+                RemoveGhostSafely(ghost);
+                message = "The ladder placement failed while committing: " + ex.Message;
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement commit failed for " + label + ": " + ex.Message);
+                return true;
+            }
+
             _activePlacement = null;
             _placementGhostSessionService.Clear();
             if (!applied)
             {
+                RemoveGhostSafely(ghost);
                 message = "The ladder could not be committed after the preview confirmed placement.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement commit failed: " + message);
                 return true;
             }
 
+            LogPlacementInfo("Placement committed to world: " + label + " at " + gridX + "," + gridY + ".");
             if (!_objectPlacementService.UpsertPlacement(_structurePlacementService.CreateLadderPlacement(
                     gridX,
                     gridY,
@@ -580,10 +706,12 @@ namespace ShelteredAPI.Scenarios
                     horizontalPos)))
             {
                 message = "Placed a ladder for room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement could not record to draft: Ladder at " + gridX + "," + gridY + ".");
                 return true;
             }
 
             message = "Placed a ladder for room " + gridX + "," + gridY + " and stored it in the draft.";
+            LogPlacementInfo("Placement recorded to draft: Ladder at " + gridX + "," + gridY + ".");
             return true;
         }
 
@@ -596,27 +724,45 @@ namespace ShelteredAPI.Scenarios
                 return CancelActivePlacement(null);
             }
 
-            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            ShelterRoomGrid grid;
             int gridX;
             int gridY;
-            if (grid == null || !grid.WorldCoordsToCellCoords(ghost.transform.position, out gridX, out gridY))
+            if (!TryGetReadyShelterGrid(out grid, out message) || !grid.WorldCoordsToCellCoords(ghost.transform.position, out gridX, out gridY))
             {
-                return CancelActivePlacement("Room light placement could not resolve a shelter cell.", out message);
+                return CancelActivePlacement(message ?? "Room light placement could not resolve a shelter cell.", out message);
             }
 
             if (!_objectPlacementService.CanRecordPlacement(out message))
                 return CancelActivePlacement(message, out message);
 
-            ghost.OnPlacementFinished();
-            bool applied = CraftingManager.FinishCraft_Light(null, null, ghost);
+            string label = _activePlacement.Label;
+            bool applied;
+            try
+            {
+                ghost.OnPlacementFinished();
+                applied = CraftingManager.FinishCraft_Light(null, null, ghost);
+            }
+            catch (Exception ex)
+            {
+                _activePlacement = null;
+                _placementGhostSessionService.Clear();
+                RemoveGhostSafely(ghost);
+                message = "The room light placement failed while committing: " + ex.Message;
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement commit failed for " + label + ": " + ex.Message);
+                return true;
+            }
+
             _activePlacement = null;
             _placementGhostSessionService.Clear();
             if (!applied)
             {
+                RemoveGhostSafely(ghost);
                 message = "The room light could not be committed after the preview confirmed placement.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement commit failed: " + message);
                 return true;
             }
 
+            LogPlacementInfo("Placement committed to world: " + label + " at " + gridX + "," + gridY + ".");
             if (!_objectPlacementService.UpsertPlacement(_structurePlacementService.CreateRoomLightPlacement(
                     gridX,
                     gridY,
@@ -624,10 +770,12 @@ namespace ShelteredAPI.Scenarios
                     BuildLightIdentity(gridX, gridY))))
             {
                 message = "Placed a room light at " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement could not record to draft: Room Light at " + gridX + "," + gridY + ".");
                 return true;
             }
 
             message = "Placed a room light at " + gridX + "," + gridY + " and stored it in the draft.";
+            LogPlacementInfo("Placement recorded to draft: Room Light at " + gridX + "," + gridY + ".");
             return true;
         }
 
@@ -662,10 +810,12 @@ namespace ShelteredAPI.Scenarios
             if (!_wallWiringEditService.ApplyWall(gridX, gridY, wallIndex))
             {
                 message = "Applied wall sprite " + wallIndex + " to room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Wall edit could not record to draft at " + gridX + "," + gridY + ".");
                 return true;
             }
 
             message = "Applied wall sprite " + wallIndex + " to room " + gridX + "," + gridY + ".";
+            LogPlacementInfo("Wall edit recorded to draft at " + gridX + "," + gridY + " sprite=" + wallIndex + ".");
             return true;
         }
 
@@ -701,10 +851,12 @@ namespace ShelteredAPI.Scenarios
             if (!_wallWiringEditService.ApplyWire(gridX, gridY, wireIndex))
             {
                 message = "Applied wiring sprite " + wireIndex + " to room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Wiring edit could not record to draft at " + gridX + "," + gridY + ".");
                 return true;
             }
 
             message = "Applied wiring sprite " + wireIndex + " to room " + gridX + "," + gridY + ".";
+            LogPlacementInfo("Wiring edit recorded to draft at " + gridX + "," + gridY + " sprite=" + wireIndex + ".");
             return true;
         }
 
@@ -803,11 +955,106 @@ namespace ShelteredAPI.Scenarios
                 return !string.IsNullOrEmpty(message);
 
             Obj_GhostBase ghost = _activePlacement.Ghost;
+            string label = _activePlacement.Label;
             _activePlacement = null;
             _placementGhostSessionService.Clear();
-            if (ghost != null)
-                ObjectManager.Instance.RemoveObject(ghost);
+            RemoveGhostSafely(ghost);
+            if (!string.IsNullOrEmpty(message))
+                LogPlacementInfo("Placement cancelled: " + (label ?? "unknown") + ". " + message);
             return true;
+        }
+
+        private bool CanStartPlacement(out ShelterRoomGrid grid, out string message)
+        {
+            grid = null;
+            if (ScenarioAuthoringRuntimeGuards.IsPlaytesting())
+            {
+                message = "End playtest before starting a new placement.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement blocked while playtest is running.");
+                return false;
+            }
+
+            if (!_objectPlacementService.CanRecordPlacement(out message))
+            {
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement blocked: " + (message ?? "draft unavailable"));
+                return false;
+            }
+
+            if (!TryGetReadyShelterGrid(out grid, out message))
+            {
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement blocked: " + (message ?? "shelter grid unavailable"));
+                return false;
+            }
+
+            if (ObjectManager.Instance == null)
+            {
+                message = "ObjectManager is not ready; placement is unavailable.";
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Placement blocked: " + message);
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryGetReadyShelterGrid(out ShelterRoomGrid grid, out string message)
+        {
+            grid = ShelterRoomGrid.Instance;
+            if (grid == null)
+            {
+                message = "ShelterRoomGrid is not ready; placement is unavailable.";
+                return false;
+            }
+
+            if (!grid.isInitialized)
+            {
+                message = "ShelterRoomGrid is not initialized yet; placement is unavailable.";
+                return false;
+            }
+
+            message = null;
+            return true;
+        }
+
+        private void RemoveGhostSafely(Obj_GhostBase ghost)
+        {
+            if (ghost == null)
+                return;
+
+            ObjectManager manager = ObjectManager.Instance;
+            if (manager != null)
+            {
+                try
+                {
+                    manager.RemoveObject(ghost);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteWarning("[ScenarioBuildPlacement] ObjectManager failed to remove placement ghost: " + ex.Message);
+                }
+            }
+
+            try
+            {
+                UnityEngine.Object.Destroy(ghost.gameObject);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioBuildPlacement] Failed to clean up placement ghost: " + ex.Message);
+            }
+        }
+
+        private string SafeActivePlacementLabel()
+        {
+            return _activePlacement != null && !string.IsNullOrEmpty(_activePlacement.Label)
+                ? _activePlacement.Label
+                : "unknown placement";
+        }
+
+        private static void LogPlacementInfo(string message)
+        {
+            if (!string.IsNullOrEmpty(message))
+                MMLog.WriteInfo("[ScenarioBuildPlacement] " + message);
         }
 
         private List<PaletteSectionModel> BuildObjectSections()

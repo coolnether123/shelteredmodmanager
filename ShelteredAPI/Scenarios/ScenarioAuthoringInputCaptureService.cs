@@ -104,6 +104,18 @@ namespace ShelteredAPI.Scenarios
             return ShouldSuppressWorldInput();
         }
 
+        public void Clear()
+        {
+            _interactiveRects.Clear();
+            PointerOverAuthoringUi = false;
+            PointerOverAuthoringUiLastFrame = false;
+            PopupOpen = false;
+            PopupOpenLastFrame = false;
+            DraggingShellChrome = false;
+            KeyboardCaptured = false;
+            _scrollFocusService.BeginFrame();
+        }
+
         private static Rect Expand(Rect rect, float padding)
         {
             return new Rect(

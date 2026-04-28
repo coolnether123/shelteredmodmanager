@@ -249,9 +249,21 @@ namespace ShelteredAPI.Scenarios
                 _activeSession = null;
             }
 
-            _editorService.CloseEditor(resumeGame);
-            _backend.ClearActiveSession(reason);
-            ClearLaunchRedirects(previous, reason);
+            try
+            {
+                _editorService.CloseEditor(resumeGame);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Editor close failed for authoring session '"
+                    + previous.DraftId + "': " + ex.Message);
+            }
+            finally
+            {
+                _backend.ClearActiveSession(reason);
+                ClearLaunchRedirects(previous, reason);
+            }
+
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Closed active authoring session '" + previous.DraftId
                 + "'. Reason=" + (reason ?? "unspecified") + ", resumeGame=" + resumeGame
                 + ", scene=" + SceneManager.GetActiveScene().name + ".");

@@ -1,4 +1,5 @@
 using System;
+using ModAPI.Core;
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
@@ -63,18 +64,32 @@ namespace ShelteredAPI.Scenarios
             bunkerEdits = null;
             string ignored;
             if (!CanMutateActiveDraft(out ignored))
+            {
+                LogMutationFailure(ignored);
                 return false;
+            }
 
             ScenarioEditorSession session = _sessionStore.Current;
-            bunkerEdits = ScenarioBunkerDraftService.EnsureBunkerEdits(session);
-            return true;
+            try
+            {
+                bunkerEdits = ScenarioBunkerDraftService.EnsureBunkerEdits(session);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogMutationFailure("Could not prepare bunker edits: " + ex.Message);
+                return false;
+            }
         }
 
         public void MarkDirty(ScenarioDirtySection section, ScenarioEditCategory category)
         {
             ScenarioEditorSession session = _sessionStore.Current;
             if (session == null)
+            {
+                LogMutationFailure("No active scenario draft is available while marking " + section + " dirty.");
                 return;
+            }
 
             if (!session.DirtyFlags.Contains(section))
                 session.DirtyFlags.Add(section);
@@ -90,13 +105,30 @@ namespace ShelteredAPI.Scenarios
 
         public bool TryUpsertPlacement(ObjectPlacement placement)
         {
+            if (placement == null)
+            {
+                LogMutationFailure("Object placement mutation was ignored because the placement was null.");
+                return false;
+            }
+
             string ignored;
             if (!CanMutateActiveDraft(out ignored))
+            {
+                LogMutationFailure(ignored);
                 return false;
+            }
 
             ScenarioEditorSession session = _sessionStore.Current;
-            ScenarioBunkerDraftService.UpsertPlacement(session, placement);
-            return true;
+            try
+            {
+                ScenarioBunkerDraftService.UpsertPlacement(session, placement);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogMutationFailure("Object placement mutation failed: " + ex.Message);
+                return false;
+            }
         }
 
         public void UpsertRoomEdit(int gridX, int gridY, Action<RoomEdit> applyUpdate)
@@ -106,13 +138,30 @@ namespace ShelteredAPI.Scenarios
 
         public bool TryUpsertRoomEdit(int gridX, int gridY, Action<RoomEdit> applyUpdate)
         {
+            if (applyUpdate == null)
+            {
+                LogMutationFailure("Room edit mutation was ignored because the update action was null.");
+                return false;
+            }
+
             string ignored;
             if (!CanMutateActiveDraft(out ignored))
+            {
+                LogMutationFailure(ignored);
                 return false;
+            }
 
             ScenarioEditorSession session = _sessionStore.Current;
-            ScenarioBunkerDraftService.UpsertRoomEdit(session, gridX, gridY, applyUpdate);
-            return true;
+            try
+            {
+                ScenarioBunkerDraftService.UpsertRoomEdit(session, gridX, gridY, applyUpdate);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogMutationFailure("Room edit mutation failed at " + gridX + "," + gridY + ": " + ex.Message);
+                return false;
+            }
         }
 
         private ScenarioEditorSession RequireSession()
@@ -121,6 +170,12 @@ namespace ShelteredAPI.Scenarios
             if (session == null)
                 throw new InvalidOperationException("No scenario editor session is active.");
             return session;
+        }
+
+        private static void LogMutationFailure(string message)
+        {
+            if (!string.IsNullOrEmpty(message))
+                MMLog.WriteWarning("[ScenarioDraftMutation] " + message);
         }
     }
 }

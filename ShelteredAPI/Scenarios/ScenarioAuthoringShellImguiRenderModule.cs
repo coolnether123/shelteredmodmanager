@@ -77,6 +77,9 @@ namespace ShelteredAPI.Scenarios
 
             if (_runtime != null)
                 _runtime.enabled = _visible;
+
+            if (!_visible)
+                ClearInputCapture();
         }
 
         public void Hide()
@@ -86,6 +89,7 @@ namespace ShelteredAPI.Scenarios
             _windowMenuOpen = false;
             if (_runtime != null)
                 _runtime.enabled = false;
+            ClearInputCapture();
         }
 
         private void EnsureRuntime()
@@ -104,6 +108,19 @@ namespace ShelteredAPI.Scenarios
             if (_runtime == null)
                 _runtime = runtimeObject.AddComponent<ScenarioAuthoringShellRuntime>();
             _runtime.Initialize(this);
+        }
+
+        private static void ClearInputCapture()
+        {
+            try
+            {
+                ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+                if (inputCapture != null)
+                    inputCapture.Clear();
+            }
+            catch
+            {
+            }
         }
 
         private void Draw()

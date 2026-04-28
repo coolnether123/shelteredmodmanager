@@ -585,10 +585,14 @@ namespace ShelteredAPI.Scenarios
     internal sealed class EditorLifecycleCommandHandler : IScenarioCommandHandler
     {
         private readonly IScenarioEditorService _editorService;
+        private readonly ScenarioBuildPlacementAuthoringService _buildPlacementService;
 
-        public EditorLifecycleCommandHandler(IScenarioEditorService editorService)
+        public EditorLifecycleCommandHandler(
+            IScenarioEditorService editorService,
+            ScenarioBuildPlacementAuthoringService buildPlacementService)
         {
             _editorService = editorService;
+            _buildPlacementService = buildPlacementService;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -648,8 +652,15 @@ namespace ShelteredAPI.Scenarios
                     return true;
                 }
 
+                string placementMessage = null;
+                if (_buildPlacementService != null && _buildPlacementService.HasActivePlacement)
+                    _buildPlacementService.CancelForPlaytest(out placementMessage);
+
                 ScenarioApplyResult result = _editorService.BeginPlaytest();
-                message = BuildPlaytestStatus(result);
+                string playtestMessage = BuildPlaytestStatus(result);
+                message = !string.IsNullOrEmpty(placementMessage)
+                    ? placementMessage + " " + playtestMessage
+                    : playtestMessage;
                 return true;
             }
             catch (Exception ex)

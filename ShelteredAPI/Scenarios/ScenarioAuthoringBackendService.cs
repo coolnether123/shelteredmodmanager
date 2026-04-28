@@ -124,6 +124,15 @@ namespace ShelteredAPI.Scenarios
             RefreshAuthoringArtifacts();
             _historyService.Reset();
             ScenarioSpriteSwapClipboard.Clear();
+            try
+            {
+                ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+                if (inputCapture != null)
+                    inputCapture.Clear();
+            }
+            catch
+            {
+            }
             MMLog.WriteInfo("[ScenarioAuthoringBackend] Active session cleared. Reason=" + (reason ?? "unspecified") + ".");
             RaiseStateChanged();
         }

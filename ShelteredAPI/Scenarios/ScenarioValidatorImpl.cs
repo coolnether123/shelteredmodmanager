@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using ModAPI.Scenarios;
 using ShelteredAPI.Content;
@@ -22,7 +24,10 @@ namespace ShelteredAPI.Scenarios
         public ScenarioValidationResult Validate(ScenarioDefinition definition, string scenarioFilePath)
         {
             ScenarioValidationResult result = _neutralValidator.Validate(definition, scenarioFilePath);
+            if (result == null)
+                result = new ScenarioValidationResult();
             ValidateLoadableAssets(definition, scenarioFilePath, result);
+            ValidateBunkerAuthoringPlacements(definition, result);
             return result;
         }
 
@@ -87,6 +92,100 @@ namespace ShelteredAPI.Scenarios
             {
                 result.AddError("Scenario " + kind + " could not be loaded through AssetLoader: " + relativePath + " (" + ex.Message + ")");
             }
+        }
+
+        private static void ValidateBunkerAuthoringPlacements(ScenarioDefinition definition, ScenarioValidationResult result)
+        {
+            if (definition == null || definition.BunkerEdits == null || definition.BunkerEdits.ObjectPlacements == null || result == null)
+                return;
+
+            for (int i = 0; i < definition.BunkerEdits.ObjectPlacements.Count; i++)
+            {
+                ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
+                if (placement == null)
+                    continue;
+
+                ScenarioPlacementDefinitionKind kind;
+                if (ScenarioPlacementDefinitions.TryParseSpecialKind(placement.DefinitionReference, out kind))
+                {
+                    ValidateSpecialPlacement(placement, i, kind, result);
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(placement.PrefabReference))
+                {
+                    result.AddWarning("Object placement #" + i.ToString(CultureInfo.InvariantCulture)
+                        + " uses PrefabReference and will be skipped by the safe pre-alpha bunker apply path.");
+                }
+
+                if (string.IsNullOrEmpty(placement.DefinitionReference))
+                    continue;
+
+                ObjectManager.ObjectType objectType;
+                if (!TryParseObjectType(placement.DefinitionReference, out objectType))
+                {
+                    result.AddError("Object placement #" + i.ToString(CultureInfo.InvariantCulture)
+                        + " has unknown DefinitionReference '" + placement.DefinitionReference + "'.");
+                }
+            }
+        }
+
+        private static void ValidateSpecialPlacement(
+            ObjectPlacement placement,
+            int index,
+            ScenarioPlacementDefinitionKind kind,
+            ScenarioValidationResult result)
+        {
+            bool hasGridX = HasProperty(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyGridX);
+            bool hasGridY = HasProperty(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyGridY);
+            if (hasGridX != hasGridY)
+            {
+                result.AddError("Special bunker placement #" + index.ToString(CultureInfo.InvariantCulture)
+                    + " must include both gridX and gridY when either coordinate is present.");
+            }
+
+            if (kind == ScenarioPlacementDefinitionKind.Ladder
+                && !HasProperty(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyHorizontalPos))
+            {
+                result.AddWarning("Ladder placement #" + index.ToString(CultureInfo.InvariantCulture)
+                    + " is missing horizontalPos; replay will fall back to the stored world position.");
+            }
+        }
+
+        private static bool TryParseObjectType(string value, out ObjectManager.ObjectType objectType)
+        {
+            objectType = ObjectManager.ObjectType.Undefined;
+            if (string.IsNullOrEmpty(value))
+                return false;
+
+            try
+            {
+                objectType = (ObjectManager.ObjectType)Enum.Parse(typeof(ObjectManager.ObjectType), value, true);
+                return objectType != ObjectManager.ObjectType.Undefined && objectType != ObjectManager.ObjectType.Max;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool HasProperty(List<ScenarioProperty> properties, string key)
+        {
+            if (properties == null || string.IsNullOrEmpty(key))
+                return false;
+
+            for (int i = 0; i < properties.Count; i++)
+            {
+                ScenarioProperty property = properties[i];
+                if (property != null
+                    && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrEmpty(property.Value))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

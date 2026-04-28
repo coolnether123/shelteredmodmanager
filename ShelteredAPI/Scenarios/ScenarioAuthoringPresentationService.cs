@@ -111,6 +111,16 @@ namespace ShelteredAPI.Scenarios
                 _activeModule.Hide();
                 _activeModule = null;
             }
+
+            try
+            {
+                ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+                if (inputCapture != null)
+                    inputCapture.Clear();
+            }
+            catch
+            {
+            }
         }
 
         private static int CompareModules(IScenarioAuthoringRenderModule left, IScenarioAuthoringRenderModule right)

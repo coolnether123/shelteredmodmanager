@@ -137,7 +137,13 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            BunkerEditsDefinition bunkerEdits = _draftMutationService.EnsureBunkerEdits();
+            BunkerEditsDefinition bunkerEdits;
+            if (!_draftMutationService.TryEnsureBunkerEdits(out bunkerEdits))
+            {
+                message = "No active scenario draft is available for shelter object capture.";
+                return false;
+            }
+
             List<ObjectPlacement> preserved = new List<ObjectPlacement>();
             for (int i = 0; i < bunkerEdits.ObjectPlacements.Count; i++)
             {
@@ -176,6 +182,12 @@ namespace ShelteredAPI.Scenarios
         public bool CaptureSelectedObject(ScenarioEditorSession session, ScenarioAuthoringTarget target, out string message)
         {
             message = null;
+            if (session == null || session.WorkingDefinition == null)
+            {
+                message = "No active authoring session is available.";
+                return false;
+            }
+
             Obj_Base obj;
             string blockingReason;
             if (!TryResolveCapturableObject(target, out obj, out blockingReason))
@@ -184,7 +196,13 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            BunkerEditsDefinition bunkerEdits = _draftMutationService.EnsureBunkerEdits();
+            BunkerEditsDefinition bunkerEdits;
+            if (!_draftMutationService.TryEnsureBunkerEdits(out bunkerEdits))
+            {
+                message = "No active scenario draft is available for selected-object capture.";
+                return false;
+            }
+
             ObjectPlacement placement = ScenarioBunkerDraftService.CreatePlacement(obj);
             int existingIndex = ScenarioBunkerDraftService.FindPlacementIndex(bunkerEdits.ObjectPlacements, obj);
             if (existingIndex >= 0)

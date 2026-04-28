@@ -25,6 +25,14 @@ namespace ShelteredAPI.Scenarios
             if (session == null)
                 throw new InvalidOperationException("No scenario editor session is active.");
 
+            if (session.WorkingDefinition == null)
+            {
+                ScenarioApplyResult missingDefinition = new ScenarioApplyResult();
+                missingDefinition.AddMessage("Playtest could not start because the active draft has no working definition.");
+                MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest blocked: active draft has no working definition.");
+                return missingDefinition;
+            }
+
             if (session.PlaytestState == ScenarioPlaytestState.Playtesting)
             {
                 ScenarioApplyResult alreadyRunning = new ScenarioApplyResult();
@@ -37,6 +45,7 @@ namespace ShelteredAPI.Scenarios
             {
                 ScenarioApplyResult notReady = new ScenarioApplyResult();
                 notReady.AddMessage("World is not ready for scenario apply; playtest did not start. " + blockingReason);
+                MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest blocked: " + blockingReason);
                 return notReady;
             }
 
@@ -44,7 +53,27 @@ namespace ShelteredAPI.Scenarios
             ScenarioApplyResult result;
             if (!reusedLiveWorld)
             {
-                result = _applier.ApplyAll(session.WorkingDefinition, scenarioFilePath);
+                try
+                {
+                    result = _applier.ApplyAll(session.WorkingDefinition, scenarioFilePath);
+                }
+                catch (Exception ex)
+                {
+                    result = new ScenarioApplyResult();
+                    result.AddMessage("Playtest apply failed: " + ex.Message);
+                    MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest apply failed: " + ex);
+                    return result;
+                }
+
+                if (result == null)
+                {
+                    result = new ScenarioApplyResult();
+                    result.AddMessage("Playtest apply returned no result.");
+                    MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest apply returned null for scenario '"
+                        + session.WorkingDefinition.Id + "'.");
+                    return result;
+                }
+
                 session.HasAppliedToCurrentWorld = true;
             }
             else

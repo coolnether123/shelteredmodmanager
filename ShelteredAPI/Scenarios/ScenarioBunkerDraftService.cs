@@ -232,7 +232,8 @@ namespace ShelteredAPI.Scenarios
                 return false;
 
             return kind == ScenarioPlacementDefinitionKind.Room
-                || kind == ScenarioPlacementDefinitionKind.Ladder;
+                || kind == ScenarioPlacementDefinitionKind.Ladder
+                || kind == ScenarioPlacementDefinitionKind.RoomLight;
         }
 
         public static string GetProperty(List<ScenarioProperty> properties, string key)

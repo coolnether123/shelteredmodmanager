@@ -1,3 +1,5 @@
+using System;
+using ModAPI.Core;
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
@@ -40,25 +42,43 @@ namespace ShelteredAPI.Scenarios
             }
 
             if (_familyApplyService != null)
-                _familyApplyService.Apply(definition, scenarioFilePath, result);
+                ApplyStep("family", result, delegate { _familyApplyService.Apply(definition, scenarioFilePath, result); });
             if (_inventoryApplyService != null)
-                _inventoryApplyService.Apply(definition, result);
+                ApplyStep("inventory", result, delegate { _inventoryApplyService.Apply(definition, result); });
             if (_bunkerApplyService != null)
-                _bunkerApplyService.Apply(definition, result);
+                ApplyStep("bunker", result, delegate { _bunkerApplyService.Apply(definition, result); });
             if (_triggerRuntimeAdapter != null)
-                _triggerRuntimeAdapter.Apply(definition, result);
+                ApplyStep("scheduled runtime", result, delegate { _triggerRuntimeAdapter.Apply(definition, result); });
             if (_objectStartStateApplyService != null)
-                _objectStartStateApplyService.Apply(definition, result);
+                ApplyStep("object start state", result, delegate { _objectStartStateApplyService.Apply(definition, result); });
             if (_assetApplyService != null)
-                _assetApplyService.Apply(definition, scenarioFilePath, result);
+                ApplyStep("assets", result, delegate { _assetApplyService.Apply(definition, scenarioFilePath, result); });
             if (_sceneSpriteStartStateApplyService != null)
-                _sceneSpriteStartStateApplyService.Apply(definition, result);
+                ApplyStep("scene sprite start state", result, delegate { _sceneSpriteStartStateApplyService.Apply(definition, result); });
             return result;
         }
 
         public ScenarioApplyResult ApplyAll(ScenarioDefinition definition)
         {
             return ApplyAll(definition, null);
+        }
+
+        private static void ApplyStep(string label, ScenarioApplyResult result, Action apply)
+        {
+            if (apply == null)
+                return;
+
+            try
+            {
+                apply();
+            }
+            catch (Exception ex)
+            {
+                string message = "Scenario " + (label ?? "runtime") + " apply failed: " + ex.Message;
+                if (result != null)
+                    result.AddMessage(message);
+                MMLog.WriteWarning("[ScenarioApplyCoordinator] " + message);
+            }
         }
     }
 }

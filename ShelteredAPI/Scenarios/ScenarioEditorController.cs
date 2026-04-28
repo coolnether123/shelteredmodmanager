@@ -83,12 +83,24 @@ namespace ShelteredAPI.Scenarios
             {
                 ScenarioValidationResult missingPath = new ScenarioValidationResult();
                 missingPath.AddError("Scenario save path is required.");
+                MMLog.WriteWarning("[ScenarioEditorController] Save blocked because the active scenario session has no file path.");
                 return missingPath;
             }
 
             ScenarioValidationResult validation = _validator.Validate(session.WorkingDefinition, path);
-            if (!validation.IsValid)
+            if (validation == null)
+            {
+                validation = new ScenarioValidationResult();
+                validation.AddError("Scenario validation did not return a result.");
+                MMLog.WriteWarning("[ScenarioEditorController] Save blocked because validation returned no result.");
                 return validation;
+            }
+
+            if (!validation.IsValid)
+            {
+                MMLog.WriteWarning("[ScenarioEditorController] Save blocked by scenario validation for " + path + ".");
+                return validation;
+            }
 
             _serializer.Save(session.WorkingDefinition, path);
             session.OriginalDefinition = ScenarioDefinitionCloner.Clone(session.WorkingDefinition);
@@ -101,6 +113,35 @@ namespace ShelteredAPI.Scenarios
         public ScenarioApplyResult BeginPlaytest()
         {
             ScenarioEditorSession session = RequireSession();
+            ScenarioValidationResult validation;
+            try
+            {
+                validation = _validator.Validate(session.WorkingDefinition, _sessionStore.CurrentFilePath);
+            }
+            catch (Exception ex)
+            {
+                ScenarioApplyResult failedValidation = new ScenarioApplyResult();
+                failedValidation.AddMessage("Playtest validation failed: " + ex.Message);
+                MMLog.WriteWarning("[ScenarioEditorController] Playtest validation failed: " + ex.Message);
+                return failedValidation;
+            }
+
+            if (validation != null && !validation.IsValid)
+            {
+                ScenarioApplyResult blocked = new ScenarioApplyResult();
+                ScenarioValidationIssue[] issues = validation.Issues;
+                for (int i = 0; issues != null && i < issues.Length && i < 3; i++)
+                {
+                    if (issues[i] != null && issues[i].Severity == ScenarioIssueSeverity.Error)
+                        blocked.AddMessage("Playtest blocked: " + issues[i].Message);
+                }
+
+                if (blocked.Messages.Length == 0)
+                    blocked.AddMessage("Playtest blocked by scenario validation.");
+                MMLog.WriteWarning("[ScenarioEditorController] Playtest blocked by validation.");
+                return blocked;
+            }
+
             return _playtestOrchestrator.BeginPlaytest(session, _sessionStore.CurrentFilePath);
         }
 
@@ -145,10 +186,24 @@ namespace ShelteredAPI.Scenarios
         public void CloseEditor(bool resumeGame)
         {
             ScenarioEditorSession previous = _sessionStore.Current;
+            if (previous != null && previous.PlaytestState == ScenarioPlaytestState.Playtesting)
+            {
+                try
+                {
+                    _playtestOrchestrator.EndPlaytest(previous);
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteWarning("[ScenarioEditorController] Failed to end active playtest during close: " + ex.Message);
+                }
+            }
+
             _sessionStore.Clear();
 
-            _spriteSwapEngine.Clear("Scenario editor closed.");
-            _sceneSpritePlacementEngine.Clear("Scenario editor closed.");
+            try { _spriteSwapEngine.Clear("Scenario editor closed."); }
+            catch (Exception ex) { MMLog.WriteWarning("[ScenarioEditorController] Sprite swap cleanup failed during close: " + ex.Message); }
+            try { _sceneSpritePlacementEngine.Clear("Scenario editor closed."); }
+            catch (Exception ex) { MMLog.WriteWarning("[ScenarioEditorController] Scene sprite cleanup failed during close: " + ex.Message); }
             ResumeFromEditor();
             MMLog.WriteInfo("[ScenarioEditorController] Editor session closed. resumeGame=" + resumeGame
                 + ", hadPreviousSession=" + (previous != null) + ".");

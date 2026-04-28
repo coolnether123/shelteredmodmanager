@@ -59,7 +59,7 @@ namespace ShelteredAPI.Scenarios
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
-                new EditorLifecycleCommandHandler(editorService),
+                new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement),
                 new SelectionCommandHandler(),
                 new AssetModeCommandHandler(),
                 new ToolCommandHandler(layoutService)
