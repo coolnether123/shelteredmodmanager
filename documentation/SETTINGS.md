@@ -7,7 +7,7 @@
 | `ModManagerBase<T>` auto-settings | `ModAPI.dll` current | Recommended |
 | `ISettingsProvider` + `SpineSettingsHelper.Scan` | `ModAPI.dll` current | Supported |
 | `ISaveSystem.RegisterModData` | `ModAPI.dll` current | Recommended |
-| `ctx.SaveData/ctx.LoadData` extensions | `ModAPI.Util` current | Supported |
+| `ctx.SaveData/ctx.LoadData` extensions | `ShelteredAPI.dll` with old `ModAPI.Core` namespace | Supported 1.3 migration aliases |
 | Legacy `ctx.Settings.GetInt/SetInt/SaveUser` style | Older API style | Deprecated |
 
 Canonical signatures: `documentation/API_Signatures_Reference.md`.

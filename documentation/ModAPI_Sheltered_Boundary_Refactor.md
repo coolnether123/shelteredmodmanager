@@ -2,6 +2,8 @@
 
 This is the baseline document for the full refactor to remove Sheltered-specific code from `ModAPI`.
 
+Prompt 8 final state: the hard boundary is complete. `ModAPI.dll` is the neutral framework assembly, `ShelteredAPI.dll` owns Sheltered integrations, and the boundary verifier baseline is empty.
+
 Prompt 1 does not move implementation code. It establishes ownership, visible debt, and a verifier so later phases can move code in small commits without adding hidden exceptions.
 
 ## Boundary Rule
@@ -9,7 +11,7 @@ Prompt 1 does not move implementation code. It establishes ownership, visible de
 - `ModAPI` owns only game-neutral modding framework code.
 - `ShelteredAPI` owns Sheltered developer hooks, adapters, Harmony patches, runtime manager integrations, NGUI/UI integrations, content injection, scenario runtime integration, and save/runtime implementations.
 - Pure C# is not enough to stay in `ModAPI`. If it encodes Sheltered vocabulary or Sheltered gameplay rules, it belongs in `ShelteredAPI` or must be split into neutral `ModAPI` contracts plus Sheltered-owned implementations.
-- Compatibility surfaces kept in `ModAPI` for the 1.3 line must be explicit, obsolete where appropriate, and tracked in the boundary baseline.
+- Compatibility surfaces kept in old `ModAPI.*` namespaces for the 1.3 line must be owned by `ShelteredAPI`, explicit, obsolete where appropriate, and documented as migration aliases.
 
 ## Current Ownership Map
 
@@ -91,9 +93,8 @@ tools\verify-modapi-boundary.cmd
 
 It checks for:
 
-- `ModAPI.csproj` references to `Assembly-CSharp`.
-- `ModAPI.csproj` references to `Manager`.
-- `ModAPI` source references to obvious Sheltered symbols such as `FamilyManager`, `SaveManager`, `ExplorationManager`, `QuestManager`, `ScenarioDef`, `UIPanelManager`, `ItemManager`, `InventoryManager`, `WeatherManager`, `EncounterManager`, `FamilyMember`, `ExplorationParty`, `EncounterCharacter`, NGUI widget types, and `ShelteredAPI`.
+- `ModAPI.csproj` references to Sheltered/game assemblies such as `Assembly-CSharp`, `Assembly-CSharp-firstpass`, `Manager`, or `ShelteredAPI`.
+- `ModAPI` source references to obvious Sheltered symbols such as managers, `ScenarioDef`, `ScenarioStage`, Sheltered panels, item/inventory/runtime save types, family/expedition/encounter types, NGUI widget types, and `ShelteredAPI`.
 - Sheltered-specific filenames or namespaces under `ModAPI`.
 
 The current target state is an empty baseline. Any verifier finding is a regression unless it is explicitly documented as a generic engine exception in:
@@ -102,7 +103,7 @@ The current target state is an empty baseline. Any verifier finding is a regress
 documentation/ModAPI_Boundary_Baseline.tsv
 ```
 
-The baseline is an explicit debt ledger, not a hiding place. Prompt 7 reduced it to no entries. Later phases must keep it empty unless a generic engine-level exception is deliberately reviewed and documented. Do not add hidden exceptions for new code. If a later phase appears to require increasing the baseline for Sheltered behavior, stop and split the design so the new Sheltered behavior lands in `ShelteredAPI` instead.
+The baseline is an explicit debt ledger, not a hiding place. Prompt 7 reduced it to no entries. Prompt 8 tightened the verifier so any future baseline row must include an explicit justification field. Later phases must keep it empty unless a generic engine-level exception is deliberately reviewed and documented. Do not add hidden exceptions for new code. If a later phase appears to require increasing the baseline for Sheltered behavior, stop and split the design so the new Sheltered behavior lands in `ShelteredAPI` instead.
 
 Every phase of this refactor must end with:
 
@@ -200,6 +201,23 @@ Boundary baseline shrink from Prompt 7:
 
 - removed the final 15 baseline entries,
 - baseline count changed from `15` to `0`.
+
+## Prompt 8 Final Cleanup
+
+Prompt 8 made the finished split coherent and enforceable:
+
+- docs and examples now tell mod authors to reference `ModAPI.dll` for neutral framework APIs and `ShelteredAPI.dll` for Sheltered hooks, runtime helpers, scenario packs, save helpers, UI/input hooks, and 1.3 migration aliases.
+- the historical custom-scenario annotated diff was removed because it repeated pre-refactor paths and signatures that are superseded by the current guides and signature reference.
+- the boundary verifier now checks a broader set of Sheltered runtime symbols and fails any future baseline row that does not include an explicit justification.
+- small stale source comments in `ModAPI` were made game-neutral.
+
+Remaining debt classification:
+
+| Debt | Classification | Reason |
+| --- | --- | --- |
+| Old `ModAPI.*` namespaces hosted by `ShelteredAPI.dll` for events, saves, UI, content, characters, interactions, and world hooks | Not necessary for this refactor | They are intentional 1.3 source migration aliases. Removing or renaming them would be a source-compatibility break beyond the boundary cleanup. |
+| Direct mod author references to `Assembly-CSharp.dll` in patch/scenario examples | Not necessary for this refactor | `ModAPI.dll` no longer references game assemblies. Mods that compile against Sheltered game types still need the game assembly by definition. |
+| Potential future namespace cleanup from migration aliases to first-class `ShelteredAPI.*` public namespaces | Would cause scope expansion beyond this refactor | It requires a migration plan, obsolete attributes, and examples across all developer-hook surfaces rather than a boundary-only cleanup. |
 
 ## Prompt 1 Scope Lock
 

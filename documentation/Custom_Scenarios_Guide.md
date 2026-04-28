@@ -11,7 +11,7 @@ Both paths appear under the in-game `Custom Scenarios` scenario-selection hub. M
 
 ## Code-Driven Registration
 
-Reference `ModAPI.dll` and `ShelteredAPI.dll`, then register during plugin startup.
+Reference `ModAPI.dll` for neutral registration contracts and `ShelteredAPI.dll` for Sheltered scenario authoring/runtime helpers. Code-driven scenarios that return `ScenarioDef` also need a compile reference to `Assembly-CSharp.dll`.
 
 ```csharp
 using ModAPI.Core;

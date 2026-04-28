@@ -15,12 +15,13 @@ Exact API signatures: `documentation/API_Signatures_Reference.md`.
 ## 1. Reference Setup
 
 Add references to:
-- `ModAPI.dll`
+- `ModAPI.dll` for Harmony helpers, patch governance, fluent transpiler helpers, and loader lifecycle
 - `0Harmony.dll`
-- `Assembly-CSharp.dll`
 - `UnityEngine.dll`
+- `Assembly-CSharp.dll` when your patch references Sheltered game target types directly
+- `ShelteredAPI.dll` when your patch uses Sheltered-owned helpers, `ShelteredAPI.*` namespaces, or old `ModAPI.*` migration aliases
 
-Add `ShelteredAPI.dll` only if your patch code uses `ShelteredAPI.*` namespaces directly.
+`ModAPI.dll` no longer references Sheltered game assemblies. Sheltered-specific patch helpers such as `ShelteredPatterns` are hosted by `ShelteredAPI.dll` during the 1.3 migration window.
 
 ## 2. Apply Patches in `Start(...)`
 

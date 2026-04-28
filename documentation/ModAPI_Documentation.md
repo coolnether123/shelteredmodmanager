@@ -16,7 +16,6 @@ For exact callable signatures, use `documentation/API_Signatures_Reference.md`.
 
 Primary areas:
 - `ModAPI/Core`
-- `ModAPI/Hooks`
 
 Responsibilities:
 - mod discovery and load ordering
@@ -103,7 +102,7 @@ Key files:
 
 Ownership note:
 - public content APIs now live in `ShelteredAPI.Content`
-- `ModAPI.dll` only keeps thin internal bridges where shared runtime helpers need to query Sheltered content without creating an assembly cycle
+- `ModAPI.dll` owns only the neutral `IContentResolutionService` port; Sheltered item/content resolution is implemented by `ShelteredAPI.dll`
 
 ## 5. Settings and Persistence
 
@@ -131,14 +130,13 @@ Related guides:
 
 ## 6. Events
 
-Primary area:
+Primary areas:
 - `ModAPI/Events`
+- `ShelteredAPI/Events`
 
 Responsibilities:
-- core gameplay lifecycle events
-- UI lifecycle events
-- inter-mod event bus
-- deterministic scheduler triggers
+- `ModAPI/Events` owns only the neutral inter-mod event bus
+- `ShelteredAPI/Events` owns Sheltered gameplay lifecycle events, UI lifecycle events, and deterministic scheduler triggers
 
 Key files:
 - `ShelteredAPI/Events/GameEvents.cs`
@@ -177,23 +175,22 @@ Related guides:
 
 ## 8. UI Runtime
 
-Primary area:
+Primary areas:
 - `ModAPI/UI`
+- `ShelteredAPI/UI/ModAPICompat`
 
 Responsibilities:
-- runtime UI helpers
-- panel lifecycle bridging
-- UI factory helpers
-- settings UI
-- debug UI
+- `ModAPI/UI` owns neutral Unity-level scroll/touch/input flow shims
+- `ShelteredAPI/UI/ModAPICompat` owns Sheltered panel lifecycle bridging, UI factory helpers, settings UI, NGUI helpers, and debug UI migration aliases
 
 Representative files:
-- `UIUtil.cs`
-- `UIHelper.cs`
-- `UIPatches.cs`
-- `UIPatchCoordinator.cs`
-- `UIFactory.cs`
-- `Runtime/*`
+- `ModAPI/UI/UIFlowGuard.cs`
+- `ModAPI/UI/ScrollInputBridge.cs`
+- `ModAPI/UI/TouchInputBridge.cs`
+- `ShelteredAPI/UI/ModAPICompat/UIUtil.cs`
+- `ShelteredAPI/UI/ModAPICompat/UIHelper.cs`
+- `ShelteredAPI/UI/ModAPICompat/UIPatches.cs`
+- `ShelteredAPI/UI/ModAPICompat/Runtime/*`
 
 ## 9. Save Expansion
 

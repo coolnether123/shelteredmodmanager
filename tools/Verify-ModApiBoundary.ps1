@@ -22,19 +22,42 @@ $ModApiRoot = Join-Path $RepoRoot "ModAPI"
 $ModApiProject = Join-Path $ModApiRoot "ModAPI.csproj"
 
 $GameSymbols = @(
+    "BasePanel",
+    "CraftingManager",
+    "EntertainmentManager",
+    "ExpeditionMap",
     "FamilyManager",
+    "FoodManager",
+    "GameModeManager",
     "SaveManager",
+    "SaveData",
+    "SaveEntry",
+    "ISaveable",
     "ExplorationManager",
     "QuestManager",
+    "QuestDefBase",
     "ScenarioDef",
+    "ScenarioStage",
+    "ScenarioSelectionPanel",
     "UIPanelManager",
     "ItemManager",
     "InventoryManager",
+    "ObjectInteraction",
+    "ObjectManager",
     "WeatherManager",
     "EncounterManager",
     "FamilyMember",
     "ExplorationParty",
     "EncounterCharacter",
+    "NpcVisitor",
+    "PlatformInput",
+    "SettingsPCPanel",
+    "SlotSelectionPanel",
+    "StoragePanel",
+    "RecyclingPanel",
+    "TradingPanel",
+    "ItemFabricationPanel",
+    "Localization",
     "ShelteredAPI"
 )
 
@@ -47,6 +70,7 @@ $NguiSymbols = @(
     "UICheckbox",
     "UIDrawCall",
     "UIEventListener",
+    "UI2DSprite",
     "UIFont",
     "UIGrid",
     "UIInput",
@@ -64,6 +88,13 @@ $NguiSymbols = @(
     "UITexture",
     "UIToggle",
     "UIWidget"
+)
+
+$ShelteredAssemblyNames = @(
+    "Assembly-CSharp",
+    "Assembly-CSharp-firstpass",
+    "Manager",
+    "ShelteredAPI"
 )
 
 $ShelteredPathTerms = @(
@@ -163,8 +194,9 @@ function Get-CurrentFindings {
     $projectRelativePath = ConvertTo-RepoRelativePath $ModApiProject
     foreach ($reference in $projectXml.GetElementsByTagName("Reference")) {
         $include = [string]$reference.GetAttribute("Include")
-        if ($include -eq "Assembly-CSharp" -or $include -eq "Manager") {
-            $findings.Add((New-BoundaryFinding -Rule "project-reference" -Path $projectRelativePath -Symbol $include -Count 1))
+        $simpleInclude = ($include -split ",")[0].Trim()
+        if ($ShelteredAssemblyNames -contains $simpleInclude) {
+            $findings.Add((New-BoundaryFinding -Rule "project-reference" -Path $projectRelativePath -Symbol $simpleInclude -Count 1))
         }
     }
 
@@ -236,8 +268,16 @@ function Read-Baseline {
         }
 
         $parts = $line -split "`t"
-        if ($parts.Length -ne 4) {
-            throw "Invalid baseline line $lineNumber in '$BaselinePath'. Expected 4 tab-separated fields."
+        if ($parts.Length -lt 5) {
+            throw "Invalid baseline line $lineNumber in '$BaselinePath'. Expected 5 tab-separated fields including a non-empty justification."
+        }
+
+        if ($parts.Length -gt 5) {
+            throw "Invalid baseline line $lineNumber in '$BaselinePath'. Expected 5 tab-separated fields."
+        }
+
+        if ([string]::IsNullOrWhiteSpace($parts[4])) {
+            throw "Invalid baseline line $lineNumber in '$BaselinePath'. Boundary exceptions require an explicit justification."
         }
 
         $count = 0
@@ -260,9 +300,9 @@ function Read-Baseline {
 $currentFindings = @(Get-CurrentFindings)
 
 if ($ListCurrent) {
-    "# Rule`tPath`tSymbol`tAllowedCount"
+    "# Rule`tPath`tSymbol`tAllowedCount`tJustification"
     foreach ($finding in $currentFindings) {
-        ConvertTo-TsvLine $finding
+        (ConvertTo-TsvLine $finding) + "`t<required justification>"
     }
 
     exit 0

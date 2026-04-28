@@ -6,7 +6,7 @@ using UnityEngine;
 namespace ModAPI.Util
 {
     /// <summary>
-    /// A serializable wrapper for Dictionaries to work around legacy XML/JSON limitations in Sheltered.
+    /// A serializable wrapper for dictionaries to work around legacy XML/JSON limitations.
     /// Used by mods to track persistent state (e.g. character IDs mapped to mod data).
     /// </summary>
     [Serializable]

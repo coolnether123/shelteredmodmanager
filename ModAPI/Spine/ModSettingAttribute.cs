@@ -10,7 +10,7 @@ namespace ModAPI.Spine
         /// <summary>The display name shown in the UI.</summary>
         public string Label;
 
-        /// <summary>Localization key from TextDatabase. If provided, Label is used as fallback.</summary>
+        /// <summary>Display text key supplied by the active runtime. If provided, Label is used as fallback.</summary>
         public string LabelKey;
         
         /// <summary>Text shown when hovering over the setting name/widget.</summary>

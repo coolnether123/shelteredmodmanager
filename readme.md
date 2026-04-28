@@ -34,7 +34,7 @@ Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs n
 - **Enhanced Save System**: Per-mod isolated data and dictionary persistence (v1.2.1)
 - Plugin loader with dependency resolution and load order management
 - Unlimited custom save slots with mod tracking and verification
-- Developer API for items, recipes, events, and Harmony patching
+- Neutral `ModAPI.dll` framework APIs plus `ShelteredAPI.dll` integration for items, recipes, events, scenarios, UI hooks, saves, and Harmony patching
 - Desktop and in-game mod managers
 - Runtime inspector (F9) for debugging
 
@@ -200,13 +200,12 @@ Sheltered/
 
 ## For mod authors
 
-The Developer API is in early development. See the documentation folder for current capabilities.
+The Developer API is split between the neutral framework (`ModAPI.dll`) and the Sheltered integration layer (`ShelteredAPI.dll`). See the documentation folder for current capabilities.
 
 Currently available:
-* Item and food injection via `ShelteredAPI.Content`
-* Custom crafting recipes
-* Event subscriptions (day cycles, save/load, UI panels)
-* Harmony integration for runtime patching
+* Neutral plugin lifecycle, settings, persistence, event-bus, actor-contract, and Harmony helper APIs via `ModAPI.dll`
+* Item, food, recipe, scenario, save, UI, input, event, and manager-backed hooks via `ShelteredAPI.dll`
+* Event subscriptions for day cycles, save/load, UI panels, and inter-mod messages
 * Runtime inspector (F9)
 
 Planned for future updates:

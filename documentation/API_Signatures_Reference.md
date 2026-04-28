@@ -9,7 +9,7 @@ Related usage guide:
 
 | Surface | Assembly | Status |
 |---------|----------|--------|
-| Core loader/plugin/content/settings APIs | `ModAPI.dll` | Current |
+| Core loader/plugin/settings APIs and neutral runtime ports | `ModAPI.dll` | Current |
 | Neutral event bus (`ModEventBus`) | `ModAPI.dll` | Current |
 | Sheltered event/helper APIs used by v1.2 mods (`GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`) | `ShelteredAPI.dll` | Current 1.3 migration aliases using old `ModAPI.*` namespaces |
 | Sheltered save compatibility helpers (`GameUtil`, `PersistentDataAPI`, `ModList`, `ModDictionary`, custom-save APIs) | `ShelteredAPI.dll` | Current 1.3 migration aliases using old `ModAPI.*` namespaces |

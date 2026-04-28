@@ -162,7 +162,7 @@ namespace ModAPI.Core
                 string mdPath = Path.Combine(ModApiPaths.UserRoot, "settings.md");
                 if (!File.Exists(mdPath))
                 {
-                    File.WriteAllText(mdPath, "# ModAPI User Settings\n\nThis folder contains internal state and user settings for the Sheltered Modding API.\n\n- `settings.json`: Contains technical flags (e.g., tutorial seen status).");
+                    File.WriteAllText(mdPath, "# ModAPI User Settings\n\nThis folder contains internal ModAPI framework state and user settings.\n\n- `settings.json`: Contains technical flags (e.g., tutorial seen status).");
                 }
             }
             catch (Exception ex)

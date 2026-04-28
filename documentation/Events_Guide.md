@@ -25,7 +25,7 @@ Available event systems:
 
 ## 2. `GameEvents`
 
-Use `GameEvents` when you want the Sheltered compatibility event surface. Reference both `ModAPI.dll` and `ShelteredAPI.dll`; the namespace remains `ModAPI.Events` during the 1.3 migration window.
+Use `GameEvents` when you want the Sheltered compatibility event surface. Reference both `ModAPI.dll` and `ShelteredAPI.dll`; if your handlers mention Sheltered game types such as `SaveData`, `EncounterCharacter`, or `ExplorationParty`, also reference `Assembly-CSharp.dll`. The namespace remains `ModAPI.Events` during the 1.3 migration window.
 
 Important events:
 

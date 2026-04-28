@@ -545,7 +545,7 @@ namespace ModAPI.Harmony
         public FluentTranspiler ReplaceAssignment(CodeInstruction[] newExpression)
         {
             // Backtrack to find the start of the expression that leads to the current stloc
-            // In Sheltered's IL, this is usually a ldarg.0 or a sequence starting with a load.
+            // In Unity game IL, this is usually a ldarg.0 or a sequence starting with a load.
             int startIdx = BacktrackToExpressionStart(_matcher.Pos);
             int count = _matcher.Pos - startIdx;
             

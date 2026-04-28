@@ -19,10 +19,11 @@ If this file conflicts with signatures in `API_Signatures_Reference.md`, follow 
 Create a C# Class Library targeting `.NET Framework 3.5`.
 
 Add references:
-- `ModAPI.dll` (from SMM install)
-- `0Harmony.dll` (if patching)
-- `Assembly-CSharp.dll` (game managed folder)
+- `ModAPI.dll` for neutral lifecycle, settings, persistence, event-bus, and helper contracts
 - `UnityEngine.dll` (game managed folder)
+- `ShelteredAPI.dll` when using Sheltered content, events, UI/input hooks, save helpers, scenario authoring/runtime helpers, actor adapters, or old `ModAPI.*` migration aliases
+- `Assembly-CSharp.dll` only when compiling directly against Sheltered game types or Harmony patch targets
+- `0Harmony.dll` if patching
 
 Game managed folder examples:
 - Steam/GOG: `<Sheltered>/Sheltered_Data/Managed`
@@ -183,7 +184,7 @@ High-value members:
 - `FindPanel(...)` and `AddComponentToPanel<T>(...)`: UI integration
 - `GameRoot` / `ModsRoot`: path roots
 
-If you use actor adapters, Sheltered save helpers (`ctx.SaveData`, `GameUtil`, `ModList`, custom-save APIs), or `ShelteredAPI.*` namespaces directly, add a reference to `ShelteredAPI.dll` too.
+If you use actor adapters, Sheltered save helpers (`ctx.SaveData`, `GameUtil`, `ModList`, custom-save APIs), Sheltered event/UI/content/scenario helpers, or any old `ModAPI.*` migration alias hosted by ShelteredAPI, add a reference to `ShelteredAPI.dll` too.
 
 ## 9. Common Pitfalls
 
