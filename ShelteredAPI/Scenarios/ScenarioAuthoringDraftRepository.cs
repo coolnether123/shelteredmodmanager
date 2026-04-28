@@ -21,14 +21,19 @@ namespace ShelteredAPI.Scenarios
         internal const string DraftStorageScenarioId = "ScenarioAuthoringDrafts";
         private readonly object _sync = new object();
         private readonly ScenarioDefinitionSerializer _serializer = new ScenarioDefinitionSerializer();
+        private readonly IScenarioSaveLibrary _saveLibrary;
 
         public static ScenarioAuthoringDraftRepository Instance
         {
             get { return ScenarioCompositionRoot.Resolve<ScenarioAuthoringDraftRepository>(); }
         }
 
-        internal ScenarioAuthoringDraftRepository()
+        internal ScenarioAuthoringDraftRepository(IScenarioSaveLibrary saveLibrary)
         {
+            if (saveLibrary == null)
+                throw new ArgumentNullException("saveLibrary");
+
+            _saveLibrary = saveLibrary;
             ScenarioRegistry.RegisterScenario(new ScenarioDescriptor
             {
                 id = DraftStorageScenarioId,
@@ -45,7 +50,7 @@ namespace ShelteredAPI.Scenarios
                 string draftsRoot = EnsureDraftsRoot();
                 string scenarioId = CreateDraftId();
                 int slot = GetNextDraftSlot(draftsRoot);
-                int nextSaveSlot = ScenarioSaves.GetNextAvailableSlot(DraftStorageScenarioId);
+                int nextSaveSlot = _saveLibrary.GetNextAvailableSlot(DraftStorageScenarioId);
                 if (nextSaveSlot > slot)
                     slot = nextSaveSlot;
 
@@ -57,7 +62,7 @@ namespace ShelteredAPI.Scenarios
                     draftRoot = EnsureSlotRoot(slot);
                 }
 
-                SaveEntry startupSave = ScenarioSaves.CreateNext(DraftStorageScenarioId, new SaveCreateOptions
+                SaveEntry startupSave = _saveLibrary.CreateNext(DraftStorageScenarioId, new SaveCreateOptions
                 {
                     name = scenarioId,
                     absoluteSlot = slot
@@ -183,7 +188,7 @@ namespace ShelteredAPI.Scenarios
                             return false;
 
                         string saveId = DraftStorageScenarioId + "_" + slot;
-                        entry = ScenarioSaves.Get(DraftStorageScenarioId, saveId);
+                        entry = _saveLibrary.Get(DraftStorageScenarioId, saveId);
                         return entry != null;
                     }
                     catch (Exception ex)
@@ -217,7 +222,7 @@ namespace ShelteredAPI.Scenarios
                         if (slot > 0)
                         {
                             string saveId = DraftStorageScenarioId + "_" + slot;
-                            saveDeleted = ScenarioSaves.Delete(DraftStorageScenarioId, saveId);
+                            saveDeleted = _saveLibrary.Delete(DraftStorageScenarioId, saveId);
                         }
 
                         string draftRoot = Path.GetDirectoryName(files[i]);

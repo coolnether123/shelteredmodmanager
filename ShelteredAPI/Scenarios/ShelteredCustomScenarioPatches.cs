@@ -223,6 +223,7 @@ namespace ShelteredAPI.Scenarios
             bool draftCancelled = false;
             if (PlatformSaveProxy.TryGetNextSave(SaveManager.SaveType.Slot1, out pendingTarget) && pendingTarget != null)
             {
+                IScenarioSaveLibrary saveLibrary = ScenarioCompositionRoot.Resolve<IScenarioSaveLibrary>();
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Customisation cancelled before game start. Clearing queued startup save. scenarioId="
                     + pendingTarget.scenarioId + " saveId=" + pendingTarget.saveId + ".");
 
@@ -239,10 +240,10 @@ namespace ShelteredAPI.Scenarios
                 else if (!string.IsNullOrEmpty(pendingTarget.scenarioId)
                     && !string.Equals(pendingTarget.scenarioId, "Standard", StringComparison.OrdinalIgnoreCase))
                 {
-                    ScenarioSaves.Delete(pendingTarget.scenarioId, pendingTarget.saveId);
+                    saveLibrary.Delete(pendingTarget.scenarioId, pendingTarget.saveId);
                 }
 
-                PlatformSaveProxy.ClearNextSave(SaveManager.SaveType.Slot1);
+                saveLibrary.ClearQueuedNewGameSave(SaveManager.SaveType.Slot1);
             }
 
             // Guard covers the edge case where a draft was queued but no save target was

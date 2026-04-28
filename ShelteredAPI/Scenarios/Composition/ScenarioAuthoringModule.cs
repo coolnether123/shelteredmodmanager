@@ -129,7 +129,8 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ScenarioAuthoringDraftRepository>(),
                     resolver.Get<ScenarioAuthoringMenuService>(),
                     resolver.Get<ScenarioAuthoringPresentationService>(),
-                    resolver.Get<IScenarioEditorService>());
+                    resolver.Get<IScenarioEditorService>(),
+                    resolver.Get<IScenarioSaveLibrary>());
             });
         }
     }

@@ -109,6 +109,11 @@ namespace ShelteredAPI.Scenarios
         private static readonly ShelteredScenarioSelectionBrowserController _instance = new ShelteredScenarioSelectionBrowserController();
         private readonly Dictionary<int, BrowserPanelState> _states = new Dictionary<int, BrowserPanelState>();
 
+        private IScenarioSaveLibrary SaveLibrary
+        {
+            get { return ScenarioCompositionRoot.Resolve<IScenarioSaveLibrary>(); }
+        }
+
         private ShelteredScenarioSelectionBrowserController()
         {
         }
@@ -564,7 +569,7 @@ namespace ShelteredAPI.Scenarios
             SaveEntry entry = null;
             try
             {
-                entry = ScenarioSaves.GetRegistry(scenario.Id).GetSaveBySlot(absoluteSlot);
+                entry = SaveLibrary.GetBySlot(scenario.Id, absoluteSlot);
             }
             catch (Exception ex)
             {
@@ -629,7 +634,7 @@ namespace ShelteredAPI.Scenarios
             bool deleted = false;
             try
             {
-                deleted = ScenarioSaves.Delete(scenario.Id, entry.id);
+                deleted = ScenarioCompositionRoot.Resolve<IScenarioSaveLibrary>().Delete(scenario.Id, entry.id);
                 if (deleted && selectionPanel != null)
                     Traverse.Create(selectionPanel).Field("m_infoNeedsRefresh").SetValue(true);
             }
@@ -654,7 +659,7 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            SaveEntry startupSave = ScenarioSaves.CreateNext(scenario.Id, new SaveCreateOptions
+            SaveEntry startupSave = SaveLibrary.CreateNext(scenario.Id, new SaveCreateOptions
             {
                 name = scenario.DisplayName
             });
@@ -674,8 +679,8 @@ namespace ShelteredAPI.Scenarios
             if (!BeginScenarioLaunchTransition(panel, "custom scenario '" + scenario.Id + "'", GetLaunchVirtualSaveType()))
             {
                 MMLog.WriteWarning("[ShelteredCustomScenarioSelection] Launch transition failed for custom scenario '" + scenario.Id + "'.");
-                PlatformSaveProxy.ClearNextSave(GetLaunchVirtualSaveType());
-                ScenarioSaves.Delete(startupSave.scenarioId, startupSave.id);
+                SaveLibrary.ClearQueuedNewGameSave(GetLaunchVirtualSaveType());
+                SaveLibrary.Delete(startupSave.scenarioId, startupSave.id);
                 ShelteredCustomScenarioService.Instance.ClearState();
                 return false;
             }
@@ -776,7 +781,7 @@ namespace ShelteredAPI.Scenarios
                     stasisScoreLabelsRoot,
                     AddNewLabel,
                     "Could not create the scenario authoring draft: " + ex.Message);
-                PlatformSaveProxy.ClearNextSave(GetLaunchVirtualSaveType());
+                SaveLibrary.ClearQueuedNewGameSave(GetLaunchVirtualSaveType());
                 ScenarioAuthoringBootstrapService.Instance.CancelPendingDraft("Authoring launch failed.");
                 MMLog.WriteWarning("[ShelteredCustomScenarioSelection] Failed to queue scenario authoring draft: " + ex.Message);
             }
@@ -885,11 +890,7 @@ namespace ShelteredAPI.Scenarios
             if (startupSave == null)
                 throw new ArgumentNullException("startupSave");
 
-            PlatformSaveProxy.ClearNextSave(saveType);
-            PlatformSaveProxy.SetNextSave(saveType, scenarioId, startupSave.id);
-            MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Queued dedicated startup save. scenarioId="
-                + scenarioId + " saveId=" + startupSave.id + " slot=" + startupSave.absoluteSlot
-                + " virtualSaveType=" + saveType + ".");
+            ScenarioCompositionRoot.Resolve<IScenarioSaveLibrary>().QueueNewGameSaveTarget(scenarioId, startupSave, saveType);
         }
 
         private ScenarioListEntry[] BuildVisibleEntries(BrowserPanelState state, CustomScenarioInfo[] scenarios)
@@ -1608,7 +1609,7 @@ namespace ShelteredAPI.Scenarios
         {
             try
             {
-                ShelteredCustomScenarioService.Instance.RefreshDefinitionCatalog();
+                ScenarioCompositionRoot.Resolve<IScenarioSelectionCatalogService>().Refresh();
             }
             catch (Exception ex)
             {

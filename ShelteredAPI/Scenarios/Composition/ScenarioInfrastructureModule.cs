@@ -11,7 +11,7 @@ namespace ShelteredAPI.Scenarios
             services.AddSingleton<IScenarioEditorSessionStore>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioEditorSessionStore>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringPauseService(); });
             services.AddSingleton<IScenarioPauseService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioAuthoringPauseService>(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringDraftRepository(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringDraftRepository(resolver.Get<IScenarioSaveLibrary>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringHistoryService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringCaptureService(resolver.Get<IScenarioDraftMutationService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioGameplayScheduleAuthoringService(); });

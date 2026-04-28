@@ -1,7 +1,6 @@
 using System;
 using ModAPI.Core;
 using ModAPI.Events;
-using ModAPI.Hooks;
 using ModAPI.Saves;
 using ModAPI.Scenarios;
 using UnityEngine.SceneManagement;
@@ -16,6 +15,7 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioAuthoringMenuService _menuService;
         private readonly ScenarioAuthoringPresentationService _presentation;
         private readonly IScenarioEditorService _editorService;
+        private readonly IScenarioSaveLibrary _saveLibrary;
         private ScenarioAuthoringSession _pendingSession;
         private ScenarioAuthoringSession _activeSession;
         private string _lastPendingDraftId;
@@ -31,13 +31,15 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringDraftRepository draftRepository,
             ScenarioAuthoringMenuService menuService,
             ScenarioAuthoringPresentationService presentation,
-            IScenarioEditorService editorService)
+            IScenarioEditorService editorService,
+            IScenarioSaveLibrary saveLibrary)
         {
             _backend = backend;
             _draftRepository = draftRepository;
             _menuService = menuService;
             _presentation = presentation;
             _editorService = editorService;
+            _saveLibrary = saveLibrary;
             try { GameEvents.OnAfterLoad += HandleAfterLoad; }
             catch { }
         }
@@ -277,7 +279,7 @@ namespace ShelteredAPI.Scenarios
             bool deleted = _draftRepository.DeleteDraft(pending.DraftId, reason);
             if (!deleted && !string.IsNullOrEmpty(pending.StorageScenarioId) && !string.IsNullOrEmpty(pending.StartupSaveId))
             {
-                bool saveDeleted = ModAPI.Saves.ScenarioSaves.Delete(pending.StorageScenarioId, pending.StartupSaveId);
+                bool saveDeleted = _saveLibrary.Delete(pending.StorageScenarioId, pending.StartupSaveId);
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Fallback draft save cleanup. draftId=" + pending.DraftId
                     + " startupSaveId=" + pending.StartupSaveId + " deleted=" + saveDeleted + ".");
             }
@@ -291,11 +293,11 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        private static void ClearLaunchRedirects(ScenarioAuthoringSession session, string reason)
+        private void ClearLaunchRedirects(ScenarioAuthoringSession session, string reason)
         {
             SaveManager.SaveType launchSaveType = session != null ? session.LaunchSaveType : SaveManager.SaveType.Slot1;
-            bool clearedSave = PlatformSaveProxy.ClearNextSave(launchSaveType);
-            bool clearedLoad = PlatformSaveProxy.ClearNextLoad(launchSaveType);
+            bool clearedSave = _saveLibrary.ClearQueuedNewGameSave(launchSaveType);
+            bool clearedLoad = _saveLibrary.ClearQueuedLoad(launchSaveType);
             if (clearedSave || clearedLoad)
             {
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Cleared pending save/load redirects. launchSaveType=" + launchSaveType

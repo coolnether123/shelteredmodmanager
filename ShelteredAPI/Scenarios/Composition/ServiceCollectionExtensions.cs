@@ -27,6 +27,15 @@ namespace ShelteredAPI.Scenarios
 
         public static void AddScenarioApplication(this ServiceCollection services)
         {
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSaveLibrary(); });
+            services.AddSingleton<IScenarioSaveLibrary>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioSaveLibrary>(); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioSelectionCatalogService(
+                    resolver.Get<IShelteredCustomScenarioService>(),
+                    resolver.Get<IScenarioSaveLibrary>());
+            });
+            services.AddSingleton<IScenarioSelectionCatalogService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioSelectionCatalogService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioStageCoordinator(resolver.Get<ScenarioStageRegistry>(), new IScenarioStageModule[0]); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new PublishValidationSummaryBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTimelineBuilder(); });
