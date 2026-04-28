@@ -210,8 +210,7 @@ source-symbol	ModAPI/Core/SaveProtection.cs	SaveManager	31
 source-symbol	ModAPI/Core/SaveRuntimeState.cs	SaveManager	22
 source-symbol	ModAPI/Core/SaveSystemImpl.cs	SaveManager	3
 source-symbol	ModAPI/Core/SharedAssemblyResolver.cs	ShelteredAPI	1
-source-symbol	ModAPI/Core/ShelteredContentBridge.cs	ItemManager	13
-source-symbol	ModAPI/Core/ShelteredContentBridge.cs	ShelteredAPI	6
+source-symbol	ModAPI/Core/ShelteredContentBridge.cs	ItemManager	12
 source-symbol	ModAPI/Custom Saves/MainMenuPanel_Quit_Patch.cs	SaveManager	7
 source-symbol	ModAPI/Custom Saves/paging/SaveVerification.cs	SaveManager	2
 source-symbol	ModAPI/Custom Saves/paging/SlotSelectionPatchCoordinator.cs	SaveManager	7

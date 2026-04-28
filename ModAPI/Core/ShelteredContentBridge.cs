@@ -1,92 +1,57 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
 
 namespace ModAPI.Core
 {
     /// <summary>
-    /// Reflection bridge used by ModAPI-owned runtime helpers to query ShelteredAPI's content module
-    /// without introducing a project reference cycle back to ShelteredAPI.
+    /// Temporary typed adapter for compatibility APIs that still expose Sheltered item runtime types.
+    /// New code should use <see cref="IContentResolutionService"/> and keep host runtime keys opaque.
     /// </summary>
     internal static class ShelteredContentBridge
     {
-        private const string ContentInjectorTypeName = "ShelteredAPI.Content.ContentInjector, ShelteredAPI";
         private static readonly ItemManager.ItemType[] EmptyRegisteredTypes = new ItemManager.ItemType[0];
 
-        /// <summary>
-        /// Gets the currently registered custom item types from ShelteredAPI's content runtime.
-        /// </summary>
         internal static IEnumerable<ItemManager.ItemType> GetRegisteredTypes()
         {
-            Type injectorType = ResolveContentInjectorType();
-            if (injectorType == null)
-                return EmptyRegisteredTypes;
+            List<ItemManager.ItemType> itemTypes = null;
 
-            try
+            foreach (object runtimeItemKey in ContentResolutionServices.GetRegisteredRuntimeItemKeys())
             {
-                PropertyInfo property = injectorType.GetProperty("RegisteredTypes", BindingFlags.Public | BindingFlags.Static);
-                if (property == null)
-                    return EmptyRegisteredTypes;
+                ItemManager.ItemType itemType;
+                if (!TryConvertRuntimeItemKey(runtimeItemKey, out itemType))
+                    continue;
 
-                object value = property.GetValue(null, null);
-                IEnumerable<ItemManager.ItemType> typed = value as IEnumerable<ItemManager.ItemType>;
-                if (typed != null)
-                    return typed;
+                if (itemTypes == null)
+                    itemTypes = new List<ItemManager.ItemType>();
 
-                IEnumerable untyped = value as IEnumerable;
-                if (untyped == null)
-                    return EmptyRegisteredTypes;
-
-                List<ItemManager.ItemType> items = new List<ItemManager.ItemType>();
-                foreach (object entry in untyped)
-                {
-                    if (entry is ItemManager.ItemType)
-                        items.Add((ItemManager.ItemType)entry);
-                }
-
-                return items;
+                itemTypes.Add(itemType);
             }
-            catch
-            {
-                return EmptyRegisteredTypes;
-            }
+
+            if (itemTypes != null)
+                return itemTypes;
+
+            return EmptyRegisteredTypes;
         }
 
-        /// <summary>
-        /// Resolves a string item identifier to the game's runtime item type using ShelteredAPI content registration first.
-        /// </summary>
         internal static bool ResolveItemType(string itemId, out ItemManager.ItemType type)
         {
+            object runtimeItemKey;
+            if (ContentResolutionServices.TryResolveRuntimeItemKey(itemId, out runtimeItemKey))
+                return TryConvertRuntimeItemKey(runtimeItemKey, out type);
+
             type = ItemManager.ItemType.Undefined;
-            Type injectorType = ResolveContentInjectorType();
-            if (injectorType == null)
-                return false;
-
-            try
-            {
-                MethodInfo method = injectorType.GetMethod("ResolveItemType", BindingFlags.Public | BindingFlags.Static);
-                if (method == null)
-                    return false;
-
-                object[] args = new object[] { itemId, type };
-                object result = method.Invoke(null, args);
-                if (result is bool && (bool)result && args[1] is ItemManager.ItemType)
-                {
-                    type = (ItemManager.ItemType)args[1];
-                    return true;
-                }
-            }
-            catch
-            {
-            }
-
             return false;
         }
 
-        private static Type ResolveContentInjectorType()
+        private static bool TryConvertRuntimeItemKey(object runtimeItemKey, out ItemManager.ItemType itemType)
         {
-            return Type.GetType(ContentInjectorTypeName, false);
+            if (runtimeItemKey is ItemManager.ItemType)
+            {
+                itemType = (ItemManager.ItemType)runtimeItemKey;
+                return true;
+            }
+
+            itemType = ItemManager.ItemType.Undefined;
+            return false;
         }
     }
 }

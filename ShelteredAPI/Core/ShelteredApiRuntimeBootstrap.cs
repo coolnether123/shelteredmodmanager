@@ -2,6 +2,7 @@ using ModAPI.Core;
 using ModAPI.Actors;
 using ModAPI.InputServices;
 using ModAPI.Scenarios;
+using ShelteredAPI.Content;
 using ShelteredAPI.Input;
 using ShelteredAPI.Scenarios;
 using UnityEngine;
@@ -59,6 +60,10 @@ namespace ShelteredAPI.Core
             var gameHelper = new GameHelperImpl();
             RegisterApi(GameRuntimeApiIds.GameHelper, gameHelper);
             RegisterApi("ShelteredAPI.GameHelper", gameHelper);
+
+            IContentResolutionService contentResolution = new ShelteredContentResolutionService();
+            RegisterApi(GameRuntimeApiIds.ContentResolution, contentResolution);
+            RegisterApi("ShelteredAPI.ContentResolution", contentResolution);
 
             IActorSystem actors = ActorSystem.Instance;
             RegisterApi(GameRuntimeApiIds.Actors, actors);

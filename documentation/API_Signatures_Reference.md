@@ -83,6 +83,17 @@ public interface ISaveSystem
     int ActiveSlotIndex { get; }
     void RegisterModData<T>(string key, T data, Action<T> migrationCallback = null) where T : class;
 }
+
+public interface IContentResolutionService
+{
+    bool TryResolveRuntimeItemKey(string itemId, out object runtimeItemKey);
+    IEnumerable<object> GetRegisteredRuntimeItemKeys();
+}
+
+public static class GameRuntimeApiIds
+{
+    public const string ContentResolution = "GameRuntime.ContentResolution";
+}
 ```
 
 ## Actor System (`ModAPI.Actors`, ShelteredAPI)

@@ -63,6 +63,7 @@
     <Compile Include="Content\ContentRegistry.cs" />
     <Compile Include="Content\ContentResolver.cs" />
     <Compile Include="Content\ContentInjector.cs" />
+    <Compile Include="Content\ShelteredContentResolutionService.cs" />
     <Compile Include="Content\InventoryIntegration.cs" />
     <Compile Include="Content\ModLocalization.cs" />
     <Compile Include="Core\GameHelperImpl.cs" />

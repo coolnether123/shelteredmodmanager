@@ -42,7 +42,7 @@ These surfaces need neutral contracts or framework pieces in `ModAPI`, with Shel
 | Save system | `ISaveSystem` contract and mod data registration model | `SaveManager` hooks, slot routing, expanded save storage, UI, and migration runtime. |
 | UI hooks | Neutral hook registration contracts and lifecycle abstractions | NGUI widgets, `BasePanel`, `UIPanelManager`, mod-manager panels, settings panels, and injection runtime. |
 | Input | Neutral binding/action contracts | Sheltered vanilla actions, Unity legacy/touchpad readers, keybind persistence, and conflict UI. |
-| Content | Neutral content extension point contracts if needed | Sheltered item, recipe, loot, localization, asset, and inventory integrations. |
+| Content | `IContentResolutionService` for resolving mod-facing IDs to opaque host runtime keys; future neutral content extension point contracts if needed | Sheltered item, recipe, loot, localization, asset, inventory integrations, and host key resolution. |
 | Scenarios | Neutral registration service contracts and portable scenario metadata where possible | `ScenarioDef`, bunker/family/inventory/quest/weather/runtime apply services, authoring UI, and in-game lifecycle patches. |
 | Events | Neutral event bus | Sheltered day/session/combat/party/UI/faction/time-trigger hooks. |
 | Runtime bootstrap | Game-neutral plugin loader sequence | Sheltered startup bootstrap and runtime API registrations. |
@@ -59,7 +59,7 @@ These current `ModAPI` surfaces encode Sheltered runtime concepts and should mov
 | `Events/GameEvents.cs`, `Events/FactionEvents.cs`, `Events/UIEvents.cs`, `Events/GameTimeTriggerHelper.cs` | Sheltered gameplay and UI event hooks. |
 | `Interactions/InteractionRegistry.cs`, `Hooks/WorldHooks.cs`, `Hooks/UIHooks.cs` | Sheltered world/UI hook vocabulary and runtime targets. |
 | `Util/GameUtil.cs`, `Util/PersistentDataAPI.cs` | Sheltered exploration/save manager helpers. |
-| `Core/ShelteredContentBridge.cs` and ShelteredAPI bootstrap/reflection in `PluginManager`/`HarmonyBootstrap` | Sheltered runtime bridge belongs in Sheltered-owned composition. |
+| Remaining typed compatibility bridge in `Core/ShelteredContentBridge.cs` | It still exposes Sheltered item runtime types for 1.3 compatibility, but Prompt 2 removed its direct reflection dependency on ShelteredAPI. Future phases should delete this adapter when item/content helpers move. |
 | `Core/SaveSystemImpl.cs`, `Core/SaveProtection.cs`, `Core/SaveExitTracer.cs` where they depend on Sheltered save/quit flow | Sheltered save/runtime implementation, not a neutral framework contract. |
 | `Custom Saves/**` | Sheltered `SaveManager`, slot selection UI, save verification, and expanded vanilla save implementation. |
 | NGUI/UI implementation files under `UI/**` | NGUI widgets, panel injection, settings panel, mod-manager panel, and UI patch runtime. |
@@ -107,6 +107,22 @@ Every phase of this refactor must end with:
 2. the most relevant build/check passing or a documented blocker,
 3. `git diff --stat` reviewed, and
 4. one focused commit for that phase.
+
+## Prompt 2 Baseline Port
+
+Prompt 2 added `ModAPI.Core.IContentResolutionService` as the first small neutral port. It is intentionally narrow:
+
+- it resolves mod-facing item IDs to opaque host runtime keys,
+- it enumerates registered host runtime item keys,
+- `ModAPI` does not interpret those keys except in existing 1.3 compatibility adapters that already expose Sheltered item types,
+- `ShelteredAPI.Content.ShelteredContentResolutionService` owns the Sheltered `ItemManager.ItemType` implementation and is registered by `ShelteredApiRuntimeBootstrap`.
+
+This removed the direct `ShelteredAPI.Content.ContentInjector, ShelteredAPI` reflection bridge from `ModAPI/Core/ShelteredContentBridge.cs`. The bridge remains only as a temporary typed adapter for current `InventoryHelper` and UI runtime compatibility call sites.
+
+Boundary baseline shrink from Prompt 2:
+
+- removed `source-symbol ModAPI/Core/ShelteredContentBridge.cs ShelteredAPI`,
+- reduced `source-symbol ModAPI/Core/ShelteredContentBridge.cs ItemManager` from `13` to `12`.
 
 ## Prompt 1 Scope Lock
 
